@@ -2,7 +2,8 @@
 // Phase 0: Foundation - Basic User and Auth models
 
 generator client {
-  provider = "prisma-client-js"
+  provider   = "prisma-client-js"
+  engineType = "wasm"
 }
 
 datasource db {
