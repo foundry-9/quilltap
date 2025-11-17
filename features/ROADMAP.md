@@ -234,17 +234,36 @@ All Phase 0 deliverables met. Users can successfully sign in with Google OAuth a
 
 **Tasks:**
 
-- [ ] Encryption service (AES-256-GCM, per-user keys)
-- [ ] API key CRUD operations
-- [ ] API key storage (encrypted in PostgreSQL)
-- [ ] API key testing endpoints
-- [ ] Connection profile management
-- [ ] Unit tests for encryption
-- [ ] Basic error handling middleware
+- [x] Encryption service (AES-256-GCM, per-user keys)
+- [x] API key CRUD operations
+- [x] API key storage (encrypted in PostgreSQL)
+- [x] API key testing endpoints
+- [x] Connection profile management
+- [x] Unit tests for encryption
+- [x] Basic error handling middleware
 
 **Deliverable**: Users can securely store and manage API keys
 
-**Status**: ⏳ **PENDING** - Next phase to implement
+**Status**: ✅ **COMPLETE** (November 17, 2025)
+
+**Completion Notes**:
+
+- Encryption service implemented with AES-256-GCM per-user encryption
+- User-specific keys derived from user ID + master pepper using PBKDF2
+- API key CRUD operations available at `/api/keys`
+- Individual API key operations at `/api/keys/[id]`
+- API key validation endpoint at `/api/keys/[id]/test`
+- Connection profile CRUD operations at `/api/profiles`
+- Individual profile operations at `/api/profiles/[id]`
+- Comprehensive unit tests for encryption service
+- Error handling middleware with security headers
+- Database schema updated with ApiKey and ConnectionProfile models
+- Migration SQL created for database updates
+- Support for 5 LLM providers: OpenAI, Anthropic, Ollama, OpenRouter, OpenAI-compatible
+- Secure key masking for UI display
+- Authentication verification on all endpoints
+
+All Phase 0.3 deliverables met. Users can now securely store, manage, and test encrypted API keys with connection profiles.
 
 ---
 

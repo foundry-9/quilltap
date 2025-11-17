@@ -1,14 +1,22 @@
 // Quilltap Database Schema
-// Phase 0: Foundation - Basic User and Auth models
+// Phase 0.3: Core Infrastructure - API Key Management and Encryption
 
 generator client {
-  provider   = "prisma-client-js"
-  engineType = "wasm"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+// Enums
+enum Provider {
+  OPENAI
+  ANTHROPIC
+  OLLAMA
+  OPENROUTER
+  OPENAI_COMPATIBLE
 }
 
 // NextAuth.js Models
@@ -23,6 +31,8 @@ model User {
 
   accounts      Account[]
   sessions      Session[]
+  apiKeys       ApiKey[]
+  profiles      ConnectionProfile[]
 
   @@map("users")
 }
@@ -65,4 +75,43 @@ model VerificationToken {
 
   @@unique([identifier, token])
   @@map("verification_tokens")
+}
+
+// Phase 0.3: API Key Management
+model ApiKey {
+  id            String   @id @default(uuid())
+  userId        String
+  provider      Provider
+  label         String
+  keyEncrypted  String   @db.Text // AES-256-GCM encrypted
+  keyIv         String   // Initialization vector
+  keyAuthTag    String   // Authentication tag
+  isActive      Boolean  @default(true)
+  lastUsed      DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profiles      ConnectionProfile[]
+
+  @@map("api_keys")
+}
+
+model ConnectionProfile {
+  id              String   @id @default(uuid())
+  userId          String
+  name            String
+  provider        Provider
+  apiKeyId        String?
+  baseUrl         String?  // For Ollama/OpenAI-compatible
+  modelName       String
+  parameters      Json     @default("{}") // { temperature, max_tokens, top_p, etc. }
+  isDefault       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apiKey          ApiKey?  @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+
+  @@map("connection_profiles")
 }

@@ -1,0 +1,288 @@
+/**
+ * API Key Testing Endpoint
+ * Phase 0.3: Core Infrastructure
+ *
+ * POST /api/keys/[id]/test - Test if an API key is valid
+ */
+
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+import { decryptApiKey } from '@/lib/encryption'
+import { Provider } from '@prisma/client'
+
+/**
+ * Test API key validity by making a simple request to the provider
+ */
+async function testProviderApiKey(
+  provider: Provider,
+  apiKey: string,
+  baseUrl?: string
+): Promise<{ valid: boolean; error?: string }> {
+  try {
+    switch (provider) {
+      case 'OPENAI':
+        return await testOpenAI(apiKey)
+
+      case 'ANTHROPIC':
+        return await testAnthropic(apiKey)
+
+      case 'OLLAMA':
+        if (!baseUrl) {
+          return { valid: false, error: 'Base URL required for Ollama' }
+        }
+        return await testOllama(baseUrl)
+
+      case 'OPENROUTER':
+        return await testOpenRouter(apiKey)
+
+      case 'OPENAI_COMPATIBLE':
+        if (!baseUrl) {
+          return { valid: false, error: 'Base URL required for OpenAI-compatible' }
+        }
+        return await testOpenAICompatible(apiKey, baseUrl)
+
+      default:
+        return { valid: false, error: 'Unsupported provider' }
+    }
+  } catch (error) {
+    return {
+      valid: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }
+  }
+}
+
+/**
+ * Test OpenAI API key
+ */
+async function testOpenAI(apiKey: string) {
+  try {
+    const response = await fetch('https://api.openai.com/v1/models', {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+    })
+
+    if (response.ok) {
+      return { valid: true }
+    }
+
+    const error = await response.json()
+    return {
+      valid: false,
+      error: error.error?.message || 'Invalid API key',
+    }
+  } catch (error) {
+    return {
+      valid: false,
+      error: 'Failed to connect to OpenAI',
+    }
+  }
+}
+
+/**
+ * Test Anthropic API key
+ */
+async function testAnthropic(apiKey: string) {
+  try {
+    // Anthropic doesn't have a simple validation endpoint
+    // We'll make a minimal request
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-3-haiku-20240307',
+        max_tokens: 1,
+        messages: [{ role: 'user', content: 'test' }],
+      }),
+    })
+
+    if (response.ok || response.status === 400) {
+      // 400 is also valid - means API key works but request might be malformed
+      return { valid: true }
+    }
+
+    if (response.status === 401) {
+      return { valid: false, error: 'Invalid API key' }
+    }
+
+    return { valid: false, error: `HTTP ${response.status}` }
+  } catch (error) {
+    return {
+      valid: false,
+      error: 'Failed to connect to Anthropic',
+    }
+  }
+}
+
+/**
+ * Test Ollama connection
+ */
+async function testOllama(baseUrl: string) {
+  try {
+    const response = await fetch(`${baseUrl}/api/tags`, {
+      method: 'GET',
+    })
+
+    if (response.ok) {
+      return { valid: true }
+    }
+
+    return {
+      valid: false,
+      error: 'Failed to connect to Ollama',
+    }
+  } catch (error) {
+    return {
+      valid: false,
+      error: 'Ollama server unreachable',
+    }
+  }
+}
+
+/**
+ * Test OpenRouter API key
+ */
+async function testOpenRouter(apiKey: string) {
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/models', {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+    })
+
+    if (response.ok) {
+      return { valid: true }
+    }
+
+    if (response.status === 401) {
+      return { valid: false, error: 'Invalid API key' }
+    }
+
+    return { valid: false, error: `HTTP ${response.status}` }
+  } catch (error) {
+    return {
+      valid: false,
+      error: 'Failed to connect to OpenRouter',
+    }
+  }
+}
+
+/**
+ * Test OpenAI-compatible API
+ */
+async function testOpenAICompatible(apiKey: string, baseUrl: string) {
+  try {
+    const response = await fetch(`${baseUrl}/v1/models`, {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+    })
+
+    if (response.ok) {
+      return { valid: true }
+    }
+
+    return {
+      valid: false,
+      error: 'Failed to validate with OpenAI-compatible endpoint',
+    }
+  } catch (error) {
+    return {
+      valid: false,
+      error: 'Server unreachable',
+    }
+  }
+}
+
+/**
+ * POST /api/keys/[id]/test
+ * Test if an API key is valid
+ *
+ * Body: {
+ *   baseUrl?: string  // Optional, required for Ollama/OpenAI-compatible
+ * }
+ */
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
+    // Get the API key
+    const apiKey = await prisma.apiKey.findFirst({
+      where: {
+        id: params.id,
+        userId: session.user.id, // Ensure user owns this key
+      },
+    })
+
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: 'API key not found' },
+        { status: 404 }
+      )
+    }
+
+    // Decrypt the API key
+    const decryptedKey = decryptApiKey(
+      apiKey.keyEncrypted,
+      apiKey.keyIv,
+      apiKey.keyAuthTag,
+      session.user.id
+    )
+
+    // Get optional baseUrl from request body
+    const body = await req.json().catch(() => ({}))
+    const { baseUrl } = body
+
+    // Test the key
+    const result = await testProviderApiKey(
+      apiKey.provider,
+      decryptedKey,
+      baseUrl
+    )
+
+    if (result.valid) {
+      // Update lastUsed timestamp
+      await prisma.apiKey.update({
+        where: { id: params.id },
+        data: { lastUsed: new Date() },
+      })
+
+      return NextResponse.json({
+        valid: true,
+        provider: apiKey.provider,
+        message: 'API key is valid',
+      })
+    }
+
+    return NextResponse.json(
+      {
+        valid: false,
+        provider: apiKey.provider,
+        error: result.error,
+      },
+      { status: 400 }
+    )
+  } catch (error) {
+    console.error('Failed to test API key:', error)
+    return NextResponse.json(
+      { error: 'Failed to test API key' },
+      { status: 500 }
+    )
+  }
+}
