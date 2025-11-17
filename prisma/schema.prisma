@@ -19,6 +19,12 @@ enum Provider {
   OPENAI_COMPATIBLE
 }
 
+enum Role {
+  SYSTEM
+  USER
+  ASSISTANT
+}
+
 // NextAuth.js Models
 model User {
   id            String    @id @default(uuid())
@@ -33,6 +39,9 @@ model User {
   sessions      Session[]
   apiKeys       ApiKey[]
   profiles      ConnectionProfile[]
+  characters    Character[]
+  personas      Persona[]
+  chats         Chat[]
 
   @@map("users")
 }
@@ -112,6 +121,99 @@ model ConnectionProfile {
 
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   apiKey          ApiKey?  @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+  chats           Chat[]
 
   @@map("connection_profiles")
+}
+
+// Phase 0.5: Character and Chat System
+model Character {
+  id                String   @id @default(uuid())
+  userId            String
+  name              String
+  description       String   @db.Text
+  personality       String   @db.Text
+  scenario          String   @db.Text
+  firstMessage      String   @db.Text
+  exampleDialogues  String?  @db.Text
+  systemPrompt      String?  @db.Text
+  avatarUrl         String?
+  sillyTavernData   Json?    // Full ST character spec
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chats             Chat[]
+  personas          CharacterPersona[]
+
+  @@map("characters")
+}
+
+model Persona {
+  id                String   @id @default(uuid())
+  userId            String
+  name              String
+  description       String   @db.Text
+  personalityTraits String?  @db.Text
+  avatarUrl         String?
+  sillyTavernData   Json?    // Full ST persona spec
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  characters        CharacterPersona[]
+  chats             Chat[]
+
+  @@map("personas")
+}
+
+model CharacterPersona {
+  characterId String
+  personaId   String
+  isDefault   Boolean @default(false)
+
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  persona     Persona   @relation(fields: [personaId], references: [id], onDelete: Cascade)
+
+  @@id([characterId, personaId])
+  @@map("character_personas")
+}
+
+model Chat {
+  id                  String   @id @default(uuid())
+  userId              String
+  characterId         String
+  personaId           String?
+  connectionProfileId String
+  title               String
+  contextSummary      String?  @db.Text
+  sillyTavernMetadata Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  character           Character         @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  persona             Persona?          @relation(fields: [personaId], references: [id], onDelete: SetNull)
+  connectionProfile   ConnectionProfile @relation(fields: [connectionProfileId], references: [id])
+  messages            Message[]
+
+  @@map("chats")
+}
+
+model Message {
+  id            String    @id @default(uuid())
+  chatId        String
+  role          Role
+  content       String    @db.Text
+  rawResponse   Json?     // Full LLM response
+  tokenCount    Int?
+  swipeGroupId  String?   // For alternative responses
+  swipeIndex    Int?
+  createdAt     DateTime  @default(now())
+
+  chat          Chat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@index([chatId, createdAt])
+  @@index([swipeGroupId])
+  @@map("messages")
 }
