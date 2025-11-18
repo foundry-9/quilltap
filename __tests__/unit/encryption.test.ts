@@ -199,7 +199,9 @@ describe('Encryption Service', () => {
   describe('maskApiKey', () => {
     it('should mask a standard API key', () => {
       const masked = maskApiKey('sk-1234567890abcdefghijklmnop')
-      expect(masked).toBe('sk-12345•••••••mnop')
+      // Shows first 8 chars, last 4 chars, and masks the middle
+      // 'sk-1234567890abcdefghijklmnop' is 29 chars, so 29 - 12 = 17 dots
+      expect(masked).toBe('sk-12345•••••••••••••••••mnop')
     })
 
     it('should handle short keys', () => {
