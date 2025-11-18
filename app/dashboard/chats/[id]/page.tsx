@@ -71,8 +71,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setStreamingContent('')
 
     // Add user message to UI
+    const tempUserMessageId = `temp-user-${Date.now()}`
     const tempUserMessage: Message = {
-      id: 'temp-user',
+      id: tempUserMessageId,
       role: 'USER',
       content: userMessage,
       createdAt: new Date().toISOString(),
@@ -141,7 +142,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       console.error('Error sending message:', err)
       alert(err instanceof Error ? err.message : 'Failed to send message')
       // Remove the temporary user message on error
-      setMessages((prev) => prev.filter((m) => m.id !== 'temp-user'))
+      setMessages((prev) => prev.filter((m) => m.id !== tempUserMessageId))
       setStreamingContent('')
       setStreaming(false)
     } finally {
