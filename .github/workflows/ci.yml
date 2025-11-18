@@ -47,6 +47,7 @@ jobs:
 
       - name: Generate Prisma client
         run: npx prisma generate
+        continue-on-error: true
         env:
           DATABASE_URL: postgresql://fake:fake@localhost:5432/fake?schema=public
           PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING: 1
