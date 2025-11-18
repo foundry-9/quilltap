@@ -97,7 +97,7 @@ export class AnthropicProvider extends LLMProvider {
       const client = new Anthropic({ apiKey })
       // Anthropic doesn't have a direct validation endpoint, so we make a minimal request
       await client.messages.create({
-        model: 'claude-3-haiku-20240307',
+        model: 'claude-haiku-4-5-20251015',
         max_tokens: 1,
         messages: [{ role: 'user', content: 'test' }],
       })
@@ -110,12 +110,21 @@ export class AnthropicProvider extends LLMProvider {
 
   async getAvailableModels(apiKey: string): Promise<string[]> {
     // Anthropic doesn't have a models endpoint, return known models
-    // These are the current Claude models as of November 2024
+    // These are the current Claude models as of November 2025
+    // Note: Claude 3.5 models were deprecated on October 22, 2025
+    // Note: Claude 3 Sonnet was retired on July 21, 2025
     return [
-      'claude-3-5-sonnet-20241022',
-      'claude-3-5-sonnet-20240620',
-      'claude-3-opus-20240229',
-      'claude-3-sonnet-20240229',
+      // Claude 4.5 models (latest)
+      'claude-sonnet-4-5-20250929',
+      'claude-haiku-4-5-20251015',
+
+      // Claude 4 models
+      'claude-opus-4-1-20250805',
+      'claude-sonnet-4-20250514',
+      'claude-opus-4-20250514',
+
+      // Claude 3 models (legacy, will be retired)
+      'claude-3-opus-20240229', // Retiring Jan 5, 2026
       'claude-3-haiku-20240307',
     ]
   }

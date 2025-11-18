@@ -316,7 +316,7 @@ export default function ConnectionProfilesTab() {
   const getModelSuggestions = (provider: string): string[] => {
     const models: Record<string, string[]> = {
       OPENAI: ['gpt-4', 'gpt-3.5-turbo', 'gpt-4-turbo'],
-      ANTHROPIC: ['claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307'],
+      ANTHROPIC: ['claude-sonnet-4-5-20250929', 'claude-haiku-4-5-20251015', 'claude-opus-4-1-20250805'],
       OLLAMA: ['llama2', 'neural-chat', 'mistral'],
       OPENROUTER: ['openai/gpt-4', 'anthropic/claude-2', 'meta-llama/llama-2-70b'],
       OPENAI_COMPATIBLE: ['gpt-3.5-turbo'],

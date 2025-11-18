@@ -1049,9 +1049,12 @@ export class AnthropicProvider extends LLMProvider {
   async getAvailableModels(): Promise<string[]> {
     // Anthropic doesn't have a models endpoint, return known models
     return [
-      'claude-3-5-sonnet-20241022',
+      'claude-sonnet-4-5-20250929',
+      'claude-haiku-4-5-20251015',
+      'claude-opus-4-1-20250805',
+      'claude-sonnet-4-20250514',
+      'claude-opus-4-20250514',
       'claude-3-opus-20240229',
-      'claude-3-sonnet-20240229',
       'claude-3-haiku-20240307',
     ]
   }

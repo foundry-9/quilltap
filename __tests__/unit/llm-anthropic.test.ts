@@ -403,7 +403,7 @@ describe('AnthropicProvider', () => {
       expect(result).toBe(true)
       expect(mockAnthropic).toHaveBeenCalledWith({ apiKey: 'valid-api-key' })
       expect(mockAnthropicInstance.messages.create).toHaveBeenCalledWith({
-        model: 'claude-3-haiku-20240307',
+        model: 'claude-haiku-4-5-20251015',
         max_tokens: 1,
         messages: [{ role: 'user', content: 'test' }],
       })
@@ -435,13 +435,15 @@ describe('AnthropicProvider', () => {
       const result = await provider.getAvailableModels('test-api-key')
 
       expect(result).toEqual([
-        'claude-3-5-sonnet-20241022',
-        'claude-3-5-sonnet-20240620',
+        'claude-sonnet-4-5-20250929',
+        'claude-haiku-4-5-20251015',
+        'claude-opus-4-1-20250805',
+        'claude-sonnet-4-20250514',
+        'claude-opus-4-20250514',
         'claude-3-opus-20240229',
-        'claude-3-sonnet-20240229',
         'claude-3-haiku-20240307',
       ])
-      expect(result).toHaveLength(5)
+      expect(result).toHaveLength(7)
     })
 
     it('should return same models regardless of API key', async () => {
@@ -451,13 +453,13 @@ describe('AnthropicProvider', () => {
       expect(result1).toEqual(result2)
     })
 
-    it('should include latest Claude 3.5 Sonnet', async () => {
+    it('should include latest Claude Sonnet 4.5', async () => {
       const result = await provider.getAvailableModels('test-key')
 
-      expect(result).toContain('claude-3-5-sonnet-20241022')
+      expect(result).toContain('claude-sonnet-4-5-20250929')
     })
 
-    it('should include all Claude 3 model families', async () => {
+    it('should include all Claude model families', async () => {
       const result = await provider.getAvailableModels('test-key')
 
       const hasSonnet = result.some(m => m.includes('sonnet'))

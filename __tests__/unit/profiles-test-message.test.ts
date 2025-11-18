@@ -555,7 +555,7 @@ describe('POST /api/profiles/test-message', () => {
       const req = createMockRequest({
         provider: 'ANTHROPIC',
         apiKeyId: 'key-123',
-        modelName: 'claude-3-sonnet-20240229',
+        modelName: 'claude-sonnet-4-5-20250929',
       })
 
       const response = await testMessage(req)
