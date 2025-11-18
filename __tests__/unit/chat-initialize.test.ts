@@ -7,22 +7,6 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals'
 import { buildChatContext } from '@/lib/chat/initialize'
 import { prisma } from '@/lib/prisma'
 
-// Create mock functions
-const mockCharacterFindUnique = jest.fn()
-const mockPersonaFindUnique = jest.fn()
-
-// Mock Prisma client
-jest.mock('@/lib/prisma', () => ({
-  prisma: {
-    character: {
-      findUnique: mockCharacterFindUnique,
-    },
-    persona: {
-      findUnique: mockPersonaFindUnique,
-    },
-  },
-}))
-
 describe('buildChatContext', () => {
   const mockCharacter = {
     id: 'char-1',
@@ -53,16 +37,20 @@ describe('buildChatContext', () => {
     jest.clearAllMocks()
   })
 
+  // Get the mock functions
+  const getCharacterFindUniqueM = () => (prisma.character.findUnique as jest.Mock)
+  const getPersonaFindUniqueM = () => (prisma.persona.findUnique as jest.Mock)
+
   describe('Basic functionality', () => {
     it('should build chat context with character only', async () => {
-      mockCharacterFindUnique.mockResolvedValue({
+      getCharacterFindUniqueM().mockResolvedValue({
         ...mockCharacter,
         personas: [],
       })
 
       const context = await buildChatContext('char-1')
 
-      expect(mockCharacterFindUnique).toHaveBeenCalledWith({
+      expect(getCharacterFindUniqueM()).toHaveBeenCalledWith({
         where: { id: 'char-1' },
         include: {
           personas: {
@@ -82,15 +70,15 @@ describe('buildChatContext', () => {
     })
 
     it('should build chat context with character and specified persona', async () => {
-      mockCharacterFindUnique.mockResolvedValue({
+      getCharacterFindUniqueM().mockResolvedValue({
         ...mockCharacter,
         personas: [],
       })
-      mockPersonaFindUnique.mockResolvedValue(mockPersona)
+      getPersonaFindUniqueM().mockResolvedValue(mockPersona)
 
       const context = await buildChatContext('char-1', 'persona-1')
 
-      expect(mockCharacterFindUnique).toHaveBeenCalledWith({
+      expect(getCharacterFindUniqueM()).toHaveBeenCalledWith({
         where: { id: 'char-1' },
         include: {
           personas: {
@@ -99,7 +87,7 @@ describe('buildChatContext', () => {
           },
         },
       })
-      expect(mockPersonaFindUnique).toHaveBeenCalledWith({
+      expect(getPersonaFindUniqueM()).toHaveBeenCalledWith({
         where: { id: 'persona-1' },
       })
 
@@ -119,7 +107,7 @@ describe('buildChatContext', () => {
         ],
       }
 
-      mockCharacterFindUnique.mockResolvedValue(
+      getCharacterFindUniqueM().mockResolvedValue(
         characterWithDefaultPersona
       )
 
@@ -130,7 +118,7 @@ describe('buildChatContext', () => {
     })
 
     it('should use custom scenario when provided', async () => {
-      mockCharacterFindUnique.mockResolvedValue({
+      getCharacterFindUniqueM().mockResolvedValue({
         ...mockCharacter,
         personas: [],
       })
@@ -144,7 +132,7 @@ describe('buildChatContext', () => {
     })
 
     it('should throw error when character not found', async () => {
-      mockCharacterFindUnique.mockResolvedValue(null)
+      getCharacterFindUniqueM().mockResolvedValue(null)
 
       await expect(buildChatContext('nonexistent')).rejects.toThrow('Character not found')
     })
@@ -152,7 +140,7 @@ describe('buildChatContext', () => {
 
   describe('System prompt building', () => {
     it('should include character name in system prompt', async () => {
-      mockCharacterFindUnique.mockResolvedValue({
+      getCharacterFindUniqueM().mockResolvedValue({
         ...mockCharacter,
         personas: [],
       })
@@ -163,7 +151,7 @@ describe('buildChatContext', () => {
     })
 
     it('should include character description', async () => {
-      mockCharacterFindUnique.mockResolvedValue({
+      getCharacterFindUniqueM().mockResolvedValue({
         ...mockCharacter,
         personas: [],
       })
@@ -175,7 +163,7 @@ describe('buildChatContext', () => {
     })
 
     it('should include personality', async () => {
-      mockCharacterFindUnique.mockResolvedValue({
+      getCharacterFindUniqueM().mockResolvedValue({
         ...mockCharacter,
         personas: [],
       })
@@ -187,7 +175,7 @@ describe('buildChatContext', () => {
     })
 
     it('should include scenario', async () => {
-      mockCharacterFindUnique.mockResolvedValue({
+      getCharacterFindUniqueM().mockResolvedValue({
         ...mockCharacter,
         personas: [],
       })
@@ -199,7 +187,7 @@ describe('buildChatContext', () => {
     })
 
     it('should include example dialogues', async () => {
-      mockCharacterFindUnique.mockResolvedValue({
+      getCharacterFindUniqueM().mockResolvedValue({
         ...mockCharacter,
         personas: [],
       })
@@ -211,7 +199,7 @@ describe('buildChatContext', () => {
     })
 
     it('should include custom system prompt', async () => {
-      mockCharacterFindUnique.mockResolvedValue({
+      getCharacterFindUniqueM().mockResolvedValue({
         ...mockCharacter,
         personas: [],
       })
@@ -222,11 +210,11 @@ describe('buildChatContext', () => {
     })
 
     it('should include persona information when present', async () => {
-      mockCharacterFindUnique.mockResolvedValue({
+      getCharacterFindUniqueM().mockResolvedValue({
         ...mockCharacter,
         personas: [],
       })
-      mockPersonaFindUnique.mockResolvedValue(mockPersona)
+      getPersonaFindUniqueM().mockResolvedValue(mockPersona)
 
       const context = await buildChatContext('char-1', 'persona-1')
 
@@ -236,7 +224,7 @@ describe('buildChatContext', () => {
     })
 
     it('should include roleplay instructions', async () => {
-      mockCharacterFindUnique.mockResolvedValue({
+      getCharacterFindUniqueM().mockResolvedValue({
         ...mockCharacter,
         personas: [],
       })
@@ -263,7 +251,7 @@ describe('buildChatContext', () => {
         updatedAt: new Date(),
       }
 
-      mockCharacterFindUnique.mockResolvedValue(minimalCharacter)
+      getCharacterFindUniqueM().mockResolvedValue(minimalCharacter)
 
       const context = await buildChatContext('char-2')
 
@@ -286,11 +274,11 @@ describe('buildChatContext', () => {
         updatedAt: new Date(),
       }
 
-      mockCharacterFindUnique.mockResolvedValue({
+      getCharacterFindUniqueM().mockResolvedValue({
         ...mockCharacter,
         personas: [],
       })
-      mockPersonaFindUnique.mockResolvedValue(minimalPersona)
+      getPersonaFindUniqueM().mockResolvedValue(minimalPersona)
 
       const context = await buildChatContext('char-1', 'persona-2')
 
@@ -299,11 +287,11 @@ describe('buildChatContext', () => {
     })
 
     it('should build complete system prompt with all components', async () => {
-      mockCharacterFindUnique.mockResolvedValue({
+      getCharacterFindUniqueM().mockResolvedValue({
         ...mockCharacter,
         personas: [],
       })
-      mockPersonaFindUnique.mockResolvedValue(mockPersona)
+      getPersonaFindUniqueM().mockResolvedValue(mockPersona)
 
       const customScenario = 'Custom scenario text'
       const context = await buildChatContext('char-1', 'persona-1', customScenario)
@@ -341,7 +329,7 @@ describe('buildChatContext', () => {
         personas: [],
       }
 
-      mockCharacterFindUnique.mockResolvedValue(characterWithNulls)
+      getCharacterFindUniqueM().mockResolvedValue(characterWithNulls)
 
       const context = await buildChatContext('char-1')
 
@@ -350,7 +338,7 @@ describe('buildChatContext', () => {
     })
 
     it('should handle persona being null when no default exists', async () => {
-      mockCharacterFindUnique.mockResolvedValue({
+      getCharacterFindUniqueM().mockResolvedValue({
         ...mockCharacter,
         personas: [],
       })
@@ -361,7 +349,7 @@ describe('buildChatContext', () => {
     })
 
     it('should handle database errors gracefully', async () => {
-      mockCharacterFindUnique.mockRejectedValue(
+      getCharacterFindUniqueM().mockRejectedValue(
         new Error('Database connection error')
       )
 
@@ -369,7 +357,7 @@ describe('buildChatContext', () => {
     })
 
     it('should trim whitespace from system prompt', async () => {
-      mockCharacterFindUnique.mockResolvedValue({
+      getCharacterFindUniqueM().mockResolvedValue({
         ...mockCharacter,
         personas: [],
       })
@@ -388,7 +376,7 @@ describe('buildChatContext', () => {
         personas: [],
       }
 
-      mockCharacterFindUnique.mockResolvedValue(characterWithLongText)
+      getCharacterFindUniqueM().mockResolvedValue(characterWithLongText)
 
       const context = await buildChatContext('char-1')
 
@@ -405,7 +393,7 @@ describe('buildChatContext', () => {
         personas: [],
       }
 
-      mockCharacterFindUnique.mockResolvedValue(specialCharacter)
+      getCharacterFindUniqueM().mockResolvedValue(specialCharacter)
 
       const context = await buildChatContext('char-1')
 

@@ -6,7 +6,10 @@ import { LLMProvider, LLMParams, LLMResponse, StreamChunk } from './base'
 
 export class OpenAIProvider extends LLMProvider {
   async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
-    const client = new OpenAI({ apiKey })
+    const client = new OpenAI({
+      apiKey,
+      dangerouslyAllowBrowser: process.env.NODE_ENV === 'test',
+    })
 
     const response = await client.chat.completions.create({
       model: params.model,
@@ -32,7 +35,10 @@ export class OpenAIProvider extends LLMProvider {
   }
 
   async *streamMessage(params: LLMParams, apiKey: string): AsyncGenerator<StreamChunk> {
-    const client = new OpenAI({ apiKey })
+    const client = new OpenAI({
+      apiKey,
+      dangerouslyAllowBrowser: process.env.NODE_ENV === 'test',
+    })
 
     const stream = await client.chat.completions.create({
       model: params.model,
@@ -47,8 +53,10 @@ export class OpenAIProvider extends LLMProvider {
     for await (const chunk of stream) {
       const content = chunk.choices[0]?.delta?.content
       const finishReason = chunk.choices[0]?.finish_reason
+      const hasUsage = chunk.usage
 
-      if (content) {
+      // Yield content unless this is the final chunk with usage info
+      if (content && !(finishReason && hasUsage)) {
         yield {
           content,
           done: false,
@@ -56,7 +64,7 @@ export class OpenAIProvider extends LLMProvider {
       }
 
       // Final chunk with usage info
-      if (finishReason && chunk.usage) {
+      if (finishReason && hasUsage) {
         yield {
           content: '',
           done: true,

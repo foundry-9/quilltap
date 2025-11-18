@@ -7,13 +7,9 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals'
 import { OpenAIProvider } from '@/lib/llm/openai'
 import { LLMParams } from '@/lib/llm/base'
 
-// Mock the OpenAI module
-const mockOpenAIConstructor = jest.fn()
-jest.mock('openai', () => {
-  return {
-    default: mockOpenAIConstructor,
-  }
-})
+// OpenAI is already mocked in jest.setup.ts
+import OpenAI from 'openai'
+const mockOpenAI = jest.mocked(OpenAI)
 
 describe('OpenAIProvider', () => {
   let provider: OpenAIProvider
@@ -24,7 +20,7 @@ describe('OpenAIProvider', () => {
     jest.clearAllMocks()
 
     // Reset the mock constructor
-    mockOpenAIConstructor.mockClear()
+    mockOpenAI.mockClear()
 
     // Create a mock OpenAI instance
     mockOpenAIInstance = {
@@ -39,7 +35,7 @@ describe('OpenAIProvider', () => {
     }
 
     // Mock the OpenAI constructor to return our mock instance
-    mockOpenAIConstructor.mockImplementation(() => mockOpenAIInstance)
+    mockOpenAI.mockImplementation(() => mockOpenAIInstance)
 
     provider = new OpenAIProvider()
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
@@ -81,7 +77,10 @@ describe('OpenAIProvider', () => {
 
       const result = await provider.sendMessage(mockParams, 'test-api-key')
 
-      expect(mockOpenAIConstructor).toHaveBeenCalledWith({ apiKey: 'test-api-key' })
+      expect(mockOpenAI).toHaveBeenCalledWith({
+        apiKey: 'test-api-key',
+        dangerouslyAllowBrowser: true,
+      })
       expect(mockOpenAIInstance.chat.completions.create).toHaveBeenCalledWith({
         model: 'gpt-4',
         messages: mockParams.messages,
@@ -414,7 +413,7 @@ describe('OpenAIProvider', () => {
       const result = await provider.validateApiKey('valid-api-key')
 
       expect(result).toBe(true)
-      expect(mockOpenAIConstructor).toHaveBeenCalledWith({ apiKey: 'valid-api-key' })
+      expect(mockOpenAI).toHaveBeenCalledWith({ apiKey: 'valid-api-key' })
       expect(mockOpenAIInstance.models.list).toHaveBeenCalled()
     })
 

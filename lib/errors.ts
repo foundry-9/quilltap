@@ -130,7 +130,9 @@ export function handleError(error: unknown): NextResponse {
  * Throws AppError if validation fails
  */
 export function validateRequestBody(body: any, requiredFields: string[]) {
-  const missingFields = requiredFields.filter(field => !body[field])
+  const missingFields = requiredFields.filter(
+    field => !(field in body) || body[field] === null || body[field] === undefined || body[field] === ''
+  )
 
   if (missingFields.length > 0) {
     throw new AppError(
