@@ -1,0 +1,30 @@
+#!/bin/bash
+
+# Pre-commit hook to automatically bump the patch version in package.json
+
+# Get the current version from package.json
+CURRENT_VERSION=$(grep -m1 '"version"' package.json | sed 's/.*"\([^"]*\)".*/\1/')
+
+# Split the version into major, minor, and patch
+IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+
+# Increment the patch version
+NEW_PATCH=$((PATCH + 1))
+NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+
+# Update package.json with the new version
+# Using sed with -i '' for macOS compatibility
+sed -i '' "s/\"version\": \"$CURRENT_VERSION\"/\"version\": \"$NEW_VERSION\"/" package.json
+
+# Check if package-lock.json exists and update it as well
+if [ -f package-lock.json ]; then
+  sed -i '' "s/\"version\": \"$CURRENT_VERSION\"/\"version\": \"$NEW_VERSION\"/" package-lock.json
+fi
+
+# Stage the updated package files
+git add package.json
+if [ -f package-lock.json ]; then
+  git add package-lock.json
+fi
+
+exit 0
