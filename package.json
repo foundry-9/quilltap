@@ -1,7 +1,18 @@
 {
   "name": "quilltap",
-  "version": "0.1.1",
+  "version": "0.5.1",
   "private": true,
+  "author": {
+    "name": "Charles Sebold",
+    "email": "charles@sebold.tech",
+    "url": "https://foundry-9.com"
+  },
+  "description": "A chat client application for hosted AI models designed for role play",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/foundry-9/quilltap.git"
+  },
   "scripts": {
     "dev": "next dev",
     "devssl": "next dev --experimental-https --experimental-https-key ./certs/localhost-key.pem --experimental-https-cert ./certs/localhost.pem",

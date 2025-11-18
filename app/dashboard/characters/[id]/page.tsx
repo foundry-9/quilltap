@@ -56,8 +56,8 @@ export default function CharacterDetailPage({ params }: { params: Promise<{ id: 
       const res = await fetch('/api/profiles')
       if (!res.ok) throw new Error('Failed to fetch profiles')
       const data = await res.json()
-      setProfiles(data.profiles || [])
-      const defaultProfile = data.profiles?.find((p: any) => p.isDefault)
+      setProfiles(data || [])
+      const defaultProfile = data?.find((p: any) => p.isDefault)
       if (defaultProfile) {
         setSelectedProfile(defaultProfile.id)
       }
