@@ -48,6 +48,7 @@ jobs:
       - name: Generate Prisma Client
         run: npm run db:generate
         env:
+          PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING: "1"
           PRISMA_SKIP_POSTINSTALL_GENERATE: "1"
           PRISMA_GENERATE_SKIP_DOWNLOAD: "1"
 
