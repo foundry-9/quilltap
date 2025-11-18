@@ -67,6 +67,31 @@ jest.mock('openai', () => {
   }
 })
 
+// Mock Anthropic SDK
+jest.mock('@anthropic-ai/sdk', () => {
+  return {
+    __esModule: true,
+    default: jest.fn().mockImplementation(() => ({
+      messages: {
+        create: jest.fn(() =>
+          Promise.resolve({
+            content: [{ type: 'text', text: 'test response' }],
+            stop_reason: 'end_turn',
+            usage: { input_tokens: 10, output_tokens: 5 },
+          })
+        ),
+      },
+    })),
+  }
+})
+
+// Add TextEncoder and TextDecoder for Node.js tests
+if (typeof TextEncoder === 'undefined') {
+  const { TextEncoder, TextDecoder } = require('util')
+  global.TextEncoder = TextEncoder
+  global.TextDecoder = TextDecoder
+}
+
 // Mock cookies for NextRequest
 if (!(globalThis as any).Cookies) {
   ;(globalThis as any).Cookies = class {
@@ -168,4 +193,17 @@ jest.mock('@prisma/client', () => ({
     OPENROUTER: 'OPENROUTER',
     OPENAI_COMPATIBLE: 'OPENAI_COMPATIBLE',
   },
+}))
+
+// Mock encryption library
+jest.mock('@/lib/encryption', () => ({
+  decryptApiKey: jest.fn(),
+  encryptApiKey: jest.fn(),
+  maskApiKey: jest.fn(),
+  testEncryption: jest.fn(),
+}))
+
+// Mock LLM factory
+jest.mock('@/lib/llm/factory', () => ({
+  createLLMProvider: jest.fn(),
 }))

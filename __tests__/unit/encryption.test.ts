@@ -3,6 +3,9 @@
  * Phase 0.3: Core Infrastructure
  */
 
+// Unmock the encryption module to test the real implementation
+jest.unmock('@/lib/encryption')
+
 import { encryptApiKey, decryptApiKey, maskApiKey, testEncryption } from '@/lib/encryption'
 
 // Mock environment variable

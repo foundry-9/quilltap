@@ -29,19 +29,10 @@ jest.mock('@/lib/prisma', () => ({
   },
 }))
 
-// Create mock implementations
-jest.mock('@/lib/encryption', () => {
-  return {
-    encryptApiKey: jest.fn(),
-    decryptApiKey: jest.fn(),
-    maskApiKey: jest.fn(),
-    testEncryption: jest.fn(),
-  }
-})
-
+// Encryption is mocked globally in jest.setup.ts
 // Get the mocked versions for use in tests
-const mockEncryptApiKey = encryptApiKey as jest.MockedFunction<typeof encryptApiKey>
-const mockMaskApiKey = maskApiKey as jest.MockedFunction<typeof maskApiKey>
+const mockEncryptApiKey = jest.mocked(encryptApiKey)
+const mockMaskApiKey = jest.mocked(maskApiKey)
 
 // Helper to create a mock NextRequest
 function createMockRequest(url: string, options?: { method?: string; body?: string }) {
@@ -66,6 +57,15 @@ describe('API Keys Routes', () => {
     ;(prisma.apiKey.create as jest.Mock).mockClear?.()
     ;(prisma.apiKey.update as jest.Mock).mockClear?.()
     ;(prisma.apiKey.delete as jest.Mock).mockClear?.()
+
+    // Set up default mock implementations for encryption functions
+    mockEncryptApiKey.mockReturnValue({
+      encrypted: 'encrypted-data',
+      iv: 'iv-data',
+      authTag: 'auth-tag',
+    })
+    mockMaskApiKey.mockImplementation((key: string) => `***${key.slice(-4)}`)
+
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
   })
 

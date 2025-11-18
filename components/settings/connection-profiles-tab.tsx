@@ -41,6 +41,20 @@ export default function ConnectionProfilesTab() {
     isDefault: false,
   })
 
+  // Connection testing states
+  const [isConnected, setIsConnected] = useState(false)
+  const [isConnecting, setIsConnecting] = useState(false)
+  const [connectionMessage, setConnectionMessage] = useState<string | null>(null)
+
+  // Fetch models states
+  const [fetchedModels, setFetchedModels] = useState<string[]>([])
+  const [isFetchingModels, setIsFetchingModels] = useState(false)
+  const [modelsMessage, setModelsMessage] = useState<string | null>(null)
+
+  // Test message states
+  const [isTestingMessage, setIsTestingMessage] = useState(false)
+  const [testMessageResult, setTestMessageResult] = useState<string | null>(null)
+
   useEffect(() => {
     fetchProfiles()
     fetchApiKeys()
@@ -85,6 +99,12 @@ export default function ConnectionProfilesTab() {
       isDefault: false,
     })
     setEditingId(null)
+    // Reset connection states
+    setIsConnected(false)
+    setConnectionMessage(null)
+    setFetchedModels([])
+    setModelsMessage(null)
+    setTestMessageResult(null)
   }
 
   const handleEdit = (profile: ConnectionProfile) => {
@@ -161,17 +181,153 @@ export default function ConnectionProfilesTab() {
       [name]:
         type === 'checkbox' ? (e.target as HTMLInputElement).checked : value,
     })
+
+    // Reset connection state if provider or credentials change
+    if (name === 'provider' || name === 'apiKeyId' || name === 'baseUrl') {
+      setIsConnected(false)
+      setConnectionMessage(null)
+      setFetchedModels([])
+      setModelsMessage(null)
+      setTestMessageResult(null)
+    }
+  }
+
+  const handleConnect = async () => {
+    setIsConnecting(true)
+    setConnectionMessage(null)
+    setError(null)
+
+    try {
+      // Validate required fields
+      if (!formData.provider) {
+        throw new Error('Provider is required')
+      }
+
+      if (formData.provider === 'OLLAMA' || formData.provider === 'OPENAI_COMPATIBLE') {
+        if (!formData.baseUrl) {
+          throw new Error('Base URL is required for this provider')
+        }
+      } else if (!formData.apiKeyId) {
+        throw new Error('API Key is required for this provider')
+      }
+
+      // Test the connection
+      const res = await fetch('/api/profiles/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: formData.provider,
+          apiKeyId: formData.apiKeyId || undefined,
+          baseUrl: formData.baseUrl || undefined,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Connection test failed')
+      }
+
+      setIsConnected(true)
+      setConnectionMessage(data.message || 'Connection successful!')
+    } catch (err) {
+      setIsConnected(false)
+      setConnectionMessage(null)
+      setError(err instanceof Error ? err.message : 'Connection failed')
+    } finally {
+      setIsConnecting(false)
+    }
+  }
+
+  const handleFetchModels = async () => {
+    setIsFetchingModels(true)
+    setModelsMessage(null)
+    setError(null)
+
+    try {
+      // Validate required fields based on provider
+      if ((formData.provider === 'OLLAMA' || formData.provider === 'OPENAI_COMPATIBLE') && !formData.baseUrl) {
+        throw new Error('Base URL is required for this provider')
+      }
+
+      const res = await fetch('/api/models', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: formData.provider,
+          apiKeyId: formData.apiKeyId || undefined,
+          baseUrl: formData.baseUrl || undefined,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to fetch models')
+      }
+
+      setFetchedModels(data.models || [])
+      setModelsMessage(`Found ${data.models?.length || 0} models`)
+    } catch (err) {
+      setModelsMessage(null)
+      setError(err instanceof Error ? err.message : 'Failed to fetch models')
+    } finally {
+      setIsFetchingModels(false)
+    }
+  }
+
+  const handleTestMessage = async () => {
+    setIsTestingMessage(true)
+    setTestMessageResult(null)
+    setError(null)
+
+    try {
+      // Validate model name
+      if (!formData.modelName) {
+        throw new Error('Model name is required')
+      }
+
+      const res = await fetch('/api/profiles/test-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: formData.provider,
+          apiKeyId: formData.apiKeyId || undefined,
+          baseUrl: formData.baseUrl || undefined,
+          modelName: formData.modelName,
+          parameters: {
+            temperature: parseFloat(String(formData.temperature)),
+            max_tokens: parseInt(String(formData.maxTokens)),
+            top_p: parseFloat(String(formData.topP)),
+          },
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Test message failed')
+      }
+
+      setTestMessageResult(data.message || 'Test message sent successfully!')
+    } catch (err) {
+      setTestMessageResult(null)
+      setError(err instanceof Error ? err.message : 'Test message failed')
+    } finally {
+      setIsTestingMessage(false)
+    }
   }
 
   const getModelSuggestions = (provider: string): string[] => {
     const models: Record<string, string[]> = {
       OPENAI: ['gpt-4', 'gpt-3.5-turbo', 'gpt-4-turbo'],
-      ANTHROPIC: ['claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307'],
+      ANTHROPIC: ['claude-sonnet-4-5-20250929', 'claude-haiku-4-5-20251015', 'claude-opus-4-1-20250805'],
       OLLAMA: ['llama2', 'neural-chat', 'mistral'],
       OPENROUTER: ['openai/gpt-4', 'anthropic/claude-2', 'meta-llama/llama-2-70b'],
       OPENAI_COMPATIBLE: ['gpt-3.5-turbo'],
     }
-    return models[provider] || ['gpt-3.5-turbo']
+    const modelList = models[provider] || ['gpt-3.5-turbo']
+    return modelList.sort()
   }
 
   if (loading) {
@@ -358,26 +514,114 @@ export default function ConnectionProfilesTab() {
               )}
             </div>
 
+            {/* Connection Testing Section */}
+            <div className="border border-gray-200 dark:border-slate-700 rounded-lg p-4 bg-gray-50 dark:bg-slate-800">
+              <h4 className="font-medium text-sm mb-3">Connection Testing</h4>
+
+              <div className="flex flex-wrap gap-3 mb-3">
+                <button
+                  type="button"
+                  onClick={handleConnect}
+                  disabled={isConnecting}
+                  className="px-4 py-2 bg-green-600 dark:bg-green-700 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-800 disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
+                >
+                  {isConnecting ? 'Connecting...' : 'Connect'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleFetchModels}
+                  disabled={
+                    isFetchingModels ||
+                    // For providers that need baseUrl, require it
+                    ((formData.provider === 'OLLAMA' || formData.provider === 'OPENAI_COMPATIBLE') && !formData.baseUrl) ||
+                    // For other providers (except ANTHROPIC which doesn't need connection), require connection
+                    (formData.provider !== 'ANTHROPIC' && formData.provider !== 'OLLAMA' && formData.provider !== 'OPENAI_COMPATIBLE' && !isConnected)
+                  }
+                  className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
+                >
+                  {isFetchingModels ? 'Fetching...' : 'Fetch Models'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleTestMessage}
+                  disabled={!isConnected || isTestingMessage || !formData.modelName}
+                  className="px-4 py-2 bg-purple-600 dark:bg-purple-700 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-800 disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
+                >
+                  {isTestingMessage ? 'Testing...' : 'Test Message'}
+                </button>
+              </div>
+
+              {/* Status messages */}
+              {connectionMessage && (
+                <div className="text-sm text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-700 rounded px-3 py-2 mb-2">
+                  ✓ {connectionMessage}
+                </div>
+              )}
+
+              {modelsMessage && (
+                <div className="text-sm text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 rounded px-3 py-2 mb-2">
+                  ✓ {modelsMessage}
+                </div>
+              )}
+
+              {testMessageResult && (
+                <div className="text-sm text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-900 border border-purple-200 dark:border-purple-700 rounded px-3 py-2 mb-2">
+                  ✓ {testMessageResult}
+                </div>
+              )}
+
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
+                1. Click Connect to test the connection • 2. Fetch Models (enabled after connection) • 3. Test Message to verify API functionality
+              </p>
+            </div>
+
             <div>
               <label htmlFor="modelName" className="block text-sm font-medium mb-2">
                 Model *
               </label>
-              <input
-                type="text"
-                id="modelName"
-                name="modelName"
-                value={formData.modelName}
-                onChange={handleChange}
-                placeholder="e.g., gpt-4"
-                list="modelSuggestions"
-                required
-                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-              />
-              <datalist id="modelSuggestions">
-                {getModelSuggestions(formData.provider).map(model => (
-                  <option key={model} value={model} />
-                ))}
-              </datalist>
+              {fetchedModels.length > 0 ? (
+                <select
+                  id="modelName"
+                  name="modelName"
+                  value={formData.modelName}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                >
+                  <option value="">Select a model</option>
+                  {[...fetchedModels].sort().map(model => (
+                    <option key={model} value={model}>
+                      {model}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    id="modelName"
+                    name="modelName"
+                    value={formData.modelName}
+                    onChange={handleChange}
+                    placeholder="e.g., gpt-4"
+                    list="modelSuggestions"
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                  />
+                  <datalist id="modelSuggestions">
+                    {getModelSuggestions(formData.provider).map(model => (
+                      <option key={model} value={model} />
+                    ))}
+                  </datalist>
+                </>
+              )}
+              {fetchedModels.length > 0 && (
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                  Showing {fetchedModels.length} fetched models from provider
+                </p>
+              )}
             </div>
 
             <div className="border-t border-gray-200 dark:border-slate-700 pt-4">

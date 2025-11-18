@@ -313,19 +313,35 @@ All Phase 0.5 deliverables met. Users can now create characters, start chats wit
 
 **Tasks:**
 
-- [ ] Abstract LLM provider interface
-- [ ] Anthropic integration
-- [ ] OpenAI-compatible provider (generic)
-- [ ] Ollama integration
-- [ ] OpenRouter integration
-- [ ] Provider selection in connection profiles
-- [ ] Model listing per provider
-- [ ] Error handling for each provider
-- [ ] Provider switching in UI
+- [x] Abstract LLM provider interface
+- [x] Anthropic integration
+- [x] OpenAI-compatible provider (generic)
+- [x] Ollama integration
+- [x] OpenRouter integration
+- [x] Provider selection in connection profiles
+- [x] Model listing per provider
+- [x] Error handling for each provider
+- [x] Provider switching in UI
 
 **Deliverable**: Users can chat using any of the 5 provider types
 
-**Status**: ⏳ **PENDING**
+**Status**: ✅ **COMPLETE** (November 18, 2025)
+
+**Completion Notes**:
+
+- Abstract LLM provider interface already implemented with base.ts
+- Anthropic provider implemented with streaming support and proper error handling
+- Ollama provider implemented with local server support
+- OpenRouter provider implemented with OpenAI-compatible SDK
+- OpenAI-compatible provider implemented for generic OpenAI-compatible APIs (LM Studio, vLLM, etc.)
+- LLM provider factory updated to support all 5 provider types with baseUrl support
+- Model listing API endpoint created at /api/models for fetching available models per provider
+- Provider-specific error handling utility created with user-friendly error messages
+- API key testing endpoint already supports all providers
+- Chat API already supports provider switching via connection profiles
+- Connection profiles support baseUrl for Ollama and OpenAI-compatible providers
+
+All Phase 0.7 deliverables met. Users can now chat using any of the 5 provider types: OpenAI, Anthropic, Ollama, OpenRouter, and OpenAI-compatible.
 
 ---
 
@@ -1033,9 +1049,12 @@ export class AnthropicProvider extends LLMProvider {
   async getAvailableModels(): Promise<string[]> {
     // Anthropic doesn't have a models endpoint, return known models
     return [
-      'claude-3-5-sonnet-20241022',
+      'claude-sonnet-4-5-20250929',
+      'claude-haiku-4-5-20251015',
+      'claude-opus-4-1-20250805',
+      'claude-sonnet-4-20250514',
+      'claude-opus-4-20250514',
       'claude-3-opus-20240229',
-      'claude-3-sonnet-20240229',
       'claude-3-haiku-20240307',
     ]
   }
