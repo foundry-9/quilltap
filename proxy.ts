@@ -1,5 +1,5 @@
 /**
- * Next.js Middleware
+ * Next.js Proxy
  * Phase 0.3: Core Infrastructure
  *
  * Handles security headers, CORS, and request preprocessing
@@ -9,10 +9,10 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 /**
- * Middleware runs on all requests
+ * Proxy runs on all requests
  * Use matcher to specify which routes to run on
  */
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const response = NextResponse.next()
 
   // Security headers
@@ -50,8 +50,8 @@ export function middleware(request: NextRequest) {
 }
 
 /**
- * Configure which routes the middleware runs on
- * This matcher runs middleware on all routes except static assets
+ * Configure which routes the proxy runs on
+ * This matcher runs proxy on all routes except static assets
  */
 export const config = {
   matcher: [
