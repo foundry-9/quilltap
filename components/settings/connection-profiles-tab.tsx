@@ -321,7 +321,8 @@ export default function ConnectionProfilesTab() {
       OPENROUTER: ['openai/gpt-4', 'anthropic/claude-2', 'meta-llama/llama-2-70b'],
       OPENAI_COMPATIBLE: ['gpt-3.5-turbo'],
     }
-    return models[provider] || ['gpt-3.5-turbo']
+    const modelList = models[provider] || ['gpt-3.5-turbo']
+    return modelList.sort()
   }
 
   if (loading) {
@@ -579,7 +580,7 @@ export default function ConnectionProfilesTab() {
                   className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
                 >
                   <option value="">Select a model</option>
-                  {fetchedModels.map(model => (
+                  {[...fetchedModels].sort().map(model => (
                     <option key={model} value={model}>
                       {model}
                     </option>
