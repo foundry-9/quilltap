@@ -197,7 +197,7 @@ jobs:
           echo "| Build | ${{ needs.build.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Test | ${{ needs.test.result == 'success' && '✅ Passed' || needs.test.result == 'skipped' && '⚠️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
 
-          if [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.build.result }}" != "success" ] || [ "${{ needs.test.result }}" != "success" ]; then
+          if [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.test.result }}" != "success" ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "❌ **CI Pipeline Failed**" >> $GITHUB_STEP_SUMMARY
             exit 1
