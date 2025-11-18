@@ -5,20 +5,43 @@ This directory contains git hooks for the Quilltap project.
 ## Hooks
 
 ### pre-commit
-Automatically bumps the patch version in `package.json` and `package-lock.json` before each commit.
+Runs quality checks (linting and testing) and automatically bumps the patch version before each commit.
 
 **Behavior:**
-- Extracts the current semver version from package.json
-- Increments the patch version (e.g., 0.1.0 → 0.1.1)
-- Updates both package.json and package-lock.json
-- Stages the updated files so they're included in the commit
+1. **Runs ESLint** - Ensures code quality standards are met
+2. **Runs tests** - Ensures all tests pass (uses `--passWithNoTests` flag)
+3. **Bumps version** - Increments the patch version (e.g., 0.1.0 → 0.1.1)
+4. **Stages changes** - Adds the updated package.json and package-lock.json to the commit
+
+**If any step fails, the commit is aborted** to maintain code quality.
 
 **Example:**
 ```
 $ git commit -m "Add feature X"
-# pre-commit hook runs and bumps version to 0.1.1
-# Stages the updated package files
-# Commit is created with both your changes and the version bump
+🔍 Running pre-commit checks...
+
+📋 Step 1/2: Running ESLint...
+✅ Linting passed!
+
+🧪 Step 2/2: Running tests...
+✅ Tests passed!
+
+📦 Bumping version...
+✅ Version bumped: 0.5.1 → 0.5.2
+
+✨ All pre-commit checks passed!
+# Commit is created with your changes and the version bump
+```
+
+**If checks fail:**
+```
+$ git commit -m "Add feature X"
+🔍 Running pre-commit checks...
+
+📋 Step 1/2: Running ESLint...
+❌ Linting failed! Please fix the errors before committing.
+   You can run 'npm run lint:fix' to auto-fix some issues.
+   Or use 'git commit --no-verify' to skip this check (not recommended).
 ```
 
 ## Configuration
