@@ -49,7 +49,7 @@ jobs:
         run: npm run db:generate
 
       - name: Build Next.js application
-        run: next build
+        run: npx next build
         env:
           # Skip lint during build since we already ran it
           SKIP_ENV_VALIDATION: true
