@@ -39,10 +39,6 @@ build/Release
 
 # Dependency directories
 node_modules/
-!node_modules/.prisma/
-!node_modules/.prisma/client
-node_modules/.prisma/*
-!node_modules/.prisma/client
 jspm_packages/
 
 # Snowpack dependency directory (https://snowpack.dev/)
