@@ -18,9 +18,10 @@ const updateChatSchema = z.object({
 // GET /api/chats/:id
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -36,7 +37,7 @@ export async function GET(
 
     const chat = await prisma.chat.findFirst({
       where: {
-        id: params.id,
+        id,
         userId: user.id,
       },
       include: {
@@ -83,9 +84,10 @@ export async function GET(
 // PUT /api/chats/:id
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -102,7 +104,7 @@ export async function PUT(
     // Verify chat ownership
     const existingChat = await prisma.chat.findFirst({
       where: {
-        id: params.id,
+        id,
         userId: user.id,
       },
     })
@@ -115,7 +117,7 @@ export async function PUT(
     const validatedData = updateChatSchema.parse(body)
 
     const chat = await prisma.chat.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...validatedData,
         updatedAt: new Date(),
@@ -142,9 +144,10 @@ export async function PUT(
 // DELETE /api/chats/:id
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -161,7 +164,7 @@ export async function DELETE(
     // Verify chat ownership
     const existingChat = await prisma.chat.findFirst({
       where: {
-        id: params.id,
+        id,
         userId: user.id,
       },
     })
@@ -171,7 +174,7 @@ export async function DELETE(
     }
 
     await prisma.chat.delete({
-      where: { id: params.id },
+      where: { id },
     })
 
     return NextResponse.json({ success: true })

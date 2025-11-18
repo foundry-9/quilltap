@@ -121,12 +121,12 @@ export default function CharacterDetailPage({ params }: { params: { id: string }
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       <Link
         href="/dashboard/characters"
-        className="text-blue-600 hover:underline mb-4 inline-block"
+        className="text-blue-600 dark:text-blue-400 hover:underline mb-4 inline-block"
       >
         ← Back to Characters
       </Link>
 
-      <div className="bg-white rounded-lg shadow-lg p-8 mb-6">
+      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-8 mb-6">
         <div className="flex items-start justify-between mb-6">
           <div className="flex items-center">
             {character.avatarUrl ? (
@@ -136,15 +136,15 @@ export default function CharacterDetailPage({ params }: { params: { id: string }
                 className="w-20 h-20 rounded-full mr-4"
               />
             ) : (
-              <div className="w-20 h-20 rounded-full bg-gray-300 mr-4 flex items-center justify-center">
-                <span className="text-3xl font-bold text-gray-600">
+              <div className="w-20 h-20 rounded-full bg-gray-300 dark:bg-slate-700 mr-4 flex items-center justify-center">
+                <span className="text-3xl font-bold text-gray-600 dark:text-gray-400">
                   {character.name.charAt(0).toUpperCase()}
                 </span>
               </div>
             )}
             <div>
-              <h1 className="text-3xl font-bold">{character.name}</h1>
-              <p className="text-gray-600">
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{character.name}</h1>
+              <p className="text-gray-600 dark:text-gray-400">
                 {character._count.chats} chat{character._count.chats !== 1 ? 's' : ''}
               </p>
             </div>
@@ -153,52 +153,52 @@ export default function CharacterDetailPage({ params }: { params: { id: string }
 
         <div className="space-y-6">
           <div>
-            <h2 className="text-xl font-semibold mb-2">Description</h2>
-            <p className="text-gray-700 whitespace-pre-wrap">{character.description}</p>
+            <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Description</h2>
+            <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{character.description}</p>
           </div>
 
           <div>
-            <h2 className="text-xl font-semibold mb-2">Personality</h2>
-            <p className="text-gray-700 whitespace-pre-wrap">{character.personality}</p>
+            <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Personality</h2>
+            <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{character.personality}</p>
           </div>
 
           <div>
-            <h2 className="text-xl font-semibold mb-2">Scenario</h2>
-            <p className="text-gray-700 whitespace-pre-wrap">{character.scenario}</p>
+            <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Scenario</h2>
+            <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{character.scenario}</p>
           </div>
 
           <div>
-            <h2 className="text-xl font-semibold mb-2">First Message</h2>
-            <p className="text-gray-700 whitespace-pre-wrap">{character.firstMessage}</p>
+            <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">First Message</h2>
+            <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{character.firstMessage}</p>
           </div>
 
           {character.exampleDialogues && (
             <div>
-              <h2 className="text-xl font-semibold mb-2">Example Dialogues</h2>
-              <p className="text-gray-700 whitespace-pre-wrap">{character.exampleDialogues}</p>
+              <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Example Dialogues</h2>
+              <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{character.exampleDialogues}</p>
             </div>
           )}
 
           {character.systemPrompt && (
             <div>
-              <h2 className="text-xl font-semibold mb-2">System Prompt</h2>
-              <p className="text-gray-700 whitespace-pre-wrap">{character.systemPrompt}</p>
+              <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">System Prompt</h2>
+              <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{character.systemPrompt}</p>
             </div>
           )}
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-lg p-6">
-        <h2 className="text-xl font-semibold mb-4">Start a Chat</h2>
+      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6">
+        <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Start a Chat</h2>
 
         {profiles.length === 0 ? (
           <div className="text-center py-4">
-            <p className="text-gray-600 mb-4">
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
               You need to create a connection profile first
             </p>
             <Link
               href="/dashboard/settings"
-              className="text-blue-600 hover:underline"
+              className="text-blue-600 dark:text-blue-400 hover:underline"
             >
               Go to Settings
             </Link>
@@ -206,14 +206,14 @@ export default function CharacterDetailPage({ params }: { params: { id: string }
         ) : (
           <div className="space-y-4">
             <div>
-              <label htmlFor="profile" className="block text-sm font-medium mb-2">
+              <label htmlFor="profile" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
                 Select Connection Profile
               </label>
               <select
                 id="profile"
                 value={selectedProfile}
                 onChange={(e) => setSelectedProfile(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
               >
                 <option value="">Select a profile</option>
                 {profiles.map((profile) => (
@@ -227,7 +227,7 @@ export default function CharacterDetailPage({ params }: { params: { id: string }
             <button
               onClick={startChat}
               disabled={!selectedProfile || startingChat}
-              className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+              className="w-full px-6 py-3 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 disabled:bg-gray-400 dark:disabled:bg-gray-600"
             >
               {startingChat ? 'Starting Chat...' : 'Start Chat'}
             </button>

@@ -17,9 +17,10 @@ const sendMessageSchema = z.object({
 // POST /api/chats/:id/messages - Send message with streaming response
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -36,7 +37,7 @@ export async function POST(
     // Get chat with all necessary relations
     const chat = await prisma.chat.findFirst({
       where: {
-        id: params.id,
+        id,
         userId: user.id,
       },
       include: {
@@ -107,7 +108,7 @@ export async function POST(
     )
 
     // Get parameters
-    const params = chat.connectionProfile.parameters as any
+    const modelParams = chat.connectionProfile.parameters as any
 
     // Create streaming response
     const encoder = new TextEncoder()
@@ -122,9 +123,9 @@ export async function POST(
             {
               messages,
               model: chat.connectionProfile.modelName,
-              temperature: params.temperature,
-              maxTokens: params.maxTokens,
-              topP: params.topP,
+              temperature: modelParams.temperature,
+              maxTokens: modelParams.maxTokens,
+              topP: modelParams.topP,
             },
             decryptedKey
           )) {

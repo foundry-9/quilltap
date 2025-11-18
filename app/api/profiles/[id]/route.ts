@@ -19,9 +19,10 @@ import { Provider } from '@prisma/client'
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -32,7 +33,7 @@ export async function GET(
 
     const profile = await prisma.connectionProfile.findFirst({
       where: {
-        id: params.id,
+        id,
         userId: session.user.id,
       },
       include: {
@@ -79,9 +80,10 @@ export async function GET(
  */
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -93,7 +95,7 @@ export async function PUT(
     // Verify ownership
     const existingProfile = await prisma.connectionProfile.findFirst({
       where: {
-        id: params.id,
+        id,
         userId: session.user.id,
       },
     })
@@ -191,7 +193,7 @@ export async function PUT(
             userId: session.user.id,
             isDefault: true,
             NOT: {
-              id: params.id,
+              id,
             },
           },
           data: {
@@ -206,7 +208,7 @@ export async function PUT(
     // Update the profile
     const updatedProfile = await prisma.connectionProfile.update({
       where: {
-        id: params.id,
+        id,
       },
       data: updateData,
       include: {
@@ -237,9 +239,10 @@ export async function PUT(
  */
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -251,7 +254,7 @@ export async function DELETE(
     // Verify ownership
     const existingProfile = await prisma.connectionProfile.findFirst({
       where: {
-        id: params.id,
+        id,
         userId: session.user.id,
       },
     })
@@ -266,7 +269,7 @@ export async function DELETE(
     // Delete the profile
     await prisma.connectionProfile.delete({
       where: {
-        id: params.id,
+        id,
       },
     })
 

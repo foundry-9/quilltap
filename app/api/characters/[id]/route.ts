@@ -24,9 +24,10 @@ const updateCharacterSchema = z.object({
 // GET /api/characters/:id
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -42,7 +43,7 @@ export async function GET(
 
     const character = await prisma.character.findFirst({
       where: {
-        id: params.id,
+        id,
         userId: user.id,
       },
       include: {
@@ -69,9 +70,10 @@ export async function GET(
 // PUT /api/characters/:id
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -88,7 +90,7 @@ export async function PUT(
     // Verify character ownership
     const existingCharacter = await prisma.character.findFirst({
       where: {
-        id: params.id,
+        id,
         userId: user.id,
       },
     })
@@ -101,7 +103,7 @@ export async function PUT(
     const validatedData = updateCharacterSchema.parse(body)
 
     const character = await prisma.character.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...validatedData,
         updatedAt: new Date(),
@@ -128,9 +130,10 @@ export async function PUT(
 // DELETE /api/characters/:id
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -147,7 +150,7 @@ export async function DELETE(
     // Verify character ownership
     const existingCharacter = await prisma.character.findFirst({
       where: {
-        id: params.id,
+        id,
         userId: user.id,
       },
     })
@@ -157,7 +160,7 @@ export async function DELETE(
     }
 
     await prisma.character.delete({
-      where: { id: params.id },
+      where: { id },
     })
 
     return NextResponse.json({ success: true })

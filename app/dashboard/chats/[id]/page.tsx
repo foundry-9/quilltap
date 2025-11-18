@@ -164,12 +164,12 @@ export default function ChatPage({ params }: { params: { id: string } }) {
   }
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col h-screen bg-white dark:bg-slate-900">
       {/* Header */}
-      <div className="bg-white border-b p-4">
+      <div className="bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 p-4">
         <Link
           href="/dashboard/chats"
-          className="text-blue-600 hover:underline mb-2 inline-block text-sm"
+          className="text-blue-600 dark:text-blue-400 hover:underline mb-2 inline-block text-sm"
         >
           ← Back to Chats
         </Link>
@@ -181,21 +181,21 @@ export default function ChatPage({ params }: { params: { id: string } }) {
               className="w-10 h-10 rounded-full mr-3"
             />
           ) : (
-            <div className="w-10 h-10 rounded-full bg-gray-300 mr-3 flex items-center justify-center">
-              <span className="text-lg font-bold text-gray-600">
+            <div className="w-10 h-10 rounded-full bg-gray-300 dark:bg-slate-700 mr-3 flex items-center justify-center">
+              <span className="text-lg font-bold text-gray-600 dark:text-gray-400">
                 {chat.character.name.charAt(0).toUpperCase()}
               </span>
             </div>
           )}
           <div>
-            <h1 className="text-xl font-bold">{chat.title}</h1>
-            <p className="text-sm text-gray-600">{chat.character.name}</p>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white">{chat.title}</h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400">{chat.character.name}</p>
           </div>
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 dark:bg-slate-900">
         {messages.map((message) => (
           <div
             key={message.id}
@@ -206,8 +206,8 @@ export default function ChatPage({ params }: { params: { id: string } }) {
             <div
               className={`max-w-3xl px-4 py-3 rounded-lg ${
                 message.role === 'USER'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white border'
+                  ? 'bg-blue-600 dark:bg-blue-700 text-white'
+                  : 'bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-white'
               }`}
             >
               <p className="whitespace-pre-wrap">{message.content}</p>
@@ -218,9 +218,9 @@ export default function ChatPage({ params }: { params: { id: string } }) {
         {/* Streaming message */}
         {streaming && streamingContent && (
           <div className="flex justify-start">
-            <div className="max-w-3xl px-4 py-3 rounded-lg bg-white border">
+            <div className="max-w-3xl px-4 py-3 rounded-lg bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-white">
               <p className="whitespace-pre-wrap">{streamingContent}</p>
-              <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse ml-1"></span>
+              <span className="inline-block w-2 h-4 bg-gray-400 dark:bg-gray-500 animate-pulse ml-1"></span>
             </div>
           </div>
         )}
@@ -229,7 +229,7 @@ export default function ChatPage({ params }: { params: { id: string } }) {
       </div>
 
       {/* Input */}
-      <div className="bg-white border-t p-4">
+      <div className="bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700 p-4">
         <form onSubmit={sendMessage} className="flex gap-2">
           <input
             type="text"
@@ -237,12 +237,12 @@ export default function ChatPage({ params }: { params: { id: string } }) {
             onChange={(e) => setInput(e.target.value)}
             disabled={sending}
             placeholder="Type a message..."
-            className="flex-1 px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+            className="flex-1 px-4 py-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 disabled:bg-gray-100 dark:disabled:bg-slate-700"
           />
           <button
             type="submit"
             disabled={sending || !input.trim()}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+            className="px-6 py-3 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 disabled:bg-gray-400 dark:disabled:bg-gray-600"
           >
             {sending ? 'Sending...' : 'Send'}
           </button>

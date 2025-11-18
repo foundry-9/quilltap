@@ -141,3 +141,4 @@ vite.config.ts.timestamp-*
 CLAUDE.md
 .claude
 certs
+next-env.d.ts

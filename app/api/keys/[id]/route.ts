@@ -20,9 +20,10 @@ import { Provider } from '@prisma/client'
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -33,7 +34,7 @@ export async function GET(
 
     const apiKey = await prisma.apiKey.findFirst({
       where: {
-        id: params.id,
+        id,
         userId: session.user.id, // Ensure user owns this key
       },
       select: {
@@ -87,9 +88,10 @@ export async function GET(
  */
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -101,7 +103,7 @@ export async function PUT(
     // Verify ownership
     const existingKey = await prisma.apiKey.findFirst({
       where: {
-        id: params.id,
+        id,
         userId: session.user.id,
       },
     })
@@ -157,7 +159,7 @@ export async function PUT(
     // Update the key
     const updatedKey = await prisma.apiKey.update({
       where: {
-        id: params.id,
+        id,
       },
       data: updateData,
       select: {
@@ -187,9 +189,10 @@ export async function PUT(
  */
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -201,7 +204,7 @@ export async function DELETE(
     // Verify ownership
     const existingKey = await prisma.apiKey.findFirst({
       where: {
-        id: params.id,
+        id,
         userId: session.user.id,
       },
     })
@@ -216,7 +219,7 @@ export async function DELETE(
     // Delete the key
     await prisma.apiKey.delete({
       where: {
-        id: params.id,
+        id,
       },
     })
 
