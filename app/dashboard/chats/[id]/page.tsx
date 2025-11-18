@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { use, useEffect, useState, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 
@@ -22,7 +22,8 @@ interface Chat {
   messages: Message[]
 }
 
-export default function ChatPage({ params }: { params: { id: string } }) {
+export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params)
   const [chat, setChat] = useState<Chat | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -39,7 +40,7 @@ export default function ChatPage({ params }: { params: { id: string } }) {
 
   const fetchChat = useCallback(async () => {
     try {
-      const res = await fetch(`/api/chats/${params.id}`)
+      const res = await fetch(`/api/chats/${id}`)
       if (!res.ok) throw new Error('Failed to fetch chat')
       const data = await res.json()
       setChat(data.chat)
@@ -49,7 +50,7 @@ export default function ChatPage({ params }: { params: { id: string } }) {
     } finally {
       setLoading(false)
     }
-  }, [params.id])
+  }, [id])
 
   useEffect(() => {
     fetchChat()
@@ -79,7 +80,7 @@ export default function ChatPage({ params }: { params: { id: string } }) {
     setMessages((prev) => [...prev, tempUserMessage])
 
     try {
-      const res = await fetch(`/api/chats/${params.id}/messages`, {
+      const res = await fetch(`/api/chats/${id}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: userMessage }),

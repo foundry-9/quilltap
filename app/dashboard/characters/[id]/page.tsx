@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { use, useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -28,7 +28,8 @@ interface ConnectionProfile {
   modelName: string
 }
 
-export default function CharacterDetailPage({ params }: { params: { id: string } }) {
+export default function CharacterDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params)
   const router = useRouter()
   const [character, setCharacter] = useState<Character | null>(null)
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([])
@@ -39,7 +40,7 @@ export default function CharacterDetailPage({ params }: { params: { id: string }
 
   const fetchCharacter = useCallback(async () => {
     try {
-      const res = await fetch(`/api/characters/${params.id}`)
+      const res = await fetch(`/api/characters/${id}`)
       if (!res.ok) throw new Error('Failed to fetch character')
       const data = await res.json()
       setCharacter(data.character)
@@ -48,7 +49,7 @@ export default function CharacterDetailPage({ params }: { params: { id: string }
     } finally {
       setLoading(false)
     }
-  }, [params.id])
+  }, [id])
 
   const fetchProfiles = useCallback(async () => {
     try {
@@ -83,7 +84,7 @@ export default function CharacterDetailPage({ params }: { params: { id: string }
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          characterId: params.id,
+          characterId: id,
           connectionProfileId: selectedProfile,
         }),
       })
