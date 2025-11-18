@@ -46,7 +46,10 @@ jobs:
         run: npm ci
 
       - name: Generate Prisma Client
-        run: PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1 npm run db:generate
+        run: npm run db:generate
+        env:
+          PRISMA_SKIP_POSTINSTALL_GENERATE: "1"
+          PRISMA_GENERATE_SKIP_DOWNLOAD: "1"
 
       - name: Build Next.js application
         run: npx next build
