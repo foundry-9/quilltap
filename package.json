@@ -1,0 +1,68 @@
+{
+  "name": "quilltap",
+  "version": "0.5.18",
+  "private": true,
+  "author": {
+    "name": "Charles Sebold",
+    "email": "charles@sebold.tech",
+    "url": "https://foundry-9.com"
+  },
+  "description": "A chat client application for hosted AI models designed for role play",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/foundry-9/quilltap.git"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "devssl": "next dev --experimental-https --experimental-https-key ./certs/localhost-key.pem --experimental-https-cert ./certs/localhost.pem",
+    "build": "npm run lint && next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.69.0",
+    "@auth/prisma-adapter": "^2.7.2",
+    "@prisma/client": "^6.19.0",
+    "glob": "^12.0.0",
+    "next": "^16.0.3",
+    "next-auth": "^4.24.7",
+    "openai": "^6.9.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.1",
+    "@jest/globals": "^30.2.0",
+    "@tailwindcss/postcss": "^4.1.17",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.5",
+    "@types/react-dom": "^19.2.3",
+    "autoprefixer": "^10.4.0",
+    "eslint": "^9.39.1",
+    "eslint-config-next": "^16.0.3",
+    "jest": "^30.2.0",
+    "jest-environment-jsdom": "^30.2.0",
+    "postcss": "^8.4.0",
+    "prisma": "^6.19.0",
+    "tailwindcss": "^4.1.17",
+    "ts-jest": "^29.4.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.0"
+  },
+  "overrides": {
+    "glob": "^12.0.0",
+    "cookie": "^0.7.0"
+  }
+}
