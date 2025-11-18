@@ -13,35 +13,35 @@ interface DashboardNavProps {
 
 export default function DashboardNav({ user }: DashboardNavProps) {
   return (
-    <nav className="border-b border-gray-200 bg-white">
+    <nav className="border-b border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900">
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
           <div className="flex items-center gap-8">
-            <Link href="/dashboard" className="text-xl font-bold text-gray-900">
+            <Link href="/dashboard" className="text-xl font-bold text-gray-900 dark:text-white">
               Quilltap
             </Link>
             <div className="hidden space-x-4 md:flex">
               <Link
                 href="/dashboard"
-                className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+                className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800"
               >
                 Dashboard
               </Link>
               <Link
                 href="/dashboard/characters"
-                className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+                className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800"
               >
                 Characters
               </Link>
               <Link
                 href="/dashboard/chats"
-                className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+                className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800"
               >
                 Chats
               </Link>
               <Link
                 href="/dashboard/settings"
-                className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+                className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800"
               >
                 Settings
               </Link>
@@ -50,8 +50,8 @@ export default function DashboardNav({ user }: DashboardNavProps) {
 
           <div className="flex items-center gap-4">
             <div className="hidden text-right md:block">
-              <p className="text-sm font-medium text-gray-900">{user.name}</p>
-              <p className="text-xs text-gray-500">{user.email}</p>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">{user.name}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{user.email}</p>
             </div>
             {user.image && (
               <img

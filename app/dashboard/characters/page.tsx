@@ -53,7 +53,7 @@ export default function CharactersPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <p className="text-lg">Loading characters...</p>
+        <p className="text-lg text-gray-900 dark:text-white">Loading characters...</p>
       </div>
     )
   }
@@ -61,7 +61,7 @@ export default function CharactersPage() {
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <p className="text-lg text-red-600">Error: {error}</p>
+        <p className="text-lg text-red-600 dark:text-red-400">Error: {error}</p>
       </div>
     )
   }
@@ -69,7 +69,7 @@ export default function CharactersPage() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Characters</h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Characters</h1>
         <Link
           href="/dashboard/characters/new"
           className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
@@ -80,10 +80,10 @@ export default function CharactersPage() {
 
       {characters.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-lg text-gray-600 mb-4">No characters yet</p>
+          <p className="text-lg text-gray-600 dark:text-gray-300 mb-4">No characters yet</p>
           <Link
             href="/dashboard/characters/new"
-            className="text-blue-600 hover:underline"
+            className="text-blue-600 dark:text-blue-400 hover:underline"
           >
             Create your first character
           </Link>
@@ -93,7 +93,7 @@ export default function CharactersPage() {
           {characters.map((character) => (
             <div
               key={character.id}
-              className="border rounded-lg p-6 hover:shadow-lg transition-shadow"
+              className="border border-gray-200 dark:border-slate-700 rounded-lg p-6 hover:shadow-lg transition-shadow bg-white dark:bg-slate-800"
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center">
@@ -104,22 +104,22 @@ export default function CharactersPage() {
                       className="w-12 h-12 rounded-full mr-3"
                     />
                   ) : (
-                    <div className="w-12 h-12 rounded-full bg-gray-300 mr-3 flex items-center justify-center">
-                      <span className="text-xl font-bold text-gray-600">
+                    <div className="w-12 h-12 rounded-full bg-gray-300 dark:bg-slate-700 mr-3 flex items-center justify-center">
+                      <span className="text-xl font-bold text-gray-600 dark:text-gray-300">
                         {character.name.charAt(0).toUpperCase()}
                       </span>
                     </div>
                   )}
                   <div>
-                    <h2 className="text-xl font-semibold">{character.name}</h2>
-                    <p className="text-sm text-gray-600">
+                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{character.name}</h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
                       {character._count.chats} chat{character._count.chats !== 1 ? 's' : ''}
                     </p>
                   </div>
                 </div>
               </div>
 
-              <p className="text-gray-700 mb-4 line-clamp-3">
+              <p className="text-gray-700 dark:text-gray-300 mb-4 line-clamp-3">
                 {character.description}
               </p>
 
