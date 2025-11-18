@@ -88,7 +88,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate API key requirements
-    if (provider !== 'OLLAMA' && !decryptedKey) {
+    // Ollama and Anthropic don't need API keys for fetching models
+    // (Ollama uses local server, Anthropic returns hardcoded list)
+    if (provider !== 'OLLAMA' && provider !== 'ANTHROPIC' && !decryptedKey) {
       return NextResponse.json(
         { error: `API key is required for ${provider} provider` },
         { status: 400 }
