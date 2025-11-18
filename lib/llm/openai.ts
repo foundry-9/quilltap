@@ -69,9 +69,9 @@ export class OpenAIProvider extends LLMProvider {
           content: '',
           done: true,
           usage: {
-            promptTokens: chunk.usage.prompt_tokens,
-            completionTokens: chunk.usage.completion_tokens,
-            totalTokens: chunk.usage.total_tokens,
+            promptTokens: chunk.usage?.prompt_tokens ?? 0,
+            completionTokens: chunk.usage?.completion_tokens ?? 0,
+            totalTokens: chunk.usage?.total_tokens ?? 0,
           },
         }
       }

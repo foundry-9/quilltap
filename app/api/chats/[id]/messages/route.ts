@@ -76,7 +76,7 @@ export async function POST(
 
     // Prepare messages for LLM
     const messages = [
-      ...chat.messages.map((msg) => ({
+      ...chat.messages.map((msg: { role: string; content: string }) => ({
         role: msg.role.toLowerCase() as 'system' | 'user' | 'assistant',
         content: msg.content,
       })),
