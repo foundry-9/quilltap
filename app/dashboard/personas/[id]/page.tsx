@@ -26,22 +26,22 @@ export default function EditPersonaPage({ params }: { params: { id: string } }) 
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    const fetchPersona = async () => {
+      try {
+        const response = await fetch(`/api/personas/${params.id}`)
+        if (!response.ok) throw new Error('Failed to fetch persona')
+        const data = await response.json()
+        setPersona(data)
+      } catch (err) {
+        setError('Failed to load persona')
+        console.error(err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
     fetchPersona()
   }, [params.id])
-
-  const fetchPersona = async () => {
-    try {
-      const response = await fetch(`/api/personas/${params.id}`)
-      if (!response.ok) throw new Error('Failed to fetch persona')
-      const data = await response.json()
-      setPersona(data)
-    } catch (err) {
-      setError('Failed to load persona')
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
