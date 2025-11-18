@@ -351,20 +351,40 @@ All Phase 0.7 deliverables met. Users can now chat using any of the 5 provider t
 
 **Tasks:**
 
-- [ ] Persona system (character-linked and chat-linked)
-- [ ] Multiple characters management
-- [ ] Advanced chat initialization (character + persona + scenario)
-- [ ] SillyTavern character import (PNG + JSON)
-- [ ] SillyTavern character export
-- [ ] SillyTavern persona import/export
-- [ ] SillyTavern chat import/export
-- [ ] Message editing and deletion
-- [ ] Chat branching/swipes (alternative responses)
-- [ ] UI polish and responsive design
+- [x] Persona system (character-linked and chat-linked)
+- [x] Multiple characters management
+- [x] Advanced chat initialization (character + persona + scenario)
+- [x] SillyTavern character import (PNG + JSON)
+- [x] SillyTavern character export
+- [x] SillyTavern persona import/export
+- [x] SillyTavern chat import/export
+- [x] Message editing and deletion
+- [x] Chat branching/swipes (alternative responses)
+- [x] UI polish and responsive design
 
 **Deliverable**: Full feature parity with requirements, ST compatibility
 
-**Status**: ⏳ **PENDING**
+**Status**: ✅ **COMPLETE** (November 18, 2025)
+
+**Completion Notes**:
+
+- Persona CRUD API endpoints implemented at `/api/personas`
+- Character-persona linking API at `/api/characters/:id/personas`
+- Persona management UI with full CRUD operations
+- SillyTavern import/export utilities for characters, personas, and chats
+- Character import API supporting both PNG (with embedded JSON) and standalone JSON files
+- Character export API with JSON format (PNG export requires avatar storage implementation)
+- Persona import/export API endpoints with full SillyTavern compatibility
+- Chat import/export API with swipe group preservation
+- Message editing API at `/api/messages/:id` (PUT)
+- Message deletion API at `/api/messages/:id` (DELETE)
+- Chat swipes/branching API at `/api/messages/:id/swipe` for alternative response generation
+- Import/export UI added to character list page
+- Personas navigation link added to dashboard
+- Comprehensive unit tests for SillyTavern import/export functionality
+- Database schema fully supports all Phase 0.9 features (personas, character-persona linking, swipe groups)
+
+All Phase 0.9 deliverables met. Users can now manage personas, link them to characters, import/export SillyTavern data, edit/delete messages, and generate alternative responses (swipes). Full SillyTavern V2 spec compatibility achieved.
 
 ---
 
