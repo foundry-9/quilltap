@@ -12,7 +12,7 @@ import { prisma } from '@/lib/prisma'
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -21,10 +21,12 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const { id } = await params
+
     // Verify character belongs to user
     const character = await prisma.character.findFirst({
       where: {
-        id: params.id,
+        id,
         userId: session.user.id,
       },
       include: {
@@ -55,7 +57,7 @@ export async function GET(
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -63,6 +65,8 @@ export async function POST(
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const { id } = await params
 
     const body = await req.json()
     const { personaId, isDefault } = body
@@ -77,7 +81,7 @@ export async function POST(
     // Verify character belongs to user
     const character = await prisma.character.findFirst({
       where: {
-        id: params.id,
+        id,
         userId: session.user.id,
       },
     })
@@ -105,7 +109,7 @@ export async function POST(
     if (isDefault) {
       await prisma.characterPersona.updateMany({
         where: {
-          characterId: params.id,
+          characterId: id,
         },
         data: {
           isDefault: false,
@@ -117,12 +121,12 @@ export async function POST(
     const link = await prisma.characterPersona.upsert({
       where: {
         characterId_personaId: {
-          characterId: params.id,
+          characterId: id,
           personaId,
         },
       },
       create: {
-        characterId: params.id,
+        characterId: id,
         personaId,
         isDefault: isDefault || false,
       },
@@ -146,7 +150,7 @@ export async function POST(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -154,6 +158,8 @@ export async function DELETE(
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const { id } = await params
 
     const { searchParams } = new URL(req.url)
     const personaId = searchParams.get('personaId')
@@ -168,7 +174,7 @@ export async function DELETE(
     // Verify character belongs to user
     const character = await prisma.character.findFirst({
       where: {
-        id: params.id,
+        id,
         userId: session.user.id,
       },
     })
@@ -184,7 +190,7 @@ export async function DELETE(
     await prisma.characterPersona.delete({
       where: {
         characterId_personaId: {
-          characterId: params.id,
+          characterId: id,
           personaId,
         },
       },

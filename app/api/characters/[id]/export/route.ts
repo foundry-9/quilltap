@@ -12,7 +12,7 @@ import { exportSTCharacter, createSTCharacterPNG } from '@/lib/sillytavern/chara
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -21,13 +21,14 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const { id } = await params
     const { searchParams } = new URL(req.url)
     const format = searchParams.get('format') || 'json' // json or png
 
     // Get character
     const character = await prisma.character.findFirst({
       where: {
-        id: params.id,
+        id,
         userId: session.user.id,
       },
     })

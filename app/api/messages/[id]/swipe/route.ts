@@ -13,7 +13,7 @@ import { decryptApiKey } from '@/lib/encryption'
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -22,10 +22,12 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const { id } = await params
+
     // Get message and verify user owns the chat
     const message = await prisma.message.findFirst({
       where: {
-        id: params.id,
+        id,
       },
       include: {
         chat: {
@@ -64,7 +66,7 @@ export async function POST(
     // Update original message with swipe group ID if needed
     if (!message.swipeGroupId) {
       await prisma.message.update({
-        where: { id: params.id },
+        where: { id },
         data: {
           swipeGroupId,
           swipeIndex: 0,
@@ -167,7 +169,7 @@ export async function POST(
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -175,6 +177,8 @@ export async function PUT(
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const { id } = await params
 
     const body = await req.json()
     const { swipeIndex } = body
@@ -189,7 +193,7 @@ export async function PUT(
     // Get message and verify user owns the chat
     const message = await prisma.message.findFirst({
       where: {
-        id: params.id,
+        id,
       },
       include: {
         chat: {
