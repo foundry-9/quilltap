@@ -52,7 +52,23 @@ jobs:
           SKIP_ENV_VALIDATION: true
           ENCRYPTION_MASTER_PEPPER: 'test-pepper-for-ci-environment-32chars!'
 
+      - name: Verify build output
+        id: verify-build
+        run: |
+          if [ -d ".next" ]; then
+            echo "✅ Build directory created"
+            echo "build_exists=true" >> $GITHUB_OUTPUT
+            ls -la .next/ | head -20
+            echo "Total size:"
+            du -sh .next/
+          else
+            echo "❌ Build directory not found"
+            echo "build_exists=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
       - name: Upload build artifacts
+        if: steps.verify-build.outputs.build_exists == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: build-artifacts
@@ -102,8 +118,29 @@ jobs:
           echo "::warning::No tests found to run. Consider adding tests to improve code quality."
           echo "📝 To add tests, create test files in the __tests__ directory"
 
-      - name: Generate coverage report
+      - name: Verify coverage output
+        id: verify-coverage
         if: steps.check-tests.outputs.tests_exist == 'true'
+        run: |
+          if [ -d "coverage" ]; then
+            echo "✅ Coverage directory created"
+            echo "coverage_exists=true" >> $GITHUB_OUTPUT
+            ls -la coverage/
+            if [ -f "coverage/coverage-summary.json" ]; then
+              echo "✅ Coverage summary file exists"
+              echo "coverage_summary_exists=true" >> $GITHUB_OUTPUT
+            else
+              echo "⚠️ Coverage summary file not found"
+              echo "coverage_summary_exists=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "❌ Coverage directory not found"
+            echo "coverage_exists=false" >> $GITHUB_OUTPUT
+            echo "coverage_summary_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload coverage report
+        if: steps.check-tests.outputs.tests_exist == 'true' && steps.verify-coverage.outputs.coverage_exists == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
@@ -111,25 +148,29 @@ jobs:
           retention-days: 30
 
       - name: Coverage Summary
-        if: steps.check-tests.outputs.tests_exist == 'true'
+        if: steps.check-tests.outputs.tests_exist == 'true' && steps.verify-coverage.outputs.coverage_summary_exists == 'true'
         run: |
           echo "## Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          if [ -f coverage/coverage-summary.json ]; then
-            node -e "
-              const fs = require('fs');
-              const coverage = JSON.parse(fs.readFileSync('coverage/coverage-summary.json', 'utf8'));
-              const total = coverage.total;
-              console.log('| Metric | Coverage |');
-              console.log('|--------|----------|');
-              console.log(\`| Lines | \${total.lines.pct}% (\${total.lines.covered}/\${total.lines.total}) |\`);
-              console.log(\`| Statements | \${total.statements.pct}% (\${total.statements.covered}/\${total.statements.total}) |\`);
-              console.log(\`| Functions | \${total.functions.pct}% (\${total.functions.covered}/\${total.functions.total}) |\`);
-              console.log(\`| Branches | \${total.branches.pct}% (\${total.branches.covered}/\${total.branches.total}) |\`);
-            " >> $GITHUB_STEP_SUMMARY
-          else
-            echo "No coverage summary generated" >> $GITHUB_STEP_SUMMARY
-          fi
+          node -e "
+            const fs = require('fs');
+            const coverage = JSON.parse(fs.readFileSync('coverage/coverage-summary.json', 'utf8'));
+            const total = coverage.total;
+            console.log('| Metric | Coverage |');
+            console.log('|--------|----------|');
+            console.log(\`| Lines | \${total.lines.pct}% (\${total.lines.covered}/\${total.lines.total}) |\`);
+            console.log(\`| Statements | \${total.statements.pct}% (\${total.statements.covered}/\${total.statements.total}) |\`);
+            console.log(\`| Functions | \${total.functions.pct}% (\${total.functions.covered}/\${total.functions.total}) |\`);
+            console.log(\`| Branches | \${total.branches.pct}% (\${total.branches.covered}/\${total.branches.total}) |\`);
+          " >> $GITHUB_STEP_SUMMARY
+
+      - name: No coverage generated warning
+        if: steps.check-tests.outputs.tests_exist == 'true' && steps.verify-coverage.outputs.coverage_exists == 'false'
+        run: |
+          echo "::warning::Tests ran but no coverage was generated. Check jest configuration."
+          echo "## Test Coverage" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ No coverage data was generated." >> $GITHUB_STEP_SUMMARY
 
   report:
     name: CI Summary

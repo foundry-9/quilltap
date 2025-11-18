@@ -40,6 +40,8 @@ const config: Config = {
       statements: 0,
     },
   },
+  coverageReporters: ['text', 'lcov', 'json-summary'],
+  coverageDirectory: 'coverage',
 }
 
 // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async
