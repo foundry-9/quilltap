@@ -73,8 +73,8 @@ jobs:
         with:
           name: build-artifacts
           path: |
-            .next
-            !.next/cache
+            .next/**
+            !.next/cache/**
           retention-days: 1
 
   test:
