@@ -1,8 +1,12 @@
 // LLM Provider Factory
-// Phase 0.5: Single Chat MVP (OpenAI only for now)
+// Phase 0.7: Multi-Provider Support
 
 import { LLMProvider } from './base'
 import { OpenAIProvider } from './openai'
+import { AnthropicProvider } from './anthropic'
+import { OllamaProvider } from './ollama'
+import { OpenRouterProvider } from './openrouter'
+import { OpenAICompatibleProvider } from './openai-compatible'
 
 type Provider = 'OPENAI' | 'ANTHROPIC' | 'OLLAMA' | 'OPENROUTER' | 'OPENAI_COMPATIBLE'
 
@@ -13,11 +17,25 @@ export function createLLMProvider(
   switch (provider) {
     case 'OPENAI':
       return new OpenAIProvider()
+
     case 'ANTHROPIC':
+      return new AnthropicProvider()
+
     case 'OLLAMA':
+      if (!baseUrl) {
+        throw new Error('Ollama provider requires baseUrl (e.g., http://localhost:11434)')
+      }
+      return new OllamaProvider(baseUrl)
+
     case 'OPENROUTER':
+      return new OpenRouterProvider()
+
     case 'OPENAI_COMPATIBLE':
-      throw new Error(`Provider ${provider} not yet implemented. Phase 0.5 supports OpenAI only.`)
+      if (!baseUrl) {
+        throw new Error('OpenAI-compatible provider requires baseUrl')
+      }
+      return new OpenAICompatibleProvider(baseUrl)
+
     default:
       throw new Error(`Unsupported provider: ${provider}`)
   }
