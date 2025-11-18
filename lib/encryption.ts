@@ -148,7 +148,8 @@ export function testEncryption(): boolean {
 
 /**
  * Mask an API key for display purposes
- * Shows only first 8 and last 4 characters
+ * Shows only first 8 and last 4 characters, with fixed 4-bullet masking
+ * Uses fixed length masking to avoid leaking key length information
  *
  * @param apiKey - The API key to mask
  * @returns Masked API key string
@@ -160,7 +161,7 @@ export function maskApiKey(apiKey: string): string {
 
   const prefix = apiKey.substring(0, 8)
   const suffix = apiKey.substring(apiKey.length - 4)
-  const masked = '•'.repeat(Math.max(4, apiKey.length - 12))
+  const masked = '••••'
 
   return `${prefix}${masked}${suffix}`
 }

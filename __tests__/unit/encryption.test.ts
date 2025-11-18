@@ -199,9 +199,8 @@ describe('Encryption Service', () => {
   describe('maskApiKey', () => {
     it('should mask a standard API key', () => {
       const masked = maskApiKey('sk-1234567890abcdefghijklmnop')
-      // Shows first 8 chars, last 4 chars, and masks the middle
-      // 'sk-1234567890abcdefghijklmnop' is 29 chars, so 29 - 12 = 17 dots
-      expect(masked).toBe('sk-12345•••••••••••••••••mnop')
+      // Shows first 8 chars, 4 bullets, last 4 chars (fixed length masking)
+      expect(masked).toBe('sk-12345••••mnop')
     })
 
     it('should handle short keys', () => {
@@ -212,14 +211,28 @@ describe('Encryption Service', () => {
     it('should handle very long keys', () => {
       const longKey = 'sk-' + 'a'.repeat(100)
       const masked = maskApiKey(longKey)
-      expect(masked).toMatch(/^sk-aaaaa/)
-      expect(masked).toMatch(/aaaa$/)
-      expect(masked).toContain('•')
+      // Should always use exactly 4 bullets regardless of length
+      expect(masked).toBe('sk-aaaaa••••aaaa')
     })
 
     it('should handle empty string', () => {
       const masked = maskApiKey('')
       expect(masked).toBe('••••••••••••')
+    })
+
+    it('should not leak key length information', () => {
+      const shortKey = 'sk-shortkey1'
+      const longKey = 'sk-verylongapikey123456789012345678901234567890'
+      const shortMasked = maskApiKey(shortKey)
+      const longMasked = maskApiKey(longKey)
+
+      // Both should have exactly 4 bullets in the middle
+      expect(shortMasked).toMatch(/^.{8}••••.{4}$/)
+      expect(longMasked).toMatch(/^.{8}••••.{4}$/)
+
+      // Verify the actual values
+      expect(shortMasked).toBe('sk-short••••key1')
+      expect(longMasked).toBe('sk-veryl••••7890')
     })
   })
 
