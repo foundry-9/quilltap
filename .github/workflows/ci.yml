@@ -45,13 +45,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate Prisma Client
-        run: npm run db:generate
-        env:
-          PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING: "1"
-          PRISMA_SKIP_POSTINSTALL_GENERATE: "1"
-          PRISMA_GENERATE_SKIP_DOWNLOAD: "1"
-
       - name: Build Next.js application
         run: npx next build
         env:
@@ -85,9 +78,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Generate Prisma Client
-        run: npm run db:generate
 
       - name: Check if tests exist
         id: check-tests
