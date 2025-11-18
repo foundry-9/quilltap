@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
         personaId: personaId || null,
         connectionProfileId,
         title: title || `Chat with ${character.name}`,
-        sillyTavernMetadata: importedData.metadata || null,
+        sillyTavernMetadata: importedData.metadata || undefined,
       },
     })
 
@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
         content: msg.content,
         swipeGroupId: msg.swipeGroupId,
         swipeIndex: msg.swipeIndex,
-        rawResponse: msg.rawResponse,
+        rawResponse: msg.rawResponse || undefined,
         createdAt: msg.createdAt,
       })),
     })
