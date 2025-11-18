@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
       data: {
         userId: session.user.id,
         ...importedData,
-        avatarUrl: avatarUrl || importedData.avatarUrl,
+        avatarUrl: avatarUrl,
       },
     })
 
