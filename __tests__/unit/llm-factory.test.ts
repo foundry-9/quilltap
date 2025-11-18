@@ -1,11 +1,16 @@
 /**
  * Unit Tests for LLM Provider Factory
  * Tests lib/llm/factory.ts
+ * Phase 0.7: Multi-Provider Support
  */
 
 import { describe, it, expect } from '@jest/globals'
 import { createLLMProvider } from '@/lib/llm/factory'
 import { OpenAIProvider } from '@/lib/llm/openai'
+import { AnthropicProvider } from '@/lib/llm/anthropic'
+import { OllamaProvider } from '@/lib/llm/ollama'
+import { OpenRouterProvider } from '@/lib/llm/openrouter'
+import { OpenAICompatibleProvider } from '@/lib/llm/openai-compatible'
 
 describe('createLLMProvider', () => {
   describe('OpenAI provider', () => {
@@ -22,35 +27,71 @@ describe('createLLMProvider', () => {
     })
   })
 
-  describe('Unsupported providers (Phase 0.5)', () => {
-    it('should throw error for ANTHROPIC provider', () => {
-      expect(() => {
-        createLLMProvider('ANTHROPIC')
-      }).toThrow('Provider ANTHROPIC not yet implemented. Phase 0.5 supports OpenAI only.')
+  describe('Anthropic provider', () => {
+    it('should create an Anthropic provider', () => {
+      const provider = createLLMProvider('ANTHROPIC')
+
+      expect(provider).toBeInstanceOf(AnthropicProvider)
     })
 
-    it('should throw error for OLLAMA provider', () => {
+    it('should create Anthropic provider regardless of baseUrl parameter', () => {
+      const provider = createLLMProvider('ANTHROPIC', 'https://custom-url.com')
+
+      expect(provider).toBeInstanceOf(AnthropicProvider)
+    })
+  })
+
+  describe('Ollama provider', () => {
+    it('should create an Ollama provider with baseUrl', () => {
+      const provider = createLLMProvider('OLLAMA', 'http://localhost:11434')
+
+      expect(provider).toBeInstanceOf(OllamaProvider)
+    })
+
+    it('should throw error when baseUrl is not provided', () => {
       expect(() => {
         createLLMProvider('OLLAMA')
-      }).toThrow('Provider OLLAMA not yet implemented. Phase 0.5 supports OpenAI only.')
+      }).toThrow('Ollama provider requires baseUrl (e.g., http://localhost:11434)')
     })
 
-    it('should throw error for OPENROUTER provider', () => {
+    it('should throw error when baseUrl is empty string', () => {
       expect(() => {
-        createLLMProvider('OPENROUTER')
-      }).toThrow('Provider OPENROUTER not yet implemented. Phase 0.5 supports OpenAI only.')
+        createLLMProvider('OLLAMA', '')
+      }).toThrow('Ollama provider requires baseUrl')
+    })
+  })
+
+  describe('OpenRouter provider', () => {
+    it('should create an OpenRouter provider', () => {
+      const provider = createLLMProvider('OPENROUTER')
+
+      expect(provider).toBeInstanceOf(OpenRouterProvider)
     })
 
-    it('should throw error for OPENAI_COMPATIBLE provider', () => {
+    it('should create OpenRouter provider regardless of baseUrl parameter', () => {
+      const provider = createLLMProvider('OPENROUTER', 'https://custom-url.com')
+
+      expect(provider).toBeInstanceOf(OpenRouterProvider)
+    })
+  })
+
+  describe('OpenAI-compatible provider', () => {
+    it('should create an OpenAI-compatible provider with baseUrl', () => {
+      const provider = createLLMProvider('OPENAI_COMPATIBLE', 'http://localhost:1234/v1')
+
+      expect(provider).toBeInstanceOf(OpenAICompatibleProvider)
+    })
+
+    it('should throw error when baseUrl is not provided', () => {
       expect(() => {
         createLLMProvider('OPENAI_COMPATIBLE')
-      }).toThrow('Provider OPENAI_COMPATIBLE not yet implemented. Phase 0.5 supports OpenAI only.')
+      }).toThrow('OpenAI-compatible provider requires baseUrl')
     })
 
-    it('should throw error with baseUrl parameter for unsupported providers', () => {
+    it('should throw error when baseUrl is empty string', () => {
       expect(() => {
-        createLLMProvider('OLLAMA', 'http://localhost:11434')
-      }).toThrow('Provider OLLAMA not yet implemented. Phase 0.5 supports OpenAI only.')
+        createLLMProvider('OPENAI_COMPATIBLE', '')
+      }).toThrow('OpenAI-compatible provider requires baseUrl')
     })
   })
 
@@ -87,20 +128,28 @@ describe('createLLMProvider', () => {
   })
 
   describe('Provider type validation', () => {
-    it('should only accept valid Provider type strings', () => {
-      const validProviders = ['OPENAI', 'ANTHROPIC', 'OLLAMA', 'OPENROUTER', 'OPENAI_COMPATIBLE']
+    it('should accept all valid Provider type strings', () => {
+      const validProviders = [
+        { name: 'OPENAI', instance: OpenAIProvider, requiresBaseUrl: false },
+        { name: 'ANTHROPIC', instance: AnthropicProvider, requiresBaseUrl: false },
+        { name: 'OLLAMA', instance: OllamaProvider, requiresBaseUrl: true },
+        { name: 'OPENROUTER', instance: OpenRouterProvider, requiresBaseUrl: false },
+        { name: 'OPENAI_COMPATIBLE', instance: OpenAICompatibleProvider, requiresBaseUrl: true },
+      ]
 
-      validProviders.forEach(provider => {
-        if (provider === 'OPENAI') {
-          expect(() => createLLMProvider(provider as any)).not.toThrow(/Unsupported provider/)
+      validProviders.forEach(({ name, instance, requiresBaseUrl }) => {
+        if (requiresBaseUrl) {
+          const provider = createLLMProvider(name as any, 'http://localhost:1234')
+          expect(provider).toBeInstanceOf(instance)
         } else {
-          expect(() => createLLMProvider(provider as any)).toThrow(/not yet implemented/)
+          const provider = createLLMProvider(name as any)
+          expect(provider).toBeInstanceOf(instance)
         }
       })
     })
 
     it('should reject provider names with different casing', () => {
-      const invalidProviders = ['OpenAI', 'openAI', 'Openai']
+      const invalidProviders = ['OpenAI', 'openAI', 'Openai', 'anthropic', 'Anthropic']
 
       invalidProviders.forEach(provider => {
         expect(() => createLLMProvider(provider as any)).toThrow(/Unsupported provider/)
