@@ -245,6 +245,11 @@ export default function ConnectionProfilesTab() {
     setError(null)
 
     try {
+      // Validate required fields based on provider
+      if ((formData.provider === 'OLLAMA' || formData.provider === 'OPENAI_COMPATIBLE') && !formData.baseUrl) {
+        throw new Error('Base URL is required for this provider')
+      }
+
       const res = await fetch('/api/models', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -526,7 +531,13 @@ export default function ConnectionProfilesTab() {
                 <button
                   type="button"
                   onClick={handleFetchModels}
-                  disabled={!isConnected || isFetchingModels}
+                  disabled={
+                    isFetchingModels ||
+                    // For providers that need baseUrl, require it
+                    ((formData.provider === 'OLLAMA' || formData.provider === 'OPENAI_COMPATIBLE') && !formData.baseUrl) ||
+                    // For other providers (except ANTHROPIC which doesn't need connection), require connection
+                    (formData.provider !== 'ANTHROPIC' && formData.provider !== 'OLLAMA' && formData.provider !== 'OPENAI_COMPATIBLE' && !isConnected)
+                  }
                   className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
                 >
                   {isFetchingModels ? 'Fetching...' : 'Fetch Models'}
