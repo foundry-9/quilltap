@@ -194,3 +194,16 @@ jest.mock('@prisma/client', () => ({
     OPENAI_COMPATIBLE: 'OPENAI_COMPATIBLE',
   },
 }))
+
+// Mock encryption library
+jest.mock('@/lib/encryption', () => ({
+  decryptApiKey: jest.fn(),
+  encryptApiKey: jest.fn(),
+  maskApiKey: jest.fn(),
+  testEncryption: jest.fn(),
+}))
+
+// Mock LLM factory
+jest.mock('@/lib/llm/factory', () => ({
+  createLLMProvider: jest.fn(),
+}))

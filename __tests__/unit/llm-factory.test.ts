@@ -4,6 +4,9 @@
  * Phase 0.7: Multi-Provider Support
  */
 
+// Unmock the factory module to test the real implementation
+jest.unmock('@/lib/llm/factory')
+
 import { describe, it, expect } from '@jest/globals'
 import { createLLMProvider } from '@/lib/llm/factory'
 import { OpenAIProvider } from '@/lib/llm/openai'

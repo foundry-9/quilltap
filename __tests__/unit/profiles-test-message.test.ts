@@ -4,14 +4,8 @@
  */
 
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals'
-import { getServerSession } from 'next-auth'
-import { POST as testMessage } from '@/app/api/profiles/test-message/route'
-import { prisma } from '@/lib/prisma'
-import { decryptApiKey } from '@/lib/encryption'
-import { createLLMProvider } from '@/lib/llm/factory'
-import { Provider } from '@prisma/client'
 
-// Mock dependencies
+// Mock dependencies FIRST (before other imports)
 jest.mock('next-auth')
 jest.mock('@/lib/prisma', () => ({
   prisma: {
@@ -20,10 +14,22 @@ jest.mock('@/lib/prisma', () => ({
     },
   },
 }))
-jest.mock('@/lib/encryption', () => ({
-  decryptApiKey: jest.fn(),
-}))
+jest.mock('@/lib/encryption')
 jest.mock('@/lib/llm/factory')
+
+// Import after mocking
+import { POST as testMessage } from '@/app/api/profiles/test-message/route'
+import { Provider } from '@prisma/client'
+import { getServerSession } from 'next-auth'
+import { prisma } from '@/lib/prisma'
+import { decryptApiKey } from '@/lib/encryption'
+import { createLLMProvider } from '@/lib/llm/factory'
+
+// Get mocked functions
+const mockGetServerSession = jest.mocked(getServerSession)
+const mockPrismaFindFirst = jest.mocked(prisma.apiKey.findFirst)
+const mockDecryptApiKey = jest.mocked(decryptApiKey)
+const mockCreateLLMProvider = jest.mocked(createLLMProvider)
 
 // Helper to create a mock NextRequest
 function createMockRequest(body: any) {
@@ -43,20 +49,17 @@ describe('POST /api/profiles/test-message', () => {
   }
 
   beforeEach(() => {
-    ;(getServerSession as jest.Mock).mockClear?.()
-    ;(prisma.apiKey.findFirst as jest.Mock).mockClear?.()
-    ;(decryptApiKey as jest.Mock).mockClear?.()
-    ;(createLLMProvider as jest.Mock).mockClear?.()
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
   })
 
   afterEach(() => {
+    jest.clearAllMocks()
     consoleErrorSpy.mockRestore()
   })
 
   describe('Authentication', () => {
     it('should return 401 for unauthenticated user', async () => {
-      ;(getServerSession as jest.Mock).mockResolvedValue(null)
+      mockGetServerSession.mockResolvedValue(null)
 
       const req = createMockRequest({
         provider: 'OPENAI',
@@ -72,7 +75,7 @@ describe('POST /api/profiles/test-message', () => {
     })
 
     it('should return 401 when session has no user id', async () => {
-      ;(getServerSession as jest.Mock).mockResolvedValue({ user: {} })
+      mockGetServerSession.mockResolvedValue({ user: {} })
 
       const req = createMockRequest({
         provider: 'OPENAI',
@@ -88,7 +91,7 @@ describe('POST /api/profiles/test-message', () => {
 
   describe('Validation', () => {
     beforeEach(() => {
-      ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
+      (getServerSession as jest.Mock).mockResolvedValue(mockSession as any)
     })
 
     it('should return 400 for invalid provider', async () => {
@@ -134,7 +137,6 @@ describe('POST /api/profiles/test-message', () => {
     it('should return 400 when baseUrl is missing for OPENAI_COMPATIBLE', async () => {
       const req = createMockRequest({
         provider: 'OPENAI_COMPATIBLE',
-        apiKeyId: 'key-123',
         modelName: 'test-model',
       })
 
@@ -159,7 +161,7 @@ describe('POST /api/profiles/test-message', () => {
     })
 
     it('should return 404 when API key is not found', async () => {
-      ;(prisma.apiKey.findFirst as jest.Mock).mockResolvedValue(null)
+      (prisma.apiKey.findFirst as jest.Mock).mockResolvedValue(null)
 
       const req = createMockRequest({
         provider: 'OPENAI',
@@ -228,16 +230,16 @@ describe('POST /api/profiles/test-message', () => {
 
   describe('Successful Test Messages', () => {
     beforeEach(() => {
-      ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
-      ;(prisma.apiKey.findFirst as jest.Mock).mockResolvedValue({
+      mockGetServerSession.mockResolvedValue(mockSession as any)
+      mockPrismaFindFirst.mockResolvedValue({
         id: 'key-123',
         userId: 'user-123',
         provider: Provider.OPENAI,
         keyEncrypted: 'encrypted',
         keyIv: 'iv',
         keyAuthTag: 'tag',
-      })
-      ;(decryptApiKey as jest.Mock).mockReturnValue('sk-test123')
+      } as any)
+      mockDecryptApiKey.mockReturnValue('sk-test123')
     })
 
     it('should successfully send test message to OpenAI', async () => {
@@ -246,7 +248,7 @@ describe('POST /api/profiles/test-message', () => {
           content: 'Hello! The connection is working perfectly.',
         }),
       }
-      ;(createLLMProvider as jest.Mock).mockReturnValue(mockProvider)
+      mockCreateLLMProvider.mockReturnValue(mockProvider as any)
 
       const req = createMockRequest({
         provider: 'OPENAI',
@@ -279,8 +281,8 @@ describe('POST /api/profiles/test-message', () => {
             },
           ],
           temperature: 0.7,
-          max_tokens: 100,
-          top_p: 1,
+          maxTokens: 100,
+          topP: 1,
         }),
         'sk-test123'
       )
@@ -292,7 +294,7 @@ describe('POST /api/profiles/test-message', () => {
           content: 'Test response',
         }),
       }
-      ;(createLLMProvider as jest.Mock).mockReturnValue(mockProvider)
+      mockCreateLLMProvider.mockReturnValue(mockProvider as any)
 
       const req = createMockRequest({
         provider: 'OPENAI',
@@ -304,7 +306,7 @@ describe('POST /api/profiles/test-message', () => {
 
       expect(mockProvider.sendMessage).toHaveBeenCalledWith(
         expect.objectContaining({
-          max_tokens: 50,
+          maxTokens: 50,
         }),
         expect.any(String)
       )
@@ -317,7 +319,7 @@ describe('POST /api/profiles/test-message', () => {
           content: longResponse,
         }),
       }
-      ;(createLLMProvider as jest.Mock).mockReturnValue(mockProvider)
+      mockCreateLLMProvider.mockReturnValue(mockProvider as any)
 
       const req = createMockRequest({
         provider: 'OPENAI',
@@ -339,7 +341,7 @@ describe('POST /api/profiles/test-message', () => {
           content: 'Response from Ollama',
         }),
       }
-      ;(createLLMProvider as jest.Mock).mockReturnValue(mockProvider)
+      mockCreateLLMProvider.mockReturnValue(mockProvider as any)
 
       const req = createMockRequest({
         provider: 'OLLAMA',
@@ -352,14 +354,14 @@ describe('POST /api/profiles/test-message', () => {
 
       expect(response.status).toBe(200)
       expect(data.success).toBe(true)
-      expect(createLLMProvider).toHaveBeenCalledWith('OLLAMA', 'http://localhost:11434')
+      expect(mockCreateLLMProvider).toHaveBeenCalledWith('OLLAMA', 'http://localhost:11434')
     })
 
     it('should pass baseUrl to provider factory for Ollama', async () => {
       const mockProvider = {
         sendMessage: jest.fn().mockResolvedValue({ content: 'Test' }),
       }
-      ;(createLLMProvider as jest.Mock).mockReturnValue(mockProvider)
+      mockCreateLLMProvider.mockReturnValue(mockProvider as any)
 
       const req = createMockRequest({
         provider: 'OLLAMA',
@@ -369,23 +371,23 @@ describe('POST /api/profiles/test-message', () => {
 
       await testMessage(req)
 
-      expect(createLLMProvider).toHaveBeenCalledWith('OLLAMA', 'http://192.168.1.100:11434')
+      expect(mockCreateLLMProvider).toHaveBeenCalledWith('OLLAMA', 'http://192.168.1.100:11434')
     })
 
     it('should pass baseUrl to provider factory for OpenAI-compatible', async () => {
-      ;(prisma.apiKey.findFirst as jest.Mock).mockResolvedValue({
+      mockPrismaFindFirst.mockResolvedValue({
         id: 'key-123',
         userId: 'user-123',
         provider: Provider.OPENAI_COMPATIBLE,
         keyEncrypted: 'encrypted',
         keyIv: 'iv',
         keyAuthTag: 'tag',
-      })
+      } as any)
 
       const mockProvider = {
         sendMessage: jest.fn().mockResolvedValue({ content: 'Test' }),
       }
-      ;(createLLMProvider as jest.Mock).mockReturnValue(mockProvider)
+      mockCreateLLMProvider.mockReturnValue(mockProvider as any)
 
       const req = createMockRequest({
         provider: 'OPENAI_COMPATIBLE',
@@ -396,29 +398,29 @@ describe('POST /api/profiles/test-message', () => {
 
       await testMessage(req)
 
-      expect(createLLMProvider).toHaveBeenCalledWith('OPENAI_COMPATIBLE', 'http://localhost:8000')
+      expect(mockCreateLLMProvider).toHaveBeenCalledWith('OPENAI_COMPATIBLE', 'http://localhost:8000')
     })
   })
 
   describe('Error Handling', () => {
     beforeEach(() => {
-      ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
-      ;(prisma.apiKey.findFirst as jest.Mock).mockResolvedValue({
+      mockGetServerSession.mockResolvedValue(mockSession as any)
+      mockPrismaFindFirst.mockResolvedValue({
         id: 'key-123',
         userId: 'user-123',
         provider: Provider.OPENAI,
         keyEncrypted: 'encrypted',
         keyIv: 'iv',
         keyAuthTag: 'tag',
-      })
-      ;(decryptApiKey as jest.Mock).mockReturnValue('sk-test123')
+      } as any)
+      mockDecryptApiKey.mockReturnValue('sk-test123')
     })
 
     it('should handle LLM provider errors', async () => {
       const mockProvider = {
         sendMessage: jest.fn().mockRejectedValue(new Error('Rate limit exceeded')),
       }
-      ;(createLLMProvider as jest.Mock).mockReturnValue(mockProvider)
+      mockCreateLLMProvider.mockReturnValue(mockProvider as any)
 
       const req = createMockRequest({
         provider: 'OPENAI',
@@ -439,7 +441,7 @@ describe('POST /api/profiles/test-message', () => {
       const mockProvider = {
         sendMessage: jest.fn().mockResolvedValue({}),
       }
-      ;(createLLMProvider as jest.Mock).mockReturnValue(mockProvider)
+      mockCreateLLMProvider.mockReturnValue(mockProvider as any)
 
       const req = createMockRequest({
         provider: 'OPENAI',
@@ -459,7 +461,7 @@ describe('POST /api/profiles/test-message', () => {
       const mockProvider = {
         sendMessage: jest.fn().mockResolvedValue(null),
       }
-      ;(createLLMProvider as jest.Mock).mockReturnValue(mockProvider)
+      mockCreateLLMProvider.mockReturnValue(mockProvider as any)
 
       const req = createMockRequest({
         provider: 'OPENAI',
@@ -476,7 +478,7 @@ describe('POST /api/profiles/test-message', () => {
     })
 
     it('should handle database errors gracefully', async () => {
-      ;(prisma.apiKey.findFirst as jest.Mock).mockRejectedValue(new Error('DB Error'))
+      mockPrismaFindFirst.mockRejectedValue(new Error('DB Error'))
 
       const req = createMockRequest({
         provider: 'OPENAI',
@@ -510,7 +512,7 @@ describe('POST /api/profiles/test-message', () => {
       const mockProvider = {
         sendMessage: jest.fn().mockRejectedValue(new Error('Model not found')),
       }
-      ;(createLLMProvider as jest.Mock).mockReturnValue(mockProvider)
+      mockCreateLLMProvider.mockReturnValue(mockProvider as any)
 
       const req = createMockRequest({
         provider: 'OPENAI',
@@ -529,26 +531,26 @@ describe('POST /api/profiles/test-message', () => {
 
   describe('Different Providers', () => {
     beforeEach(() => {
-      ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
+      mockGetServerSession.mockResolvedValue(mockSession as any)
     })
 
     it('should work with Anthropic provider', async () => {
-      ;(prisma.apiKey.findFirst as jest.Mock).mockResolvedValue({
+      mockPrismaFindFirst.mockResolvedValue({
         id: 'key-123',
         userId: 'user-123',
         provider: Provider.ANTHROPIC,
         keyEncrypted: 'encrypted',
         keyIv: 'iv',
         keyAuthTag: 'tag',
-      })
-      ;(decryptApiKey as jest.Mock).mockReturnValue('sk-ant-test123')
+      } as any)
+      mockDecryptApiKey.mockReturnValue('sk-ant-test123')
 
       const mockProvider = {
         sendMessage: jest.fn().mockResolvedValue({
           content: 'Response from Claude',
         }),
       }
-      ;(createLLMProvider as jest.Mock).mockReturnValue(mockProvider)
+      mockCreateLLMProvider.mockReturnValue(mockProvider as any)
 
       const req = createMockRequest({
         provider: 'ANTHROPIC',
@@ -565,22 +567,22 @@ describe('POST /api/profiles/test-message', () => {
     })
 
     it('should work with OpenRouter provider', async () => {
-      ;(prisma.apiKey.findFirst as jest.Mock).mockResolvedValue({
+      mockPrismaFindFirst.mockResolvedValue({
         id: 'key-123',
         userId: 'user-123',
         provider: Provider.OPENROUTER,
         keyEncrypted: 'encrypted',
         keyIv: 'iv',
         keyAuthTag: 'tag',
-      })
-      ;(decryptApiKey as jest.Mock).mockReturnValue('sk-or-test123')
+      } as any)
+      mockDecryptApiKey.mockReturnValue('sk-or-test123')
 
       const mockProvider = {
         sendMessage: jest.fn().mockResolvedValue({
           content: 'Response from OpenRouter',
         }),
       }
-      ;(createLLMProvider as jest.Mock).mockReturnValue(mockProvider)
+      mockCreateLLMProvider.mockReturnValue(mockProvider as any)
 
       const req = createMockRequest({
         provider: 'OPENROUTER',

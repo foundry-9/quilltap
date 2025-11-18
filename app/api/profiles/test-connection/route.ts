@@ -267,7 +267,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    if (provider !== 'OLLAMA' && !decryptedKey) {
+    if (provider !== 'OLLAMA' && provider !== 'OPENAI_COMPATIBLE' && !decryptedKey) {
       return NextResponse.json(
         { error: `API key is required for ${provider}` },
         { status: 400 }

@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    if (provider !== 'OLLAMA' && !decryptedKey) {
+    if (provider !== 'OLLAMA' && provider !== 'OPENAI_COMPATIBLE' && !decryptedKey) {
       return NextResponse.json(
         { error: `API key is required for ${provider}` },
         { status: 400 }
@@ -113,8 +113,9 @@ export async function POST(req: NextRequest) {
               content: testPrompt,
             },
           ],
-          ...parameters,
-          max_tokens: parameters.max_tokens || 50, // Limit tokens for test
+          temperature: parameters.temperature,
+          maxTokens: parameters.max_tokens || 50, // Limit tokens for test
+          topP: parameters.top_p,
         },
         decryptedKey
       )
