@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 
 interface Character {
   id: string
@@ -36,12 +37,7 @@ export default function CharacterDetailPage({ params }: { params: { id: string }
   const [startingChat, setStartingChat] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetchCharacter()
-    fetchProfiles()
-  }, [params.id])
-
-  const fetchCharacter = async () => {
+  const fetchCharacter = useCallback(async () => {
     try {
       const res = await fetch(`/api/characters/${params.id}`)
       if (!res.ok) throw new Error('Failed to fetch character')
@@ -52,9 +48,9 @@ export default function CharacterDetailPage({ params }: { params: { id: string }
     } finally {
       setLoading(false)
     }
-  }
+  }, [params.id])
 
-  const fetchProfiles = async () => {
+  const fetchProfiles = useCallback(async () => {
     try {
       const res = await fetch('/api/profiles')
       if (!res.ok) throw new Error('Failed to fetch profiles')
@@ -67,7 +63,12 @@ export default function CharacterDetailPage({ params }: { params: { id: string }
     } catch (err) {
       console.error('Failed to fetch profiles:', err)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    fetchCharacter()
+    fetchProfiles()
+  }, [fetchCharacter, fetchProfiles])
 
   const startChat = async () => {
     if (!selectedProfile) {
@@ -130,9 +131,11 @@ export default function CharacterDetailPage({ params }: { params: { id: string }
         <div className="flex items-start justify-between mb-6">
           <div className="flex items-center">
             {character.avatarUrl ? (
-              <img
+              <Image
                 src={character.avatarUrl}
                 alt={character.name}
+                width={80}
+                height={80}
                 className="w-20 h-20 rounded-full mr-4"
               />
             ) : (

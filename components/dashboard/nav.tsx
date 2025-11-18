@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { signOut } from "next-auth/react";
 
 interface DashboardNavProps {
@@ -54,9 +55,11 @@ export default function DashboardNav({ user }: DashboardNavProps) {
               <p className="text-xs text-gray-500 dark:text-gray-400">{user.email}</p>
             </div>
             {user.image && (
-              <img
+              <Image
                 src={user.image}
                 alt={user.name || "User"}
+                width={32}
+                height={32}
                 className="h-8 w-8 rounded-full"
               />
             )}

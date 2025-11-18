@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 
 interface Message {
   id: string
@@ -32,19 +33,11 @@ export default function ChatPage({ params }: { params: { id: string } }) {
   const [error, setError] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    fetchChat()
-  }, [params.id])
-
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages, streamingContent])
-
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  const fetchChat = async () => {
+  const fetchChat = useCallback(async () => {
     try {
       const res = await fetch(`/api/chats/${params.id}`)
       if (!res.ok) throw new Error('Failed to fetch chat')
@@ -56,7 +49,15 @@ export default function ChatPage({ params }: { params: { id: string } }) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [params.id])
+
+  useEffect(() => {
+    fetchChat()
+  }, [fetchChat])
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages, streamingContent])
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -175,9 +176,11 @@ export default function ChatPage({ params }: { params: { id: string } }) {
         </Link>
         <div className="flex items-center">
           {chat.character.avatarUrl ? (
-            <img
+            <Image
               src={chat.character.avatarUrl}
               alt={chat.character.name}
+              width={40}
+              height={40}
               className="w-10 h-10 rounded-full mr-3"
             />
           ) : (

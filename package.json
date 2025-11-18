@@ -5,9 +5,10 @@
   "scripts": {
     "dev": "next dev",
     "devssl": "next dev --experimental-https --experimental-https-key ./certs/localhost-key.pem --experimental-https-cert ./certs/localhost.pem",
-    "build": "next build",
+    "build": "npm run lint && next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
@@ -26,6 +27,7 @@
     "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.1",
     "@tailwindcss/postcss": "^4.1.17",
     "@types/node": "^22.0.0",
     "@types/react": "^19.2.5",

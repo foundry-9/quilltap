@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 
 interface Chat {
   id: string
@@ -100,9 +101,11 @@ export default function ChatsPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center flex-1">
                   {chat.character.avatarUrl ? (
-                    <img
+                    <Image
                       src={chat.character.avatarUrl}
                       alt={chat.character.name}
+                      width={48}
+                      height={48}
                       className="w-12 h-12 rounded-full mr-4"
                     />
                   ) : (

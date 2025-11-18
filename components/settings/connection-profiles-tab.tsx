@@ -189,7 +189,7 @@ export default function ConnectionProfilesTab() {
       {apiKeys.length === 0 && (
         <div className="bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-700 text-yellow-700 dark:text-yellow-200 px-4 py-3 rounded mb-6">
           <p className="font-medium">No API keys found</p>
-          <p className="text-sm">Add an API key in the "API Keys" tab before creating a connection profile.</p>
+          <p className="text-sm">Add an API key in the &quot;API Keys&quot; tab before creating a connection profile.</p>
         </div>
       )}
 
