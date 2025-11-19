@@ -82,10 +82,20 @@ export default function PersonasPage() {
 
       if (!response.ok) throw new Error('Failed to import persona')
 
-      const newPersona = await response.json()
-      setPersonas([newPersona, ...personas])
-      setImportDialogOpen(false)
-      alert('Persona imported successfully!')
+      const result = await response.json()
+
+      // Check if this is a multi-persona import or single persona import
+      if (result.personas && Array.isArray(result.personas)) {
+        // Multi-persona import
+        setPersonas([...result.personas, ...personas])
+        setImportDialogOpen(false)
+        alert(result.message || `Successfully imported ${result.count} persona(s)!`)
+      } else {
+        // Single persona import
+        setPersonas([result, ...personas])
+        setImportDialogOpen(false)
+        alert('Persona imported successfully!')
+      }
     } catch (err) {
       alert('Failed to import persona. Make sure it\'s a valid SillyTavern persona JSON file.')
       console.error(err)
