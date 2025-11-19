@@ -3,6 +3,7 @@
 import { use, useEffect, useState, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { showAlert } from '@/lib/alert'
 
 interface Message {
   id: string
@@ -179,7 +180,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       }
     } catch (err) {
       console.error('Error sending message:', err)
-      alert(err instanceof Error ? err.message : 'Failed to send message')
+      await showAlert(err instanceof Error ? err.message : 'Failed to send message')
       // Remove the temporary user message on error
       setMessages((prev) => prev.filter((m) => m.id !== tempUserMessageId))
       setStreamingContent('')
@@ -214,7 +215,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       setEditingMessageId(null)
       setEditContent('')
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update message')
+      await showAlert(err instanceof Error ? err.message : 'Failed to update message')
     }
   }
 
@@ -231,7 +232,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       // Remove message from display
       setMessages(messages.filter(m => m.id !== messageId))
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete message')
+      await showAlert(err instanceof Error ? err.message : 'Failed to delete message')
     }
   }
 
@@ -248,7 +249,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       // Refresh chat to get updated swipe groups
       await fetchChat()
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to generate alternative response')
+      await showAlert(err instanceof Error ? err.message : 'Failed to generate alternative response')
     }
   }
 

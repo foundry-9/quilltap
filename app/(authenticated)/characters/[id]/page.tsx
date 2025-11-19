@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { AvatarSelector } from '@/components/images/avatar-selector'
 import { ImageUploadDialog } from '@/components/images/image-upload-dialog'
+import { showAlert } from '@/lib/alert'
 
 interface Character {
   id: string
@@ -91,7 +92,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
       }
 
       await fetchCharacter()
-      alert('Character saved successfully!')
+      await showAlert('Character saved successfully!')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
@@ -118,7 +119,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
       await fetchCharacter()
       setShowAvatarSelector(false)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to set avatar')
+      await showAlert(err instanceof Error ? err.message : 'Failed to set avatar')
     }
   }
 

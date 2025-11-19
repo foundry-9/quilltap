@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
+import { showAlert } from '@/lib/alert'
 
 interface Character {
   id: string
@@ -48,7 +49,7 @@ export default function CharactersPage() {
       if (!res.ok) throw new Error('Failed to delete character')
       setCharacters(characters.filter((c) => c.id !== id))
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete character')
+      await showAlert(err instanceof Error ? err.message : 'Failed to delete character')
     }
   }
 
@@ -67,9 +68,9 @@ export default function CharactersPage() {
       const character = await res.json()
       setCharacters([character, ...characters])
       setImportDialogOpen(false)
-      alert('Character imported successfully!')
+      await showAlert('Character imported successfully!')
     } catch (err) {
-      alert('Failed to import character. Make sure it\'s a valid SillyTavern PNG or JSON file.')
+      await showAlert('Failed to import character. Make sure it\'s a valid SillyTavern PNG or JSON file.')
       console.error(err)
     }
   }

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { AvatarSelector } from '@/components/images/avatar-selector'
 import { ImageUploadDialog } from '@/components/images/image-upload-dialog'
+import { showAlert } from '@/lib/alert'
 
 interface Persona {
   id: string
@@ -74,7 +75,7 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
       }
 
       await fetchPersona()
-      alert('Persona saved successfully!')
+      await showAlert('Persona saved successfully!')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
@@ -101,7 +102,7 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
       await fetchPersona()
       setShowAvatarSelector(false)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to set avatar')
+      await showAlert(err instanceof Error ? err.message : 'Failed to set avatar')
     }
   }
 

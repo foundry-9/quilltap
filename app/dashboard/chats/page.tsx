@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { showAlert } from '@/lib/alert'
 
 interface Chat {
   id: string
@@ -78,7 +79,7 @@ export default function ChatsPage() {
       if (!res.ok) throw new Error('Failed to delete chat')
       setChats(chats.filter((c) => c.id !== id))
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete chat')
+      await showAlert(err instanceof Error ? err.message : 'Failed to delete chat')
     }
   }
 
@@ -90,7 +91,7 @@ export default function ChatsPage() {
     const profileId = formData.get('profileId') as string
 
     if (!file || !characterId || !profileId) {
-      alert('Please select a file, character, and profile')
+      await showAlert('Please select a file, character, and profile')
       return
     }
 
@@ -115,9 +116,9 @@ export default function ChatsPage() {
       const imported = await res.json()
       setChats([imported.chat, ...chats])
       setImportDialogOpen(false)
-      alert('Chat imported successfully!')
+      await showAlert('Chat imported successfully!')
     } catch (err) {
-      alert('Failed to import chat. Make sure it\'s a valid SillyTavern chat JSON file.')
+      await showAlert('Failed to import chat. Make sure it\'s a valid SillyTavern chat JSON file.')
       console.error(err)
     }
   }

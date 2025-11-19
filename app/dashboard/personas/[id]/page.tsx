@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { ImageUploadDialog } from '@/components/images/image-upload-dialog'
 import { AvatarSelector } from '@/components/images/avatar-selector'
+import { showAlert } from '@/lib/alert'
 
 interface Persona {
   id: string
@@ -106,7 +107,7 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
 
       router.push('/dashboard/personas')
     } catch (err) {
-      alert('Failed to delete persona')
+      await showAlert('Failed to delete persona')
       console.error(err)
     }
   }
@@ -127,7 +128,7 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
       const data = await updatedResponse.json()
       setPersona(data)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to set avatar')
+      await showAlert(err instanceof Error ? err.message : 'Failed to set avatar')
     }
   }
 
