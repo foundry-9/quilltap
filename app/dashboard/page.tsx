@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { RecentChatsSection } from "@/components/dashboard/recent-chats";
+import { FavoriteCharactersSection } from "@/components/dashboard/favorite-characters";
 
 export default async function Dashboard() {
   const session = await getServerSession(authOptions);
@@ -14,6 +15,21 @@ export default async function Dashboard() {
     userId ? prisma.chat.count({ where: { userId } }) : 0,
     userId ? prisma.persona.count({ where: { userId } }) : 0,
   ]);
+
+  // Get favorite characters
+  const favoriteCharacters = userId
+    ? await prisma.character.findMany({
+        where: { userId, isFavorite: true },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          name: true,
+          avatarUrl: true,
+          defaultImageId: true,
+          defaultImage: true,
+        },
+      })
+    : [];
 
   // Get recent chats (5 most recent, ordered by updatedAt)
   const recentChats = userId
@@ -45,16 +61,21 @@ export default async function Dashboard() {
   return (
     <div className="container mx-auto px-4 py-8 flex flex-col max-w-[800px]">
       <div className="flex-1">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Welcome, {session?.user?.name || "User"}!
-          </h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Your AI-powered roleplay chat platform
-          </p>
-        </div>
+        {/* Show favorite characters section if there are any favorites */}
+        {favoriteCharacters.length > 0 ? (
+          <FavoriteCharactersSection characters={favoriteCharacters} />
+        ) : (
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+              Welcome, {session?.user?.name || "User"}!
+            </h1>
+            <p className="mt-2 text-gray-600 dark:text-gray-400">
+              Your AI-powered roleplay chat platform
+            </p>
+          </div>
+        )}
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-8">
         {/* Characters Card */}
         <Link href="/characters">
           <div className="h-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 shadow-sm dark:shadow-lg hover:border-blue-500 hover:shadow-md dark:hover:border-blue-500 dark:hover:shadow-md transition-all cursor-pointer">

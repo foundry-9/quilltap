@@ -46,6 +46,7 @@ export async function GET(req: NextRequest) {
         avatarUrl: true,
         defaultImageId: true,
         defaultImage: true,
+        isFavorite: true,
         createdAt: true,
         updatedAt: true,
         _count: {

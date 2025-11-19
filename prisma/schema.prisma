@@ -152,6 +152,7 @@ model Character {
   avatarUrl         String?  // Legacy URL-based avatar (deprecated)
   defaultImageId    String?  // New image-based avatar
   sillyTavernData   Json?    // Full ST character spec
+  isFavorite        Boolean  @default(false)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

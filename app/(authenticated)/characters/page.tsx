@@ -17,6 +17,7 @@ interface Character {
     filepath: string
     url?: string
   }
+  isFavorite: boolean
   createdAt: string
   _count: {
     chats: number
@@ -63,6 +64,18 @@ export default function CharactersPage() {
       setCharacters(characters.filter((c) => c.id !== id))
     } catch (err) {
       await showAlert(err instanceof Error ? err.message : 'Failed to delete character')
+    }
+  }
+
+  const toggleFavorite = async (e: React.MouseEvent, id: string) => {
+    e.preventDefault()
+    try {
+      const res = await fetch(`/api/characters/${id}/favorite`, { method: 'PATCH' })
+      if (!res.ok) throw new Error('Failed to toggle favorite')
+      const data = await res.json()
+      setCharacters(characters.map((c) => (c.id === id ? { ...c, isFavorite: data.character.isFavorite } : c)))
+    } catch (err) {
+      await showAlert(err instanceof Error ? err.message : 'Failed to toggle favorite')
     }
   }
 
@@ -142,7 +155,7 @@ export default function CharactersPage() {
               className="border border-gray-200 dark:border-slate-700 rounded-lg p-6 hover:shadow-lg transition-shadow bg-white dark:bg-slate-800"
             >
               <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center">
+                <div className="flex items-center flex-grow">
                   {getAvatarSrc(character) ? (
                     <Image
                       src={getAvatarSrc(character)!}
@@ -158,13 +171,20 @@ export default function CharactersPage() {
                       </span>
                     </div>
                   )}
-                  <div>
+                  <div className="flex-grow">
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{character.name}</h2>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
                       {character._count.chats} chat{character._count.chats !== 1 ? 's' : ''}
                     </p>
                   </div>
                 </div>
+                <button
+                  onClick={(e) => toggleFavorite(e, character.id)}
+                  className="ml-2 text-2xl hover:scale-110 transition-transform flex-shrink-0"
+                  title={character.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                >
+                  {character.isFavorite ? '⭐' : '☆'}
+                </button>
               </div>
 
               <p className="text-gray-700 dark:text-gray-300 mb-4 line-clamp-3">

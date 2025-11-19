@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { showAlert } from '@/lib/alert'
 import MessageContent from '@/components/chat/MessageContent'
+import { RecentCharacterConversations } from '@/components/character/recent-conversations'
 
 interface Tag {
   id: string
@@ -187,58 +188,77 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-[800px]">
-      <div className="mb-8">
+    <div className="min-h-screen px-4 py-8">
+      <div className="mx-auto">
         <Link
           href="/characters"
           className="text-blue-600 dark:text-blue-400 hover:underline mb-4 inline-block"
         >
           ← Back to Characters
         </Link>
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            {getAvatarSrc() ? (
-              <Image
-                src={getAvatarSrc()!}
-                alt={character?.name || ''}
-                width={80}
-                height={80}
-                className="w-20 h-20 rounded-full object-cover"
-              />
-            ) : (
-              <div className="w-20 h-20 rounded-full bg-gray-300 dark:bg-slate-700 flex items-center justify-center">
-                <span className="text-3xl font-bold text-gray-600 dark:text-gray-400">
-                  {character?.name?.charAt(0)?.toUpperCase() || '?'}
-                </span>
+        <div className="flex items-start justify-between gap-4 mb-8">
+          <div className="flex items-center gap-4 flex-grow">
+            <div className="relative">
+              {getAvatarSrc() ? (
+                <Image
+                  src={getAvatarSrc()!}
+                  alt={character?.name || ''}
+                  width={80}
+                  height={80}
+                  className="w-20 h-20 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-20 h-20 rounded-full bg-gray-300 dark:bg-slate-700 flex items-center justify-center">
+                  <span className="text-3xl font-bold text-gray-600 dark:text-gray-400">
+                    {character?.name?.charAt(0)?.toUpperCase() || '?'}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+                {character?.name || 'Loading...'}
+              </h1>
+            </div>
+          </div>
+          <div className="flex gap-2 flex-shrink-0">
+            <button
+              onClick={handleStartChat}
+              className="px-4 py-2 bg-green-600 dark:bg-green-700 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-800 font-medium whitespace-nowrap"
+            >
+              Start Chat
+            </button>
+            <Link
+              href={`/characters/${id}/edit`}
+              className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 font-medium whitespace-nowrap text-center"
+            >
+              Edit
+            </Link>
+          </div>
+        </div>
+
+        {/* Two-column layout: content on left, conversations on right on wide screens */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+          {/* Left Column: Character Details */}
+          <div className="xl:col-span-2">
+            {/* Tags Section */}
+            {tags.length > 0 && (
+              <div className="mb-6">
+                <div className="flex flex-wrap gap-2">
+                  {tags.map((tag) => (
+                    <span
+                      key={tag.id}
+                      className="inline-block px-3 py-1 bg-blue-200 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full text-sm font-medium"
+                    >
+                      {tag.name}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-              {character?.name || 'Loading...'}
-            </h1>
-          </div>
-        </div>
-      </div>
 
-      {/* Tags Section */}
-      {tags.length > 0 && (
-        <div className="mb-6">
-          <div className="flex flex-wrap gap-2">
-            {tags.map((tag) => (
-              <span
-                key={tag.id}
-                className="inline-block px-3 py-1 bg-blue-200 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full text-sm font-medium"
-              >
-                {tag.name}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Main Content */}
-      <div className="space-y-6">
+            {/* Main Content */}
+            <div className="space-y-6">
         <div>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             Description
@@ -298,22 +318,19 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
             </pre>
           </div>
         )}
-      </div>
+            </div>
+          </div>
 
-      {/* Action Buttons */}
-      <div className="flex gap-4 mt-8">
-        <button
-          onClick={handleStartChat}
-          className="flex-1 px-6 py-3 bg-green-600 dark:bg-green-700 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-800 font-medium"
-        >
-          Start Chat
-        </button>
-        <Link
-          href={`/characters/${id}/edit`}
-          className="flex-1 px-6 py-3 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 text-center font-medium"
-        >
-          Edit
-        </Link>
+          {/* Right Column: Recent Conversations */}
+          <div className="xl:col-span-1">
+            <div className="sticky top-8">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                Recent Conversations
+              </h2>
+              <RecentCharacterConversations characterId={id} />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Chat Creation Dialog */}
