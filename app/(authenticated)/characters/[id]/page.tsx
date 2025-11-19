@@ -1,7 +1,6 @@
 'use client'
 
-import { use, useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { use, useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { AvatarSelector } from '@/components/images/avatar-selector'
@@ -28,7 +27,6 @@ interface Character {
 
 export default function EditCharacterPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -46,11 +44,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
     avatarUrl: '',
   })
 
-  useEffect(() => {
-    fetchCharacter()
-  }, [id])
-
-  const fetchCharacter = async () => {
+  const fetchCharacter = useCallback(async () => {
     try {
       const res = await fetch(`/api/characters/${id}`)
       if (!res.ok) throw new Error('Failed to fetch character')
@@ -72,7 +66,11 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
     } finally {
       setLoading(false)
     }
-  }
+  }, [id])
+
+  useEffect(() => {
+    fetchCharacter()
+  }, [fetchCharacter])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

@@ -1,6 +1,6 @@
 'use client'
 
-import { use, useEffect, useState } from 'react'
+import { use, useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { AvatarSelector } from '@/components/images/avatar-selector'
@@ -35,11 +35,7 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
     description: '',
   })
 
-  useEffect(() => {
-    fetchPersona()
-  }, [id])
-
-  const fetchPersona = async () => {
+  const fetchPersona = useCallback(async () => {
     try {
       const res = await fetch(`/api/personas/${id}`)
       if (!res.ok) throw new Error('Failed to fetch persona')
@@ -55,7 +51,11 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
     } finally {
       setLoading(false)
     }
-  }
+  }, [id])
+
+  useEffect(() => {
+    fetchPersona()
+  }, [fetchPersona])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
