@@ -10,13 +10,13 @@ interface RecentChat {
   updatedAt: string | Date
   character: {
     name: string
-    avatarUrl?: string
-    defaultImageId?: string
+    avatarUrl?: string | null
+    defaultImageId?: string | null
     defaultImage?: {
       id: string
       filepath: string
-      url?: string
-    }
+      url?: string | null
+    } | null
   }
   persona?: {
     id: string
