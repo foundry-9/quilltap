@@ -15,7 +15,7 @@ import { z } from 'zod'
 
 // Validation schema
 const testConnectionSchema = z.object({
-  provider: z.enum(['OPENAI', 'ANTHROPIC', 'OLLAMA', 'OPENROUTER', 'OPENAI_COMPATIBLE']),
+  provider: z.enum(['OPENAI', 'ANTHROPIC', 'GROK', 'OLLAMA', 'OPENROUTER', 'OPENAI_COMPATIBLE']),
   apiKeyId: z.string().optional(),
   baseUrl: z.string().optional(),
 })
@@ -35,6 +35,9 @@ async function testProviderConnection(
 
       case 'ANTHROPIC':
         return await testAnthropic(apiKey)
+
+      case 'GROK':
+        return await testGrok(apiKey)
 
       case 'OLLAMA':
         if (!baseUrl) {
@@ -122,6 +125,34 @@ async function testAnthropic(apiKey: string) {
     return {
       valid: false,
       error: 'Failed to connect to Anthropic',
+    }
+  }
+}
+
+/**
+ * Test Grok connection
+ */
+async function testGrok(apiKey: string) {
+  try {
+    const response = await fetch('https://api.x.ai/v1/models', {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+    })
+
+    if (response.ok) {
+      return { valid: true }
+    }
+
+    const error = await response.json()
+    return {
+      valid: false,
+      error: error.error?.message || 'Invalid API key',
+    }
+  } catch (error) {
+    return {
+      valid: false,
+      error: 'Failed to connect to Grok',
     }
   }
 }

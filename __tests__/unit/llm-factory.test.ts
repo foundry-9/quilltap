@@ -14,6 +14,7 @@ import { AnthropicProvider } from '@/lib/llm/anthropic'
 import { OllamaProvider } from '@/lib/llm/ollama'
 import { OpenRouterProvider } from '@/lib/llm/openrouter'
 import { OpenAICompatibleProvider } from '@/lib/llm/openai-compatible'
+import { GrokProvider } from '@/lib/llm/grok'
 
 describe('createLLMProvider', () => {
   describe('OpenAI provider', () => {
@@ -98,6 +99,20 @@ describe('createLLMProvider', () => {
     })
   })
 
+  describe('Grok provider', () => {
+    it('should create a Grok provider', () => {
+      const provider = createLLMProvider('GROK')
+
+      expect(provider).toBeInstanceOf(GrokProvider)
+    })
+
+    it('should create Grok provider regardless of baseUrl parameter', () => {
+      const provider = createLLMProvider('GROK', 'https://custom-url.com')
+
+      expect(provider).toBeInstanceOf(GrokProvider)
+    })
+  })
+
   describe('Invalid provider names', () => {
     it('should throw error for invalid provider name', () => {
       expect(() => {
@@ -138,6 +153,7 @@ describe('createLLMProvider', () => {
         { name: 'OLLAMA', instance: OllamaProvider, requiresBaseUrl: true },
         { name: 'OPENROUTER', instance: OpenRouterProvider, requiresBaseUrl: false },
         { name: 'OPENAI_COMPATIBLE', instance: OpenAICompatibleProvider, requiresBaseUrl: true },
+        { name: 'GROK', instance: GrokProvider, requiresBaseUrl: false },
       ]
 
       validProviders.forEach(({ name, instance, requiresBaseUrl }) => {

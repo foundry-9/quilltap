@@ -7,8 +7,9 @@ import { AnthropicProvider } from './anthropic'
 import { OllamaProvider } from './ollama'
 import { OpenRouterProvider } from './openrouter'
 import { OpenAICompatibleProvider } from './openai-compatible'
+import { GrokProvider } from './grok'
 
-type Provider = 'OPENAI' | 'ANTHROPIC' | 'OLLAMA' | 'OPENROUTER' | 'OPENAI_COMPATIBLE'
+type Provider = 'OPENAI' | 'ANTHROPIC' | 'OLLAMA' | 'OPENROUTER' | 'OPENAI_COMPATIBLE' | 'GROK'
 
 export function createLLMProvider(
   provider: Provider,
@@ -35,6 +36,9 @@ export function createLLMProvider(
         throw new Error('OpenAI-compatible provider requires baseUrl')
       }
       return new OpenAICompatibleProvider(baseUrl)
+
+    case 'GROK':
+      return new GrokProvider()
 
     default:
       throw new Error(`Unsupported provider: ${provider}`)

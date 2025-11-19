@@ -17,6 +17,7 @@ enum Provider {
   OLLAMA
   OPENROUTER
   OPENAI_COMPATIBLE
+  GROK
 }
 
 enum Role {
