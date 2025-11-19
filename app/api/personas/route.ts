@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { name, description, personalityTraits, avatarUrl, sillyTavernData } =
+    const { name, title, description, personalityTraits, avatarUrl, sillyTavernData } =
       body
 
     // Validate required fields
@@ -72,6 +72,7 @@ export async function POST(req: NextRequest) {
       data: {
         userId: session.user.id,
         name,
+        title: title || null,
         description,
         personalityTraits: personalityTraits || null,
         avatarUrl: avatarUrl || null,

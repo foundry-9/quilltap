@@ -17,6 +17,7 @@ export default function NewPersonaPage() {
     const formData = new FormData(e.currentTarget)
     const data = {
       name: formData.get('name') as string,
+      title: formData.get('title') as string,
       description: formData.get('description') as string,
       personalityTraits: formData.get('personalityTraits') as string,
     }
@@ -80,6 +81,22 @@ export default function NewPersonaPage() {
             required
             className="block w-full rounded-md border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 border"
             placeholder="Your character's name"
+          />
+        </div>
+
+        <div>
+          <label
+            htmlFor="title"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+          >
+            Title
+          </label>
+          <input
+            type="text"
+            id="title"
+            name="title"
+            className="block w-full rounded-md border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 border"
+            placeholder="e.g., The Wanderer, Knight of the Realm"
           />
         </div>
 
