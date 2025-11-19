@@ -70,7 +70,7 @@ export function exportSTPersona(persona: any): STPersona {
  * Check if the data is a multi-persona backup format
  */
 export function isMultiPersonaBackup(data: any): data is MultiPersonaBackup {
-  return (
+  return !!(
     data &&
     typeof data === 'object' &&
     'personas' in data &&
