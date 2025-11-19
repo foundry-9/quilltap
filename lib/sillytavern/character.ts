@@ -36,13 +36,22 @@ export function importSTCharacter(stData: STCharacterV2 | STCharacterCard) {
   // Handle both direct V2 format and card format
   const data = 'data' in stData ? stData.data : stData
 
+  // mes_example can be an array or string in SillyTavern format
+  // Convert to JSON string for storage
+  let exampleDialogues = ''
+  if (data.mes_example) {
+    exampleDialogues = Array.isArray(data.mes_example)
+      ? JSON.stringify(data.mes_example)
+      : data.mes_example
+  }
+
   return {
     name: data.name,
     description: data.description,
     personality: data.personality,
     scenario: data.scenario,
     firstMessage: data.first_mes,
-    exampleDialogues: data.mes_example || '',
+    exampleDialogues,
     systemPrompt: data.system_prompt || '',
     sillyTavernData: data, // Store original for full fidelity
   }
