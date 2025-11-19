@@ -31,6 +31,7 @@ interface ConnectionProfile {
 interface Persona {
   id: string
   name: string
+  title?: string
   description: string
 }
 
@@ -352,7 +353,7 @@ export default function CharacterDetailPage({ params }: { params: Promise<{ id: 
               .filter(p => !linkedPersonas.some(lp => lp.personaId === p.id))
               .map((persona) => (
                 <option key={persona.id} value={persona.id}>
-                  {persona.name}
+                  {persona.title ? `${persona.name} (${persona.title})` : persona.name}
                 </option>
               ))}
           </select>
@@ -424,7 +425,7 @@ export default function CharacterDetailPage({ params }: { params: Promise<{ id: 
                 <option value="">None (use default)</option>
                 {personas.map((persona) => (
                   <option key={persona.id} value={persona.id}>
-                    {persona.name}
+                    {persona.title ? `${persona.name} (${persona.title})` : persona.name}
                   </option>
                 ))}
               </select>
