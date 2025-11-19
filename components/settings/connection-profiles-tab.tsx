@@ -323,6 +323,7 @@ export default function ConnectionProfilesTab() {
       OPENAI: ['gpt-4', 'gpt-3.5-turbo', 'gpt-4-turbo'],
       ANTHROPIC: ['claude-sonnet-4-5-20250929', 'claude-haiku-4-5-20251015', 'claude-opus-4-1-20250805'],
       GROK: ['grok-beta', 'grok-2', 'grok-vision-beta'],
+      GAB_AI: ['arya', 'gpt-4o'],
       OLLAMA: ['llama2', 'neural-chat', 'mistral'],
       OPENROUTER: ['openai/gpt-4', 'anthropic/claude-2', 'meta-llama/llama-2-70b'],
       OPENAI_COMPATIBLE: ['gpt-3.5-turbo'],
@@ -466,6 +467,7 @@ export default function ConnectionProfilesTab() {
                   <option value="OPENAI">OpenAI</option>
                   <option value="ANTHROPIC">Anthropic</option>
                   <option value="GROK">Grok</option>
+                  <option value="GAB_AI">Gab AI</option>
                   <option value="OLLAMA">Ollama</option>
                   <option value="OPENROUTER">OpenRouter</option>
                   <option value="OPENAI_COMPATIBLE">OpenAI Compatible</option>

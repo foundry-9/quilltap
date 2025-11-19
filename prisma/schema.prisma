@@ -18,6 +18,7 @@ enum Provider {
   OPENROUTER
   OPENAI_COMPATIBLE
   GROK
+  GAB_AI
 }
 
 enum Role {

@@ -16,7 +16,7 @@ import { z } from 'zod'
 
 // Validation schema
 const getModelsSchema = z.object({
-  provider: z.enum(['OPENAI', 'ANTHROPIC', 'GROK', 'OLLAMA', 'OPENROUTER', 'OPENAI_COMPATIBLE']),
+  provider: z.enum(['OPENAI', 'ANTHROPIC', 'GROK', 'GAB_AI', 'OLLAMA', 'OPENROUTER', 'OPENAI_COMPATIBLE']),
   apiKeyId: z.string().optional(), // Optional API key ID
   baseUrl: z.string().optional(), // Required for Ollama/OpenAI-compatible
 })

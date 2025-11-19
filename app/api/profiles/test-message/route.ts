@@ -16,7 +16,7 @@ import { z } from 'zod'
 
 // Validation schema
 const testMessageSchema = z.object({
-  provider: z.enum(['OPENAI', 'ANTHROPIC', 'GROK', 'OLLAMA', 'OPENROUTER', 'OPENAI_COMPATIBLE']),
+  provider: z.enum(['OPENAI', 'ANTHROPIC', 'GROK', 'GAB_AI', 'OLLAMA', 'OPENROUTER', 'OPENAI_COMPATIBLE']),
   apiKeyId: z.string().optional(),
   baseUrl: z.string().optional(),
   modelName: z.string(),

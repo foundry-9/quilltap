@@ -225,6 +225,7 @@ export default function ApiKeysTab() {
                 <option value="OPENAI">OpenAI</option>
                 <option value="ANTHROPIC">Anthropic</option>
                 <option value="GROK">Grok</option>
+                <option value="GAB_AI">Gab AI</option>
                 <option value="OLLAMA">Ollama</option>
                 <option value="OPENROUTER">OpenRouter</option>
                 <option value="OPENAI_COMPATIBLE">OpenAI Compatible</option>

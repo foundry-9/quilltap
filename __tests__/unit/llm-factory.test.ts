@@ -15,6 +15,7 @@ import { OllamaProvider } from '@/lib/llm/ollama'
 import { OpenRouterProvider } from '@/lib/llm/openrouter'
 import { OpenAICompatibleProvider } from '@/lib/llm/openai-compatible'
 import { GrokProvider } from '@/lib/llm/grok'
+import { GabAIProvider } from '@/lib/llm/gab-ai'
 
 describe('createLLMProvider', () => {
   describe('OpenAI provider', () => {
@@ -113,6 +114,20 @@ describe('createLLMProvider', () => {
     })
   })
 
+  describe('Gab AI provider', () => {
+    it('should create a Gab AI provider', () => {
+      const provider = createLLMProvider('GAB_AI')
+
+      expect(provider).toBeInstanceOf(GabAIProvider)
+    })
+
+    it('should create Gab AI provider regardless of baseUrl parameter', () => {
+      const provider = createLLMProvider('GAB_AI', 'https://custom-url.com')
+
+      expect(provider).toBeInstanceOf(GabAIProvider)
+    })
+  })
+
   describe('Invalid provider names', () => {
     it('should throw error for invalid provider name', () => {
       expect(() => {
@@ -154,6 +169,7 @@ describe('createLLMProvider', () => {
         { name: 'OPENROUTER', instance: OpenRouterProvider, requiresBaseUrl: false },
         { name: 'OPENAI_COMPATIBLE', instance: OpenAICompatibleProvider, requiresBaseUrl: true },
         { name: 'GROK', instance: GrokProvider, requiresBaseUrl: false },
+        { name: 'GAB_AI', instance: GabAIProvider, requiresBaseUrl: false },
       ]
 
       validProviders.forEach(({ name, instance, requiresBaseUrl }) => {

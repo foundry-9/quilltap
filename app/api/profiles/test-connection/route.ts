@@ -15,7 +15,7 @@ import { z } from 'zod'
 
 // Validation schema
 const testConnectionSchema = z.object({
-  provider: z.enum(['OPENAI', 'ANTHROPIC', 'GROK', 'OLLAMA', 'OPENROUTER', 'OPENAI_COMPATIBLE']),
+  provider: z.enum(['OPENAI', 'ANTHROPIC', 'GROK', 'GAB_AI', 'OLLAMA', 'OPENROUTER', 'OPENAI_COMPATIBLE']),
   apiKeyId: z.string().optional(),
   baseUrl: z.string().optional(),
 })
@@ -38,6 +38,9 @@ async function testProviderConnection(
 
       case 'GROK':
         return await testGrok(apiKey)
+
+      case 'GAB_AI':
+        return await testGabAI(apiKey)
 
       case 'OLLAMA':
         if (!baseUrl) {
@@ -153,6 +156,34 @@ async function testGrok(apiKey: string) {
     return {
       valid: false,
       error: 'Failed to connect to Grok',
+    }
+  }
+}
+
+/**
+ * Test Gab AI connection
+ */
+async function testGabAI(apiKey: string) {
+  try {
+    const response = await fetch('https://gab.ai/v1/models', {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+    })
+
+    if (response.ok) {
+      return { valid: true }
+    }
+
+    const error = await response.json()
+    return {
+      valid: false,
+      error: error.error?.message || 'Invalid API key',
+    }
+  } catch (error) {
+    return {
+      valid: false,
+      error: 'Failed to connect to Gab AI',
     }
   }
 }
