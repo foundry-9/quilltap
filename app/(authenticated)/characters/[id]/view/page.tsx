@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { showAlert } from '@/lib/alert'
+import MessageContent from '@/components/chat/MessageContent'
 
 interface Tag {
   id: string
@@ -242,36 +243,36 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             Description
           </h2>
-          <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-            {character?.description}
-          </p>
+          <div className="text-gray-700 dark:text-gray-300">
+            <MessageContent content={character?.description || ''} />
+          </div>
         </div>
 
         <div>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             Personality
           </h2>
-          <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-            {character?.personality}
-          </p>
+          <div className="text-gray-700 dark:text-gray-300">
+            <MessageContent content={character?.personality || ''} />
+          </div>
         </div>
 
         <div>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             Scenario
           </h2>
-          <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-            {character?.scenario}
-          </p>
+          <div className="text-gray-700 dark:text-gray-300">
+            <MessageContent content={character?.scenario || ''} />
+          </div>
         </div>
 
         <div>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             First Message
           </h2>
-          <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-            {character?.firstMessage}
-          </p>
+          <div className="text-gray-700 dark:text-gray-300">
+            <MessageContent content={character?.firstMessage || ''} />
+          </div>
         </div>
 
         {character?.exampleDialogues && (
@@ -279,9 +280,9 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
               Example Dialogues
             </h2>
-            <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-              {character.exampleDialogues}
-            </p>
+            <div className="text-gray-700 dark:text-gray-300">
+              <MessageContent content={character.exampleDialogues} />
+            </div>
           </div>
         )}
 
@@ -290,9 +291,11 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
               System Prompt
             </h2>
-            <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono text-sm bg-gray-100 dark:bg-slate-900 p-3 rounded">
-              {character.systemPrompt}
-            </p>
+            <pre className="bg-gray-900 dark:bg-gray-950 text-gray-100 p-4 rounded-md overflow-hidden my-2">
+              <code className="text-sm whitespace-pre-wrap break-words">
+                {character.systemPrompt}
+              </code>
+            </pre>
           </div>
         )}
       </div>

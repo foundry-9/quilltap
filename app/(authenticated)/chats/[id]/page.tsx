@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { TagEditor } from '@/components/tags/tag-editor'
 import { showAlert } from '@/lib/alert'
+import MessageContent from '@/components/chat/MessageContent'
 
 interface Message {
   id: string
@@ -382,7 +383,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                       </div>
                     </div>
                   ) : (
-                    <p className="whitespace-pre-wrap">{message.content}</p>
+                    <MessageContent content={message.content} />
                   )}
                 </div>
 
@@ -456,7 +457,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         {streaming && streamingContent && (
           <div className="flex justify-start">
             <div className="max-w-3xl px-4 py-3 rounded-lg bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-white">
-              <p className="whitespace-pre-wrap">{streamingContent}</p>
+              <MessageContent content={streamingContent} />
               <span className="inline-block w-2 h-4 bg-gray-400 dark:bg-gray-500 animate-pulse ml-1"></span>
             </div>
           </div>
