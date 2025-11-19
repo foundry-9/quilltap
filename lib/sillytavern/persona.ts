@@ -107,8 +107,6 @@ export function convertMultiPersonaBackup(backup: MultiPersonaBackup): STPersona
         connections: description.connections,
         filename: filename,
         isDefault: backup.default_persona === filename,
-        // Store any other fields from the description
-        ...description,
       })
     }
   }

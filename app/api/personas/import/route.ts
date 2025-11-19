@@ -48,6 +48,18 @@ export async function POST(req: NextRequest) {
               userId: session.user.id,
               ...importedData,
             },
+            include: {
+              characters: {
+                include: {
+                  character: {
+                    select: {
+                      id: true,
+                      name: true,
+                    },
+                  },
+                },
+              },
+            },
           })
         })
       )
@@ -69,6 +81,18 @@ export async function POST(req: NextRequest) {
         data: {
           userId: session.user.id,
           ...importedData,
+        },
+        include: {
+          characters: {
+            include: {
+              character: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
         },
       })
 
