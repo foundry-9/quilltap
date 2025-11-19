@@ -10,7 +10,7 @@ interface Persona {
   description: string
   personalityTraits: string | null
   avatarUrl: string | null
-  characters: Array<{
+  characters?: Array<{
     character: {
       id: string
       name: string
@@ -72,7 +72,6 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
 
       const updated = await response.json()
       setPersona(updated)
-      alert('Persona updated successfully!')
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -152,7 +151,7 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
         </div>
       )}
 
-      {persona.characters.length > 0 && (
+      {persona.characters && persona.characters.length > 0 && (
         <div className="mb-6 p-4 bg-indigo-50 dark:bg-indigo-950 border border-indigo-200 dark:border-indigo-800 rounded-md">
           <h3 className="text-sm font-medium text-indigo-900 dark:text-indigo-100 mb-2">
             Linked to characters:
