@@ -2,6 +2,7 @@
 // Phase 0.5: Single Chat MVP
 
 import { prisma } from '@/lib/prisma'
+import { processCharacterTemplates } from '@/lib/templates/processor'
 
 interface Character {
   id: string
@@ -78,19 +79,26 @@ function buildSystemPrompt({
   persona?: Persona
   scenario: string
 }): string {
-  let prompt = character.systemPrompt || ''
+  // Process all character templates with the current context
+  const processedCharacter = processCharacterTemplates({
+    character,
+    persona,
+    scenario,
+  })
+
+  let prompt = processedCharacter.systemPrompt || ''
 
   // Add character identity
   prompt += `\n\nYou are roleplaying as ${character.name}.`
 
-  // Add character description
-  if (character.description) {
-    prompt += `\n\nCharacter Description:\n${character.description}`
+  // Add character description (with templates processed)
+  if (processedCharacter.description) {
+    prompt += `\n\nCharacter Description:\n${processedCharacter.description}`
   }
 
-  // Add personality
-  if (character.personality) {
-    prompt += `\n\nPersonality:\n${character.personality}`
+  // Add personality (with templates processed)
+  if (processedCharacter.personality) {
+    prompt += `\n\nPersonality:\n${processedCharacter.personality}`
   }
 
   // Add persona (who they're talking to)
@@ -104,14 +112,14 @@ function buildSystemPrompt({
     }
   }
 
-  // Add scenario
-  if (scenario) {
-    prompt += `\n\nScenario:\n${scenario}`
+  // Add scenario (with templates processed)
+  if (processedCharacter.scenario) {
+    prompt += `\n\nScenario:\n${processedCharacter.scenario}`
   }
 
-  // Add example dialogues
-  if (character.exampleDialogues) {
-    prompt += `\n\nExample Dialogue:\n${character.exampleDialogues}`
+  // Add example dialogues (with templates processed)
+  if (processedCharacter.exampleDialogues) {
+    prompt += `\n\nExample Dialogue:\n${processedCharacter.exampleDialogues}`
   }
 
   // Add roleplay instructions
