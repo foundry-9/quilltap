@@ -15,6 +15,9 @@ import { Provider } from '@/lib/types/prisma'
 /**
  * GET /api/profiles
  * List all connection profiles for the authenticated user
+ * Query params:
+ *   - sortByCharacter: Character ID to sort profiles by matching tags
+ *   - sortByPersona: Persona ID to sort profiles by matching tags (used with sortByCharacter)
  */
 export async function GET(req: NextRequest) {
   try {
@@ -25,6 +28,10 @@ export async function GET(req: NextRequest) {
         { status: 401 }
       )
     }
+
+    const { searchParams } = new URL(req.url)
+    const sortByCharacter = searchParams.get('sortByCharacter')
+    const sortByPersona = searchParams.get('sortByPersona')
 
     const profiles = await prisma.connectionProfile.findMany({
       where: {
@@ -39,12 +46,63 @@ export async function GET(req: NextRequest) {
             isActive: true,
           },
         },
+        tags: {
+          include: {
+            tag: true,
+          },
+        },
       },
       orderBy: [
         { isDefault: 'desc' },
         { createdAt: 'desc' },
       ],
     })
+
+    // If sortByCharacter is specified, sort by matching tags
+    if (sortByCharacter) {
+      // Get character tags
+      const characterTags = await prisma.characterTag.findMany({
+        where: { characterId: sortByCharacter },
+        select: { tagId: true },
+      })
+      const characterTagIds = new Set(characterTags.map(ct => ct.tagId))
+
+      // Get persona tags if sortByPersona is specified
+      const personaTags = sortByPersona
+        ? await prisma.personaTag.findMany({
+            where: { personaId: sortByPersona },
+            select: { tagId: true },
+          })
+        : []
+      const personaTagIds = new Set(personaTags.map(pt => pt.tagId))
+
+      // Combine tag IDs
+      const allTagIds = new Set([...characterTagIds, ...personaTagIds])
+
+      // Sort profiles by number of matching tags (descending)
+      profiles.sort((a, b) => {
+        const aMatchingTags = a.tags.filter(cpt => allTagIds.has(cpt.tagId)).length
+        const bMatchingTags = b.tags.filter(cpt => allTagIds.has(cpt.tagId)).length
+
+        // If same number of matches, prefer default profile
+        if (aMatchingTags === bMatchingTags) {
+          return b.isDefault ? 1 : a.isDefault ? -1 : 0
+        }
+
+        return bMatchingTags - aMatchingTags
+      })
+
+      // Add matching tags info to each profile
+      const profilesWithMatches = profiles.map(profile => ({
+        ...profile,
+        matchingTags: profile.tags
+          .filter(cpt => allTagIds.has(cpt.tagId))
+          .map(cpt => cpt.tag),
+        matchingTagCount: profile.tags.filter(cpt => allTagIds.has(cpt.tagId)).length,
+      }))
+
+      return NextResponse.json(profilesWithMatches)
+    }
 
     return NextResponse.json(profiles)
   } catch (error) {

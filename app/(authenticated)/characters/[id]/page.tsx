@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { AvatarSelector } from '@/components/images/avatar-selector'
 import { ImageUploadDialog } from '@/components/images/image-upload-dialog'
+import { TagEditor } from '@/components/tags/tag-editor'
 import { showAlert } from '@/lib/alert'
 
 interface Character {
@@ -293,6 +294,9 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
             placeholder="Custom system instructions (will be combined with auto-generated prompt)"
           />
         </div>
+
+        {/* Tag Editor */}
+        <TagEditor entityType="character" entityId={id} />
 
         <div className="flex gap-4">
           <button

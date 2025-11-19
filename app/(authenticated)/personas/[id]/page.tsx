@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { AvatarSelector } from '@/components/images/avatar-selector'
 import { ImageUploadDialog } from '@/components/images/image-upload-dialog'
+import { TagEditor } from '@/components/tags/tag-editor'
 import { showAlert } from '@/lib/alert'
 
 interface Persona {
@@ -218,6 +219,9 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
             placeholder="Describe this persona's characteristics, background, and role"
           />
         </div>
+
+        {/* Tag Editor */}
+        <TagEditor entityType="persona" entityId={id} />
 
         <div className="flex gap-4">
           <button

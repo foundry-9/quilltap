@@ -52,6 +52,7 @@ model User {
   personas      Persona[]
   chats         Chat[]
   images        Image[]
+  tags          Tag[]
 
   @@map("users")
 }
@@ -132,6 +133,7 @@ model ConnectionProfile {
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   apiKey          ApiKey?  @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
   chats           Chat[]
+  tags            ConnectionProfileTag[]
 
   @@map("connection_profiles")
 }
@@ -158,6 +160,7 @@ model Character {
   chats             Chat[]
   personas          CharacterPersona[]
   chatAvatarOverrides ChatAvatarOverride[]
+  tags              CharacterTag[]
 
   @@map("characters")
 }
@@ -179,6 +182,7 @@ model Persona {
   defaultImage      Image?              @relation("PersonaDefaultImage", fields: [defaultImageId], references: [id], onDelete: SetNull)
   characters        CharacterPersona[]
   chats             Chat[]
+  tags              PersonaTag[]
 
   @@map("personas")
 }
@@ -213,6 +217,7 @@ model Chat {
   connectionProfile   ConnectionProfile     @relation(fields: [connectionProfileId], references: [id])
   messages            Message[]
   avatarOverrides     ChatAvatarOverride[]
+  tags                ChatTag[]
 
   @@map("chats")
 }
@@ -285,4 +290,80 @@ model ChatAvatarOverride {
 
   @@unique([chatId, characterId])
   @@map("chat_avatar_overrides")
+}
+
+// Phase 0.7: Tag System
+model Tag {
+  id          String   @id @default(uuid())
+  userId      String
+  name        String
+  nameLower   String   // For case-insensitive unique constraint
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user              User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  characterTags     CharacterTag[]
+  personaTags       PersonaTag[]
+  chatTags          ChatTag[]
+  connectionProfileTags ConnectionProfileTag[]
+
+  @@unique([userId, nameLower])
+  @@index([userId, nameLower])
+  @@map("tags")
+}
+
+model CharacterTag {
+  id          String    @id @default(uuid())
+  characterId String
+  tagId       String
+  createdAt   DateTime  @default(now())
+
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  tag         Tag       @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([characterId, tagId])
+  @@index([tagId])
+  @@map("character_tags")
+}
+
+model PersonaTag {
+  id        String   @id @default(uuid())
+  personaId String
+  tagId     String
+  createdAt DateTime @default(now())
+
+  persona   Persona  @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([personaId, tagId])
+  @@index([tagId])
+  @@map("persona_tags")
+}
+
+model ChatTag {
+  id        String   @id @default(uuid())
+  chatId    String
+  tagId     String
+  createdAt DateTime @default(now())
+
+  chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([chatId, tagId])
+  @@index([tagId])
+  @@map("chat_tags")
+}
+
+model ConnectionProfileTag {
+  id                  String            @id @default(uuid())
+  connectionProfileId String
+  tagId               String
+  createdAt           DateTime          @default(now())
+
+  connectionProfile   ConnectionProfile @relation(fields: [connectionProfileId], references: [id], onDelete: Cascade)
+  tag                 Tag               @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionProfileId, tagId])
+  @@index([tagId])
+  @@map("connection_profile_tags")
 }

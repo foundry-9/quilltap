@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { TagEditor } from '@/components/tags/tag-editor'
 
 interface ApiKey {
   id: string
@@ -698,6 +699,13 @@ export default function ConnectionProfilesTab() {
                 Set as default profile
               </label>
             </div>
+
+            {/* Tag Editor (only show when editing existing profile) */}
+            {editingId && (
+              <div className="pt-4">
+                <TagEditor entityType="profile" entityId={editingId} />
+              </div>
+            )}
 
             <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-slate-700">
               <button

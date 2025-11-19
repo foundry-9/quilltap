@@ -3,6 +3,7 @@
 import { use, useEffect, useState, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { TagEditor } from '@/components/tags/tag-editor'
 import { showAlert } from '@/lib/alert'
 
 interface Message {
@@ -329,6 +330,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             <p className="text-sm text-gray-600 dark:text-gray-400">{chat.character.name}</p>
           </div>
         </div>
+      </div>
+
+      {/* Tags */}
+      <div className="px-4 py-3 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+        <TagEditor entityType="chat" entityId={id} />
       </div>
 
       {/* Messages */}
