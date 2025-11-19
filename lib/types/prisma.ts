@@ -1,23 +1,27 @@
 /**
  * Prisma types export
- * Re-exports types from @prisma/client and defines enums that match the schema
+ * Re-exports types from @prisma/client and defines enum types
  */
-
-// Export the Provider enum to match the Prisma schema
-export enum Provider {
-  OPENAI = 'OPENAI',
-  ANTHROPIC = 'ANTHROPIC',
-  OLLAMA = 'OLLAMA',
-  OPENROUTER = 'OPENROUTER',
-  OPENAI_COMPATIBLE = 'OPENAI_COMPATIBLE',
-}
-
-// Export the Role enum to match the Prisma schema
-export enum Role {
-  SYSTEM = 'SYSTEM',
-  USER = 'USER',
-  ASSISTANT = 'ASSISTANT',
-}
 
 // Re-export all types from @prisma/client
 export * from '@prisma/client';
+
+// Define Provider and Role as string literal union types
+// These match the Prisma schema enums and are compatible with Prisma's generated types
+export type Provider = 'OPENAI' | 'ANTHROPIC' | 'OLLAMA' | 'OPENROUTER' | 'OPENAI_COMPATIBLE';
+export type Role = 'SYSTEM' | 'USER' | 'ASSISTANT';
+
+// Export const objects with enum values for runtime validation
+export const Provider = {
+  OPENAI: 'OPENAI',
+  ANTHROPIC: 'ANTHROPIC',
+  OLLAMA: 'OLLAMA',
+  OPENROUTER: 'OPENROUTER',
+  OPENAI_COMPATIBLE: 'OPENAI_COMPATIBLE',
+} as const;
+
+export const Role = {
+  SYSTEM: 'SYSTEM',
+  USER: 'USER',
+  ASSISTANT: 'ASSISTANT',
+} as const;
