@@ -41,7 +41,7 @@ export default async function Dashboard() {
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* Characters Card */}
-        <Link href="/dashboard/characters">
+        <Link href="/characters">
           <div className="h-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 shadow-sm dark:shadow-lg hover:border-blue-500 hover:shadow-md dark:hover:border-blue-500 dark:hover:shadow-md transition-all cursor-pointer">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Characters</h2>
@@ -59,7 +59,7 @@ export default async function Dashboard() {
         </Link>
 
         {/* Chats Card */}
-        <Link href="/dashboard/chats">
+        <Link href="/chats">
           <div className="h-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 shadow-sm dark:shadow-lg hover:border-green-500 hover:shadow-md dark:hover:border-green-500 dark:hover:shadow-md transition-all cursor-pointer">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Chats</h2>
@@ -77,7 +77,7 @@ export default async function Dashboard() {
         </Link>
 
         {/* Personas Card */}
-        <Link href="/dashboard/personas">
+        <Link href="/personas">
           <div className="h-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 shadow-sm dark:shadow-lg hover:border-purple-500 hover:shadow-md dark:hover:border-purple-500 dark:hover:shadow-md transition-all cursor-pointer">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Personas</h2>

@@ -16,9 +16,10 @@ const addTagSchema = z.object({
 // GET /api/characters/[id]/tags - Get all tags for a character
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -32,7 +33,7 @@ export async function GET(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const characterId = params.id
+    const characterId = id
 
     // Verify character exists and belongs to user
     const character = await prisma.character.findUnique({
@@ -78,9 +79,10 @@ export async function GET(
 // POST /api/characters/[id]/tags - Add a tag to a character
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -94,7 +96,7 @@ export async function POST(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const characterId = params.id
+    const characterId = id
 
     // Verify character exists and belongs to user
     const character = await prisma.character.findUnique({
@@ -163,9 +165,10 @@ export async function POST(
 // DELETE /api/characters/[id]/tags?tagId=xxx - Remove a tag from a character
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -179,7 +182,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const characterId = params.id
+    const characterId = id
     const tagId = req.nextUrl.searchParams.get('tagId')
 
     if (!tagId) {

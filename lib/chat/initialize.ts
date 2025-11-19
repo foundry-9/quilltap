@@ -59,8 +59,13 @@ export async function buildChatContext(
     scenario: customScenario || character.scenario,
   })
 
-  // Get first message
-  const firstMessage = character.firstMessage
+  // Process first message with templates
+  const processedCharacter = processCharacterTemplates({
+    character,
+    persona: persona || undefined,
+    scenario: customScenario || character.scenario,
+  })
+  const firstMessage = processedCharacter.firstMessage
 
   return {
     systemPrompt,

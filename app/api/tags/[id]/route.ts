@@ -16,9 +16,10 @@ const updateTagSchema = z.object({
 // PUT /api/tags/[id] - Update tag name
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -32,7 +33,7 @@ export async function PUT(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const tagId = params.id
+    const tagId = id
 
     // Verify tag exists and belongs to user
     const existingTag = await prisma.tag.findUnique({
@@ -96,9 +97,10 @@ export async function PUT(
 // DELETE /api/tags/[id] - Delete a tag
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -112,7 +114,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const tagId = params.id
+    const tagId = id
 
     // Verify tag exists and belongs to user
     const existingTag = await prisma.tag.findUnique({

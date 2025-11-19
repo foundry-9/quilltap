@@ -5,7 +5,7 @@
  * Allows viewing, adding, and removing tags for any entity
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { showAlert } from '@/lib/alert';
 
 export interface Tag {
@@ -30,7 +30,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
   // Map entity type to API endpoint
-  const getApiPath = () => {
+  const getApiPath = useCallback(() => {
     switch (entityType) {
       case 'character':
         return `/api/characters/${entityId}/tags`;
@@ -41,7 +41,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
       case 'profile':
         return `/api/profiles/${entityId}/tags`;
     }
-  };
+  }, [entityType, entityId]);
 
   // Load tags for this entity
   useEffect(() => {
@@ -61,7 +61,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
     };
 
     loadTags();
-  }, [entityId]);
+  }, [entityId, getApiPath, onTagsChange]);
 
   // Load all available tags when input is focused
   useEffect(() => {
@@ -125,7 +125,8 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
       const { tag } = await tagRes.json();
 
       // Then attach it to the entity
-      const attachRes = await fetch(getApiPath(), {
+      const apiPath = getApiPath();
+      const attachRes = await fetch(apiPath, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tagId: tag.id }),
@@ -153,7 +154,8 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
 
     setLoading(true);
     try {
-      const res = await fetch(`${getApiPath()}?tagId=${tagId}`, {
+      const apiPath = getApiPath();
+      const res = await fetch(`${apiPath}?tagId=${tagId}`, {
         method: 'DELETE',
       });
 

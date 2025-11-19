@@ -4,10 +4,12 @@ import { useEffect } from 'react'
 
 interface AlertDialogProps {
   message: string
-  onClose: () => void
+  onClose: (buttonLabel?: string) => void
+  buttons?: string[]
+  showCopy?: boolean
 }
 
-export function AlertDialog({ message, onClose }: AlertDialogProps) {
+export function AlertDialog({ message, onClose, buttons, showCopy = true }: AlertDialogProps) {
   // Close on Escape key
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -28,6 +30,17 @@ export function AlertDialog({ message, onClose }: AlertDialogProps) {
     }
   }
 
+  // Default to single close button if no buttons provided
+  const dialogButtons = buttons && buttons.length > 0 ? buttons : ['Close']
+
+  const getButtonStyle = (index: number, total: number) => {
+    // Last button is primary (blue), others are secondary (gray)
+    const isLast = index === total - 1
+    return isLast
+      ? 'px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-700 dark:hover:bg-indigo-800 transition-colors'
+      : 'px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors'
+  }
+
   return (
     <div className="fixed inset-0 bg-gray-500 dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75 flex items-center justify-center p-4 z-50">
       <div className="bg-white dark:bg-slate-800 rounded-lg p-6 max-w-md w-full shadow-xl">
@@ -37,18 +50,23 @@ export function AlertDialog({ message, onClose }: AlertDialogProps) {
           </p>
         </div>
         <div className="flex gap-3 justify-end">
-          <button
-            onClick={handleCopy}
-            className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors"
-          >
-            Copy
-          </button>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-700 dark:hover:bg-indigo-800 transition-colors"
-          >
-            Close
-          </button>
+          {showCopy && (
+            <button
+              onClick={handleCopy}
+              className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors"
+            >
+              Copy
+            </button>
+          )}
+          {dialogButtons.map((buttonLabel, index) => (
+            <button
+              key={buttonLabel}
+              onClick={() => onClose(buttonLabel)}
+              className={getButtonStyle(index, dialogButtons.length)}
+            >
+              {buttonLabel}
+            </button>
+          ))}
         </div>
       </div>
     </div>

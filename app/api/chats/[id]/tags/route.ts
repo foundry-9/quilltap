@@ -16,9 +16,10 @@ const addTagSchema = z.object({
 // GET /api/chats/[id]/tags - Get all tags for a chat
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -32,7 +33,7 @@ export async function GET(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const chatId = params.id
+    const chatId = id
 
     // Verify chat exists and belongs to user
     const chat = await prisma.chat.findUnique({
@@ -78,9 +79,10 @@ export async function GET(
 // POST /api/chats/[id]/tags - Add a tag to a chat
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -94,7 +96,7 @@ export async function POST(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const chatId = params.id
+    const chatId = id
 
     // Verify chat exists and belongs to user
     const chat = await prisma.chat.findUnique({
@@ -163,9 +165,10 @@ export async function POST(
 // DELETE /api/chats/[id]/tags?tagId=xxx - Remove a tag from a chat
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -179,7 +182,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const chatId = params.id
+    const chatId = id
     const tagId = req.nextUrl.searchParams.get('tagId')
 
     if (!tagId) {

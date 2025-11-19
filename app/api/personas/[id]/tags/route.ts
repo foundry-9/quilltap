@@ -16,9 +16,10 @@ const addTagSchema = z.object({
 // GET /api/personas/[id]/tags - Get all tags for a persona
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -32,7 +33,7 @@ export async function GET(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const personaId = params.id
+    const personaId = id
 
     // Verify persona exists and belongs to user
     const persona = await prisma.persona.findUnique({
@@ -78,9 +79,10 @@ export async function GET(
 // POST /api/personas/[id]/tags - Add a tag to a persona
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -94,7 +96,7 @@ export async function POST(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const personaId = params.id
+    const personaId = id
 
     // Verify persona exists and belongs to user
     const persona = await prisma.persona.findUnique({
@@ -163,9 +165,10 @@ export async function POST(
 // DELETE /api/personas/[id]/tags?tagId=xxx - Remove a tag from a persona
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -179,7 +182,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const personaId = params.id
+    const personaId = id
     const tagId = req.nextUrl.searchParams.get('tagId')
 
     if (!tagId) {
