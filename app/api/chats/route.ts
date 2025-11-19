@@ -43,6 +43,8 @@ export async function GET(req: NextRequest) {
             id: true,
             name: true,
             avatarUrl: true,
+            defaultImageId: true,
+            defaultImage: true,
           },
         },
         persona: {

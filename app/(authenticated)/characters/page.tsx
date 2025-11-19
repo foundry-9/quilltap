@@ -11,6 +11,12 @@ interface Character {
   name: string
   description: string
   avatarUrl?: string
+  defaultImageId?: string
+  defaultImage?: {
+    id: string
+    filepath: string
+    url?: string
+  }
   createdAt: string
   _count: {
     chats: number
@@ -27,6 +33,13 @@ export default function CharactersPage() {
   useEffect(() => {
     fetchCharacters()
   }, [])
+
+  const getAvatarSrc = (character: Character): string | null => {
+    if (character.defaultImage) {
+      return character.defaultImage.url || `/${character.defaultImage.filepath}`
+    }
+    return character.avatarUrl || null
+  }
 
   const fetchCharacters = async () => {
     try {
@@ -92,7 +105,7 @@ export default function CharactersPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8 max-w-[800px]">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Characters</h1>
         <div className="flex gap-2">
@@ -130,13 +143,13 @@ export default function CharactersPage() {
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center">
-                  {character.avatarUrl ? (
+                  {getAvatarSrc(character) ? (
                     <Image
-                      src={character.avatarUrl}
+                      src={getAvatarSrc(character)!}
                       alt={character.name}
                       width={48}
                       height={48}
-                      className="w-12 h-12 rounded-full mr-3"
+                      className="w-12 h-12 rounded-full mr-3 object-cover"
                     />
                   ) : (
                     <div className="w-12 h-12 rounded-full bg-gray-300 dark:bg-slate-700 mr-3 flex items-center justify-center">

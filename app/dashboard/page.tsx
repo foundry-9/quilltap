@@ -22,7 +22,11 @@ export default async function Dashboard() {
         orderBy: { updatedAt: "desc" },
         take: 5,
         include: {
-          character: true,
+          character: {
+            include: {
+              defaultImage: true,
+            },
+          },
           persona: true,
           tags: {
             include: {
@@ -39,7 +43,7 @@ export default async function Dashboard() {
     : [];
 
   return (
-    <div className="container mx-auto px-4 py-8 flex flex-col">
+    <div className="container mx-auto px-4 py-8 flex flex-col max-w-[800px]">
       <div className="flex-1">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">

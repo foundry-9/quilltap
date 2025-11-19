@@ -295,51 +295,56 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     <div className="flex flex-col h-screen bg-white dark:bg-slate-900">
       {/* Header */}
       <div className="bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 p-4">
-        <div className="flex justify-between items-start mb-2">
-          <Link
-            href="/chats"
-            className="text-blue-600 dark:text-blue-400 hover:underline text-sm"
-          >
-            ← Back to Chats
-          </Link>
-          <a
-            href={`/api/chats/${id}/export`}
-            download
-            className="px-3 py-1 text-sm bg-gray-600 text-white rounded hover:bg-gray-700 dark:bg-slate-600 dark:hover:bg-slate-500"
-          >
-            Export Chat
-          </a>
-        </div>
-        <div className="flex items-center">
-          {chat.character.avatarUrl ? (
-            <Image
-              src={chat.character.avatarUrl}
-              alt={chat.character.name}
-              width={40}
-              height={40}
-              className="w-10 h-10 rounded-full mr-3"
-            />
-          ) : (
-            <div className="w-10 h-10 rounded-full bg-gray-300 dark:bg-slate-700 mr-3 flex items-center justify-center">
-              <span className="text-lg font-bold text-gray-600 dark:text-gray-400">
-                {chat.character.name.charAt(0).toUpperCase()}
-              </span>
+        <div className="mx-auto max-w-[800px]">
+          <div className="flex justify-between items-start mb-2">
+            <Link
+              href="/chats"
+              className="text-blue-600 dark:text-blue-400 hover:underline text-sm"
+            >
+              ← Back to Chats
+            </Link>
+            <a
+              href={`/api/chats/${id}/export`}
+              download
+              className="px-3 py-1 text-sm bg-gray-600 text-white rounded hover:bg-gray-700 dark:bg-slate-600 dark:hover:bg-slate-500"
+            >
+              Export Chat
+            </a>
+          </div>
+          <div className="flex items-center">
+            {chat.character.avatarUrl ? (
+              <Image
+                src={chat.character.avatarUrl}
+                alt={chat.character.name}
+                width={40}
+                height={40}
+                className="w-10 h-10 rounded-full mr-3"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-gray-300 dark:bg-slate-700 mr-3 flex items-center justify-center">
+                <span className="text-lg font-bold text-gray-600 dark:text-gray-400">
+                  {chat.character.name.charAt(0).toUpperCase()}
+                </span>
+              </div>
+            )}
+            <div>
+              <h1 className="text-xl font-bold text-gray-900 dark:text-white">{chat.title}</h1>
+              <p className="text-sm text-gray-600 dark:text-gray-400">{chat.character.name}</p>
             </div>
-          )}
-          <div>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">{chat.title}</h1>
-            <p className="text-sm text-gray-600 dark:text-gray-400">{chat.character.name}</p>
           </div>
         </div>
       </div>
 
       {/* Tags */}
-      <div className="px-4 py-3 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
-        <TagEditor entityType="chat" entityId={id} />
+      <div className="bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
+        <div className="mx-auto max-w-[800px] px-4 py-3">
+          <TagEditor entityType="chat" entityId={id} />
+        </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 dark:bg-slate-900">
+      <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-slate-900">
+        <div className="mx-auto max-w-[800px] p-4 space-y-4">
         {messages.map((message) => {
           const isEditing = editingMessageId === message.id
           const swipeState = message.swipeGroupId ? swipeStates[message.swipeGroupId] : null
@@ -351,7 +356,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 message.role === 'USER' ? 'justify-end' : 'justify-start'
               }`}
             >
-              <div className={`max-w-3xl ${message.role === 'USER' ? '' : 'w-full max-w-3xl'}`}>
+              <div className="w-[90%]">
                 <div
                   className={`px-4 py-3 rounded-lg ${
                     message.role === 'USER'
@@ -456,35 +461,38 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         {/* Streaming message */}
         {streaming && streamingContent && (
           <div className="flex justify-start">
-            <div className="max-w-3xl px-4 py-3 rounded-lg bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-white">
+            <div className="w-[90%] px-4 py-3 rounded-lg bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-white">
               <MessageContent content={streamingContent} />
               <span className="inline-block w-2 h-4 bg-gray-400 dark:bg-gray-500 animate-pulse ml-1"></span>
             </div>
           </div>
         )}
 
-        <div ref={messagesEndRef} />
+          <div ref={messagesEndRef} />
+        </div>
       </div>
 
       {/* Input */}
-      <div className="bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700 p-4">
-        <form onSubmit={sendMessage} className="flex gap-2">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            disabled={sending}
-            placeholder="Type a message..."
-            className="flex-1 px-4 py-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 disabled:bg-gray-100 dark:disabled:bg-slate-700"
-          />
-          <button
-            type="submit"
-            disabled={sending || !input.trim()}
-            className="px-6 py-3 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 disabled:bg-gray-400 dark:disabled:bg-gray-600"
-          >
-            {sending ? 'Sending...' : 'Send'}
-          </button>
-        </form>
+      <div className="bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700">
+        <div className="mx-auto max-w-[800px] p-4">
+          <form onSubmit={sendMessage} className="flex gap-2">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              disabled={sending}
+              placeholder="Type a message..."
+              className="flex-1 px-4 py-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 disabled:bg-gray-100 dark:disabled:bg-slate-700"
+            />
+            <button
+              type="submit"
+              disabled={sending || !input.trim()}
+              className="px-6 py-3 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 disabled:bg-gray-400 dark:disabled:bg-gray-600"
+            >
+              {sending ? 'Sending...' : 'Send'}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   )

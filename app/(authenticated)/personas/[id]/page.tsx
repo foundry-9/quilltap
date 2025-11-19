@@ -123,7 +123,7 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-3xl">
+    <div className="container mx-auto px-4 py-8 max-w-[800px]">
       <div className="mb-8">
         <Link
           href="/personas"

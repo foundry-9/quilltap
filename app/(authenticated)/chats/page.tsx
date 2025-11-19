@@ -15,6 +15,12 @@ interface Chat {
     id: string
     name: string
     avatarUrl?: string
+    defaultImageId?: string
+    defaultImage?: {
+      id: string
+      filepath: string
+      url?: string
+    }
   }
   persona?: {
     id: string
@@ -45,6 +51,13 @@ export default function ChatsPage() {
     fetchCharacters()
     fetchProfiles()
   }, [])
+
+  const getAvatarSrc = (chat: Chat): string | null => {
+    if (chat.character.defaultImage) {
+      return chat.character.defaultImage.url || `/${chat.character.defaultImage.filepath}`
+    }
+    return chat.character.avatarUrl || null
+  }
 
   const fetchChats = async () => {
     try {
@@ -153,7 +166,7 @@ export default function ChatsPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8 max-w-[800px]">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Chats</h1>
         <div className="flex gap-2">
@@ -191,13 +204,13 @@ export default function ChatsPage() {
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center flex-1">
-                  {chat.character.avatarUrl ? (
+                  {getAvatarSrc(chat) ? (
                     <Image
-                      src={chat.character.avatarUrl}
+                      src={getAvatarSrc(chat)!}
                       alt={chat.character.name}
                       width={48}
                       height={48}
-                      className="w-12 h-12 rounded-full mr-4"
+                      className="w-12 h-12 rounded-full mr-4 object-cover"
                     />
                   ) : (
                     <div className="w-12 h-12 rounded-full bg-gray-300 dark:bg-slate-700 mr-4 flex items-center justify-center">
