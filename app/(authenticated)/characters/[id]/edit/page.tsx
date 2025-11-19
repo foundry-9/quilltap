@@ -1,7 +1,6 @@
 'use client'
 
 import { use, useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { AvatarSelector } from '@/components/images/avatar-selector'
@@ -27,6 +26,19 @@ interface Character {
   }
 }
 
+interface Persona {
+  id: string
+  name: string
+  title?: string
+  matchingTagCount?: number
+}
+
+interface CharacterPersonaLink {
+  personaId: string
+  isDefault: boolean
+  persona: Persona
+}
+
 export default function EditCharacterPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
@@ -36,6 +48,9 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
   const [showUploadDialog, setShowUploadDialog] = useState(false)
   const [showAvatarSelector, setShowAvatarSelector] = useState(false)
   const [character, setCharacter] = useState<Character | null>(null)
+  const [personas, setPersonas] = useState<Persona[]>([])
+  const [defaultPersonaId, setDefaultPersonaId] = useState<string>('')
+  const [loadingPersonas, setLoadingPersonas] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -56,6 +71,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
     systemPrompt: '',
     avatarUrl: '',
   })
+  const [originalDefaultPersonaId, setOriginalDefaultPersonaId] = useState<string>('')
 
   const fetchCharacter = useCallback(async () => {
     try {
@@ -83,11 +99,42 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
     }
   }, [id])
 
+  const fetchPersonas = useCallback(async () => {
+    try {
+      setLoadingPersonas(true)
+      const res = await fetch(`/api/personas?sortByCharacter=${id}`)
+      if (!res.ok) throw new Error('Failed to fetch personas')
+      const data = await res.json()
+      setPersonas(data)
+    } catch (err) {
+      console.error('Error fetching personas:', err)
+    } finally {
+      setLoadingPersonas(false)
+    }
+  }, [id])
+
+  const fetchDefaultPersona = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/characters/${id}/personas`)
+      if (!res.ok) throw new Error('Failed to fetch linked personas')
+      const data = await res.json()
+      const defaultPersona = data.find((cp: CharacterPersonaLink) => cp.isDefault)
+      if (defaultPersona) {
+        setDefaultPersonaId(defaultPersona.personaId)
+        setOriginalDefaultPersonaId(defaultPersona.personaId)
+      }
+    } catch (err) {
+      console.error('Error fetching default persona:', err)
+    }
+  }, [id])
+
   useEffect(() => {
     fetchCharacter()
-  }, [fetchCharacter])
+    fetchPersonas()
+    fetchDefaultPersona()
+  }, [fetchCharacter, fetchPersonas, fetchDefaultPersona])
 
-  const hasChanges = JSON.stringify(formData) !== JSON.stringify(originalFormData)
+  const hasChanges = JSON.stringify(formData) !== JSON.stringify(originalFormData) || defaultPersonaId !== originalDefaultPersonaId
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -104,6 +151,28 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Failed to update character')
+      }
+
+      // Handle persona linking/unlinking
+      if (defaultPersonaId !== originalDefaultPersonaId) {
+        // If there was a previous default persona, unlink it
+        if (originalDefaultPersonaId) {
+          await fetch(`/api/characters/${id}/personas?personaId=${originalDefaultPersonaId}`, {
+            method: 'DELETE',
+          })
+        }
+
+        // If a new default persona is selected, link it
+        if (defaultPersonaId) {
+          await fetch(`/api/characters/${id}/personas`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              personaId: defaultPersonaId,
+              isDefault: true,
+            }),
+          })
+        }
       }
 
       await fetchCharacter()
@@ -333,6 +402,37 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
             placeholder="Custom system instructions (will be combined with auto-generated prompt)"
           />
         </div>
+
+        {/* Default Persona Selector */}
+        {personas.length > 0 && (
+          <div>
+            <label htmlFor="defaultPersona" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+              Default Persona (Optional)
+            </label>
+            <select
+              id="defaultPersona"
+              value={defaultPersonaId}
+              onChange={(e) => setDefaultPersonaId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+            >
+              <option value="">No default persona</option>
+              {personas.map((persona) => {
+                const displayName = persona.title ? `${persona.name} (${persona.title})` : persona.name
+                const tagCount = persona.matchingTagCount
+                const plural = tagCount === 1 ? '' : 's'
+                const tagSuffix = tagCount ? ` — ${tagCount} shared tag${plural}` : ''
+                return (
+                  <option key={persona.id} value={persona.id}>
+                    {displayName}{tagSuffix}
+                  </option>
+                )
+              })}
+            </select>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Personas are sorted by number of tags shared with this character
+            </p>
+          </div>
+        )}
 
         {/* Tag Editor */}
         <TagEditor entityType="character" entityId={id} />
