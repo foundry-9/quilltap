@@ -14,6 +14,7 @@ export interface ImageUploadResult {
   size: number;
   width?: number;
   height?: number;
+  url?: string;
 }
 
 /**

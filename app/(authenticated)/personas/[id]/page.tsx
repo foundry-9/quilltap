@@ -1,260 +1,261 @@
 'use client'
 
 import { use, useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
+import { AvatarSelector } from '@/components/images/avatar-selector'
+import { ImageUploadDialog } from '@/components/images/image-upload-dialog'
 
 interface Persona {
   id: string
   name: string
-  title: string | null
+  title?: string
   description: string
-  personalityTraits: string | null
-  avatarUrl: string | null
-  characters?: Array<{
-    character: {
-      id: string
-      name: string
-    }
-  }>
+  avatarUrl?: string
+  defaultImageId?: string
+  defaultImage?: {
+    id: string
+    filepath: string
+    url?: string
+  }
 }
 
 export default function EditPersonaPage({ params }: { params: Promise<{ id: string }> }) {
-  const router = useRouter()
   const { id } = use(params)
-  const [persona, setPersona] = useState<Persona | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showUploadDialog, setShowUploadDialog] = useState(false)
+  const [showAvatarSelector, setShowAvatarSelector] = useState(false)
+  const [persona, setPersona] = useState<Persona | null>(null)
+  const [formData, setFormData] = useState({
+    name: '',
+    title: '',
+    description: '',
+  })
 
   useEffect(() => {
-    const fetchPersona = async () => {
-      try {
-        const response = await fetch(`/api/personas/${id}`)
-        if (!response.ok) throw new Error('Failed to fetch persona')
-        const data = await response.json()
-        setPersona(data)
-      } catch (err) {
-        setError('Failed to load persona')
-        console.error(err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
     fetchPersona()
   }, [id])
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const fetchPersona = async () => {
+    try {
+      const res = await fetch(`/api/personas/${id}`)
+      if (!res.ok) throw new Error('Failed to fetch persona')
+      const p = await res.json()
+      setPersona(p)
+      setFormData({
+        name: p.name,
+        title: p.title || '',
+        description: p.description,
+      })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
     setError(null)
 
-    const formData = new FormData(e.currentTarget)
-    const data = {
-      name: formData.get('name') as string,
-      title: formData.get('title') as string,
-      description: formData.get('description') as string,
-      personalityTraits: formData.get('personalityTraits') as string,
-    }
-
     try {
-      const response = await fetch(`/api/personas/${id}`, {
+      const res = await fetch(`/api/personas/${id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
       })
 
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to update persona')
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to update persona')
       }
 
-      const updated = await response.json()
-      setPersona(updated)
-    } catch (err: any) {
-      setError(err.message)
+      await fetchPersona()
+      alert('Persona saved successfully!')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
       setSaving(false)
     }
   }
 
-  const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this persona? This action cannot be undone.')) {
-      return
-    }
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value })
+  }
 
+  const setPersonaAvatar = async (imageId: string) => {
     try {
-      const response = await fetch(`/api/personas/${id}`, {
-        method: 'DELETE',
+      const res = await fetch(`/api/personas/${id}/avatar`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageId: imageId || null }),
       })
 
-      if (!response.ok) throw new Error('Failed to delete persona')
+      if (!res.ok) throw new Error('Failed to set avatar')
 
-      router.push('/personas')
+      await fetchPersona()
+      setShowAvatarSelector(false)
     } catch (err) {
-      alert('Failed to delete persona')
-      console.error(err)
+      alert(err instanceof Error ? err.message : 'Failed to set avatar')
     }
+  }
+
+  const getAvatarSrc = () => {
+    if (persona?.defaultImage) {
+      return persona.defaultImage.url || `/${persona.defaultImage.filepath}`
+    }
+    return persona?.avatarUrl
   }
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="text-gray-600 dark:text-gray-400">Loading persona...</div>
-      </div>
-    )
-  }
-
-  if (!persona) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="text-gray-600 dark:text-gray-400">Persona not found</div>
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-lg">Loading persona...</p>
       </div>
     )
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="container mx-auto px-4 py-8 max-w-3xl">
       <div className="mb-8">
         <Link
           href="/personas"
-          className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 mb-4 inline-block"
+          className="text-blue-600 dark:text-blue-400 hover:underline mb-4 inline-block"
         >
-          ← Back to personas
+          ← Back to Personas
         </Link>
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{persona.name}</h1>
-            <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">Edit persona details</p>
-          </div>
-          <div className="flex gap-2">
-            <a
-              href={`/api/personas/${id}/export`}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700"
-            >
-              Export
-            </a>
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            {getAvatarSrc() ? (
+              <Image
+                src={getAvatarSrc()!}
+                alt={persona?.name || ''}
+                width={80}
+                height={80}
+                className="w-20 h-20 rounded-full object-cover"
+              />
+            ) : (
+              <div className="w-20 h-20 rounded-full bg-gray-300 dark:bg-slate-700 flex items-center justify-center">
+                <span className="text-3xl font-bold text-gray-600 dark:text-gray-400">
+                  {persona?.name?.charAt(0)?.toUpperCase() || '?'}
+                </span>
+              </div>
+            )}
             <button
-              onClick={handleDelete}
-              className="inline-flex items-center px-4 py-2 border border-red-300 dark:border-red-700 rounded-md shadow-sm text-sm font-medium text-red-700 dark:text-red-400 bg-white dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950"
+              onClick={() => setShowAvatarSelector(true)}
+              className="absolute -bottom-1 -right-1 bg-blue-600 text-white rounded-full p-1.5 hover:bg-blue-700 shadow-lg"
+              title="Change avatar"
             >
-              Delete
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
             </button>
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{persona?.name || 'Loading...'}</h1>
+            {persona?.title && (
+              <p className="text-gray-600 dark:text-gray-400">{persona.title}</p>
+            )}
           </div>
         </div>
       </div>
 
       {error && (
-        <div className="mb-4 p-4 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-700 rounded-md">
-          <p className="text-sm text-red-600 dark:text-red-200">{error}</p>
+        <div className="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 px-4 py-3 rounded mb-4">
+          {error}
         </div>
       )}
 
-      {persona.characters && persona.characters.length > 0 && (
-        <div className="mb-6 p-4 bg-indigo-50 dark:bg-indigo-950 border border-indigo-200 dark:border-indigo-800 rounded-md">
-          <h3 className="text-sm font-medium text-indigo-900 dark:text-indigo-100 mb-2">
-            Linked to characters:
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            {persona.characters.map((link) => (
-              <Link
-                key={link.character.id}
-                href={`/characters/${link.character.id}`}
-                className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200 hover:bg-indigo-200 dark:hover:bg-indigo-800"
-              >
-                {link.character.name}
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-6 bg-white dark:bg-slate-800 shadow rounded-lg p-6">
+      <form onSubmit={handleSubmit} className="space-y-6">
         <div>
-          <label
-            htmlFor="name"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-          >
+          <label htmlFor="name" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
             Name *
           </label>
           <input
             type="text"
             id="name"
             name="name"
+            value={formData.name}
+            onChange={handleChange}
             required
-            defaultValue={persona.name}
-            className="block w-full rounded-md border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 border"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
           />
         </div>
 
         <div>
-          <label
-            htmlFor="title"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-          >
-            Title
+          <label htmlFor="title" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+            Title (Optional)
           </label>
           <input
             type="text"
             id="title"
             name="title"
-            defaultValue={persona.title || ''}
-            className="block w-full rounded-md border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 border"
+            value={formData.title}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+            placeholder="e.g., Student, Teacher, Narrator"
           />
         </div>
 
         <div>
-          <label
-            htmlFor="description"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-          >
+          <label htmlFor="description" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
             Description *
           </label>
           <textarea
             id="description"
             name="description"
+            value={formData.description}
+            onChange={handleChange}
             required
-            rows={4}
-            defaultValue={persona.description}
-            className="block w-full rounded-md border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 border"
+            rows={6}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+            placeholder="Describe this persona's characteristics, background, and role"
           />
         </div>
 
-        <div>
-          <label
-            htmlFor="personalityTraits"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-          >
-            Personality Traits
-          </label>
-          <textarea
-            id="personalityTraits"
-            name="personalityTraits"
-            rows={3}
-            defaultValue={persona.personalityTraits || ''}
-            className="block w-full rounded-md border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 border"
-          />
-        </div>
-
-        <div className="flex gap-4 pt-4">
+        <div className="flex gap-4">
           <button
             type="submit"
             disabled={saving}
-            className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-700 dark:hover:bg-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 px-6 py-3 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 disabled:bg-gray-400 dark:disabled:bg-gray-600"
           >
-            {saving ? 'Saving...' : 'Save Changes'}
+            {saving ? 'Saving...' : 'Save Persona'}
           </button>
           <Link
             href="/personas"
-            className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 hover:bg-gray-50 dark:hover:bg-slate-600"
+            className="px-6 py-3 bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 text-center"
           >
             Cancel
           </Link>
         </div>
       </form>
+
+      {/* Avatar Selector Modal */}
+      <AvatarSelector
+        isOpen={showAvatarSelector}
+        onClose={() => setShowAvatarSelector(false)}
+        onSelect={setPersonaAvatar}
+        currentImageId={persona?.defaultImageId}
+        contextType="PERSONA"
+        contextId={id}
+      />
+
+      {/* Image Upload Dialog */}
+      <ImageUploadDialog
+        isOpen={showUploadDialog}
+        onClose={() => setShowUploadDialog(false)}
+        onSuccess={() => {
+          setShowUploadDialog(false)
+          fetchPersona()
+        }}
+        contextType="PERSONA"
+        contextId={id}
+      />
     </div>
   )
 }

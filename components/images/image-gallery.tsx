@@ -5,7 +5,7 @@
  * Displays a grid of images with optional filtering and selection
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 
 export interface ImageData {
@@ -38,11 +38,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadImages();
-  }, [tagType, tagId]);
-
-  async function loadImages() {
+  const loadImages = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -64,7 +60,11 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
     } finally {
       setLoading(false);
     }
-  }
+  }, [tagType, tagId]);
+
+  useEffect(() => {
+    loadImages();
+  }, [loadImages]);
 
   async function handleDeleteImage(imageId: string) {
     if (!confirm('Are you sure you want to delete this image?')) {
