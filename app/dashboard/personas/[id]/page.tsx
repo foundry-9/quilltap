@@ -120,7 +120,7 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
         <Link
-          href="/dashboard/personas"
+          href="/personas"
           className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 mb-4 inline-block"
         >
           ← Back to personas
@@ -162,7 +162,7 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
             {persona.characters.map((link) => (
               <Link
                 key={link.character.id}
-                href={`/dashboard/characters/${link.character.id}`}
+                href={`/characters/${link.character.id}`}
                 className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200 hover:bg-indigo-200 dark:hover:bg-indigo-800"
               >
                 {link.character.name}
@@ -248,7 +248,7 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
           <Link
-            href="/dashboard/personas"
+            href="/personas"
             className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 hover:bg-gray-50 dark:hover:bg-slate-600"
           >
             Cancel

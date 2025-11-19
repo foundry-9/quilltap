@@ -37,7 +37,7 @@ export default function NewCharacterPage() {
       }
 
       const data = await res.json()
-      router.push(`/dashboard/characters/${data.character.id}`)
+      router.push(`/characters/${data.character.id}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {

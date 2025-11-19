@@ -162,7 +162,7 @@ export default function ChatsPage() {
         <div className="text-center py-12">
           <p className="text-lg text-gray-600 dark:text-gray-400 mb-4">No chats yet</p>
           <Link
-            href="/dashboard/characters"
+            href="/characters"
             className="text-blue-600 dark:text-blue-400 hover:underline"
           >
             Start a chat with a character

@@ -29,25 +29,25 @@ export default function DashboardNav({ user }: DashboardNavProps) {
                 Dashboard
               </Link>
               <Link
-                href="/dashboard/characters"
+                href="/characters"
                 className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800"
               >
                 Characters
               </Link>
               <Link
-                href="/dashboard/personas"
+                href="/personas"
                 className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800"
               >
                 Personas
               </Link>
               <Link
-                href="/dashboard/chats"
+                href="/chats"
                 className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800"
               >
                 Chats
               </Link>
               <Link
-                href="/dashboard/settings"
+                href="/settings"
                 className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800"
               >
                 Settings
