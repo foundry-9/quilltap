@@ -5,6 +5,7 @@
 export interface STPersona {
   name: string
   description: string
+  title?: string
   personality?: string
   scenario?: string
   mes_example?: string
@@ -19,6 +20,7 @@ export function importSTPersona(stData: STPersona) {
   return {
     name: stData.name,
     description: stData.description,
+    title: stData.title || '',
     personalityTraits: stData.personality || '',
     sillyTavernData: stData, // Store original for full fidelity
   }
@@ -39,6 +41,7 @@ export function exportSTPersona(persona: any): STPersona {
     ...baseData,
     name: persona.name,
     description: persona.description,
+    title: persona.title || '',
     personality: persona.personalityTraits || '',
   }
 }

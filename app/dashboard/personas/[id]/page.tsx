@@ -7,6 +7,7 @@ import Link from 'next/link'
 interface Persona {
   id: string
   name: string
+  title: string | null
   description: string
   personalityTraits: string | null
   avatarUrl: string | null
@@ -52,6 +53,7 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
     const formData = new FormData(e.currentTarget)
     const data = {
       name: formData.get('name') as string,
+      title: formData.get('title') as string,
       description: formData.get('description') as string,
       personalityTraits: formData.get('personalityTraits') as string,
     }
@@ -184,6 +186,22 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
             name="name"
             required
             defaultValue={persona.name}
+            className="block w-full rounded-md border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 border"
+          />
+        </div>
+
+        <div>
+          <label
+            htmlFor="title"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+          >
+            Title
+          </label>
+          <input
+            type="text"
+            id="title"
+            name="title"
+            defaultValue={persona.title || ''}
             className="block w-full rounded-md border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 border"
           />
         </div>

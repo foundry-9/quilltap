@@ -7,6 +7,7 @@ import Link from 'next/link'
 interface Persona {
   id: string
   name: string
+  title: string | null
   description: string
   personalityTraits: string | null
   avatarUrl: string | null
@@ -171,6 +172,11 @@ export default function PersonasPage() {
                   <h3 className="text-lg font-medium text-gray-900 dark:text-white truncate">
                     {persona.name}
                   </h3>
+                  {persona.title && (
+                    <span className="text-sm text-gray-500 dark:text-gray-400 ml-2 truncate">
+                      {persona.title}
+                    </span>
+                  )}
                 </div>
                 <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-3 mb-4">
                   {persona.description}
