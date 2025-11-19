@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
+import { RecentChatsSection } from "@/components/dashboard/recent-chats";
 
 export default async function Dashboard() {
   const session = await getServerSession(authOptions);
@@ -23,6 +24,16 @@ export default async function Dashboard() {
         include: {
           character: true,
           persona: true,
+          tags: {
+            include: {
+              tag: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
         },
       })
     : [];
@@ -96,43 +107,7 @@ export default async function Dashboard() {
       </div>
 
         {/* Recent Chats */}
-        <div className="mt-8">
-        <h3 className="mb-4 text-xl font-semibold text-gray-900 dark:text-white">
-          Recent Chats
-        </h3>
-        {recentChats.length > 0 ? (
-          <div className="space-y-3 max-h-96 overflow-y-auto">
-            {recentChats.map((chat: typeof recentChats[0]) => (
-              <Link
-                key={chat.id}
-                href={`/chats/${chat.id}`}
-                className="block rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 shadow-sm dark:shadow-lg hover:border-blue-500 dark:hover:border-blue-500 transition-colors"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-grow">
-                    <h4 className="font-semibold text-gray-900 dark:text-white">
-                      {chat.title}
-                    </h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      with {chat.character.name}
-                      {chat.persona && ` as ${chat.persona.name}`}
-                    </p>
-                  </div>
-                  <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap ml-4">
-                    {new Date(chat.updatedAt).toLocaleDateString()}
-                  </span>
-                </div>
-              </Link>
-            ))}
-          </div>
-          ) : (
-            <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-8 text-center shadow-sm dark:shadow-lg">
-              <p className="text-gray-600 dark:text-gray-400">
-                No chats yet. Create a character and start your first conversation!
-              </p>
-            </div>
-          )}
-        </div>
+        <RecentChatsSection chats={recentChats} />
       </div>
     </div>
   );

@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { showAlert } from '@/lib/alert'
+import { showAlert, showConfirmation } from '@/lib/alert'
+import { TagDisplay } from '@/components/tags/tag-display'
 
 interface Chat {
   id: string
@@ -15,6 +16,17 @@ interface Chat {
     name: string
     avatarUrl?: string
   }
+  persona?: {
+    id: string
+    name: string
+    title?: string | null
+  } | null
+  tags: Array<{
+    tag: {
+      id: string
+      name: string
+    }
+  }>
   _count: {
     messages: number
   }
@@ -72,7 +84,8 @@ export default function ChatsPage() {
   }
 
   const deleteChat = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this chat?')) return
+    const confirmed = await showConfirmation('Are you sure you want to delete this chat?')
+    if (!confirmed) return
 
     try {
       const res = await fetch(`/api/chats/${id}`, { method: 'DELETE' })
@@ -196,10 +209,17 @@ export default function ChatsPage() {
                   <div className="flex-1">
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{chat.title}</h2>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {chat.character.name} • {chat._count.messages} message
+                      {chat.character.name}
+                      {chat.persona && ` (${chat.persona.name}${chat.persona.title ? ` - ${chat.persona.title}` : ''})`}
+                      {' •  '}{chat._count.messages} message
                       {chat._count.messages !== 1 ? 's' : ''} • Last updated:{' '}
                       {new Date(chat.updatedAt).toLocaleDateString()}
                     </p>
+                    {chat.tags.length > 0 && (
+                      <div className="mt-2">
+                        <TagDisplay tags={chat.tags.map(ct => ct.tag)} />
+                      </div>
+                    )}
                   </div>
                 </div>
 

@@ -10,7 +10,7 @@ interface AlertDialogProps {
 }
 
 export function AlertDialog({ message, onClose, buttons, showCopy = true }: AlertDialogProps) {
-  // Close on Escape key
+  // Close on Escape key and prevent body scroll
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -20,6 +20,7 @@ export function AlertDialog({ message, onClose, buttons, showCopy = true }: Aler
     window.addEventListener('keydown', handleEscape)
     return () => window.removeEventListener('keydown', handleEscape)
   }, [onClose])
+
 
   const handleCopy = async () => {
     try {
@@ -42,8 +43,10 @@ export function AlertDialog({ message, onClose, buttons, showCopy = true }: Aler
   }
 
   return (
-    <div className="fixed inset-0 bg-gray-500 dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75 flex items-center justify-center p-4 z-50">
-      <div className="bg-white dark:bg-slate-800 rounded-lg p-6 max-w-md w-full shadow-xl">
+    <>
+      <div className="fixed inset-0 bg-black bg-opacity-10 pointer-events-auto z-40" onClick={() => onClose()} />
+      <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-auto">
+        <div className="bg-white dark:bg-slate-800 rounded-lg p-6 max-w-md w-full shadow-xl">
         <div className="mb-6">
           <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap break-words">
             {message}
@@ -68,7 +71,8 @@ export function AlertDialog({ message, onClose, buttons, showCopy = true }: Aler
             </button>
           ))}
         </div>
+        </div>
       </div>
-    </div>
+    </>
   )
 }

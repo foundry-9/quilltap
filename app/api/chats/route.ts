@@ -45,6 +45,23 @@ export async function GET(req: NextRequest) {
             avatarUrl: true,
           },
         },
+        persona: {
+          select: {
+            id: true,
+            name: true,
+            title: true,
+          },
+        },
+        tags: {
+          include: {
+            tag: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
         _count: {
           select: { messages: true },
         },
