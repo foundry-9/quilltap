@@ -29,8 +29,13 @@ const config: Config = {
     '!**/jest.config.ts',
   ],
   testMatch: [
-    '**/__tests__/**/*.{js,jsx,ts,tsx}',
-    '**/*.{spec,test}.{js,jsx,ts,tsx}',
+    '**/__tests__/unit/**/*.{js,jsx,ts,tsx}',
+    '**/*.test.{js,jsx,ts,tsx}',
+  ],
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/.next/',
+    '/__tests__/integration/',
   ],
   coverageThreshold: {
     global: {

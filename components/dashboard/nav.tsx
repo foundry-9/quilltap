@@ -35,6 +35,12 @@ export default function DashboardNav({ user }: DashboardNavProps) {
                 Characters
               </Link>
               <Link
+                href="/dashboard/personas"
+                className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800"
+              >
+                Personas
+              </Link>
+              <Link
                 href="/dashboard/chats"
                 className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800"
               >

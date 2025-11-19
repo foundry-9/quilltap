@@ -21,6 +21,7 @@ export default function CharactersPage() {
   const [characters, setCharacters] = useState<Character[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
 
   useEffect(() => {
     fetchCharacters()
@@ -51,6 +52,28 @@ export default function CharactersPage() {
     }
   }
 
+  const handleImport = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const formData = new FormData(e.currentTarget)
+
+    try {
+      const res = await fetch('/api/characters/import', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!res.ok) throw new Error('Failed to import character')
+
+      const character = await res.json()
+      setCharacters([character, ...characters])
+      setImportDialogOpen(false)
+      alert('Character imported successfully!')
+    } catch (err) {
+      alert('Failed to import character. Make sure it\'s a valid SillyTavern PNG or JSON file.')
+      console.error(err)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -71,12 +94,20 @@ export default function CharactersPage() {
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Characters</h1>
-        <Link
-          href="/dashboard/characters/new"
-          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-        >
-          Create Character
-        </Link>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setImportDialogOpen(true)}
+            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+          >
+            Import
+          </button>
+          <Link
+            href="/dashboard/characters/new"
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            Create Character
+          </Link>
+        </div>
       </div>
 
       {characters.length === 0 ? (
@@ -133,6 +164,13 @@ export default function CharactersPage() {
                 >
                   View
                 </Link>
+                <a
+                  href={`/api/characters/${character.id}/export?format=json`}
+                  className="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                  title="Export"
+                >
+                  ↓
+                </a>
                 <button
                   onClick={() => deleteCharacter(character.id)}
                   className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
@@ -142,6 +180,46 @@ export default function CharactersPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Import Dialog */}
+      {importDialogOpen && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-slate-800 rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+              Import Character
+            </h3>
+            <form onSubmit={handleImport}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Select SillyTavern character file (PNG or JSON)
+                </label>
+                <input
+                  type="file"
+                  name="file"
+                  accept=".png,.json"
+                  required
+                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setImportDialogOpen(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+                >
+                  Import
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
