@@ -1,0 +1,20 @@
+# Quilltap Automated Database Backup Crontab
+#
+# To install this crontab:
+# 1. Edit this file with your paths
+# 2. Run: crontab -e
+# 3. Add the lines below (uncomment and adjust paths)
+#
+# Important: Replace /path/to/quilltap with your actual project path
+
+# Backup database every day at 2 AM
+# 0 2 * * * cd /path/to/quilltap && ./docker/scripts/backup-database.sh >> /var/log/quilltap-backup.log 2>&1
+
+# Backup database every 6 hours (for critical systems)
+# 0 */6 * * * cd /path/to/quilltap && ./docker/scripts/backup-database.sh >> /var/log/quilltap-backup.log 2>&1
+
+# Weekly backup on Sundays at 3 AM with custom name
+# 0 3 * * 0 cd /path/to/quilltap && ./docker/scripts/backup-database.sh weekly-backup-$(date +\%Y\%m\%d) >> /var/log/quilltap-backup.log 2>&1
+
+# Example with cloud upload (uncomment upload commands in backup script)
+# 0 2 * * * cd /path/to/quilltap && ./docker/scripts/backup-database.sh && echo "Backup completed at $(date)" | mail -s "Quilltap Backup Success" admin@example.com
