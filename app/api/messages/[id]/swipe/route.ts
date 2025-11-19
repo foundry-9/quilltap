@@ -103,7 +103,7 @@ export async function POST(
     })
 
     // Build messages array for LLM
-    const llmMessages = previousMessages.map((m) => ({
+    const llmMessages = previousMessages.map((m: any) => ({
       role: m.role.toLowerCase() as 'system' | 'user' | 'assistant',
       content: m.content,
     }))

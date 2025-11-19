@@ -82,7 +82,16 @@ class Logger {
     }
 
     const timestamp = new Date().toISOString();
-    const logData = {
+    const logData: LogContext & {
+      timestamp: string;
+      level: LogLevel;
+      message: string;
+      error?: {
+        name: string;
+        message: string;
+        stack?: string;
+      };
+    } = {
       timestamp,
       level,
       message,

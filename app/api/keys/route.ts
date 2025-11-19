@@ -11,7 +11,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { encryptApiKey, maskApiKey } from '@/lib/encryption'
-import { Provider } from '@prisma/client'
+import { Provider } from '@/lib/types/prisma'
 
 /**
  * GET /api/keys
@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
     })
 
     // Mask the encrypted keys for security
-    const maskedKeys = apiKeys.map(key => ({
+    const maskedKeys = apiKeys.map((key: any) => ({
       id: key.id,
       provider: key.provider,
       label: key.label,

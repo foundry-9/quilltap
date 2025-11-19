@@ -10,7 +10,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { decryptApiKey } from '@/lib/encryption'
-import { Provider } from '@prisma/client'
+import { Provider } from '@/lib/types/prisma'
 import { z } from 'zod'
 
 // Validation schema
@@ -232,7 +232,8 @@ export async function POST(req: NextRequest) {
 
     // Validate request body
     const body = await req.json()
-    const { provider, apiKeyId, baseUrl } = testConnectionSchema.parse(body)
+    const { provider: providerString, apiKeyId, baseUrl } = testConnectionSchema.parse(body)
+    const provider = providerString as Provider
 
     // Get API key if provided
     let decryptedKey = ''
