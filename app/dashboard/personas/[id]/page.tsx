@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { use, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -18,8 +18,9 @@ interface Persona {
   }>
 }
 
-export default function EditPersonaPage({ params }: { params: { id: string } }) {
+export default function EditPersonaPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
+  const { id } = use(params)
   const [persona, setPersona] = useState<Persona | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -28,7 +29,7 @@ export default function EditPersonaPage({ params }: { params: { id: string } }) 
   useEffect(() => {
     const fetchPersona = async () => {
       try {
-        const response = await fetch(`/api/personas/${params.id}`)
+        const response = await fetch(`/api/personas/${id}`)
         if (!response.ok) throw new Error('Failed to fetch persona')
         const data = await response.json()
         setPersona(data)
@@ -41,7 +42,7 @@ export default function EditPersonaPage({ params }: { params: { id: string } }) 
     }
 
     fetchPersona()
-  }, [params.id])
+  }, [id])
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -56,7 +57,7 @@ export default function EditPersonaPage({ params }: { params: { id: string } }) 
     }
 
     try {
-      const response = await fetch(`/api/personas/${params.id}`, {
+      const response = await fetch(`/api/personas/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -85,7 +86,7 @@ export default function EditPersonaPage({ params }: { params: { id: string } }) 
     }
 
     try {
-      const response = await fetch(`/api/personas/${params.id}`, {
+      const response = await fetch(`/api/personas/${id}`, {
         method: 'DELETE',
       })
 
@@ -101,7 +102,7 @@ export default function EditPersonaPage({ params }: { params: { id: string } }) 
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
-        <div className="text-gray-600">Loading persona...</div>
+        <div className="text-gray-600 dark:text-gray-400">Loading persona...</div>
       </div>
     )
   }
@@ -109,7 +110,7 @@ export default function EditPersonaPage({ params }: { params: { id: string } }) 
   if (!persona) {
     return (
       <div className="flex justify-center items-center min-h-screen">
-        <div className="text-gray-600">Persona not found</div>
+        <div className="text-gray-600 dark:text-gray-400">Persona not found</div>
       </div>
     )
   }
@@ -119,25 +120,25 @@ export default function EditPersonaPage({ params }: { params: { id: string } }) 
       <div className="mb-8">
         <Link
           href="/dashboard/personas"
-          className="text-sm text-indigo-600 hover:text-indigo-500 mb-4 inline-block"
+          className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 mb-4 inline-block"
         >
           ← Back to personas
         </Link>
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">{persona.name}</h1>
-            <p className="mt-2 text-sm text-gray-700">Edit persona details</p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{persona.name}</h1>
+            <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">Edit persona details</p>
           </div>
           <div className="flex gap-2">
             <a
-              href={`/api/personas/${params.id}/export`}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+              href={`/api/personas/${id}/export`}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700"
             >
               Export
             </a>
             <button
               onClick={handleDelete}
-              className="inline-flex items-center px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-700 bg-white hover:bg-red-50"
+              className="inline-flex items-center px-4 py-2 border border-red-300 dark:border-red-700 rounded-md shadow-sm text-sm font-medium text-red-700 dark:text-red-400 bg-white dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950"
             >
               Delete
             </button>
@@ -146,14 +147,14 @@ export default function EditPersonaPage({ params }: { params: { id: string } }) 
       </div>
 
       {error && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
-          <p className="text-sm text-red-600">{error}</p>
+        <div className="mb-4 p-4 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-700 rounded-md">
+          <p className="text-sm text-red-600 dark:text-red-200">{error}</p>
         </div>
       )}
 
       {persona.characters.length > 0 && (
-        <div className="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-md">
-          <h3 className="text-sm font-medium text-indigo-900 mb-2">
+        <div className="mb-6 p-4 bg-indigo-50 dark:bg-indigo-950 border border-indigo-200 dark:border-indigo-800 rounded-md">
+          <h3 className="text-sm font-medium text-indigo-900 dark:text-indigo-100 mb-2">
             Linked to characters:
           </h3>
           <div className="flex flex-wrap gap-2">
@@ -161,7 +162,7 @@ export default function EditPersonaPage({ params }: { params: { id: string } }) 
               <Link
                 key={link.character.id}
                 href={`/dashboard/characters/${link.character.id}`}
-                className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800 hover:bg-indigo-200"
+                className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200 hover:bg-indigo-200 dark:hover:bg-indigo-800"
               >
                 {link.character.name}
               </Link>
@@ -170,11 +171,11 @@ export default function EditPersonaPage({ params }: { params: { id: string } }) 
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6 bg-white shadow rounded-lg p-6">
+      <form onSubmit={handleSubmit} className="space-y-6 bg-white dark:bg-slate-800 shadow rounded-lg p-6">
         <div>
           <label
             htmlFor="name"
-            className="block text-sm font-medium text-gray-700 mb-2"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
           >
             Name *
           </label>
@@ -184,14 +185,14 @@ export default function EditPersonaPage({ params }: { params: { id: string } }) 
             name="name"
             required
             defaultValue={persona.name}
-            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 border"
+            className="block w-full rounded-md border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 border"
           />
         </div>
 
         <div>
           <label
             htmlFor="description"
-            className="block text-sm font-medium text-gray-700 mb-2"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
           >
             Description *
           </label>
@@ -201,14 +202,14 @@ export default function EditPersonaPage({ params }: { params: { id: string } }) 
             required
             rows={4}
             defaultValue={persona.description}
-            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 border"
+            className="block w-full rounded-md border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 border"
           />
         </div>
 
         <div>
           <label
             htmlFor="personalityTraits"
-            className="block text-sm font-medium text-gray-700 mb-2"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
           >
             Personality Traits
           </label>
@@ -217,7 +218,7 @@ export default function EditPersonaPage({ params }: { params: { id: string } }) 
             name="personalityTraits"
             rows={3}
             defaultValue={persona.personalityTraits || ''}
-            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 border"
+            className="block w-full rounded-md border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 border"
           />
         </div>
 
@@ -225,13 +226,13 @@ export default function EditPersonaPage({ params }: { params: { id: string } }) 
           <button
             type="submit"
             disabled={saving}
-            className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-700 dark:hover:bg-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
           <Link
             href="/dashboard/personas"
-            className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 hover:bg-gray-50 dark:hover:bg-slate-600"
           >
             Cancel
           </Link>
