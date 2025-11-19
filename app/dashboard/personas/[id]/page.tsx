@@ -3,6 +3,9 @@
 import { use, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
+import { ImageUploadDialog } from '@/components/images/image-upload-dialog'
+import { AvatarSelector } from '@/components/images/avatar-selector'
 
 interface Persona {
   id: string
@@ -11,6 +14,12 @@ interface Persona {
   description: string
   personalityTraits: string | null
   avatarUrl: string | null
+  defaultImageId?: string
+  defaultImage?: {
+    id: string
+    filepath: string
+    url?: string
+  }
   characters?: Array<{
     character: {
       id: string
@@ -26,6 +35,8 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showUploadDialog, setShowUploadDialog] = useState(false)
+  const [showAvatarSelector, setShowAvatarSelector] = useState(false)
 
   useEffect(() => {
     const fetchPersona = async () => {
@@ -100,6 +111,33 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
     }
   }
 
+  const setPersonaAvatar = async (imageId: string) => {
+    try {
+      const response = await fetch(`/api/personas/${id}/avatar`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageId: imageId || null }),
+      })
+
+      if (!response.ok) throw new Error('Failed to set avatar')
+
+      // Reload persona
+      const updatedResponse = await fetch(`/api/personas/${id}`)
+      if (!updatedResponse.ok) throw new Error('Failed to fetch persona')
+      const data = await updatedResponse.json()
+      setPersona(data)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to set avatar')
+    }
+  }
+
+  const getAvatarSrc = () => {
+    if (persona?.defaultImage) {
+      return persona.defaultImage.url || `/${persona.defaultImage.filepath}`
+    }
+    return persona?.avatarUrl
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -126,11 +164,45 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
           ← Back to personas
         </Link>
         <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{persona.name}</h1>
-            <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">Edit persona details</p>
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              {getAvatarSrc() ? (
+                <Image
+                  src={getAvatarSrc()!}
+                  alt={persona.name}
+                  width={64}
+                  height={64}
+                  className="w-16 h-16 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-indigo-200 dark:bg-indigo-800 flex items-center justify-center">
+                  <span className="text-2xl font-bold text-indigo-600 dark:text-indigo-300">
+                    {persona.name.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+              )}
+              <button
+                onClick={() => setShowAvatarSelector(true)}
+                className="absolute -bottom-1 -right-1 bg-indigo-600 text-white rounded-full p-1.5 hover:bg-indigo-700 shadow-lg"
+                title="Change avatar"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+              </button>
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{persona.name}</h1>
+              <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">Edit persona details</p>
+            </div>
           </div>
           <div className="flex gap-2">
+            <button
+              onClick={() => setShowUploadDialog(true)}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700"
+            >
+              Import Image
+            </button>
             <a
               href={`/api/personas/${id}/export`}
               className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700"
@@ -255,6 +327,27 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
           </Link>
         </div>
       </form>
+
+      {/* Image Upload Dialog */}
+      <ImageUploadDialog
+        isOpen={showUploadDialog}
+        onClose={() => setShowUploadDialog(false)}
+        onSuccess={() => {
+          setShowUploadDialog(false)
+        }}
+        contextType="PERSONA"
+        contextId={id}
+      />
+
+      {/* Avatar Selector Dialog */}
+      <AvatarSelector
+        isOpen={showAvatarSelector}
+        onClose={() => setShowAvatarSelector(false)}
+        onSelect={setPersonaAvatar}
+        currentImageId={persona?.defaultImageId}
+        contextType="PERSONA"
+        contextId={id}
+      />
     </div>
   )
 }

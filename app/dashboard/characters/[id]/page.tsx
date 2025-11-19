@@ -4,6 +4,8 @@ import { use, useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
+import { ImageUploadDialog } from '@/components/images/image-upload-dialog'
+import { AvatarSelector } from '@/components/images/avatar-selector'
 
 interface Character {
   id: string
@@ -15,6 +17,12 @@ interface Character {
   exampleDialogues?: string
   systemPrompt?: string
   avatarUrl?: string
+  defaultImageId?: string
+  defaultImage?: {
+    id: string
+    filepath: string
+    url?: string
+  }
   createdAt: string
   _count: {
     chats: number
@@ -54,6 +62,8 @@ export default function CharacterDetailPage({ params }: { params: Promise<{ id: 
   const [loading, setLoading] = useState(true)
   const [startingChat, setStartingChat] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showUploadDialog, setShowUploadDialog] = useState(false)
+  const [showAvatarSelector, setShowAvatarSelector] = useState(false)
 
   const fetchCharacter = useCallback(async () => {
     try {
@@ -201,6 +211,29 @@ export default function CharacterDetailPage({ params }: { params: Promise<{ id: 
     }
   }
 
+  const setCharacterAvatar = async (imageId: string) => {
+    try {
+      const res = await fetch(`/api/characters/${id}/avatar`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageId: imageId || null }),
+      })
+
+      if (!res.ok) throw new Error('Failed to set avatar')
+
+      await fetchCharacter()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to set avatar')
+    }
+  }
+
+  const getAvatarSrc = () => {
+    if (character?.defaultImage) {
+      return character.defaultImage.url || `/${character.defaultImage.filepath}`
+    }
+    return character?.avatarUrl
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -229,21 +262,32 @@ export default function CharacterDetailPage({ params }: { params: Promise<{ id: 
       <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-8 mb-6">
         <div className="flex items-start justify-between mb-6">
           <div className="flex items-center">
-            {character.avatarUrl ? (
-              <Image
-                src={character.avatarUrl}
-                alt={character.name}
-                width={80}
-                height={80}
-                className="w-20 h-20 rounded-full mr-4"
-              />
-            ) : (
-              <div className="w-20 h-20 rounded-full bg-gray-300 dark:bg-slate-700 mr-4 flex items-center justify-center">
-                <span className="text-3xl font-bold text-gray-600 dark:text-gray-400">
-                  {character.name.charAt(0).toUpperCase()}
-                </span>
-              </div>
-            )}
+            <div className="relative mr-4">
+              {getAvatarSrc() ? (
+                <Image
+                  src={getAvatarSrc()!}
+                  alt={character.name}
+                  width={80}
+                  height={80}
+                  className="w-20 h-20 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-20 h-20 rounded-full bg-gray-300 dark:bg-slate-700 flex items-center justify-center">
+                  <span className="text-3xl font-bold text-gray-600 dark:text-gray-400">
+                    {character.name.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+              )}
+              <button
+                onClick={() => setShowAvatarSelector(true)}
+                className="absolute -bottom-1 -right-1 bg-blue-600 text-white rounded-full p-1.5 hover:bg-blue-700 shadow-lg"
+                title="Change avatar"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+              </button>
+            </div>
             <div>
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{character.name}</h1>
               <p className="text-gray-600 dark:text-gray-400">
@@ -251,6 +295,12 @@ export default function CharacterDetailPage({ params }: { params: Promise<{ id: 
               </p>
             </div>
           </div>
+          <button
+            onClick={() => setShowUploadDialog(true)}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+          >
+            Import Image
+          </button>
         </div>
 
         <div className="space-y-6">
@@ -444,6 +494,27 @@ export default function CharacterDetailPage({ params }: { params: Promise<{ id: 
           </div>
         )}
       </div>
+
+      {/* Image Upload Dialog */}
+      <ImageUploadDialog
+        isOpen={showUploadDialog}
+        onClose={() => setShowUploadDialog(false)}
+        onSuccess={() => {
+          setShowUploadDialog(false)
+        }}
+        contextType="CHARACTER"
+        contextId={id}
+      />
+
+      {/* Avatar Selector Dialog */}
+      <AvatarSelector
+        isOpen={showAvatarSelector}
+        onClose={() => setShowAvatarSelector(false)}
+        onSelect={setCharacterAvatar}
+        currentImageId={character?.defaultImageId}
+        contextType="CHARACTER"
+        contextId={id}
+      />
     </div>
   )
 }
