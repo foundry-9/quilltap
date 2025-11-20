@@ -18,34 +18,40 @@ export default function MessageContent({ content, className = '' }: MessageConte
       const match = /language-(\w+)/.exec(className || '')
       const language = match ? match[1] : ''
       const inline = !match
+      const childrenString = typeof children === 'string' || typeof children === 'number' ? String(children) : ''
 
       return !inline && language ? (
-        <SyntaxHighlighter
-          // @ts-expect-error - style type mismatch between library versions
-          style={oneDark}
-          language={language}
-          PreTag="div"
-          className="rounded-md my-2"
-          wrapLines={true}
-          wrapLongLines={true}
-          customStyle={{
-            margin: 0,
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            overflowWrap: 'anywhere',
-            overflow: 'hidden',
-          }}
-          codeTagProps={{
-            style: {
+        <div style={{
+          width: '100%',
+          maxWidth: '100%',
+          boxSizing: 'border-box',
+          overflow: 'hidden',
+          borderRadius: '0.375rem',
+          marginTop: '0.5rem',
+          marginBottom: '0.5rem',
+        }}>
+          <SyntaxHighlighter
+            // @ts-expect-error - style type mismatch between library versions
+            style={oneDark}
+            language={language}
+            PreTag="div"
+            wrapLines={true}
+            wrapLongLines={true}
+            customStyle={{
+              margin: 0,
+              padding: '1rem',
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word',
-              overflowWrap: 'anywhere',
-            }
-          }}
-          {...props}
-        >
-          {String(children).replace(/\n$/, '')}
-        </SyntaxHighlighter>
+              overflowWrap: 'break-word',
+              width: '100%',
+              maxWidth: '100%',
+              boxSizing: 'border-box',
+            }}
+            {...props}
+          >
+            {childrenString.replace(/\n$/, '')}
+          </SyntaxHighlighter>
+        </div>
       ) : (
         <code className={`${className} bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded text-sm`} {...props}>
           {children}
@@ -148,13 +154,30 @@ export default function MessageContent({ content, className = '' }: MessageConte
   }
 
   return (
-    <div className={`prose prose-sm dark:prose-invert max-w-none ${className}`}>
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={components}
-      >
-        {content}
-      </ReactMarkdown>
-    </div>
+    <>
+      <style>{`
+        .message-content pre {
+          white-space: pre-wrap !important;
+          word-break: break-word !important;
+          overflow-wrap: break-word !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          overflow: hidden !important;
+        }
+        .message-content code {
+          white-space: pre-wrap !important;
+          word-break: break-word !important;
+          overflow-wrap: break-word !important;
+        }
+      `}</style>
+      <div className={`prose prose-sm dark:prose-invert max-w-none w-full message-content ${className}`} style={{ overflow: 'hidden' }}>
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={components}
+        >
+          {content}
+        </ReactMarkdown>
+      </div>
+    </>
   )
 }

@@ -6,12 +6,12 @@ export interface STMessage {
   name: string
   is_user: boolean
   is_name: boolean
-  send_date: number
+  send_date: number | string
   mes: string
   swipes?: string[]
   swipe_id?: number
   swipe_info?: Array<{
-    send_date: number
+    send_date: number | string
     gen_started: number
     gen_finished: number
     extra?: Record<string, any>
@@ -34,6 +34,37 @@ export interface STChat {
 }
 
 /**
+ * Helper function to parse send_date which can be either a timestamp or a string
+ */
+function parseSendDate(sendDate: number | string): Date {
+  if (typeof sendDate === 'number') {
+    return new Date(sendDate)
+  }
+
+  // Try parsing the string date with multiple formats
+  let parsed = new Date(sendDate)
+
+  // If standard parsing failed, try other formats
+  if (Number.isNaN(parsed.getTime())) {
+    // Try to parse format like "November 16, 2025 7:45am"
+    // Replace ordinal indicators and normalize the string
+    const normalized = sendDate
+      .replace(/(\d+)(?:st|nd|rd|th)/, '$1')
+      .replace(/(\d{1,2}):(\d{2})(am|pm)/i, (match, hours, mins, ampm) => {
+        let h = Number.parseInt(hours)
+        if (ampm.toLowerCase() === 'pm' && h !== 12) h += 12
+        if (ampm.toLowerCase() === 'am' && h === 12) h = 0
+        return `${h.toString().padStart(2, '0')}:${mins}`
+      })
+
+    parsed = new Date(normalized)
+  }
+
+  // If still invalid, return current date as fallback
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed
+}
+
+/**
  * Import SillyTavern chat to internal format
  */
 export function importSTChat(
@@ -41,15 +72,6 @@ export function importSTChat(
   characterId: string,
   userId: string
 ) {
-  const messages = stChat.messages.map((msg, index) => ({
-    role: msg.is_user ? 'USER' : 'ASSISTANT',
-    content: msg.mes,
-    swipeGroupId: msg.swipes && msg.swipes.length > 1 ? `swipe-${index}` : null,
-    swipeIndex: msg.swipe_id ?? 0,
-    createdAt: new Date(msg.send_date),
-    rawResponse: msg.extra || null,
-  }))
-
   // If there are swipes, we need to create additional message records
   const allMessages: any[] = []
 
@@ -57,7 +79,7 @@ export function importSTChat(
     const baseMessage = {
       role: msg.is_user ? 'USER' : 'ASSISTANT',
       swipeGroupId: msg.swipes && msg.swipes.length > 1 ? `swipe-${index}` : null,
-      createdAt: new Date(msg.send_date),
+      createdAt: parseSendDate(msg.send_date),
       rawResponse: msg.extra || null,
     }
 

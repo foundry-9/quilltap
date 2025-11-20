@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { showAlert, showConfirmation } from '@/lib/alert'
+import { showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { TagDisplay } from '@/components/tags/tag-display'
 
@@ -46,12 +46,28 @@ export default function ChatsPage() {
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [characters, setCharacters] = useState<Array<{ id: string; name: string }>>([])
   const [profiles, setProfiles] = useState<Array<{ id: string; name: string }>>([])
+  const [highlightedChatId, setHighlightedChatId] = useState<string | null>(null)
+  const importedChatRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     fetchChats()
     fetchCharacters()
     fetchProfiles()
   }, [])
+
+  // Auto-scroll and highlight imported chat
+  useEffect(() => {
+    if (highlightedChatId && importedChatRef.current) {
+      importedChatRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+
+      // Clear the highlight after animation completes (2.5 seconds)
+      const timer = setTimeout(() => {
+        setHighlightedChatId(null)
+      }, 2500)
+
+      return () => clearTimeout(timer)
+    }
+  }, [highlightedChatId])
 
   const getAvatarSrc = (chat: Chat): string | null => {
     if (chat.character.defaultImage) {
@@ -124,7 +140,50 @@ export default function ChatsPage() {
 
     try {
       const text = await file.text()
-      const chatData = JSON.parse(text)
+      let chatData
+
+      // Handle both JSON and JSONL formats
+      if (file.name.endsWith('.jsonl')) {
+        // SillyTavern JSONL format: first line is metadata, rest are messages
+        const lines = text.trim().split('\n').filter(line => line.trim())
+        if (lines.length === 0) throw new Error('Empty JSONL file')
+
+        let metadata: any = {}
+        const messages = []
+
+        for (const line of lines) {
+          try {
+            const obj = JSON.parse(line)
+
+            // First line with chat_metadata is the metadata
+            if (obj.chat_metadata && !metadata.chat_metadata) {
+              metadata = obj
+            } else if (obj.mes !== undefined) {
+              // Lines with 'mes' field are messages
+              messages.push(obj)
+            }
+          } catch {
+            // Skip invalid JSON lines
+            console.warn('Skipped invalid JSON line:', line.substring(0, 50))
+          }
+        }
+
+        if (messages.length === 0) {
+          throw new Error('No messages found in JSONL file')
+        }
+
+        // Wrap in the expected format
+        chatData = {
+          messages,
+          chat_metadata: metadata.chat_metadata,
+          character_name: metadata.character_name,
+          user_name: metadata.user_name,
+          create_date: metadata.create_date,
+        }
+      } else {
+        // Parse regular JSON format
+        chatData = JSON.parse(text)
+      }
 
       const res = await fetch('/api/chats/import', {
         method: 'POST',
@@ -138,14 +197,26 @@ export default function ChatsPage() {
         }),
       })
 
-      if (!res.ok) throw new Error('Failed to import chat')
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to import chat')
+      }
 
       const imported = await res.json()
-      setChats([imported.chat, ...chats])
+      // API returns the chat directly, not wrapped in a 'chat' property
+      const chat = imported.chat || imported
+
+      // Sort chats by updatedAt (most recent first) and highlight the imported chat
+      const sortedChats = [chat, ...chats].sort(
+        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      )
+      setChats(sortedChats)
+      setHighlightedChatId(chat.id)
       setImportDialogOpen(false)
       showSuccessToast('Chat imported successfully!')
     } catch (err) {
-      showErrorToast('Failed to import chat. Make sure it\'s a valid SillyTavern chat JSON file.')
+      const errorMessage = err instanceof Error ? err.message : 'Failed to import chat'
+      showErrorToast(errorMessage)
       console.error(err)
     }
   }
@@ -168,6 +239,26 @@ export default function ChatsPage() {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-[800px]">
+      <style>{`
+        @keyframes arrowFlash {
+          0% {
+            opacity: 1;
+            transform: translateX(0);
+          }
+          50% {
+            opacity: 1;
+            transform: translateX(10px);
+          }
+          100% {
+            opacity: 0;
+            transform: translateX(10px);
+          }
+        }
+        .arrow-highlight {
+          animation: arrowFlash 2.5s ease-out forwards;
+        }
+      `}</style>
+
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Chats</h1>
         <div className="flex gap-2">
@@ -201,8 +292,14 @@ export default function ChatsPage() {
           {chats.map((chat) => (
             <div
               key={chat.id}
-              className="border border-gray-200 dark:border-slate-700 rounded-lg p-6 bg-white dark:bg-slate-800 hover:shadow-lg dark:hover:shadow-xl transition-shadow"
+              ref={highlightedChatId === chat.id ? importedChatRef : null}
+              className="border border-gray-200 dark:border-slate-700 rounded-lg p-6 bg-white dark:bg-slate-800 hover:shadow-lg dark:hover:shadow-xl transition-shadow relative"
             >
+              {highlightedChatId === chat.id && (
+                <div className="absolute -right-12 top-1/2 transform -translate-y-1/2 arrow-highlight">
+                  <span className="text-6xl text-yellow-200 font-black" style={{ textShadow: '0 0 10px rgba(255, 255, 0, 0.8)' }}>←</span>
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <div className="flex items-center flex-1">
                   {getAvatarSrc(chat) ? (
