@@ -129,93 +129,121 @@ export default function ChatsPage() {
   const handleImport = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
-    const file = formData.get('file') as File
+    const files = formData.getAll('files') as File[]
     const characterId = formData.get('characterId') as string
     const profileId = formData.get('profileId') as string
 
-    if (!file || !characterId || !profileId) {
-      showErrorToast('Please select a file, character, and profile')
+    if (!files || files.length === 0 || !characterId || !profileId) {
+      showErrorToast('Please select at least one file, a character, and a profile')
       return
     }
 
     try {
-      const text = await file.text()
-      let chatData
+      const importedChats: Chat[] = []
+      let successCount = 0
+      let failCount = 0
+      const errors: string[] = []
 
-      // Handle both JSON and JSONL formats
-      if (file.name.endsWith('.jsonl')) {
-        // SillyTavern JSONL format: first line is metadata, rest are messages
-        const lines = text.trim().split('\n').filter(line => line.trim())
-        if (lines.length === 0) throw new Error('Empty JSONL file')
+      for (const file of files) {
+        try {
+          const text = await file.text()
+          let chatData
 
-        let metadata: any = {}
-        const messages = []
+          // Handle both JSON and JSONL formats
+          if (file.name.endsWith('.jsonl')) {
+            // SillyTavern JSONL format: first line is metadata, rest are messages
+            const lines = text.trim().split('\n').filter(line => line.trim())
+            if (lines.length === 0) throw new Error('Empty JSONL file')
 
-        for (const line of lines) {
-          try {
-            const obj = JSON.parse(line)
+            let metadata: any = {}
+            const messages = []
 
-            // First line with chat_metadata is the metadata
-            if (obj.chat_metadata && !metadata.chat_metadata) {
-              metadata = obj
-            } else if (obj.mes !== undefined) {
-              // Lines with 'mes' field are messages
-              messages.push(obj)
+            for (const line of lines) {
+              try {
+                const obj = JSON.parse(line)
+
+                // First line with chat_metadata is the metadata
+                if (obj.chat_metadata && !metadata.chat_metadata) {
+                  metadata = obj
+                } else if (obj.mes !== undefined) {
+                  // Lines with 'mes' field are messages
+                  messages.push(obj)
+                }
+              } catch {
+                // Skip invalid JSON lines
+                console.warn('Skipped invalid JSON line:', line.substring(0, 50))
+              }
             }
-          } catch {
-            // Skip invalid JSON lines
-            console.warn('Skipped invalid JSON line:', line.substring(0, 50))
+
+            if (messages.length === 0) {
+              throw new Error('No messages found in JSONL file')
+            }
+
+            // Wrap in the expected format
+            chatData = {
+              messages,
+              chat_metadata: metadata.chat_metadata,
+              character_name: metadata.character_name,
+              user_name: metadata.user_name,
+              create_date: metadata.create_date,
+            }
+          } else {
+            // Parse regular JSON format
+            chatData = JSON.parse(text)
           }
-        }
 
-        if (messages.length === 0) {
-          throw new Error('No messages found in JSONL file')
-        }
+          const res = await fetch('/api/chats/import', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              chatData,
+              characterId,
+              connectionProfileId: profileId,
+            }),
+          })
 
-        // Wrap in the expected format
-        chatData = {
-          messages,
-          chat_metadata: metadata.chat_metadata,
-          character_name: metadata.character_name,
-          user_name: metadata.user_name,
-          create_date: metadata.create_date,
+          if (!res.ok) {
+            const errorData = await res.json().catch(() => ({}))
+            throw new Error(errorData.error || 'Failed to import chat')
+          }
+
+          const imported = await res.json()
+          // API returns the chat directly, not wrapped in a 'chat' property
+          const chat = imported.chat || imported
+          importedChats.push(chat)
+          successCount++
+        } catch (err) {
+          failCount++
+          const errorMessage = err instanceof Error ? err.message : `Failed to import ${file.name}`
+          errors.push(`${file.name}: ${errorMessage}`)
+          console.error(err)
         }
-      } else {
-        // Parse regular JSON format
-        chatData = JSON.parse(text)
       }
 
-      const res = await fetch('/api/chats/import', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          chatData,
-          characterId,
-          connectionProfileId: profileId,
-        }),
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to import chat')
+      // Update chats list with imported chats
+      if (importedChats.length > 0) {
+        const sortedChats = [...importedChats, ...chats].sort(
+          (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+        )
+        setChats(sortedChats)
+        // Highlight the first imported chat
+        setHighlightedChatId(importedChats[0].id)
       }
 
-      const imported = await res.json()
-      // API returns the chat directly, not wrapped in a 'chat' property
-      const chat = imported.chat || imported
-
-      // Sort chats by updatedAt (most recent first) and highlight the imported chat
-      const sortedChats = [chat, ...chats].sort(
-        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-      )
-      setChats(sortedChats)
-      setHighlightedChatId(chat.id)
       setImportDialogOpen(false)
-      showSuccessToast('Chat imported successfully!')
+
+      // Show appropriate message
+      if (failCount === 0) {
+        showSuccessToast(`Successfully imported ${successCount} chat${successCount !== 1 ? 's' : ''}!`)
+      } else if (successCount > 0) {
+        showErrorToast(`Imported ${successCount} chat${successCount !== 1 ? 's' : ''}, ${failCount} failed.\n${errors.join('\n')}`)
+      } else {
+        showErrorToast(`Failed to import all chats.\n${errors.join('\n')}`)
+      }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to import chat'
+      const errorMessage = err instanceof Error ? err.message : 'Failed to import chats'
       showErrorToast(errorMessage)
       console.error(err)
     }
@@ -359,18 +387,19 @@ export default function ChatsPage() {
         <div className="fixed inset-0 bg-gray-500 bg-opacity-75 dark:bg-gray-900 dark:bg-opacity-75 flex items-center justify-center p-4 z-50">
           <div className="bg-white dark:bg-slate-800 rounded-lg p-6 max-w-md w-full">
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-              Import Chat
+              Import Chats
             </h3>
             <form onSubmit={handleImport}>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Select SillyTavern chat JSON file
+                    Select SillyTavern chat JSON files (one or more)
                   </label>
                   <input
                     type="file"
-                    name="file"
+                    name="files"
                     accept=".json,.jsonl"
+                    multiple
                     required
                     className="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 dark:file:bg-blue-900 file:text-blue-700 dark:file:text-blue-200 hover:file:bg-blue-100 dark:hover:file:bg-blue-800"
                   />

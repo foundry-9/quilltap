@@ -7,6 +7,7 @@ import { TagEditor } from '@/components/tags/tag-editor'
 import { showAlert } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import MessageContent from '@/components/chat/MessageContent'
+import { formatMessageTime } from '@/lib/format-time'
 
 interface Message {
   id: string
@@ -427,6 +428,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                       ) : (
                         <MessageContent content={message.content} />
                       )}
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                        {formatMessageTime(message.createdAt)}
+                      </div>
                     </>
                   )}
                 </div>
