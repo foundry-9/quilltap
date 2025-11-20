@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation'
 import { AvatarSelector } from '@/components/images/avatar-selector'
 import { ImageUploadDialog } from '@/components/images/image-upload-dialog'
 import { TagEditor } from '@/components/tags/tag-editor'
-import { showAlert } from '@/lib/alert'
+import { showAlert, showConfirmation } from '@/lib/alert'
+import { showSuccessToast, showErrorToast } from '@/lib/toast'
 
 interface Character {
   id: string
@@ -176,7 +177,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
       }
 
       await fetchCharacter()
-      await showAlert('Character saved successfully!')
+      showSuccessToast('Character saved successfully!')
       router.push(`/characters/${id}/view`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
@@ -224,7 +225,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
       await fetchCharacter()
       setShowAvatarSelector(false)
     } catch (err) {
-      await showAlert(err instanceof Error ? err.message : 'Failed to set avatar')
+      showErrorToast(err instanceof Error ? err.message : 'Failed to set avatar')
     }
   }
 

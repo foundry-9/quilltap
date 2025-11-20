@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { showAlert, showConfirmation } from '@/lib/alert'
+import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { TagDisplay } from '@/components/tags/tag-display'
 
 interface Chat {
@@ -105,7 +106,7 @@ export default function ChatsPage() {
       if (!res.ok) throw new Error('Failed to delete chat')
       setChats(chats.filter((c) => c.id !== id))
     } catch (err) {
-      await showAlert(err instanceof Error ? err.message : 'Failed to delete chat')
+      showErrorToast(err instanceof Error ? err.message : 'Failed to delete chat')
     }
   }
 
@@ -117,7 +118,7 @@ export default function ChatsPage() {
     const profileId = formData.get('profileId') as string
 
     if (!file || !characterId || !profileId) {
-      await showAlert('Please select a file, character, and profile')
+      showErrorToast('Please select a file, character, and profile')
       return
     }
 
@@ -142,9 +143,9 @@ export default function ChatsPage() {
       const imported = await res.json()
       setChats([imported.chat, ...chats])
       setImportDialogOpen(false)
-      await showAlert('Chat imported successfully!')
+      showSuccessToast('Chat imported successfully!')
     } catch (err) {
-      await showAlert('Failed to import chat. Make sure it\'s a valid SillyTavern chat JSON file.')
+      showErrorToast('Failed to import chat. Make sure it\'s a valid SillyTavern chat JSON file.')
       console.error(err)
     }
   }

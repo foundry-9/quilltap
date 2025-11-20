@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { showAlert } from '@/lib/alert'
+import { showErrorToast } from '@/lib/toast'
 import MessageContent from '@/components/chat/MessageContent'
 import { RecentCharacterConversations } from '@/components/character/recent-conversations'
 
@@ -124,7 +125,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
 
   const handleStartChat = () => {
     if (profiles.length === 0) {
-      showAlert('No connection profiles available. Please set up a profile first.')
+      showErrorToast('No connection profiles available. Please set up a profile first.')
       return
     }
     setShowChatDialog(true)
@@ -132,7 +133,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
 
   const handleCreateChat = async () => {
     if (!selectedProfileId) {
-      await showAlert('Please select a connection profile')
+      showErrorToast('Please select a connection profile')
       return
     }
 
@@ -157,7 +158,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       setShowChatDialog(false)
       router.push(`/chats/${data.chat.id}`)
     } catch (err) {
-      await showAlert(err instanceof Error ? err.message : 'Failed to start chat')
+      showErrorToast(err instanceof Error ? err.message : 'Failed to start chat')
     } finally {
       setCreatingChat(false)
     }

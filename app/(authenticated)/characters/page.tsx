@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { showAlert } from '@/lib/alert'
+import { showSuccessToast, showErrorToast } from '@/lib/toast'
 
 interface Character {
   id: string
@@ -63,7 +64,7 @@ export default function CharactersPage() {
       if (!res.ok) throw new Error('Failed to delete character')
       setCharacters(characters.filter((c) => c.id !== id))
     } catch (err) {
-      await showAlert(err instanceof Error ? err.message : 'Failed to delete character')
+      showErrorToast(err instanceof Error ? err.message : 'Failed to delete character')
     }
   }
 
@@ -75,7 +76,7 @@ export default function CharactersPage() {
       const data = await res.json()
       setCharacters(characters.map((c) => (c.id === id ? { ...c, isFavorite: data.character.isFavorite } : c)))
     } catch (err) {
-      await showAlert(err instanceof Error ? err.message : 'Failed to toggle favorite')
+      showErrorToast(err instanceof Error ? err.message : 'Failed to toggle favorite')
     }
   }
 
@@ -94,9 +95,9 @@ export default function CharactersPage() {
       const character = await res.json()
       setCharacters([character, ...characters])
       setImportDialogOpen(false)
-      await showAlert('Character imported successfully!')
+      showSuccessToast('Character imported successfully!')
     } catch (err) {
-      await showAlert('Failed to import character. Make sure it\'s a valid SillyTavern PNG or JSON file.')
+      showErrorToast('Failed to import character. Make sure it\'s a valid SillyTavern PNG or JSON file.')
       console.error(err)
     }
   }

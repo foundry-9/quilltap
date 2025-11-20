@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { showAlert } from '@/lib/alert';
+import { showErrorToast } from '@/lib/toast';
 
 export interface ImageData {
   id: string;
@@ -86,7 +87,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
       // Reload images
       loadImages();
     } catch (err) {
-      await showAlert(err instanceof Error ? err.message : 'Failed to delete image');
+      showErrorToast(err instanceof Error ? err.message : 'Failed to delete image');
     }
   }
 

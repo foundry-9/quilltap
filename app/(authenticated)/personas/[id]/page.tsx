@@ -7,6 +7,7 @@ import { AvatarSelector } from '@/components/images/avatar-selector'
 import { ImageUploadDialog } from '@/components/images/image-upload-dialog'
 import { TagEditor } from '@/components/tags/tag-editor'
 import { showAlert } from '@/lib/alert'
+import { showSuccessToast, showErrorToast } from '@/lib/toast'
 
 interface Persona {
   id: string
@@ -76,7 +77,7 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
       }
 
       await fetchPersona()
-      await showAlert('Persona saved successfully!')
+      showSuccessToast('Persona saved successfully!')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
@@ -103,7 +104,7 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
       await fetchPersona()
       setShowAvatarSelector(false)
     } catch (err) {
-      await showAlert(err instanceof Error ? err.message : 'Failed to set avatar')
+      showErrorToast(err instanceof Error ? err.message : 'Failed to set avatar')
     }
   }
 

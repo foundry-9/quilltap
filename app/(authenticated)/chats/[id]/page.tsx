@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { TagEditor } from '@/components/tags/tag-editor'
 import { showAlert } from '@/lib/alert'
+import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import MessageContent from '@/components/chat/MessageContent'
 
 interface Message {
@@ -40,7 +41,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
   const [swipeStates, setSwipeStates] = useState<Record<string, { current: number; total: number; messages: Message[] }>>({})
+  const [viewSourceMessageIds, setViewSourceMessageIds] = useState<Set<string>>(new Set())
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -101,6 +104,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   useEffect(() => {
     scrollToBottom()
   }, [messages, streamingContent])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      inputRef.current?.focus()
+      inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 100)
+    return () => clearTimeout(timer)
+  }, [])
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -182,13 +193,16 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       }
     } catch (err) {
       console.error('Error sending message:', err)
-      await showAlert(err instanceof Error ? err.message : 'Failed to send message')
+      showErrorToast(err instanceof Error ? err.message : 'Failed to send message')
       // Remove the temporary user message on error
       setMessages((prev) => prev.filter((m) => m.id !== tempUserMessageId))
       setStreamingContent('')
       setStreaming(false)
     } finally {
       setSending(false)
+      setTimeout(() => {
+        inputRef.current?.focus()
+      }, 0)
     }
   }
 
@@ -217,7 +231,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       setEditingMessageId(null)
       setEditContent('')
     } catch (err) {
-      await showAlert(err instanceof Error ? err.message : 'Failed to update message')
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update message')
     }
   }
 
@@ -234,7 +248,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       // Remove message from display
       setMessages(messages.filter(m => m.id !== messageId))
     } catch (err) {
-      await showAlert(err instanceof Error ? err.message : 'Failed to delete message')
+      showErrorToast(err instanceof Error ? err.message : 'Failed to delete message')
     }
   }
 
@@ -251,7 +265,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       // Refresh chat to get updated swipe groups
       await fetchChat()
     } catch (err) {
-      await showAlert(err instanceof Error ? err.message : 'Failed to generate alternative response')
+      showErrorToast(err instanceof Error ? err.message : 'Failed to generate alternative response')
     }
   }
 
@@ -272,6 +286,23 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setSwipeStates({
       ...swipeStates,
       [groupId]: { ...state, current: newIndex }
+    })
+  }
+
+  const copyMessageContent = (content: string) => {
+    navigator.clipboard.writeText(content)
+    showSuccessToast('Message copied to clipboard!')
+  }
+
+  const toggleSourceView = (messageId: string) => {
+    setViewSourceMessageIds(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(messageId)) {
+        newSet.delete(messageId)
+      } else {
+        newSet.add(messageId)
+      }
+      return newSet
     })
   }
 
@@ -356,7 +387,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 message.role === 'USER' ? 'justify-end' : 'justify-start'
               }`}
             >
-              <div className="w-[90%]">
+              <div className="w-[90%] group relative">
                 <div
                   className={`px-4 py-3 rounded-lg ${
                     message.role === 'USER'
@@ -388,9 +419,37 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                       </div>
                     </div>
                   ) : (
-                    <MessageContent content={message.content} />
+                    <>
+                      {viewSourceMessageIds.has(message.id) ? (
+                        <div className="bg-gray-100 dark:bg-gray-900 p-3 rounded font-mono text-sm whitespace-pre-wrap break-words overflow-auto max-h-96">
+                          {message.content}
+                        </div>
+                      ) : (
+                        <MessageContent content={message.content} />
+                      )}
+                    </>
                   )}
                 </div>
+
+                {/* Hover action buttons */}
+                {!isEditing && (
+                  <div className="absolute -top-8 right-0 flex gap-1 bg-gray-200 dark:bg-slate-700 rounded px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => copyMessageContent(message.content)}
+                      className="p-1 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+                      title="Copy message"
+                    >
+                      📋
+                    </button>
+                    <button
+                      onClick={() => toggleSourceView(message.id)}
+                      className="p-1 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+                      title={viewSourceMessageIds.has(message.id) ? 'View rendered' : 'View source'}
+                    >
+                      {viewSourceMessageIds.has(message.id) ? '👁️' : '</>'}
+                    </button>
+                  </div>
+                )}
 
                 {/* Message actions */}
                 {!isEditing && (
@@ -477,6 +536,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         <div className="mx-auto max-w-[800px] p-4">
           <form onSubmit={sendMessage} className="flex gap-2">
             <input
+              ref={inputRef}
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { showAlert } from '@/lib/alert'
+import { showSuccessToast, showErrorToast } from '@/lib/toast'
 
 interface Persona {
   id: string
@@ -58,7 +59,7 @@ export default function PersonasPage() {
 
       setPersonas(personas.filter((p) => p.id !== id))
     } catch (err) {
-      await showAlert('Failed to delete persona')
+      showErrorToast('Failed to delete persona')
       console.error(err)
     }
   }
@@ -91,15 +92,15 @@ export default function PersonasPage() {
         // Multi-persona import
         setPersonas([...result.personas, ...personas])
         setImportDialogOpen(false)
-        await showAlert(result.message || `Successfully imported ${result.count} persona(s)!`)
+        showSuccessToast(result.message || `Successfully imported ${result.count} persona(s)!`)
       } else {
         // Single persona import
         setPersonas([result, ...personas])
         setImportDialogOpen(false)
-        await showAlert('Persona imported successfully!')
+        showSuccessToast('Persona imported successfully!')
       }
     } catch (err) {
-      await showAlert('Failed to import persona. Make sure it\'s a valid SillyTavern persona JSON file.')
+      showErrorToast('Failed to import persona. Make sure it\'s a valid SillyTavern persona JSON file.')
       console.error(err)
     }
   }

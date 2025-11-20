@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { showAlert } from '@/lib/alert';
+import { showErrorToast } from '@/lib/toast';
 
 export interface Tag {
   id: string;
@@ -145,7 +146,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
       setIsAddingTag(false);
     } catch (error) {
       console.error('Error adding tag:', error);
-      showAlert('Failed to add tag. Please try again.');
+      showErrorToast('Failed to add tag. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -170,7 +171,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
       onTagsChange?.(newTags);
     } catch (error) {
       console.error('Error removing tag:', error);
-      showAlert('Failed to remove tag. Please try again.');
+      showErrorToast('Failed to remove tag. Please try again.');
     } finally {
       setLoading(false);
     }
