@@ -8,7 +8,7 @@ import { getServerSession } from 'next-auth'
 import { POST as testConnection } from '@/app/api/profiles/test-connection/route'
 import { prisma } from '@/lib/prisma'
 import { decryptApiKey } from '@/lib/encryption'
-import { Provider } from '@prisma/client'
+import { Provider } from '@/lib/types/prisma'
 
 // Mock dependencies
 jest.mock('next-auth')

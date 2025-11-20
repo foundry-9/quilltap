@@ -147,3 +147,5 @@ CLAUDE.md
 .claude
 certs
 next-env.d.ts
+.DS_Store
+public/uploads/images/*

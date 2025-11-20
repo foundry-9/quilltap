@@ -47,6 +47,7 @@ export async function GET(
         userId: user.id,
       },
       include: {
+        defaultImage: true,
         _count: {
           select: { chats: true },
         },

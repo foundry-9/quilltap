@@ -19,7 +19,7 @@ jest.mock('@/lib/llm/factory')
 
 // Import after mocking
 import { POST as testMessage } from '@/app/api/profiles/test-message/route'
-import { Provider } from '@prisma/client'
+import { Provider } from '@/lib/types/prisma'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { decryptApiKey } from '@/lib/encryption'

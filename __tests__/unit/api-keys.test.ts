@@ -13,7 +13,7 @@ import {
 } from '@/app/api/keys/[id]/route'
 import { prisma } from '@/lib/prisma'
 import { encryptApiKey, maskApiKey } from '@/lib/encryption'
-import { Provider } from '@prisma/client'
+import { Provider } from '@/lib/types/prisma'
 
 // Mock dependencies
 jest.mock('next-auth')

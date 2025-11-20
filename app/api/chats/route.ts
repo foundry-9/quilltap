@@ -43,6 +43,25 @@ export async function GET(req: NextRequest) {
             id: true,
             name: true,
             avatarUrl: true,
+            defaultImageId: true,
+            defaultImage: true,
+          },
+        },
+        persona: {
+          select: {
+            id: true,
+            name: true,
+            title: true,
+          },
+        },
+        tags: {
+          include: {
+            tag: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
           },
         },
         _count: {
@@ -114,6 +133,26 @@ export async function POST(req: NextRequest) {
       validatedData.scenario
     )
 
+    // Get character tags
+    const characterTags = await prisma.characterTag.findMany({
+      where: { characterId: validatedData.characterId },
+      select: { tagId: true },
+    })
+
+    // Get persona tags if persona is specified
+    const personaTags = validatedData.personaId
+      ? await prisma.personaTag.findMany({
+          where: { personaId: validatedData.personaId },
+          select: { tagId: true },
+        })
+      : []
+
+    // Combine and deduplicate tags
+    const allTagIds = new Set([
+      ...characterTags.map(ct => ct.tagId),
+      ...personaTags.map(pt => pt.tagId),
+    ])
+
     // Create chat
     const chat = await prisma.chat.create({
       data: {
@@ -123,6 +162,12 @@ export async function POST(req: NextRequest) {
         connectionProfileId: validatedData.connectionProfileId,
         title: validatedData.title || `Chat with ${context.character.name}`,
         contextSummary: validatedData.scenario || null,
+        // Inherit tags from character and persona
+        tags: {
+          create: Array.from(allTagIds).map(tagId => ({
+            tagId,
+          })),
+        },
       },
       include: {
         character: true,

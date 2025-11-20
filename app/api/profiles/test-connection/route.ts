@@ -10,12 +10,12 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { decryptApiKey } from '@/lib/encryption'
-import { Provider } from '@prisma/client'
+import { Provider } from '@/lib/types/prisma'
 import { z } from 'zod'
 
 // Validation schema
 const testConnectionSchema = z.object({
-  provider: z.enum(['OPENAI', 'ANTHROPIC', 'OLLAMA', 'OPENROUTER', 'OPENAI_COMPATIBLE']),
+  provider: z.enum(['OPENAI', 'ANTHROPIC', 'GROK', 'GAB_AI', 'OLLAMA', 'OPENROUTER', 'OPENAI_COMPATIBLE']),
   apiKeyId: z.string().optional(),
   baseUrl: z.string().optional(),
 })
@@ -35,6 +35,12 @@ async function testProviderConnection(
 
       case 'ANTHROPIC':
         return await testAnthropic(apiKey)
+
+      case 'GROK':
+        return await testGrok(apiKey)
+
+      case 'GAB_AI':
+        return await testGabAI(apiKey)
 
       case 'OLLAMA':
         if (!baseUrl) {
@@ -122,6 +128,62 @@ async function testAnthropic(apiKey: string) {
     return {
       valid: false,
       error: 'Failed to connect to Anthropic',
+    }
+  }
+}
+
+/**
+ * Test Grok connection
+ */
+async function testGrok(apiKey: string) {
+  try {
+    const response = await fetch('https://api.x.ai/v1/models', {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+    })
+
+    if (response.ok) {
+      return { valid: true }
+    }
+
+    const error = await response.json()
+    return {
+      valid: false,
+      error: error.error?.message || 'Invalid API key',
+    }
+  } catch (error) {
+    return {
+      valid: false,
+      error: 'Failed to connect to Grok',
+    }
+  }
+}
+
+/**
+ * Test Gab AI connection
+ */
+async function testGabAI(apiKey: string) {
+  try {
+    const response = await fetch('https://gab.ai/v1/models', {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+    })
+
+    if (response.ok) {
+      return { valid: true }
+    }
+
+    const error = await response.json()
+    return {
+      valid: false,
+      error: error.error?.message || 'Invalid API key',
+    }
+  } catch (error) {
+    return {
+      valid: false,
+      error: 'Failed to connect to Gab AI',
     }
   }
 }
@@ -232,7 +294,8 @@ export async function POST(req: NextRequest) {
 
     // Validate request body
     const body = await req.json()
-    const { provider, apiKeyId, baseUrl } = testConnectionSchema.parse(body)
+    const { provider: providerString, apiKeyId, baseUrl } = testConnectionSchema.parse(body)
+    const provider = providerString as Provider
 
     // Get API key if provided
     let decryptedKey = ''

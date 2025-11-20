@@ -91,6 +91,17 @@ export async function POST(req: NextRequest) {
         ...importedData,
         avatarUrl: avatarUrl,
       },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        avatarUrl: true,
+        createdAt: true,
+        updatedAt: true,
+        _count: {
+          select: { chats: true },
+        },
+      },
     })
 
     return NextResponse.json(character, { status: 201 })

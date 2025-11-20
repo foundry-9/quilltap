@@ -1,57 +1,115 @@
 /**
- * Next.js Proxy
- * Phase 0.3: Core Infrastructure
- *
- * Handles security headers, CORS, and request preprocessing
+ * Next.js Proxy for rate limiting, security headers, and CORS
+ * Runs on Edge Runtime before requests reach API routes
  */
 
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import {
+  checkRateLimit,
+  getClientIdentifier,
+  RATE_LIMITS,
+  createRateLimitResponse,
+} from './lib/rate-limit';
 
 /**
- * Proxy runs on all requests
- * Use matcher to specify which routes to run on
+ * Security headers to add to all responses
  */
+const securityHeaders = {
+  // Prevent clickjacking
+  'X-Frame-Options': 'SAMEORIGIN',
+  // Prevent MIME type sniffing
+  'X-Content-Type-Options': 'nosniff',
+  // Enable XSS protection
+  'X-XSS-Protection': '1; mode=block',
+  // Referrer policy
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  // Permissions policy
+  'Permissions-Policy': 'geolocation=(), microphone=(), camera=()',
+  // Content Security Policy
+  'Content-Security-Policy': [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-eval' 'unsafe-inline'", // Next.js requires unsafe-eval
+    "style-src 'self' 'unsafe-inline'", // Tailwind requires unsafe-inline
+    "img-src 'self' data: https:",
+    "font-src 'self' data:",
+    "connect-src 'self' https://api.openai.com https://api.anthropic.com https://openrouter.ai",
+    "frame-ancestors 'none'",
+  ].join('; '),
+};
+
+/**
+ * Paths that should be rate limited
+ */
+const RATE_LIMITED_PATHS = {
+  api: /^\/api\//,
+  auth: /^\/api\/auth\//,
+  chat: /^\/api\/chats\/[^/]+\/messages/,
+};
+
 export function proxy(request: NextRequest) {
-  const response = NextResponse.next()
+  const { pathname } = request.nextUrl;
+  const response = NextResponse.next();
 
-  // Security headers
-  response.headers.set('X-Content-Type-Options', 'nosniff')
-  response.headers.set('X-Frame-Options', 'DENY')
-  response.headers.set('X-XSS-Protection', '1; mode=block')
-  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
-
-  // Content Security Policy (basic)
-  response.headers.set(
-    'Content-Security-Policy',
-    "default-src 'self'; " +
-    "script-src 'self' 'unsafe-eval' 'unsafe-inline'; " +
-    "style-src 'self' 'unsafe-inline'; " +
-    "img-src 'self' data: https:; " +
-    "font-src 'self' data:; " +
-    "connect-src 'self' https://api.openai.com https://api.anthropic.com https://openrouter.ai;"
-  )
+  // Add security headers to all responses
+  Object.entries(securityHeaders).forEach(([key, value]) => {
+    response.headers.set(key, value);
+  });
 
   // CORS headers for API routes
-  if (request.nextUrl.pathname.startsWith('/api/')) {
+  if (pathname.startsWith('/api/')) {
     // Allow same-origin requests
-    response.headers.set('Access-Control-Allow-Origin', request.headers.get('origin') || '*')
-    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-    response.headers.set('Access-Control-Allow-Credentials', 'true')
+    response.headers.set('Access-Control-Allow-Origin', request.headers.get('origin') || '*');
+    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    response.headers.set('Access-Control-Allow-Credentials', 'true');
 
     // Handle preflight requests
     if (request.method === 'OPTIONS') {
-      return new NextResponse(null, { status: 204, headers: response.headers })
+      return new NextResponse(null, { status: 204, headers: response.headers });
     }
   }
 
-  return response
+  // Apply rate limiting based on path
+  const clientId = getClientIdentifier(request);
+
+  // Chat endpoints (streaming) - special rate limit
+  if (RATE_LIMITED_PATHS.chat.test(pathname)) {
+    const result = checkRateLimit(clientId, RATE_LIMITS.chat);
+    if (!result.success) {
+      return createRateLimitResponse(result);
+    }
+    // Add rate limit headers
+    response.headers.set('X-RateLimit-Limit', result.limit.toString());
+    response.headers.set('X-RateLimit-Remaining', result.remaining.toString());
+    response.headers.set('X-RateLimit-Reset', result.reset.toString());
+  }
+  // Auth endpoints - strict rate limit
+  else if (RATE_LIMITED_PATHS.auth.test(pathname)) {
+    const result = checkRateLimit(clientId, RATE_LIMITS.auth);
+    if (!result.success) {
+      return createRateLimitResponse(result);
+    }
+    response.headers.set('X-RateLimit-Limit', result.limit.toString());
+    response.headers.set('X-RateLimit-Remaining', result.remaining.toString());
+    response.headers.set('X-RateLimit-Reset', result.reset.toString());
+  }
+  // Other API endpoints - normal rate limit
+  else if (RATE_LIMITED_PATHS.api.test(pathname)) {
+    const result = checkRateLimit(clientId, RATE_LIMITS.api);
+    if (!result.success) {
+      return createRateLimitResponse(result);
+    }
+    response.headers.set('X-RateLimit-Limit', result.limit.toString());
+    response.headers.set('X-RateLimit-Remaining', result.remaining.toString());
+    response.headers.set('X-RateLimit-Reset', result.reset.toString());
+  }
+
+  return response;
 }
 
 /**
- * Configure which routes the proxy runs on
- * This matcher runs proxy on all routes except static assets
+ * Configure which routes the proxy should run on
  */
 export const config = {
   matcher: [
@@ -60,8 +118,8 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - public folder files
+     * - public files (public directory)
      */
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
-}
+};

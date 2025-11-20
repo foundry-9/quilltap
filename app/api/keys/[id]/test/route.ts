@@ -10,7 +10,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { decryptApiKey } from '@/lib/encryption'
-import { Provider } from '@prisma/client'
+import { Provider } from '@/lib/types/prisma'
 
 /**
  * Test API key validity by making a simple request to the provider

@@ -17,12 +17,21 @@ enum Provider {
   OLLAMA
   OPENROUTER
   OPENAI_COMPATIBLE
+  GROK
+  GAB_AI
 }
 
 enum Role {
   SYSTEM
   USER
   ASSISTANT
+}
+
+enum ImageTagType {
+  CHARACTER
+  PERSONA
+  CHAT
+  THEME
 }
 
 // NextAuth.js Models
@@ -42,6 +51,8 @@ model User {
   characters    Character[]
   personas      Persona[]
   chats         Chat[]
+  images        Image[]
+  tags          Tag[]
 
   @@map("users")
 }
@@ -122,6 +133,7 @@ model ConnectionProfile {
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   apiKey          ApiKey?  @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
   chats           Chat[]
+  tags            ConnectionProfileTag[]
 
   @@map("connection_profiles")
 }
@@ -137,14 +149,19 @@ model Character {
   firstMessage      String   @db.Text
   exampleDialogues  String?  @db.Text
   systemPrompt      String?  @db.Text
-  avatarUrl         String?
+  avatarUrl         String?  // Legacy URL-based avatar (deprecated)
+  defaultImageId    String?  // New image-based avatar
   sillyTavernData   Json?    // Full ST character spec
+  isFavorite        Boolean  @default(false)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  defaultImage      Image?              @relation("CharacterDefaultImage", fields: [defaultImageId], references: [id], onDelete: SetNull)
   chats             Chat[]
   personas          CharacterPersona[]
+  chatAvatarOverrides ChatAvatarOverride[]
+  tags              CharacterTag[]
 
   @@map("characters")
 }
@@ -153,16 +170,20 @@ model Persona {
   id                String   @id @default(uuid())
   userId            String
   name              String
+  title             String?
   description       String   @db.Text
   personalityTraits String?  @db.Text
-  avatarUrl         String?
+  avatarUrl         String?  // Legacy URL-based avatar (deprecated)
+  defaultImageId    String?  // New image-based avatar
   sillyTavernData   Json?    // Full ST persona spec
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  defaultImage      Image?              @relation("PersonaDefaultImage", fields: [defaultImageId], references: [id], onDelete: SetNull)
   characters        CharacterPersona[]
   chats             Chat[]
+  tags              PersonaTag[]
 
   @@map("personas")
 }
@@ -191,11 +212,13 @@ model Chat {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  character           Character         @relation(fields: [characterId], references: [id], onDelete: Cascade)
-  persona             Persona?          @relation(fields: [personaId], references: [id], onDelete: SetNull)
-  connectionProfile   ConnectionProfile @relation(fields: [connectionProfileId], references: [id])
+  user                User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  character           Character             @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  persona             Persona?              @relation(fields: [personaId], references: [id], onDelete: SetNull)
+  connectionProfile   ConnectionProfile     @relation(fields: [connectionProfileId], references: [id])
   messages            Message[]
+  avatarOverrides     ChatAvatarOverride[]
+  tags                ChatTag[]
 
   @@map("chats")
 }
@@ -216,4 +239,132 @@ model Message {
   @@index([chatId, createdAt])
   @@index([swipeGroupId])
   @@map("messages")
+}
+
+// Phase 0.6: Image Gallery and Tagging System
+model Image {
+  id              String   @id @default(uuid())
+  userId          String
+  filename        String
+  filepath        String   // Path relative to public directory
+  url             String?  // For imported images from URL
+  mimeType        String
+  size            Int      // File size in bytes
+  width           Int?
+  height          Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tags            ImageTag[]
+  charactersUsingAsDefault Character[] @relation("CharacterDefaultImage")
+  personasUsingAsDefault   Persona[]   @relation("PersonaDefaultImage")
+  chatAvatarOverrides      ChatAvatarOverride[]
+
+  @@map("images")
+}
+
+model ImageTag {
+  id        String       @id @default(uuid())
+  imageId   String
+  tagType   ImageTagType
+  tagId     String       // ID of the character/persona/chat/theme
+  createdAt DateTime     @default(now())
+
+  image     Image        @relation(fields: [imageId], references: [id], onDelete: Cascade)
+
+  @@unique([imageId, tagType, tagId])
+  @@index([tagType, tagId])
+  @@map("image_tags")
+}
+
+model ChatAvatarOverride {
+  id          String   @id @default(uuid())
+  chatId      String
+  characterId String   // Which character's avatar we're overriding
+  imageId     String   // The image to use as avatar
+  createdAt   DateTime @default(now())
+
+  chat        Chat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  image       Image     @relation(fields: [imageId], references: [id], onDelete: Cascade)
+
+  @@unique([chatId, characterId])
+  @@map("chat_avatar_overrides")
+}
+
+// Phase 0.7: Tag System
+model Tag {
+  id          String   @id @default(uuid())
+  userId      String
+  name        String
+  nameLower   String   // For case-insensitive unique constraint
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user              User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  characterTags     CharacterTag[]
+  personaTags       PersonaTag[]
+  chatTags          ChatTag[]
+  connectionProfileTags ConnectionProfileTag[]
+
+  @@unique([userId, nameLower])
+  @@index([userId, nameLower])
+  @@map("tags")
+}
+
+model CharacterTag {
+  id          String    @id @default(uuid())
+  characterId String
+  tagId       String
+  createdAt   DateTime  @default(now())
+
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  tag         Tag       @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([characterId, tagId])
+  @@index([tagId])
+  @@map("character_tags")
+}
+
+model PersonaTag {
+  id        String   @id @default(uuid())
+  personaId String
+  tagId     String
+  createdAt DateTime @default(now())
+
+  persona   Persona  @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([personaId, tagId])
+  @@index([tagId])
+  @@map("persona_tags")
+}
+
+model ChatTag {
+  id        String   @id @default(uuid())
+  chatId    String
+  tagId     String
+  createdAt DateTime @default(now())
+
+  chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([chatId, tagId])
+  @@index([tagId])
+  @@map("chat_tags")
+}
+
+model ConnectionProfileTag {
+  id                  String            @id @default(uuid())
+  connectionProfileId String
+  tagId               String
+  createdAt           DateTime          @default(now())
+
+  connectionProfile   ConnectionProfile @relation(fields: [connectionProfileId], references: [id], onDelete: Cascade)
+  tag                 Tag               @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionProfileId, tagId])
+  @@index([tagId])
+  @@map("connection_profile_tags")
 }

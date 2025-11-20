@@ -17,6 +17,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const { searchParams } = new URL(req.url)
+    const sortByCharacter = searchParams.get('sortByCharacter')
+
     const personas = await prisma.persona.findMany({
       where: {
         userId: session.user.id,
@@ -32,11 +35,44 @@ export async function GET(req: NextRequest) {
             },
           },
         },
+        tags: {
+          include: {
+            tag: true,
+          },
+        },
       },
       orderBy: {
         createdAt: 'desc',
       },
     })
+
+    // If sortByCharacter is specified, sort by matching tags
+    if (sortByCharacter) {
+      // Get character tags
+      const characterTags = await prisma.characterTag.findMany({
+        where: { characterId: sortByCharacter },
+        select: { tagId: true },
+      })
+      const characterTagIds = new Set(characterTags.map(ct => ct.tagId))
+
+      // Sort personas by number of matching tags (descending)
+      personas.sort((a, b) => {
+        const aMatchingTags = a.tags.filter(pt => characterTagIds.has(pt.tagId)).length
+        const bMatchingTags = b.tags.filter(pt => characterTagIds.has(pt.tagId)).length
+        return bMatchingTags - aMatchingTags
+      })
+
+      // Add matching tags info to each persona
+      const personasWithMatches = personas.map(persona => ({
+        ...persona,
+        matchingTags: persona.tags
+          .filter(pt => characterTagIds.has(pt.tagId))
+          .map(pt => pt.tag),
+        matchingTagCount: persona.tags.filter(pt => characterTagIds.has(pt.tagId)).length,
+      }))
+
+      return NextResponse.json(personasWithMatches)
+    }
 
     return NextResponse.json(personas)
   } catch (error) {
@@ -57,7 +93,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { name, description, personalityTraits, avatarUrl, sillyTavernData } =
+    const { name, title, description, personalityTraits, avatarUrl, sillyTavernData } =
       body
 
     // Validate required fields
@@ -72,6 +108,7 @@ export async function POST(req: NextRequest) {
       data: {
         userId: session.user.id,
         name,
+        title: title || null,
         description,
         personalityTraits: personalityTraits || null,
         avatarUrl: avatarUrl || null,

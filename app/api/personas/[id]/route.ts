@@ -83,13 +83,14 @@ export async function PUT(
     }
 
     const body = await req.json()
-    const { name, description, personalityTraits, avatarUrl, sillyTavernData } =
+    const { name, title, description, personalityTraits, avatarUrl, sillyTavernData } =
       body
 
     const persona = await prisma.persona.update({
       where: { id },
       data: {
         name: name !== undefined ? name : existing.name,
+        title: title !== undefined ? title : existing.title,
         description: description !== undefined ? description : existing.description,
         personalityTraits:
           personalityTraits !== undefined
