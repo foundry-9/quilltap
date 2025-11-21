@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
         userId: session.user.id,
       },
       include: {
+        defaultImage: true,
         characters: {
           include: {
             character: {

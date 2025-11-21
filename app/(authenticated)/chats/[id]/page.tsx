@@ -25,8 +25,52 @@ interface Chat {
     id: string
     name: string
     avatarUrl?: string
+    defaultImageId?: string
+    defaultImage?: {
+      id: string
+      filepath: string
+      url?: string
+    } | null
+    personas: Array<{
+      persona: {
+        id: string
+        name: string
+        title?: string | null
+        avatarUrl?: string | null
+        defaultImage?: {
+          id: string
+          filepath: string
+          url?: string
+        } | null
+      }
+    }>
+  }
+  persona?: {
+    id: string
+    name: string
+    title?: string
+    avatarUrl?: string
+    defaultImageId?: string
+    defaultImage?: {
+      id: string
+      filepath: string
+      url?: string
+    } | null
+  } | null
+  user: {
+    id: string
+    name?: string | null
+    image?: string | null
   }
   messages: Message[]
+}
+
+interface ChatSettings {
+  id: string
+  userId: string
+  avatarDisplayMode: 'ALWAYS' | 'GROUP_ONLY' | 'NEVER'
+  createdAt: string
+  updatedAt: string
 }
 
 export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
@@ -43,12 +87,26 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [editContent, setEditContent] = useState('')
   const [swipeStates, setSwipeStates] = useState<Record<string, { current: number; total: number; messages: Message[] }>>({})
   const [viewSourceMessageIds, setViewSourceMessageIds] = useState<Set<string>>(new Set())
+  const [chatSettings, setChatSettings] = useState<ChatSettings | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
+
+  const fetchChatSettings = useCallback(async () => {
+    try {
+      const res = await fetch('/api/chat-settings')
+      if (!res.ok) throw new Error('Failed to fetch chat settings')
+      const data = await res.json()
+      setChatSettings(data)
+    } catch (err) {
+      console.error('Failed to fetch chat settings:', err)
+      // Use default settings if fetch fails
+      setChatSettings({ id: '', userId: '', avatarDisplayMode: 'ALWAYS', createdAt: '', updatedAt: '' })
+    }
+  }, [])
 
   const fetchChat = useCallback(async () => {
     try {
@@ -100,7 +158,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   useEffect(() => {
     fetchChat()
-  }, [fetchChat])
+    fetchChatSettings()
+  }, [fetchChat, fetchChatSettings])
 
   useEffect(() => {
     scrollToBottom()
@@ -307,6 +366,106 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     })
   }
 
+  const shouldShowAvatars = () => {
+    if (!chatSettings) return true // Default to showing avatars
+    return chatSettings.avatarDisplayMode === 'ALWAYS'
+  }
+
+  const getMessageAvatar = (message: Message) => {
+    if (message.role === 'USER') {
+      // Fallback priority:
+      // 1. Chat's assigned persona (if explicitly set for this chat)
+      // 2. Character's default persona (if it has one)
+      // 3. User's avatar (fallback)
+
+      if (chat?.persona) {
+        return {
+          name: chat.persona.name,
+          title: chat.persona.title,
+          avatarUrl: chat.persona.avatarUrl,
+          defaultImage: chat.persona.defaultImage,
+        }
+      } else if (chat?.character.personas && chat.character.personas.length > 0) {
+        const defaultPersona = chat.character.personas[0].persona
+        return {
+          name: defaultPersona.name,
+          title: defaultPersona.title,
+          avatarUrl: defaultPersona.avatarUrl,
+          defaultImage: defaultPersona.defaultImage,
+        }
+      } else if (chat?.user) {
+        return {
+          name: chat.user.name || 'User',
+          title: null,
+          avatarUrl: chat.user.image,
+          defaultImage: null,
+        }
+      }
+    } else if (message.role === 'ASSISTANT' && chat?.character) {
+      return {
+        name: chat.character.name,
+        title: null,
+        avatarUrl: chat.character.avatarUrl,
+        defaultImage: chat.character.defaultImage,
+      }
+    }
+    return null
+  }
+
+  const getAvatarSrc = (avatar: ReturnType<typeof getMessageAvatar>) => {
+    if (!avatar) return null
+    if (avatar.defaultImage) {
+      return avatar.defaultImage.url || `/${avatar.defaultImage.filepath}`
+    }
+    return avatar.avatarUrl || null
+  }
+
+  const renderAvatar = (avatar: ReturnType<typeof getMessageAvatar>) => {
+    if (!avatar) return null
+
+    const avatarSrc = getAvatarSrc(avatar)
+    // 4:5 ratio: width 100px = height 125px, max height 200px = width 160px
+    // Using width 120px and height 150px as a good balance
+    const avatarWidth = 120
+    const avatarHeight = 150
+
+    return (
+      <div className="flex flex-col items-center flex-shrink-0 w-32 gap-1">
+        <div
+          className="bg-gray-300 dark:bg-slate-700 flex items-center justify-center overflow-hidden"
+          style={{
+            width: `${avatarWidth}px`,
+            height: `${avatarHeight}px`,
+          }}
+        >
+          {avatarSrc ? (
+            <Image
+              src={avatarSrc}
+              alt={avatar.name}
+              width={avatarWidth}
+              height={avatarHeight}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <span className="text-4xl font-bold text-gray-600 dark:text-gray-400">
+              {avatar.name.charAt(0).toUpperCase()}
+            </span>
+          )}
+        </div>
+        <div className="text-center">
+          <div className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-2">
+            {avatar.name}
+          </div>
+          {avatar.title && (
+            <div className="text-xs italic text-gray-600 dark:text-gray-400 line-clamp-2">
+              {avatar.title}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -381,14 +540,21 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           const isEditing = editingMessageId === message.id
           const swipeState = message.swipeGroupId ? swipeStates[message.swipeGroupId] : null
 
+          const messageAvatar = shouldShowAvatars() ? getMessageAvatar(message) : null
+
           return (
             <div
               key={message.id}
-              className={`flex ${
-                message.role === 'USER' ? 'justify-end' : 'justify-start'
+              className={`flex gap-4 w-[90%] ${
+                message.role === 'USER' ? 'justify-end ml-auto' : 'justify-start'
               }`}
             >
-              <div className="w-[90%] group relative">
+              {message.role === 'ASSISTANT' && shouldShowAvatars() && (
+                <div className="flex-shrink-0">
+                  {renderAvatar(messageAvatar)}
+                </div>
+              )}
+              <div className="flex-1 min-w-0 group relative">
                 <div
                   className={`px-4 py-3 rounded-lg ${
                     message.role === 'USER'
@@ -517,14 +683,29 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   </div>
                 )}
               </div>
+              {message.role === 'USER' && shouldShowAvatars() && (
+                <div className="flex-shrink-0">
+                  {renderAvatar(messageAvatar)}
+                </div>
+              )}
             </div>
           )
         })}
 
         {/* Streaming message */}
         {streaming && streamingContent && (
-          <div className="flex justify-start">
-            <div className="w-[90%] px-4 py-3 rounded-lg bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-white">
+          <div className="flex gap-4 w-[90%] justify-start">
+            {shouldShowAvatars() && (
+              <div className="flex-shrink-0">
+                {renderAvatar({
+                  name: chat?.character.name || 'AI',
+                  title: null,
+                  avatarUrl: chat?.character.avatarUrl,
+                  defaultImage: chat?.character.defaultImage,
+                })}
+              </div>
+            )}
+            <div className="flex-1 min-w-0 px-4 py-3 rounded-lg bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-white">
               <MessageContent content={streamingContent} />
               <span className="inline-block w-2 h-4 bg-gray-400 dark:bg-gray-500 animate-pulse ml-1"></span>
             </div>

@@ -41,8 +41,35 @@ export async function GET(
         userId: user.id,
       },
       include: {
-        character: true,
-        persona: true,
+        character: {
+          include: {
+            defaultImage: true,
+            personas: {
+              where: {
+                isDefault: true,
+              },
+              include: {
+                persona: {
+                  include: {
+                    defaultImage: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        persona: {
+          include: {
+            defaultImage: true,
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
+          },
+        },
         connectionProfile: {
           include: {
             apiKey: {
@@ -62,6 +89,8 @@ export async function GET(
             content: true,
             tokenCount: true,
             createdAt: true,
+            swipeGroupId: true,
+            swipeIndex: true,
           },
         },
       },
