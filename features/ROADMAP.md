@@ -31,9 +31,10 @@ Quilltap is a Docker-containerized Next.js web application for AI-powered rolepl
 - **Auth Framework**: NextAuth.js v5 (Auth.js)
 - **Providers**:
   - Google OAuth (v1.0)
-  - Apple OAuth (post-1.0)
-  - GitHub OAuth (post-1.0)
-- **Session**: JWT in httpOnly cookies
+  - Email/Password with TOTP 2FA (v1.1, planned)
+  - Apple OAuth (post-1.1)
+  - GitHub OAuth (post-1.1)
+- **Session**: Database sessions (v1.0), JWT in httpOnly cookies (optional future)
 
 ### Testing
 
@@ -60,10 +61,15 @@ Quilltap is a Docker-containerized Next.js web application for AI-powered rolepl
     "@ai-sdk/openai": "^0.0.0",
     "@anthropic-ai/sdk": "^0.20.0",
     "zod": "^3.22.0",
-    "tailwindcss": "^3.4.0"
+    "tailwindcss": "^3.4.0",
+    "bcrypt": "^5.1.1",
+    "speakeasy": "^2.0.0",
+    "qrcode": "^1.5.3"
   }
 }
 ```
+
+**Note**: bcrypt, speakeasy, and qrcode will be added in v1.1 for local authentication and TOTP 2FA support.
 
 ---
 
@@ -447,6 +453,32 @@ All Phase 1.0 deliverables met. Application is production-ready with enterprise-
 
 ---
 
+### Phase 1.1: Local User Authentication (Weeks 12-13)
+
+**Goal**: Email/password authentication with TOTP 2FA
+
+**Status**: 📋 **PLANNED**
+
+**Tasks:**
+
+- [ ] Database schema migration for password and TOTP fields
+- [ ] Password utilities (bcrypt hashing, strength validation)
+- [ ] NextAuth CredentialsProvider configuration
+- [ ] User signup API endpoint and UI
+- [ ] Updated signin UI supporting both OAuth and credentials
+- [ ] TOTP utilities (secret generation, verification, backup codes)
+- [ ] 2FA setup/enable/disable API endpoints
+- [ ] Security settings UI for 2FA management
+- [ ] Unit tests for password and TOTP functionality
+- [ ] Integration tests for authentication flows
+- [ ] Documentation updates
+
+**Deliverable**: Users can create accounts with email/password and optionally enable TOTP 2FA compatible with any authenticator app (1Password, Google Authenticator, Authy, etc.)
+
+**See**: [features/LOCAL_USER_AUTH.md](LOCAL_USER_AUTH.md) for detailed implementation plan
+
+---
+
 ### Post-1.0: Enhancement Backlog
 
 **Future features** (prioritize based on user feedback):
@@ -454,6 +486,8 @@ All Phase 1.0 deliverables met. Application is production-ready with enterprise-
 - World Book/Lorebook support
 - Redis caching for LLM responses
 - Apple and GitHub OAuth providers
+- Email verification and password reset flows
+- Account linking (OAuth + password)
 - Advanced prompt templates
 - Chat folders/organization
 - Image generation integration
@@ -462,6 +496,8 @@ All Phase 1.0 deliverables met. Application is production-ready with enterprise-
 - Multi-user shared chats
 - Admin dashboard
 - Usage analytics
+- Session management (view/revoke active sessions)
+- WebAuthn/Passkey support
 - Export to other formats (Character.AI, etc.)
 - PNG character card format support (importing/exporting JSON embedded in PNG files)
 

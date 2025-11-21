@@ -17,7 +17,7 @@ Quilltap is a modern, self-hosted chat platform designed for AI-powered roleplay
 - 🔄 SillyTavern import/export compatibility
 - 🔐 Secure encrypted API key storage
 - 🐳 Docker-based deployment
-- 🔒 OAuth authentication (Google)
+- 🔒 OAuth authentication (Google) with local email/password auth planned
 
 ## What Can It Do?
 
@@ -66,7 +66,8 @@ Configure connections to any of these providers:
 
 - AES-256-GCM encryption for API keys
 - Per-user encryption keys
-- OAuth authentication (no password management)
+- OAuth authentication (Google)
+- Optional local email/password authentication with TOTP 2FA (planned for v1.1+)
 - Rate limiting and security headers
 - All data stored in your own PostgreSQL database
 
@@ -320,6 +321,7 @@ Once logged in, you'll need to:
 - [Deployment Guide](docs/DEPLOYMENT.md) - Production deployment instructions
 - [Development Progress](DEVELOPMENT.md) - Feature completion status
 - [Roadmap](features/ROADMAP.md) - Technical architecture and implementation details
+- [Local User Authentication](features/LOCAL_USER_AUTH.md) - Email/password + TOTP 2FA implementation plan (planned)
 
 ## Troubleshooting
 
