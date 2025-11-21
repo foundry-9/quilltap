@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "1.2.6",
+  "version": "1.2.7",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -35,6 +35,7 @@
     "@anthropic-ai/sdk": "^0.69.0",
     "@auth/prisma-adapter": "^2.7.2",
     "@prisma/client": "^6.19.0",
+    "bcrypt": "^5.1.1",
     "glob": "^12.0.0",
     "next": "^16.0.3",
     "next-auth": "^4.24.7",
@@ -53,6 +54,7 @@
     "@playwright/test": "^1.49.0",
     "@tailwindcss/postcss": "^4.1.17",
     "@testing-library/jest-dom": "^6.9.1",
+    "@types/bcrypt": "^5.0.2",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.2.5",
