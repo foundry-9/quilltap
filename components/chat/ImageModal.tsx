@@ -3,6 +3,7 @@
 import { useEffect, useCallback, useState } from 'react'
 import Image from 'next/image'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { showConfirmation } from '@/lib/alert'
 
 interface ImageModalProps {
   isOpen: boolean
@@ -125,6 +126,10 @@ export default function ImageModal({
 
   const handleDelete = async () => {
     if (!fileId) return
+
+    if (!(await showConfirmation('Permanently delete this photo? This cannot be undone.'))) {
+      return
+    }
 
     setIsDeleting(true)
     try {

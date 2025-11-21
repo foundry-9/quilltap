@@ -2,6 +2,7 @@
 
 import { useEffect, useCallback } from 'react'
 import Image from 'next/image'
+import { showConfirmation } from '@/lib/alert'
 
 interface ImageData {
   id: string
@@ -76,14 +77,14 @@ export default function GalleryImageViewModal({
     }
   }
 
-  const handleUntagClick = () => {
-    if (confirm('Remove this photo from the character gallery?')) {
+  const handleUntagClick = async () => {
+    if (await showConfirmation('Remove this photo from the character gallery?')) {
       onUntag()
     }
   }
 
-  const handleDeleteClick = () => {
-    if (confirm('Permanently delete this photo? This cannot be undone.')) {
+  const handleDeleteClick = async () => {
+    if (await showConfirmation('Permanently delete this photo? This cannot be undone.')) {
       onDelete()
     }
   }

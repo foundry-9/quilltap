@@ -5,8 +5,10 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { TagEditor } from '@/components/tags/tag-editor'
 import ImageModal from '@/components/chat/ImageModal'
+import ChatPhotoGalleryModal from '@/components/chat/ChatPhotoGalleryModal'
 import { showAlert } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { safeJsonParse } from '@/lib/fetch-helpers'
 import MessageContent from '@/components/chat/MessageContent'
 import { formatMessageTime } from '@/lib/format-time'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
@@ -103,6 +105,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [attachedFiles, setAttachedFiles] = useState<Array<{ id: string; filename: string; filepath: string; mimeType: string; url: string }>>([])
   const [uploadingFile, setUploadingFile] = useState(false)
   const [modalImage, setModalImage] = useState<{ src: string; filename: string; fileId?: string } | null>(null)
+  const [chatPhotoCount, setChatPhotoCount] = useState(0)
+  const [galleryOpen, setGalleryOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -179,10 +183,24 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
   }, [id])
 
+  const fetchChatPhotoCount = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/chats/${id}/files`)
+      if (res.ok) {
+        const data = await res.json()
+        const imageCount = (data.files || []).filter((f: { mimeType: string }) => f.mimeType.startsWith('image/')).length
+        setChatPhotoCount(imageCount)
+      }
+    } catch (err) {
+      console.error('Failed to fetch chat photo count:', err)
+    }
+  }, [id])
+
   useEffect(() => {
     fetchChat()
     fetchChatSettings()
-  }, [fetchChat, fetchChatSettings])
+    fetchChatPhotoCount()
+  }, [fetchChat, fetchChatSettings, fetchChatPhotoCount])
 
   useEffect(() => {
     scrollToBottom()
@@ -211,18 +229,18 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         body: formData,
       })
 
-      if (!res.ok) {
-        const data = await res.json()
+      const data = await safeJsonParse<{ file?: { id: string; filepath: string; mimeType: string; url: string }; error?: string }>(res)
+
+      if (!res.ok || !data.file) {
         throw new Error(data.error || 'Failed to upload file')
       }
-
-      const data = await res.json()
+      const uploadedFile = data.file
       setAttachedFiles((prev) => [...prev, {
-        id: data.file.id,
+        id: uploadedFile.id,
         filename: file.name,
-        filepath: data.file.filepath,
-        mimeType: data.file.mimeType,
-        url: data.file.url,
+        filepath: uploadedFile.filepath,
+        mimeType: uploadedFile.mimeType,
+        url: uploadedFile.url,
       }])
       showSuccessToast('File attached')
     } catch (err) {
@@ -904,6 +922,19 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 </svg>
               )}
             </button>
+            {/* Photo gallery button - only shown if there are photos */}
+            {chatPhotoCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setGalleryOpen(true)}
+                className="px-3 py-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700"
+                title={`View chat photos (${chatPhotoCount})`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </button>
+            )}
             <input
               ref={inputRef}
               type="text"
@@ -938,6 +969,35 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         onDelete={() => {
           // Refresh chat to update message attachments
           fetchChat()
+        }}
+      />
+
+      {/* Chat Photo Gallery Modal */}
+      <ChatPhotoGalleryModal
+        isOpen={galleryOpen}
+        onClose={() => setGalleryOpen(false)}
+        chatId={id}
+        characterId={chat?.character.id}
+        characterName={chat?.character.name}
+        personaId={chat?.persona?.id || chat?.character.personas?.[0]?.persona.id}
+        personaName={chat?.persona?.name || chat?.character.personas?.[0]?.persona.name}
+        onImageDeleted={(fileId) => {
+          // Update messages to show deleted indicator for this file
+          setMessages((prev) =>
+            prev.map((msg) => {
+              if (msg.attachments?.some((a) => a.id === fileId)) {
+                // Remove the attachment and add deleted indicator to content
+                const newAttachments = msg.attachments.filter((a) => a.id !== fileId)
+                const newContent = msg.content.includes('[attached photo deleted]')
+                  ? msg.content
+                  : `${msg.content} [attached photo deleted]`
+                return { ...msg, attachments: newAttachments, content: newContent }
+              }
+              return msg
+            })
+          )
+          // Refresh photo count
+          fetchChatPhotoCount()
         }}
       />
     </div>
