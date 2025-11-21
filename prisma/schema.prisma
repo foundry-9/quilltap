@@ -47,6 +47,20 @@ model User {
   name          String?
   image         String?
   emailVerified DateTime?
+
+  // Password authentication fields (Phase 1)
+  passwordHash  String?   // bcrypt hash (nullable for OAuth-only users)
+
+  // TOTP 2FA fields (Phase 2)
+  totpSecret        String?   // Encrypted TOTP secret
+  totpSecretIv      String?   // IV for TOTP secret encryption
+  totpSecretAuthTag String?   // Auth tag for TOTP secret encryption
+  totpEnabled       Boolean   @default(false)
+  totpVerifiedAt    DateTime? // When 2FA was set up
+  backupCodes       String?   // Encrypted JSON array of backup codes
+  backupCodesIv     String?
+  backupCodesAuthTag String?
+
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
