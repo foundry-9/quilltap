@@ -102,7 +102,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [chatSettings, setChatSettings] = useState<ChatSettings | null>(null)
   const [attachedFiles, setAttachedFiles] = useState<Array<{ id: string; filename: string; filepath: string; mimeType: string; url: string }>>([])
   const [uploadingFile, setUploadingFile] = useState(false)
-  const [modalImage, setModalImage] = useState<{ src: string; filename: string } | null>(null)
+  const [modalImage, setModalImage] = useState<{ src: string; filename: string; fileId?: string } | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -698,7 +698,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                               key={attachment.id}
                               onClick={() => setModalImage({
                                 src: `/${attachment.filepath}`,
-                                filename: attachment.filename
+                                filename: attachment.filename,
+                                fileId: attachment.id,
                               })}
                               className="relative group/thumb overflow-hidden rounded border border-gray-300 dark:border-slate-600 hover:border-blue-500 dark:hover:border-blue-400 transition-colors"
                             >
@@ -929,6 +930,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         onClose={() => setModalImage(null)}
         src={modalImage?.src || ''}
         filename={modalImage?.filename || ''}
+        fileId={modalImage?.fileId}
+        characterId={chat?.character.id}
+        characterName={chat?.character.name}
+        personaId={chat?.persona?.id || chat?.character.personas?.[0]?.persona.id}
+        personaName={chat?.persona?.name || chat?.character.personas?.[0]?.persona.name}
+        onDelete={() => {
+          // Refresh chat to update message attachments
+          fetchChat()
+        }}
       />
     </div>
   )
