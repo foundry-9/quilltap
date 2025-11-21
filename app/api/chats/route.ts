@@ -42,9 +42,16 @@ export async function GET(req: NextRequest) {
           select: {
             id: true,
             name: true,
+            title: true,
             avatarUrl: true,
             defaultImageId: true,
-            defaultImage: true,
+            defaultImage: {
+              select: {
+                id: true,
+                filepath: true,
+                url: true,
+              },
+            },
           },
         },
         persona: {
@@ -52,6 +59,15 @@ export async function GET(req: NextRequest) {
             id: true,
             name: true,
             title: true,
+            avatarUrl: true,
+            defaultImageId: true,
+            defaultImage: {
+              select: {
+                id: true,
+                filepath: true,
+                url: true,
+              },
+            },
           },
         },
         tags: {

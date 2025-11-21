@@ -40,18 +40,43 @@ export async function GET(
         id,
         userId: user.id,
       },
-      include: {
+      select: {
+        id: true,
+        title: true,
+        updatedAt: true,
         character: {
-          include: {
-            defaultImage: true,
+          select: {
+            id: true,
+            name: true,
+            title: true,
+            avatarUrl: true,
+            defaultImageId: true,
+            defaultImage: {
+              select: {
+                id: true,
+                filepath: true,
+                url: true,
+              },
+            },
             personas: {
               where: {
                 isDefault: true,
               },
-              include: {
+              select: {
                 persona: {
-                  include: {
-                    defaultImage: true,
+                  select: {
+                    id: true,
+                    name: true,
+                    title: true,
+                    avatarUrl: true,
+                    defaultImageId: true,
+                    defaultImage: {
+                      select: {
+                        id: true,
+                        filepath: true,
+                        url: true,
+                      },
+                    },
                   },
                 },
               },
@@ -59,8 +84,19 @@ export async function GET(
           },
         },
         persona: {
-          include: {
-            defaultImage: true,
+          select: {
+            id: true,
+            name: true,
+            title: true,
+            avatarUrl: true,
+            defaultImageId: true,
+            defaultImage: {
+              select: {
+                id: true,
+                filepath: true,
+                url: true,
+              },
+            },
           },
         },
         user: {
@@ -71,7 +107,9 @@ export async function GET(
           },
         },
         connectionProfile: {
-          include: {
+          select: {
+            id: true,
+            name: true,
             apiKey: {
               select: {
                 id: true,

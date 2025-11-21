@@ -8,6 +8,7 @@ import { showAlert } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import MessageContent from '@/components/chat/MessageContent'
 import { formatMessageTime } from '@/lib/format-time'
+import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 
 interface Message {
   id: string
@@ -76,6 +77,7 @@ interface ChatSettings {
 
 export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
+  const { style } = useAvatarDisplay()
   const [chat, setChat] = useState<Chat | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -91,6 +93,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [chatSettings, setChatSettings] = useState<ChatSettings | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const getCharacterAvatarSrc = (character: Chat['character']) => {
+    if (character.defaultImage) {
+      return character.defaultImage.url || `/${character.defaultImage.filepath}`
+    }
+    return character.avatarUrl
+  }
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -405,7 +414,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     } else if (message.role === 'ASSISTANT' && chat?.character) {
       return {
         name: chat.character.name,
-        title: null,
+        title: chat.character.title,
         avatarUrl: chat.character.avatarUrl,
         defaultImage: chat.character.defaultImage,
       }
@@ -503,17 +512,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               Export Chat
             </a>
           </div>
-          <div className="flex items-center">
-            {chat.character.avatarUrl ? (
+          <div className="flex items-center gap-3">
+            {getCharacterAvatarSrc(chat.character) ? (
               <Image
-                src={chat.character.avatarUrl}
+                src={getCharacterAvatarSrc(chat.character)!}
                 alt={chat.character.name}
                 width={40}
                 height={40}
-                className="w-10 h-10 rounded-full mr-3"
+                className="w-10 h-10 rounded-full mr-3 object-cover"
               />
             ) : (
-              <div className="w-10 h-10 rounded-full bg-gray-300 dark:bg-slate-700 mr-3 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-full bg-gray-300 dark:bg-slate-700 mr-3 flex items-center justify-center flex-shrink-0">
                 <span className="text-lg font-bold text-gray-600 dark:text-gray-400">
                   {chat.character.name.charAt(0).toUpperCase()}
                 </span>
@@ -522,8 +531,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             <div>
               <h1 className="text-xl font-bold text-gray-900 dark:text-white">{chat.title}</h1>
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                {chat.character.name}
-                {chat.character.title && ` - ${chat.character.title}`}
+                {chat.character.title ? `${chat.character.name} - ${chat.character.title}` : chat.character.name}
               </p>
             </div>
           </div>
