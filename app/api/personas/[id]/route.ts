@@ -29,6 +29,7 @@ export async function GET(
         userId: session.user.id,
       },
       include: {
+        defaultImage: true,
         characters: {
           include: {
             character: {
@@ -101,6 +102,9 @@ export async function PUT(
           sillyTavernData !== undefined
             ? sillyTavernData
             : existing.sillyTavernData,
+      },
+      include: {
+        defaultImage: true,
       },
     })
 

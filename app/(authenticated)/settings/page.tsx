@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import ApiKeysTab from '@/components/settings/api-keys-tab'
 import ConnectionProfilesTab from '@/components/settings/connection-profiles-tab'
+import ChatSettingsTab from '@/components/settings/chat-settings-tab'
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<'keys' | 'profiles'>('keys')
+  const [activeTab, setActiveTab] = useState<'keys' | 'profiles' | 'chat'>('keys')
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl">
@@ -38,6 +39,16 @@ export default function SettingsPage() {
           >
             Connection Profiles
           </button>
+          <button
+            onClick={() => setActiveTab('chat')}
+            className={`px-4 py-2 border-b-2 font-medium transition-colors ${
+              activeTab === 'chat'
+                ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+            }`}
+          >
+            Chat Settings
+          </button>
         </div>
       </div>
 
@@ -45,6 +56,7 @@ export default function SettingsPage() {
       <div>
         {activeTab === 'keys' && <ApiKeysTab />}
         {activeTab === 'profiles' && <ConnectionProfilesTab />}
+        {activeTab === 'chat' && <ChatSettingsTab />}
       </div>
 
       {/* Back Link */}
