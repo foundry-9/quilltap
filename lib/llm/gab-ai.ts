@@ -4,12 +4,13 @@
 // Note: Gab AI does not currently support file attachments
 
 import OpenAI from 'openai'
-import { LLMProvider, LLMParams, LLMResponse, StreamChunk } from './base'
+import { LLMProvider, LLMParams, LLMResponse, StreamChunk, type ImageGenParams, type ImageGenResponse } from './base'
 
 export class GabAIProvider extends LLMProvider {
   private readonly baseUrl = 'https://gab.ai/v1'
   readonly supportsFileAttachments = false
   readonly supportedMimeTypes: string[] = []
+  readonly supportsImageGeneration = false
 
   // Helper to collect attachment failures for unsupported provider
   private collectAttachmentFailures(params: LLMParams): { sent: string[]; failed: { id: string; error: string }[] } {
@@ -161,5 +162,9 @@ export class GabAIProvider extends LLMProvider {
       console.error('Failed to fetch Gab AI models:', error)
       return []
     }
+  }
+
+  async generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse> {
+    throw new Error('Gab AI does not support image generation.')
   }
 }

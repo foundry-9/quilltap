@@ -4,11 +4,12 @@
 // Note: File support varies by implementation
 
 import OpenAI from 'openai'
-import { LLMProvider, LLMParams, LLMResponse, StreamChunk } from './base'
+import { LLMProvider, LLMParams, LLMResponse, StreamChunk, type ImageGenParams, type ImageGenResponse } from './base'
 
 export class OpenAICompatibleProvider extends LLMProvider {
   readonly supportsFileAttachments = false // Varies by implementation, conservative default
   readonly supportedMimeTypes: string[] = []
+  readonly supportsImageGeneration = false
 
   constructor(private baseUrl: string) {
     super()
@@ -147,5 +148,9 @@ export class OpenAICompatibleProvider extends LLMProvider {
       console.error('Failed to fetch OpenAI-compatible models:', error)
       return []
     }
+  }
+
+  async generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse> {
+    throw new Error('OpenAI-compatible image generation support varies by implementation (not yet implemented)')
   }
 }

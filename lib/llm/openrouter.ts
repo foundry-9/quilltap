@@ -3,12 +3,13 @@
 // Note: OpenRouter proxies to many models, file support depends on the underlying model
 
 import OpenAI from 'openai'
-import { LLMProvider, LLMParams, LLMResponse, StreamChunk } from './base'
+import { LLMProvider, LLMParams, LLMResponse, StreamChunk, type ImageGenParams, type ImageGenResponse } from './base'
 
 export class OpenRouterProvider extends LLMProvider {
   private readonly baseUrl = 'https://openrouter.ai/api/v1'
   readonly supportsFileAttachments = false // Model-dependent, conservative default
   readonly supportedMimeTypes: string[] = []
+  readonly supportsImageGeneration = true
 
   // Helper to collect attachment failures
   private collectAttachmentFailures(params: LLMParams): { sent: string[]; failed: { id: string; error: string }[] } {
@@ -160,6 +161,69 @@ export class OpenRouterProvider extends LLMProvider {
     } catch (error) {
       console.error('Failed to fetch OpenRouter models:', error)
       return []
+    }
+  }
+
+  async generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse> {
+    const requestBody: any = {
+      model: params.model ?? 'google/gemini-2.5-flash-image-preview',
+      messages: [{ role: 'user', content: params.prompt }],
+      modalities: ['image', 'text'],
+    }
+
+    if (params.aspectRatio) {
+      requestBody.image_config = { aspect_ratio: params.aspectRatio }
+    }
+
+    const response = await fetch(`${this.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': process.env.NEXTAUTH_URL || 'http://localhost:3000',
+        'X-Title': 'Quilltap',
+      },
+      body: JSON.stringify(requestBody),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`OpenRouter API error: ${response.status} ${errorText}`)
+    }
+
+    const data = await response.json()
+    const choice = data.choices?.[0]
+    if (!choice) {
+      throw new Error('No choices in OpenRouter response')
+    }
+
+    const images = []
+
+    // Check if response includes images
+    if ((choice.message as any).images && Array.isArray((choice.message as any).images)) {
+      for (const image of (choice.message as any).images) {
+        if (image.image_url?.url) {
+          // Extract base64 data from data URL
+          const dataUrl = image.image_url.url
+          if (dataUrl.startsWith('data:image/')) {
+            const [, base64] = dataUrl.split(',')
+            const mimeType = dataUrl.match(/data:(image\/[^;]+)/)?.[1] || 'image/png'
+            images.push({
+              data: base64,
+              mimeType,
+            })
+          }
+        }
+      }
+    }
+
+    if (images.length === 0) {
+      throw new Error('No images returned from OpenRouter')
+    }
+
+    return {
+      images,
+      raw: data,
     }
   }
 }

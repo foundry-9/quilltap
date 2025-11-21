@@ -2,7 +2,7 @@
 // Phase 0.7: Multi-Provider Support
 
 import Anthropic from '@anthropic-ai/sdk'
-import { LLMProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage } from './base'
+import { LLMProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage, type ImageGenParams, type ImageGenResponse } from './base'
 
 // Anthropic supports images and PDFs
 const ANTHROPIC_SUPPORTED_MIME_TYPES = [
@@ -28,6 +28,7 @@ interface AnthropicMessage {
 export class AnthropicProvider extends LLMProvider {
   readonly supportsFileAttachments = true
   readonly supportedMimeTypes = ANTHROPIC_SUPPORTED_MIME_TYPES
+  readonly supportsImageGeneration = false
 
   private formatMessagesWithAttachments(
     messages: LLMMessage[]
@@ -226,5 +227,9 @@ export class AnthropicProvider extends LLMProvider {
       'claude-3-opus-20240229', // Retiring Jan 5, 2026
       'claude-3-haiku-20240307',
     ]
+  }
+
+  async generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse> {
+    throw new Error('Anthropic does not support image generation. Claude can analyze images but cannot generate them.')
   }
 }

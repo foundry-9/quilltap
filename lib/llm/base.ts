@@ -11,6 +11,28 @@ export interface FileAttachment {
   data?: string
 }
 
+// Image Generation Types
+export interface ImageGenParams {
+  prompt: string
+  model?: string // Provider-specific model
+  n?: number // Number of images (default 1)
+  size?: string // e.g., "1024x1024"
+  quality?: 'standard' | 'hd'
+  style?: 'vivid' | 'natural'
+  aspectRatio?: string // For Gemini: "16:9", "4:3", etc.
+}
+
+export interface GeneratedImage {
+  data: string // Base64 encoded image data
+  mimeType: string // "image/png" or "image/jpeg"
+  revisedPrompt?: string // Some providers return revised prompt
+}
+
+export interface ImageGenResponse {
+  images: GeneratedImage[]
+  raw: any
+}
+
 export interface LLMMessage {
   role: 'system' | 'user' | 'assistant'
   content: string
@@ -65,8 +87,12 @@ export abstract class LLMProvider {
   // Supported MIME types for file attachments (empty if no support)
   abstract readonly supportedMimeTypes: string[]
 
+  // Whether this provider supports image generation
+  abstract readonly supportsImageGeneration: boolean
+
   abstract sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse>
   abstract streamMessage(params: LLMParams, apiKey: string): AsyncGenerator<StreamChunk>
   abstract validateApiKey(apiKey: string): Promise<boolean>
   abstract getAvailableModels(apiKey: string): Promise<string[]>
+  abstract generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse>
 }

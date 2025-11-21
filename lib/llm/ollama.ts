@@ -2,11 +2,12 @@
 // Phase 0.7: Multi-Provider Support
 // Note: Ollama supports images via multimodal models (llava, etc.) but implementation varies
 
-import { LLMProvider, LLMParams, LLMResponse, StreamChunk } from './base'
+import { LLMProvider, LLMParams, LLMResponse, StreamChunk, type ImageGenParams, type ImageGenResponse } from './base'
 
 export class OllamaProvider extends LLMProvider {
   readonly supportsFileAttachments = false // TODO: Add support for llava and other multimodal models
   readonly supportedMimeTypes: string[] = []
+  readonly supportsImageGeneration = false
 
   constructor(private baseUrl: string) {
     super()
@@ -191,5 +192,9 @@ export class OllamaProvider extends LLMProvider {
       console.error('Failed to fetch Ollama models:', error)
       return []
     }
+  }
+
+  async generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse> {
+    throw new Error('Ollama does not support image generation. Use a multimodal model for image analysis.')
   }
 }

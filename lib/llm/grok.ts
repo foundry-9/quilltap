@@ -5,7 +5,7 @@
 
 import OpenAI from 'openai'
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
-import { LLMProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage } from './base'
+import { LLMProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage, type ImageGenParams, type ImageGenResponse } from './base'
 
 // Grok supports images and documents (as of Nov 2025)
 const GROK_SUPPORTED_MIME_TYPES = [
@@ -30,6 +30,7 @@ export class GrokProvider extends LLMProvider {
   private readonly baseUrl = 'https://api.x.ai/v1'
   readonly supportsFileAttachments = true
   readonly supportedMimeTypes = GROK_SUPPORTED_MIME_TYPES
+  readonly supportsImageGeneration = true
 
   private formatMessagesWithAttachments(
     messages: LLMMessage[]
@@ -241,6 +242,43 @@ export class GrokProvider extends LLMProvider {
     } catch (error) {
       console.error('Failed to fetch Grok models:', error)
       return []
+    }
+  }
+
+  async generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse> {
+    if (!apiKey) {
+      throw new Error('Grok provider requires an API key')
+    }
+
+    const client = new OpenAI({
+      apiKey,
+      baseURL: this.baseUrl,
+    })
+
+    const response = await client.images.generate({
+      model: params.model ?? 'grok-2-image',
+      prompt: params.prompt,
+      n: params.n ?? 1,
+      response_format: 'b64_json',
+    })
+
+    const images = await Promise.all(
+      (response.data || []).map(async (image) => {
+        if (!image.b64_json) {
+          throw new Error('No base64 image data in response')
+        }
+
+        return {
+          data: image.b64_json,
+          mimeType: 'image/jpeg',
+          revisedPrompt: image.revised_prompt,
+        }
+      })
+    )
+
+    return {
+      images,
+      raw: response,
     }
   }
 }
