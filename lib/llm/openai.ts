@@ -2,18 +2,99 @@
 // Phase 0.5: Single Chat MVP
 
 import OpenAI from 'openai'
-import { LLMProvider, LLMParams, LLMResponse, StreamChunk } from './base'
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
+import { LLMProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage } from './base'
+
+// OpenAI supports images in vision-capable models
+const OPENAI_SUPPORTED_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+]
+
+type OpenAIMessageContent = string | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string; detail?: 'auto' | 'low' | 'high' } }>
+
+interface OpenAIMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: OpenAIMessageContent
+}
 
 export class OpenAIProvider extends LLMProvider {
+  readonly supportsFileAttachments = true
+  readonly supportedMimeTypes = OPENAI_SUPPORTED_MIME_TYPES
+
+  private formatMessagesWithAttachments(
+    messages: LLMMessage[]
+  ): { messages: OpenAIMessage[]; attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } } {
+    const sent: string[] = []
+    const failed: { id: string; error: string }[] = []
+
+    const formattedMessages: OpenAIMessage[] = messages.map((msg) => {
+      // If no attachments, return simple string content
+      if (!msg.attachments || msg.attachments.length === 0) {
+        return {
+          role: msg.role,
+          content: msg.content,
+        }
+      }
+
+      // Build multimodal content array
+      const content: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string; detail?: 'auto' | 'low' | 'high' } }> = []
+
+      // Add text content first
+      if (msg.content) {
+        content.push({ type: 'text', text: msg.content })
+      }
+
+      // Add image attachments
+      for (const attachment of msg.attachments) {
+        if (!this.supportedMimeTypes.includes(attachment.mimeType)) {
+          failed.push({
+            id: attachment.id,
+            error: `Unsupported file type: ${attachment.mimeType}. OpenAI supports: ${this.supportedMimeTypes.join(', ')}`,
+          })
+          continue
+        }
+
+        if (!attachment.data) {
+          failed.push({
+            id: attachment.id,
+            error: 'File data not loaded',
+          })
+          continue
+        }
+
+        content.push({
+          type: 'image_url',
+          image_url: {
+            url: `data:${attachment.mimeType};base64,${attachment.data}`,
+            detail: 'auto',
+          },
+        })
+        sent.push(attachment.id)
+      }
+
+      return {
+        role: msg.role,
+        content: content.length > 0 ? content : msg.content,
+      }
+    })
+
+    return { messages: formattedMessages, attachmentResults: { sent, failed } }
+  }
+
   async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
     const client = new OpenAI({
       apiKey,
       dangerouslyAllowBrowser: process.env.NODE_ENV === 'test',
     })
 
+    const { messages, attachmentResults } = this.formatMessagesWithAttachments(params.messages)
+
     const response = await client.chat.completions.create({
       model: params.model,
-      messages: params.messages,
+      messages: messages as ChatCompletionMessageParam[],
       temperature: params.temperature ?? 0.7,
       max_tokens: params.maxTokens ?? 1000,
       top_p: params.topP ?? 1,
@@ -31,6 +112,7 @@ export class OpenAIProvider extends LLMProvider {
         totalTokens: response.usage?.total_tokens ?? 0,
       },
       raw: response,
+      attachmentResults,
     }
   }
 
@@ -40,9 +122,11 @@ export class OpenAIProvider extends LLMProvider {
       dangerouslyAllowBrowser: process.env.NODE_ENV === 'test',
     })
 
+    const { messages, attachmentResults } = this.formatMessagesWithAttachments(params.messages)
+
     const stream = await client.chat.completions.create({
       model: params.model,
-      messages: params.messages,
+      messages: messages as ChatCompletionMessageParam[],
       temperature: params.temperature ?? 0.7,
       max_tokens: params.maxTokens ?? 1000,
       top_p: params.topP ?? 1,
@@ -73,6 +157,7 @@ export class OpenAIProvider extends LLMProvider {
             completionTokens: chunk.usage?.completion_tokens ?? 0,
             totalTokens: chunk.usage?.total_tokens ?? 0,
           },
+          attachmentResults,
         }
       }
     }

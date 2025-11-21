@@ -2,23 +2,123 @@
 // Phase 0.7: Multi-Provider Support
 
 import Anthropic from '@anthropic-ai/sdk'
-import { LLMProvider, LLMParams, LLMResponse, StreamChunk } from './base'
+import { LLMProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage } from './base'
+
+// Anthropic supports images and PDFs
+const ANTHROPIC_SUPPORTED_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'application/pdf',
+]
+
+type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
+
+type AnthropicContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; source: { type: 'base64'; media_type: ImageMediaType; data: string } }
+  | { type: 'document'; source: { type: 'base64'; media_type: 'application/pdf'; data: string } }
+
+interface AnthropicMessage {
+  role: 'user' | 'assistant'
+  content: string | AnthropicContentBlock[]
+}
 
 export class AnthropicProvider extends LLMProvider {
+  readonly supportsFileAttachments = true
+  readonly supportedMimeTypes = ANTHROPIC_SUPPORTED_MIME_TYPES
+
+  private formatMessagesWithAttachments(
+    messages: LLMMessage[]
+  ): { messages: AnthropicMessage[]; attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } } {
+    const sent: string[] = []
+    const failed: { id: string; error: string }[] = []
+
+    // Filter out system messages (handled separately in Anthropic)
+    const nonSystemMessages = messages.filter(m => m.role !== 'system')
+
+    const formattedMessages: AnthropicMessage[] = nonSystemMessages.map((msg) => {
+      const role = msg.role === 'user' ? 'user' : 'assistant'
+
+      // If no attachments, return simple string content
+      if (!msg.attachments || msg.attachments.length === 0) {
+        return {
+          role,
+          content: msg.content,
+        }
+      }
+
+      // Build multimodal content array
+      const content: AnthropicContentBlock[] = []
+
+      // Add text content first
+      if (msg.content) {
+        content.push({ type: 'text', text: msg.content })
+      }
+
+      // Add file attachments
+      for (const attachment of msg.attachments) {
+        if (!this.supportedMimeTypes.includes(attachment.mimeType)) {
+          failed.push({
+            id: attachment.id,
+            error: `Unsupported file type: ${attachment.mimeType}. Anthropic supports: ${this.supportedMimeTypes.join(', ')}`,
+          })
+          continue
+        }
+
+        if (!attachment.data) {
+          failed.push({
+            id: attachment.id,
+            error: 'File data not loaded',
+          })
+          continue
+        }
+
+        if (attachment.mimeType === 'application/pdf') {
+          // PDF document
+          content.push({
+            type: 'document',
+            source: {
+              type: 'base64',
+              media_type: attachment.mimeType,
+              data: attachment.data,
+            },
+          })
+        } else {
+          // Image - mimeType is validated above to be one of the supported image types
+          content.push({
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: attachment.mimeType as ImageMediaType,
+              data: attachment.data,
+            },
+          })
+        }
+        sent.push(attachment.id)
+      }
+
+      return {
+        role,
+        content: content.length > 0 ? content : msg.content,
+      }
+    })
+
+    return { messages: formattedMessages, attachmentResults: { sent, failed } }
+  }
+
   async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
     const client = new Anthropic({ apiKey })
 
     // Anthropic requires system message separate from messages array
     const systemMessage = params.messages.find(m => m.role === 'system')
-    const messages = params.messages.filter(m => m.role !== 'system')
+    const { messages, attachmentResults } = this.formatMessagesWithAttachments(params.messages)
 
     const response = await client.messages.create({
       model: params.model,
       system: systemMessage?.content,
-      messages: messages.map(m => ({
-        role: m.role === 'user' ? 'user' : 'assistant',
-        content: m.content,
-      })),
+      messages,
       max_tokens: params.maxTokens ?? 1000,
       temperature: params.temperature ?? 0.7,
       top_p: params.topP ?? 1,
@@ -35,6 +135,7 @@ export class AnthropicProvider extends LLMProvider {
         totalTokens: response.usage.input_tokens + response.usage.output_tokens,
       },
       raw: response,
+      attachmentResults,
     }
   }
 
@@ -42,15 +143,12 @@ export class AnthropicProvider extends LLMProvider {
     const client = new Anthropic({ apiKey })
 
     const systemMessage = params.messages.find(m => m.role === 'system')
-    const messages = params.messages.filter(m => m.role !== 'system')
+    const { messages, attachmentResults } = this.formatMessagesWithAttachments(params.messages)
 
     const stream = await client.messages.create({
       model: params.model,
       system: systemMessage?.content,
-      messages: messages.map(m => ({
-        role: m.role === 'user' ? 'user' : 'assistant',
-        content: m.content,
-      })),
+      messages,
       max_tokens: params.maxTokens ?? 1000,
       temperature: params.temperature ?? 0.7,
       stream: true,
@@ -87,6 +185,7 @@ export class AnthropicProvider extends LLMProvider {
             completionTokens: totalOutputTokens,
             totalTokens: totalInputTokens + totalOutputTokens,
           },
+          attachmentResults,
         }
       }
     }

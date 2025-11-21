@@ -1,20 +1,48 @@
 // Ollama Provider Implementation
 // Phase 0.7: Multi-Provider Support
+// Note: Ollama supports images via multimodal models (llava, etc.) but implementation varies
 
 import { LLMProvider, LLMParams, LLMResponse, StreamChunk } from './base'
 
 export class OllamaProvider extends LLMProvider {
+  readonly supportsFileAttachments = false // TODO: Add support for llava and other multimodal models
+  readonly supportedMimeTypes: string[] = []
+
   constructor(private baseUrl: string) {
     super()
   }
 
+  // Helper to collect attachment failures for unsupported provider
+  private collectAttachmentFailures(params: LLMParams): { sent: string[]; failed: { id: string; error: string }[] } {
+    const failed: { id: string; error: string }[] = []
+    for (const msg of params.messages) {
+      if (msg.attachments) {
+        for (const attachment of msg.attachments) {
+          failed.push({
+            id: attachment.id,
+            error: 'Ollama file attachment support not yet implemented (requires multimodal model detection)',
+          })
+        }
+      }
+    }
+    return { sent: [], failed }
+  }
+
   async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
+    const attachmentResults = this.collectAttachmentFailures(params)
+
+    // Strip attachments from messages
+    const messages = params.messages.map(m => ({
+      role: m.role,
+      content: m.content,
+    }))
+
     const response = await fetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: params.model,
-        messages: params.messages,
+        messages,
         stream: false,
         options: {
           temperature: params.temperature ?? 0.7,
@@ -41,16 +69,25 @@ export class OllamaProvider extends LLMProvider {
         totalTokens: (data.prompt_eval_count ?? 0) + (data.eval_count ?? 0),
       },
       raw: data,
+      attachmentResults,
     }
   }
 
   async *streamMessage(params: LLMParams, apiKey: string): AsyncGenerator<StreamChunk> {
+    const attachmentResults = this.collectAttachmentFailures(params)
+
+    // Strip attachments from messages
+    const messages = params.messages.map(m => ({
+      role: m.role,
+      content: m.content,
+    }))
+
     const response = await fetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: params.model,
-        messages: params.messages,
+        messages,
         stream: true,
         options: {
           temperature: params.temperature ?? 0.7,
@@ -111,6 +148,7 @@ export class OllamaProvider extends LLMProvider {
                   completionTokens: totalCompletionTokens,
                   totalTokens: totalPromptTokens + totalCompletionTokens,
                 },
+                attachmentResults,
               }
             }
           } catch (e) {

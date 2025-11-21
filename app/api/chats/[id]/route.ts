@@ -129,6 +129,14 @@ export async function GET(
             createdAt: true,
             swipeGroupId: true,
             swipeIndex: true,
+            attachments: {
+              select: {
+                id: true,
+                filename: true,
+                filepath: true,
+                mimeType: true,
+              },
+            },
           },
         },
       },

@@ -252,6 +252,7 @@ model Chat {
   persona             Persona?              @relation(fields: [personaId], references: [id], onDelete: SetNull)
   connectionProfile   ConnectionProfile     @relation(fields: [connectionProfileId], references: [id])
   messages            Message[]
+  files               ChatFile[]
   avatarOverrides     ChatAvatarOverride[]
   tags                ChatTag[]
 
@@ -270,10 +271,34 @@ model Message {
   createdAt     DateTime  @default(now())
 
   chat          Chat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  attachments   ChatFile[]
 
   @@index([chatId, createdAt])
   @@index([swipeGroupId])
   @@map("messages")
+}
+
+// Chat file attachments - files uploaded with messages
+model ChatFile {
+  id              String   @id @default(uuid())
+  chatId          String
+  messageId       String?  // The message this file was sent with (null if not yet sent)
+  filename        String
+  filepath        String   // Path relative to public directory
+  mimeType        String
+  size            Int      // File size in bytes
+  width           Int?     // For images
+  height          Int?     // For images
+  sentToProvider  Boolean  @default(false) // Whether file was successfully sent to LLM provider
+  providerError   String?  // Error message if provider doesn't support file uploads
+  createdAt       DateTime @default(now())
+
+  chat            Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  message         Message? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@index([chatId])
+  @@index([messageId])
+  @@map("chat_files")
 }
 
 // Phase 0.6: Image Gallery and Tagging System

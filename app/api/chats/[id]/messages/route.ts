@@ -7,11 +7,14 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { createLLMProvider } from '@/lib/llm/factory'
 import { decryptApiKey } from '@/lib/encryption'
+import { loadChatFilesForLLM } from '@/lib/chat-files'
 import { z } from 'zod'
 
 // Validation schema
 const sendMessageSchema = z.object({
   content: z.string().min(1, 'Message content is required'),
+  // Optional array of file IDs to attach to this message
+  fileIds: z.array(z.string()).optional(),
 })
 
 // POST /api/chats/:id/messages - Send message with streaming response
@@ -63,7 +66,27 @@ export async function POST(
 
     // Validate request body
     const body = await req.json()
-    const { content } = sendMessageSchema.parse(body)
+    const { content, fileIds } = sendMessageSchema.parse(body)
+
+    // Load file attachments if provided
+    let attachedFiles: Array<{
+      id: string
+      filepath: string
+      filename: string
+      mimeType: string
+      size: number
+    }> = []
+
+    if (fileIds && fileIds.length > 0) {
+      // Get the chat files from database
+      const chatFiles = await prisma.chatFile.findMany({
+        where: {
+          id: { in: fileIds },
+          chatId: chat.id,
+        },
+      })
+      attachedFiles = chatFiles
+    }
 
     // Save user message
     const userMessage = await prisma.message.create({
@@ -74,6 +97,21 @@ export async function POST(
       },
     })
 
+    // Link files to this message
+    if (attachedFiles.length > 0) {
+      await prisma.chatFile.updateMany({
+        where: {
+          id: { in: attachedFiles.map((f) => f.id) },
+        },
+        data: {
+          messageId: userMessage.id,
+        },
+      })
+    }
+
+    // Load file data for LLM
+    const fileAttachments = await loadChatFilesForLLM(attachedFiles)
+
     // Prepare messages for LLM
     const messages = [
       ...chat.messages.map((msg: { role: string; content: string }) => ({
@@ -83,6 +121,7 @@ export async function POST(
       {
         role: 'user' as const,
         content,
+        attachments: fileAttachments.length > 0 ? fileAttachments : undefined,
       },
     ]
 
@@ -114,6 +153,7 @@ export async function POST(
     const encoder = new TextEncoder()
     let fullResponse = ''
     let usage: any = null
+    let attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null = null
 
     const stream = new ReadableStream({
       async start(controller) {
@@ -136,8 +176,31 @@ export async function POST(
               )
             }
 
-            if (chunk.done && chunk.usage) {
-              usage = chunk.usage
+            if (chunk.done) {
+              if (chunk.usage) {
+                usage = chunk.usage
+              }
+              if (chunk.attachmentResults) {
+                attachmentResults = chunk.attachmentResults
+              }
+            }
+          }
+
+          // Update attachment status in database
+          if (attachmentResults) {
+            // Mark successfully sent attachments
+            if (attachmentResults.sent.length > 0) {
+              await prisma.chatFile.updateMany({
+                where: { id: { in: attachmentResults.sent } },
+                data: { sentToProvider: true, providerError: null },
+              })
+            }
+            // Mark failed attachments with error messages
+            for (const failure of attachmentResults.failed) {
+              await prisma.chatFile.update({
+                where: { id: failure.id },
+                data: { sentToProvider: false, providerError: failure.error },
+              })
             }
           }
 
@@ -158,13 +221,14 @@ export async function POST(
             data: { updatedAt: new Date() },
           })
 
-          // Send final message with message ID and usage
+          // Send final message with message ID, usage, and attachment results
           controller.enqueue(
             encoder.encode(
               `data: ${JSON.stringify({
                 done: true,
                 messageId: assistantMessage.id,
                 usage,
+                attachmentResults,
               })}\n\n`
             )
           )

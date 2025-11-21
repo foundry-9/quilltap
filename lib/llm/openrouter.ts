@@ -1,13 +1,34 @@
 // OpenRouter Provider Implementation
 // Phase 0.7: Multi-Provider Support
+// Note: OpenRouter proxies to many models, file support depends on the underlying model
 
 import OpenAI from 'openai'
 import { LLMProvider, LLMParams, LLMResponse, StreamChunk } from './base'
 
 export class OpenRouterProvider extends LLMProvider {
   private readonly baseUrl = 'https://openrouter.ai/api/v1'
+  readonly supportsFileAttachments = false // Model-dependent, conservative default
+  readonly supportedMimeTypes: string[] = []
+
+  // Helper to collect attachment failures
+  private collectAttachmentFailures(params: LLMParams): { sent: string[]; failed: { id: string; error: string }[] } {
+    const failed: { id: string; error: string }[] = []
+    for (const msg of params.messages) {
+      if (msg.attachments) {
+        for (const attachment of msg.attachments) {
+          failed.push({
+            id: attachment.id,
+            error: 'OpenRouter file attachment support depends on model (not yet implemented)',
+          })
+        }
+      }
+    }
+    return { sent: [], failed }
+  }
 
   async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
+    const attachmentResults = this.collectAttachmentFailures(params)
+
     const client = new OpenAI({
       apiKey,
       baseURL: this.baseUrl,
@@ -17,9 +38,15 @@ export class OpenRouterProvider extends LLMProvider {
       },
     })
 
+    // Strip attachments from messages
+    const messages = params.messages.map(m => ({
+      role: m.role,
+      content: m.content,
+    }))
+
     const response = await client.chat.completions.create({
       model: params.model,
-      messages: params.messages,
+      messages,
       temperature: params.temperature ?? 0.7,
       max_tokens: params.maxTokens ?? 1000,
       top_p: params.topP ?? 1,
@@ -37,10 +64,13 @@ export class OpenRouterProvider extends LLMProvider {
         totalTokens: response.usage?.total_tokens ?? 0,
       },
       raw: response,
+      attachmentResults,
     }
   }
 
   async *streamMessage(params: LLMParams, apiKey: string): AsyncGenerator<StreamChunk> {
+    const attachmentResults = this.collectAttachmentFailures(params)
+
     const client = new OpenAI({
       apiKey,
       baseURL: this.baseUrl,
@@ -50,9 +80,15 @@ export class OpenRouterProvider extends LLMProvider {
       },
     })
 
+    // Strip attachments from messages
+    const messages = params.messages.map(m => ({
+      role: m.role,
+      content: m.content,
+    }))
+
     const stream = await client.chat.completions.create({
       model: params.model,
-      messages: params.messages,
+      messages,
       temperature: params.temperature ?? 0.7,
       max_tokens: params.maxTokens ?? 1000,
       top_p: params.topP ?? 1,
@@ -83,6 +119,7 @@ export class OpenRouterProvider extends LLMProvider {
             completionTokens: chunk.usage?.completion_tokens ?? 0,
             totalTokens: chunk.usage?.total_tokens ?? 0,
           },
+          attachmentResults,
         }
       }
     }

@@ -4,11 +4,19 @@ import { use, useEffect, useState, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { TagEditor } from '@/components/tags/tag-editor'
+import ImageModal from '@/components/chat/ImageModal'
 import { showAlert } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import MessageContent from '@/components/chat/MessageContent'
 import { formatMessageTime } from '@/lib/format-time'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
+
+interface MessageAttachment {
+  id: string
+  filename: string
+  filepath: string
+  mimeType: string
+}
 
 interface Message {
   id: string
@@ -17,6 +25,7 @@ interface Message {
   createdAt: string
   swipeGroupId?: string | null
   swipeIndex?: number | null
+  attachments?: MessageAttachment[]
 }
 
 interface Chat {
@@ -91,8 +100,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [swipeStates, setSwipeStates] = useState<Record<string, { current: number; total: number; messages: Message[] }>>({})
   const [viewSourceMessageIds, setViewSourceMessageIds] = useState<Set<string>>(new Set())
   const [chatSettings, setChatSettings] = useState<ChatSettings | null>(null)
+  const [attachedFiles, setAttachedFiles] = useState<Array<{ id: string; filename: string; filepath: string; mimeType: string; url: string }>>([])
+  const [uploadingFile, setUploadingFile] = useState(false)
+  const [modalImage, setModalImage] = useState<{ src: string; filename: string } | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const getCharacterAvatarSrc = (character: Chat['character']) => {
     if (character.defaultImage) {
@@ -183,23 +196,84 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     return () => clearTimeout(timer)
   }, [])
 
+  // Handle file selection
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploadingFile(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const res = await fetch(`/api/chats/${id}/files`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to upload file')
+      }
+
+      const data = await res.json()
+      setAttachedFiles((prev) => [...prev, {
+        id: data.file.id,
+        filename: file.name,
+        filepath: data.file.filepath,
+        mimeType: data.file.mimeType,
+        url: data.file.url,
+      }])
+      showSuccessToast('File attached')
+    } catch (err) {
+      console.error('Error uploading file:', err)
+      showErrorToast(err instanceof Error ? err.message : 'Failed to upload file')
+    } finally {
+      setUploadingFile(false)
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+
+  // Remove attached file
+  const removeAttachedFile = (fileId: string) => {
+    setAttachedFiles((prev) => prev.filter((f) => f.id !== fileId))
+  }
+
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!input.trim() || sending) return
+    if ((!input.trim() && attachedFiles.length === 0) || sending) return
 
     const userMessage = input.trim()
+    const fileIds = attachedFiles.map((f) => f.id)
+    // Capture attachments before clearing state
+    const messageAttachments: MessageAttachment[] = attachedFiles.map((f) => ({
+      id: f.id,
+      filename: f.filename,
+      filepath: f.filepath,
+      mimeType: f.mimeType,
+    }))
     setInput('')
+    setAttachedFiles([])
     setSending(true)
     setStreaming(true)
     setStreamingContent('')
+
+    // Build display content with file indicators
+    const displayContent = messageAttachments.length > 0
+      ? `${userMessage}${userMessage ? '\n' : ''}[Attached: ${messageAttachments.map(f => f.filename).join(', ')}]`
+      : userMessage
 
     // Add user message to UI
     const tempUserMessageId = `temp-user-${Date.now()}`
     const tempUserMessage: Message = {
       id: tempUserMessageId,
       role: 'USER',
-      content: userMessage,
+      content: displayContent,
       createdAt: new Date().toISOString(),
+      attachments: messageAttachments.length > 0 ? messageAttachments : undefined,
     }
     setMessages((prev) => [...prev, tempUserMessage])
 
@@ -207,7 +281,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       const res = await fetch(`/api/chats/${id}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: userMessage }),
+        body: JSON.stringify({ content: userMessage || 'Please look at the attached file(s).', fileIds }),
       })
 
       if (!res.ok) {
@@ -430,6 +504,16 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     return avatar.avatarUrl || null
   }
 
+  // Strip [Attached: ...] from message content for display
+  const getDisplayContent = (content: string) => {
+    return content.replace(/\n?\[Attached: [^\]]+\]$/, '').trim()
+  }
+
+  // Get image attachments from a message
+  const getImageAttachments = (message: Message) => {
+    return (message.attachments || []).filter(a => a.mimeType.startsWith('image/'))
+  }
+
   const renderAvatar = (avatar: ReturnType<typeof getMessageAvatar>) => {
     if (!avatar) return null
 
@@ -604,7 +688,35 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                           {message.content}
                         </div>
                       ) : (
-                        <MessageContent content={message.content} />
+                        <MessageContent content={getDisplayContent(message.content)} />
+                      )}
+                      {/* Image attachment thumbnails */}
+                      {getImageAttachments(message).length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {getImageAttachments(message).map((attachment) => (
+                            <button
+                              key={attachment.id}
+                              onClick={() => setModalImage({
+                                src: `/${attachment.filepath}`,
+                                filename: attachment.filename
+                              })}
+                              className="relative group/thumb overflow-hidden rounded border border-gray-300 dark:border-slate-600 hover:border-blue-500 dark:hover:border-blue-400 transition-colors"
+                            >
+                              <Image
+                                src={`/${attachment.filepath}`}
+                                alt={attachment.filename}
+                                width={80}
+                                height={80}
+                                className="w-20 h-20 object-cover"
+                              />
+                              <div className="absolute inset-0 bg-black/0 group-hover/thumb:bg-black/20 transition-colors flex items-center justify-center">
+                                <svg className="w-6 h-6 text-white opacity-0 group-hover/thumb:opacity-100 transition-opacity drop-shadow-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                                </svg>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
                       )}
                       <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                         {formatMessageTime(message.createdAt)}
@@ -731,19 +843,78 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       {/* Input */}
       <div className="bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700">
         <div className="mx-auto max-w-[800px] p-4">
+          {/* Attached files preview */}
+          {attachedFiles.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-2">
+              {attachedFiles.map((file) => (
+                <div
+                  key={file.id}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-slate-700 rounded-lg text-sm"
+                >
+                  {file.mimeType.startsWith('image/') ? (
+                    <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  )}
+                  <span className="text-gray-700 dark:text-gray-300 max-w-[150px] truncate">
+                    {file.filename}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeAttachedFile(file.id)}
+                    className="text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <form onSubmit={sendMessage} className="flex gap-2">
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              onChange={handleFileSelect}
+              accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/markdown,text/csv"
+              className="hidden"
+            />
+            {/* Attach file button */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={sending || uploadingFile}
+              className="px-3 py-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Attach file"
+            >
+              {uploadingFile ? (
+                <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                </svg>
+              )}
+            </button>
             <input
               ref={inputRef}
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               disabled={sending}
-              placeholder="Type a message..."
+              placeholder={attachedFiles.length > 0 ? "Add a message (optional)..." : "Type a message..."}
               className="flex-1 px-4 py-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 disabled:bg-gray-100 dark:disabled:bg-slate-700"
             />
             <button
               type="submit"
-              disabled={sending || !input.trim()}
+              disabled={sending || (!input.trim() && attachedFiles.length === 0)}
               className="px-6 py-3 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 disabled:bg-gray-400 dark:disabled:bg-gray-600"
             >
               {sending ? 'Sending...' : 'Send'}
@@ -751,6 +922,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           </form>
         </div>
       </div>
+
+      {/* Image Modal */}
+      <ImageModal
+        isOpen={modalImage !== null}
+        onClose={() => setModalImage(null)}
+        src={modalImage?.src || ''}
+        filename={modalImage?.filename || ''}
+      />
     </div>
   )
 }
