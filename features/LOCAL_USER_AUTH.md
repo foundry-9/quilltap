@@ -12,6 +12,7 @@ This document outlines the implementation plan for adding email/password authent
 ## Current Authentication System
 
 Quilltap currently uses:
+
 - **NextAuth.js v4.24.7** for authentication
 - **Google OAuth** as the sole authentication provider
 - **PostgreSQL + Prisma ORM** for user storage
@@ -21,6 +22,7 @@ Quilltap currently uses:
 ### Existing Security Infrastructure
 
 We already have:
+
 - ✅ Encryption service with AES-256-GCM (`lib/encryption.ts`)
 - ✅ Per-user encryption keys derived using PBKDF2 (100,000 iterations)
 - ✅ Master pepper approach for key derivation
@@ -1337,6 +1339,7 @@ Create `app/api/auth/reset-password/route.ts`:
 #### 3.2: Email Verification (Optional)
 
 Currently auto-verifying emails. Can add:
+
 - Email verification tokens
 - Send verification email on signup
 - Require verification before allowing signin
@@ -1344,6 +1347,7 @@ Currently auto-verifying emails. Can add:
 #### 3.3: Account Linking
 
 Allow users to link both OAuth and password authentication:
+
 - OAuth user can add a password
 - Password user can link OAuth providers
 - Manage linked accounts in settings
@@ -1517,6 +1521,7 @@ Add to `.env.example`:
 ### Q: Why not just use OAuth?
 
 **A**: OAuth is great, but some users prefer email/password for:
+
 - Privacy (no Google dependency)
 - Self-hosting requirements
 - Corporate/enterprise environments
@@ -1525,6 +1530,7 @@ Add to `.env.example`:
 ### Q: Is TOTP secure?
 
 **A**: Yes, TOTP (RFC 6238) is an industry standard:
+
 - Used by Google, GitHub, AWS, etc.
 - More secure than SMS 2FA
 - Works offline
@@ -1541,6 +1547,7 @@ Add to `.env.example`:
 ### Q: What about password complexity?
 
 **A**: Requirements:
+
 - Minimum 8 characters
 - At least one uppercase letter
 - At least one lowercase letter
@@ -1583,7 +1590,7 @@ These are enforced on both client and server.
 
 ## Success Criteria
 
-### Phase 1 Complete When:
+### Phase 1 Complete When
 
 - [ ] Users can create accounts with email/password
 - [ ] Users can sign in with email/password
@@ -1591,7 +1598,7 @@ These are enforced on both client and server.
 - [ ] NextAuth CredentialsProvider integrated
 - [ ] Unit tests passing
 
-### Phase 2 Complete When:
+### Phase 2 Complete When
 
 - [ ] Users can enable TOTP 2FA
 - [ ] QR code generation works
@@ -1600,7 +1607,7 @@ These are enforced on both client and server.
 - [ ] Users can disable 2FA
 - [ ] Integration tests passing
 
-### Phase 3 Complete When:
+### Phase 3 Complete When
 
 - [ ] Password reset flow works (if implemented)
 - [ ] Email verification works (if implemented)
