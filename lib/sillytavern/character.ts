@@ -20,6 +20,7 @@ export interface STCharacterV2 {
   // Additional V2 spec fields
   alternate_greetings?: string[]
   character_book?: any
+  title?: string
   [key: string]: any
 }
 
@@ -47,6 +48,7 @@ export function importSTCharacter(stData: STCharacterV2 | STCharacterCard) {
 
   return {
     name: data.name,
+    title: data.title || null,
     description: data.description,
     personality: data.personality,
     scenario: data.scenario,
@@ -86,6 +88,7 @@ export function exportSTCharacter(character: any): STCharacterCard {
     first_mes: character.firstMessage,
     mes_example: character.exampleDialogues || '',
     system_prompt: character.systemPrompt || '',
+    title: character.title || undefined,
   }
 
   return {

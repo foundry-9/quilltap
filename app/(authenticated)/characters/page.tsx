@@ -1,15 +1,16 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { showAlert } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
+import { getAvatarClasses } from '@/lib/avatar-styles'
 
 interface Character {
   id: string
   name: string
+  title?: string | null
   description: string
   avatarUrl?: string
   defaultImageId?: string
@@ -26,11 +27,11 @@ interface Character {
 }
 
 export default function CharactersPage() {
-  const router = useRouter()
   const [characters, setCharacters] = useState<Character[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
+  const { style } = useAvatarDisplay()
 
   useEffect(() => {
     fetchCharacters()
@@ -149,31 +150,34 @@ export default function CharactersPage() {
           </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {characters.map((character) => (
             <div
               key={character.id}
               className="border border-gray-200 dark:border-slate-700 rounded-lg p-6 hover:shadow-lg transition-shadow bg-white dark:bg-slate-800"
             >
               <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center flex-grow">
+                <div className="flex items-center flex-grow gap-4">
                   {getAvatarSrc(character) ? (
                     <Image
                       src={getAvatarSrc(character)!}
                       alt={character.name}
                       width={48}
                       height={48}
-                      className="w-12 h-12 rounded-full mr-3 object-cover"
+                      className={getAvatarClasses(style, 'md').imageClass}
                     />
                   ) : (
-                    <div className="w-12 h-12 rounded-full bg-gray-300 dark:bg-slate-700 mr-3 flex items-center justify-center">
-                      <span className="text-xl font-bold text-gray-600 dark:text-gray-300">
+                    <div className={getAvatarClasses(style, 'md').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>
+                      <span className={getAvatarClasses(style, 'md').fallbackClass}>
                         {character.name.charAt(0).toUpperCase()}
                       </span>
                     </div>
                   )}
                   <div className="flex-grow">
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{character.name}</h2>
+                    {character.title && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400">{character.title}</p>
+                    )}
                     <p className="text-sm text-gray-600 dark:text-gray-400">
                       {character._count.chats} chat{character._count.chats !== 1 ? 's' : ''}
                     </p>

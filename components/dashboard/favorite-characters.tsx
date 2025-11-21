@@ -2,6 +2,8 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
+import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
+import { getAvatarClasses } from '@/lib/avatar-styles'
 
 interface FavoriteCharacter {
   id: string
@@ -27,6 +29,8 @@ function getAvatarSrc(character: FavoriteCharacter): string | null {
 }
 
 export function FavoriteCharactersSection({ characters }: FavoriteCharactersProps) {
+  const { style } = useAvatarDisplay()
+
   if (characters.length === 0) {
     return null
   }
@@ -41,7 +45,7 @@ export function FavoriteCharactersSection({ characters }: FavoriteCharactersProp
           <Link
             key={character.id}
             href={`/characters/${character.id}/view`}
-            className="flex flex-col items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-md transition-all"
+            className="flex flex-col items-center gap-4 p-4 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-md transition-all"
           >
             {getAvatarSrc(character) ? (
               <Image
@@ -49,11 +53,11 @@ export function FavoriteCharactersSection({ characters }: FavoriteCharactersProp
                 alt={character.name}
                 width={80}
                 height={80}
-                className="w-20 h-20 rounded-full object-cover"
+                className={getAvatarClasses(style, 'lg').imageClass}
               />
             ) : (
-              <div className="w-20 h-20 rounded-full bg-gray-300 dark:bg-slate-700 flex items-center justify-center">
-                <span className="text-3xl font-bold text-gray-600 dark:text-gray-400">
+              <div className={getAvatarClasses(style, 'lg').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>
+                <span className={getAvatarClasses(style, 'lg').fallbackClass}>
                   {character.name.charAt(0).toUpperCase()}
                 </span>
               </div>

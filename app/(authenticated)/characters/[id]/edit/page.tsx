@@ -12,6 +12,7 @@ import { showSuccessToast, showErrorToast } from '@/lib/toast'
 interface Character {
   id: string
   name: string
+  title?: string | null
   description: string
   personality: string
   scenario: string
@@ -54,6 +55,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
   const [loadingPersonas, setLoadingPersonas] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
+    title: '',
     description: '',
     personality: '',
     scenario: '',
@@ -64,6 +66,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
   })
   const [originalFormData, setOriginalFormData] = useState({
     name: '',
+    title: '',
     description: '',
     personality: '',
     scenario: '',
@@ -83,6 +86,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
       setCharacter(char)
       const initialFormData = {
         name: char.name,
+        title: char.title || '',
         description: char.description,
         personality: char.personality,
         scenario: char.scenario,
@@ -307,6 +311,21 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
             onChange={handleChange}
             required
             className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+          />
+        </div>
+
+        <div>
+          <label htmlFor="title" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+            Title (Optional)
+          </label>
+          <input
+            type="text"
+            id="title"
+            name="title"
+            value={formData.title}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+            placeholder="e.g., Student, Teacher, Narrator"
           />
         </div>
 

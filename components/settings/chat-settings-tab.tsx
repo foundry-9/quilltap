@@ -3,11 +3,13 @@
 import { useState, useEffect } from 'react'
 
 type AvatarDisplayMode = 'ALWAYS' | 'GROUP_ONLY' | 'NEVER'
+type AvatarDisplayStyle = 'CIRCULAR' | 'RECTANGULAR'
 
 interface ChatSettings {
   id: string
   userId: string
   avatarDisplayMode: AvatarDisplayMode
+  avatarDisplayStyle: AvatarDisplayStyle
   createdAt: string
   updatedAt: string
 }
@@ -27,6 +29,21 @@ const AVATAR_MODES: { value: AvatarDisplayMode; label: string; description: stri
     value: 'NEVER',
     label: 'Never Show Avatars',
     description: 'Hide avatars in all chats',
+  },
+]
+
+const AVATAR_STYLES: { value: AvatarDisplayStyle; label: string; description: string; preview: string }[] = [
+  {
+    value: 'CIRCULAR',
+    label: 'Circular',
+    description: 'Display avatars as circles',
+    preview: '⭕',
+  },
+  {
+    value: 'RECTANGULAR',
+    label: 'Rectangular (5:4)',
+    description: 'Display avatars as rectangles with 5:4 aspect ratio',
+    preview: '▭',
   },
 ]
 
@@ -65,9 +82,39 @@ export default function ChatSettingsTab() {
       setSuccess(false)
 
       const res = await fetch('/api/chat-settings', {
-        method: 'POST',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ avatarDisplayMode: mode }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to update chat settings')
+      }
+
+      const updatedSettings = await res.json()
+      setSettings(updatedSettings)
+      setSuccess(true)
+      setTimeout(() => setSuccess(false), 2000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleAvatarStyleChange = async (style: AvatarDisplayStyle) => {
+    if (!settings) return
+
+    try {
+      setSaving(true)
+      setError(null)
+      setSuccess(false)
+
+      const res = await fetch('/api/chat-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ avatarDisplayStyle: style }),
       })
 
       if (!res.ok) {
@@ -143,6 +190,39 @@ export default function ChatSettingsTab() {
                   {mode.description}
                 </div>
               </div>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
+        <h2 className="text-xl font-semibold mb-4">Avatar Display Style</h2>
+        <p className="text-gray-600 dark:text-gray-400 mb-4">
+          Choose how avatars are shaped and displayed throughout the application
+        </p>
+
+        <div className="space-y-3">
+          {AVATAR_STYLES.map((style) => (
+            <label
+              key={style.value}
+              className="flex items-start gap-3 p-4 border border-gray-200 dark:border-slate-700 rounded hover:bg-gray-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
+            >
+              <input
+                type="radio"
+                name="avatarDisplayStyle"
+                value={style.value}
+                checked={settings.avatarDisplayStyle === style.value}
+                onChange={() => handleAvatarStyleChange(style.value)}
+                disabled={saving}
+                className="mt-1"
+              />
+              <div className="flex-1">
+                <div className="font-medium">{style.label}</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  {style.description}
+                </div>
+              </div>
+              <div className="text-3xl">{style.preview}</div>
             </label>
           ))}
         </div>

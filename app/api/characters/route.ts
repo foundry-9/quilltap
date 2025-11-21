@@ -11,6 +11,7 @@ import { z } from 'zod'
 // Validation schema
 const createCharacterSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
+  title: z.string().optional(),
   description: z.string().min(1, 'Description is required'),
   personality: z.string().min(1, 'Personality is required'),
   scenario: z.string().min(1, 'Scenario is required'),
@@ -42,6 +43,7 @@ export async function GET(req: NextRequest) {
       select: {
         id: true,
         name: true,
+        title: true,
         description: true,
         avatarUrl: true,
         defaultImageId: true,
@@ -88,6 +90,7 @@ export async function POST(req: NextRequest) {
       data: {
         userId: user.id,
         name: validatedData.name,
+        title: validatedData.title || null,
         description: validatedData.description,
         personality: validatedData.personality,
         scenario: validatedData.scenario,

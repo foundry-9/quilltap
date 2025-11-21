@@ -12,6 +12,7 @@ import { z } from 'zod'
 // Validation schema for updates
 const updateCharacterSchema = z.object({
   name: z.string().min(1).max(100).optional(),
+  title: z.string().optional(),
   description: z.string().optional(),
   personality: z.string().optional(),
   scenario: z.string().optional(),
