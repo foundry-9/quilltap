@@ -24,6 +24,7 @@ interface Chat {
   character: {
     id: string
     name: string
+    title?: string | null
     avatarUrl?: string
     defaultImageId?: string
     defaultImage?: {
@@ -520,7 +521,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             )}
             <div>
               <h1 className="text-xl font-bold text-gray-900 dark:text-white">{chat.title}</h1>
-              <p className="text-sm text-gray-600 dark:text-gray-400">{chat.character.name}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {chat.character.name}
+                {chat.character.title && ` - ${chat.character.title}`}
+              </p>
             </div>
           </div>
         </div>
