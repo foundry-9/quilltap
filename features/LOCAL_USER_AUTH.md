@@ -295,7 +295,9 @@ export const authOptions = {
 }
 ```
 
-#### 1.4: Signup API Endpoint
+#### 1.4: Signup API Endpoint ✅
+
+**Status**: COMPLETED
 
 Create `app/api/auth/signup/route.ts`:
 
