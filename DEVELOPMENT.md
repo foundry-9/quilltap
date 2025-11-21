@@ -101,9 +101,9 @@ Enterprise-grade AI roleplay chat platform with full SillyTavern compatibility, 
 - Character-persona linking API at `/api/characters/:id/personas`
 - Persona management UI with full CRUD operations
 - SillyTavern import/export utilities for characters, personas, and chats
-- Character import API supporting both PNG (with embedded JSON) and standalone JSON files
-- Character export API with JSON format (PNG export requires avatar storage implementation)
-- Persona import/export API endpoints with full SillyTavern compatibility
+- Character import API supporting JSON format only (PNG import not supported)
+- Character export API with JSON format only (PNG export not supported)
+- Persona import/export API endpoints with full SillyTavern compatibility (JSON format)
 - Chat import/export API with swipe group preservation
 - Message editing API at `/api/messages/:id` (PUT)
 - Message deletion API at `/api/messages/:id` (DELETE)
@@ -173,12 +173,22 @@ Enterprise-grade AI roleplay chat platform with full SillyTavern compatibility, 
 - ✅ Chat history and management
 
 ### SillyTavern Compatibility
-- ✅ Character import (PNG with embedded JSON + standalone JSON)
-- ✅ Character export (JSON format)
-- ✅ Persona import/export
-- ✅ Chat import/export
-- ✅ Full SillyTavern V2 spec support
+- ✅ Character import (JSON format only - PNG card format not supported)
+- ✅ Character export (JSON format only - PNG card format not supported)
+- ✅ Persona import/export (JSON format)
+- ✅ Chat import/export (JSON format)
+- ✅ SillyTavern V2 spec support (JSON format)
 - ✅ Preservation of original SillyTavern metadata
+
+### Avatar & Image Management
+- ✅ Image upload (file upload or URL import)
+- ✅ Image gallery with tagging system
+- ✅ Character avatar assignment
+- ✅ Persona avatar assignment
+- ✅ Chat avatar overrides
+- ✅ Image storage in user-specific directories
+
+**Note**: PNG character card format (JSON embedded in PNG files) is not supported. Avatar images work fine - you can upload and assign them to characters/personas. The limitation is specifically importing/exporting the SillyTavern PNG card format.
 
 ### Production Features
 - ✅ Production Docker Compose with Nginx reverse proxy
@@ -243,6 +253,7 @@ The following features are planned for future releases:
 - Admin dashboard
 - Usage analytics
 - Export to other formats (Character.AI, etc.)
+- PNG character card format support (importing/exporting JSON embedded in PNG files)
 
 ## Contributing
 
