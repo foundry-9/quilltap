@@ -226,10 +226,14 @@ export async function POST(
 
           // Log rawResponse details for debugging
           console.log('[TOOLS] rawResponse type:', typeof rawResponse)
-          console.log('[TOOLS] rawResponse keys:', rawResponse ? Object.keys(rawResponse) : 'null')
+          console.log('[TOOLS] rawResponse is null?:', rawResponse === null)
+          console.log('[TOOLS] rawResponse value:', rawResponse)
           if (rawResponse) {
+            console.log('[TOOLS] rawResponse keys:', Object.keys(rawResponse))
             console.log('[TOOLS] rawResponse.choices:', JSON.stringify(rawResponse.choices, null, 2))
             console.log('[TOOLS] rawResponse.content:', JSON.stringify(rawResponse.content, null, 2))
+          } else {
+            console.log('[TOOLS] rawResponse is falsy')
           }
 
           // Detect and execute tool calls
