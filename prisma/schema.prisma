@@ -21,6 +21,12 @@ enum Provider {
   GAB_AI
 }
 
+enum ImageProvider {
+  OPENAI
+  GROK
+  GOOGLE_IMAGEN
+}
+
 enum Role {
   SYSTEM
   USER
@@ -64,16 +70,17 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts      Account[]
-  sessions      Session[]
-  apiKeys       ApiKey[]
-  profiles      ConnectionProfile[]
-  characters    Character[]
-  personas      Persona[]
-  chats         Chat[]
-  images        Image[]
-  tags          Tag[]
-  chatSettings  ChatSettings?
+  accounts        Account[]
+  sessions        Session[]
+  apiKeys         ApiKey[]
+  profiles        ConnectionProfile[]
+  imageProfiles   ImageProfile[]
+  characters      Character[]
+  personas        Persona[]
+  chats           Chat[]
+  images          Image[]
+  tags            Tag[]
+  chatSettings    ChatSettings?
 
   @@map("users")
 }
@@ -145,8 +152,9 @@ model ApiKey {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  profiles      ConnectionProfile[]
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profiles        ConnectionProfile[]
+  imageProfiles   ImageProfile[]
 
   @@map("api_keys")
 }
@@ -365,11 +373,12 @@ model Tag {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  user              User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  characterTags     CharacterTag[]
-  personaTags       PersonaTag[]
-  chatTags          ChatTag[]
+  user                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  characterTags         CharacterTag[]
+  personaTags           PersonaTag[]
+  chatTags              ChatTag[]
   connectionProfileTags ConnectionProfileTag[]
+  imageProfileTags      ImageProfileTag[]
 
   @@unique([userId, nameLower])
   @@index([userId, nameLower])
@@ -430,4 +439,41 @@ model ConnectionProfileTag {
   @@unique([connectionProfileId, tagId])
   @@index([tagId])
   @@map("connection_profile_tags")
+}
+
+// Phase 1: Image Generation Profiles
+model ImageProfile {
+  id              String        @id @default(uuid())
+  userId          String
+  name            String
+  provider        ImageProvider
+  apiKeyId        String?
+  baseUrl         String?       // For self-hosted or custom endpoints
+  modelName       String        // e.g., "dall-e-3", "imagen-4", "grok-2-image"
+  parameters      Json          @default("{}") // Provider-specific defaults (quality, style, aspectRatio, etc.)
+  isDefault       Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apiKey          ApiKey?       @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+  tags            ImageProfileTag[]
+
+  @@unique([userId, name])
+  @@index([userId, isDefault])
+  @@map("image_profiles")
+}
+
+model ImageProfileTag {
+  id              String       @id @default(uuid())
+  imageProfileId  String
+  tagId           String
+  createdAt       DateTime     @default(now())
+
+  imageProfile    ImageProfile @relation(fields: [imageProfileId], references: [id], onDelete: Cascade)
+  tag             Tag          @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([imageProfileId, tagId])
+  @@index([tagId])
+  @@map("image_profile_tags")
 }

@@ -1054,12 +1054,30 @@ export function ImageProfileParameters({ provider, defaults, onChange }: ImagePr
 
 ### 1. Schema & Migration
 
-- [ ] Add `ImageProvider` enum to Prisma schema
-- [ ] Create `ImageProfile` model (separate from ConnectionProfile)
-- [ ] Create `ImageProfileTag` junction table
-- [ ] Add `imageProfiles` relation to User model
-- [ ] Add `imageProfiles` relation to ApiKey model
-- [ ] Create and run migration
+- [x] Add `ImageProvider` enum to Prisma schema
+- [x] Create `ImageProfile` model (separate from ConnectionProfile)
+- [x] Create `ImageProfileTag` junction table
+- [x] Add `imageProfiles` relation to User model
+- [x] Add `imageProfiles` relation to ApiKey model
+- [x] Create and run migration
+
+#### Status: ✅ COMPLETED
+
+Migration: `prisma/migrations/20251122045746_phase_1_image_profiles/`
+
+#### Changes Made
+
+- Added `ImageProvider` enum with values: OPENAI, GROK, GOOGLE_IMAGEN
+- Created `ImageProfile` model with fields:
+  - `id`, `userId`, `name`, `provider`, `apiKeyId`, `baseUrl`, `modelName`, `parameters`, `isDefault`, `createdAt`, `updatedAt`
+  - Relations: User (cascade delete), ApiKey (set null on delete), ImageProfileTag[]
+  - Unique constraint on (userId, name)
+  - Index on (userId, isDefault)
+- Created `ImageProfileTag` junction table linking ImageProfile to Tag
+  - Unique constraint on (imageProfileId, tagId)
+- Updated User model to include `imageProfiles` relation
+- Updated ApiKey model to include `imageProfiles` relation
+- Updated Tag model to include `imageProfileTags` relation
 
 ### 2. Image Provider Abstraction
 
