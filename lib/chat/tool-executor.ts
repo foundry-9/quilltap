@@ -119,8 +119,13 @@ export function detectToolCalls(
   const toolCalls: ToolCallRequest[] = [];
 
   try {
+    console.log('[TOOLS] detectToolCalls - provider:', provider);
+    console.log('[TOOLS] detectToolCalls - response type:', typeof response);
+    console.log('[TOOLS] detectToolCalls - response keys:', response ? Object.keys(response) : 'null/undefined');
+
     // OpenAI format
-    if (provider === 'OPENAI' && response.tool_calls) {
+    if (provider === 'OPENAI' && response?.tool_calls) {
+      console.log('[TOOLS] detectToolCalls - OpenAI format detected');
       for (const toolCall of response.tool_calls) {
         if (toolCall.type === 'function' && toolCall.function) {
           toolCalls.push({
@@ -132,9 +137,11 @@ export function detectToolCalls(
     }
 
     // Anthropic format
-    if (provider === 'ANTHROPIC' && response.content) {
+    if (provider === 'ANTHROPIC' && response?.content) {
+      console.log('[TOOLS] detectToolCalls - Anthropic format detected');
       for (const block of response.content) {
         if (block.type === 'tool_use') {
+          console.log('[TOOLS] detectToolCalls - Found tool_use block:', block.name);
           toolCalls.push({
             name: block.name,
             arguments: block.input || {},
@@ -144,7 +151,8 @@ export function detectToolCalls(
     }
 
     // Grok format (similar to OpenAI)
-    if (provider === 'GROK' && response.tool_calls) {
+    if (provider === 'GROK' && response?.tool_calls) {
+      console.log('[TOOLS] detectToolCalls - Grok format detected');
       for (const toolCall of response.tool_calls) {
         if (toolCall.type === 'function' && toolCall.function) {
           toolCalls.push({

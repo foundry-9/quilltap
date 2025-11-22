@@ -9,6 +9,7 @@ import { createLLMProvider } from '@/lib/llm/factory'
 import { decryptApiKey } from '@/lib/encryption'
 import { loadChatFilesForLLM } from '@/lib/chat-files'
 import { detectToolCalls, executeToolCall, formatToolResult } from '@/lib/chat/tool-executor'
+import { imageGenerationToolDefinition, anthropicImageGenerationToolDefinition } from '@/lib/tools/image-generation-tool'
 import { z } from 'zod'
 
 // Validation schema
@@ -17,6 +18,35 @@ const sendMessageSchema = z.object({
   // Optional array of file IDs to attach to this message
   fileIds: z.array(z.string()).optional(),
 })
+
+// Helper function to get tools for a provider
+function getToolsForProvider(provider: string, imageProfileId?: string | null): any[] {
+  // Only include image generation tool if an image profile is configured for this chat
+  if (!imageProfileId) {
+    console.log('[TOOLS] No image profile configured for this chat')
+    return []
+  }
+
+  console.log(`[TOOLS] Image profile configured (${imageProfileId}), providing tools for provider: ${provider}`)
+
+  // Return provider-specific tool format
+  switch (provider) {
+    case 'ANTHROPIC':
+      console.log('[TOOLS] Providing Anthropic tool format')
+      return [anthropicImageGenerationToolDefinition]
+    case 'OPENAI':
+    case 'GROK':
+    case 'OPENROUTER':
+    case 'OLLAMA':
+    case 'OPENAI_COMPATIBLE':
+    case 'GAB_AI':
+      console.log('[TOOLS] Providing OpenAI-compatible tool format')
+      return [imageGenerationToolDefinition]
+    default:
+      console.log(`[TOOLS] Unknown provider: ${provider}`)
+      return []
+  }
+}
 
 // POST /api/chats/:id/messages - Send message with streaming response
 export async function POST(
@@ -65,6 +95,8 @@ export async function POST(
     if (!chat) {
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
     }
+
+    console.log('[TOOLS] Chat loaded - imageProfileId:', chat.imageProfileId)
 
     // Validate request body
     const body = await req.json()
@@ -192,6 +224,10 @@ export async function POST(
             await updateAttachmentStatus(attachmentResults)
           }
 
+          // Log rawResponse details for debugging
+          console.log('[TOOLS] rawResponse type:', typeof rawResponse)
+          console.log('[TOOLS] rawResponse keys:', rawResponse ? Object.keys(rawResponse) : 'null')
+
           // Detect and execute tool calls
           const toolExecutionMessages = await processToolCalls(
             rawResponse,
@@ -271,6 +307,9 @@ export async function POST(
     }) {
       const { provider, chat, messages, modelParams, decryptedKey, controller, encoder, callbacks } = options
 
+      // Get tools for this chat if an image profile is configured
+      const tools = getToolsForProvider(chat.connectionProfile.provider, chat.imageProfileId)
+
       for await (const chunk of provider.streamMessage(
         {
           messages,
@@ -278,6 +317,7 @@ export async function POST(
           temperature: modelParams.temperature,
           maxTokens: modelParams.maxTokens,
           topP: modelParams.topP,
+          tools: tools.length > 0 ? tools : undefined,
         },
         decryptedKey
       )) {
@@ -332,15 +372,20 @@ export async function POST(
       const toolExecutionMessages: { role: string; content: string }[] = []
 
       if (!rawResponse) {
+        console.log('[TOOLS] No raw response available for tool detection')
         return toolExecutionMessages
       }
 
+      console.log('[TOOLS] Attempting to detect tool calls from response')
       const toolCalls = detectToolCalls(rawResponse, chat.connectionProfile.provider)
+      console.log(`[TOOLS] Detected ${toolCalls.length} tool call(s)`)
 
       if (toolCalls.length === 0) {
+        console.log('[TOOLS] No tool calls detected')
         return toolExecutionMessages
       }
 
+      console.log('[TOOLS] Notifying client of tool detection')
       controller.enqueue(
         encoder.encode(`data: ${JSON.stringify({ toolsDetected: toolCalls.length })}\n\n`)
       )

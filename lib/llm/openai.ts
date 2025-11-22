@@ -93,14 +93,21 @@ export class OpenAIProvider extends LLMProvider {
 
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(params.messages)
 
-    const response = await client.chat.completions.create({
+    const requestParams: any = {
       model: params.model,
       messages: messages as ChatCompletionMessageParam[],
       temperature: params.temperature ?? 0.7,
       max_tokens: params.maxTokens ?? 1000,
       top_p: params.topP ?? 1,
       stop: params.stop,
-    })
+    }
+
+    // Add tools if provided
+    if (params.tools && params.tools.length > 0) {
+      requestParams.tools = params.tools
+    }
+
+    const response = await client.chat.completions.create(requestParams)
 
     const choice = response.choices[0]
 
@@ -125,7 +132,7 @@ export class OpenAIProvider extends LLMProvider {
 
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(params.messages)
 
-    const stream = await client.chat.completions.create({
+    const requestParams: any = {
       model: params.model,
       messages: messages as ChatCompletionMessageParam[],
       temperature: params.temperature ?? 0.7,
@@ -133,7 +140,14 @@ export class OpenAIProvider extends LLMProvider {
       top_p: params.topP ?? 1,
       stream: true,
       stream_options: { include_usage: true },
-    })
+    }
+
+    // Add tools if provided
+    if (params.tools && params.tools.length > 0) {
+      requestParams.tools = params.tools
+    }
+
+    const stream = (await client.chat.completions.create(requestParams)) as unknown as AsyncIterable<any>
 
     for await (const chunk of stream) {
       const content = chunk.choices[0]?.delta?.content
@@ -159,6 +173,7 @@ export class OpenAIProvider extends LLMProvider {
             totalTokens: chunk.usage?.total_tokens ?? 0,
           },
           attachmentResults,
+          rawResponse: chunk,
         }
       }
     }

@@ -107,6 +107,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [modalImage, setModalImage] = useState<{ src: string; filename: string; fileId?: string } | null>(null)
   const [chatPhotoCount, setChatPhotoCount] = useState(0)
   const [galleryOpen, setGalleryOpen] = useState(false)
+  const [toolExecutionStatus, setToolExecutionStatus] = useState<{ tool: string; status: 'pending' | 'success' | 'error'; message: string } | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -331,6 +332,36 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 setStreamingContent(fullContent)
               }
 
+              // Handle tool detection
+              if (data.toolsDetected) {
+                setToolExecutionStatus({
+                  tool: 'generate_image',
+                  status: 'pending',
+                  message: `Generating ${data.toolsDetected} image${data.toolsDetected > 1 ? 's' : ''}...`,
+                })
+              }
+
+              // Handle tool results
+              if (data.toolResult) {
+                const { name, success, result } = data.toolResult
+                if (success) {
+                  const imageCount = result?.images?.length || 1
+                  setToolExecutionStatus({
+                    tool: name,
+                    status: 'success',
+                    message: `Successfully generated ${imageCount} image${imageCount > 1 ? 's' : ''}!`,
+                  })
+                  showSuccessToast(`Image generation complete! ${imageCount} image${imageCount > 1 ? 's' : ''} generated.`)
+                } else {
+                  setToolExecutionStatus({
+                    tool: name,
+                    status: 'error',
+                    message: result?.error || 'Failed to generate image',
+                  })
+                  showErrorToast(`Image generation failed: ${result?.error || 'Unknown error'}`)
+                }
+              }
+
               if (data.done) {
                 // Add assistant message to messages list
                 const assistantMessage: Message = {
@@ -342,6 +373,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 setMessages((prev) => [...prev, assistantMessage])
                 setStreamingContent('')
                 setStreaming(false)
+                // Clear tool status after a short delay
+                setTimeout(() => setToolExecutionStatus(null), 3000)
               }
 
               if (data.error) {
@@ -862,6 +895,34 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       {/* Input */}
       <div className="bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700">
         <div className="mx-auto max-w-[800px] p-4">
+          {/* Tool execution status indicator */}
+          {toolExecutionStatus && (
+            <div
+              className={`mb-4 p-3 rounded-lg flex items-center gap-2 ${
+                toolExecutionStatus.status === 'pending'
+                  ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200'
+                  : toolExecutionStatus.status === 'success'
+                  ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200'
+                  : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
+              }`}
+            >
+              {toolExecutionStatus.status === 'pending' ? (
+                <svg className="w-5 h-5 animate-spin flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              ) : toolExecutionStatus.status === 'success' ? (
+                <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              )}
+              <span className="text-sm font-medium">{toolExecutionStatus.message}</span>
+            </div>
+          )}
+
           {/* Attached files preview */}
           {attachedFiles.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-2">

@@ -47,6 +47,7 @@ export interface LLMParams {
   maxTokens?: number
   topP?: number
   stop?: string[]
+  tools?: any[] // Provider-specific tool definitions (OpenAI function_calling, Anthropic tool_use, etc.)
 }
 
 export interface LLMResponse {
@@ -78,6 +79,8 @@ export interface StreamChunk {
     sent: string[]
     failed: { id: string; error: string }[]
   }
+  // Raw response for tool call detection
+  rawResponse?: any
 }
 
 export abstract class LLMProvider {

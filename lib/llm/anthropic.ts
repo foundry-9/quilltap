@@ -116,14 +116,21 @@ export class AnthropicProvider extends LLMProvider {
     const systemMessage = params.messages.find(m => m.role === 'system')
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(params.messages)
 
-    const response = await client.messages.create({
+    const requestParams: any = {
       model: params.model,
       system: systemMessage?.content,
       messages,
       max_tokens: params.maxTokens ?? 1000,
       temperature: params.temperature ?? 0.7,
       top_p: params.topP ?? 1,
-    })
+    }
+
+    // Add tools if provided
+    if (params.tools && params.tools.length > 0) {
+      requestParams.tools = params.tools
+    }
+
+    const response = await client.messages.create(requestParams)
 
     const content = response.content[0]
 
@@ -146,17 +153,25 @@ export class AnthropicProvider extends LLMProvider {
     const systemMessage = params.messages.find(m => m.role === 'system')
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(params.messages)
 
-    const stream = await client.messages.create({
+    const requestParams: any = {
       model: params.model,
       system: systemMessage?.content,
       messages,
       max_tokens: params.maxTokens ?? 1000,
       temperature: params.temperature ?? 0.7,
       stream: true,
-    })
+    }
+
+    // Add tools if provided
+    if (params.tools && params.tools.length > 0) {
+      requestParams.tools = params.tools
+    }
+
+    const stream = (await client.messages.create(requestParams)) as unknown as AsyncIterable<any>
 
     let totalInputTokens = 0
     let totalOutputTokens = 0
+    let fullMessage: any = null
 
     for await (const event of stream) {
       if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
@@ -169,6 +184,7 @@ export class AnthropicProvider extends LLMProvider {
       // Track usage from message_start event
       if (event.type === 'message_start') {
         totalInputTokens = event.message.usage.input_tokens
+        fullMessage = event.message
       }
 
       // Track usage from message_delta event
@@ -187,6 +203,7 @@ export class AnthropicProvider extends LLMProvider {
             totalTokens: totalInputTokens + totalOutputTokens,
           },
           attachmentResults,
+          rawResponse: fullMessage,
         }
       }
     }
