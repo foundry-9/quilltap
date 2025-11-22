@@ -1,6 +1,6 @@
 /**
  * Tools Module
- * Exports tool definitions, registry, and utilities
+ * Exports tool definitions, registry, handlers, and utilities
  */
 
 export {
@@ -23,3 +23,11 @@ export {
   type ImageGenerationToolOutput,
   type GeneratedImageResult,
 } from './image-generation-tool';
+
+export {
+  executeImageGenerationTool,
+  validateImageProfile,
+  getDefaultImageProfile,
+  ImageGenerationError,
+  type ImageToolExecutionContext,
+} from './handlers/image-generation-handler';

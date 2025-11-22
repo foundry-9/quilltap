@@ -8,6 +8,7 @@ import { prisma } from '@/lib/prisma'
 import { createLLMProvider } from '@/lib/llm/factory'
 import { decryptApiKey } from '@/lib/encryption'
 import { loadChatFilesForLLM } from '@/lib/chat-files'
+import { detectToolCalls, executeToolCall, formatToolResult } from '@/lib/chat/tool-executor'
 import { z } from 'zod'
 
 // Validation schema
@@ -50,6 +51,7 @@ export async function POST(
             apiKey: true,
           },
         },
+        imageProfile: true, // Include image profile for tool calls
         messages: {
           orderBy: { createdAt: 'asc' },
           select: {
@@ -154,55 +156,50 @@ export async function POST(
     let fullResponse = ''
     let usage: any = null
     let attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null = null
+    let rawResponse: any = null
 
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          // Stream the response
-          for await (const chunk of provider.streamMessage(
-            {
-              messages,
-              model: chat.connectionProfile.modelName,
-              temperature: modelParams.temperature,
-              maxTokens: modelParams.maxTokens,
-              topP: modelParams.topP,
+          // Stream the response from LLM
+          await streamLLMResponse({
+            provider,
+            chat,
+            user,
+            messages,
+            modelParams,
+            decryptedKey,
+            controller,
+            encoder,
+            callbacks: {
+              onResponse: (response: string) => {
+                fullResponse = response
+              },
+              onUsage: (u: any) => {
+                usage = u
+              },
+              onRawResponse: (r: any) => {
+                rawResponse = r
+              },
+              onAttachmentResults: (ar: any) => {
+                attachmentResults = ar
+              },
             },
-            decryptedKey
-          )) {
-            if (chunk.content) {
-              fullResponse += chunk.content
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ content: chunk.content })}\n\n`)
-              )
-            }
-
-            if (chunk.done) {
-              if (chunk.usage) {
-                usage = chunk.usage
-              }
-              if (chunk.attachmentResults) {
-                attachmentResults = chunk.attachmentResults
-              }
-            }
-          }
+          })
 
           // Update attachment status in database
           if (attachmentResults) {
-            // Mark successfully sent attachments
-            if (attachmentResults.sent.length > 0) {
-              await prisma.chatFile.updateMany({
-                where: { id: { in: attachmentResults.sent } },
-                data: { sentToProvider: true, providerError: null },
-              })
-            }
-            // Mark failed attachments with error messages
-            for (const failure of attachmentResults.failed) {
-              await prisma.chatFile.update({
-                where: { id: failure.id },
-                data: { sentToProvider: false, providerError: failure.error },
-              })
-            }
+            await updateAttachmentStatus(attachmentResults)
           }
+
+          // Detect and execute tool calls
+          const toolExecutionMessages = await processToolCalls(
+            rawResponse,
+            chat,
+            user,
+            controller,
+            encoder
+          )
 
           // Save assistant message
           const assistantMessage = await prisma.message.create({
@@ -211,9 +208,14 @@ export async function POST(
               role: 'ASSISTANT',
               content: fullResponse,
               tokenCount: usage?.totalTokens || null,
-              rawResponse: usage || null,
+              rawResponse: rawResponse || null,
             },
           })
+
+          // If tools were executed, save tool results in conversation
+          if (toolExecutionMessages.length > 0) {
+            await saveToolResults(chat.id, toolExecutionMessages)
+          }
 
           // Update chat timestamp
           await prisma.chat.update({
@@ -221,7 +223,7 @@ export async function POST(
             data: { updatedAt: new Date() },
           })
 
-          // Send final message with message ID, usage, and attachment results
+          // Send final message
           controller.enqueue(
             encoder.encode(
               `data: ${JSON.stringify({
@@ -229,6 +231,7 @@ export async function POST(
                 messageId: assistantMessage.id,
                 usage,
                 attachmentResults,
+                toolsExecuted: toolExecutionMessages.length > 0,
               })}\n\n`
             )
           )
@@ -248,6 +251,142 @@ export async function POST(
         }
       },
     })
+
+    // Helper function to stream LLM response
+    async function streamLLMResponse(options: {
+      provider: any
+      chat: any
+      user: any
+      messages: any[]
+      modelParams: any
+      decryptedKey: string
+      controller: ReadableStreamDefaultController<Uint8Array>
+      encoder: TextEncoder
+      callbacks: {
+        onResponse: (response: string) => void
+        onUsage: (usage: any) => void
+        onRawResponse: (response: any) => void
+        onAttachmentResults: (results: any) => void
+      }
+    }) {
+      const { provider, chat, messages, modelParams, decryptedKey, controller, encoder, callbacks } = options
+
+      for await (const chunk of provider.streamMessage(
+        {
+          messages,
+          model: chat.connectionProfile.modelName,
+          temperature: modelParams.temperature,
+          maxTokens: modelParams.maxTokens,
+          topP: modelParams.topP,
+        },
+        decryptedKey
+      )) {
+        if (chunk.content) {
+          fullResponse += chunk.content
+          callbacks.onResponse(fullResponse)
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ content: chunk.content })}\n\n`)
+          )
+        }
+
+        if (chunk.done) {
+          if (chunk.usage) {
+            callbacks.onUsage(chunk.usage)
+          }
+          if (chunk.attachmentResults) {
+            callbacks.onAttachmentResults(chunk.attachmentResults)
+          }
+          if (chunk.rawResponse) {
+            callbacks.onRawResponse(chunk.rawResponse)
+          }
+        }
+      }
+    }
+
+    // Helper function to update attachment status
+    async function updateAttachmentStatus(
+      attachmentResults: { sent: string[]; failed: { id: string; error: string }[] }
+    ) {
+      if (attachmentResults.sent.length > 0) {
+        await prisma.chatFile.updateMany({
+          where: { id: { in: attachmentResults.sent } },
+          data: { sentToProvider: true, providerError: null },
+        })
+      }
+      for (const failure of attachmentResults.failed) {
+        await prisma.chatFile.update({
+          where: { id: failure.id },
+          data: { sentToProvider: false, providerError: failure.error },
+        })
+      }
+    }
+
+    // Helper function to process tool calls
+    async function processToolCalls(
+      rawResponse: any,
+      chat: any,
+      user: any,
+      controller: ReadableStreamDefaultController<Uint8Array>,
+      encoder: TextEncoder
+    ): Promise<{ role: string; content: string }[]> {
+      const toolExecutionMessages: { role: string; content: string }[] = []
+
+      if (!rawResponse) {
+        return toolExecutionMessages
+      }
+
+      const toolCalls = detectToolCalls(rawResponse, chat.connectionProfile.provider)
+
+      if (toolCalls.length === 0) {
+        return toolExecutionMessages
+      }
+
+      controller.enqueue(
+        encoder.encode(`data: ${JSON.stringify({ toolsDetected: toolCalls.length })}\n\n`)
+      )
+
+      for (const toolCall of toolCalls) {
+        const toolResult = await executeToolCall(
+          toolCall,
+          chat.id,
+          user.id,
+          chat.imageProfileId || undefined
+        )
+
+        const formattedResult = formatToolResult(toolResult, chat.connectionProfile.provider)
+        toolExecutionMessages.push(formattedResult)
+
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({
+              toolResult: {
+                name: toolResult.toolName,
+                success: toolResult.success,
+                result: toolResult.result,
+              },
+            })}\n\n`
+          )
+        )
+      }
+
+      return toolExecutionMessages
+    }
+
+    // Helper function to save tool results
+    async function saveToolResults(
+      chatId: string,
+      toolExecutionMessages: { role: string; content: string }[]
+    ) {
+      for (const toolResultMsg of toolExecutionMessages) {
+        await prisma.message.create({
+          data: {
+            chatId,
+            role: toolResultMsg.role.toUpperCase() === 'SYSTEM' ? 'SYSTEM' : 'USER',
+            content: toolResultMsg.content,
+          },
+        })
+      }
+    }
 
     return new NextResponse(stream, {
       headers: {

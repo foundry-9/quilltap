@@ -249,6 +249,7 @@ model Chat {
   characterId         String
   personaId           String?
   connectionProfileId String
+  imageProfileId      String?  // Optional: separate image generation profile
   title               String
   contextSummary      String?  @db.Text
   sillyTavernMetadata Json?
@@ -259,6 +260,7 @@ model Chat {
   character           Character             @relation(fields: [characterId], references: [id], onDelete: Cascade)
   persona             Persona?              @relation(fields: [personaId], references: [id], onDelete: SetNull)
   connectionProfile   ConnectionProfile     @relation(fields: [connectionProfileId], references: [id])
+  imageProfile        ImageProfile?         @relation(fields: [imageProfileId], references: [id], onDelete: SetNull)
   messages            Message[]
   files               ChatFile[]
   avatarOverrides     ChatAvatarOverride[]
@@ -458,6 +460,7 @@ model ImageProfile {
   user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   apiKey          ApiKey?       @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
   tags            ImageProfileTag[]
+  chats           Chat[]        // Chats that use this profile for image generation
 
   @@unique([userId, name])
   @@index([userId, isDefault])
