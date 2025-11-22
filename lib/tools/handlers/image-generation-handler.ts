@@ -105,7 +105,8 @@ async function saveGeneratedImage(
  */
 function mergeParameters(
   input: ImageGenerationToolInput,
-  profileDefaults: Record<string, unknown> = {}
+  profileDefaults: Record<string, unknown> = {},
+  model?: string // Model should be passed separately from profile
 ): {
   prompt: string;
   negativePrompt?: string;
@@ -122,7 +123,7 @@ function mergeParameters(
   return {
     prompt: input.prompt,
     negativePrompt: input.negativePrompt || (profileDefaults.negativePrompt as string | undefined),
-    model: profileDefaults.model as string, // Model comes from profile, not user
+    model: model || (profileDefaults.model as string) || 'dall-e-3', // Model from parameter, profile defaults, or default to dall-e-3
     n: input.count ?? (profileDefaults.n as number | undefined) ?? 1,
     size: input.size || (profileDefaults.size as string | undefined),
     aspectRatio: input.aspectRatio || (profileDefaults.aspectRatio as string | undefined),
@@ -221,7 +222,8 @@ async function generateImagesWithProvider(
   console.log('[IMAGE_PROVIDER] Merging parameters...');
   const mergedParams = mergeParameters(
     toolInput,
-    imageProfile.parameters as Record<string, unknown>
+    imageProfile.parameters as Record<string, unknown>,
+    imageProfile.modelName
   );
   console.log('[IMAGE_PROVIDER] Merged params:', { ...mergedParams, model: mergedParams.model, size: mergedParams.size });
 
