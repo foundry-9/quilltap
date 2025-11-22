@@ -248,18 +248,22 @@ export async function POST(
             encoder
           )
 
-          // Save assistant message
-          const assistantMessage = await prisma.message.create({
-            data: {
-              chatId: chat.id,
-              role: 'ASSISTANT',
-              content: fullResponse,
-              tokenCount: usage?.totalTokens || null,
-              rawResponse: rawResponse || null,
-            },
-          })
+          // Save assistant message only if there's actual content (not just a tool call)
+          let assistantMessage = null
+          if (fullResponse && fullResponse.trim().length > 0) {
+            assistantMessage = await prisma.message.create({
+              data: {
+                chatId: chat.id,
+                role: 'ASSISTANT',
+                content: fullResponse,
+                tokenCount: usage?.totalTokens || null,
+                rawResponse: rawResponse || null,
+              },
+            })
+          }
 
           // Save tool messages if tools were executed
+          let firstToolMessageId: string | null = null
           if (toolMessages.length > 0) {
             console.log('[TOOLS] Saving', toolMessages.length, 'tool message(s)')
             for (const toolMsg of toolMessages) {
@@ -277,6 +281,11 @@ export async function POST(
                   }),
                 },
               })
+
+              // Track the first tool message ID
+              if (!firstToolMessageId) {
+                firstToolMessageId = toolMessage.id
+              }
 
               // Attach generated images to tool message
               if (generatedImagePaths.length > 0) {
@@ -305,12 +314,14 @@ export async function POST(
             data: { updatedAt: new Date() },
           })
 
-          // Send final message
+          // Send final message - use assistant message ID if available, otherwise use the first tool message ID
+          const finalMessageId = assistantMessage?.id || firstToolMessageId
+
           controller.enqueue(
             encoder.encode(
               `data: ${JSON.stringify({
                 done: true,
-                messageId: assistantMessage.id,
+                messageId: finalMessageId,
                 usage,
                 attachmentResults,
                 toolsExecuted: toolMessages.length > 0,
