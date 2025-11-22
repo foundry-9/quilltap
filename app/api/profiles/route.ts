@@ -11,6 +11,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { Provider } from '@/lib/types/prisma'
+import { supportsImageGeneration } from '@/lib/llm/image-capable'
 
 /**
  * GET /api/profiles
@@ -18,6 +19,7 @@ import { Provider } from '@/lib/types/prisma'
  * Query params:
  *   - sortByCharacter: Character ID to sort profiles by matching tags
  *   - sortByPersona: Persona ID to sort profiles by matching tags (used with sortByCharacter)
+ *   - imageCapable: 'true' to filter only image-generation-capable providers
  */
 export async function GET(req: NextRequest) {
   try {
@@ -32,8 +34,9 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const sortByCharacter = searchParams.get('sortByCharacter')
     const sortByPersona = searchParams.get('sortByPersona')
+    const imageCapable = searchParams.get('imageCapable') === 'true'
 
-    const profiles = await prisma.connectionProfile.findMany({
+    let profiles = await prisma.connectionProfile.findMany({
       where: {
         userId: session.user.id,
       },
@@ -57,6 +60,11 @@ export async function GET(req: NextRequest) {
         { createdAt: 'desc' },
       ],
     })
+
+    // Filter to image-capable providers if requested
+    if (imageCapable) {
+      profiles = profiles.filter(profile => supportsImageGeneration(profile.provider))
+    }
 
     // If sortByCharacter is specified, sort by matching tags
     if (sortByCharacter) {
