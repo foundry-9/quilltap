@@ -367,6 +367,7 @@ export function ImageGenerationDialog({
                 <div className="grid grid-cols-2 gap-3">
                   {previewImages.map((img) => (
                     <div key={img.id} className="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={img.data}
                         alt="Generated"
