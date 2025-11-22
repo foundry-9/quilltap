@@ -40,6 +40,11 @@ export interface GeneratedImageResult {
   url: string; // URL to access the image
   filename: string; // Original filename
   revisedPrompt?: string; // Prompt as revised by the provider
+  filepath?: string; // Relative path to the image file
+  mimeType?: string; // MIME type of the image
+  size?: number; // File size in bytes
+  width?: number; // Image width in pixels
+  height?: number; // Image height in pixels
 }
 
 /**

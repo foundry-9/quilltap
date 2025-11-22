@@ -6,7 +6,7 @@ import Image from 'next/image'
 import { TagEditor } from '@/components/tags/tag-editor'
 import ImageModal from '@/components/chat/ImageModal'
 import ChatPhotoGalleryModal from '@/components/chat/ChatPhotoGalleryModal'
-import { showAlert } from '@/lib/alert'
+import { showAlert, showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { safeJsonParse } from '@/lib/fetch-helpers'
 import MessageContent from '@/components/chat/MessageContent'
@@ -431,7 +431,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   }
 
   const deleteMessage = async (messageId: string) => {
-    if (!confirm('Are you sure you want to delete this message?')) return
+    if (!(await showConfirmation('Are you sure you want to delete this message?'))) return
 
     try {
       const res = await fetch(`/api/messages/${messageId}`, {

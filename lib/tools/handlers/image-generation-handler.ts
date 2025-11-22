@@ -46,6 +46,7 @@ async function saveGeneratedImage(
   imageData: string, // Base64-encoded image data
   mimeType: string,
   userId: string,
+  chatId: string | undefined,
   metadata: {
     prompt: string;
     revisedPrompt?: string;
@@ -85,11 +86,28 @@ async function saveGeneratedImage(
       },
     });
 
+    // Tag image with chat ID if provided (makes it appear in chat gallery)
+    if (chatId) {
+      console.log('[IMAGE_TOOL] Tagging image with chat ID:', chatId);
+      await prisma.imageTag.create({
+        data: {
+          imageId: image.id,
+          tagType: 'CHAT',
+          tagId: chatId,
+        },
+      });
+    }
+
     return {
       id: image.id,
       url: `/api/images/${image.id}`,
       filename,
       revisedPrompt: metadata.revisedPrompt,
+      filepath,
+      mimeType,
+      size: buffer.length,
+      width: image.width ?? undefined,
+      height: image.height ?? undefined,
     };
   } catch (error) {
     throw new ImageGenerationError(
@@ -193,7 +211,8 @@ async function loadAndValidateProfile(
 async function generateImagesWithProvider(
   toolInput: ImageGenerationToolInput,
   imageProfile: any,
-  userId: string
+  userId: string,
+  chatId?: string
 ): Promise<GeneratedImageResult[]> {
   console.log('[IMAGE_PROVIDER] Getting provider:', imageProfile.provider);
   const provider = getImageGenProvider(imageProfile.provider);
@@ -248,7 +267,7 @@ async function generateImagesWithProvider(
     console.log('[IMAGE_PROVIDER] Saving', generationResponse.images.length, 'image(s) to database...');
     return await Promise.all(
       generationResponse.images.map((img) =>
-        saveGeneratedImage(img.data, img.mimeType, userId, {
+        saveGeneratedImage(img.data, img.mimeType, userId, chatId, {
           prompt: toolInput.prompt,
           revisedPrompt: img.revisedPrompt,
           model: imageProfile.modelName,
@@ -322,7 +341,8 @@ export async function executeImageGenerationTool(
     const savedImages = await generateImagesWithProvider(
       toolInput,
       imageProfile,
-      context.userId
+      context.userId,
+      context.chatId
     );
     console.log('[IMAGE_TOOL] Images generated and saved:', savedImages.length, 'image(s)');
 

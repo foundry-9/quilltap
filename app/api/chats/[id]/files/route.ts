@@ -93,7 +93,7 @@ export async function POST(
   }
 }
 
-// GET /api/chats/:id/files - List files for a chat
+// GET /api/chats/:id/files - List files for a chat (includes uploaded files and generated images)
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -125,13 +125,29 @@ export async function GET(
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
     }
 
-    const files = await prisma.chatFile.findMany({
+    // Get uploaded chat files
+    const chatFiles = await prisma.chatFile.findMany({
       where: { chatId },
       orderBy: { createdAt: 'desc' },
     })
 
-    return NextResponse.json({
-      files: files.map((f) => ({
+    // Get generated images tagged with this chat
+    const generatedImages = await prisma.image.findMany({
+      where: {
+        userId: user.id,
+        tags: {
+          some: {
+            tagType: 'CHAT',
+            tagId: chatId,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    // Combine both lists, converting to the same format
+    const allFiles = [
+      ...chatFiles.map((f) => ({
         id: f.id,
         filename: f.filename,
         filepath: f.filepath,
@@ -141,7 +157,25 @@ export async function GET(
         sentToProvider: f.sentToProvider,
         providerError: f.providerError,
         createdAt: f.createdAt,
+        type: 'chatFile' as const,
       })),
+      ...generatedImages.map((img) => ({
+        id: img.id,
+        filename: img.filename,
+        filepath: img.filepath,
+        mimeType: img.mimeType,
+        size: img.size,
+        url: img.url || `/${img.filepath}`,
+        createdAt: img.createdAt,
+        type: 'generatedImage' as const,
+      })),
+    ]
+
+    // Sort by creation time, newest first
+    allFiles.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+
+    return NextResponse.json({
+      files: allFiles,
     })
   } catch (error) {
     console.error('Error listing chat files:', error)

@@ -237,7 +237,7 @@ export async function POST(
           }
 
           // Detect and execute tool calls
-          const toolExecutionMessages = await processToolCalls(
+          const { toolExecutionMessages, generatedImagePaths } = await processToolCalls(
             rawResponse,
             chat,
             user,
@@ -256,9 +256,23 @@ export async function POST(
             },
           })
 
-          // If tools were executed, save tool results in conversation
-          if (toolExecutionMessages.length > 0) {
-            await saveToolResults(chat.id, toolExecutionMessages)
+          // Create ChatFile records for generated images and attach to message
+          if (generatedImagePaths.length > 0) {
+            console.log('[TOOLS] Creating ChatFile records for', generatedImagePaths.length, 'generated image(s)')
+            for (const imagePath of generatedImagePaths) {
+              await prisma.chatFile.create({
+                data: {
+                  chatId: chat.id,
+                  messageId: assistantMessage.id,
+                  filename: imagePath.filename,
+                  filepath: imagePath.filepath,
+                  mimeType: imagePath.mimeType,
+                  size: imagePath.size,
+                  width: imagePath.width,
+                  height: imagePath.height,
+                },
+              })
+            }
           }
 
           // Update chat timestamp
@@ -381,12 +395,13 @@ export async function POST(
       user: any,
       controller: ReadableStreamDefaultController<Uint8Array>,
       encoder: TextEncoder
-    ): Promise<{ role: string; content: string }[]> {
+    ): Promise<{ toolExecutionMessages: { role: string; content: string }[]; generatedImagePaths: Array<{ filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number }> }> {
       const toolExecutionMessages: { role: string; content: string }[] = []
+      const generatedImagePaths: Array<{ filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number }> = []
 
       if (!rawResponse) {
         console.log('[TOOLS] No raw response available for tool detection')
-        return toolExecutionMessages
+        return { toolExecutionMessages, generatedImagePaths }
       }
 
       console.log('[TOOLS] Attempting to detect tool calls from response')
@@ -395,7 +410,7 @@ export async function POST(
 
       if (toolCalls.length === 0) {
         console.log('[TOOLS] No tool calls detected')
-        return toolExecutionMessages
+        return { toolExecutionMessages, generatedImagePaths }
       }
 
       console.log('[TOOLS] Notifying client of tool detection')
@@ -410,6 +425,22 @@ export async function POST(
           user.id,
           chat.imageProfileId || undefined
         )
+
+        // Collect generated image paths for ChatFile creation
+        if (toolResult.success && (toolResult.result as any)?.images) {
+          for (const img of (toolResult.result as any).images) {
+            if (img.filepath) {
+              generatedImagePaths.push({
+                filename: img.filename,
+                filepath: img.filepath,
+                mimeType: img.mimeType || 'image/png',
+                size: img.size || 0,
+                width: img.width,
+                height: img.height,
+              })
+            }
+          }
+        }
 
         const formattedResult = formatToolResult(toolResult, chat.connectionProfile.provider)
         toolExecutionMessages.push(formattedResult)
@@ -427,23 +458,7 @@ export async function POST(
         )
       }
 
-      return toolExecutionMessages
-    }
-
-    // Helper function to save tool results
-    async function saveToolResults(
-      chatId: string,
-      toolExecutionMessages: { role: string; content: string }[]
-    ) {
-      for (const toolResultMsg of toolExecutionMessages) {
-        await prisma.message.create({
-          data: {
-            chatId,
-            role: toolResultMsg.role.toUpperCase() === 'SYSTEM' ? 'SYSTEM' : 'USER',
-            content: toolResultMsg.content,
-          },
-        })
-      }
+      return { toolExecutionMessages, generatedImagePaths }
     }
 
     return new NextResponse(stream, {
