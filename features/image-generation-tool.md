@@ -1275,11 +1275,56 @@ Details:
 
 ### 8. UI Components
 
-- [ ] Create `ImageProfileForm` component
-- [ ] Create `ImageProfilePicker` component for chat settings
-- [ ] Create `ImageProfileParameters` component (provider-specific)
-- [ ] Add image profiles section to settings page
-- [ ] Update chat settings to include image profile selection
+- [x] Create `ImageProfileForm` component
+- [x] Create `ImageProfilePicker` component for chat settings
+- [x] Create `ImageProfileParameters` component (provider-specific)
+- [x] Add image profiles section to settings page
+- [x] Update chat settings to include image profile selection
+
+Status: ✅ COMPLETED
+
+Implementation Files: `components/image-profiles/`, `components/settings/image-profiles-tab.tsx`, `PHASE_7_IMPLEMENTATION_SUMMARY.md`
+
+Details:
+
+- **Created `components/image-profiles/ImageProfileForm.tsx`**:
+  - Reusable form for creating and editing image profiles
+  - Full form validation with error messages
+  - Dynamic provider selection
+  - API key selection with compatibility checking
+  - Real-time API key validation against provider endpoints
+  - Dynamic model discovery based on provider and API key
+  - Support for both create and edit modes
+  - Default profile management
+
+- **Created `components/image-profiles/ImageProfileParameters.tsx`**:
+  - Provider-specific parameter configuration
+  - OpenAI: quality, style, size
+  - Google Imagen: aspect ratio, negative prompt
+  - Grok: minimal parameters with info
+  - Context-aware UI based on selected provider
+
+- **Created `components/image-profiles/ImageProfilePicker.tsx`**:
+  - Dropdown selector for image profile selection in chats
+  - Tag-based sorting by character/persona
+  - Profile detail preview
+  - Supports null selection (no image generation)
+  - Loading and error states
+
+- **Created `components/image-profiles/ProviderIcon.tsx`**:
+  - ProviderIcon component with SVG icons
+  - ProviderBadge component for profile listings
+  - Color-coded by provider
+  - Customizable sizing
+
+- **Created `components/settings/image-profiles-tab.tsx`**:
+  - Main settings tab for profile management
+  - List, create, edit, delete profiles
+  - Profile detail cards with parameters
+  - Delete confirmation dialog
+  - Empty state with CTA
+  - Full form integration
+  - Error handling and feedback
 
 ### 9. Migration from Legacy System
 
