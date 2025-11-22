@@ -150,8 +150,17 @@ export class OpenAIProvider extends LLMProvider {
     const stream = (await client.chat.completions.create(requestParams)) as unknown as AsyncIterable<any>
 
     let fullMessage: any = null
+    let chunkCount = 0
 
     for await (const chunk of stream) {
+      chunkCount++
+      console.log(`[STREAM] OpenAI chunk ${chunkCount}:`, {
+        hasContent: !!chunk.choices?.[0]?.delta?.content,
+        hasToolCalls: !!chunk.choices?.[0]?.tool_calls,
+        finishReason: chunk.choices?.[0]?.finish_reason,
+        hasUsage: !!chunk.usage,
+      })
+
       const content = chunk.choices[0]?.delta?.content
       const finishReason = chunk.choices[0]?.finish_reason
       const hasUsage = chunk.usage
@@ -185,6 +194,7 @@ export class OpenAIProvider extends LLMProvider {
 
       // Final chunk with usage info
       if (finishReason && hasUsage) {
+        console.log(`[STREAM] OpenAI final chunk detected. fullMessage tool_calls:`, fullMessage.choices?.[0]?.tool_calls)
         yield {
           content: '',
           done: true,
@@ -198,6 +208,7 @@ export class OpenAIProvider extends LLMProvider {
         }
       }
     }
+    console.log(`[STREAM] OpenAI stream ended. Total chunks: ${chunkCount}`)
   }
 
   async validateApiKey(apiKey: string): Promise<boolean> {
