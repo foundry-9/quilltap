@@ -271,6 +271,7 @@ export async function POST(
                     toolName: toolMsg.toolName,
                     success: toolMsg.success,
                     result: toolMsg.content,
+                    arguments: toolMsg.arguments,
                     provider: toolMsg.metadata?.provider,
                     model: toolMsg.metadata?.model,
                   }),
@@ -418,8 +419,8 @@ export async function POST(
       user: any,
       controller: ReadableStreamDefaultController<Uint8Array>,
       encoder: TextEncoder
-    ): Promise<{ toolMessages: Array<{ toolName: string; success: boolean; content: string; metadata?: { provider?: string; model?: string } }>; generatedImagePaths: Array<{ filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number }> }> {
-      const toolMessages: Array<{ toolName: string; success: boolean; content: string; metadata?: { provider?: string; model?: string } }> = []
+    ): Promise<{ toolMessages: Array<{ toolName: string; success: boolean; content: string; arguments?: Record<string, unknown>; metadata?: { provider?: string; model?: string } }>; generatedImagePaths: Array<{ filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number }> }> {
+      const toolMessages: Array<{ toolName: string; success: boolean; content: string; arguments?: Record<string, unknown>; metadata?: { provider?: string; model?: string } }> = []
       const generatedImagePaths: Array<{ filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number }> = []
 
       if (!rawResponse) {
@@ -476,6 +477,7 @@ export async function POST(
           toolName: toolResult.toolName,
           success: toolResult.success,
           content: resultText,
+          arguments: toolCall.arguments,
           metadata: toolResult.metadata,
         })
 
