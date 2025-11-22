@@ -3,8 +3,17 @@
  * Re-exports types from @prisma/client and defines enum types
  */
 
-// Re-export all types from @prisma/client
-export * from '@prisma/client';
+// Explicitly export Prisma-generated enums and types for Turbopack compatibility
+// (avoids "unexpected export *" warning with CommonJS modules)
+export type {
+  ApiKey,
+  ImageProfile,
+  User,
+  Message,
+  Chat,
+  Image,
+} from '@prisma/client'
+export { ImageProvider } from '@prisma/client'
 
 // Define Provider and Role as string literal union types
 // These match the Prisma schema enums and are compatible with Prisma's generated types
