@@ -161,6 +161,8 @@ export class OpenAIProvider extends LLMProvider {
       usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
     }
     let chunkCount = 0
+    let finishReasonSeen = false
+    let usageSeen = false
 
     for await (const chunk of stream) {
       chunkCount++
@@ -205,32 +207,53 @@ export class OpenAIProvider extends LLMProvider {
       // Update finish reason
       if (finishReason) {
         fullMessage.choices[0].finish_reason = finishReason
+        finishReasonSeen = true
       }
 
       // Update usage
       if (hasUsage) {
         fullMessage.usage = chunk.usage
+        usageSeen = true
       }
 
-      // Yield content unless this is the final chunk with usage info
-      if (content && !(finishReason && hasUsage)) {
+      // Yield content chunks unless this is the final chunk (finish_reason + usage together)
+      // Exception: for tool_calls, we yield even with finish_reason (no usage comes with tool_calls)
+      const isFinalChunk = finishReasonSeen && usageSeen
+      const isToolCallsChunk = finishReasonSeen && finishReason === 'tool_calls'
+
+      if (content && !isFinalChunk && !isToolCallsChunk) {
         yield {
           content,
           done: false,
         }
       }
 
-      // Final chunk with usage info
-      if (finishReason && hasUsage) {
-        console.log(`[STREAM] OpenAI final chunk. Tool calls:`, fullMessage.choices?.[0]?.message?.tool_calls)
-        // For tool calls, OpenAI returns finish_reason: 'tool_calls' instead of message content
+      // For tool calls: OpenAI sends finish_reason='tool_calls' in one chunk, usage in the next
+      // We yield immediately when we see tool_calls finish reason
+      if (finishReasonSeen && finishReason === 'tool_calls' && !usageSeen) {
+        console.log(`[STREAM] OpenAI final chunk with tool_calls. Tool calls:`, fullMessage.choices?.[0]?.message?.tool_calls)
         yield {
           content: '',
           done: true,
           usage: {
-            promptTokens: chunk.usage?.prompt_tokens ?? 0,
-            completionTokens: chunk.usage?.completion_tokens ?? 0,
-            totalTokens: chunk.usage?.total_tokens ?? 0,
+            promptTokens: fullMessage.usage?.prompt_tokens ?? 0,
+            completionTokens: fullMessage.usage?.completion_tokens ?? 0,
+            totalTokens: fullMessage.usage?.total_tokens ?? 0,
+          },
+          attachmentResults,
+          rawResponse: fullMessage,
+        }
+        // Continue reading to drain the stream
+      } else if (finishReasonSeen && usageSeen) {
+        // For regular text responses, we get both finish_reason and usage
+        console.log(`[STREAM] OpenAI final chunk. Tool calls:`, fullMessage.choices?.[0]?.message?.tool_calls)
+        yield {
+          content: '',
+          done: true,
+          usage: {
+            promptTokens: fullMessage.usage?.prompt_tokens ?? 0,
+            completionTokens: fullMessage.usage?.completion_tokens ?? 0,
+            totalTokens: fullMessage.usage?.total_tokens ?? 0,
           },
           attachmentResults,
           rawResponse: fullMessage,
