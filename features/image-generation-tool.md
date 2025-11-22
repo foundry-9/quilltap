@@ -1081,12 +1081,47 @@ Migration: `prisma/migrations/20251122045746_phase_1_image_profiles/`
 
 ### 2. Image Provider Abstraction
 
-- [ ] Create `lib/image-gen/base.ts` with abstract `ImageGenProvider` class
-- [ ] Implement `OpenAIImageProvider` using OpenAI Images API
-- [ ] Implement `GrokImageProvider` using xAI Images API
-- [ ] Implement `GoogleImagenProvider` using Google Generative Language API
-- [ ] Create `lib/image-gen/factory.ts` with provider factory function
+- [x] Create `lib/image-gen/base.ts` with abstract `ImageGenProvider` class
+- [x] Implement `OpenAIImageProvider` using OpenAI Images API
+- [x] Implement `GrokImageProvider` using xAI Images API
+- [x] Implement `GoogleImagenProvider` using Google Generative Language API
+- [x] Create `lib/image-gen/factory.ts` with provider factory function
 - [ ] Add unit tests for each provider
+
+Status: ✅ COMPLETED
+
+Implementation Files: `lib/image-gen/` directory with base.ts, openai.ts, grok.ts, google-imagen.ts, and factory.ts
+
+Details:
+
+- Created `lib/image-gen/base.ts`:
+  - `ImageGenParams` interface with full parameter support for all providers
+  - `GeneratedImage` interface for image responses
+  - `ImageGenResponse` interface with raw provider response
+  - `ImageGenProvider` abstract base class with three abstract methods
+
+- Created `lib/image-gen/openai.ts`:
+  - `OpenAIImageProvider` class supporting gpt-image-1, dall-e-3, dall-e-2
+  - Proper handling of model-specific parameters (quality, style only for DALL-E 3)
+  - Base64 response format for consistency
+  - API key validation using models.list() endpoint
+
+- Created `lib/image-gen/grok.ts`:
+  - `GrokImageProvider` class supporting grok-2-image
+  - Direct HTTP requests to xAI API (can also use OpenAI SDK with custom base URL)
+  - Minimal parameter set (no quality/style/size)
+  - API key validation using models endpoint
+
+- Created `lib/image-gen/google-imagen.ts`:
+  - `GoogleImagenProvider` class supporting imagen-4.0, imagen-3.0, imagen-3.0-fast
+  - Proper parameter handling for aspect ratio and negative prompts
+  - API key validation using models list endpoint
+  - Base64 image extraction from predictions
+
+- Created `lib/image-gen/factory.ts`:
+  - `getImageGenProvider()` factory function with type-safe provider lookup
+  - `getSupportedImageProviders()` helper to list available providers
+  - Error handling for unknown providers
 
 ### 3. Tool Definition
 
