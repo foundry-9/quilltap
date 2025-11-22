@@ -15,6 +15,10 @@ export interface ToolResult {
   success: boolean;
   result: unknown;
   error?: string;
+  metadata?: {
+    provider?: string;
+    model?: string;
+  };
 }
 
 /**
@@ -88,6 +92,10 @@ export async function executeToolCall(
         success: result.success,
         result: result.success ? result.images : null,
         error: result.success ? undefined : result.error,
+        metadata: {
+          provider: result.provider,
+          model: result.model,
+        },
       };
     }
 

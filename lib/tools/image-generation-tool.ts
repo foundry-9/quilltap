@@ -55,6 +55,8 @@ export interface ImageGenerationToolOutput {
   images?: GeneratedImageResult[];
   error?: string;
   message?: string;
+  provider?: string;
+  model?: string;
 }
 
 /**

@@ -10,6 +10,7 @@ import { showAlert, showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { safeJsonParse } from '@/lib/fetch-helpers'
 import MessageContent from '@/components/chat/MessageContent'
+import ToolMessage from '@/components/chat/ToolMessage'
 import { formatMessageTime } from '@/lib/format-time'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 
@@ -373,6 +374,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 setMessages((prev) => [...prev, assistantMessage])
                 setStreamingContent('')
                 setStreaming(false)
+                // Refresh chat to get tool messages
+                await fetchChat()
                 // Clear tool status after a short delay
                 setTimeout(() => setToolExecutionStatus(null), 3000)
               }
@@ -686,6 +689,20 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         {messages.map((message) => {
           const isEditing = editingMessageId === message.id
           const swipeState = message.swipeGroupId ? swipeStates[message.swipeGroupId] : null
+
+
+          // Render TOOL messages differently
+          if (message.role === 'TOOL') {
+            return (
+              <ToolMessage
+                key={message.id}
+                message={message}
+                onImageClick={(filepath, filename, fileId) => {
+                  setModalImage({ src: `/${filepath}`, filename, fileId })
+                }}
+              />
+            )
+          }
 
           const messageAvatar = shouldShowAvatars() ? getMessageAvatar(message) : null
 

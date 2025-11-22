@@ -86,18 +86,6 @@ async function saveGeneratedImage(
       },
     });
 
-    // Tag image with chat ID if provided (makes it appear in chat gallery)
-    if (chatId) {
-      console.log('[IMAGE_TOOL] Tagging image with chat ID:', chatId);
-      await prisma.imageTag.create({
-        data: {
-          imageId: image.id,
-          tagType: 'CHAT',
-          tagId: chatId,
-        },
-      });
-    }
-
     return {
       id: image.id,
       url: `/api/images/${image.id}`,
@@ -351,6 +339,8 @@ export async function executeImageGenerationTool(
       success: true,
       images: savedImages,
       message: `Successfully generated ${savedImages.length} image(s) using ${imageProfile.modelName}`,
+      provider: imageProfile.provider,
+      model: imageProfile.modelName,
     };
   } catch (error) {
     console.error('[IMAGE_TOOL] Error during execution:', error);

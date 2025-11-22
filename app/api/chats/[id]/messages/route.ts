@@ -8,7 +8,7 @@ import { prisma } from '@/lib/prisma'
 import { createLLMProvider } from '@/lib/llm/factory'
 import { decryptApiKey } from '@/lib/encryption'
 import { loadChatFilesForLLM } from '@/lib/chat-files'
-import { detectToolCalls, executeToolCall, formatToolResult } from '@/lib/chat/tool-executor'
+import { detectToolCalls, executeToolCall } from '@/lib/chat/tool-executor'
 import { imageGenerationToolDefinition, anthropicImageGenerationToolDefinition } from '@/lib/tools/image-generation-tool'
 import { z } from 'zod'
 
@@ -147,11 +147,14 @@ export async function POST(
     const fileAttachments = await loadChatFilesForLLM(attachedFiles)
 
     // Prepare messages for LLM
+    // Filter out TOOL messages - they should not be sent to the LLM
     const messages = [
-      ...chat.messages.map((msg: { role: string; content: string }) => ({
-        role: msg.role.toLowerCase() as 'system' | 'user' | 'assistant',
-        content: msg.content,
-      })),
+      ...chat.messages
+        .filter((msg: { role: string }) => msg.role !== 'TOOL')
+        .map((msg: { role: string; content: string }) => ({
+          role: msg.role.toLowerCase() as 'system' | 'user' | 'assistant',
+          content: msg.content,
+        })),
       {
         role: 'user' as const,
         content,
@@ -237,7 +240,7 @@ export async function POST(
           }
 
           // Detect and execute tool calls
-          const { toolExecutionMessages, generatedImagePaths } = await processToolCalls(
+          const { toolMessages, generatedImagePaths } = await processToolCalls(
             rawResponse,
             chat,
             user,
@@ -256,22 +259,42 @@ export async function POST(
             },
           })
 
-          // Create ChatFile records for generated images and attach to message
-          if (generatedImagePaths.length > 0) {
-            console.log('[TOOLS] Creating ChatFile records for', generatedImagePaths.length, 'generated image(s)')
-            for (const imagePath of generatedImagePaths) {
-              await prisma.chatFile.create({
+          // Save tool messages if tools were executed
+          if (toolMessages.length > 0) {
+            console.log('[TOOLS] Saving', toolMessages.length, 'tool message(s)')
+            for (const toolMsg of toolMessages) {
+              const toolMessage = await prisma.message.create({
                 data: {
                   chatId: chat.id,
-                  messageId: assistantMessage.id,
-                  filename: imagePath.filename,
-                  filepath: imagePath.filepath,
-                  mimeType: imagePath.mimeType,
-                  size: imagePath.size,
-                  width: imagePath.width,
-                  height: imagePath.height,
+                  role: 'TOOL',
+                  content: JSON.stringify({
+                    toolName: toolMsg.toolName,
+                    success: toolMsg.success,
+                    result: toolMsg.content,
+                    provider: toolMsg.metadata?.provider,
+                    model: toolMsg.metadata?.model,
+                  }),
                 },
               })
+
+              // Attach generated images to tool message
+              if (generatedImagePaths.length > 0) {
+                console.log('[TOOLS] Attaching', generatedImagePaths.length, 'generated image(s) to tool message')
+                for (const imagePath of generatedImagePaths) {
+                  await prisma.chatFile.create({
+                    data: {
+                      chatId: chat.id,
+                      messageId: toolMessage.id,
+                      filename: imagePath.filename,
+                      filepath: imagePath.filepath,
+                      mimeType: imagePath.mimeType,
+                      size: imagePath.size,
+                      width: imagePath.width,
+                      height: imagePath.height,
+                    },
+                  })
+                }
+              }
             }
           }
 
@@ -289,7 +312,7 @@ export async function POST(
                 messageId: assistantMessage.id,
                 usage,
                 attachmentResults,
-                toolsExecuted: toolExecutionMessages.length > 0,
+                toolsExecuted: toolMessages.length > 0,
               })}\n\n`
             )
           )
@@ -395,13 +418,13 @@ export async function POST(
       user: any,
       controller: ReadableStreamDefaultController<Uint8Array>,
       encoder: TextEncoder
-    ): Promise<{ toolExecutionMessages: { role: string; content: string }[]; generatedImagePaths: Array<{ filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number }> }> {
-      const toolExecutionMessages: { role: string; content: string }[] = []
+    ): Promise<{ toolMessages: Array<{ toolName: string; success: boolean; content: string; metadata?: { provider?: string; model?: string } }>; generatedImagePaths: Array<{ filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number }> }> {
+      const toolMessages: Array<{ toolName: string; success: boolean; content: string; metadata?: { provider?: string; model?: string } }> = []
       const generatedImagePaths: Array<{ filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number }> = []
 
       if (!rawResponse) {
         console.log('[TOOLS] No raw response available for tool detection')
-        return { toolExecutionMessages, generatedImagePaths }
+        return { toolMessages, generatedImagePaths }
       }
 
       console.log('[TOOLS] Attempting to detect tool calls from response')
@@ -410,7 +433,7 @@ export async function POST(
 
       if (toolCalls.length === 0) {
         console.log('[TOOLS] No tool calls detected')
-        return { toolExecutionMessages, generatedImagePaths }
+        return { toolMessages, generatedImagePaths }
       }
 
       console.log('[TOOLS] Notifying client of tool detection')
@@ -427,8 +450,8 @@ export async function POST(
         )
 
         // Collect generated image paths for ChatFile creation
-        if (toolResult.success && (toolResult.result as any)?.images) {
-          for (const img of (toolResult.result as any).images) {
+        if (toolResult.success && Array.isArray(toolResult.result)) {
+          for (const img of toolResult.result) {
             if (img.filepath) {
               generatedImagePaths.push({
                 filename: img.filename,
@@ -442,8 +465,19 @@ export async function POST(
           }
         }
 
-        const formattedResult = formatToolResult(toolResult, chat.connectionProfile.provider)
-        toolExecutionMessages.push(formattedResult)
+        // Format tool result for display
+        const resultText = toolResult.success
+          ? toolResult.toolName === 'generate_image'
+            ? `Generated ${(toolResult.result as any)?.length || 1} image(s)`
+            : JSON.stringify(toolResult.result, null, 2)
+          : `Error: ${toolResult.error || 'Unknown error'}`
+
+        toolMessages.push({
+          toolName: toolResult.toolName,
+          success: toolResult.success,
+          content: resultText,
+          metadata: toolResult.metadata,
+        })
 
         controller.enqueue(
           encoder.encode(
@@ -458,7 +492,7 @@ export async function POST(
         )
       }
 
-      return { toolExecutionMessages, generatedImagePaths }
+      return { toolMessages, generatedImagePaths }
     }
 
     return new NextResponse(stream, {

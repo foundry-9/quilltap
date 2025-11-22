@@ -11,6 +11,47 @@ export class OpenAIImageProvider extends ImageGenProvider {
   readonly provider = 'OPENAI';
   readonly supportedModels = ['gpt-image-1', 'dall-e-3', 'dall-e-2'];
 
+  /**
+   * Validate and normalize size for OpenAI API
+   * gpt-image-1: 1024x1024, 1024x1536, 1536x1024, auto
+   * dall-e-3: 1024x1024, 1024x1792, 1792x1024
+   * dall-e-2: 256x256, 512x512, 1024x1024
+   */
+  private validateAndNormalizeSize(size: string | undefined, model: string): string {
+    if (!size) {
+      return '1024x1024';
+    }
+
+    const isGptImage = model === 'gpt-image-1';
+
+    if (isGptImage) {
+      // gpt-image-1 supports: 1024x1024, 1024x1536, 1536x1024, auto
+      const gptImageSizes = ['1024x1024', '1024x1536', '1536x1024', 'auto'];
+      if (gptImageSizes.includes(size)) {
+        return size;
+      }
+      // Map unsupported sizes to nearest valid size
+      return '1024x1024';
+    }
+
+    if (model === 'dall-e-3') {
+      // dall-e-3 supports: 1024x1024, 1024x1792, 1792x1024
+      const dalleThreeSizes = ['1024x1024', '1024x1792', '1792x1024'];
+      if (dalleThreeSizes.includes(size)) {
+        return size;
+      }
+      // Map unsupported sizes to nearest valid size
+      return '1024x1024';
+    }
+
+    // dall-e-2 supports: 256x256, 512x512, 1024x1024
+    const dalleTwoSizes = ['256x256', '512x512', '1024x1024'];
+    if (dalleTwoSizes.includes(size)) {
+      return size;
+    }
+    return '1024x1024';
+  }
+
   async generateImage(
     params: ImageGenParams,
     apiKey: string
@@ -31,12 +72,8 @@ export class OpenAIImageProvider extends ImageGenProvider {
       requestParams.response_format = 'b64_json';
     }
 
-    // Size handling differs between models
-    if (params.size) {
-      requestParams.size = params.size;
-    } else {
-      requestParams.size = '1024x1024';
-    }
+    // Size handling with validation
+    requestParams.size = this.validateAndNormalizeSize(params.size, params.model);
 
     // quality and style are DALL-E 3 specific parameters
     if (!isGptImage) {
