@@ -149,10 +149,31 @@ export class OpenAIProvider extends LLMProvider {
 
     const stream = (await client.chat.completions.create(requestParams)) as unknown as AsyncIterable<any>
 
+    let fullMessage: any = null
+
     for await (const chunk of stream) {
       const content = chunk.choices[0]?.delta?.content
       const finishReason = chunk.choices[0]?.finish_reason
       const hasUsage = chunk.usage
+
+      // Store the most recent chunk (needed for tool calls)
+      if (!fullMessage) {
+        fullMessage = chunk
+      } else {
+        // Merge tool calls if present
+        if (chunk.choices?.[0]?.tool_calls) {
+          if (!fullMessage.choices[0]) fullMessage.choices[0] = {}
+          fullMessage.choices[0].tool_calls = chunk.choices[0].tool_calls
+        }
+        // Update finish reason
+        if (finishReason) {
+          fullMessage.choices[0].finish_reason = finishReason
+        }
+        // Update usage
+        if (hasUsage) {
+          fullMessage.usage = chunk.usage
+        }
+      }
 
       // Yield content unless this is the final chunk with usage info
       if (content && !(finishReason && hasUsage)) {
@@ -173,7 +194,7 @@ export class OpenAIProvider extends LLMProvider {
             totalTokens: chunk.usage?.total_tokens ?? 0,
           },
           attachmentResults,
-          rawResponse: chunk,
+          rawResponse: fullMessage,
         }
       }
     }
