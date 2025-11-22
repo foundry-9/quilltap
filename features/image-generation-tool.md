@@ -1125,9 +1125,39 @@ Details:
 
 ### 3. Tool Definition
 
-- [ ] Create `lib/tools/image-generation-tool.ts` with tool schema
-- [ ] Define `ImageGenerationToolConfig` interface
-- [ ] Export tool definition in OpenAI and Anthropic formats
+- [x] Create `lib/tools/image-generation-tool.ts` with tool schema
+- [x] Define `ImageGenerationToolConfig` interface
+- [x] Export tool definition in OpenAI and Anthropic formats
+
+Status: ✅ COMPLETED
+
+Implementation Files: `lib/tools/image-generation-tool.ts` and `lib/tools/registry.ts`
+
+Details:
+
+- Created `lib/tools/image-generation-tool.ts`:
+  - `ImageGenerationToolInput` interface for LLM tool parameters
+  - `ImageGenerationToolConfig` interface for tool configuration
+  - `GeneratedImageResult` interface for image response metadata
+  - `ImageGenerationToolOutput` interface for tool execution results
+  - OpenAI format tool definition (function calling)
+  - Anthropic format tool definition (tool_use)
+  - `validateImageGenerationInput()` function for input validation
+  - `getProviderConstraints()` for provider-specific capabilities
+  - Helper functions: `getOpenAIImageGenerationTool()`, `getAnthropicImageGenerationTool()`
+
+- Created `lib/tools/registry.ts`:
+  - `ToolRegistry` class for managing available tools
+  - `getToolRegistry()` singleton accessor
+  - `toOpenAIFormat()` - Converts tools to OpenAI function calling format
+  - `toAnthropicFormat()` - Converts tools to Anthropic tool_use format
+  - `toGoogleFormat()` - Converts tools to Google format
+  - `toProviderFormat()` - Provider-aware tool format conversion
+  - Support for: OpenAI, Anthropic, Grok, Ollama, OpenRouter, Gab AI
+
+- Created `lib/tools/index.ts`:
+  - Central exports for all tool functionality
+  - Re-exports tool definitions and registry
 
 ### 4. Tool Execution Handler
 
@@ -1139,10 +1169,14 @@ Details:
 
 ### 5. Tool Registry
 
-- [ ] Create `lib/tools/registry.ts` with `ToolRegistry` class
-- [ ] Implement tool registration and lookup
-- [ ] Add format converters for different LLM providers
-- [ ] Register image generation tool
+- [x] Create `lib/tools/registry.ts` with `ToolRegistry` class
+- [x] Implement tool registration and lookup
+- [x] Add format converters for different LLM providers
+- [x] Register image generation tool
+
+Status: ✅ COMPLETED (included in Phase 3)
+
+This was implemented as part of Phase 3 to provide central tool management.
 
 ### 6. Chat Integration
 
