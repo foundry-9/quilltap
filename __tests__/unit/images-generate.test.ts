@@ -185,6 +185,9 @@ describe('POST /api/images/generate', () => {
       size: 67,
       width: null,
       height: null,
+      source: 'generated',
+      generationPrompt: 'a beautiful landscape',
+      generationModel: 'dall-e-3',
       createdAt: new Date(),
       updatedAt: new Date(),
       tags: [],
@@ -207,6 +210,17 @@ describe('POST /api/images/generate', () => {
     expect(data.metadata.prompt).toBe('a beautiful landscape')
     expect(data.metadata.provider).toBe('OPENAI')
     expect(mockProvider.generateImage).toHaveBeenCalled()
+
+    // Verify new Phase 4 fields are set correctly
+    expect(mockPrisma.image.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          source: 'generated',
+          generationPrompt: 'a beautiful landscape',
+          generationModel: 'dall-e-3',
+        }),
+      })
+    )
   })
 
   it('should handle image generation with tags', async () => {
@@ -268,6 +282,9 @@ describe('POST /api/images/generate', () => {
       size: 67,
       width: null,
       height: null,
+      source: 'generated',
+      generationPrompt: 'a warrior character',
+      generationModel: 'dall-e-3',
       createdAt: new Date(),
       updatedAt: new Date(),
       tags: [
@@ -362,6 +379,9 @@ describe('POST /api/images/generate', () => {
       size: 67,
       width: null,
       height: null,
+      source: 'generated',
+      generationPrompt: 'a test image',
+      generationModel: 'dall-e-3',
       createdAt: new Date(),
       updatedAt: new Date(),
       tags: [],

@@ -312,6 +312,9 @@ model Image {
   size            Int      // File size in bytes
   width           Int?
   height          Int?
+  source          String   @default("upload") // 'upload' | 'import' | 'generated'
+  generationPrompt String?  @db.Text // Original prompt for generated images
+  generationModel  String?  // Which model generated the image (e.g., "dalle-3", "imagen-3")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

@@ -111,6 +111,7 @@ export async function POST(request: NextRequest) {
           size: imageData.size,
           width: imageData.width,
           height: imageData.height,
+          source: 'import',
           tags: tags
             ? {
                 create: tags.map((tag) => ({
@@ -161,6 +162,7 @@ export async function POST(request: NextRequest) {
           size: imageData.size,
           width: imageData.width,
           height: imageData.height,
+          source: 'upload',
           tags: tags
             ? {
                 create: tags.map((tag) => ({

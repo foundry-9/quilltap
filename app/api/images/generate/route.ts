@@ -153,6 +153,9 @@ export async function POST(request: NextRequest) {
             filepath,
             mimeType: generatedImage.mimeType,
             size: imageBuffer.length,
+            source: 'generated',
+            generationPrompt: prompt,
+            generationModel: profile.modelName,
             tags: tags
               ? {
                   create: tags.map((tag) => ({
