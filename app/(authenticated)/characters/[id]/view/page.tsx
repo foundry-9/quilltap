@@ -9,6 +9,7 @@ import MessageContent from '@/components/chat/MessageContent'
 import { RecentCharacterConversations } from '@/components/character/recent-conversations'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
+import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 
 interface Tag {
   id: string
@@ -57,6 +58,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const [showChatDialog, setShowChatDialog] = useState(false)
   const [selectedProfileId, setSelectedProfileId] = useState<string>('')
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>('')
+  const [selectedImageProfileId, setSelectedImageProfileId] = useState<string | null>(null)
   const [creatingChat, setCreatingChat] = useState(false)
   const { style } = useAvatarDisplay()
 
@@ -149,6 +151,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           characterId: id,
           connectionProfileId: selectedProfileId,
           personaId: selectedPersonaId || undefined,
+          imageProfileId: selectedImageProfileId || undefined,
           title: `Chat with ${character?.name}`,
         }),
       })
@@ -390,6 +393,19 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                   </select>
                 </div>
               )}
+
+              {/* Image Profile Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                  Image Generation Profile (Optional)
+                </label>
+                <ImageProfilePicker
+                  value={selectedImageProfileId}
+                  onChange={setSelectedImageProfileId}
+                  characterId={id}
+                  personaId={selectedPersonaId}
+                />
+              </div>
             </div>
 
             <div className="flex gap-3 justify-end mt-6">

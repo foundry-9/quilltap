@@ -90,7 +90,7 @@ export default function ImageProfilesTab() {
   if (loading) {
     return (
       <div className="flex justify-center py-8">
-        <div className="text-gray-600">Loading image profiles...</div>
+        <div className="text-gray-600 dark:text-gray-400">Loading image profiles...</div>
       </div>
     )
   }
@@ -100,8 +100,8 @@ export default function ImageProfilesTab() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Image Generation Profiles</h2>
-          <p className="text-sm text-gray-600 mt-1">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Image Generation Profiles</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
             Manage profiles for different image generation providers
           </p>
         </div>
@@ -117,15 +117,15 @@ export default function ImageProfilesTab() {
 
       {/* Error Alert */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/50 text-red-700 dark:text-red-400 px-4 py-3 rounded">
           {error}
         </div>
       )}
 
       {/* Form */}
       {(showForm || editingId) && (
-        <div className="border rounded-lg p-6 bg-gray-50">
-          <h3 className="text-md font-semibold text-gray-900 mb-4">
+        <div className="border border-gray-200 dark:border-slate-700 rounded-lg p-6 bg-gray-50 dark:bg-slate-900/50">
+          <h3 className="text-md font-semibold text-gray-900 dark:text-white mb-4">
             {editingProfile ? 'Edit Profile' : 'Create New Profile'}
           </h3>
           <ImageProfileForm
@@ -141,8 +141,8 @@ export default function ImageProfilesTab() {
       {!showForm && !editingId && (
         <div className="space-y-3">
           {profiles.length === 0 ? (
-            <div className="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
-              <p className="text-gray-600 mb-4">No image profiles yet</p>
+            <div className="text-center py-8 bg-gray-50 dark:bg-slate-900/30 rounded-lg border border-gray-200 dark:border-slate-700">
+              <p className="text-gray-600 dark:text-gray-400 mb-4">No image profiles yet</p>
               <button
                 onClick={() => setShowForm(true)}
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
@@ -154,12 +154,12 @@ export default function ImageProfilesTab() {
             profiles.map(profile => (
               <div
                 key={profile.id}
-                className="border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition"
+                className="border border-gray-200 dark:border-slate-700 rounded-lg p-4 hover:border-gray-300 dark:hover:border-slate-600 transition bg-white dark:bg-slate-800"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <h3 className="font-medium text-gray-900">{profile.name}</h3>
+                      <h3 className="font-medium text-gray-900 dark:text-white">{profile.name}</h3>
                       <ProviderBadge provider={profile.provider} />
                       {profile.isDefault && (
                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
@@ -167,28 +167,28 @@ export default function ImageProfilesTab() {
                         </span>
                       )}
                     </div>
-                    <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
+                    <div className="grid grid-cols-2 gap-4 text-sm text-gray-600 dark:text-gray-400">
                       <div>
-                        <p className="text-xs text-gray-500 uppercase">Model</p>
-                        <p className="font-mono text-sm">{profile.modelName}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-500 uppercase">Model</p>
+                        <p className="font-mono text-sm dark:text-gray-300">{profile.modelName}</p>
                       </div>
                       {profile.apiKey && (
                         <div>
-                          <p className="text-xs text-gray-500 uppercase">API Key</p>
-                          <p className="text-sm">{profile.apiKey.label}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-500 uppercase">API Key</p>
+                          <p className="text-sm dark:text-gray-300">{profile.apiKey.label}</p>
                         </div>
                       )}
                     </div>
 
                     {/* Parameters Display */}
                     {Object.keys(profile.parameters).length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-gray-200">
-                        <p className="text-xs text-gray-500 uppercase mb-2">Parameters</p>
+                      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-slate-700">
+                        <p className="text-xs text-gray-500 dark:text-gray-500 uppercase mb-2">Parameters</p>
                         <div className="space-y-1">
                           {Object.entries(profile.parameters).map(([key, value]) => (
-                            <div key={key} className="text-xs text-gray-600">
+                            <div key={key} className="text-xs text-gray-600 dark:text-gray-400">
                               <span className="font-mono">{key}:</span>{' '}
-                              <span className="text-gray-900">
+                              <span className="text-gray-900 dark:text-gray-200">
                                 {typeof value === 'string' ? value : JSON.stringify(value)}
                               </span>
                             </div>
@@ -202,26 +202,26 @@ export default function ImageProfilesTab() {
                   <div className="flex gap-2 ml-4">
                     <button
                       onClick={() => setEditingId(profile.id)}
-                      className="px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded border border-blue-200 hover:border-blue-300"
+                      className="px-3 py-1 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded border border-blue-200 dark:border-blue-900/50 hover:border-blue-300 dark:hover:border-blue-900/70"
                     >
                       Edit
                     </button>
                     <div className="relative">
                       <button
                         onClick={() => setDeleteConfirming(deleteConfirming === profile.id ? null : profile.id)}
-                        className="px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded border border-red-200 hover:border-red-300"
+                        className="px-3 py-1 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded border border-red-200 dark:border-red-900/50 hover:border-red-300 dark:hover:border-red-900/70"
                       >
                         Delete
                       </button>
 
                       {/* Delete Confirmation Popover */}
                       {deleteConfirming === profile.id && (
-                        <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-3 whitespace-nowrap z-10">
-                          <p className="text-sm text-gray-700 mb-2">Delete this profile?</p>
+                        <div className="absolute right-0 top-full mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg p-3 whitespace-nowrap z-10">
+                          <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">Delete this profile?</p>
                           <div className="flex gap-2">
                             <button
                               onClick={() => setDeleteConfirming(null)}
-                              className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded"
+                              className="px-2 py-1 text-xs bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded"
                             >
                               Cancel
                             </button>

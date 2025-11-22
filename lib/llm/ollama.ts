@@ -38,20 +38,27 @@ export class OllamaProvider extends LLMProvider {
       content: m.content,
     }))
 
+    const requestBody: any = {
+      model: params.model,
+      messages,
+      stream: false,
+      options: {
+        temperature: params.temperature ?? 0.7,
+        num_predict: params.maxTokens ?? 1000,
+        top_p: params.topP ?? 1,
+        stop: params.stop,
+      },
+    }
+
+    // Add tools if provided
+    if (params.tools && params.tools.length > 0) {
+      requestBody.tools = params.tools
+    }
+
     const response = await fetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: params.model,
-        messages,
-        stream: false,
-        options: {
-          temperature: params.temperature ?? 0.7,
-          num_predict: params.maxTokens ?? 1000,
-          top_p: params.topP ?? 1,
-          stop: params.stop,
-        },
-      }),
+      body: JSON.stringify(requestBody),
     })
 
     if (!response.ok) {
@@ -83,19 +90,26 @@ export class OllamaProvider extends LLMProvider {
       content: m.content,
     }))
 
+    const requestBody: any = {
+      model: params.model,
+      messages,
+      stream: true,
+      options: {
+        temperature: params.temperature ?? 0.7,
+        num_predict: params.maxTokens ?? 1000,
+        top_p: params.topP ?? 1,
+      },
+    }
+
+    // Add tools if provided
+    if (params.tools && params.tools.length > 0) {
+      requestBody.tools = params.tools
+    }
+
     const response = await fetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: params.model,
-        messages,
-        stream: true,
-        options: {
-          temperature: params.temperature ?? 0.7,
-          num_predict: params.maxTokens ?? 1000,
-          top_p: params.topP ?? 1,
-        },
-      }),
+      body: JSON.stringify(requestBody),
     })
 
     if (!response.ok) {
