@@ -123,15 +123,26 @@ export function detectToolCalls(
     console.log('[TOOLS] detectToolCalls - response type:', typeof response);
     console.log('[TOOLS] detectToolCalls - response keys:', response ? Object.keys(response) : 'null/undefined');
 
-    // OpenAI format
-    if (provider === 'OPENAI' && response?.tool_calls) {
-      console.log('[TOOLS] detectToolCalls - OpenAI format detected');
-      for (const toolCall of response.tool_calls) {
-        if (toolCall.type === 'function' && toolCall.function) {
-          toolCalls.push({
-            name: toolCall.function.name,
-            arguments: JSON.parse(toolCall.function.arguments || '{}'),
-          });
+    // OpenAI format - supports both direct tool_calls and nested in choices[0].message
+    if (provider === 'OPENAI') {
+      let toolCallsArray = response?.tool_calls;
+
+      // Check nested structure from streaming responses
+      if (!toolCallsArray && response?.choices?.[0]?.message?.tool_calls) {
+        toolCallsArray = response.choices[0].message.tool_calls;
+        console.log('[TOOLS] detectToolCalls - OpenAI format detected (streaming structure)');
+      } else if (toolCallsArray) {
+        console.log('[TOOLS] detectToolCalls - OpenAI format detected (direct structure)');
+      }
+
+      if (toolCallsArray && toolCallsArray.length > 0) {
+        for (const toolCall of toolCallsArray) {
+          if (toolCall.type === 'function' && toolCall.function) {
+            toolCalls.push({
+              name: toolCall.function.name,
+              arguments: JSON.parse(toolCall.function.arguments || '{}'),
+            });
+          }
         }
       }
     }
