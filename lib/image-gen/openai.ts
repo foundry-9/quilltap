@@ -24,8 +24,12 @@ export class OpenAIImageProvider extends ImageGenProvider {
       model: params.model,
       prompt: params.prompt,
       n: params.n ?? 1,
-      response_format: 'b64_json',
     };
+
+    // gpt-image-1 returns URL by default, DALL-E models can use b64_json
+    if (!isGptImage) {
+      requestParams.response_format = 'b64_json';
+    }
 
     // Size handling differs between models
     if (params.size) {
@@ -48,7 +52,8 @@ export class OpenAIImageProvider extends ImageGenProvider {
 
     return {
       images: response.data.map((img) => ({
-        data: img.b64_json!,
+        // gpt-image-1 returns urls, DALL-E models return b64_json
+        data: img.b64_json || img.url || '',
         mimeType: 'image/png',
         revisedPrompt: img.revised_prompt,
       })),
