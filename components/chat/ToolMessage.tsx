@@ -15,6 +15,18 @@ interface ToolMessageProps {
       mimeType: string
     }>
   }
+  readonly character?: {
+    id: string
+    name: string
+    title?: string | null
+    avatarUrl?: string
+    defaultImageId?: string
+    defaultImage?: {
+      id: string
+      filepath: string
+      url?: string
+    } | null
+  }
   readonly onImageClick?: (filepath: string, filename: string, fileId: string) => void
 }
 
@@ -27,7 +39,7 @@ interface ToolResult {
   model?: string
 }
 
-export default function ToolMessage({ message, onImageClick }: ToolMessageProps) {
+export default function ToolMessage({ message, character, onImageClick }: ToolMessageProps) {
   const [showSource, setShowSource] = useState(false)
 
   let toolData: ToolResult = {
@@ -82,11 +94,20 @@ export default function ToolMessage({ message, onImageClick }: ToolMessageProps)
         <div className={`px-4 py-3 rounded-lg ${info.bgColor}`}>
           {/* Tool header */}
           <div className="flex items-center gap-2 mb-2">
-            <span className="font-semibold text-sm text-gray-900 dark:text-white">
-              {info.displayName}
-            </span>
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                {character && (
+                  <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">
+                    {character.name} requested
+                  </span>
+                )}
+                <span className="font-semibold text-sm text-gray-900 dark:text-white">
+                  {info.displayName}
+                </span>
+              </div>
+            </div>
             <span
-              className={`inline-block px-2 py-0.5 text-xs font-medium rounded ${
+              className={`inline-block px-2 py-0.5 text-xs font-medium rounded ml-auto ${
                 toolData.success
                   ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
                   : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'

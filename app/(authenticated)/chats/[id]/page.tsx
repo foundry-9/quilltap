@@ -697,6 +697,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               <ToolMessage
                 key={message.id}
                 message={message}
+                character={chat?.character}
                 onImageClick={(filepath, filename, fileId) => {
                   setModalImage({ src: `/${filepath}`, filename, fileId })
                 }}
