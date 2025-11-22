@@ -227,6 +227,10 @@ export async function POST(
           // Log rawResponse details for debugging
           console.log('[TOOLS] rawResponse type:', typeof rawResponse)
           console.log('[TOOLS] rawResponse keys:', rawResponse ? Object.keys(rawResponse) : 'null')
+          if (rawResponse) {
+            console.log('[TOOLS] rawResponse.choices:', JSON.stringify(rawResponse.choices, null, 2))
+            console.log('[TOOLS] rawResponse.content:', JSON.stringify(rawResponse.content, null, 2))
+          }
 
           // Detect and execute tool calls
           const toolExecutionMessages = await processToolCalls(
@@ -309,6 +313,11 @@ export async function POST(
 
       // Get tools for this chat if an image profile is configured
       const tools = getToolsForProvider(chat.connectionProfile.provider, chat.imageProfileId)
+
+      console.log('[TOOLS] About to call streamMessage with tools:', tools.length > 0 ? 'YES' : 'NO')
+      if (tools.length > 0) {
+        console.log('[TOOLS] Tools being passed:', JSON.stringify(tools, null, 2))
+      }
 
       for await (const chunk of provider.streamMessage(
         {
