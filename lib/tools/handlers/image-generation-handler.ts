@@ -194,18 +194,22 @@ async function generateImagesWithProvider(
   imageProfile: any,
   userId: string
 ): Promise<GeneratedImageResult[]> {
+  console.log('[IMAGE_PROVIDER] Getting provider:', imageProfile.provider);
   const provider = getImageGenProvider(imageProfile.provider);
 
   // Decrypt the API key
   let decryptedKey: string;
   try {
+    console.log('[IMAGE_PROVIDER] Decrypting API key...');
     decryptedKey = decryptApiKey(
       imageProfile.apiKey.keyEncrypted,
       imageProfile.apiKey.keyIv,
       imageProfile.apiKey.keyAuthTag,
       imageProfile.userId
     );
+    console.log('[IMAGE_PROVIDER] API key decrypted successfully');
   } catch (error) {
+    console.error('[IMAGE_PROVIDER] Failed to decrypt API key:', error);
     throw new ImageGenerationError(
       'ENCRYPTION_ERROR',
       'Failed to decrypt API key',
@@ -214,17 +218,22 @@ async function generateImagesWithProvider(
   }
 
   // Merge parameters (profile defaults + user input)
+  console.log('[IMAGE_PROVIDER] Merging parameters...');
   const mergedParams = mergeParameters(
     toolInput,
     imageProfile.parameters as Record<string, unknown>
   );
+  console.log('[IMAGE_PROVIDER] Merged params:', { ...mergedParams, model: mergedParams.model, size: mergedParams.size });
 
   // Generate images
   let generationResponse;
   try {
+    console.log('[IMAGE_PROVIDER] Calling provider.generateImage...');
     generationResponse = await provider.generateImage(mergedParams, decryptedKey);
+    console.log('[IMAGE_PROVIDER] Generation successful, got', generationResponse.images.length, 'image(s)');
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('[IMAGE_PROVIDER] Generation failed:', errorMessage);
     throw new ImageGenerationError(
       'PROVIDER_ERROR',
       `Image generation failed: ${errorMessage}`,
@@ -234,6 +243,7 @@ async function generateImagesWithProvider(
 
   // Save images and create database records
   try {
+    console.log('[IMAGE_PROVIDER] Saving', generationResponse.images.length, 'image(s) to database...');
     return await Promise.all(
       generationResponse.images.map((img) =>
         saveGeneratedImage(img.data, img.mimeType, userId, {
@@ -245,6 +255,7 @@ async function generateImagesWithProvider(
       )
     );
   } catch (error) {
+    console.error('[IMAGE_PROVIDER] Failed to save images:', error);
     if (error instanceof ImageGenerationError) {
       throw error;
     }
@@ -264,8 +275,12 @@ export async function executeImageGenerationTool(
   context: ImageToolExecutionContext
 ): Promise<ImageGenerationToolOutput> {
   try {
+    console.log('[IMAGE_TOOL] Starting image generation for user:', context.userId);
+    console.log('[IMAGE_TOOL] Profile ID:', context.profileId);
+
     // 1. Validate input
     if (!validateImageGenerationInput(input)) {
+      console.log('[IMAGE_TOOL] Invalid input validation failed');
       return {
         success: false,
         error: 'Invalid input: prompt is required and must be a non-empty string',
@@ -274,19 +289,25 @@ export async function executeImageGenerationTool(
     }
 
     const toolInput = input as unknown as ImageGenerationToolInput;
+    console.log('[IMAGE_TOOL] Input validated. Prompt:', toolInput.prompt.substring(0, 50) + '...');
 
     // 2. Load and validate profile
+    console.log('[IMAGE_TOOL] Loading and validating profile...');
     const profileResult = await loadAndValidateProfile(context.profileId, context.userId);
     if (!profileResult.success) {
+      console.log('[IMAGE_TOOL] Profile validation failed:', profileResult.output?.error);
       return profileResult.output as ImageGenerationToolOutput;
     }
 
     const imageProfile = profileResult.profile;
+    console.log('[IMAGE_TOOL] Profile loaded:', imageProfile.name, 'Provider:', imageProfile.provider);
 
     // 3. Validate provider
     try {
       getImageGenProvider(imageProfile.provider);
-    } catch {
+      console.log('[IMAGE_TOOL] Provider validated');
+    } catch (e) {
+      console.log('[IMAGE_TOOL] Provider validation failed:', e);
       return {
         success: false,
         error: 'Unknown provider',
@@ -295,11 +316,13 @@ export async function executeImageGenerationTool(
     }
 
     // 4. Generate images
+    console.log('[IMAGE_TOOL] Starting image generation...');
     const savedImages = await generateImagesWithProvider(
       toolInput,
       imageProfile,
       context.userId
     );
+    console.log('[IMAGE_TOOL] Images generated and saved:', savedImages.length, 'image(s)');
 
     // 5. Return success response
     return {
@@ -308,7 +331,10 @@ export async function executeImageGenerationTool(
       message: `Successfully generated ${savedImages.length} image(s) using ${imageProfile.modelName}`,
     };
   } catch (error) {
+    console.error('[IMAGE_TOOL] Error during execution:', error);
+
     if (error instanceof ImageGenerationError) {
+      console.error('[IMAGE_TOOL] ImageGenerationError:', error.code, error.message);
       return {
         success: false,
         error: error.code,
@@ -318,6 +344,7 @@ export async function executeImageGenerationTool(
 
     // Unexpected error
     const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('[IMAGE_TOOL] Unexpected error:', errorMessage);
     return {
       success: false,
       error: 'UNKNOWN_ERROR',
