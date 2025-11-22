@@ -1161,11 +1161,31 @@ Details:
 
 ### 4. Tool Execution Handler
 
-- [ ] Create `lib/tools/handlers/image-generation-handler.ts`
-- [ ] Implement profile loading and validation
-- [ ] Implement parameter merging (profile defaults + request params)
-- [ ] Integrate with image storage service
-- [ ] Add error handling and logging
+- [x] Create `lib/tools/handlers/image-generation-handler.ts`
+- [x] Implement profile loading and validation
+- [x] Implement parameter merging (profile defaults + request params)
+- [x] Integrate with image storage service
+- [x] Add error handling and logging
+
+Status: ✅ COMPLETED
+
+Implementation Files: `lib/tools/handlers/image-generation-handler.ts`
+
+Details:
+
+- Created `lib/tools/handlers/image-generation-handler.ts`:
+  - `executeImageGenerationTool()` - Main tool execution function
+  - `validateImageProfile()` - Profile validation utility
+  - `getDefaultImageProfile()` - Get user's default profile
+  - `ImageGenerationError` - Custom error class
+  - `ImageToolExecutionContext` - Execution context type
+  - `loadAndValidateProfile()` - Profile loading with error handling
+  - `generateImagesWithProvider()` - Provider integration and image generation
+  - `saveGeneratedImage()` - Image storage and database integration
+  - `mergeParameters()` - Profile defaults + user input merging
+  - Full error handling with descriptive messages
+  - API key decryption using encryption module
+  - Comprehensive validation and logging
 
 ### 5. Tool Registry
 
@@ -1180,17 +1200,78 @@ This was implemented as part of Phase 3 to provide central tool management.
 
 ### 6. Chat Integration
 
-- [ ] Add optional `imageProfileId` to Chat model
-- [ ] Update chat creation to accept image profile
-- [ ] Update message handler to detect and execute tool calls
-- [ ] Implement tool result formatting for conversation context
+- [x] Add optional `imageProfileId` to Chat model
+- [x] Update chat creation to accept image profile
+- [x] Update message handler to detect and execute tool calls
+- [x] Implement tool result formatting for conversation context
+
+Status: ✅ COMPLETED
+
+Implementation Files: `lib/chat/tool-executor.ts`, `app/api/chats/[id]/messages/route.ts`, database migration
+
+Details:
+
+- **Database Schema** (`prisma/schema.prisma`):
+  - Added optional `imageProfileId` field to Chat model
+  - Added foreign key relation to ImageProfile (ON DELETE SET NULL)
+  - Added reverse relation in ImageProfile model
+  - Migration: `20251122052502_phase_5_chat_image_profile`
+
+- **Tool Execution Module** (`lib/chat/tool-executor.ts`):
+  - `executeToolCall()` - Execute image generation tool requests
+  - `detectToolCalls()` - Detect tool calls in LLM responses (OpenAI, Anthropic, Grok formats)
+  - `formatToolResult()` - Format results for conversation context
+  - Type-safe tool call and result handling
+
+- **Message Handler Enhancement** (`app/api/chats/[id]/messages/route.ts`):
+  - Load imageProfile with chat
+  - Detect tool calls after LLM response
+  - Execute tools with image profile
+  - Stream tool results to client in real-time
+  - Save tool results in conversation history
+  - Helper functions: streamLLMResponse(), updateAttachmentStatus(), processToolCalls(), saveToolResults()
+
+- **Streaming Integration**:
+  - Stream tool detection: `toolsDetected` event
+  - Stream tool results: `toolResult` events
+  - Final status: `toolsExecuted` flag
+  - Graceful error handling in tool execution
 
 ### 7. API Endpoints
 
-- [ ] Create `app/api/image-profiles/route.ts` (list, create)
-- [ ] Create `app/api/image-profiles/[id]/route.ts` (get, update, delete)
-- [ ] Create `app/api/image-profiles/models/route.ts` (get available models)
-- [ ] Add API key validation endpoint for image providers
+- [x] Create `app/api/image-profiles/route.ts` (list, create)
+- [x] Create `app/api/image-profiles/[id]/route.ts` (get, update, delete)
+- [x] Create `app/api/image-profiles/models/route.ts` (get available models)
+- [x] Add API key validation endpoint for image providers
+
+Status: ✅ COMPLETED
+
+Implementation Files: `app/api/image-profiles/`, `PHASE_6_IMPLEMENTATION_SUMMARY.md`
+
+Details:
+
+- **Created `app/api/image-profiles/route.ts`**:
+  - `GET /api/image-profiles` - List all user image profiles with sorting by character/persona tags
+  - `POST /api/image-profiles` - Create new profile with validation and duplicate prevention
+  - Includes API key and tag information in responses
+
+- **Created `app/api/image-profiles/[id]/route.ts`**:
+  - `GET /api/image-profiles/[id]` - Get specific profile with all metadata
+  - `PUT /api/image-profiles/[id]` - Update profile with partial update support
+  - `DELETE /api/image-profiles/[id]` - Delete profile (cascades to chats)
+  - Ownership verification on all operations
+
+- **Created `app/api/image-profiles/models/route.ts`**:
+  - `GET /api/image-profiles/models?provider=X&apiKeyId=Y` - Get available models
+  - Supports both stored keys (decrypted) and direct validation
+  - Graceful fallback to default models on API errors
+  - Returns provider-specific model lists
+
+- **Created `app/api/image-profiles/validate-key/route.ts`**:
+  - `POST /api/image-profiles/validate-key` - Validate API keys before saving
+  - Supports apiKeyId (stored) and apiKey (direct) modes
+  - Returns validation status and available models if valid
+  - Provider-specific validation logic
 
 ### 8. UI Components
 
