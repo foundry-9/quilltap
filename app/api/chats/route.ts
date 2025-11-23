@@ -14,6 +14,7 @@ const createChatSchema = z.object({
   characterId: z.string().uuid(),
   personaId: z.string().uuid().optional(),
   connectionProfileId: z.string().uuid(),
+  imageProfileId: z.string().uuid().optional(),
   title: z.string().optional(),
   scenario: z.string().optional(),
 })
@@ -42,9 +43,16 @@ export async function GET(req: NextRequest) {
           select: {
             id: true,
             name: true,
+            title: true,
             avatarUrl: true,
             defaultImageId: true,
-            defaultImage: true,
+            defaultImage: {
+              select: {
+                id: true,
+                filepath: true,
+                url: true,
+              },
+            },
           },
         },
         persona: {
@@ -52,6 +60,15 @@ export async function GET(req: NextRequest) {
             id: true,
             name: true,
             title: true,
+            avatarUrl: true,
+            defaultImageId: true,
+            defaultImage: {
+              select: {
+                id: true,
+                filepath: true,
+                url: true,
+              },
+            },
           },
         },
         tags: {
@@ -160,6 +177,7 @@ export async function POST(req: NextRequest) {
         characterId: validatedData.characterId,
         personaId: validatedData.personaId || null,
         connectionProfileId: validatedData.connectionProfileId,
+        imageProfileId: validatedData.imageProfileId || null,
         title: validatedData.title || `Chat with ${context.character.name}`,
         contextSummary: validatedData.scenario || null,
         // Inherit tags from character and persona

@@ -17,20 +17,22 @@ Quilltap is a modern, self-hosted chat platform designed for AI-powered roleplay
 - 🔄 SillyTavern import/export compatibility
 - 🔐 Secure encrypted API key storage
 - 🐳 Docker-based deployment
-- 🔒 OAuth authentication (Google)
+- 🔒 OAuth authentication (Google) with local email/password auth planned
 
 ## What Can It Do?
 
 ### Character Management
 
 - Create custom characters with detailed personalities, scenarios, and example dialogues
-- Import characters from SillyTavern (PNG with embedded JSON or standalone JSON files)
-- Export characters to share or backup
+- Upload and assign avatar images to characters
+- Import characters from SillyTavern (JSON format only - PNG card format not supported)
+- Export characters to share or backup (JSON format only)
 - Link personas to characters for personalized interactions
 
 ### Persona System
 
 - Create user personas that define your character in roleplay
+- Upload and assign avatar images to personas
 - Link specific personas to characters for consistent interactions
 - Import/export personas from SillyTavern
 
@@ -41,6 +43,14 @@ Quilltap is a modern, self-hosted chat platform designed for AI-powered roleplay
 - Chat branching with swipes (generate alternative responses)
 - Full chat history preservation
 - Import/export entire conversations from SillyTavern
+
+### Image & Avatar Management
+
+- Upload images via file or URL
+- Image gallery with tagging system
+- Assign avatars to characters and personas
+- Chat-specific avatar overrides
+- User-specific secure image storage
 
 ### Multi-Provider Support
 
@@ -56,7 +66,8 @@ Configure connections to any of these providers:
 
 - AES-256-GCM encryption for API keys
 - Per-user encryption keys
-- OAuth authentication (no password management)
+- OAuth authentication (Google)
+- Optional local email/password authentication with TOTP 2FA (planned for v1.1+)
 - Rate limiting and security headers
 - All data stored in your own PostgreSQL database
 
@@ -310,6 +321,7 @@ Once logged in, you'll need to:
 - [Deployment Guide](docs/DEPLOYMENT.md) - Production deployment instructions
 - [Development Progress](DEVELOPMENT.md) - Feature completion status
 - [Roadmap](features/ROADMAP.md) - Technical architecture and implementation details
+- [Local User Authentication](features/LOCAL_USER_AUTH.md) - Email/password + TOTP 2FA implementation plan (planned)
 
 ## Troubleshooting
 
@@ -334,8 +346,10 @@ Once logged in, you'll need to:
 
 ### Import/Export not working
 
-- Ensure files are valid SillyTavern format (V2 spec)
-- Check file size limits (especially for PNG files)
+- Ensure files are valid SillyTavern format (V2 spec, JSON only)
+- PNG character card format is not supported - use JSON format for character import/export
+- Note: Avatar images work fine - the limitation is only the PNG card format (JSON embedded in PNG)
+- Check file size limits
 - Verify you're logged in
 
 For more help, please [open an issue](https://github.com/foundry-9/quilltap/issues).

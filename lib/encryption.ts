@@ -165,3 +165,24 @@ export function maskApiKey(apiKey: string): string {
 
   return `${prefix}${masked}${suffix}`
 }
+
+/**
+ * Generic encrypt function that wraps encryptApiKey
+ * Used for encrypting any sensitive data (TOTP secrets, backup codes, etc.)
+ */
+export function encryptData(data: string, userId: string) {
+  return encryptApiKey(data, userId)
+}
+
+/**
+ * Generic decrypt function that wraps decryptApiKey
+ * Used for decrypting any sensitive data (TOTP secrets, backup codes, etc.)
+ */
+export function decryptData(
+  encrypted: string,
+  iv: string,
+  authTag: string,
+  userId: string
+): string {
+  return decryptApiKey(encrypted, iv, authTag, userId)
+}

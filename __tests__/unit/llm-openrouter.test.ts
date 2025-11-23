@@ -113,6 +113,7 @@ describe('OpenRouterProvider', () => {
           totalTokens: 30,
         },
         raw: mockResponse,
+        attachmentResults: { sent: [], failed: [] },
       })
     })
 
@@ -273,6 +274,8 @@ describe('OpenRouterProvider', () => {
             completionTokens: 5,
             totalTokens: 15,
           },
+          attachmentResults: { sent: [], failed: [] },
+          rawResponse: expect.any(Object),
         },
       ])
 

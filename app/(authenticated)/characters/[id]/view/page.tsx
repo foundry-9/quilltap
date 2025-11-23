@@ -4,10 +4,12 @@ import { use, useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { showAlert } from '@/lib/alert'
 import { showErrorToast } from '@/lib/toast'
 import MessageContent from '@/components/chat/MessageContent'
 import { RecentCharacterConversations } from '@/components/character/recent-conversations'
+import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
+import { getAvatarClasses } from '@/lib/avatar-styles'
+import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 
 interface Tag {
   id: string
@@ -28,6 +30,7 @@ interface Persona {
 interface Character {
   id: string
   name: string
+  title?: string | null
   description: string
   personality: string
   scenario: string
@@ -55,7 +58,9 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const [showChatDialog, setShowChatDialog] = useState(false)
   const [selectedProfileId, setSelectedProfileId] = useState<string>('')
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>('')
+  const [selectedImageProfileId, setSelectedImageProfileId] = useState<string | null>(null)
   const [creatingChat, setCreatingChat] = useState(false)
+  const { style } = useAvatarDisplay()
 
   const fetchCharacter = useCallback(async () => {
     try {
@@ -146,6 +151,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           characterId: id,
           connectionProfileId: selectedProfileId,
           personaId: selectedPersonaId || undefined,
+          imageProfileId: selectedImageProfileId || undefined,
           title: `Chat with ${character?.name}`,
         }),
       })
@@ -206,11 +212,11 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                   alt={character?.name || ''}
                   width={80}
                   height={80}
-                  className="w-20 h-20 rounded-full object-cover"
+                  className={getAvatarClasses(style, 'lg').imageClass}
                 />
               ) : (
-                <div className="w-20 h-20 rounded-full bg-gray-300 dark:bg-slate-700 flex items-center justify-center">
-                  <span className="text-3xl font-bold text-gray-600 dark:text-gray-400">
+                <div className={getAvatarClasses(style, 'lg').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>
+                  <span className={getAvatarClasses(style, 'lg').fallbackClass}>
                     {character?.name?.charAt(0)?.toUpperCase() || '?'}
                   </span>
                 </div>
@@ -220,6 +226,9 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
                 {character?.name || 'Loading...'}
               </h1>
+              {character?.title && (
+                <p className="text-gray-600 dark:text-gray-400">{character.title}</p>
+              )}
             </div>
           </div>
           <div className="flex gap-2 flex-shrink-0">
@@ -384,6 +393,19 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                   </select>
                 </div>
               )}
+
+              {/* Image Profile Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                  Image Generation Profile (Optional)
+                </label>
+                <ImageProfilePicker
+                  value={selectedImageProfileId}
+                  onChange={setSelectedImageProfileId}
+                  characterId={id}
+                  personaId={selectedPersonaId}
+                />
+              </div>
             </div>
 
             <div className="flex gap-3 justify-end mt-6">

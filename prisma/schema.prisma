@@ -21,10 +21,17 @@ enum Provider {
   GAB_AI
 }
 
+enum ImageProvider {
+  OPENAI
+  GROK
+  GOOGLE_IMAGEN
+}
+
 enum Role {
   SYSTEM
   USER
   ASSISTANT
+  TOOL
 }
 
 enum ImageTagType {
@@ -47,19 +54,34 @@ model User {
   name          String?
   image         String?
   emailVerified DateTime?
+
+  // Password authentication fields (Phase 1)
+  passwordHash  String?   // bcrypt hash (nullable for OAuth-only users)
+
+  // TOTP 2FA fields (Phase 2)
+  totpSecret        String?   // Encrypted TOTP secret
+  totpSecretIv      String?   // IV for TOTP secret encryption
+  totpSecretAuthTag String?   // Auth tag for TOTP secret encryption
+  totpEnabled       Boolean   @default(false)
+  totpVerifiedAt    DateTime? // When 2FA was set up
+  backupCodes       String?   // Encrypted JSON array of backup codes
+  backupCodesIv     String?
+  backupCodesAuthTag String?
+
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts      Account[]
-  sessions      Session[]
-  apiKeys       ApiKey[]
-  profiles      ConnectionProfile[]
-  characters    Character[]
-  personas      Persona[]
-  chats         Chat[]
-  images        Image[]
-  tags          Tag[]
-  chatSettings  ChatSettings?
+  accounts        Account[]
+  sessions        Session[]
+  apiKeys         ApiKey[]
+  profiles        ConnectionProfile[]
+  imageProfiles   ImageProfile[]
+  characters      Character[]
+  personas        Persona[]
+  chats           Chat[]
+  images          Image[]
+  tags            Tag[]
+  chatSettings    ChatSettings?
 
   @@map("users")
 }
@@ -68,6 +90,7 @@ model ChatSettings {
   id                  String   @id @default(uuid())
   userId              String   @unique
   avatarDisplayMode   AvatarDisplayMode @default(ALWAYS)
+  avatarDisplayStyle  String   @default("CIRCULAR") // CIRCULAR or RECTANGULAR
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -130,8 +153,9 @@ model ApiKey {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  profiles      ConnectionProfile[]
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profiles        ConnectionProfile[]
+  imageProfiles   ImageProfile[]
 
   @@map("api_keys")
 }
@@ -162,6 +186,7 @@ model Character {
   id                String   @id @default(uuid())
   userId            String
   name              String
+  title             String?
   description       String   @db.Text
   personality       String   @db.Text
   scenario          String   @db.Text
@@ -225,6 +250,7 @@ model Chat {
   characterId         String
   personaId           String?
   connectionProfileId String
+  imageProfileId      String?  // Optional: separate image generation profile
   title               String
   contextSummary      String?  @db.Text
   sillyTavernMetadata Json?
@@ -235,7 +261,9 @@ model Chat {
   character           Character             @relation(fields: [characterId], references: [id], onDelete: Cascade)
   persona             Persona?              @relation(fields: [personaId], references: [id], onDelete: SetNull)
   connectionProfile   ConnectionProfile     @relation(fields: [connectionProfileId], references: [id])
+  imageProfile        ImageProfile?         @relation(fields: [imageProfileId], references: [id], onDelete: SetNull)
   messages            Message[]
+  files               ChatFile[]
   avatarOverrides     ChatAvatarOverride[]
   tags                ChatTag[]
 
@@ -254,10 +282,34 @@ model Message {
   createdAt     DateTime  @default(now())
 
   chat          Chat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  attachments   ChatFile[]
 
   @@index([chatId, createdAt])
   @@index([swipeGroupId])
   @@map("messages")
+}
+
+// Chat file attachments - files uploaded with messages
+model ChatFile {
+  id              String   @id @default(uuid())
+  chatId          String
+  messageId       String?  // The message this file was sent with (null if not yet sent)
+  filename        String
+  filepath        String   // Path relative to public directory
+  mimeType        String
+  size            Int      // File size in bytes
+  width           Int?     // For images
+  height          Int?     // For images
+  sentToProvider  Boolean  @default(false) // Whether file was successfully sent to LLM provider
+  providerError   String?  // Error message if provider doesn't support file uploads
+  createdAt       DateTime @default(now())
+
+  chat            Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  message         Message? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@index([chatId])
+  @@index([messageId])
+  @@map("chat_files")
 }
 
 // Phase 0.6: Image Gallery and Tagging System
@@ -271,6 +323,9 @@ model Image {
   size            Int      // File size in bytes
   width           Int?
   height          Int?
+  source          String   @default("upload") // 'upload' | 'import' | 'generated'
+  generationPrompt String?  @db.Text // Original prompt for generated images
+  generationModel  String?  // Which model generated the image (e.g., "dalle-3", "imagen-3")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -321,11 +376,12 @@ model Tag {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  user              User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  characterTags     CharacterTag[]
-  personaTags       PersonaTag[]
-  chatTags          ChatTag[]
+  user                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  characterTags         CharacterTag[]
+  personaTags           PersonaTag[]
+  chatTags              ChatTag[]
   connectionProfileTags ConnectionProfileTag[]
+  imageProfileTags      ImageProfileTag[]
 
   @@unique([userId, nameLower])
   @@index([userId, nameLower])
@@ -386,4 +442,42 @@ model ConnectionProfileTag {
   @@unique([connectionProfileId, tagId])
   @@index([tagId])
   @@map("connection_profile_tags")
+}
+
+// Phase 1: Image Generation Profiles
+model ImageProfile {
+  id              String        @id @default(uuid())
+  userId          String
+  name            String
+  provider        ImageProvider
+  apiKeyId        String?
+  baseUrl         String?       // For self-hosted or custom endpoints
+  modelName       String        // e.g., "dall-e-3", "imagen-4", "grok-2-image"
+  parameters      Json          @default("{}") // Provider-specific defaults (quality, style, aspectRatio, etc.)
+  isDefault       Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apiKey          ApiKey?       @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+  tags            ImageProfileTag[]
+  chats           Chat[]        // Chats that use this profile for image generation
+
+  @@unique([userId, name])
+  @@index([userId, isDefault])
+  @@map("image_profiles")
+}
+
+model ImageProfileTag {
+  id              String       @id @default(uuid())
+  imageProfileId  String
+  tagId           String
+  createdAt       DateTime     @default(now())
+
+  imageProfile    ImageProfile @relation(fields: [imageProfileId], references: [id], onDelete: Cascade)
+  tag             Tag          @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([imageProfileId, tagId])
+  @@index([tagId])
+  @@map("image_profile_tags")
 }

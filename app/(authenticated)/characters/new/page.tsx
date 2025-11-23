@@ -10,6 +10,7 @@ export default function NewCharacterPage() {
   const [error, setError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     name: '',
+    title: '',
     description: '',
     personality: '',
     scenario: '',
@@ -82,6 +83,21 @@ export default function NewCharacterPage() {
             onChange={handleChange}
             required
             className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+          />
+        </div>
+
+        <div>
+          <label htmlFor="title" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+            Title (Optional)
+          </label>
+          <input
+            type="text"
+            id="title"
+            name="title"
+            value={formData.title}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+            placeholder="e.g., The Wanderer, Knight of the Realm"
           />
         </div>
 

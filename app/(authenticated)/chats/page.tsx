@@ -6,6 +6,8 @@ import Image from 'next/image'
 import { showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { TagDisplay } from '@/components/tags/tag-display'
+import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
+import { getAvatarClasses } from '@/lib/avatar-styles'
 
 interface Chat {
   id: string
@@ -44,10 +46,11 @@ export default function ChatsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
-  const [characters, setCharacters] = useState<Array<{ id: string; name: string }>>([])
+  const [characters, setCharacters] = useState<Array<{ id: string; name: string; title?: string | null }>>([])
   const [profiles, setProfiles] = useState<Array<{ id: string; name: string }>>([])
   const [highlightedChatId, setHighlightedChatId] = useState<string | null>(null)
   const importedChatRef = useRef<HTMLDivElement>(null)
+  const { style } = useAvatarDisplay()
 
   useEffect(() => {
     fetchChats()
@@ -94,7 +97,7 @@ export default function ChatsPage() {
       const res = await fetch('/api/characters')
       if (res.ok) {
         const data = await res.json()
-        setCharacters(data.characters.map((c: any) => ({ id: c.id, name: c.name })))
+        setCharacters(data.characters.map((c: any) => ({ id: c.id, name: c.name, title: c.title })))
       }
     } catch (err) {
       console.error('Failed to fetch characters:', err)
@@ -329,18 +332,18 @@ export default function ChatsPage() {
                 </div>
               )}
               <div className="flex items-center justify-between">
-                <div className="flex items-center flex-1">
+                <div className="flex items-center flex-1 gap-4">
                   {getAvatarSrc(chat) ? (
                     <Image
                       src={getAvatarSrc(chat)!}
                       alt={chat.character.name}
                       width={48}
                       height={48}
-                      className="w-12 h-12 rounded-full mr-4 object-cover"
+                      className={getAvatarClasses(style, 'md').imageClass}
                     />
                   ) : (
-                    <div className="w-12 h-12 rounded-full bg-gray-300 dark:bg-slate-700 mr-4 flex items-center justify-center">
-                      <span className="text-xl font-bold text-gray-600 dark:text-gray-400">
+                    <div className={getAvatarClasses(style, 'md').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>
+                      <span className={getAvatarClasses(style, 'md').fallbackClass}>
                         {chat.character.name.charAt(0).toUpperCase()}
                       </span>
                     </div>
@@ -417,7 +420,7 @@ export default function ChatsPage() {
                     <option value="">Select a character</option>
                     {characters.map((char) => (
                       <option key={char.id} value={char.id}>
-                        {char.name}
+                        {char.title ? `${char.name} (${char.title})` : char.name}
                       </option>
                     ))}
                   </select>

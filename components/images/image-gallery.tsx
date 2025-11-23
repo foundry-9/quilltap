@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
-import { showAlert } from '@/lib/alert';
+import { showConfirmation } from '@/lib/alert';
 import { showErrorToast } from '@/lib/toast';
 
 export interface ImageData {
@@ -69,7 +69,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
   }, [loadImages]);
 
   async function handleDeleteImage(imageId: string) {
-    if (!confirm('Are you sure you want to delete this image?')) {
+    if (!(await showConfirmation('Permanently delete this image? This cannot be undone.'))) {
       return;
     }
 

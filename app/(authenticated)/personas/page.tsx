@@ -1,11 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { showAlert } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
+import { getAvatarClasses } from '@/lib/avatar-styles'
+import PersonaPhotoGalleryModal from '@/components/images/PersonaPhotoGalleryModal'
 
 interface Persona {
   id: string
@@ -37,11 +38,12 @@ interface Persona {
 }
 
 export default function PersonasPage() {
-  const router = useRouter()
   const [personas, setPersonas] = useState<Persona[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
+  const [galleryPersona, setGalleryPersona] = useState<{ id: string; name: string } | null>(null)
+  const { style } = useAvatarDisplay()
 
   const getAvatarSrc = (persona: Persona): string | null => {
     if (persona.defaultImage) {
@@ -194,26 +196,26 @@ export default function PersonasPage() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {personas.map((persona) => (
             <div
               key={persona.id}
-              className="border border-gray-200 dark:border-slate-700 rounded-lg p-6 hover:shadow-lg transition-shadow bg-white dark:bg-slate-800"
+              className="border border-gray-200 dark:border-slate-700 rounded-lg p-6 hover:shadow-lg transition-shadow bg-white dark:bg-slate-800 flex flex-col"
             >
               <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center flex-grow">
+                <div className="flex items-center flex-grow gap-4">
                   {getAvatarSrc(persona) ? (
                     <Image
                       src={getAvatarSrc(persona)!}
                       alt={persona.name}
                       width={48}
                       height={60}
-                      className="w-12 object-cover mr-3 flex-shrink-0"
+                      className={getAvatarClasses(style, 'md').imageClass}
                       priority={false}
                     />
                   ) : (
-                    <div className="w-12 h-15 flex-shrink-0 bg-gray-300 dark:bg-slate-700 mr-3 flex items-center justify-center" style={{ aspectRatio: '4/5' }}>
-                      <span className="text-xl font-bold text-gray-600 dark:text-gray-300">
+                    <div className={getAvatarClasses(style, 'md').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>
+                      <span className={getAvatarClasses(style, 'md').fallbackClass}>
                         {persona.name.charAt(0).toUpperCase()}
                       </span>
                     </div>
@@ -227,49 +229,60 @@ export default function PersonasPage() {
                 </div>
               </div>
 
-              <p className="text-gray-700 dark:text-gray-300 mb-4 line-clamp-3">
-                {persona.description}
-              </p>
+              <div className="flex-grow">
+                <p className="text-gray-700 dark:text-gray-300 mb-4 line-clamp-3">
+                  {persona.description}
+                </p>
 
-              {persona.characters.length > 0 && (
-                <div className="mb-4">
-                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-2 font-medium">Linked to:</p>
-                  <div className="flex flex-wrap gap-1">
-                    {persona.characters.map((link) => (
-                      <span
-                        key={link.character.id}
-                        className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
-                      >
-                        {link.character.name}
-                      </span>
-                    ))}
+                {persona.characters.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-2 font-medium">Linked to:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {persona.characters.map((link) => (
+                        <span
+                          key={link.character.id}
+                          className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
+                        >
+                          {link.character.name}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {persona.tags.length > 0 && (
-                <div className="mb-4">
-                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-2 font-medium">Tags:</p>
-                  <div className="flex flex-wrap gap-1">
-                    {persona.tags.map((tagLink) => (
-                      <span
-                        key={tagLink.tag.id}
-                        className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
-                      >
-                        {tagLink.tag.name}
-                      </span>
-                    ))}
+                {persona.tags.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-2 font-medium">Tags:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {persona.tags.map((tagLink) => (
+                        <span
+                          key={tagLink.tag.id}
+                          className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
+                        >
+                          {tagLink.tag.name}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 mt-4">
                 <Link
                   href={`/personas/${persona.id}`}
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-center"
                 >
                   Edit
                 </Link>
+                <button
+                  onClick={() => setGalleryPersona({ id: persona.id, name: persona.name })}
+                  className="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                  title="Photos"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </button>
                 <a
                   href={`/api/personas/${persona.id}/export`}
                   className="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
@@ -327,6 +340,16 @@ export default function PersonasPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Persona Photo Gallery Modal */}
+      {galleryPersona && (
+        <PersonaPhotoGalleryModal
+          isOpen={true}
+          onClose={() => setGalleryPersona(null)}
+          personaId={galleryPersona.id}
+          personaName={galleryPersona.name}
+        />
       )}
     </div>
   )

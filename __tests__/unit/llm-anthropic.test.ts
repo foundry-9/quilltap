@@ -90,6 +90,7 @@ describe('AnthropicProvider', () => {
           totalTokens: 30,
         },
         raw: mockResponse,
+        attachmentResults: { sent: [], failed: [] },
       })
     })
 
@@ -277,6 +278,8 @@ describe('AnthropicProvider', () => {
             completionTokens: 5,
             totalTokens: 15,
           },
+          attachmentResults: { sent: [], failed: [] },
+          rawResponse: expect.any(Object),
         },
       ])
 

@@ -1,13 +1,25 @@
 'use client'
 
 import { use, useEffect, useState, useRef, useCallback } from 'react'
-import Link from 'next/link'
 import Image from 'next/image'
-import { TagEditor } from '@/components/tags/tag-editor'
-import { showAlert } from '@/lib/alert'
+import ImageModal from '@/components/chat/ImageModal'
+import ChatPhotoGalleryModal from '@/components/chat/ChatPhotoGalleryModal'
+import { showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { safeJsonParse } from '@/lib/fetch-helpers'
 import MessageContent from '@/components/chat/MessageContent'
+import ToolMessage from '@/components/chat/ToolMessage'
 import { formatMessageTime } from '@/lib/format-time'
+import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
+import { useDebugOptional } from '@/components/providers/debug-provider'
+import DebugPanel from '@/components/debug/DebugPanel'
+
+interface MessageAttachment {
+  id: string
+  filename: string
+  filepath: string
+  mimeType: string
+}
 
 interface Message {
   id: string
@@ -16,6 +28,7 @@ interface Message {
   createdAt: string
   swipeGroupId?: string | null
   swipeIndex?: number | null
+  attachments?: MessageAttachment[]
 }
 
 interface Chat {
@@ -24,6 +37,7 @@ interface Chat {
   character: {
     id: string
     name: string
+    title?: string | null
     avatarUrl?: string
     defaultImageId?: string
     defaultImage?: {
@@ -62,6 +76,17 @@ interface Chat {
     name?: string | null
     image?: string | null
   }
+  connectionProfile?: {
+    id: string
+    name: string
+    provider?: string
+    modelName?: string
+    apiKey?: {
+      id: string
+      provider: string
+      label?: string
+    }
+  }
   messages: Message[]
 }
 
@@ -75,6 +100,8 @@ interface ChatSettings {
 
 export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
+  useAvatarDisplay()
+  const debug = useDebugOptional()
   const [chat, setChat] = useState<Chat | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -88,8 +115,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [swipeStates, setSwipeStates] = useState<Record<string, { current: number; total: number; messages: Message[] }>>({})
   const [viewSourceMessageIds, setViewSourceMessageIds] = useState<Set<string>>(new Set())
   const [chatSettings, setChatSettings] = useState<ChatSettings | null>(null)
+  const [attachedFiles, setAttachedFiles] = useState<Array<{ id: string; filename: string; filepath: string; mimeType: string; url: string }>>([])
+  const [uploadingFile, setUploadingFile] = useState(false)
+  const [modalImage, setModalImage] = useState<{ src: string; filename: string; fileId?: string } | null>(null)
+  const [chatPhotoCount, setChatPhotoCount] = useState(0)
+  const [galleryOpen, setGalleryOpen] = useState(false)
+  const [toolExecutionStatus, setToolExecutionStatus] = useState<{ tool: string; status: 'pending' | 'success' | 'error'; message: string } | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -156,10 +190,24 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
   }, [id])
 
+  const fetchChatPhotoCount = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/chats/${id}/files`)
+      if (res.ok) {
+        const data = await res.json()
+        const imageCount = (data.files || []).filter((f: { mimeType: string }) => f.mimeType.startsWith('image/')).length
+        setChatPhotoCount(imageCount)
+      }
+    } catch (err) {
+      console.error('Failed to fetch chat photo count:', err)
+    }
+  }, [id])
+
   useEffect(() => {
     fetchChat()
     fetchChatSettings()
-  }, [fetchChat, fetchChatSettings])
+    fetchChatPhotoCount()
+  }, [fetchChat, fetchChatSettings, fetchChatPhotoCount])
 
   useEffect(() => {
     scrollToBottom()
@@ -173,32 +221,133 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     return () => clearTimeout(timer)
   }, [])
 
+  // Handle file selection
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploadingFile(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const res = await fetch(`/api/chats/${id}/files`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await safeJsonParse<{ file?: { id: string; filepath: string; mimeType: string; url: string }; error?: string }>(res)
+
+      if (!res.ok || !data.file) {
+        throw new Error(data.error || 'Failed to upload file')
+      }
+      const uploadedFile = data.file
+      setAttachedFiles((prev) => [...prev, {
+        id: uploadedFile.id,
+        filename: file.name,
+        filepath: uploadedFile.filepath,
+        mimeType: uploadedFile.mimeType,
+        url: uploadedFile.url,
+      }])
+      showSuccessToast('File attached')
+    } catch (err) {
+      console.error('Error uploading file:', err)
+      showErrorToast(err instanceof Error ? err.message : 'Failed to upload file')
+    } finally {
+      setUploadingFile(false)
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+
+  // Remove attached file
+  const removeAttachedFile = (fileId: string) => {
+    setAttachedFiles((prev) => prev.filter((f) => f.id !== fileId))
+  }
+
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!input.trim() || sending) return
+    if ((!input.trim() && attachedFiles.length === 0) || sending) return
 
     const userMessage = input.trim()
+    const fileIds = attachedFiles.map((f) => f.id)
+    // Capture attachments before clearing state
+    const messageAttachments: MessageAttachment[] = attachedFiles.map((f) => ({
+      id: f.id,
+      filename: f.filename,
+      filepath: f.filepath,
+      mimeType: f.mimeType,
+    }))
     setInput('')
+    setAttachedFiles([])
     setSending(true)
     setStreaming(true)
     setStreamingContent('')
+
+    // Build display content with file indicators
+    const displayContent = messageAttachments.length > 0
+      ? `${userMessage}${userMessage ? '\n' : ''}[Attached: ${messageAttachments.map(f => f.filename).join(', ')}]`
+      : userMessage
 
     // Add user message to UI
     const tempUserMessageId = `temp-user-${Date.now()}`
     const tempUserMessage: Message = {
       id: tempUserMessageId,
       role: 'USER',
-      content: userMessage,
+      content: displayContent,
       createdAt: new Date().toISOString(),
+      attachments: messageAttachments.length > 0 ? messageAttachments : undefined,
     }
     setMessages((prev) => [...prev, tempUserMessage])
+
+    // Debug: Log outgoing request
+    const requestPayload = { content: userMessage || 'Please look at the attached file(s).', fileIds }
+    let debugEntryId: string | undefined
+    const debugProviderName = chat?.connectionProfile?.name || 'LLM Provider'
+    const debugProviderType = (chat?.connectionProfile?.apiKey?.provider || 'UNKNOWN') as import('@/components/providers/debug-provider').LLMProviderType
+    const debugModel = chat?.connectionProfile?.modelName
+
+    if (debug?.isDebugMode) {
+      debugEntryId = debug.addEntry({
+        direction: 'outgoing',
+        provider: debugProviderName,
+        providerType: debugProviderType,
+        model: debugModel,
+        endpoint: `/api/chats/${id}/messages`,
+        status: 'pending',
+        data: JSON.stringify(requestPayload, null, 2),
+        contentType: 'application/json',
+      })
+    }
+
+    // Debug: Prepare response entry
+    let responseEntryId: string | undefined
+    if (debug?.isDebugMode) {
+      responseEntryId = debug.addEntry({
+        direction: 'incoming',
+        provider: debugProviderName,
+        providerType: debugProviderType,
+        model: debugModel,
+        endpoint: `/api/chats/${id}/messages`,
+        status: 'streaming',
+        data: '',
+        contentType: 'text/event-stream',
+      })
+    }
 
     try {
       const res = await fetch(`/api/chats/${id}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: userMessage }),
+        body: JSON.stringify(requestPayload),
       })
+
+      // Debug: Mark request as complete
+      if (debug?.isDebugMode && debugEntryId) {
+        debug.updateEntry(debugEntryId, { status: 'complete' })
+      }
 
       if (!res.ok) {
         throw new Error('Failed to send message')
@@ -219,6 +368,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         const chunk = decoder.decode(value)
         const lines = chunk.split('\n')
 
+        // Debug: Append raw chunk to response entry
+        if (debug?.isDebugMode && responseEntryId) {
+          debug.appendToEntry(responseEntryId, chunk)
+        }
+
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             try {
@@ -229,7 +383,42 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 setStreamingContent(fullContent)
               }
 
+              // Handle tool detection
+              if (data.toolsDetected) {
+                setToolExecutionStatus({
+                  tool: 'generate_image',
+                  status: 'pending',
+                  message: `Generating ${data.toolsDetected} image${data.toolsDetected > 1 ? 's' : ''}...`,
+                })
+              }
+
+              // Handle tool results
+              if (data.toolResult) {
+                const { name, success, result } = data.toolResult
+                if (success) {
+                  const imageCount = result?.images?.length || 1
+                  setToolExecutionStatus({
+                    tool: name,
+                    status: 'success',
+                    message: `Successfully generated ${imageCount} image${imageCount > 1 ? 's' : ''}!`,
+                  })
+                  showSuccessToast(`Image generation complete! ${imageCount} image${imageCount > 1 ? 's' : ''} generated.`)
+                } else {
+                  setToolExecutionStatus({
+                    tool: name,
+                    status: 'error',
+                    message: result?.error || 'Failed to generate image',
+                  })
+                  showErrorToast(`Image generation failed: ${result?.error || 'Unknown error'}`)
+                }
+              }
+
               if (data.done) {
+                // Debug: Finalize streaming entry with stitched content
+                if (debug?.isDebugMode && responseEntryId) {
+                  debug.finalizeStreamingEntry(responseEntryId)
+                }
+
                 // Add assistant message to messages list
                 const assistantMessage: Message = {
                   id: data.messageId,
@@ -240,6 +429,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 setMessages((prev) => [...prev, assistantMessage])
                 setStreamingContent('')
                 setStreaming(false)
+                // Refresh chat to get tool messages
+                await fetchChat()
+                // Clear tool status after a short delay
+                setTimeout(() => setToolExecutionStatus(null), 3000)
               }
 
               if (data.error) {
@@ -254,6 +447,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     } catch (err) {
       console.error('Error sending message:', err)
       showErrorToast(err instanceof Error ? err.message : 'Failed to send message')
+
+      // Debug: Mark entries as error
+      if (debug?.isDebugMode) {
+        if (debugEntryId) {
+          debug.updateEntry(debugEntryId, { status: 'error', error: err instanceof Error ? err.message : 'Unknown error' })
+        }
+        if (responseEntryId) {
+          debug.updateEntry(responseEntryId, { status: 'error', error: err instanceof Error ? err.message : 'Unknown error' })
+        }
+      }
+
       // Remove the temporary user message on error
       setMessages((prev) => prev.filter((m) => m.id !== tempUserMessageId))
       setStreamingContent('')
@@ -296,7 +500,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   }
 
   const deleteMessage = async (messageId: string) => {
-    if (!confirm('Are you sure you want to delete this message?')) return
+    if (!(await showConfirmation('Are you sure you want to delete this message?'))) return
 
     try {
       const res = await fetch(`/api/messages/${messageId}`, {
@@ -404,7 +608,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     } else if (message.role === 'ASSISTANT' && chat?.character) {
       return {
         name: chat.character.name,
-        title: null,
+        title: chat.character.title,
         avatarUrl: chat.character.avatarUrl,
         defaultImage: chat.character.defaultImage,
       }
@@ -418,6 +622,16 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       return avatar.defaultImage.url || `/${avatar.defaultImage.filepath}`
     }
     return avatar.avatarUrl || null
+  }
+
+  // Strip [Attached: ...] from message content for display
+  const getDisplayContent = (content: string) => {
+    return content.replace(/\n?\[Attached: [^\]]+\]$/, '').trim()
+  }
+
+  // Get image attachments from a message
+  const getImageAttachments = (message: Message) => {
+    return (message.attachments || []).filter(a => a.mimeType.startsWith('image/'))
   }
 
   const renderAvatar = (avatar: ReturnType<typeof getMessageAvatar>) => {
@@ -482,63 +696,34 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     )
   }
 
-  return (
-    <div className="flex flex-col h-screen bg-white dark:bg-slate-900">
-      {/* Header */}
-      <div className="bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 p-4">
-        <div className="mx-auto max-w-[800px]">
-          <div className="flex justify-between items-start mb-2">
-            <Link
-              href="/chats"
-              className="text-blue-600 dark:text-blue-400 hover:underline text-sm"
-            >
-              ← Back to Chats
-            </Link>
-            <a
-              href={`/api/chats/${id}/export`}
-              download
-              className="px-3 py-1 text-sm bg-gray-600 text-white rounded hover:bg-gray-700 dark:bg-slate-600 dark:hover:bg-slate-500"
-            >
-              Export Chat
-            </a>
-          </div>
-          <div className="flex items-center">
-            {chat.character.avatarUrl ? (
-              <Image
-                src={chat.character.avatarUrl}
-                alt={chat.character.name}
-                width={40}
-                height={40}
-                className="w-10 h-10 rounded-full mr-3"
-              />
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-gray-300 dark:bg-slate-700 mr-3 flex items-center justify-center">
-                <span className="text-lg font-bold text-gray-600 dark:text-gray-400">
-                  {chat.character.name.charAt(0).toUpperCase()}
-                </span>
-              </div>
-            )}
-            <div>
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white">{chat.title}</h1>
-              <p className="text-sm text-gray-600 dark:text-gray-400">{chat.character.name}</p>
-            </div>
-          </div>
-        </div>
-      </div>
+  const isDebugMode = debug?.isDebugMode ?? false
 
-      {/* Tags */}
-      <div className="bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
-        <div className="mx-auto max-w-[800px] px-4 py-3">
-          <TagEditor entityType="chat" entityId={id} />
-        </div>
-      </div>
+  return (
+    <div className="flex h-screen bg-white dark:bg-slate-900">
+      {/* Main chat area */}
+      <div className={`flex flex-col flex-1 ${isDebugMode ? 'w-1/2' : 'w-full'}`}>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-slate-900">
-        <div className="mx-auto max-w-[800px] p-4 space-y-4">
+        <div className={`${isDebugMode ? '' : 'mx-auto max-w-[800px]'} p-4 space-y-4`}>
         {messages.map((message) => {
           const isEditing = editingMessageId === message.id
           const swipeState = message.swipeGroupId ? swipeStates[message.swipeGroupId] : null
+
+
+          // Render TOOL messages differently
+          if (message.role === 'TOOL') {
+            return (
+              <ToolMessage
+                key={message.id}
+                message={message}
+                character={chat?.character}
+                onImageClick={(filepath, filename, fileId) => {
+                  setModalImage({ src: `/${filepath}`, filename, fileId })
+                }}
+              />
+            )
+          }
 
           const messageAvatar = shouldShowAvatars() ? getMessageAvatar(message) : null
 
@@ -592,7 +777,36 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                           {message.content}
                         </div>
                       ) : (
-                        <MessageContent content={message.content} />
+                        <MessageContent content={getDisplayContent(message.content)} />
+                      )}
+                      {/* Image attachment thumbnails */}
+                      {getImageAttachments(message).length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {getImageAttachments(message).map((attachment) => (
+                            <button
+                              key={attachment.id}
+                              onClick={() => setModalImage({
+                                src: `/${attachment.filepath}`,
+                                filename: attachment.filename,
+                                fileId: attachment.id,
+                              })}
+                              className="relative group/thumb overflow-hidden rounded border border-gray-300 dark:border-slate-600 hover:border-blue-500 dark:hover:border-blue-400 transition-colors"
+                            >
+                              <Image
+                                src={`/${attachment.filepath}`}
+                                alt={attachment.filename}
+                                width={80}
+                                height={80}
+                                className="w-20 h-20 object-cover"
+                              />
+                              <div className="absolute inset-0 bg-black/0 group-hover/thumb:bg-black/20 transition-colors flex items-center justify-center">
+                                <svg className="w-6 h-6 text-white opacity-0 group-hover/thumb:opacity-100 transition-opacity drop-shadow-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                                </svg>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
                       )}
                       <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                         {formatMessageTime(message.createdAt)}
@@ -718,20 +932,120 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
       {/* Input */}
       <div className="bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700">
-        <div className="mx-auto max-w-[800px] p-4">
+        <div className={`${isDebugMode ? '' : 'mx-auto max-w-[800px]'} p-4`}>
+          {/* Tool execution status indicator */}
+          {toolExecutionStatus && (
+            <div
+              className={`mb-4 p-3 rounded-lg flex items-center gap-2 ${
+                toolExecutionStatus.status === 'pending'
+                  ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200'
+                  : toolExecutionStatus.status === 'success'
+                  ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200'
+                  : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
+              }`}
+            >
+              {toolExecutionStatus.status === 'pending' ? (
+                <svg className="w-5 h-5 animate-spin flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              ) : toolExecutionStatus.status === 'success' ? (
+                <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              )}
+              <span className="text-sm font-medium">{toolExecutionStatus.message}</span>
+            </div>
+          )}
+
+          {/* Attached files preview */}
+          {attachedFiles.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-2">
+              {attachedFiles.map((file) => (
+                <div
+                  key={file.id}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-slate-700 rounded-lg text-sm"
+                >
+                  {file.mimeType.startsWith('image/') ? (
+                    <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  )}
+                  <span className="text-gray-700 dark:text-gray-300 max-w-[150px] truncate">
+                    {file.filename}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeAttachedFile(file.id)}
+                    className="text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <form onSubmit={sendMessage} className="flex gap-2">
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              onChange={handleFileSelect}
+              accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/markdown,text/csv"
+              className="hidden"
+            />
+            {/* Attach file button */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={sending || uploadingFile}
+              className="px-3 py-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Attach file"
+            >
+              {uploadingFile ? (
+                <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                </svg>
+              )}
+            </button>
+            {/* Photo gallery button - only shown if there are photos */}
+            {chatPhotoCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setGalleryOpen(true)}
+                className="px-3 py-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700"
+                title={`View chat photos (${chatPhotoCount})`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </button>
+            )}
             <input
               ref={inputRef}
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               disabled={sending}
-              placeholder="Type a message..."
+              placeholder={attachedFiles.length > 0 ? "Add a message (optional)..." : "Type a message..."}
               className="flex-1 px-4 py-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 disabled:bg-gray-100 dark:disabled:bg-slate-700"
             />
             <button
               type="submit"
-              disabled={sending || !input.trim()}
+              disabled={sending || (!input.trim() && attachedFiles.length === 0)}
               className="px-6 py-3 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 disabled:bg-gray-400 dark:disabled:bg-gray-600"
             >
               {sending ? 'Sending...' : 'Send'}
@@ -739,6 +1053,60 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           </form>
         </div>
       </div>
+
+      {/* Image Modal */}
+      <ImageModal
+        isOpen={modalImage !== null}
+        onClose={() => setModalImage(null)}
+        src={modalImage?.src || ''}
+        filename={modalImage?.filename || ''}
+        fileId={modalImage?.fileId}
+        characterId={chat?.character.id}
+        characterName={chat?.character.name}
+        personaId={chat?.persona?.id || chat?.character.personas?.[0]?.persona.id}
+        personaName={chat?.persona?.name || chat?.character.personas?.[0]?.persona.name}
+        onDelete={() => {
+          // Refresh chat to update message attachments
+          fetchChat()
+        }}
+      />
+
+      {/* Chat Photo Gallery Modal */}
+      <ChatPhotoGalleryModal
+        isOpen={galleryOpen}
+        onClose={() => setGalleryOpen(false)}
+        chatId={id}
+        characterId={chat?.character.id}
+        characterName={chat?.character.name}
+        personaId={chat?.persona?.id || chat?.character.personas?.[0]?.persona.id}
+        personaName={chat?.persona?.name || chat?.character.personas?.[0]?.persona.name}
+        onImageDeleted={(fileId) => {
+          // Update messages to show deleted indicator for this file
+          setMessages((prev) =>
+            prev.map((msg) => {
+              if (msg.attachments?.some((a) => a.id === fileId)) {
+                // Remove the attachment and add deleted indicator to content
+                const newAttachments = msg.attachments.filter((a) => a.id !== fileId)
+                const newContent = msg.content.includes('[attached photo deleted]')
+                  ? msg.content
+                  : `${msg.content} [attached photo deleted]`
+                return { ...msg, attachments: newAttachments, content: newContent }
+              }
+              return msg
+            })
+          )
+          // Refresh photo count
+          fetchChatPhotoCount()
+        }}
+      />
+      </div>
+
+      {/* Debug Panel */}
+      {isDebugMode && (
+        <div className="w-1/2 h-full">
+          <DebugPanel />
+        </div>
+      )}
     </div>
   )
 }
