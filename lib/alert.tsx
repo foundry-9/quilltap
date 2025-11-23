@@ -16,7 +16,7 @@ export function showAlert(message: string, buttons?: string[]): Promise<string |
     overlayContainer.setAttribute('role', 'alert-dialog-overlay')
     overlayContainer.style.position = 'fixed'
     overlayContainer.style.inset = '0'
-    overlayContainer.style.zIndex = '40'
+    overlayContainer.style.zIndex = '9998'
     overlayContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.3)'
     overlayContainer.style.pointerEvents = 'auto'
 
@@ -26,7 +26,7 @@ export function showAlert(message: string, buttons?: string[]): Promise<string |
     dialogContainer.style.top = '50%'
     dialogContainer.style.left = '50%'
     dialogContainer.style.transform = 'translate(-50%, -50%)'
-    dialogContainer.style.zIndex = '50'
+    dialogContainer.style.zIndex = '9999'
     dialogContainer.style.pointerEvents = 'auto'
 
     document.body.appendChild(overlayContainer)

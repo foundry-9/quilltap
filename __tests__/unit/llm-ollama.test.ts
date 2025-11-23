@@ -94,6 +94,7 @@ describe('OllamaProvider', () => {
           totalTokens: 30,
         },
         raw: mockResponse,
+        attachmentResults: { sent: [], failed: [] },
       })
     })
 
@@ -267,6 +268,7 @@ describe('OllamaProvider', () => {
             completionTokens: 5,
             totalTokens: 15,
           },
+          attachmentResults: { sent: [], failed: [] },
         },
       ])
 

@@ -9,8 +9,9 @@ import { OpenRouterProvider } from './openrouter'
 import { OpenAICompatibleProvider } from './openai-compatible'
 import { GrokProvider } from './grok'
 import { GabAIProvider } from './gab-ai'
+import { GoogleProvider } from './google'
 
-type Provider = 'OPENAI' | 'ANTHROPIC' | 'OLLAMA' | 'OPENROUTER' | 'OPENAI_COMPATIBLE' | 'GROK' | 'GAB_AI'
+type Provider = 'OPENAI' | 'ANTHROPIC' | 'OLLAMA' | 'OPENROUTER' | 'OPENAI_COMPATIBLE' | 'GROK' | 'GAB_AI' | 'GOOGLE'
 
 export function createLLMProvider(
   provider: Provider,
@@ -43,6 +44,9 @@ export function createLLMProvider(
 
     case 'GAB_AI':
       return new GabAIProvider()
+
+    case 'GOOGLE':
+      return new GoogleProvider()
 
     default:
       throw new Error(`Unsupported provider: ${provider}`)

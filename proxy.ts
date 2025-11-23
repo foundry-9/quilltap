@@ -49,26 +49,6 @@ const RATE_LIMITED_PATHS = {
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const response = NextResponse.next();
-
-  // Add security headers to all responses
-  Object.entries(securityHeaders).forEach(([key, value]) => {
-    response.headers.set(key, value);
-  });
-
-  // CORS headers for API routes
-  if (pathname.startsWith('/api/')) {
-    // Allow same-origin requests
-    response.headers.set('Access-Control-Allow-Origin', request.headers.get('origin') || '*');
-    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    response.headers.set('Access-Control-Allow-Credentials', 'true');
-
-    // Handle preflight requests
-    if (request.method === 'OPTIONS') {
-      return new NextResponse(null, { status: 204, headers: response.headers });
-    }
-  }
 
   // Apply rate limiting based on path
   const clientId = getClientIdentifier(request);
@@ -79,10 +59,6 @@ export function proxy(request: NextRequest) {
     if (!result.success) {
       return createRateLimitResponse(result);
     }
-    // Add rate limit headers
-    response.headers.set('X-RateLimit-Limit', result.limit.toString());
-    response.headers.set('X-RateLimit-Remaining', result.remaining.toString());
-    response.headers.set('X-RateLimit-Reset', result.reset.toString());
   }
   // Auth endpoints - strict rate limit
   else if (RATE_LIMITED_PATHS.auth.test(pathname)) {
@@ -90,9 +66,6 @@ export function proxy(request: NextRequest) {
     if (!result.success) {
       return createRateLimitResponse(result);
     }
-    response.headers.set('X-RateLimit-Limit', result.limit.toString());
-    response.headers.set('X-RateLimit-Remaining', result.remaining.toString());
-    response.headers.set('X-RateLimit-Reset', result.reset.toString());
   }
   // Other API endpoints - normal rate limit
   else if (RATE_LIMITED_PATHS.api.test(pathname)) {
@@ -100,9 +73,33 @@ export function proxy(request: NextRequest) {
     if (!result.success) {
       return createRateLimitResponse(result);
     }
-    response.headers.set('X-RateLimit-Limit', result.limit.toString());
-    response.headers.set('X-RateLimit-Remaining', result.remaining.toString());
-    response.headers.set('X-RateLimit-Reset', result.reset.toString());
+  }
+
+  // Handle preflight OPTIONS requests early
+  if (pathname.startsWith('/api/') && request.method === 'OPTIONS') {
+    return new NextResponse(null, { status: 204 });
+  }
+
+  // For requests with bodies, use NextResponse.next() without modifying it
+  // to avoid locking the request body
+  if (request.method === 'POST' || request.method === 'PUT' || request.method === 'PATCH') {
+    return NextResponse.next();
+  }
+
+  // For requests without bodies, we can safely add headers
+  const response = NextResponse.next();
+
+  // Add security headers to all responses
+  Object.entries(securityHeaders).forEach(([key, value]) => {
+    response.headers.set(key, value);
+  });
+
+  // CORS headers for API routes
+  if (pathname.startsWith('/api/')) {
+    response.headers.set('Access-Control-Allow-Origin', request.headers.get('origin') || '*');
+    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    response.headers.set('Access-Control-Allow-Credentials', 'true');
   }
 
   return response;
@@ -119,7 +116,8 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - public files (public directory)
+     * - /api/images (file upload endpoint - incompatible with middleware body handling)
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api/images|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };

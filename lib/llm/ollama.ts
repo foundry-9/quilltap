@@ -1,28 +1,64 @@
 // Ollama Provider Implementation
 // Phase 0.7: Multi-Provider Support
+// Note: Ollama supports images via multimodal models (llava, etc.) but implementation varies
 
-import { LLMProvider, LLMParams, LLMResponse, StreamChunk } from './base'
+import { LLMProvider, LLMParams, LLMResponse, StreamChunk, type ImageGenParams, type ImageGenResponse } from './base'
 
 export class OllamaProvider extends LLMProvider {
+  readonly supportsFileAttachments = false // TODO: Add support for llava and other multimodal models
+  readonly supportedMimeTypes: string[] = []
+  readonly supportsImageGeneration = false
+
   constructor(private baseUrl: string) {
     super()
   }
 
+  // Helper to collect attachment failures for unsupported provider
+  private collectAttachmentFailures(params: LLMParams): { sent: string[]; failed: { id: string; error: string }[] } {
+    const failed: { id: string; error: string }[] = []
+    for (const msg of params.messages) {
+      if (msg.attachments) {
+        for (const attachment of msg.attachments) {
+          failed.push({
+            id: attachment.id,
+            error: 'Ollama file attachment support not yet implemented (requires multimodal model detection)',
+          })
+        }
+      }
+    }
+    return { sent: [], failed }
+  }
+
   async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
+    const attachmentResults = this.collectAttachmentFailures(params)
+
+    // Strip attachments from messages
+    const messages = params.messages.map(m => ({
+      role: m.role,
+      content: m.content,
+    }))
+
+    const requestBody: any = {
+      model: params.model,
+      messages,
+      stream: false,
+      options: {
+        temperature: params.temperature ?? 0.7,
+        num_predict: params.maxTokens ?? 1000,
+        top_p: params.topP ?? 1,
+        stop: params.stop,
+      },
+    }
+
+    // Add tools if provided
+    if (params.tools && params.tools.length > 0) {
+      requestBody.tools = params.tools
+    }
+
     const response = await fetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: params.model,
-        messages: params.messages,
-        stream: false,
-        options: {
-          temperature: params.temperature ?? 0.7,
-          num_predict: params.maxTokens ?? 1000,
-          top_p: params.topP ?? 1,
-          stop: params.stop,
-        },
-      }),
+      body: JSON.stringify(requestBody),
     })
 
     if (!response.ok) {
@@ -41,23 +77,39 @@ export class OllamaProvider extends LLMProvider {
         totalTokens: (data.prompt_eval_count ?? 0) + (data.eval_count ?? 0),
       },
       raw: data,
+      attachmentResults,
     }
   }
 
   async *streamMessage(params: LLMParams, apiKey: string): AsyncGenerator<StreamChunk> {
+    const attachmentResults = this.collectAttachmentFailures(params)
+
+    // Strip attachments from messages
+    const messages = params.messages.map(m => ({
+      role: m.role,
+      content: m.content,
+    }))
+
+    const requestBody: any = {
+      model: params.model,
+      messages,
+      stream: true,
+      options: {
+        temperature: params.temperature ?? 0.7,
+        num_predict: params.maxTokens ?? 1000,
+        top_p: params.topP ?? 1,
+      },
+    }
+
+    // Add tools if provided
+    if (params.tools && params.tools.length > 0) {
+      requestBody.tools = params.tools
+    }
+
     const response = await fetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: params.model,
-        messages: params.messages,
-        stream: true,
-        options: {
-          temperature: params.temperature ?? 0.7,
-          num_predict: params.maxTokens ?? 1000,
-          top_p: params.topP ?? 1,
-        },
-      }),
+      body: JSON.stringify(requestBody),
     })
 
     if (!response.ok) {
@@ -111,6 +163,7 @@ export class OllamaProvider extends LLMProvider {
                   completionTokens: totalCompletionTokens,
                   totalTokens: totalPromptTokens + totalCompletionTokens,
                 },
+                attachmentResults,
               }
             }
           } catch (e) {
@@ -153,5 +206,9 @@ export class OllamaProvider extends LLMProvider {
       console.error('Failed to fetch Ollama models:', error)
       return []
     }
+  }
+
+  async generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse> {
+    throw new Error('Ollama does not support image generation. Use a multimodal model for image analysis.')
   }
 }

@@ -107,6 +107,7 @@ describe('GrokProvider', () => {
           totalTokens: 30,
         },
         raw: mockResponse,
+        attachmentResults: { sent: [], failed: [] },
       })
     })
 
@@ -263,6 +264,8 @@ describe('GrokProvider', () => {
             completionTokens: 5,
             totalTokens: 15,
           },
+          attachmentResults: { sent: [], failed: [] },
+          rawResponse: expect.any(Object),
         },
       ])
 

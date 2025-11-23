@@ -3,6 +3,8 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { TagDisplay } from '@/components/tags/tag-display'
+import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
+import { getAvatarClasses } from '@/lib/avatar-styles'
 
 interface RecentChat {
   id: string
@@ -43,6 +45,8 @@ function getAvatarSrc(chat: RecentChat): string | null {
 }
 
 export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
+  const { style } = useAvatarDisplay()
+
   return (
     <div className="mt-8">
       <h3 className="mb-4 text-xl font-semibold text-gray-900 dark:text-white">
@@ -57,18 +61,18 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
               className="block rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 shadow-sm dark:shadow-lg hover:border-blue-500 dark:hover:border-blue-500 transition-colors"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3 flex-grow">
+                <div className="flex items-start gap-4 flex-grow">
                   {getAvatarSrc(chat) ? (
                     <Image
                       src={getAvatarSrc(chat)!}
                       alt={chat.character.name}
                       width={40}
                       height={40}
-                      className="w-10 h-10 rounded-full flex-shrink-0 object-cover"
+                      className={getAvatarClasses(style, 'sm').imageClass}
                     />
                   ) : (
-                    <div className="w-10 h-10 rounded-full bg-gray-300 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
-                      <span className="text-sm font-bold text-gray-600 dark:text-gray-400">
+                    <div className={getAvatarClasses(style, 'sm').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>
+                      <span className={getAvatarClasses(style, 'sm').fallbackClass}>
                         {chat.character.name.charAt(0).toUpperCase()}
                       </span>
                     </div>
