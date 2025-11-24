@@ -9,33 +9,15 @@ services:
     container_name: quilltap-test
     environment:
       - NODE_ENV=test
-      - DATABASE_URL=postgresql://postgres:test_password@test-db:5432/quilltap_test
       - NEXTAUTH_SECRET=test-secret-key-minimum-32-characters
       - ENCRYPTION_MASTER_PEPPER=test-pepper-key-minimum-32-chars
       - GOOGLE_CLIENT_ID=test-client-id
       - GOOGLE_CLIENT_SECRET=test-client-secret
       - NEXTAUTH_URL=http://localhost:3000
-    depends_on:
-      test-db:
-        condition: service_healthy
-    command: sh -c "npx prisma migrate deploy && npm run test:coverage"
+    command: npm run test:coverage
     networks:
       - quilltap-test-network
 
-  test-db:
-    image: postgres:16-alpine
-    container_name: quilltap-test-db
-    environment:
-      POSTGRES_DB: quilltap_test
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: test_password
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    networks:
-      - quilltap-test-network
 
 networks:
   quilltap-test-network:

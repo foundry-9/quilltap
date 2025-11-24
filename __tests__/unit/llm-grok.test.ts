@@ -256,6 +256,7 @@ describe('GrokProvider', () => {
       expect(chunks).toEqual([
         { content: 'Hello', done: false },
         { content: ' there', done: false },
+        { content: '!', done: false },
         {
           content: '',
           done: true,
@@ -310,7 +311,20 @@ describe('GrokProvider', () => {
         chunks.push(chunk)
       }
 
-      expect(chunks).toEqual([{ content: 'Content', done: false }])
+      expect(chunks).toEqual([
+        { content: 'Content', done: false },
+        {
+          content: '',
+          done: true,
+          usage: {
+            promptTokens: 0,
+            completionTokens: 0,
+            totalTokens: 0,
+          },
+          attachmentResults: { sent: [], failed: [] },
+          rawResponse: expect.any(Object),
+        },
+      ])
     })
 
     it('should use custom parameters for streaming', async () => {
@@ -347,6 +361,95 @@ describe('GrokProvider', () => {
         stream: true,
         stream_options: { include_usage: true },
       })
+    })
+
+    it('should handle streaming tool calls', async () => {
+      const mockStream = [
+        {
+          choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_123', type: 'function', function: { name: 'test_tool', arguments: '' } }] }, finish_reason: null }],
+        },
+        {
+          choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '{"arg":' } }] }, finish_reason: null }],
+        },
+        {
+          choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '"value"}' } }] }, finish_reason: null }],
+        },
+        {
+          choices: [{ delta: {}, finish_reason: 'tool_calls' }],
+          usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+        },
+      ]
+
+      const asyncIterable = {
+        [Symbol.asyncIterator]: async function* () {
+          for (const chunk of mockStream) {
+            yield chunk
+          }
+        },
+      }
+
+      mockOpenAIInstance.chat.completions.create.mockResolvedValue(asyncIterable)
+
+      const chunks: any[] = []
+      for await (const chunk of provider.streamMessage(mockParams, 'xai-api-key')) {
+        chunks.push(chunk)
+      }
+
+      const finalChunk = chunks[chunks.length - 1]
+      expect(finalChunk.done).toBe(true)
+      expect(finalChunk.rawResponse.choices[0].message.tool_calls).toEqual([
+        {
+          id: 'call_123',
+          type: 'function',
+          function: {
+            name: 'test_tool',
+            arguments: '{"arg":"value"}',
+          },
+        },
+      ])
+    })
+
+    it('should handle streaming tool calls without usage info', async () => {
+      const mockStream = [
+        {
+          choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_123', type: 'function', function: { name: 'test_tool', arguments: '' } }] }, finish_reason: null }],
+        },
+        {
+          choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '{"arg":"value"}' } }] }, finish_reason: null }],
+        },
+        {
+          choices: [{ delta: {}, finish_reason: 'tool_calls' }],
+          // No usage info here
+        },
+      ]
+
+      const asyncIterable = {
+        [Symbol.asyncIterator]: async function* () {
+          for (const chunk of mockStream) {
+            yield chunk
+          }
+        },
+      }
+
+      mockOpenAIInstance.chat.completions.create.mockResolvedValue(asyncIterable)
+
+      const chunks: any[] = []
+      for await (const chunk of provider.streamMessage(mockParams, 'xai-api-key')) {
+        chunks.push(chunk)
+      }
+
+      const finalChunk = chunks[chunks.length - 1]
+      expect(finalChunk.done).toBe(true)
+      expect(finalChunk.rawResponse.choices[0].message.tool_calls).toEqual([
+        {
+          id: 'call_123',
+          type: 'function',
+          function: {
+            name: 'test_tool',
+            arguments: '{"arg":"value"}',
+          },
+        },
+      ])
     })
   })
 

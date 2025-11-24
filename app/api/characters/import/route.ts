@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 import { importSTCharacter, parseSTCharacterPNG } from '@/lib/sillytavern/character'
 
 export async function POST(req: NextRequest) {
@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const repos = getRepositories()
     const contentType = req.headers.get('content-type')
 
     let characterData = null
@@ -85,26 +86,33 @@ export async function POST(req: NextRequest) {
     const importedData = importSTCharacter(characterData)
 
     // Create character in database
-    const character = await prisma.character.create({
-      data: {
-        userId: session.user.id,
-        ...importedData,
-        avatarUrl: avatarUrl,
-      },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        avatarUrl: true,
-        createdAt: true,
-        updatedAt: true,
-        _count: {
-          select: { chats: true },
-        },
-      },
+    const character = await repos.characters.create({
+      userId: session.user.id,
+      ...importedData,
+      avatarUrl: avatarUrl,
+      isFavorite: false,
+      tags: [] as string[],
+      personaLinks: [] as { personaId: string; isDefault: boolean }[],
+      avatarOverrides: [] as { chatId: string; imageId: string }[],
+      defaultImageId: null,
     })
 
-    return NextResponse.json(character, { status: 201 })
+    // Get chat count for response (will be 0 for new character)
+    const chats = await repos.chats.findByCharacterId(character.id)
+
+    const response = {
+      id: character.id,
+      name: character.name,
+      description: character.description,
+      avatarUrl: character.avatarUrl,
+      createdAt: character.createdAt,
+      updatedAt: character.updatedAt,
+      _count: {
+        chats: chats.length,
+      },
+    }
+
+    return NextResponse.json(response, { status: 201 })
   } catch (error) {
     console.error('Error importing character:', error)
     return NextResponse.json(

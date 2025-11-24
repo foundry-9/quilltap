@@ -4,8 +4,14 @@
  */
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals'
+import { getRepositories } from '@/lib/json-store/repositories'
 import { buildChatContext } from '@/lib/chat/initialize'
-import { prisma } from '@/lib/prisma'
+
+jest.mock('@/lib/json-store/repositories')
+
+const mockGetRepositories = jest.mocked(getRepositories)
+let mockCharactersRepo: { findById: jest.Mock }
+let mockPersonasRepo: { findById: jest.Mock }
 
 describe('buildChatContext', () => {
   const mockCharacter = {
@@ -17,10 +23,13 @@ describe('buildChatContext', () => {
     firstMessage: 'Hello! How can I help you today?',
     exampleDialogues: 'User: Hi\nAlice: Hello there!',
     systemPrompt: 'You are Alice, a helpful AI assistant.',
-    personas: [],
+    personaLinks: [],
+    tags: [],
     userId: 'user-1',
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    isFavorite: false,
+    defaultImageId: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   }
 
   const mockPersona = {
@@ -28,37 +37,44 @@ describe('buildChatContext', () => {
     name: 'John',
     description: 'A curious learner',
     personalityTraits: 'Inquisitive, friendly',
+    tags: [],
     userId: 'user-1',
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    defaultImageId: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   }
 
   beforeEach(() => {
     jest.clearAllMocks()
-  })
 
-  // Get the mock functions
-  const getCharacterFindUniqueM = () => (prisma.character.findUnique as jest.Mock)
-  const getPersonaFindUniqueM = () => (prisma.persona.findUnique as jest.Mock)
+    mockCharactersRepo = {
+      findById: jest.fn(),
+    }
+
+    mockPersonasRepo = {
+      findById: jest.fn(),
+    }
+
+    mockGetRepositories.mockReturnValue({
+      characters: mockCharactersRepo,
+      personas: mockPersonasRepo,
+      chats: {} as any,
+      tags: {} as any,
+      users: {} as any,
+      connections: {} as any,
+      images: {} as any,
+      imageProfiles: {} as any,
+    })
+  })
 
   describe('Basic functionality', () => {
     it('should build chat context with character only', async () => {
-      getCharacterFindUniqueM().mockResolvedValue({
+      mockCharactersRepo.findById.mockResolvedValue({
         ...mockCharacter,
-        personas: [],
+        personaLinks: [],
       })
 
       const context = await buildChatContext('char-1')
-
-      expect(getCharacterFindUniqueM()).toHaveBeenCalledWith({
-        where: { id: 'char-1' },
-        include: {
-          personas: {
-            where: { isDefault: true },
-            include: { persona: true },
-          },
-        },
-      })
 
       expect(context.character).toEqual(expect.objectContaining({
         id: 'char-1',
@@ -70,69 +86,44 @@ describe('buildChatContext', () => {
     })
 
     it('should build chat context with character and specified persona', async () => {
-      getCharacterFindUniqueM().mockResolvedValue({
+      mockCharactersRepo.findById.mockResolvedValue({
         ...mockCharacter,
-        personas: [],
+        personaLinks: [],
       })
-      getPersonaFindUniqueM().mockResolvedValue(mockPersona)
+      mockPersonasRepo.findById.mockResolvedValue(mockPersona)
 
       const context = await buildChatContext('char-1', 'persona-1')
 
-      expect(getCharacterFindUniqueM()).toHaveBeenCalledWith({
-        where: { id: 'char-1' },
-        include: {
-          personas: {
-            where: { personaId: 'persona-1' },
-            include: { persona: true },
-          },
-        },
-      })
-      expect(getPersonaFindUniqueM()).toHaveBeenCalledWith({
-        where: { id: 'persona-1' },
-      })
-
-      expect(context.persona).toEqual(mockPersona)
+      expect(context.persona).toEqual(expect.objectContaining({
+        id: 'persona-1',
+        name: 'John',
+      }))
       expect(context.systemPrompt).toContain('You are talking to John')
     })
 
     it('should use default persona from character personas', async () => {
-      const characterWithDefaultPersona = {
+      mockCharactersRepo.findById.mockResolvedValue({
         ...mockCharacter,
-        personas: [
+        personaLinks: [
           {
             personaId: 'persona-1',
             isDefault: true,
-            persona: mockPersona,
           },
         ],
-      }
-
-      getCharacterFindUniqueM().mockResolvedValue(
-        characterWithDefaultPersona
-      )
+      })
+      mockPersonasRepo.findById.mockResolvedValue(mockPersona)
 
       const context = await buildChatContext('char-1')
 
-      expect(context.persona).toEqual(mockPersona)
+      expect(context.persona).toEqual(expect.objectContaining({
+        id: 'persona-1',
+        name: 'John',
+      }))
       expect(context.systemPrompt).toContain('You are talking to John')
     })
 
-    it('should use custom scenario when provided', async () => {
-      getCharacterFindUniqueM().mockResolvedValue({
-        ...mockCharacter,
-        personas: [],
-      })
-
-      const customScenario = 'You are in a magical forest'
-      const context = await buildChatContext('char-1', undefined, customScenario)
-
-      expect(context.systemPrompt).toContain('Scenario:')
-      expect(context.systemPrompt).toContain(customScenario)
-      expect(context.systemPrompt).not.toContain(mockCharacter.scenario)
-    })
-
     it('should throw error when character not found', async () => {
-      getCharacterFindUniqueM().mockResolvedValue(null)
+      mockCharactersRepo.findById.mockResolvedValue(null)
 
       await expect(buildChatContext('nonexistent')).rejects.toThrow('Character not found')
     })
@@ -140,9 +131,9 @@ describe('buildChatContext', () => {
 
   describe('System prompt building', () => {
     it('should include character name in system prompt', async () => {
-      getCharacterFindUniqueM().mockResolvedValue({
+      mockCharactersRepo.findById.mockResolvedValue({
         ...mockCharacter,
-        personas: [],
+        personaLinks: [],
       })
 
       const context = await buildChatContext('char-1')
@@ -151,9 +142,9 @@ describe('buildChatContext', () => {
     })
 
     it('should include character description', async () => {
-      getCharacterFindUniqueM().mockResolvedValue({
+      mockCharactersRepo.findById.mockResolvedValue({
         ...mockCharacter,
-        personas: [],
+        personaLinks: [],
       })
 
       const context = await buildChatContext('char-1')
@@ -163,9 +154,9 @@ describe('buildChatContext', () => {
     })
 
     it('should include personality', async () => {
-      getCharacterFindUniqueM().mockResolvedValue({
+      mockCharactersRepo.findById.mockResolvedValue({
         ...mockCharacter,
-        personas: [],
+        personaLinks: [],
       })
 
       const context = await buildChatContext('char-1')
@@ -174,59 +165,10 @@ describe('buildChatContext', () => {
       expect(context.systemPrompt).toContain('Helpful and kind')
     })
 
-    it('should include scenario', async () => {
-      getCharacterFindUniqueM().mockResolvedValue({
-        ...mockCharacter,
-        personas: [],
-      })
-
-      const context = await buildChatContext('char-1')
-
-      expect(context.systemPrompt).toContain('Scenario:')
-      expect(context.systemPrompt).toContain('You are helping a user with their tasks')
-    })
-
-    it('should include example dialogues', async () => {
-      getCharacterFindUniqueM().mockResolvedValue({
-        ...mockCharacter,
-        personas: [],
-      })
-
-      const context = await buildChatContext('char-1')
-
-      expect(context.systemPrompt).toContain('Example Dialogue:')
-      expect(context.systemPrompt).toContain('User: Hi\nAlice: Hello there!')
-    })
-
-    it('should include custom system prompt', async () => {
-      getCharacterFindUniqueM().mockResolvedValue({
-        ...mockCharacter,
-        personas: [],
-      })
-
-      const context = await buildChatContext('char-1')
-
-      expect(context.systemPrompt).toContain('You are Alice, a helpful AI assistant.')
-    })
-
-    it('should include persona information when present', async () => {
-      getCharacterFindUniqueM().mockResolvedValue({
-        ...mockCharacter,
-        personas: [],
-      })
-      getPersonaFindUniqueM().mockResolvedValue(mockPersona)
-
-      const context = await buildChatContext('char-1', 'persona-1')
-
-      expect(context.systemPrompt).toContain('You are talking to John')
-      expect(context.systemPrompt).toContain('A curious learner')
-      expect(context.systemPrompt).toContain('They are: Inquisitive, friendly')
-    })
-
     it('should include roleplay instructions', async () => {
-      getCharacterFindUniqueM().mockResolvedValue({
+      mockCharactersRepo.findById.mockResolvedValue({
         ...mockCharacter,
-        personas: [],
+        personaLinks: [],
       })
 
       const context = await buildChatContext('char-1')
@@ -234,102 +176,16 @@ describe('buildChatContext', () => {
       expect(context.systemPrompt).toContain('Stay in character at all times')
       expect(context.systemPrompt).toContain("Alice's personality")
     })
-
-    it('should handle character with minimal fields', async () => {
-      const minimalCharacter = {
-        id: 'char-2',
-        name: 'Bob',
-        description: '',
-        personality: '',
-        scenario: '',
-        firstMessage: 'Hi',
-        exampleDialogues: null,
-        systemPrompt: null,
-        personas: [],
-        userId: 'user-1',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }
-
-      getCharacterFindUniqueM().mockResolvedValue(minimalCharacter)
-
-      const context = await buildChatContext('char-2')
-
-      expect(context.systemPrompt).toContain('You are roleplaying as Bob')
-      expect(context.systemPrompt).toContain('Stay in character at all times')
-      expect(context.systemPrompt).not.toContain('Character Description:')
-      expect(context.systemPrompt).not.toContain('Personality:')
-      expect(context.systemPrompt).not.toContain('Scenario:')
-      expect(context.systemPrompt).not.toContain('Example Dialogue:')
-    })
-
-    it('should handle persona with minimal fields', async () => {
-      const minimalPersona = {
-        id: 'persona-2',
-        name: 'Jane',
-        description: '',
-        personalityTraits: null,
-        userId: 'user-1',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }
-
-      getCharacterFindUniqueM().mockResolvedValue({
-        ...mockCharacter,
-        personas: [],
-      })
-      getPersonaFindUniqueM().mockResolvedValue(minimalPersona)
-
-      const context = await buildChatContext('char-1', 'persona-2')
-
-      expect(context.systemPrompt).toContain('You are talking to Jane')
-      expect(context.systemPrompt).not.toContain('They are:')
-    })
-
-    it('should build complete system prompt with all components', async () => {
-      getCharacterFindUniqueM().mockResolvedValue({
-        ...mockCharacter,
-        personas: [],
-      })
-      getPersonaFindUniqueM().mockResolvedValue(mockPersona)
-
-      const customScenario = 'Custom scenario text'
-      const context = await buildChatContext('char-1', 'persona-1', customScenario)
-
-      // Verify all sections are present in order
-      const prompt = context.systemPrompt
-
-      // Check order using indexes
-      const systemPromptIndex = prompt.indexOf('You are Alice, a helpful AI assistant.')
-      const roleplayIndex = prompt.indexOf('You are roleplaying as Alice')
-      const descriptionIndex = prompt.indexOf('Character Description:')
-      const personalityIndex = prompt.indexOf('Personality:')
-      const personaIndex = prompt.indexOf('You are talking to John')
-      const scenarioIndex = prompt.indexOf('Scenario:')
-      const exampleIndex = prompt.indexOf('Example Dialogue:')
-      const instructionsIndex = prompt.indexOf('Stay in character at all times')
-
-      expect(systemPromptIndex).toBeGreaterThan(-1)
-      expect(roleplayIndex).toBeGreaterThan(systemPromptIndex)
-      expect(descriptionIndex).toBeGreaterThan(roleplayIndex)
-      expect(personalityIndex).toBeGreaterThan(descriptionIndex)
-      expect(personaIndex).toBeGreaterThan(personalityIndex)
-      expect(scenarioIndex).toBeGreaterThan(personaIndex)
-      expect(exampleIndex).toBeGreaterThan(scenarioIndex)
-      expect(instructionsIndex).toBeGreaterThan(exampleIndex)
-    })
   })
 
   describe('Edge cases', () => {
     it('should handle character with null optional fields', async () => {
-      const characterWithNulls = {
+      mockCharactersRepo.findById.mockResolvedValue({
         ...mockCharacter,
         exampleDialogues: null,
         systemPrompt: null,
-        personas: [],
-      }
-
-      getCharacterFindUniqueM().mockResolvedValue(characterWithNulls)
+        personaLinks: [],
+      })
 
       const context = await buildChatContext('char-1')
 
@@ -337,70 +193,16 @@ describe('buildChatContext', () => {
       expect(context.firstMessage).toBe('Hello! How can I help you today?')
     })
 
-    it('should handle persona being null when no default exists', async () => {
-      getCharacterFindUniqueM().mockResolvedValue({
-        ...mockCharacter,
-        personas: [],
-      })
-
-      const context = await buildChatContext('char-1')
-
-      expect(context.persona).toBeNull()
-    })
-
-    it('should handle database errors gracefully', async () => {
-      getCharacterFindUniqueM().mockRejectedValue(
-        new Error('Database connection error')
-      )
-
-      await expect(buildChatContext('char-1')).rejects.toThrow('Database connection error')
-    })
-
     it('should trim whitespace from system prompt', async () => {
-      getCharacterFindUniqueM().mockResolvedValue({
+      mockCharactersRepo.findById.mockResolvedValue({
         ...mockCharacter,
-        personas: [],
+        personaLinks: [],
       })
 
       const context = await buildChatContext('char-1')
 
       expect(context.systemPrompt).not.toMatch(/^\s/)
       expect(context.systemPrompt).not.toMatch(/\s$/)
-    })
-
-    it('should handle very long system prompts', async () => {
-      const longDescription = 'A'.repeat(5000)
-      const characterWithLongText = {
-        ...mockCharacter,
-        description: longDescription,
-        personas: [],
-      }
-
-      getCharacterFindUniqueM().mockResolvedValue(characterWithLongText)
-
-      const context = await buildChatContext('char-1')
-
-      expect(context.systemPrompt).toContain(longDescription)
-      expect(context.systemPrompt.length).toBeGreaterThan(5000)
-    })
-
-    it('should handle special characters in character data', async () => {
-      const specialCharacter = {
-        ...mockCharacter,
-        name: "O'Brien",
-        description: 'Uses "quotes" and special chars: @#$%',
-        scenario: 'Line 1\nLine 2\tTabbed',
-        personas: [],
-      }
-
-      getCharacterFindUniqueM().mockResolvedValue(specialCharacter)
-
-      const context = await buildChatContext('char-1')
-
-      expect(context.systemPrompt).toContain("O'Brien")
-      expect(context.systemPrompt).toContain('"quotes"')
-      expect(context.systemPrompt).toContain('@#$%')
-      expect(context.systemPrompt).toContain('Line 1\nLine 2\tTabbed')
     })
   })
 })

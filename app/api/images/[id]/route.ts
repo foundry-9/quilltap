@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { getRepositories } from '@/lib/json-store/repositories';
 import { deleteImage } from '@/lib/images';
 
 interface RouteContext {
@@ -26,29 +26,35 @@ export async function GET(request: NextRequest, context: RouteContext) {
     }
 
     const { id } = await context.params;
+    const repos = getRepositories();
 
-    const image = await prisma.image.findUnique({
-      where: {
-        id,
-        userId: session.user.id,
-      },
-      include: {
-        tags: true,
-        _count: {
-          select: {
-            charactersUsingAsDefault: true,
-            personasUsingAsDefault: true,
-            chatAvatarOverrides: true,
-          },
-        },
-      },
-    });
+    const image = await repos.images.findById(id);
 
     if (!image) {
       return NextResponse.json({ error: 'Image not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ data: image });
+    // Count usages by checking related entities
+    const allCharacters = await repos.characters.findAll();
+    const allPersonas = await repos.personas.findAll();
+
+    const charactersUsingAsDefault = allCharacters.filter(c => c.defaultImageId === id).length;
+    const personasUsingAsDefault = allPersonas.filter(p => p.defaultImageId === id).length;
+    const chatAvatarOverrides = allCharacters.reduce((count, c) => {
+      return count + c.avatarOverrides.filter(o => o.imageId === id).length;
+    }, 0);
+
+    return NextResponse.json({
+      data: {
+        ...image,
+        tags: image.tags,
+        _count: {
+          charactersUsingAsDefault,
+          personasUsingAsDefault,
+          chatAvatarOverrides,
+        },
+      }
+    });
   } catch (error) {
     console.error('Error fetching image:', error);
     return NextResponse.json(
@@ -70,33 +76,30 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     }
 
     const { id } = await context.params;
+    const repos = getRepositories();
 
-    // Check if image exists and belongs to user
-    const image = await prisma.image.findUnique({
-      where: {
-        id,
-        userId: session.user.id,
-      },
-      include: {
-        _count: {
-          select: {
-            charactersUsingAsDefault: true,
-            personasUsingAsDefault: true,
-            chatAvatarOverrides: true,
-          },
-        },
-      },
-    });
+    // Check if image exists
+    const image = await repos.images.findById(id);
 
     if (!image) {
       return NextResponse.json({ error: 'Image not found' }, { status: 404 });
     }
 
+    // Count usages by checking related entities
+    const allCharacters = await repos.characters.findAll();
+    const allPersonas = await repos.personas.findAll();
+
+    const charactersUsingAsDefault = allCharacters.filter(c => c.defaultImageId === id).length;
+    const personasUsingAsDefault = allPersonas.filter(p => p.defaultImageId === id).length;
+    const chatAvatarOverrides = allCharacters.reduce((count, c) => {
+      return count + c.avatarOverrides.filter(o => o.imageId === id).length;
+    }, 0);
+
     // Check if image is being used
     const isInUse =
-      image._count.charactersUsingAsDefault > 0 ||
-      image._count.personasUsingAsDefault > 0 ||
-      image._count.chatAvatarOverrides > 0;
+      charactersUsingAsDefault > 0 ||
+      personasUsingAsDefault > 0 ||
+      chatAvatarOverrides > 0;
 
     if (isInUse) {
       return NextResponse.json(
@@ -109,14 +112,13 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       );
     }
 
-    // Delete from database (this will cascade delete tags)
-    await prisma.image.delete({
-      where: { id },
-    });
+    // Delete from database
+    await repos.images.delete(id);
 
     // Delete file from filesystem (if not a URL import)
-    if (!image.url) {
-      await deleteImage(image.filepath);
+    // Note: In JsonStore, we use relativePath instead of url
+    if (image.relativePath && !image.relativePath.startsWith('http')) {
+      await deleteImage(image.relativePath);
     }
 
     return NextResponse.json({ data: { success: true } });

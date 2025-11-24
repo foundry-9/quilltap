@@ -3,9 +3,6 @@ const nextConfig = {
   // Standalone output for Docker deployments
   output: 'standalone',
 
-  // External packages for server-side rendering
-  serverExternalPackages: ['@prisma/client'],
-
   // Experimental features
   experimental: {
     turbopackUseSystemTlsCerts: true,

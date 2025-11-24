@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 import { z } from 'zod'
 
 // Validation schema
@@ -29,35 +29,55 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    })
+    const repos = getRepositories()
+    const user = await repos.users.findByEmail(session.user.email)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const characters = await prisma.character.findMany({
-      where: { userId: user.id },
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        name: true,
-        title: true,
-        description: true,
-        avatarUrl: true,
-        defaultImageId: true,
-        defaultImage: true,
-        isFavorite: true,
-        createdAt: true,
-        updatedAt: true,
-        _count: {
-          select: { chats: true },
-        },
-      },
-    })
+    const characters = await repos.characters.findByUserId(user.id)
 
-    return NextResponse.json({ characters })
+    // Sort by createdAt descending
+    characters.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+
+    // Enrich characters with related data (defaultImage and chat count)
+    const enrichedCharacters = await Promise.all(
+      characters.map(async (character) => {
+        // Get default image if present
+        let defaultImage = null
+        if (character.defaultImageId) {
+          defaultImage = await repos.images.findById(character.defaultImageId)
+        }
+
+        // Get chat count for this character
+        const chats = await repos.chats.findByCharacterId(character.id)
+
+        return {
+          id: character.id,
+          name: character.name,
+          title: character.title,
+          description: character.description,
+          avatarUrl: character.avatarUrl,
+          defaultImageId: character.defaultImageId,
+          defaultImage: defaultImage
+            ? {
+                id: defaultImage.id,
+                filepath: defaultImage.relativePath,
+                url: null,
+              }
+            : null,
+          isFavorite: character.isFavorite,
+          createdAt: character.createdAt,
+          updatedAt: character.updatedAt,
+          _count: {
+            chats: chats.length,
+          },
+        }
+      })
+    )
+
+    return NextResponse.json({ characters: enrichedCharacters })
   } catch (error) {
     console.error('Error fetching characters:', error)
     return NextResponse.json(
@@ -75,9 +95,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    })
+    const repos = getRepositories()
+    const user = await repos.users.findByEmail(session.user.email)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -86,19 +105,22 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const validatedData = createCharacterSchema.parse(body)
 
-    const character = await prisma.character.create({
-      data: {
-        userId: user.id,
-        name: validatedData.name,
-        title: validatedData.title || null,
-        description: validatedData.description,
-        personality: validatedData.personality,
-        scenario: validatedData.scenario,
-        firstMessage: validatedData.firstMessage,
-        exampleDialogues: validatedData.exampleDialogues || null,
-        systemPrompt: validatedData.systemPrompt || null,
-        avatarUrl: validatedData.avatarUrl || null,
-      },
+    const character = await repos.characters.create({
+      userId: user.id,
+      name: validatedData.name,
+      title: validatedData.title || null,
+      description: validatedData.description,
+      personality: validatedData.personality,
+      scenario: validatedData.scenario,
+      firstMessage: validatedData.firstMessage,
+      exampleDialogues: validatedData.exampleDialogues || null,
+      systemPrompt: validatedData.systemPrompt || null,
+      avatarUrl: validatedData.avatarUrl || null,
+      isFavorite: false,
+      tags: [] as string[],
+      personaLinks: [] as { personaId: string; isDefault: boolean }[],
+      avatarOverrides: [] as { chatId: string; imageId: string }[],
+      defaultImageId: null,
     })
 
     return NextResponse.json({ character }, { status: 201 })

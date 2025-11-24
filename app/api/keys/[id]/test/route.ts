@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 import { decryptApiKey } from '@/lib/encryption'
 import { Provider } from '@/lib/types/prisma'
 
@@ -223,13 +223,10 @@ export async function POST(
       )
     }
 
+    const repos = getRepositories()
+
     // Get the API key
-    const apiKey = await prisma.apiKey.findFirst({
-      where: {
-        id,
-        userId: session.user.id, // Ensure user owns this key
-      },
-    })
+    const apiKey = await repos.connections.findApiKeyById(id)
 
     if (!apiKey) {
       return NextResponse.json(
@@ -240,9 +237,9 @@ export async function POST(
 
     // Decrypt the API key
     const decryptedKey = decryptApiKey(
-      apiKey.keyEncrypted,
-      apiKey.keyIv,
-      apiKey.keyAuthTag,
+      apiKey.ciphertext,
+      apiKey.iv,
+      apiKey.authTag,
       session.user.id
     )
 
@@ -252,17 +249,14 @@ export async function POST(
 
     // Test the key
     const result = await testProviderApiKey(
-      apiKey.provider,
+      apiKey.provider as Provider,
       decryptedKey,
       baseUrl
     )
 
     if (result.valid) {
       // Update lastUsed timestamp
-      await prisma.apiKey.update({
-        where: { id },
-        data: { lastUsed: new Date() },
-      })
+      await repos.connections.recordApiKeyUsage(id)
 
       return NextResponse.json({
         valid: true,

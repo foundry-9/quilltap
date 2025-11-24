@@ -1,7 +1,7 @@
 // Chat Initialization Utility
 // Phase 0.5: Single Chat MVP
 
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 import { processCharacterTemplates } from '@/lib/templates/processor'
 
 interface Character {
@@ -34,23 +34,24 @@ export async function buildChatContext(
   personaId?: string,
   customScenario?: string
 ): Promise<ChatContext> {
-  const character = await prisma.character.findUnique({
-    where: { id: characterId },
-    include: {
-      personas: {
-        where: personaId ? { personaId } : { isDefault: true },
-        include: { persona: true },
-      },
-    },
-  })
+  const repos = getRepositories()
+
+  const character = await repos.characters.findById(characterId)
 
   if (!character) {
     throw new Error('Character not found')
   }
 
-  const persona = personaId
-    ? await prisma.persona.findUnique({ where: { id: personaId } })
-    : character.personas[0]?.persona
+  let persona: Persona | null = null
+  if (personaId) {
+    persona = await repos.personas.findById(personaId) as Persona | null
+  } else if (character.personaLinks && character.personaLinks.length > 0) {
+    // Find default persona
+    const defaultLink = character.personaLinks.find(link => link.isDefault)
+    if (defaultLink) {
+      persona = await repos.personas.findById(defaultLink.personaId) as Persona | null
+    }
+  }
 
   // Build system prompt
   const systemPrompt = buildSystemPrompt({

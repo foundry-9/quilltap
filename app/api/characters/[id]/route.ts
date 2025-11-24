@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 import { z } from 'zod'
 
 // Validation schema for updates
@@ -34,32 +34,43 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    })
+    const repos = getRepositories()
+    const user = await repos.users.findByEmail(session.user.email)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const character = await prisma.character.findFirst({
-      where: {
-        id,
-        userId: user.id,
-      },
-      include: {
-        defaultImage: true,
-        _count: {
-          select: { chats: true },
-        },
-      },
-    })
+    const character = await repos.characters.findById(id)
 
-    if (!character) {
+    if (!character || character.userId !== user.id) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
     }
 
-    return NextResponse.json({ character })
+    // Get default image if present
+    let defaultImage = null
+    if (character.defaultImageId) {
+      defaultImage = await repos.images.findById(character.defaultImageId)
+    }
+
+    // Get chat count
+    const chats = await repos.chats.findByCharacterId(id)
+
+    const enrichedCharacter = {
+      ...character,
+      defaultImage: defaultImage
+        ? {
+            id: defaultImage.id,
+            filepath: defaultImage.relativePath,
+            url: null,
+          }
+        : null,
+      _count: {
+        chats: chats.length,
+      },
+    }
+
+    return NextResponse.json({ character: enrichedCharacter })
   } catch (error) {
     console.error('Error fetching character:', error)
     return NextResponse.json(
@@ -81,36 +92,24 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    })
+    const repos = getRepositories()
+    const user = await repos.users.findByEmail(session.user.email)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
     // Verify character ownership
-    const existingCharacter = await prisma.character.findFirst({
-      where: {
-        id,
-        userId: user.id,
-      },
-    })
+    const existingCharacter = await repos.characters.findById(id)
 
-    if (!existingCharacter) {
+    if (!existingCharacter || existingCharacter.userId !== user.id) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
     }
 
     const body = await req.json()
     const validatedData = updateCharacterSchema.parse(body)
 
-    const character = await prisma.character.update({
-      where: { id },
-      data: {
-        ...validatedData,
-        updatedAt: new Date(),
-      },
-    })
+    const character = await repos.characters.update(id, validatedData)
 
     return NextResponse.json({ character })
   } catch (error) {
@@ -141,29 +140,21 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    })
+    const repos = getRepositories()
+    const user = await repos.users.findByEmail(session.user.email)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
     // Verify character ownership
-    const existingCharacter = await prisma.character.findFirst({
-      where: {
-        id,
-        userId: user.id,
-      },
-    })
+    const existingCharacter = await repos.characters.findById(id)
 
-    if (!existingCharacter) {
+    if (!existingCharacter || existingCharacter.userId !== user.id) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
     }
 
-    await prisma.character.delete({
-      where: { id },
-    })
+    await repos.characters.delete(id)
 
     return NextResponse.json({ success: true })
   } catch (error) {

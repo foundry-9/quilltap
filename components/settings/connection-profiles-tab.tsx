@@ -36,7 +36,7 @@ export default function ConnectionProfilesTab() {
     apiKeyId: '',
     baseUrl: '',
     modelName: 'gpt-3.5-turbo',
-    temperature: 0.7,
+    temperature: 1,
     maxTokens: 1000,
     topP: 1,
     isDefault: false,
@@ -94,7 +94,7 @@ export default function ConnectionProfilesTab() {
       apiKeyId: '',
       baseUrl: '',
       modelName: 'gpt-3.5-turbo',
-      temperature: 0.7,
+      temperature: 1,
       maxTokens: 1000,
       topP: 1,
       isDefault: false,
@@ -115,13 +115,20 @@ export default function ConnectionProfilesTab() {
       apiKeyId: profile.apiKeyId || '',
       baseUrl: profile.baseUrl || '',
       modelName: profile.modelName,
-      temperature: profile.parameters?.temperature ?? 0.7,
+      temperature: profile.parameters?.temperature ?? 1,
       maxTokens: profile.parameters?.max_tokens ?? 1000,
       topP: profile.parameters?.top_p ?? 1,
       isDefault: profile.isDefault,
     })
     setEditingId(profile.id)
     setShowForm(true)
+    // Scroll to form after state update
+    setTimeout(() => {
+      const formElement = document.getElementById('profile-form')
+      if (formElement) {
+        formElement.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    }, 0)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -361,6 +368,13 @@ export default function ConnectionProfilesTab() {
               onClick={() => {
                 resetForm()
                 setShowForm(true)
+                // Scroll to form after state update
+                setTimeout(() => {
+                  const formElement = document.getElementById('profile-form')
+                  if (formElement) {
+                    formElement.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }
+                }, 0)
               }}
               className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800"
             >
@@ -432,7 +446,7 @@ export default function ConnectionProfilesTab() {
 
       {/* Add/Edit Profile Form */}
       {showForm && (
-        <div className="bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg p-6">
+        <div id="profile-form" className="bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg p-6">
           <h3 className="text-lg font-semibold mb-4">
             {editingId ? 'Edit Connection Profile' : 'Add New Connection Profile'}
           </h3>

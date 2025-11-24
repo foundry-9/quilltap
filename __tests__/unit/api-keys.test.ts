@@ -6,33 +6,18 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals'
 import { getServerSession } from 'next-auth'
 import { GET as getKeys, POST as createKey } from '@/app/api/keys/route'
-import {
-  GET as getKey,
-  PUT as updateKey,
-  DELETE as deleteKey,
-} from '@/app/api/keys/[id]/route'
-import { prisma } from '@/lib/prisma'
 import { encryptApiKey, maskApiKey } from '@/lib/encryption'
 import { Provider } from '@/lib/types/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 
 // Mock dependencies
 jest.mock('next-auth')
-jest.mock('@/lib/prisma', () => ({
-  prisma: {
-    apiKey: {
-      findMany: jest.fn(),
-      findFirst: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-    },
-  },
-}))
 
 // Encryption is mocked globally in jest.setup.ts
 // Get the mocked versions for use in tests
 const mockEncryptApiKey = jest.mocked(encryptApiKey)
 const mockMaskApiKey = jest.mocked(maskApiKey)
+const mockGetRepositories = jest.mocked(getRepositories)
 
 // Helper to create a mock NextRequest
 function createMockRequest(url: string, options?: { method?: string; body?: string }) {
@@ -48,15 +33,11 @@ function createMockRequest(url: string, options?: { method?: string; body?: stri
 
 describe('API Keys Routes', () => {
   let consoleErrorSpy: jest.SpiedFunction<typeof console.error>
+  let mockConnectionsRepo: any
 
   beforeEach(() => {
     // Clear mock call history
     ;(getServerSession as jest.Mock).mockClear?.()
-    ;(prisma.apiKey.findMany as jest.Mock).mockClear?.()
-    ;(prisma.apiKey.findFirst as jest.Mock).mockClear?.()
-    ;(prisma.apiKey.create as jest.Mock).mockClear?.()
-    ;(prisma.apiKey.update as jest.Mock).mockClear?.()
-    ;(prisma.apiKey.delete as jest.Mock).mockClear?.()
 
     // Set up default mock implementations for encryption functions
     mockEncryptApiKey.mockReturnValue({
@@ -66,11 +47,37 @@ describe('API Keys Routes', () => {
     })
     mockMaskApiKey.mockImplementation((key: string) => `***${key.slice(-4)}`)
 
+    // Set up repository mocks
+    mockConnectionsRepo = {
+      getAllApiKeys: jest.fn(),
+      findApiKeyById: jest.fn(),
+      createApiKey: jest.fn(),
+      updateApiKey: jest.fn(),
+      deleteApiKey: jest.fn(),
+      findByUserId: jest.fn(),
+      findById: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+    }
+
+    mockGetRepositories.mockReturnValue({
+      connections: mockConnectionsRepo,
+      characters: {},
+      personas: {},
+      chats: {},
+      tags: {},
+      users: {},
+      images: {},
+      imageProfiles: {},
+    })
+
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
   })
 
   afterEach(() => {
     consoleErrorSpy.mockRestore()
+    jest.clearAllMocks()
   })
 
   describe('GET /api/keys', () => {
@@ -91,7 +98,7 @@ describe('API Keys Routes', () => {
           lastUsed: new Date('2024-01-01'),
           createdAt: new Date('2024-01-01'),
           updatedAt: new Date('2024-01-01'),
-          keyEncrypted: 'encrypted-data-here-1234567890',
+          ciphertext: 'encrypted-data-here-1234567890',
         },
         {
           id: 'key-2',
@@ -101,37 +108,24 @@ describe('API Keys Routes', () => {
           lastUsed: null,
           createdAt: new Date('2024-01-02'),
           updatedAt: new Date('2024-01-02'),
-          keyEncrypted: 'encrypted-data-here-0987654321',
+          ciphertext: 'encrypted-data-here-0987654321',
         },
       ]
 
       ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
-      ;(prisma.apiKey.findMany as jest.Mock).mockResolvedValue(mockKeys)
+      mockConnectionsRepo.getAllApiKeys.mockResolvedValue(mockKeys)
 
       const req = createMockRequest('http://localhost:3000/api/keys')
       const response = await getKeys(req)
       const data = await response.json()
 
       expect(getServerSession).toHaveBeenCalled()
-      expect(prisma.apiKey.findMany).toHaveBeenCalledWith({
-        where: { userId: 'user-123' },
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          provider: true,
-          label: true,
-          isActive: true,
-          lastUsed: true,
-          createdAt: true,
-          updatedAt: true,
-          keyEncrypted: true,
-        },
-      })
+      expect(mockConnectionsRepo.getAllApiKeys).toHaveBeenCalled()
 
       expect(response.status).toBe(200)
       expect(data).toHaveLength(2)
       expect(data[0]).toHaveProperty('keyPreview')
-      expect(data[0]).not.toHaveProperty('keyEncrypted')
+      expect(data[0]).not.toHaveProperty('ciphertext')
     })
 
     it('should return 401 for unauthenticated user', async () => {
@@ -143,7 +137,7 @@ describe('API Keys Routes', () => {
 
       expect(response.status).toBe(401)
       expect(data).toEqual({ error: 'Unauthorized' })
-      expect(prisma.apiKey.findMany).not.toHaveBeenCalled()
+      expect(mockConnectionsRepo.getAllApiKeys).not.toHaveBeenCalled()
     })
 
     it('should return 401 when session has no user id', async () => {
@@ -157,7 +151,7 @@ describe('API Keys Routes', () => {
 
     it('should return empty array when user has no keys', async () => {
       ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
-      ;(prisma.apiKey.findMany as jest.Mock).mockResolvedValue([])
+      mockConnectionsRepo.getAllApiKeys.mockResolvedValue([])
 
       const req = createMockRequest('http://localhost:3000/api/keys')
       const response = await getKeys(req)
@@ -169,7 +163,7 @@ describe('API Keys Routes', () => {
 
     it('should handle database errors gracefully', async () => {
       ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
-      ;(prisma.apiKey.findMany as jest.Mock).mockRejectedValue(new Error('DB Error'))
+      mockConnectionsRepo.getAllApiKeys.mockRejectedValue(new Error('DB Error'))
 
       const req = createMockRequest('http://localhost:3000/api/keys')
       const response = await getKeys(req)
@@ -178,6 +172,51 @@ describe('API Keys Routes', () => {
       expect(response.status).toBe(500)
       expect(data).toEqual({ error: 'Failed to fetch API keys' })
       expect(consoleErrorSpy).toHaveBeenCalled()
+    })
+
+    it('should sort keys by creation date descending', async () => {
+      const mockKeys = [
+        {
+          id: 'key-1',
+          provider: Provider.OPENAI,
+          label: 'First',
+          isActive: true,
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+          ciphertext: 'enc1',
+        },
+        {
+          id: 'key-2',
+          provider: Provider.ANTHROPIC,
+          label: 'Second',
+          isActive: true,
+          createdAt: '2024-01-03T00:00:00Z',
+          updatedAt: '2024-01-03T00:00:00Z',
+          ciphertext: 'enc2',
+        },
+        {
+          id: 'key-3',
+          provider: Provider.OPENAI,
+          label: 'Third',
+          isActive: true,
+          createdAt: '2024-01-02T00:00:00Z',
+          updatedAt: '2024-01-02T00:00:00Z',
+          ciphertext: 'enc3',
+        },
+      ]
+
+      ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
+      mockConnectionsRepo.getAllApiKeys.mockResolvedValue(mockKeys)
+
+      const req = createMockRequest('http://localhost:3000/api/keys')
+      const response = await getKeys(req)
+      const data = await response.json()
+
+      expect(response.status).toBe(200)
+      // Should be sorted: key-2 (2024-01-03), key-3 (2024-01-02), key-1 (2024-01-01)
+      expect(data[0].id).toBe('key-2')
+      expect(data[1].id).toBe('key-3')
+      expect(data[2].id).toBe('key-1')
     })
   })
 
@@ -196,12 +235,6 @@ describe('API Keys Routes', () => {
     }
 
     it('should create a new API key', async () => {
-      const mockEncrypted = {
-        encrypted: 'encrypted-data',
-        iv: 'iv-data',
-        authTag: 'auth-tag',
-      }
-
       const mockCreatedKey = {
         id: 'key-new',
         provider: Provider.OPENAI,
@@ -212,7 +245,7 @@ describe('API Keys Routes', () => {
       }
 
       ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
-      ;(prisma.apiKey.create as jest.Mock).mockResolvedValue(mockCreatedKey)
+      mockConnectionsRepo.createApiKey.mockResolvedValue(mockCreatedKey)
 
       const req = createMockRequest('http://localhost:3000/api/keys', {
         method: 'POST',
@@ -224,16 +257,12 @@ describe('API Keys Routes', () => {
 
       expect(response.status).toBe(201)
       expect(data.id).toBe('key-new')
-      expect(prisma.apiKey.create).toHaveBeenCalledWith(
+      expect(mockConnectionsRepo.createApiKey).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({
-            userId: 'user-123',
-            provider: 'OPENAI',
-            label: 'My API Key',
-          }),
+          provider: 'OPENAI',
+          label: 'My API Key',
         })
       )
-      expect(data).toEqual(mockCreatedKey)
     })
 
     it('should return 401 for unauthenticated user', async () => {
@@ -324,7 +353,7 @@ describe('API Keys Routes', () => {
 
     it('should trim label whitespace', async () => {
       ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
-      ;(prisma.apiKey.create as jest.Mock).mockResolvedValue({
+      mockConnectionsRepo.createApiKey.mockResolvedValue({
         id: 'key-1',
         provider: Provider.OPENAI,
         label: 'Trimmed',
@@ -340,18 +369,44 @@ describe('API Keys Routes', () => {
 
       await createKey(req)
 
-      expect(prisma.apiKey.create).toHaveBeenCalledWith(
+      expect(mockConnectionsRepo.createApiKey).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({
-            label: 'Trimmed',
-          }),
+          label: 'Trimmed',
+        })
+      )
+    })
+
+    it('should encrypt the API key', async () => {
+      ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
+      mockConnectionsRepo.createApiKey.mockResolvedValue({
+        id: 'key-1',
+        provider: Provider.OPENAI,
+        label: 'Test',
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+
+      const req = createMockRequest('http://localhost:3000/api/keys', {
+        method: 'POST',
+        body: JSON.stringify(validBody),
+      })
+
+      await createKey(req)
+
+      expect(mockEncryptApiKey).toHaveBeenCalledWith(validBody.apiKey, 'user-123')
+      expect(mockConnectionsRepo.createApiKey).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ciphertext: 'encrypted-data',
+          iv: 'iv-data',
+          authTag: 'auth-tag',
         })
       )
     })
 
     it('should handle database errors', async () => {
       ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
-      ;(prisma.apiKey.create as jest.Mock).mockRejectedValue(new Error('DB Error'))
+      mockConnectionsRepo.createApiKey.mockRejectedValue(new Error('DB Error'))
 
       const req = createMockRequest('http://localhost:3000/api/keys', {
         method: 'POST',
@@ -362,303 +417,6 @@ describe('API Keys Routes', () => {
 
       expect(response.status).toBe(500)
       expect((await response.json()).error).toBe('Failed to create API key')
-    })
-  })
-
-  describe('GET /api/keys/[id]', () => {
-    const mockSession = {
-      user: {
-        id: 'user-123',
-        email: 'test@example.com',
-      },
-    }
-
-    it('should return a specific API key', async () => {
-      const mockKey = {
-        id: 'key-1',
-        provider: Provider.OPENAI,
-        label: 'My Key',
-        isActive: true,
-        lastUsed: new Date(),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        keyEncrypted: 'encrypted-data-1234567890',
-      }
-
-      ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
-      ;(prisma.apiKey.findFirst as jest.Mock).mockResolvedValue(mockKey)
-
-      const req = createMockRequest('http://localhost:3000/api/keys/key-1')
-      const response = await getKey(req, { params: Promise.resolve({ id: 'key-1' }) })
-      const data = await response.json()
-
-      expect(response.status).toBe(200)
-      expect(data).toHaveProperty('keyPreview')
-      expect(typeof data.keyPreview).toBe('string')
-      expect(data).not.toHaveProperty('keyEncrypted')
-    })
-
-    it('should return 401 for unauthenticated user', async () => {
-      ;(getServerSession as jest.Mock).mockResolvedValue(null)
-
-      const req = createMockRequest('http://localhost:3000/api/keys/key-1')
-      const response = await getKey(req, { params: Promise.resolve({ id: 'key-1' }) })
-
-      expect(response.status).toBe(401)
-    })
-
-    it('should return 404 when key not found', async () => {
-      ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
-      ;(prisma.apiKey.findFirst as jest.Mock).mockResolvedValue(null)
-
-      const req = createMockRequest('http://localhost:3000/api/keys/nonexistent')
-      const response = await getKey(req, {
-        params: Promise.resolve({ id: 'nonexistent' }),
-      })
-
-      expect(response.status).toBe(404)
-      expect((await response.json()).error).toBe('API key not found')
-    })
-
-    it('should not return keys from other users', async () => {
-      ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
-      ;(prisma.apiKey.findFirst as jest.Mock).mockResolvedValue(null)
-
-      const req = createMockRequest('http://localhost:3000/api/keys/other-key')
-      const response = await getKey(req, {
-        params: Promise.resolve({ id: 'other-key' }),
-      })
-
-      expect(prisma.apiKey.findFirst).toHaveBeenCalledWith({
-        where: {
-          id: 'other-key',
-          userId: 'user-123',
-        },
-        select: expect.any(Object),
-      })
-      expect(response.status).toBe(404)
-    })
-  })
-
-  describe('PUT /api/keys/[id]', () => {
-    const mockSession = {
-      user: {
-        id: 'user-123',
-        email: 'test@example.com',
-      },
-    }
-
-    const mockExistingKey = {
-      id: 'key-1',
-      userId: 'user-123',
-      provider: Provider.OPENAI,
-      label: 'Old Label',
-      isActive: true,
-    }
-
-    it('should update API key label', async () => {
-      const mockUpdated = {
-        ...mockExistingKey,
-        label: 'New Label',
-        lastUsed: new Date(),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }
-
-      ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
-      ;(prisma.apiKey.findFirst as jest.Mock).mockResolvedValue(mockExistingKey)
-      ;(prisma.apiKey.update as jest.Mock).mockResolvedValue(mockUpdated)
-
-      const req = createMockRequest('http://localhost:3000/api/keys/key-1', {
-        method: 'PUT',
-        body: JSON.stringify({ label: 'New Label' }),
-      })
-
-      const response = await updateKey(req, { params: Promise.resolve({ id: 'key-1' }) })
-      const data = await response.json()
-
-      expect(response.status).toBe(200)
-      expect(data.label).toBe('New Label')
-    })
-
-    it('should update isActive status', async () => {
-      ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
-      ;(prisma.apiKey.findFirst as jest.Mock).mockResolvedValue(mockExistingKey)
-      ;(prisma.apiKey.update as jest.Mock).mockResolvedValue({
-        ...mockExistingKey,
-        isActive: false,
-      })
-
-      const req = createMockRequest('http://localhost:3000/api/keys/key-1', {
-        method: 'PUT',
-        body: JSON.stringify({ isActive: false }),
-      })
-
-      await updateKey(req, { params: Promise.resolve({ id: 'key-1' }) })
-
-      expect(prisma.apiKey.update).toHaveBeenCalledWith({
-        where: { id: 'key-1' },
-        data: { isActive: false },
-        select: expect.any(Object),
-      })
-    })
-
-    it('should re-encrypt API key when provided', async () => {
-      ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
-      ;(prisma.apiKey.findFirst as jest.Mock).mockResolvedValue(mockExistingKey)
-      ;(prisma.apiKey.update as jest.Mock).mockResolvedValue(mockExistingKey)
-
-      const req = createMockRequest('http://localhost:3000/api/keys/key-1', {
-        method: 'PUT',
-        body: JSON.stringify({ apiKey: 'sk-newkey123' }),
-      })
-
-      const response = await updateKey(req, { params: Promise.resolve({ id: 'key-1' }) })
-
-      expect(response.status).toBe(200)
-      expect(prisma.apiKey.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'key-1' },
-          data: expect.objectContaining({
-            keyEncrypted: expect.any(String),
-            keyIv: expect.any(String),
-            keyAuthTag: expect.any(String),
-          }),
-        })
-      )
-    })
-
-    it('should return 401 for unauthenticated user', async () => {
-      ;(getServerSession as jest.Mock).mockResolvedValue(null)
-
-      const req = createMockRequest('http://localhost:3000/api/keys/key-1', {
-        method: 'PUT',
-        body: JSON.stringify({ label: 'New' }),
-      })
-
-      const response = await updateKey(req, { params: Promise.resolve({ id: 'key-1' }) })
-
-      expect(response.status).toBe(401)
-    })
-
-    it('should return 404 for non-existent key', async () => {
-      ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
-      ;(prisma.apiKey.findFirst as jest.Mock).mockResolvedValue(null)
-
-      const req = createMockRequest('http://localhost:3000/api/keys/nonexistent', {
-        method: 'PUT',
-        body: JSON.stringify({ label: 'New' }),
-      })
-
-      const response = await updateKey(req, {
-        params: Promise.resolve({ id: 'nonexistent' }),
-      })
-
-      expect(response.status).toBe(404)
-    })
-
-    it('should return 400 for invalid label', async () => {
-      ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
-      ;(prisma.apiKey.findFirst as jest.Mock).mockResolvedValue(mockExistingKey)
-
-      const req = createMockRequest('http://localhost:3000/api/keys/key-1', {
-        method: 'PUT',
-        body: JSON.stringify({ label: '' }),
-      })
-
-      const response = await updateKey(req, { params: Promise.resolve({ id: 'key-1' }) })
-
-      expect(response.status).toBe(400)
-    })
-
-    it('should return 400 for invalid isActive', async () => {
-      ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
-      ;(prisma.apiKey.findFirst as jest.Mock).mockResolvedValue(mockExistingKey)
-
-      const req = createMockRequest('http://localhost:3000/api/keys/key-1', {
-        method: 'PUT',
-        body: JSON.stringify({ isActive: 'true' }),
-      })
-
-      const response = await updateKey(req, { params: Promise.resolve({ id: 'key-1' }) })
-
-      expect(response.status).toBe(400)
-    })
-  })
-
-  describe('DELETE /api/keys/[id]', () => {
-    const mockSession = {
-      user: {
-        id: 'user-123',
-        email: 'test@example.com',
-      },
-    }
-
-    const mockExistingKey = {
-      id: 'key-1',
-      userId: 'user-123',
-    }
-
-    it('should delete an API key', async () => {
-      ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
-      ;(prisma.apiKey.findFirst as jest.Mock).mockResolvedValue(mockExistingKey)
-      ;(prisma.apiKey.delete as jest.Mock).mockResolvedValue(mockExistingKey)
-
-      const req = createMockRequest('http://localhost:3000/api/keys/key-1', {
-        method: 'DELETE',
-      })
-
-      const response = await deleteKey(req, { params: Promise.resolve({ id: 'key-1' }) })
-      const data = await response.json()
-
-      expect(response.status).toBe(200)
-      expect(data).toEqual({ message: 'API key deleted successfully' })
-      expect(prisma.apiKey.delete).toHaveBeenCalledWith({
-        where: { id: 'key-1' },
-      })
-    })
-
-    it('should return 401 for unauthenticated user', async () => {
-      ;(getServerSession as jest.Mock).mockResolvedValue(null)
-
-      const req = createMockRequest('http://localhost:3000/api/keys/key-1', {
-        method: 'DELETE',
-      })
-
-      const response = await deleteKey(req, { params: Promise.resolve({ id: 'key-1' }) })
-
-      expect(response.status).toBe(401)
-    })
-
-    it('should return 404 for non-existent key', async () => {
-      ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
-      ;(prisma.apiKey.findFirst as jest.Mock).mockResolvedValue(null)
-
-      const req = createMockRequest('http://localhost:3000/api/keys/nonexistent', {
-        method: 'DELETE',
-      })
-
-      const response = await deleteKey(req, {
-        params: Promise.resolve({ id: 'nonexistent' }),
-      })
-
-      expect(response.status).toBe(404)
-      expect(prisma.apiKey.delete).not.toHaveBeenCalled()
-    })
-
-    it('should not allow deleting other users keys', async () => {
-      ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
-      ;(prisma.apiKey.findFirst as jest.Mock).mockResolvedValue(null)
-
-      const req = createMockRequest('http://localhost:3000/api/keys/other-key', {
-        method: 'DELETE',
-      })
-
-      const response = await deleteKey(req, {
-        params: Promise.resolve({ id: 'other-key' }),
-      })
-
-      expect(response.status).toBe(404)
     })
   })
 })

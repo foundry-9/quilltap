@@ -122,78 +122,6 @@ jest.mock('next/server', () => {
   }
 })
 
-// Mock @prisma/client to avoid needing prisma generate in tests
-jest.mock('@prisma/client', () => ({
-  PrismaClient: jest.fn().mockImplementation(() => ({
-    $connect: jest.fn(),
-    $disconnect: jest.fn(),
-    $executeRaw: jest.fn(),
-    $queryRaw: jest.fn(),
-    user: {
-      findMany: jest.fn(),
-      findUnique: jest.fn(),
-      findFirst: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-    },
-    character: {
-      findMany: jest.fn(),
-      findUnique: jest.fn(),
-      findFirst: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-    },
-    persona: {
-      findMany: jest.fn(),
-      findUnique: jest.fn(),
-      findFirst: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-    },
-    chat: {
-      findMany: jest.fn(),
-      findUnique: jest.fn(),
-      findFirst: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-    },
-    message: {
-      findMany: jest.fn(),
-      findUnique: jest.fn(),
-      findFirst: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-    },
-    apiKey: {
-      findMany: jest.fn(),
-      findUnique: jest.fn(),
-      findFirst: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-    },
-    connectionProfile: {
-      findMany: jest.fn(),
-      findUnique: jest.fn(),
-      findFirst: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-    },
-  })),
-  Provider: {
-    OPENAI: 'OPENAI',
-    ANTHROPIC: 'ANTHROPIC',
-    OLLAMA: 'OLLAMA',
-    OPENROUTER: 'OPENROUTER',
-    OPENAI_COMPATIBLE: 'OPENAI_COMPATIBLE',
-  },
-}))
 
 // Mock encryption library
 jest.mock('@/lib/encryption', () => ({
@@ -206,4 +134,10 @@ jest.mock('@/lib/encryption', () => ({
 // Mock LLM factory
 jest.mock('@/lib/llm/factory', () => ({
   createLLMProvider: jest.fn(),
+}))
+
+// Mock JSON Store Repositories
+jest.mock('@/lib/json-store/repositories', () => ({
+  getRepositories: jest.fn(),
+  resetRepositories: jest.fn(),
 }))

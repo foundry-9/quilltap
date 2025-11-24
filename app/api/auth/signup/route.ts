@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 import { hashPassword, validatePasswordStrength } from '@/lib/auth/password'
 import { z } from 'zod'
 
@@ -23,10 +23,10 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    const repos = getRepositories()
+
     // Check if user already exists
-    const existing = await prisma.user.findUnique({
-      where: { email }
-    })
+    const existing = await repos.users.findByEmail(email)
 
     if (existing) {
       return NextResponse.json(
@@ -39,23 +39,20 @@ export async function POST(req: NextRequest) {
     const passwordHash = await hashPassword(password)
 
     // Create user
-    const user = await prisma.user.create({
-      data: {
-        email,
-        name,
-        passwordHash,
-        emailVerified: new Date(), // Auto-verify for now (can add email verification later)
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-      }
+    const user = await repos.users.create({
+      email,
+      name: name || null,
+      passwordHash,
+      emailVerified: new Date().toISOString(), // Auto-verify for now (can add email verification later)
     })
 
     return NextResponse.json({
       message: 'Account created successfully',
-      user
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+      }
     }, { status: 201 })
 
   } catch (error) {

@@ -68,7 +68,7 @@ sed "${SED_INPLACE[@]}" "s/\"version\": \"$CURRENT_VERSION\"/\"version\": \"$NEW
 
 # Check if package-lock.json exists and update it as well
 if [ -f package-lock.json ]; then
-  sed "${SED_INPLACE[@]}" "s/\"version\": \"$CURRENT_VERSION\"/\"version\": \"$NEW_VERSION\"/" package-lock.json
+  npm install --package-lock-only
 fi
 
 # Stage the updated package files

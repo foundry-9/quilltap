@@ -35,7 +35,10 @@ export default function ApiKeysTab() {
     try {
       setLoading(true)
       setError(null)
-      const res = await fetch('/api/keys')
+      const res = await fetch('/api/keys', {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+      })
       if (!res.ok) throw new Error('Failed to fetch API keys')
       const data = await res.json()
       setApiKeys(data)

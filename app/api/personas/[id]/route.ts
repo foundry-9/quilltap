@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 
 export async function GET(
   req: NextRequest,
@@ -22,33 +22,49 @@ export async function GET(
     }
 
     const { id } = await params
+    const repos = getRepositories()
 
-    const persona = await prisma.persona.findFirst({
-      where: {
-        id,
-        userId: session.user.id,
-      },
-      include: {
-        defaultImage: true,
-        characters: {
-          include: {
-            character: {
-              select: {
-                id: true,
-                name: true,
-                avatarUrl: true,
-              },
-            },
-          },
-        },
-      },
-    })
+    const persona = await repos.personas.findById(id)
 
-    if (!persona) {
+    if (!persona || persona.userId !== session.user.id) {
       return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
     }
 
-    return NextResponse.json(persona)
+    // Get default image if present
+    let defaultImage = null
+    if (persona.defaultImageId) {
+      defaultImage = await repos.images.findById(persona.defaultImageId)
+    }
+
+    // Get character links with details
+    const characters = await Promise.all(
+      persona.characterLinks.map(async (characterId) => {
+        const character = await repos.characters.findById(characterId)
+        return character
+          ? {
+              character: {
+                id: character.id,
+                name: character.name,
+                avatarUrl: character.avatarUrl,
+              },
+            }
+          : null
+      })
+    )
+
+    const enrichedPersona = {
+      ...persona,
+      defaultImage: defaultImage
+        ? {
+            id: defaultImage.id,
+            filepath: defaultImage.relativePath,
+            url: null,
+          }
+        : null,
+      characters: characters.filter(Boolean),
+    }
+
+    return NextResponse.json(enrichedPersona)
   } catch (error) {
     console.error('Error fetching persona:', error)
     return NextResponse.json(
@@ -70,16 +86,12 @@ export async function PUT(
     }
 
     const { id } = await params
+    const repos = getRepositories()
 
     // Verify persona belongs to user
-    const existing = await prisma.persona.findFirst({
-      where: {
-        id,
-        userId: session.user.id,
-      },
-    })
+    const existing = await repos.personas.findById(id)
 
-    if (!existing) {
+    if (!existing || existing.userId !== session.user.id) {
       return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
     }
 
@@ -87,28 +99,32 @@ export async function PUT(
     const { name, title, description, personalityTraits, avatarUrl, sillyTavernData } =
       body
 
-    const persona = await prisma.persona.update({
-      where: { id },
-      data: {
-        name: name !== undefined ? name : existing.name,
-        title: title !== undefined ? title : existing.title,
-        description: description !== undefined ? description : existing.description,
-        personalityTraits:
-          personalityTraits !== undefined
-            ? personalityTraits
-            : existing.personalityTraits,
-        avatarUrl: avatarUrl !== undefined ? avatarUrl : existing.avatarUrl,
-        sillyTavernData:
-          sillyTavernData !== undefined
-            ? sillyTavernData
-            : existing.sillyTavernData,
-      },
-      include: {
-        defaultImage: true,
-      },
-    })
+    const updateData: Record<string, unknown> = {}
+    if (name !== undefined) updateData.name = name
+    if (title !== undefined) updateData.title = title
+    if (description !== undefined) updateData.description = description
+    if (personalityTraits !== undefined) updateData.personalityTraits = personalityTraits
+    if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl
+    if (sillyTavernData !== undefined) updateData.sillyTavernData = sillyTavernData
 
-    return NextResponse.json(persona)
+    const persona = await repos.personas.update(id, updateData)
+
+    // Get default image for response
+    let defaultImage = null
+    if (persona?.defaultImageId) {
+      defaultImage = await repos.images.findById(persona.defaultImageId)
+    }
+
+    return NextResponse.json({
+      ...persona,
+      defaultImage: defaultImage
+        ? {
+            id: defaultImage.id,
+            filepath: defaultImage.relativePath,
+            url: null,
+          }
+        : null,
+    })
   } catch (error) {
     console.error('Error updating persona:', error)
     return NextResponse.json(
@@ -130,22 +146,16 @@ export async function DELETE(
     }
 
     const { id } = await params
+    const repos = getRepositories()
 
     // Verify persona belongs to user
-    const existing = await prisma.persona.findFirst({
-      where: {
-        id,
-        userId: session.user.id,
-      },
-    })
+    const existing = await repos.personas.findById(id)
 
-    if (!existing) {
+    if (!existing || existing.userId !== session.user.id) {
       return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
     }
 
-    await prisma.persona.delete({
-      where: { id },
-    })
+    await repos.personas.delete(id)
 
     return NextResponse.json({ success: true })
   } catch (error) {

@@ -6,7 +6,7 @@
 import { writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { prisma } from '@/lib/prisma';
+import { getRepositories } from '@/lib/json-store/repositories';
 import { decryptApiKey } from '@/lib/encryption';
 import { getImageGenProvider } from '@/lib/image-gen/factory';
 import {
@@ -72,18 +72,26 @@ async function saveGeneratedImage(
 
     await writeFile(fullPath, buffer);
 
-    // Create database record
-    const image = await prisma.image.create({
-      data: {
-        userId,
-        filename,
-        filepath,
-        mimeType,
-        size: buffer.length,
-        source: 'generated',
-        generationPrompt: metadata.prompt,
-        generationModel: metadata.model,
-      },
+    // Create database record using JsonStore
+    const repos = getRepositories();
+
+    // Generate SHA256 hash for the image
+    const crypto = await import('node:crypto');
+    const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
+
+    const image = await repos.images.create({
+      sha256,
+      type: 'image',
+      userId,
+      filename,
+      relativePath: filepath,
+      mimeType,
+      size: buffer.length,
+      source: 'generated',
+      generationPrompt: metadata.prompt,
+      generationModel: metadata.model,
+      chatId: chatId || null,
+      tags: [],
     });
 
     return {
@@ -96,6 +104,7 @@ async function saveGeneratedImage(
       size: buffer.length,
       width: image.width ?? undefined,
       height: image.height ?? undefined,
+      sha256,
     };
   } catch (error) {
     throw new ImageGenerationError(
@@ -151,17 +160,10 @@ async function loadAndValidateProfile(
   userId: string
 ): Promise<{ success: boolean; profile?: any; output?: ImageGenerationToolOutput }> {
   try {
-    const imageProfile = await prisma.imageProfile.findFirst({
-      where: {
-        id: profileId,
-        userId,
-      },
-      include: {
-        apiKey: true,
-      },
-    });
+    const repos = getRepositories();
+    const imageProfile = await repos.imageProfiles.findById(profileId);
 
-    if (!imageProfile) {
+    if (!imageProfile || imageProfile.userId !== userId) {
       return {
         success: false,
         output: {
@@ -172,7 +174,13 @@ async function loadAndValidateProfile(
       };
     }
 
-    if (!imageProfile.apiKey?.keyEncrypted) {
+    // Get the API key if profile has one
+    let apiKey = null;
+    if (imageProfile.apiKeyId) {
+      apiKey = await repos.connections.findApiKeyById(imageProfile.apiKeyId);
+    }
+
+    if (!apiKey?.ciphertext) {
       return {
         success: false,
         output: {
@@ -183,7 +191,7 @@ async function loadAndValidateProfile(
       };
     }
 
-    return { success: true, profile: imageProfile };
+    return { success: true, profile: { ...imageProfile, apiKey } };
   } catch (error) {
     throw new ImageGenerationError(
       'DATABASE_ERROR',
@@ -208,9 +216,9 @@ async function generateImagesWithProvider(
   let decryptedKey: string;
   try {
     decryptedKey = decryptApiKey(
-      imageProfile.apiKey.keyEncrypted,
-      imageProfile.apiKey.keyIv,
-      imageProfile.apiKey.keyAuthTag,
+      imageProfile.apiKey.ciphertext,
+      imageProfile.apiKey.iv,
+      imageProfile.apiKey.authTag,
       imageProfile.userId
     );
   } catch (error) {
@@ -351,24 +359,23 @@ export async function validateImageProfile(
   userId: string
 ): Promise<{ valid: boolean; error?: string }> {
   try {
-    const profile = await prisma.imageProfile.findFirst({
-      where: {
-        id: profileId,
-        userId,
-      },
-      include: {
-        apiKey: true,
-      },
-    });
+    const repos = getRepositories();
+    const profile = await repos.imageProfiles.findById(profileId);
 
-    if (!profile) {
+    if (!profile || profile.userId !== userId) {
       return {
         valid: false,
         error: 'Profile not found or not authorized',
       };
     }
 
-    if (!profile.apiKey?.keyEncrypted) {
+    // Get the API key if profile has one
+    let apiKey = null;
+    if (profile.apiKeyId) {
+      apiKey = await repos.connections.findApiKeyById(profile.apiKeyId);
+    }
+
+    if (!apiKey?.ciphertext) {
       return {
         valid: false,
         error: 'Profile does not have a valid API key',
@@ -399,21 +406,27 @@ export async function validateImageProfile(
  */
 export async function getDefaultImageProfile(userId: string) {
   try {
-    return await prisma.imageProfile.findFirst({
-      where: {
-        userId,
-        isDefault: true,
-      },
-      include: {
-        apiKey: {
-          select: {
-            id: true,
-            provider: true,
-            label: true,
-          },
-        },
-      },
-    });
+    const repos = getRepositories();
+    const profile = await repos.imageProfiles.findDefault(userId);
+
+    if (!profile) {
+      return null;
+    }
+
+    // Enrich with API key info
+    let apiKey = null;
+    if (profile.apiKeyId) {
+      const key = await repos.connections.findApiKeyById(profile.apiKeyId);
+      if (key) {
+        apiKey = {
+          id: key.id,
+          provider: key.provider,
+          label: key.label,
+        };
+      }
+    }
+
+    return { ...profile, apiKey };
   } catch {
     // Database error - return null for missing profile
     return null;

@@ -9,8 +9,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
-import { ImageProvider } from '@/lib/types/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
+import { ImageProviderEnum, type ImageProvider } from '@/lib/json-store/schemas/types'
 import { getImageGenProvider } from '@/lib/image-gen/factory'
 
 /**
@@ -34,56 +34,72 @@ export async function GET(req: NextRequest) {
     const sortByCharacter = searchParams.get('sortByCharacter')
     const sortByPersona = searchParams.get('sortByPersona')
 
-    let profiles = await prisma.imageProfile.findMany({
-      where: {
-        userId: session.user.id,
-      },
-      include: {
-        apiKey: {
-          select: {
-            id: true,
-            label: true,
-            provider: true,
-            isActive: true,
-          },
-        },
-        tags: {
-          include: {
-            tag: true,
-          },
-        },
-      },
-      orderBy: [
-        { isDefault: 'desc' },
-        { createdAt: 'desc' },
-      ],
+    const repos = getRepositories()
+
+    // Get all image profiles for user
+    let profiles = await repos.imageProfiles.findByUserId(session.user.id)
+
+    // Enrich with API key info and tags
+    const enrichedProfiles = await Promise.all(
+      profiles.map(async (profile) => {
+        // Get API key info if exists
+        let apiKey = null
+        if (profile.apiKeyId) {
+          const key = await repos.connections.findApiKeyById(profile.apiKeyId)
+          if (key) {
+            apiKey = {
+              id: key.id,
+              label: key.label,
+              provider: key.provider,
+              isActive: key.isActive,
+            }
+          }
+        }
+
+        // Get tag details
+        const tagDetails = await Promise.all(
+          profile.tags.map(async (tagId) => {
+            const tag = await repos.tags.findById(tagId)
+            return tag ? { tagId, tag } : null
+          })
+        )
+
+        return {
+          ...profile,
+          apiKey,
+          tags: tagDetails.filter(Boolean),
+        }
+      })
+    )
+
+    // Sort by default first, then by creation date
+    enrichedProfiles.sort((a, b) => {
+      if (a.isDefault !== b.isDefault) {
+        return b.isDefault ? 1 : -1
+      }
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     })
 
     // If sortByCharacter is specified, sort by matching tags
     if (sortByCharacter) {
       // Get character tags
-      const characterTags = await prisma.characterTag.findMany({
-        where: { characterId: sortByCharacter },
-        select: { tagId: true },
-      })
-      const characterTagIds = new Set(characterTags.map(ct => ct.tagId))
+      const character = await repos.characters.findById(sortByCharacter)
+      const characterTagIds = new Set(character?.tags || [])
 
       // Get persona tags if sortByPersona is specified
-      const personaTags = sortByPersona
-        ? await prisma.personaTag.findMany({
-            where: { personaId: sortByPersona },
-            select: { tagId: true },
-          })
-        : []
-      const personaTagIds = new Set(personaTags.map(pt => pt.tagId))
+      let personaTagIds = new Set<string>()
+      if (sortByPersona) {
+        const persona = await repos.personas.findById(sortByPersona)
+        personaTagIds = new Set(persona?.tags || [])
+      }
 
       // Combine tag IDs
       const allTagIds = new Set([...characterTagIds, ...personaTagIds])
 
       // Sort profiles by number of matching tags (descending)
-      profiles.sort((a, b) => {
-        const aMatchingTags = a.tags.filter(ipt => allTagIds.has(ipt.tagId)).length
-        const bMatchingTags = b.tags.filter(ipt => allTagIds.has(ipt.tagId)).length
+      enrichedProfiles.sort((a, b) => {
+        const aMatchingTags = a.tags.filter((t: any) => allTagIds.has(t.tagId)).length
+        const bMatchingTags = b.tags.filter((t: any) => allTagIds.has(t.tagId)).length
 
         // If same number of matches, prefer default profile
         if (aMatchingTags === bMatchingTags) {
@@ -94,18 +110,18 @@ export async function GET(req: NextRequest) {
       })
 
       // Add matching tags info to each profile
-      const profilesWithMatches = profiles.map(profile => ({
+      const profilesWithMatches = enrichedProfiles.map(profile => ({
         ...profile,
         matchingTags: profile.tags
-          .filter(ipt => allTagIds.has(ipt.tagId))
-          .map(ipt => ipt.tag),
-        matchingTagCount: profile.tags.filter(ipt => allTagIds.has(ipt.tagId)).length,
+          .filter((t: any) => allTagIds.has(t.tagId))
+          .map((t: any) => t.tag),
+        matchingTagCount: profile.tags.filter((t: any) => allTagIds.has(t.tagId)).length,
       }))
 
       return NextResponse.json(profilesWithMatches)
     }
 
-    return NextResponse.json(profiles)
+    return NextResponse.json(enrichedProfiles)
   } catch (error) {
     console.error('Failed to fetch image profiles:', error)
     return NextResponse.json(
@@ -165,9 +181,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate provider
-    if (!provider || !Object.values(ImageProvider).includes(provider as ImageProvider)) {
+    const validProviders = ImageProviderEnum.options
+    if (!provider || !validProviders.includes(provider)) {
       return NextResponse.json(
-        { error: `Invalid provider. Must be one of: ${Object.values(ImageProvider).join(', ')}` },
+        { error: `Invalid provider. Must be one of: ${validProviders.join(', ')}` },
         { status: 400 }
       )
     }
@@ -197,14 +214,11 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    const repos = getRepositories()
+
     // Validate apiKeyId if provided
     if (apiKeyId) {
-      const apiKey = await prisma.apiKey.findFirst({
-        where: {
-          id: apiKeyId,
-          userId: session.user.id,
-        },
-      })
+      const apiKey = await repos.connections.findApiKeyById(apiKeyId)
 
       if (!apiKey) {
         return NextResponse.json(
@@ -219,12 +233,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Check for duplicate name
-    const existingProfile = await prisma.imageProfile.findFirst({
-      where: {
-        userId: session.user.id,
-        name: name.trim(),
-      },
-    })
+    const existingProfile = await repos.imageProfiles.findByName(session.user.id, name.trim())
 
     if (existingProfile) {
       return NextResponse.json(
@@ -235,42 +244,37 @@ export async function POST(req: NextRequest) {
 
     // If setting as default, unset other defaults
     if (isDefault) {
-      await prisma.imageProfile.updateMany({
-        where: {
-          userId: session.user.id,
-          isDefault: true,
-        },
-        data: {
-          isDefault: false,
-        },
-      })
+      await repos.imageProfiles.unsetAllDefaults(session.user.id)
     }
 
     // Create profile
-    const profile = await prisma.imageProfile.create({
-      data: {
-        userId: session.user.id,
-        name: name.trim(),
-        provider: provider as ImageProvider,
-        apiKeyId: apiKeyId || null,
-        baseUrl: baseUrl || null,
-        modelName: modelName.trim(),
-        parameters: parameters,
-        isDefault,
-      },
-      include: {
-        apiKey: {
-          select: {
-            id: true,
-            label: true,
-            provider: true,
-            isActive: true,
-          },
-        },
-      },
+    const profile = await repos.imageProfiles.create({
+      userId: session.user.id,
+      name: name.trim(),
+      provider: provider as ImageProvider,
+      apiKeyId: apiKeyId || null,
+      baseUrl: baseUrl || null,
+      modelName: modelName.trim(),
+      parameters: parameters,
+      isDefault,
+      tags: [],
     })
 
-    return NextResponse.json(profile, { status: 201 })
+    // Enrich with API key info
+    let apiKey = null
+    if (profile.apiKeyId) {
+      const key = await repos.connections.findApiKeyById(profile.apiKeyId)
+      if (key) {
+        apiKey = {
+          id: key.id,
+          label: key.label,
+          provider: key.provider,
+          isActive: key.isActive,
+        }
+      }
+    }
+
+    return NextResponse.json({ ...profile, apiKey }, { status: 201 })
   } catch (error) {
     console.error('Failed to create image profile:', error)
     return NextResponse.json(

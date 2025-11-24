@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 import { ImageProvider } from '@/lib/types/prisma'
 import { getImageGenProvider } from '@/lib/image-gen/factory'
 import { decryptApiKey } from '@/lib/encryption'
@@ -72,13 +72,10 @@ export async function POST(request: NextRequest) {
 
     // Get the API key to validate
     if (apiKeyId) {
+      const repos = getRepositories()
+
       // Fetch from stored keys
-      const storedKey = await prisma.apiKey.findFirst({
-        where: {
-          id: apiKeyId,
-          userId: session.user.id,
-        },
-      })
+      const storedKey = await repos.connections.findApiKeyById(apiKeyId)
 
       if (!storedKey) {
         return NextResponse.json(
@@ -89,9 +86,9 @@ export async function POST(request: NextRequest) {
 
       try {
         keyToValidate = decryptApiKey(
-          storedKey.keyEncrypted,
-          storedKey.keyIv,
-          storedKey.keyAuthTag,
+          storedKey.ciphertext,
+          storedKey.iv,
+          storedKey.authTag,
           session.user.id
         )
       } catch (error) {

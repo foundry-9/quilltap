@@ -45,6 +45,7 @@ export interface GeneratedImageResult {
   size?: number; // File size in bytes
   width?: number; // Image width in pixels
   height?: number; // Image height in pixels
+  sha256?: string; // SHA256 hash of the image file
 }
 
 /**

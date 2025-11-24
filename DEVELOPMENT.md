@@ -18,10 +18,10 @@ Enterprise-grade AI roleplay chat platform with full SillyTavern compatibility, 
 
 **Achievements**:
 - Next.js 14 application fully set up with TypeScript
-- Prisma ORM configured with PostgreSQL database
+- JSON file-based data store configured
 - Docker Compose development environment ready
 - Google OAuth authentication working via NextAuth.js
-- User model and authentication tables created
+- User authentication configured
 - Environment variables configured with .env.example template
 - Tailwind CSS integrated with custom theme
 - Dashboard with navigation and user profile display
@@ -57,8 +57,8 @@ Enterprise-grade AI roleplay chat platform with full SillyTavern compatibility, 
 **Deliverable**: Users can create a character and chat using OpenAI
 
 **Achievements**:
-- Database schema updated with Character, Chat, Message, Persona, and CharacterPersona models
-- Prisma schema migration SQL file created
+- JSON data store extended with Character, Chat, Message, Persona, and CharacterPersona models
+- Character data persistence implemented
 - LLM provider architecture implemented with base interface and OpenAI provider
 - Character CRUD API endpoints: GET/POST /api/characters, GET/PUT/DELETE /api/characters/:id
 - Chat CRUD API endpoints: GET/POST /api/chats, GET/PUT/DELETE /api/chats/:id
@@ -154,7 +154,7 @@ Enterprise-grade AI roleplay chat platform with full SillyTavern compatibility, 
 
 ### Foundation & Infrastructure
 - ✅ Next.js 14 with TypeScript
-- ✅ PostgreSQL database with Prisma ORM
+- ✅ JSON file-based data store
 - ✅ Google OAuth authentication via NextAuth.js
 - ✅ Docker Compose development environment
 - ✅ Tailwind CSS styling
@@ -219,9 +219,8 @@ quilltap/
 │   └── providers/            # Context providers
 ├── lib/                      # Utility libraries
 │   ├── auth.ts               # NextAuth configuration
-│   └── prisma.ts             # Prisma client
-├── prisma/                   # Database schema
-│   └── schema.prisma         # Prisma schema
+│   └── json-store/           # JSON data store
+├── data/                     # JSON data files
 ├── public/                   # Static assets
 ├── docker-compose.yml        # Docker configuration
 ├── Dockerfile                # Multi-stage Docker build
@@ -232,10 +231,7 @@ quilltap/
 
 1. Make changes to the code
 2. Next.js hot reload will update automatically
-3. For database changes:
-   - Update `prisma/schema.prisma`
-   - Run `npm run db:push` or `npm run db:migrate`
-   - Run `npm run db:generate` to update Prisma client
+3. Data is automatically persisted to JSON files in the `data/` directory
 
 ## Future Enhancements (Post-1.0)
 

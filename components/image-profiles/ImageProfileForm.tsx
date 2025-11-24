@@ -220,14 +220,14 @@ export function ImageProfileForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/50 text-red-700 dark:text-red-400 px-4 py-3 rounded">
           {error}
         </div>
       )}
 
       {/* Profile Name */}
       <div>
-        <label className="block text-sm font-medium text-gray-900 mb-1">
+        <label className="block text-sm font-medium text-gray-900 dark:text-white mb-1">
           Profile Name
         </label>
         <input
@@ -235,22 +235,22 @@ export function ImageProfileForm({
           value={formData.name}
           onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
           placeholder="e.g., DALL-E 3 HD"
-          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
         />
         {validationErrors.name && (
-          <p className="text-red-600 text-sm mt-1">{validationErrors.name}</p>
+          <p className="text-red-600 dark:text-red-400 text-sm mt-1">{validationErrors.name}</p>
         )}
       </div>
 
       {/* Provider Selection */}
       <div>
-        <label className="block text-sm font-medium text-gray-900 mb-1">
+        <label className="block text-sm font-medium text-gray-900 dark:text-white mb-1">
           Provider
         </label>
         <select
           value={formData.provider}
           onChange={handleProviderChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
         >
           {IMAGE_PROVIDERS.map(p => (
             <option key={p.value} value={p.value}>
@@ -259,20 +259,20 @@ export function ImageProfileForm({
           ))}
         </select>
         {validationErrors.provider && (
-          <p className="text-red-600 text-sm mt-1">{validationErrors.provider}</p>
+          <p className="text-red-600 dark:text-red-400 text-sm mt-1">{validationErrors.provider}</p>
         )}
       </div>
 
       {/* API Key Selection */}
       <div>
-        <label className="block text-sm font-medium text-gray-900 mb-1">
+        <label className="block text-sm font-medium text-gray-900 dark:text-white mb-1">
           API Key
         </label>
         <div className="flex gap-2">
           <select
             value={formData.apiKeyId}
             onChange={handleApiKeyChange}
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
+            className="flex-1 px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
           >
             <option value="">Select an API key</option>
             {getAvailableApiKeys().map(key => (
@@ -285,16 +285,16 @@ export function ImageProfileForm({
             type="button"
             onClick={handleValidateKey}
             disabled={!formData.apiKeyId || isValidatingKey}
-            className="px-3 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 disabled:bg-gray-400"
+            className="px-3 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md text-sm hover:bg-blue-700 dark:hover:bg-blue-600 disabled:bg-gray-400 dark:disabled:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
           >
             {isValidatingKey ? 'Validating...' : 'Validate'}
           </button>
         </div>
         {validationErrors.apiKeyId && (
-          <p className="text-red-600 text-sm mt-1">{validationErrors.apiKeyId}</p>
+          <p className="text-red-600 dark:text-red-400 text-sm mt-1">{validationErrors.apiKeyId}</p>
         )}
         {keyValidationStatus && (
-          <p className={`text-sm mt-1 ${keyValidationStatus.startsWith('✓') ? 'text-green-600' : 'text-red-600'}`}>
+          <p className={`text-sm mt-1 ${keyValidationStatus.startsWith('✓') ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
             {keyValidationStatus}
           </p>
         )}
@@ -302,14 +302,14 @@ export function ImageProfileForm({
 
       {/* Model Selection */}
       <div>
-        <label className="block text-sm font-medium text-gray-900 mb-1">
+        <label className="block text-sm font-medium text-gray-900 dark:text-white mb-1">
           Model
         </label>
         <select
           value={formData.modelName}
           onChange={e => setFormData(prev => ({ ...prev, modelName: e.target.value }))}
           disabled={isFetchingModels}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white disabled:bg-gray-100 dark:disabled:bg-slate-800 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
         >
           {(availableModels.length > 0 ? availableModels : PROVIDER_MODELS[formData.provider] || []).map(
             model => (
@@ -320,7 +320,7 @@ export function ImageProfileForm({
           )}
         </select>
         {validationErrors.modelName && (
-          <p className="text-red-600 text-sm mt-1">{validationErrors.modelName}</p>
+          <p className="text-red-600 dark:text-red-400 text-sm mt-1">{validationErrors.modelName}</p>
         )}
       </div>
 
@@ -338,9 +338,9 @@ export function ImageProfileForm({
           id="isDefault"
           checked={formData.isDefault}
           onChange={e => setFormData(prev => ({ ...prev, isDefault: e.target.checked }))}
-          className="h-4 w-4 text-blue-600 rounded border-gray-300"
+          className="h-4 w-4 text-blue-600 dark:accent-blue-500 rounded border-gray-300 dark:border-slate-600 dark:bg-slate-700"
         />
-        <label htmlFor="isDefault" className="ml-2 text-sm text-gray-700">
+        <label htmlFor="isDefault" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
           Set as default profile for image generation
         </label>
       </div>
@@ -351,7 +351,7 @@ export function ImageProfileForm({
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+            className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
           >
             Cancel
           </button>
@@ -359,7 +359,7 @@ export function ImageProfileForm({
         <button
           type="submit"
           disabled={loading}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400"
+          className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:bg-gray-400 dark:disabled:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
         >
           {loading ? 'Saving...' : profile ? 'Update' : 'Create'}
         </button>

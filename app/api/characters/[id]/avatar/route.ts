@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { getRepositories } from '@/lib/json-store/repositories';
 import { z } from 'zod';
 
 interface RouteContext {
@@ -29,45 +29,48 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     }
 
     const { id } = await context.params;
+    const repos = getRepositories();
+
     const body = await request.json();
     const { imageId } = avatarSchema.parse(body);
 
     // Verify character exists and belongs to user
-    const character = await prisma.character.findUnique({
-      where: {
-        id,
-        userId: session.user.id,
-      },
-    });
+    const character = await repos.characters.findById(id);
 
-    if (!character) {
+    if (!character || character.userId !== session.user.id) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 });
     }
 
     // If imageId is provided, verify it exists and belongs to user
     if (imageId) {
-      const image = await prisma.image.findUnique({
-        where: {
-          id: imageId,
-          userId: session.user.id,
-        },
-      });
+      const image = await repos.images.findById(imageId);
 
-      if (!image) {
+      if (!image || image.userId !== session.user.id) {
         return NextResponse.json({ error: 'Image not found' }, { status: 404 });
       }
     }
 
     // Update character avatar
-    const updatedCharacter = await prisma.character.update({
-      where: { id },
-      data: { defaultImageId: imageId },
-      include: {
-        defaultImage: true,
+    const updatedCharacter = await repos.characters.update(id, { defaultImageId: imageId });
+
+    // Get the default image for response
+    let defaultImage = null;
+    if (updatedCharacter?.defaultImageId) {
+      defaultImage = await repos.images.findById(updatedCharacter.defaultImageId);
+    }
+
+    return NextResponse.json({
+      data: {
+        ...updatedCharacter,
+        defaultImage: defaultImage
+          ? {
+              id: defaultImage.id,
+              filepath: defaultImage.relativePath,
+              url: null,
+            }
+          : null,
       },
     });
-
-    return NextResponse.json({ data: updatedCharacter });
   } catch (error) {
     console.error('Error updating character avatar:', error);
 

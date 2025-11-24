@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 import { z } from 'zod'
 import fs from 'fs/promises'
 import path from 'path'
@@ -36,53 +36,46 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const body = await request.json()
     const { tagType, tagId } = tagSchema.parse(body)
 
-    // Get the chat file
-    const chatFile = await prisma.chatFile.findUnique({
-      where: { id },
-      include: {
-        chat: true,
-      },
-    })
+    const repos = getRepositories()
 
-    if (!chatFile) {
+    // Get the chat file (binary entry with type chat_file)
+    const chatFile = await repos.images.findById(id)
+
+    if (!chatFile || chatFile.type !== 'chat_file') {
       return NextResponse.json({ error: 'Chat file not found' }, { status: 404 })
     }
 
-    // Verify chat belongs to user
-    if (chatFile.chat.userId !== session.user.id) {
+    // Verify chat belongs to user by checking the chatId
+    if (chatFile.chatId) {
+      const chat = await repos.chats.findById(chatFile.chatId)
+      if (!chat || chat.userId !== session.user.id) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+    } else if (chatFile.userId !== session.user.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     // Verify the tagged entity exists and belongs to user
     if (tagType === 'CHARACTER') {
-      const character = await prisma.character.findUnique({
-        where: { id: tagId, userId: session.user.id },
-      })
-      if (!character) {
+      const character = await repos.characters.findById(tagId)
+      if (!character || character.userId !== session.user.id) {
         return NextResponse.json({ error: 'Character not found' }, { status: 404 })
       }
     } else if (tagType === 'PERSONA') {
-      const persona = await prisma.persona.findUnique({
-        where: { id: tagId, userId: session.user.id },
-      })
-      if (!persona) {
+      const persona = await repos.personas.findById(tagId)
+      if (!persona || persona.userId !== session.user.id) {
         return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
       }
     }
 
     // Check if this file has already been copied to the gallery with this tag
-    const existingImage = await prisma.image.findFirst({
-      where: {
-        userId: session.user.id,
-        filepath: chatFile.filepath,
-        tags: {
-          some: {
-            tagType,
-            tagId,
-          },
-        },
-      },
-    })
+    // Look for an image type entry with same filepath/sha256 and the tag
+    const allImages = await repos.images.findByUserId(session.user.id)
+    const existingImage = allImages.find(
+      img => img.type === 'image' &&
+             img.relativePath === chatFile.relativePath &&
+             img.tags.includes(tagId)
+    )
 
     if (existingImage) {
       return NextResponse.json(
@@ -92,36 +85,33 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     // Check if image already exists in gallery (by filepath)
-    let image = await prisma.image.findFirst({
-      where: {
-        userId: session.user.id,
-        filepath: chatFile.filepath,
-      },
-    })
+    let image = allImages.find(
+      img => img.type === 'image' && img.relativePath === chatFile.relativePath
+    )
 
     // If image doesn't exist in gallery, create it
     if (!image) {
-      image = await prisma.image.create({
-        data: {
-          userId: session.user.id,
-          filename: chatFile.filename,
-          filepath: chatFile.filepath,
-          mimeType: chatFile.mimeType,
-          size: chatFile.size,
-          width: chatFile.width,
-          height: chatFile.height,
-        },
+      image = await repos.images.create({
+        sha256: chatFile.sha256,
+        type: 'image',
+        userId: session.user.id,
+        filename: chatFile.filename,
+        relativePath: chatFile.relativePath,
+        mimeType: chatFile.mimeType,
+        size: chatFile.size,
+        source: chatFile.source || 'upload',
+        width: chatFile.width ?? undefined,
+        height: chatFile.height ?? undefined,
+        tags: [tagId],
       })
+    } else {
+      // Add tag to existing image
+      await repos.images.addTag(image.id, tagId)
+      const updatedImage = await repos.images.findById(image.id)
+      if (updatedImage) {
+        image = updatedImage
+      }
     }
-
-    // Add tag to the image
-    await prisma.imageTag.create({
-      data: {
-        imageId: image.id,
-        tagType,
-        tagId,
-      },
-    })
 
     return NextResponse.json({
       data: {
@@ -137,11 +127,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Validation error', details: error.errors }, { status: 400 })
     }
 
-    // Check for unique constraint violation
-    if ((error as any)?.code === 'P2002') {
-      return NextResponse.json({ error: 'Tag already exists' }, { status: 400 })
-    }
-
     return NextResponse.json(
       { error: 'Failed to tag image', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
@@ -151,7 +136,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
 /**
  * DELETE /api/chat-files/:id
- * Delete a chat file
+ * Delete a chat file or generated image in a chat
  */
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
@@ -162,49 +147,67 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     const { id } = await context.params
 
-    // Get the chat file
-    const chatFile = await prisma.chatFile.findUnique({
-      where: { id },
-      include: {
-        chat: true,
-      },
-    })
+    const repos = getRepositories()
 
-    if (!chatFile) {
-      return NextResponse.json({ error: 'Chat file not found' }, { status: 404 })
+    // Get the file (can be chat_file or image)
+    const file = await repos.images.findById(id)
+
+    if (!file) {
+      return NextResponse.json({ error: 'File not found' }, { status: 404 })
     }
 
-    // Verify chat belongs to user
-    if (chatFile.chat.userId !== session.user.id) {
+    // Accept both 'chat_file' (uploaded) and 'image' (generated in chat) types
+    if (file.type !== 'chat_file' && file.type !== 'image') {
+      return NextResponse.json({ error: 'File not found' }, { status: 404 })
+    }
+
+    // For images, require a chatId to ensure they belong to a chat
+    if (file.type === 'image' && !file.chatId) {
+      return NextResponse.json({ error: 'Invalid file for deletion' }, { status: 400 })
+    }
+
+    // Verify the file belongs to a chat that belongs to the user
+    if (file.chatId) {
+      const chat = await repos.chats.findById(file.chatId)
+      if (!chat || chat.userId !== session.user.id) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+    } else if (file.userId !== session.user.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Check if this file is used by an Image in the gallery
-    const galleryImage = await prisma.image.findFirst({
-      where: {
-        filepath: chatFile.filepath,
-      },
-    })
+    // Check if this file is being used elsewhere
+    const allImages = await repos.images.findByUserId(session.user.id)
+    
+    // For chat_file type, check if there's a corresponding image in gallery
+    let canDeleteFromDisk = true
+    if (file.type === 'chat_file') {
+      const galleryImage = allImages.find(
+        img => img.type === 'image' && img.relativePath === file.relativePath
+      )
+      canDeleteFromDisk = !galleryImage
+    }
 
     // Delete the database record
-    await prisma.chatFile.delete({
-      where: { id },
-    })
+    const deleted = await repos.images.delete(id)
+    
+    if (!deleted) {
+      return NextResponse.json({ error: 'Failed to delete file' }, { status: 500 })
+    }
 
-    // Only delete the file from disk if it's not used in the gallery
-    if (!galleryImage) {
-      const fullPath = path.join(process.cwd(), 'public', chatFile.filepath)
+    // Only delete the file from disk if it's not referenced elsewhere
+    if (canDeleteFromDisk) {
+      const fullPath = path.join(process.cwd(), 'public', file.relativePath)
       try {
         await fs.unlink(fullPath)
       } catch (err) {
         // File might already be deleted, that's ok
-        console.warn('Could not delete file:', fullPath, err)
       }
     }
 
     return NextResponse.json({ data: { success: true } })
   } catch (error) {
-    console.error('Error deleting chat file:', error)
+    console.error('Error deleting file:', error)
     return NextResponse.json(
       { error: 'Failed to delete file', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }

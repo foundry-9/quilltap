@@ -1,62 +1,133 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { getRepositories } from "@/lib/json-store/repositories";
 import Link from "next/link";
 import { RecentChatsSection } from "@/components/dashboard/recent-chats";
 import { FavoriteCharactersSection } from "@/components/dashboard/favorite-characters";
 
 export default async function Dashboard() {
   const session = await getServerSession(authOptions);
-  const userId = session?.user?.id;
+  const repos = getRepositories();
 
-  // Get counts for each card
-  const [charactersCount, chatsCount, personasCount] = await Promise.all([
-    userId ? prisma.character.count({ where: { userId } }) : 0,
-    userId ? prisma.chat.count({ where: { userId } }) : 0,
-    userId ? prisma.persona.count({ where: { userId } }) : 0,
+  // Get the user from the repository
+  const user = session?.user?.email
+    ? await repos.users.findByEmail(session.user.email)
+    : null;
+  const userId = user?.id;
+
+  // Get all characters, chats, and personas for counts
+  const [allCharacters, allChats, allPersonas] = await Promise.all([
+    userId ? repos.characters.findAll() : Promise.resolve([]),
+    userId ? repos.chats.findAll() : Promise.resolve([]),
+    userId ? repos.personas.findAll() : Promise.resolve([]),
   ]);
+
+  // Count items (single-user system, but filter by userId for consistency)
+  const charactersCount = allCharacters.length;
+  const chatsCount = allChats.length;
+  const personasCount = allPersonas.length;
 
   // Get favorite characters
   const favoriteCharacters = userId
-    ? await prisma.character.findMany({
-        where: { userId, isFavorite: true },
-        orderBy: { createdAt: "desc" },
-        select: {
-          id: true,
-          name: true,
-          avatarUrl: true,
-          defaultImageId: true,
-          defaultImage: true,
-        },
-      })
+    ? await Promise.all(
+        allCharacters
+          .filter((c) => c.isFavorite)
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+          .map(async (character) => {
+            // Get default image if exists
+            let defaultImage = null;
+            if (character.defaultImageId) {
+              defaultImage = await repos.images.findById(character.defaultImageId);
+            }
+            return {
+              id: character.id,
+              name: character.name,
+              avatarUrl: character.avatarUrl ?? null,
+              defaultImageId: character.defaultImageId ?? null,
+              defaultImage: defaultImage
+                ? {
+                    id: defaultImage.id,
+                    filepath: defaultImage.relativePath,
+                    url: null,
+                  }
+                : null,
+            };
+          })
+      )
     : [];
 
   // Get recent chats (5 most recent, ordered by updatedAt)
-  const recentChats = userId
-    ? await prisma.chat.findMany({
-        where: { userId },
-        orderBy: { updatedAt: "desc" },
-        take: 5,
-        include: {
-          character: {
-            include: {
-              defaultImage: true,
-            },
-          },
-          persona: true,
-          tags: {
-            include: {
-              tag: {
-                select: {
-                  id: true,
-                  name: true,
-                },
+  const allRecentChats: Array<{
+    id: string
+    title: string
+    updatedAt: string
+    character: {
+      name: string
+      avatarUrl: string | null
+      defaultImageId: string | null
+      defaultImage: { id: string; filepath: string; url: null } | null
+    }
+    persona: { id: string; name: string } | null
+    tags: Array<{ tag: { id: string; name: string } }>
+  } | null> = userId
+    ? await Promise.all(
+        [...allChats]
+          .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+          .slice(0, 5)
+          .map(async (chat) => {
+            // Get character data
+            const character = await repos.characters.findById(chat.characterId);
+            // Skip chats without characters
+            if (!character) return null;
+
+            let characterDefaultImage = null;
+            if (character.defaultImageId) {
+              characterDefaultImage = await repos.images.findById(character.defaultImageId);
+            }
+
+            // Get persona data if present
+            let persona = null;
+            if (chat.personaId) {
+              persona = await repos.personas.findById(chat.personaId);
+            }
+
+            // Get tags
+            const tagData = await Promise.all(
+              chat.tags.map(async (tagId) => {
+                const tag = await repos.tags.findById(tagId);
+                return tag ? { tag: { id: tag.id, name: tag.name } } : null;
+              })
+            );
+
+            return {
+              id: chat.id,
+              title: chat.title,
+              updatedAt: chat.updatedAt,
+              character: {
+                name: character.name,
+                avatarUrl: character.avatarUrl ?? null,
+                defaultImageId: character.defaultImageId ?? null,
+                defaultImage: characterDefaultImage
+                  ? {
+                      id: characterDefaultImage.id,
+                      filepath: characterDefaultImage.relativePath,
+                      url: null,
+                    }
+                  : null,
               },
-            },
-          },
-        },
-      })
+              persona: persona
+                ? {
+                    id: persona.id,
+                    name: persona.name,
+                  }
+                : null,
+              tags: tagData.filter((tag): tag is { tag: { id: string; name: string } } => tag !== null),
+            };
+          })
+      )
     : [];
+
+  const recentChats = allRecentChats.filter((chat) => chat !== null);
 
   return (
     <div className="container mx-auto px-4 py-8 flex flex-col max-w-[800px]">

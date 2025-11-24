@@ -9,8 +9,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
-import { AvatarDisplayMode } from '@prisma/client'
+import { getRepositories } from '@/lib/json-store/repositories'
+import type { AvatarDisplayMode } from '@/lib/json-store/schemas/types'
 
 /**
  * Validate and update chat settings
@@ -36,21 +36,13 @@ async function updateChatSettings(
     }
   }
 
+  const repos = getRepositories()
+
   const updateData: Record<string, any> = {}
   if (avatarDisplayMode) updateData.avatarDisplayMode = avatarDisplayMode
   if (avatarDisplayStyle) updateData.avatarDisplayStyle = avatarDisplayStyle
 
-  return prisma.chatSettings.upsert({
-    where: {
-      userId,
-    },
-    update: updateData,
-    create: {
-      userId,
-      avatarDisplayMode: (avatarDisplayMode as AvatarDisplayMode) || 'ALWAYS',
-      avatarDisplayStyle: avatarDisplayStyle || 'CIRCULAR',
-    },
-  })
+  return repos.users.updateChatSettings(userId, updateData)
 }
 
 /**
@@ -68,19 +60,17 @@ export async function GET(req: NextRequest) {
       )
     }
 
-    let chatSettings = await prisma.chatSettings.findUnique({
-      where: {
-        userId: session.user.id,
-      },
-    })
+    const repos = getRepositories()
 
-    // If no settings exist, create default settings
-    chatSettings ??= await prisma.chatSettings.create({
-      data: {
-        userId: session.user.id,
+    let chatSettings = await repos.users.getChatSettings(session.user.id)
+
+    // If no settings exist, create default settings via update
+    if (!chatSettings) {
+      chatSettings = await repos.users.updateChatSettings(session.user.id, {
         avatarDisplayMode: 'ALWAYS',
-      },
-    })
+        avatarDisplayStyle: 'CIRCULAR',
+      })
+    }
 
     return NextResponse.json(chatSettings)
   } catch (error) {

@@ -69,29 +69,29 @@ Configure connections to any of these providers:
 - OAuth authentication (Google)
 - Optional local email/password authentication with TOTP 2FA (planned for v1.1+)
 - Rate limiting and security headers
-- All data stored in your own PostgreSQL database
+- All data stored in JSON files in your data directory (completely portable)
 
 ## How It Works
 
 Quilltap is built on a modern stack:
 
 - **Frontend & Backend**: Next.js 14+ with TypeScript
-- **Database**: PostgreSQL 16 with Prisma ORM
+- **Data Store**: JSON-based file storage with atomic writes and JSONL append-only support
 - **Authentication**: NextAuth.js with Google OAuth
 - **Styling**: Tailwind CSS
-- **Deployment**: Docker + Docker Compose
+- **Deployment**: Docker + Docker Compose (single container, no database service needed)
 - **Production**: Nginx reverse proxy with Let's Encrypt SSL
 
-The architecture is straightforward: a Next.js application serves both the web UI and API endpoints, connecting to a PostgreSQL database. All chat processing happens server-side, with streaming responses sent to the client via Server-Sent Events.
+The architecture is straightforward: a Next.js application serves both the web UI and API endpoints, with all data persisted to JSON files in a `data/` directory. This approach eliminates the need for a separate database service, making deployment simpler and more portable. All chat processing happens server-side, with streaming responses sent to the client via Server-Sent Events.
 
-Your API keys are encrypted with AES-256-GCM using a user-specific key derived from your user ID and a master pepper. This means your keys are secure at rest and can only be decrypted when you're authenticated.
+Your API keys are encrypted with AES-256-GCM using a user-specific key derived from your user ID and a master pepper. This means your keys are secure at rest and can only be decrypted when you're authenticated. Session data is stored in append-only JSONL format for performance and auditability.
 
 ## Getting Started
 
 ### Prerequisites
 
 - **Docker and Docker Compose** (recommended)
-- **Node.js 20+** (for local development without Docker)
+- **Node.js 20+** (for local development)
 - **Google OAuth credentials** ([Get them here](https://console.cloud.google.com/))
 
 ### Quick Start with Docker
@@ -114,9 +114,6 @@ cp .env.example .env.local
 Edit `.env.local` and set your values:
 
 ```env
-# Database (already configured for Docker)
-DATABASE_URL="postgresql://postgres:dev_password@db:5432/quilltap"
-
 # NextAuth
 NEXTAUTH_URL="http://localhost:3000"
 NEXTAUTH_SECRET="your-nextauth-secret-here"
@@ -168,35 +165,25 @@ docker-compose down
 
 The application will be available at [http://localhost:3000](http://localhost:3000)
 
-### Local Development (Without Docker)
+### Local Development
 
-If you prefer to run the database in Docker but the app locally:
+For local development, you only need Node.js:
 
-#### 1. Start PostgreSQL in Docker
-
-```bash
-docker run -d \
-  --name quilltap-db \
-  -e POSTGRES_DB=quilltap \
-  -e POSTGRES_USER=postgres \
-  -e POSTGRES_PASSWORD=dev_password \
-  -p 5432:5432 \
-  postgres:16-alpine
-```
-
-#### 2. Install dependencies
+#### 1. Install dependencies
 
 ```bash
 npm install
 ```
 
-#### 3. Run database migrations
+#### 2. Configure environment variables
 
 ```bash
-npx prisma migrate dev
+cp .env.example .env.local
 ```
 
-#### 4. Start the development server
+Edit `.env.local` with your values (see Quick Start section above).
+
+#### 3. Start the development server
 
 ```bash
 npm run dev
@@ -204,19 +191,7 @@ npm run dev
 
 The application will be available at [http://localhost:3000](http://localhost:3000)
 
-### Using an Existing PostgreSQL Server
-
-If you have a PostgreSQL server already running:
-
-1. Create a database named `quilltap`
-2. Update `DATABASE_URL` in `.env.local` to point to your server:
-
-   ```env
-   DATABASE_URL="postgresql://username:password@hostname:5432/quilltap"
-   ```
-
-3. Run migrations: `npx prisma migrate dev`
-4. Start the app: `npm run dev`
+All data will be stored in the `data/` directory in JSON files. The application will create this directory automatically on first run.
 
 ## Production Deployment
 
@@ -238,8 +213,8 @@ cp .env.example .env.production
 # 2. Edit .env.production with your production values
 # Make sure to set:
 # - NEXTAUTH_URL=https://yourdomain.com
-# - Production database credentials
 # - Google OAuth redirect URI: https://yourdomain.com/api/auth/callback/google
+# - All encryption and auth secrets
 
 # 3. Initialize SSL certificates
 chmod +x docker/init-letsencrypt.sh
@@ -248,34 +223,44 @@ chmod +x docker/init-letsencrypt.sh
 # 4. Start production services
 docker-compose -f docker-compose.prod.yml up -d
 
-# 5. Run database migrations
-docker-compose -f docker-compose.prod.yml exec app npx prisma migrate deploy
-
-# 6. Check logs
+# 5. Check logs
 docker-compose -f docker-compose.prod.yml logs -f
 ```
 
 Your application will be available at `https://yourdomain.com` with automatic SSL certificate renewal.
 
-For detailed production deployment instructions, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+The application automatically creates the `data/` directory for storing all data. Ensure this directory is backed up regularly. For detailed production deployment instructions, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
-## Database Management
+## Data Management
 
-Useful commands for managing your database:
+Quilltap stores all data in JSON files in the `data/` directory:
+
+```
+data/
+├── characters/           # Character definitions
+├── personas/            # User personas
+├── chats/              # Conversations
+├── auth/               # Authentication data (sessions, accounts)
+├── settings/           # Application settings
+└── binaries/           # Image files
+```
+
+### Backup & Restore
+
+To backup your data:
 
 ```bash
-# Generate Prisma client (after schema changes)
-npm run db:generate
-
-# Push schema changes to database (development)
-npm run db:push
-
-# Create and run migrations (production)
-npm run db:migrate
-
-# Open Prisma Studio (visual database browser)
-npm run db:studio
+cp -r data/ data-backup-$(date +%Y%m%d).tar.gz
 ```
+
+To restore from backup:
+
+```bash
+tar -xzf data-backup-YYYYMMDD.tar.gz
+docker-compose restart app
+```
+
+For detailed backup and restore procedures, see [docs/BACKUP-RESTORE.md](docs/BACKUP-RESTORE.md).
 
 ## Configuration
 
@@ -285,14 +270,20 @@ Required environment variables:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:pass@localhost:5432/quilltap` |
 | `NEXTAUTH_URL` | Your app's URL | `http://localhost:3000` |
 | `NEXTAUTH_SECRET` | Secret for NextAuth.js | Generate with `openssl rand -base64 32` |
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID | From Google Cloud Console |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | From Google Cloud Console |
 | `ENCRYPTION_MASTER_PEPPER` | Master encryption key | Generate with `openssl rand -base64 32` |
 
-**Important**: Back up your `ENCRYPTION_MASTER_PEPPER` securely. If lost, all encrypted API keys become unrecoverable.
+Optional environment variables:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DATA_BACKEND` | Data backend mode (json/prisma/dual) | `json` |
+| `LOG_LEVEL` | Logging level (error/warn/info/debug) | `info` |
+
+**Important**: Back up your `ENCRYPTION_MASTER_PEPPER` securely. If lost, all encrypted API keys become unrecoverable. Also ensure the `data/` directory is backed up regularly.
 
 ### Connection Profiles
 
@@ -307,9 +298,9 @@ Once logged in, you'll need to:
 
 - **Framework**: Next.js 16 (App Router)
 - **Language**: TypeScript 5.6
-- **Database**: PostgreSQL 16
-- **ORM**: Prisma 6.19
-- **Auth**: NextAuth.js 4.24
+- **Data Storage**: JSON files with atomic writes and JSONL append-only support
+- **Authentication**: NextAuth.js 4.24 with Google OAuth
+- **Encryption**: AES-256-GCM for sensitive data
 - **Styling**: Tailwind CSS 4.1
 - **Container**: Docker + Docker Compose
 - **Reverse Proxy**: Nginx (production)
@@ -329,13 +320,15 @@ Once logged in, you'll need to:
 
 - Check that Docker is running: `docker ps`
 - Check logs: `docker-compose logs -f`
-- Ensure ports 3000 and 5432 aren't in use
+- Ensure port 3000 isn't in use
+- Verify the `data/` directory is writable
 
-### Can't connect to database
+### Data not persisting
 
-- Verify `DATABASE_URL` in `.env.local`
-- Check database container is running: `docker ps | grep postgres`
-- Try running migrations: `npx prisma migrate dev`
+- Ensure the `data/` directory exists and is writable: `ls -la data/`
+- Check file permissions: `chmod 755 data/`
+- If running in Docker, verify volume mounts in docker-compose.yml
+- Check application logs for write errors
 
 ### Authentication issues
 
@@ -383,9 +376,8 @@ Built with these excellent open source projects:
 
 - [Next.js](https://nextjs.org/) - React framework
 - [NextAuth.js](https://next-auth.js.org/) - Authentication
-- [Prisma](https://www.prisma.io/) - Database ORM
 - [Tailwind CSS](https://tailwindcss.com/) - Styling
-- [PostgreSQL](https://www.postgresql.org/) - Database
+- [Zod](https://zod.dev/) - TypeScript-first schema validation
 - [Docker](https://www.docker.com/) - Containerization
 
 Special thanks to the [SillyTavern](https://github.com/SillyTavern/SillyTavern) project for inspiring the character format and import/export compatibility.

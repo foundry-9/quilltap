@@ -1,15 +1,17 @@
 # Quilltap Production Deployment Guide
 
-This guide covers deploying Quilltap to a production environment with Docker, Nginx, and SSL.
+## Overview
+
+Quilltap is now deployed as a **single containerized application** with no external database required. All data is stored in JSON files within the `data/` directory, making deployment faster, simpler, and more portable.
 
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
 - [Server Setup](#server-setup)
-- [Installation](#installation)
+- [Quick Start](#quick-start)
 - [SSL Configuration](#ssl-configuration)
 - [Environment Variables](#environment-variables)
-- [Database Management](#database-management)
+- [Data Management](#data-management)
 - [Monitoring](#monitoring)
 - [Backup Strategy](#backup-strategy)
 - [Updating](#updating)
@@ -20,9 +22,9 @@ This guide covers deploying Quilltap to a production environment with Docker, Ng
 ### Server Requirements
 
 - **Operating System**: Ubuntu 20.04+ or Debian 11+ (recommended)
-- **RAM**: Minimum 2GB, recommended 4GB+
-- **Storage**: Minimum 20GB SSD
-- **CPU**: 2+ cores recommended
+- **RAM**: Minimum 1GB, recommended 2GB+
+- **Storage**: Minimum 20GB SSD (for data growth)
+- **CPU**: 1+ core (2+ recommended)
 - **Network**: Public IP address with ports 80 and 443 accessible
 
 ### Domain Requirements
@@ -88,27 +90,35 @@ sudo ufw enable
 sudo ufw status
 ```
 
-## Installation
+### 4. Create Data Directory
+
+```bash
+# As quilltap user
+cd ~/quilltap
+
+# Create data directory with proper permissions
+mkdir -p data
+chmod 755 data
+
+# This directory will be populated by the application on first run
+```
+
+## Quick Start
 
 ### 1. Configure Environment Variables
 
 ```bash
-# Copy production environment template
-cp .env.production.example .env.production
+# Copy environment template
+cp .env.example .env.production
 
-# Edit with your values
+# Edit with your production values
 nano .env.production
 ```
 
 **Required variables:**
 
 ```env
-# Database
-DB_NAME="quilltap"
-DB_USER="postgres"
-DB_PASSWORD="CHANGE_THIS_STRONG_PASSWORD"
-
-# NextAuth
+# NextAuth (production domain)
 NEXTAUTH_URL="https://yourdomain.com"
 NEXTAUTH_SECRET="$(openssl rand -base64 32)"
 
@@ -116,7 +126,7 @@ NEXTAUTH_SECRET="$(openssl rand -base64 32)"
 GOOGLE_CLIENT_ID="your-google-client-id"
 GOOGLE_CLIENT_SECRET="your-google-client-secret"
 
-# Encryption (CRITICAL: backup this value!)
+# Encryption (CRITICAL: back this up securely!)
 ENCRYPTION_MASTER_PEPPER="$(openssl rand -base64 32)"
 
 # SSL
@@ -135,32 +145,7 @@ SSL_EMAIL="admin@yourdomain.com"
    - `https://yourdomain.com/api/auth/callback/google`
 7. Copy Client ID and Client Secret to `.env.production`
 
-### 3. Build Application
-
-```bash
-# Build Docker images
-docker compose -f docker-compose.prod.yml build
-```
-
-### 4. Initialize Database
-
-```bash
-# Start database only
-docker compose -f docker-compose.prod.yml up -d db
-
-# Wait for database to be ready
-sleep 10
-
-# Run migrations
-docker compose -f docker-compose.prod.yml run --rm app npx prisma migrate deploy
-
-# Generate Prisma client
-docker compose -f docker-compose.prod.yml run --rm app npx prisma generate
-```
-
-## SSL Configuration
-
-### Automatic SSL with Let's Encrypt
+### 3. Initialize SSL Certificates
 
 ```bash
 # Make script executable
@@ -177,238 +162,282 @@ This script will:
 4. Obtain real Let's Encrypt certificate
 5. Reload Nginx with proper certificate
 
-### SSL Certificate Renewal
+**Note**: This may take 1-2 minutes on first run.
 
-Certificates auto-renew via Certbot container (runs every 12 hours).
+### 4. Start Application
 
-**Manual renewal:**
 ```bash
-docker compose -f docker-compose.prod.yml run --rm certbot renew
-docker compose -f docker-compose.prod.yml exec nginx nginx -s reload
+# Start all services (app + nginx)
+docker compose -f docker-compose.prod.yml up -d
+
+# Verify it's running
+docker compose -f docker-compose.prod.yml ps
+
+# Check logs
+docker compose -f docker-compose.prod.yml logs -f app
 ```
 
-**Check certificate expiry:**
+Your application should now be available at `https://yourdomain.com` with auto-renewing SSL certificate.
+
+## SSL Configuration
+
+### Automatic SSL with Let's Encrypt
+
+The `init-letsencrypt.sh` script automates SSL setup:
+
 ```bash
-docker compose -f docker-compose.prod.yml run --rm certbot certificates
+./docker/init-letsencrypt.sh yourdomain.com admin@yourdomain.com
+```
+
+### Verify SSL Certificate
+
+```bash
+# Check certificate details
+docker compose -f docker-compose.prod.yml exec nginx \
+  openssl x509 -in /etc/letsencrypt/live/yourdomain.com/fullchain.pem -text
+
+# Check certificate expiry
+docker compose -f docker-compose.prod.yml exec nginx \
+  openssl x509 -in /etc/letsencrypt/live/yourdomain.com/fullchain.pem -noout -dates
+```
+
+### Manual Certificate Renewal
+
+```bash
+# Force renewal (usually automatic)
+docker compose -f docker-compose.prod.yml exec nginx \
+  certbot renew --force-renewal
+
+# Restart Nginx after renewal
+docker compose -f docker-compose.prod.yml restart nginx
 ```
 
 ## Environment Variables
 
-### Critical Variables
+### Required
 
-**Never lose these values:**
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `NEXTAUTH_URL` | Your production domain | `https://yourdomain.com` |
+| `NEXTAUTH_SECRET` | Secret for NextAuth (32+ chars) | `$(openssl rand -base64 32)` |
+| `GOOGLE_CLIENT_ID` | From Google Cloud Console | `xxxxx.apps.googleusercontent.com` |
+| `GOOGLE_CLIENT_SECRET` | From Google Cloud Console | `xxxxx-xxxxx` |
+| `ENCRYPTION_MASTER_PEPPER` | Master encryption key (32+ chars) | `$(openssl rand -base64 32)` |
+| `DOMAIN` | Your domain for SSL | `yourdomain.com` |
+| `SSL_EMAIL` | Email for SSL renewal notifications | `admin@yourdomain.com` |
 
-- `ENCRYPTION_MASTER_PEPPER` - Required to decrypt API keys
-- `NEXTAUTH_SECRET` - Required for authentication
+### Optional
 
-**Backup strategy:**
-```bash
-# Create encrypted backup of .env.production
-gpg -c .env.production
-# Store .env.production.gpg in a secure location
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `LOG_LEVEL` | Logging level | `info` |
+| `NODE_ENV` | Environment | `production` |
+
+**CRITICAL SECURITY NOTES:**
+
+1. **Backup `ENCRYPTION_MASTER_PEPPER`** - If lost, all encrypted API keys are unrecoverable
+2. **Use strong values** - Generate with `openssl rand -base64 32`
+3. **Keep `.env.production` secret** - Never commit to version control
+4. **Restrict file permissions** - `chmod 600 .env.production`
+
+## Data Management
+
+All application data is stored in the `data/` directory:
+
+```
+data/
+├── characters/              # Character definitions
+├── personas/               # User personas
+├── chats/                 # Conversations and messages
+├── auth/                  # Authentication (sessions, accounts)
+├── settings/              # Application settings
+├── image-profiles/        # Image configurations
+└── binaries/              # User uploaded images
 ```
 
-### Optional Variables
-
-```env
-# Rate Limiting
-RATE_LIMIT_API_MAX=100
-RATE_LIMIT_API_WINDOW=10
-RATE_LIMIT_AUTH_MAX=5
-RATE_LIMIT_AUTH_WINDOW=60
-RATE_LIMIT_CHAT_MAX=20
-RATE_LIMIT_CHAT_WINDOW=60
-RATE_LIMIT_GENERAL_MAX=100
-RATE_LIMIT_GENERAL_WINDOW=60
-
-# Logging
-LOG_LEVEL=info  # Options: error, warn, info, debug
-```
-
-## Database Management
-
-### Access Database
-
-```bash
-# PostgreSQL CLI
-docker compose -f docker-compose.prod.yml exec db psql -U postgres quilltap
-
-# Prisma Studio (web UI)
-docker compose -f docker-compose.prod.yml run --rm -p 5555:5555 app npx prisma studio
-# Visit http://your-server-ip:5555
-```
-
-### Run Migrations
+### Disk Usage Monitoring
 
 ```bash
-# Deploy pending migrations
-docker compose -f docker-compose.prod.yml run --rm app npx prisma migrate deploy
+# Check data directory size
+du -sh ~/quilltap/data/
 
-# Create new migration (development only)
-docker compose -f docker-compose.prod.yml run --rm app npx prisma migrate dev
+# Monitor in real-time
+watch -n 5 'du -sh ~/quilltap/data/'
+
+# List largest subdirectories
+du -sh ~/quilltap/data/*
 ```
+
+### Storage Recommendations
+
+- **Small deployment (< 100 users)**: 5-10 GB
+- **Medium deployment (100-1000 users)**: 20-50 GB
+- **Large deployment (1000+ users)**: 100+ GB
+
+Adjust server storage and monitoring accordingly.
 
 ## Monitoring
 
-### Health Check
+### Check Application Status
 
 ```bash
-# Check application health
-curl https://yourdomain.com/api/health
-
-# Expected response:
-# {
-#   "status": "healthy",
-#   "timestamp": "2025-01-19T12:00:00.000Z",
-#   "uptime": 86400,
-#   "environment": "production",
-#   "database": "connected"
-# }
-```
-
-### View Logs
-
-```bash
-# All services
-docker compose -f docker-compose.prod.yml logs -f
-
-# Specific service
-docker compose -f docker-compose.prod.yml logs -f app
-docker compose -f docker-compose.prod.yml logs -f db
-docker compose -f docker-compose.prod.yml logs -f nginx
-
-# Last 100 lines
-docker compose -f docker-compose.prod.yml logs --tail=100 app
-```
-
-### Service Status
-
-```bash
-# Check running containers
+# View running containers
 docker compose -f docker-compose.prod.yml ps
 
-# Check resource usage
-docker stats
+# View logs
+docker compose -f docker-compose.prod.yml logs -f app
+
+# View specific service logs
+docker compose -f docker-compose.prod.yml logs -f nginx
 ```
 
-### Log Rotation
-
-Configure log rotation to prevent disk filling:
+### Application Health Check
 
 ```bash
-# Create logrotate config
-sudo nano /etc/logrotate.d/docker-containers
+# Check if app is responding
+curl https://yourdomain.com/api/health
 
-# Add:
-/var/lib/docker/containers/*/*.log {
-  rotate 7
-  daily
-  compress
-  size=10M
-  missingok
-  delaycompress
-  copytruncate
-}
+# Expected response: 200 OK
+```
+
+### Set Up Monitoring Alerts
+
+For production, consider setting up monitoring:
+
+```bash
+# Using curl + cron to check health every 5 minutes
+*/5 * * * * curl -f https://yourdomain.com/api/health || \
+  mail -s "Quilltap health check failed" admin@yourdomain.com
+```
+
+### Resource Monitoring
+
+```bash
+# Monitor Docker resource usage
+docker stats quilltap-app
+
+# Check memory usage
+docker compose -f docker-compose.prod.yml \
+  exec app ps aux | grep node
 ```
 
 ## Backup Strategy
 
-### Automated Backups
-
-Set up automated daily backups:
+### Automated Daily Backups
 
 ```bash
-# Edit crontab
+#!/bin/bash
+# /home/quilltap/backup-quilltap.sh
+
+BACKUP_DIR="/home/quilltap/backups"
+DATA_DIR="/home/quilltap/quilltap/data"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+
+# Create backup directory
+mkdir -p "$BACKUP_DIR"
+
+# Backup data
+tar -czf "$BACKUP_DIR/quilltap_$TIMESTAMP.tar.gz" \
+  -C "$DATA_DIR/.." data/
+
+# Keep only last 7 days
+find "$BACKUP_DIR" -name "quilltap_*.tar.gz" -mtime +7 -delete
+
+# Log backup
+echo "$(date): Backup completed: $TIMESTAMP" >> "$BACKUP_DIR/backup.log"
+```
+
+Add to crontab:
+
+```bash
+# Schedule daily backup at 2 AM
 crontab -e
-
-# Add daily backup at 2 AM
-0 2 * * * cd /home/quilltap/quilltap && ./docker/scripts/backup-database.sh >> /var/log/quilltap-backup.log 2>&1
+# Add: 0 2 * * * /home/quilltap/backup-quilltap.sh
 ```
 
-### Manual Backup
+### Remote Backup
 
 ```bash
-# Create backup
-./docker/scripts/backup-database.sh
+#!/bin/bash
+# Upload backup to remote server/cloud
 
-# Create named backup
-./docker/scripts/backup-database.sh important-backup
+BACKUP_FILE="$1"
+REMOTE_BACKUP_DIR="/mnt/nas/quilltap-backups"
+
+# Copy to NAS/Network share
+cp "$BACKUP_FILE" "$REMOTE_BACKUP_DIR/"
+
+# Or upload to S3
+aws s3 cp "$BACKUP_FILE" s3://my-backups/quilltap/
+
+# Or upload to Google Cloud Storage
+gsutil cp "$BACKUP_FILE" gs://my-backups/quilltap/
 ```
 
-Backups are stored in `./backups/` directory.
-
-### Restore from Backup
+### Verify Backups
 
 ```bash
-# List available backups
-ls -lh backups/
+# List recent backups
+ls -lh ~/backups/quilltap_*.tar.gz | tail -10
 
-# Restore (WARNING: overwrites current database)
-./docker/scripts/restore-database.sh backups/quilltap_20250119_120000.sql.gz
+# Verify backup integrity
+tar -tzf ~/backups/quilltap_20250120_120000.tar.gz | head
+
+# Check backup size
+du -h ~/backups/quilltap_*.tar.gz
 ```
 
-### Off-site Backup
-
-**Option 1: AWS S3**
-```bash
-# Install AWS CLI
-sudo apt install awscli -y
-
-# Configure
-aws configure
-
-# Upload backup
-aws s3 cp backups/ s3://your-bucket/quilltap-backups/ --recursive
-```
-
-**Option 2: rsync to remote server**
-```bash
-# Sync backups to remote server
-rsync -avz backups/ user@backup-server:/backups/quilltap/
-```
+See [Backup & Restore Guide](BACKUP-RESTORE.md) for detailed procedures.
 
 ## Updating
 
-### Update Application Code
+### Check for Updates
 
 ```bash
-# Pull latest code
+cd ~/quilltap
+
+# Check available updates
+git fetch origin
+git log --oneline main..origin/main
+
+# View changes
+git diff main..origin/main
+```
+
+### Update Process
+
+```bash
+# 1. Backup current data
+cp -r data/ data-backup-$(date +%Y%m%d)/
+
+# 2. Pull latest code
 git pull origin main
 
-# Rebuild and restart
-docker compose -f docker-compose.prod.yml up -d --build
+# 3. Rebuild Docker image
+docker compose -f docker-compose.prod.yml build
 
-# Run migrations
-docker compose -f docker-compose.prod.yml run --rm app npx prisma migrate deploy
+# 4. Restart services
+docker compose -f docker-compose.prod.yml down
+docker compose -f docker-compose.prod.yml up -d
 
-# Verify health
+# 5. Verify it's working
+docker compose -f docker-compose.prod.yml logs -f app
 curl https://yourdomain.com/api/health
 ```
 
-### Update Dependencies
+### Rollback (If Needed)
 
 ```bash
-# Update npm packages
-docker compose -f docker-compose.prod.yml run --rm app npm update
+# If something goes wrong, rollback
+git checkout HEAD~1  # Go back one commit
+docker compose -f docker-compose.prod.yml build
+docker compose -f docker-compose.prod.yml down
+docker compose -f docker-compose.prod.yml up -d
 
-# Rebuild
-docker compose -f docker-compose.prod.yml up -d --build
-```
-
-### Zero-Downtime Updates (Advanced)
-
-For zero-downtime updates, use multiple app instances with a load balancer:
-
-```bash
-# Scale app to 2 instances
-docker compose -f docker-compose.prod.yml up -d --scale app=2
-
-# Update and rebuild
-git pull
-docker compose -f docker-compose.prod.yml build app
-
-# Rolling restart
-docker compose -f docker-compose.prod.yml up -d --no-deps --scale app=2 app
+# Or restore from data backup
+rm -rf data/
+cp -r data-backup-20250120/ data/
+docker compose -f docker-compose.prod.yml restart app
 ```
 
 ## Troubleshooting
@@ -419,109 +448,146 @@ docker compose -f docker-compose.prod.yml up -d --no-deps --scale app=2 app
 # Check logs
 docker compose -f docker-compose.prod.yml logs app
 
-# Verify environment variables
-docker compose -f docker-compose.prod.yml config
+# Common issues:
+# - Port 3000 already in use
+# - ENCRYPTION_MASTER_PEPPER not set
+# - data/ directory not writable
+# - .env.production missing required variables
 
-# Rebuild from scratch
-docker compose -f docker-compose.prod.yml down
-docker compose -f docker-compose.prod.yml build --no-cache
-docker compose -f docker-compose.prod.yml up -d
-```
+# Fix permissions
+chmod 755 data/
+chmod 600 .env.production
 
-### Database Connection Issues
-
-```bash
-# Check database is running
-docker compose -f docker-compose.prod.yml ps db
-
-# Check database logs
-docker compose -f docker-compose.prod.yml logs db
-
-# Verify connection
-docker compose -f docker-compose.prod.yml exec db pg_isready -U postgres
-
-# Test connection from app
-docker compose -f docker-compose.prod.yml exec app sh -c 'npx prisma db push --skip-generate'
+# Restart
+docker compose -f docker-compose.prod.yml restart app
 ```
 
 ### SSL Certificate Issues
 
 ```bash
-# Check Nginx configuration
-docker compose -f docker-compose.prod.yml exec nginx nginx -t
+# Check certificate renewal status
+docker compose -f docker-compose.prod.yml exec nginx \
+  certbot renew --dry-run
 
-# View Nginx error logs
-docker compose -f docker-compose.prod.yml logs nginx
+# Force renewal
+docker compose -f docker-compose.prod.yml exec nginx \
+  certbot renew --force-renewal
 
-# Re-run SSL initialization
-./docker/init-letsencrypt.sh yourdomain.com admin@yourdomain.com
-
-# Check certificate files
-ls -la certbot/conf/live/yourdomain.com/
+# Restart Nginx
+docker compose -f docker-compose.prod.yml restart nginx
 ```
 
 ### High Memory Usage
 
 ```bash
 # Check memory usage
-docker stats
+docker stats quilltap-app
 
-# Restart services
-docker compose -f docker-compose.prod.yml restart
+# If high, restart the app
+docker compose -f docker-compose.prod.yml restart app
 
-# Add swap space if needed
-sudo fallocate -l 2G /swapfile
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
+# Check for large files in data/
+du -sh data/* | sort -h
 ```
 
-### Performance Issues
+### Data Not Persisting
 
 ```bash
-# Check server resources
-htop
+# Verify data directory exists
+ls -la data/
 
-# Check disk space
-df -h
+# Check file permissions
+chmod 755 data/
 
-# Check database size
-docker compose -f docker-compose.prod.yml exec db \
-  psql -U postgres -c "SELECT pg_size_pretty(pg_database_size('quilltap'));"
+# Verify volume mount in docker-compose.prod.yml
+docker inspect quilltap-app | grep -A 5 Mounts
 
-# Optimize database
-docker compose -f docker-compose.prod.yml exec db \
-  psql -U postgres quilltap -c "VACUUM ANALYZE;"
+# Check if container can write
+docker compose -f docker-compose.prod.yml exec app \
+  ls -la /app/data/
 ```
 
-### Reset Everything (Last Resort)
+### Cannot Connect to Domain
 
 ```bash
-# WARNING: This deletes all data!
-docker compose -f docker-compose.prod.yml down -v
-docker system prune -a --volumes
-# Then start fresh installation
+# Check DNS resolution
+nslookup yourdomain.com
+
+# Verify firewall allows traffic
+sudo ufw status
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+
+# Check if app is running
+docker compose -f docker-compose.prod.yml ps
+
+# Check if port 80/443 are in use
+sudo netstat -tlnp | grep 80
+sudo netstat -tlnp | grep 443
 ```
+
+## Production Checklist
+
+Before going live, verify:
+
+- [ ] SSL certificate is valid (`curl -v https://yourdomain.com`)
+- [ ] All environment variables are set correctly
+- [ ] Data directory is backed up
+- [ ] Monitoring/alerts are configured
+- [ ] Backup script is scheduled
+- [ ] Encryption key is securely backed up
+- [ ] Firewall rules are configured
+- [ ] Google OAuth redirect URI is correct
+- [ ] Application health check is working
+- [ ] Logs are being monitored
+
+## Performance Tuning
+
+### Docker Resource Limits
+
+For high-traffic deployments, set resource limits in docker-compose.prod.yml:
+
+```yaml
+services:
+  app:
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+```
+
+### Nginx Caching
+
+The included Nginx config already has caching for:
+- Static assets (30 days)
+- API responses (5 minutes)
+- Images (1 day)
+
+No additional tuning usually needed.
+
+## Support & Resources
+
+- **Documentation**: [README.md](../README.md)
+- **Migration Guide**: [MIGRATION.md](MIGRATION.md)
+- **Backup Guide**: [BACKUP-RESTORE.md](BACKUP-RESTORE.md)
+- **GitHub Issues**: https://github.com/foundry-9/quilltap/issues
+- **Email Support**: charles@sebold.tech
 
 ## Security Checklist
 
-- [ ] Strong passwords for database
-- [ ] Firewall configured (UFW)
-- [ ] SSH key-only authentication
-- [ ] SSL certificates installed and auto-renewing
-- [ ] Environment variables secured
-- [ ] Regular backups enabled
-- [ ] Log rotation configured
-- [ ] Rate limiting enabled
-- [ ] Security headers configured
-- [ ] Regular updates scheduled
+- [ ] SSH key-only authentication (no password login)
+- [ ] Firewall configured (UFW or similar)
+- [ ] Regular security updates (`apt update && apt upgrade`)
+- [ ] Strong encryption key (32+ characters)
+- [ ] Environment file protected (600 permissions)
+- [ ] Backups stored off-server
+- [ ] SSL certificate auto-renewal verified
+- [ ] Rate limiting enabled (default)
+- [ ] NEXTAUTH_SECRET is strong (32+ characters)
+- [ ] No Quilltap sensitive files in version control
 
-## Support
-
-- **Documentation**: See `/docs` directory
-- **Issues**: https://github.com/foundry-9/quilltap/issues
-- **Security**: Report security issues privately to security@foundry-9.com
-
-## License
-
-MIT License - see LICENSE file for details
+That's it! Your Quilltap instance is now running securely in production with zero external dependencies.

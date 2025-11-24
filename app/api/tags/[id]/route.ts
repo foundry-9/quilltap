@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 import { z } from 'zod'
 
 // Validation schema
@@ -25,9 +25,8 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    })
+    const repos = getRepositories()
+    const user = await repos.users.findByEmail(session.user.email)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -36,9 +35,7 @@ export async function PUT(
     const tagId = id
 
     // Verify tag exists and belongs to user
-    const existingTag = await prisma.tag.findUnique({
-      where: { id: tagId },
-    })
+    const existingTag = await repos.tags.findById(tagId)
 
     if (!existingTag) {
       return NextResponse.json({ error: 'Tag not found' }, { status: 404 })
@@ -54,13 +51,10 @@ export async function PUT(
     const nameLower = validatedData.name.toLowerCase()
 
     // Check if another tag with this name already exists
-    const duplicateTag = await prisma.tag.findFirst({
-      where: {
-        userId: user.id,
-        nameLower,
-        id: { not: tagId },
-      },
-    })
+    const allTags = await repos.tags.findByUserId(user.id)
+    const duplicateTag = allTags.find(
+      tag => tag.nameLower === nameLower && tag.id !== tagId
+    )
 
     if (duplicateTag) {
       return NextResponse.json(
@@ -69,12 +63,9 @@ export async function PUT(
       )
     }
 
-    const tag = await prisma.tag.update({
-      where: { id: tagId },
-      data: {
-        name: validatedData.name,
-        nameLower,
-      },
+    const tag = await repos.tags.update(tagId, {
+      name: validatedData.name,
+      nameLower,
     })
 
     return NextResponse.json({ tag })
@@ -106,9 +97,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    })
+    const repos = getRepositories()
+    const user = await repos.users.findByEmail(session.user.email)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -117,9 +107,7 @@ export async function DELETE(
     const tagId = id
 
     // Verify tag exists and belongs to user
-    const existingTag = await prisma.tag.findUnique({
-      where: { id: tagId },
-    })
+    const existingTag = await repos.tags.findById(tagId)
 
     if (!existingTag) {
       return NextResponse.json({ error: 'Tag not found' }, { status: 404 })
@@ -130,9 +118,7 @@ export async function DELETE(
     }
 
     // Delete the tag (cascade will remove all junction table entries)
-    await prisma.tag.delete({
-      where: { id: tagId },
-    })
+    await repos.tags.delete(tagId)
 
     return NextResponse.json({ success: true })
   } catch (error) {

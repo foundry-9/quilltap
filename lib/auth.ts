@@ -1,12 +1,31 @@
 import { NextAuthOptions } from "next-auth";
-import { PrismaAdapter } from "@auth/prisma-adapter";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/auth/password";
+import { JsonStoreAdapter } from "@/lib/json-store/auth-adapter";
+import { getJsonStore } from "@/lib/json-store/core/json-store";
+import { UsersRepository } from "@/lib/json-store/repositories/users.repository";
+
+// Lazy-load repositories and adapter to allow for testing
+let usersRepo: UsersRepository | null = null;
+let adapter: ReturnType<typeof JsonStoreAdapter> | null = null;
+
+function getUsersRepository(): UsersRepository {
+  if (!usersRepo) {
+    usersRepo = new UsersRepository(getJsonStore());
+  }
+  return usersRepo;
+}
+
+function getAdapter(): ReturnType<typeof JsonStoreAdapter> {
+  if (!adapter) {
+    adapter = JsonStoreAdapter(getJsonStore());
+  }
+  return adapter;
+}
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma) as any,
+  adapter: getAdapter(),
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -26,9 +45,7 @@ export const authOptions: NextAuthOptions = {
         }
 
         // Find user
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email }
-        })
+        const user = await getUsersRepository().findByEmail(credentials.email)
 
         if (!user?.passwordHash) {
           throw new Error('Invalid email or password')
@@ -45,12 +62,12 @@ export const authOptions: NextAuthOptions = {
         }
 
         // Check if 2FA is enabled
-        if (user.totpEnabled) {
+        if (user.totp?.enabled) {
           if (!credentials.totpCode) {
             throw new Error('2FA code required')
           }
 
-          // Verify TOTP (will be implemented in Phase 2)
+          // Verify TOTP
           const { verifyTOTP } = await import('@/lib/auth/totp')
           const totpValid = await verifyTOTP(user.id, credentials.totpCode)
 

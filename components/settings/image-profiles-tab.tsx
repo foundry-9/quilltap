@@ -108,7 +108,7 @@ export default function ImageProfilesTab() {
         {!showForm && !editingId && (
           <button
             onClick={() => setShowForm(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
           >
             New Profile
           </button>
@@ -145,7 +145,7 @@ export default function ImageProfilesTab() {
               <p className="text-gray-600 dark:text-gray-400 mb-4">No image profiles yet</p>
               <button
                 onClick={() => setShowForm(true)}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
               >
                 Create First Profile
               </button>
@@ -162,7 +162,7 @@ export default function ImageProfilesTab() {
                       <h3 className="font-medium text-gray-900 dark:text-white">{profile.name}</h3>
                       <ProviderBadge provider={profile.provider} />
                       {profile.isDefault && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400">
                           Default
                         </span>
                       )}
@@ -202,14 +202,14 @@ export default function ImageProfilesTab() {
                   <div className="flex gap-2 ml-4">
                     <button
                       onClick={() => setEditingId(profile.id)}
-                      className="px-3 py-1 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded border border-blue-200 dark:border-blue-900/50 hover:border-blue-300 dark:hover:border-blue-900/70"
+                      className="px-3 py-1 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded border border-blue-200 dark:border-blue-900/50 hover:border-blue-300 dark:hover:border-blue-900/70 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
                     >
                       Edit
                     </button>
                     <div className="relative">
                       <button
                         onClick={() => setDeleteConfirming(deleteConfirming === profile.id ? null : profile.id)}
-                        className="px-3 py-1 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded border border-red-200 dark:border-red-900/50 hover:border-red-300 dark:hover:border-red-900/70"
+                        className="px-3 py-1 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded border border-red-200 dark:border-red-900/50 hover:border-red-300 dark:hover:border-red-900/70 focus:outline-none focus:ring-2 focus:ring-red-500 dark:focus:ring-red-400"
                       >
                         Delete
                       </button>
@@ -221,13 +221,13 @@ export default function ImageProfilesTab() {
                           <div className="flex gap-2">
                             <button
                               onClick={() => setDeleteConfirming(null)}
-                              className="px-2 py-1 text-xs bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded"
+                              className="px-2 py-1 text-xs bg-gray-100 dark:bg-slate-700 text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-slate-600 rounded focus:outline-none focus:ring-2 focus:ring-gray-500 dark:focus:ring-gray-400"
                             >
                               Cancel
                             </button>
                             <button
                               onClick={() => handleDelete(profile.id)}
-                              className="px-2 py-1 text-xs bg-red-600 text-white hover:bg-red-700 rounded"
+                              className="px-2 py-1 text-xs bg-red-600 dark:bg-red-700 text-white hover:bg-red-700 dark:hover:bg-red-600 rounded focus:outline-none focus:ring-2 focus:ring-red-500 dark:focus:ring-red-400"
                             >
                               Delete
                             </button>

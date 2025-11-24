@@ -7,29 +7,23 @@ import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals
 
 // Mock dependencies FIRST (before other imports)
 jest.mock('next-auth')
-jest.mock('@/lib/prisma', () => ({
-  prisma: {
-    apiKey: {
-      findFirst: jest.fn(),
-    },
-  },
-}))
 jest.mock('@/lib/encryption')
 jest.mock('@/lib/llm/factory')
+jest.mock('@/lib/json-store/repositories')
 
 // Import after mocking
 import { POST as testMessage } from '@/app/api/profiles/test-message/route'
 import { Provider } from '@/lib/types/prisma'
 import { getServerSession } from 'next-auth'
-import { prisma } from '@/lib/prisma'
 import { decryptApiKey } from '@/lib/encryption'
 import { createLLMProvider } from '@/lib/llm/factory'
+import { getRepositories } from '@/lib/json-store/repositories'
 
 // Get mocked functions
 const mockGetServerSession = jest.mocked(getServerSession)
-const mockPrismaFindFirst = jest.mocked(prisma.apiKey.findFirst)
 const mockDecryptApiKey = jest.mocked(decryptApiKey)
 const mockCreateLLMProvider = jest.mocked(createLLMProvider)
+const mockGetRepositories = jest.mocked(getRepositories)
 
 // Helper to create a mock NextRequest
 function createMockRequest(body: any) {
@@ -40,6 +34,7 @@ function createMockRequest(body: any) {
 
 describe('POST /api/profiles/test-message', () => {
   let consoleErrorSpy: jest.SpiedFunction<typeof console.error>
+  let mockConnectionsRepo: any
 
   const mockSession = {
     user: {
@@ -50,6 +45,31 @@ describe('POST /api/profiles/test-message', () => {
 
   beforeEach(() => {
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+
+    // Set up repository mocks
+    mockConnectionsRepo = {
+      getAllApiKeys: jest.fn(),
+      findApiKeyById: jest.fn(),
+      createApiKey: jest.fn(),
+      updateApiKey: jest.fn(),
+      deleteApiKey: jest.fn(),
+      findByUserId: jest.fn(),
+      findById: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+    }
+
+    mockGetRepositories.mockReturnValue({
+      connections: mockConnectionsRepo,
+      characters: {},
+      personas: {},
+      chats: {},
+      tags: {},
+      users: {},
+      images: {},
+      imageProfiles: {},
+    })
   })
 
   afterEach(() => {
@@ -161,7 +181,7 @@ describe('POST /api/profiles/test-message', () => {
     })
 
     it('should return 404 when API key is not found', async () => {
-      (prisma.apiKey.findFirst as jest.Mock).mockResolvedValue(null)
+      mockConnectionsRepo.findApiKeyById.mockResolvedValue(null)
 
       const req = createMockRequest({
         provider: 'OPENAI',
@@ -231,13 +251,13 @@ describe('POST /api/profiles/test-message', () => {
   describe('Successful Test Messages', () => {
     beforeEach(() => {
       mockGetServerSession.mockResolvedValue(mockSession as any)
-      mockPrismaFindFirst.mockResolvedValue({
+      mockConnectionsRepo.findApiKeyById.mockResolvedValue({
         id: 'key-123',
         userId: 'user-123',
         provider: Provider.OPENAI,
-        keyEncrypted: 'encrypted',
-        keyIv: 'iv',
-        keyAuthTag: 'tag',
+        ciphertext: 'encrypted',
+        iv: 'iv',
+        authTag: 'tag',
       } as any)
       mockDecryptApiKey.mockReturnValue('sk-test123')
     })
@@ -375,13 +395,13 @@ describe('POST /api/profiles/test-message', () => {
     })
 
     it('should pass baseUrl to provider factory for OpenAI-compatible', async () => {
-      mockPrismaFindFirst.mockResolvedValue({
+      mockConnectionsRepo.findApiKeyById.mockResolvedValue({
         id: 'key-123',
         userId: 'user-123',
         provider: Provider.OPENAI_COMPATIBLE,
-        keyEncrypted: 'encrypted',
-        keyIv: 'iv',
-        keyAuthTag: 'tag',
+        ciphertext: 'encrypted',
+        iv: 'iv',
+        authTag: 'tag',
       } as any)
 
       const mockProvider = {
@@ -405,13 +425,13 @@ describe('POST /api/profiles/test-message', () => {
   describe('Error Handling', () => {
     beforeEach(() => {
       mockGetServerSession.mockResolvedValue(mockSession as any)
-      mockPrismaFindFirst.mockResolvedValue({
+      mockConnectionsRepo.findApiKeyById.mockResolvedValue({
         id: 'key-123',
         userId: 'user-123',
         provider: Provider.OPENAI,
-        keyEncrypted: 'encrypted',
-        keyIv: 'iv',
-        keyAuthTag: 'tag',
+        ciphertext: 'encrypted',
+        iv: 'iv',
+        authTag: 'tag',
       } as any)
       mockDecryptApiKey.mockReturnValue('sk-test123')
     })
@@ -478,7 +498,7 @@ describe('POST /api/profiles/test-message', () => {
     })
 
     it('should handle database errors gracefully', async () => {
-      mockPrismaFindFirst.mockRejectedValue(new Error('DB Error'))
+      mockConnectionsRepo.findApiKeyById.mockRejectedValue(new Error('DB Error'))
 
       const req = createMockRequest({
         provider: 'OPENAI',
@@ -535,13 +555,13 @@ describe('POST /api/profiles/test-message', () => {
     })
 
     it('should work with Anthropic provider', async () => {
-      mockPrismaFindFirst.mockResolvedValue({
+      mockConnectionsRepo.findApiKeyById.mockResolvedValue({
         id: 'key-123',
         userId: 'user-123',
         provider: Provider.ANTHROPIC,
-        keyEncrypted: 'encrypted',
-        keyIv: 'iv',
-        keyAuthTag: 'tag',
+        ciphertext: 'encrypted',
+        iv: 'iv',
+        authTag: 'tag',
       } as any)
       mockDecryptApiKey.mockReturnValue('sk-ant-test123')
 
@@ -567,13 +587,13 @@ describe('POST /api/profiles/test-message', () => {
     })
 
     it('should work with OpenRouter provider', async () => {
-      mockPrismaFindFirst.mockResolvedValue({
+      mockConnectionsRepo.findApiKeyById.mockResolvedValue({
         id: 'key-123',
         userId: 'user-123',
         provider: Provider.OPENROUTER,
-        keyEncrypted: 'encrypted',
-        keyIv: 'iv',
-        keyAuthTag: 'tag',
+        ciphertext: 'encrypted',
+        iv: 'iv',
+        authTag: 'tag',
       } as any)
       mockDecryptApiKey.mockReturnValue('sk-or-test123')
 

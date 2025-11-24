@@ -7,7 +7,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
+import type { ChatEvent, MessageEvent, ChatMetadata } from '@/lib/json-store/schemas/types'
 
 export async function PUT(
   req: NextRequest,
@@ -21,6 +22,7 @@ export async function PUT(
     }
 
     const { id } = await params
+    const repos = getRepositories()
 
     const body = await req.json()
     const { content } = body
@@ -32,45 +34,51 @@ export async function PUT(
       )
     }
 
-    // Get message and verify user owns the chat
-    const message = await prisma.message.findFirst({
-      where: {
-        id,
-      },
-      include: {
-        chat: {
-          select: {
-            userId: true,
-          },
-        },
-      },
-    })
+    // Find the message across all chats
+    const allChats = await repos.chats.findAll()
+    let foundChat: ChatMetadata | null = null
+    let foundMessage: MessageEvent | null = null
+    let allMessages: ChatEvent[] = []
+    let messageIndex = -1
 
-    if (!message) {
+    for (const chat of allChats) {
+      const messages = await repos.chats.getMessages(chat.id)
+      const idx = messages.findIndex(
+        (m): m is MessageEvent => m.type === 'message' && m.id === id
+      )
+      if (idx !== -1) {
+        foundChat = chat
+        foundMessage = messages[idx] as MessageEvent
+        allMessages = messages
+        messageIndex = idx
+        break
+      }
+    }
+
+    if (!foundMessage || !foundChat) {
       return NextResponse.json({ error: 'Message not found' }, { status: 404 })
     }
 
-    if (message.chat.userId !== session.user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    // Update the message content
+    const updatedMessage: MessageEvent = {
+      ...foundMessage,
+      content,
     }
 
-    // Update message
-    const updated = await prisma.message.update({
-      where: { id },
-      data: {
-        content,
-      },
-    })
+    // Update the message in the array
+    allMessages[messageIndex] = updatedMessage
+
+    // Rewrite all messages (since we need to update in place)
+    // Clear and rewrite the chat messages file
+    await repos.chats.clearMessages(foundChat.id)
+    for (const msg of allMessages) {
+      await repos.chats.addMessage(foundChat.id, msg)
+    }
 
     // Update chat's updatedAt timestamp
-    await prisma.chat.update({
-      where: { id: message.chatId },
-      data: {
-        updatedAt: new Date(),
-      },
-    })
+    await repos.chats.update(foundChat.id, {})
 
-    return NextResponse.json(updated)
+    return NextResponse.json(updatedMessage)
   } catch (error) {
     console.error('Error updating message:', error)
     return NextResponse.json(
@@ -92,50 +100,54 @@ export async function DELETE(
     }
 
     const { id } = await params
+    const repos = getRepositories()
 
-    // Get message and verify user owns the chat
-    const message = await prisma.message.findFirst({
-      where: {
-        id,
-      },
-      include: {
-        chat: {
-          select: {
-            userId: true,
-          },
-        },
-      },
-    })
+    // Find the message across all chats
+    const allChats = await repos.chats.findAll()
+    let foundChat: ChatMetadata | null = null
+    let foundMessage: MessageEvent | null = null
+    let allMessages: ChatEvent[] = []
 
-    if (!message) {
+    for (const chat of allChats) {
+      const messages = await repos.chats.getMessages(chat.id)
+      const message = messages.find(
+        (m): m is MessageEvent => m.type === 'message' && m.id === id
+      )
+      if (message) {
+        foundChat = chat
+        foundMessage = message
+        allMessages = messages
+        break
+      }
+    }
+
+    if (!foundMessage || !foundChat) {
       return NextResponse.json({ error: 'Message not found' }, { status: 404 })
     }
 
-    if (message.chat.userId !== session.user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
     // If this message is part of a swipe group, delete all messages in the group
-    if (message.swipeGroupId) {
-      await prisma.message.deleteMany({
-        where: {
-          swipeGroupId: message.swipeGroupId,
-        },
-      })
+    let filteredMessages: ChatEvent[]
+    if (foundMessage.swipeGroupId) {
+      filteredMessages = allMessages.filter(
+        (m) =>
+          m.type !== 'message' ||
+          (m as MessageEvent).swipeGroupId !== foundMessage!.swipeGroupId
+      )
     } else {
       // Delete single message
-      await prisma.message.delete({
-        where: { id },
-      })
+      filteredMessages = allMessages.filter(
+        (m) => m.type !== 'message' || m.id !== id
+      )
+    }
+
+    // Rewrite all messages without the deleted one(s)
+    await repos.chats.clearMessages(foundChat.id)
+    for (const msg of filteredMessages) {
+      await repos.chats.addMessage(foundChat.id, msg)
     }
 
     // Update chat's updatedAt timestamp
-    await prisma.chat.update({
-      where: { id: message.chatId },
-      data: {
-        updatedAt: new Date(),
-      },
-    })
+    await repos.chats.update(foundChat.id, {})
 
     return NextResponse.json({ success: true })
   } catch (error) {

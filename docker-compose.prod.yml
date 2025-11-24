@@ -38,15 +38,11 @@ services:
       - "3000"
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-production_password}@db:5432/${DB_NAME:-quilltap}
       - NEXTAUTH_URL=${NEXTAUTH_URL:-https://yourdomain.com}
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - ENCRYPTION_MASTER_PEPPER=${ENCRYPTION_MASTER_PEPPER}
-    depends_on:
-      db:
-        condition: service_healthy
     restart: unless-stopped
     networks:
       - quilltap-network
@@ -57,28 +53,6 @@ services:
       retries: 3
       start_period: 40s
 
-  db:
-    image: postgres:16-alpine
-    container_name: quilltap-db
-    environment:
-      POSTGRES_DB: ${DB_NAME:-quilltap}
-      POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-production_password}
-    volumes:
-      - postgres_prod:/var/lib/postgresql/data
-      - ./backups:/backups
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-    networks:
-      - quilltap-network
-
-volumes:
-  postgres_prod:
-    driver: local
 
 networks:
   quilltap-network:

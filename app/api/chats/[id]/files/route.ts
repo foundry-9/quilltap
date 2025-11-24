@@ -4,7 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 import { uploadChatFile } from '@/lib/chat-files'
 
 // POST /api/chats/:id/files - Upload a file
@@ -19,23 +19,17 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    })
+    const repos = getRepositories()
+    const user = await repos.users.findByEmail(session.user.email)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
     // Verify chat belongs to user
-    const chat = await prisma.chat.findFirst({
-      where: {
-        id: chatId,
-        userId: user.id,
-      },
-    })
+    const chat = await repos.chats.findById(chatId)
 
-    if (!chat) {
+    if (!chat || chat.userId !== user.id) {
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
     }
 
@@ -50,27 +44,30 @@ export async function POST(
     // Upload the file
     const uploadResult = await uploadChatFile(file, chatId)
 
-    // Save to database
-    const chatFile = await prisma.chatFile.create({
-      data: {
-        chatId,
-        filename: uploadResult.filename,
-        filepath: uploadResult.filepath,
-        mimeType: uploadResult.mimeType,
-        size: uploadResult.size,
-        width: uploadResult.width,
-        height: uploadResult.height,
-      },
+    // Save to images repository
+    const chatFile = await repos.images.create({
+      userId: user.id,
+      type: 'chat_file',
+      chatId,
+      filename: uploadResult.filename,
+      relativePath: uploadResult.filepath || `chats/${chatId}/${uploadResult.filename}`,
+      mimeType: uploadResult.mimeType,
+      size: uploadResult.size,
+      sha256: uploadResult.sha256,
+      source: 'upload',
+      width: uploadResult.width,
+      height: uploadResult.height,
+      tags: [],
     })
 
     return NextResponse.json({
       file: {
         id: chatFile.id,
         filename: file.name, // Original filename for display
-        filepath: chatFile.filepath,
+        filepath: chatFile.relativePath,
         mimeType: chatFile.mimeType,
         size: chatFile.size,
-        url: `/${chatFile.filepath}`,
+        url: `/${chatFile.relativePath}`,
       },
     })
   } catch (error) {
@@ -105,71 +102,34 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    })
+    const repos = getRepositories()
+    const user = await repos.users.findByEmail(session.user.email)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
     // Verify chat belongs to user
-    const chat = await prisma.chat.findFirst({
-      where: {
-        id: chatId,
-        userId: user.id,
-      },
-    })
+    const chat = await repos.chats.findById(chatId)
 
-    if (!chat) {
+    if (!chat || chat.userId !== user.id) {
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
     }
 
-    // Get uploaded chat files
-    const chatFiles = await prisma.chatFile.findMany({
-      where: { chatId },
-      orderBy: { createdAt: 'desc' },
-    })
+    // Get all files for this chat from images repository
+    const chatFiles = await repos.images.findByChatId(chatId)
 
-    // Get generated images tagged with this chat
-    const generatedImages = await prisma.image.findMany({
-      where: {
-        userId: user.id,
-        tags: {
-          some: {
-            tagType: 'CHAT',
-            tagId: chatId,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    })
-
-    // Combine both lists, converting to the same format
-    const allFiles = [
-      ...chatFiles.map((f) => ({
-        id: f.id,
-        filename: f.filename,
-        filepath: f.filepath,
-        mimeType: f.mimeType,
-        size: f.size,
-        url: `/${f.filepath}`,
-        sentToProvider: f.sentToProvider,
-        providerError: f.providerError,
-        createdAt: f.createdAt,
-        type: 'chatFile' as const,
-      })),
-      ...generatedImages.map((img) => ({
-        id: img.id,
-        filename: img.filename,
-        filepath: img.filepath,
-        mimeType: img.mimeType,
-        size: img.size,
-        url: img.url || `/${img.filepath}`,
-        createdAt: img.createdAt,
-        type: 'generatedImage' as const,
-      })),
-    ]
+    // Format files for response
+    const allFiles = chatFiles.map((f) => ({
+      id: f.id,
+      filename: f.filename,
+      filepath: f.relativePath,
+      mimeType: f.mimeType,
+      size: f.size,
+      url: `/${f.relativePath}`,
+      createdAt: f.createdAt,
+      type: f.type === 'image' ? 'generatedImage' as const : 'chatFile' as const,
+    }))
 
     // Sort by creation time, newest first
     allFiles.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())

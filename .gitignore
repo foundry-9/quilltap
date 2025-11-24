@@ -150,3 +150,5 @@ next-env.d.ts
 .DS_Store
 public/uploads/*
 backups/*
+data/
+data-backup/

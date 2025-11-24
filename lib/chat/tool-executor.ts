@@ -161,13 +161,22 @@ export function detectToolCalls(
     }
 
     // Grok format (similar to OpenAI)
-    if (provider === 'GROK' && response?.tool_calls) {
-      for (const toolCall of response.tool_calls) {
-        if (toolCall.type === 'function' && toolCall.function) {
-          toolCalls.push({
-            name: toolCall.function.name,
-            arguments: JSON.parse(toolCall.function.arguments || '{}'),
-          });
+    if (provider === 'GROK') {
+      let toolCallsArray = response?.tool_calls;
+
+      // Check nested structure from streaming responses
+      if (!toolCallsArray && response?.choices?.[0]?.message?.tool_calls) {
+        toolCallsArray = response.choices[0].message.tool_calls;
+      }
+
+      if (toolCallsArray && toolCallsArray.length > 0) {
+        for (const toolCall of toolCallsArray) {
+          if (toolCall.type === 'function' && toolCall.function) {
+            toolCalls.push({
+              name: toolCall.function.name,
+              arguments: JSON.parse(toolCall.function.arguments || '{}'),
+            });
+          }
         }
       }
     }

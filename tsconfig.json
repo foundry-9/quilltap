@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "baseUrl": ".",
     "target": "ES2017",
     "lib": [
       "dom",
@@ -26,6 +27,16 @@
       "@/*": [
         "./*"
       ]
+    }
+  },
+  "ts-node": {
+    "transpileOnly": true,
+    "compilerOptions": {
+      "module": "commonjs",
+      "moduleResolution": "node",
+      "paths": {
+        "@/*": ["./*"]
+      }
     }
   },
   "include": [

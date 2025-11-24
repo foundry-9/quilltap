@@ -14,7 +14,6 @@ const config: Config = {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
-    '^@auth/prisma-adapter$': '<rootDir>/__mocks__/@auth/prisma-adapter.ts',
     '^openid-client$': '<rootDir>/__mocks__/openid-client.ts',
   },
   collectCoverageFrom: [

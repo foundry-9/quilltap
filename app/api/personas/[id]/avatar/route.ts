@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { getRepositories } from '@/lib/json-store/repositories';
 import { z } from 'zod';
 
 interface RouteContext {
@@ -29,45 +29,48 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     }
 
     const { id } = await context.params;
+    const repos = getRepositories();
+
     const body = await request.json();
     const { imageId } = avatarSchema.parse(body);
 
     // Verify persona exists and belongs to user
-    const persona = await prisma.persona.findUnique({
-      where: {
-        id,
-        userId: session.user.id,
-      },
-    });
+    const persona = await repos.personas.findById(id);
 
-    if (!persona) {
+    if (!persona || persona.userId !== session.user.id) {
       return NextResponse.json({ error: 'Persona not found' }, { status: 404 });
     }
 
     // If imageId is provided, verify it exists and belongs to user
     if (imageId) {
-      const image = await prisma.image.findUnique({
-        where: {
-          id: imageId,
-          userId: session.user.id,
-        },
-      });
+      const image = await repos.images.findById(imageId);
 
-      if (!image) {
+      if (!image || image.userId !== session.user.id) {
         return NextResponse.json({ error: 'Image not found' }, { status: 404 });
       }
     }
 
     // Update persona avatar
-    const updatedPersona = await prisma.persona.update({
-      where: { id },
-      data: { defaultImageId: imageId },
-      include: {
-        defaultImage: true,
+    const updatedPersona = await repos.personas.update(id, { defaultImageId: imageId });
+
+    // Get the default image for response
+    let defaultImage = null;
+    if (updatedPersona?.defaultImageId) {
+      defaultImage = await repos.images.findById(updatedPersona.defaultImageId);
+    }
+
+    return NextResponse.json({
+      data: {
+        ...updatedPersona,
+        defaultImage: defaultImage
+          ? {
+              id: defaultImage.id,
+              filepath: defaultImage.relativePath,
+              url: null,
+            }
+          : null,
       },
     });
-
-    return NextResponse.json({ data: updatedPersona });
   } catch (error) {
     console.error('Error updating persona avatar:', error);
 

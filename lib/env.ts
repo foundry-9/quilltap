@@ -9,8 +9,8 @@ const envSchema = z.object({
   // Node environment
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 
-  // Database
-  DATABASE_URL: z.string().url().min(1, 'DATABASE_URL is required'),
+  // Database (optional - JSON store is now the default)
+  DATABASE_URL: z.string().url().optional(),
 
   // NextAuth
   NEXTAUTH_URL: z.string().url().min(1, 'NEXTAUTH_URL is required'),
