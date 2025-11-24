@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 
 export async function GET(req: NextRequest) {
   try {
@@ -17,65 +17,90 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const repos = getRepositories()
+
     const { searchParams } = new URL(req.url)
     const sortByCharacter = searchParams.get('sortByCharacter')
 
-    const personas = await prisma.persona.findMany({
-      where: {
-        userId: session.user.id,
-      },
-      include: {
-        defaultImage: true,
-        characters: {
-          include: {
-            character: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        },
-        tags: {
-          include: {
-            tag: true,
-          },
-        },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    })
+    // Get all personas for user
+    const personas = await repos.personas.findByUserId(session.user.id)
+
+    // Enrich personas with related data
+    const enrichedPersonas = await Promise.all(
+      personas.map(async (persona) => {
+        // Get default image if present
+        let defaultImage = null
+        if (persona.defaultImageId) {
+          defaultImage = await repos.images.findById(persona.defaultImageId)
+        }
+
+        // Get character links
+        const characters = await Promise.all(
+          persona.characterLinks.map(async (characterId) => {
+            const character = await repos.characters.findById(characterId)
+            return character
+              ? {
+                  character: {
+                    id: character.id,
+                    name: character.name,
+                  },
+                }
+              : null
+          })
+        )
+
+        // Get tags
+        const tags = await Promise.all(
+          persona.tags.map(async (tagId) => {
+            const tag = await repos.tags.findById(tagId)
+            return tag ? { tag, tagId: tag.id } : null
+          })
+        )
+
+        return {
+          ...persona,
+          defaultImage: defaultImage
+            ? {
+                id: defaultImage.id,
+                filepath: defaultImage.relativePath,
+                url: null,
+              }
+            : null,
+          characters: characters.filter(Boolean),
+          tags: tags.filter(Boolean),
+        }
+      })
+    )
+
+    // Sort by createdAt descending by default
+    enrichedPersonas.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
     // If sortByCharacter is specified, sort by matching tags
     if (sortByCharacter) {
       // Get character tags
-      const characterTags = await prisma.characterTag.findMany({
-        where: { characterId: sortByCharacter },
-        select: { tagId: true },
-      })
-      const characterTagIds = new Set(characterTags.map(ct => ct.tagId))
+      const character = await repos.characters.findById(sortByCharacter)
+      const characterTagIds = new Set(character?.tags || [])
 
       // Sort personas by number of matching tags (descending)
-      personas.sort((a, b) => {
-        const aMatchingTags = a.tags.filter(pt => characterTagIds.has(pt.tagId)).length
-        const bMatchingTags = b.tags.filter(pt => characterTagIds.has(pt.tagId)).length
+      enrichedPersonas.sort((a, b) => {
+        const aMatchingTags = a.tags.filter((pt) => pt && characterTagIds.has(pt.tagId)).length
+        const bMatchingTags = b.tags.filter((pt) => pt && characterTagIds.has(pt.tagId)).length
         return bMatchingTags - aMatchingTags
       })
 
       // Add matching tags info to each persona
-      const personasWithMatches = personas.map(persona => ({
+      const personasWithMatches = enrichedPersonas.map((persona) => ({
         ...persona,
         matchingTags: persona.tags
-          .filter(pt => characterTagIds.has(pt.tagId))
-          .map(pt => pt.tag),
-        matchingTagCount: persona.tags.filter(pt => characterTagIds.has(pt.tagId)).length,
+          .filter((pt) => pt && characterTagIds.has(pt.tagId))
+          .map((pt) => pt?.tag),
+        matchingTagCount: persona.tags.filter((pt) => pt && characterTagIds.has(pt.tagId)).length,
       }))
 
       return NextResponse.json(personasWithMatches)
     }
 
-    return NextResponse.json(personas)
+    return NextResponse.json(enrichedPersonas)
   } catch (error) {
     console.error('Error fetching personas:', error)
     return NextResponse.json(
@@ -93,6 +118,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const repos = getRepositories()
+
     const body = await req.json()
     const { name, title, description, personalityTraits, avatarUrl, sillyTavernData } =
       body
@@ -105,16 +132,17 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const persona = await prisma.persona.create({
-      data: {
-        userId: session.user.id,
-        name,
-        title: title || null,
-        description,
-        personalityTraits: personalityTraits || null,
-        avatarUrl: avatarUrl || null,
-        sillyTavernData: sillyTavernData || null,
-      },
+    const persona = await repos.personas.create({
+      userId: session.user.id,
+      name,
+      title: title || null,
+      description,
+      personalityTraits: personalityTraits || null,
+      avatarUrl: avatarUrl || null,
+      sillyTavernData: sillyTavernData || null,
+      tags: [] as string[],
+      characterLinks: [] as string[],
+      defaultImageId: null,
     })
 
     return NextResponse.json(persona, { status: 201 })

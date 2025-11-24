@@ -218,16 +218,25 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
 
   const setCharacterAvatar = async (imageId: string) => {
     try {
+      if (!id) {
+        throw new Error('Character ID is missing')
+      }
+      
       const res = await fetch(`/api/characters/${id}/avatar`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageId: imageId || null }),
       })
 
-      if (!res.ok) throw new Error('Failed to set avatar')
+      const responseData = await res.json()
+      
+      if (!res.ok) {
+        throw new Error(responseData.error || 'Failed to set avatar')
+      }
 
       await fetchCharacter()
       setShowAvatarSelector(false)
+      showSuccessToast('Avatar updated!')
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to set avatar')
     }
@@ -261,6 +270,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
           <div className="relative">
             {getAvatarSrc() ? (
               <Image
+                key={character?.defaultImageId || 'no-image'}
                 src={getAvatarSrc()!}
                 alt={character?.name || ''}
                 width={80}

@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 
 export async function GET(
   req: NextRequest,
@@ -22,30 +22,36 @@ export async function GET(
     }
 
     const { id } = await params
+    const repos = getRepositories()
 
     // Verify character belongs to user
-    const character = await prisma.character.findFirst({
-      where: {
-        id,
-        userId: session.user.id,
-      },
-      include: {
-        personas: {
-          include: {
-            persona: true,
-          },
-        },
-      },
-    })
+    const character = await repos.characters.findById(id)
 
-    if (!character) {
+    if (!character || character.userId !== session.user.id) {
       return NextResponse.json(
         { error: 'Character not found' },
         { status: 404 }
       )
     }
 
-    return NextResponse.json(character.personas)
+    // Get persona details for each linked persona
+    const personaLinks = await Promise.all(
+      character.personaLinks.map(async (link) => {
+        const persona = await repos.personas.findById(link.personaId)
+        return persona
+          ? {
+              personaId: link.personaId,
+              isDefault: link.isDefault,
+              persona,
+            }
+          : null
+      })
+    )
+
+    // Filter out null values (personas that no longer exist)
+    const validLinks = personaLinks.filter(Boolean)
+
+    return NextResponse.json(validLinks)
   } catch (error) {
     console.error('Error fetching character personas:', error)
     return NextResponse.json(
@@ -67,6 +73,7 @@ export async function POST(
     }
 
     const { id } = await params
+    const repos = getRepositories()
 
     const body = await req.json()
     const { personaId, isDefault } = body
@@ -79,14 +86,9 @@ export async function POST(
     }
 
     // Verify character belongs to user
-    const character = await prisma.character.findFirst({
-      where: {
-        id,
-        userId: session.user.id,
-      },
-    })
+    const character = await repos.characters.findById(id)
 
-    if (!character) {
+    if (!character || character.userId !== session.user.id) {
       return NextResponse.json(
         { error: 'Character not found' },
         { status: 404 }
@@ -94,51 +96,36 @@ export async function POST(
     }
 
     // Verify persona belongs to user
-    const persona = await prisma.persona.findFirst({
-      where: {
-        id: personaId,
-        userId: session.user.id,
-      },
-    })
+    const persona = await repos.personas.findById(personaId)
 
-    if (!persona) {
+    if (!persona || persona.userId !== session.user.id) {
       return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
     }
 
     // If setting as default, unset any existing default
     if (isDefault) {
-      await prisma.characterPersona.updateMany({
-        where: {
-          characterId: id,
-        },
-        data: {
-          isDefault: false,
-        },
-      })
+      const updatedLinks = character.personaLinks.map((link) => ({
+        ...link,
+        isDefault: false,
+      }))
+      await repos.characters.update(id, { personaLinks: updatedLinks })
     }
 
-    // Create or update the link
-    const link = await prisma.characterPersona.upsert({
-      where: {
-        characterId_personaId: {
-          characterId: id,
-          personaId,
-        },
-      },
-      create: {
-        characterId: id,
-        personaId,
-        isDefault: isDefault || false,
-      },
-      update: {
-        isDefault: isDefault !== undefined ? isDefault : undefined,
-      },
-      include: {
-        persona: true,
-      },
-    })
+    // Add persona link using repository method
+    await repos.characters.addPersona(id, personaId, isDefault || false)
 
-    return NextResponse.json(link, { status: 201 })
+    // Get updated character to return the link
+    const updatedCharacter = await repos.characters.findById(id)
+    const link = updatedCharacter?.personaLinks.find((l) => l.personaId === personaId)
+
+    return NextResponse.json(
+      {
+        personaId,
+        isDefault: link?.isDefault || false,
+        persona,
+      },
+      { status: 201 }
+    )
   } catch (error) {
     console.error('Error linking persona to character:', error)
     return NextResponse.json(
@@ -160,6 +147,7 @@ export async function DELETE(
     }
 
     const { id } = await params
+    const repos = getRepositories()
 
     const { searchParams } = new URL(req.url)
     const personaId = searchParams.get('personaId')
@@ -172,29 +160,17 @@ export async function DELETE(
     }
 
     // Verify character belongs to user
-    const character = await prisma.character.findFirst({
-      where: {
-        id,
-        userId: session.user.id,
-      },
-    })
+    const character = await repos.characters.findById(id)
 
-    if (!character) {
+    if (!character || character.userId !== session.user.id) {
       return NextResponse.json(
         { error: 'Character not found' },
         { status: 404 }
       )
     }
 
-    // Delete the link
-    await prisma.characterPersona.delete({
-      where: {
-        characterId_personaId: {
-          characterId: id,
-          personaId,
-        },
-      },
-    })
+    // Remove the persona link
+    await repos.characters.removePersona(id, personaId)
 
     return NextResponse.json({ success: true })
   } catch (error) {

@@ -10,9 +10,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 import { encryptApiKey, maskApiKey } from '@/lib/encryption'
-import { Provider } from '@/lib/types/prisma'
 
 /**
  * GET /api/keys/[id]
@@ -32,22 +31,8 @@ export async function GET(
       )
     }
 
-    const apiKey = await prisma.apiKey.findFirst({
-      where: {
-        id,
-        userId: session.user.id, // Ensure user owns this key
-      },
-      select: {
-        id: true,
-        provider: true,
-        label: true,
-        isActive: true,
-        lastUsed: true,
-        createdAt: true,
-        updatedAt: true,
-        keyEncrypted: true,
-      },
-    })
+    const repos = getRepositories()
+    const apiKey = await repos.connections.findApiKeyById(id)
 
     if (!apiKey) {
       return NextResponse.json(
@@ -65,7 +50,7 @@ export async function GET(
       lastUsed: apiKey.lastUsed,
       createdAt: apiKey.createdAt,
       updatedAt: apiKey.updatedAt,
-      keyPreview: maskApiKey(apiKey.keyEncrypted.substring(0, 32)),
+      keyPreview: maskApiKey(apiKey.ciphertext.substring(0, 32)),
     })
   } catch (error) {
     console.error('Failed to fetch API key:', error)
@@ -100,13 +85,10 @@ export async function PUT(
       )
     }
 
-    // Verify ownership
-    const existingKey = await prisma.apiKey.findFirst({
-      where: {
-        id,
-        userId: session.user.id,
-      },
-    })
+    const repos = getRepositories()
+
+    // Verify key exists
+    const existingKey = await repos.connections.findApiKeyById(id)
 
     if (!existingKey) {
       return NextResponse.json(
@@ -151,29 +133,30 @@ export async function PUT(
       }
 
       const encrypted = encryptApiKey(apiKey, session.user.id)
-      updateData.keyEncrypted = encrypted.encrypted
-      updateData.keyIv = encrypted.iv
-      updateData.keyAuthTag = encrypted.authTag
+      updateData.ciphertext = encrypted.encrypted
+      updateData.iv = encrypted.iv
+      updateData.authTag = encrypted.authTag
     }
 
     // Update the key
-    const updatedKey = await prisma.apiKey.update({
-      where: {
-        id,
-      },
-      data: updateData,
-      select: {
-        id: true,
-        provider: true,
-        label: true,
-        isActive: true,
-        lastUsed: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    })
+    const updatedKey = await repos.connections.updateApiKey(id, updateData)
 
-    return NextResponse.json(updatedKey)
+    if (!updatedKey) {
+      return NextResponse.json(
+        { error: 'Failed to update API key' },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({
+      id: updatedKey.id,
+      provider: updatedKey.provider,
+      label: updatedKey.label,
+      isActive: updatedKey.isActive,
+      lastUsed: updatedKey.lastUsed,
+      createdAt: updatedKey.createdAt,
+      updatedAt: updatedKey.updatedAt,
+    })
   } catch (error) {
     console.error('Failed to update API key:', error)
     return NextResponse.json(
@@ -201,13 +184,10 @@ export async function DELETE(
       )
     }
 
-    // Verify ownership
-    const existingKey = await prisma.apiKey.findFirst({
-      where: {
-        id,
-        userId: session.user.id,
-      },
-    })
+    const repos = getRepositories()
+
+    // Verify key exists
+    const existingKey = await repos.connections.findApiKeyById(id)
 
     if (!existingKey) {
       return NextResponse.json(
@@ -217,11 +197,14 @@ export async function DELETE(
     }
 
     // Delete the key
-    await prisma.apiKey.delete({
-      where: {
-        id,
-      },
-    })
+    const deleted = await repos.connections.deleteApiKey(id)
+
+    if (!deleted) {
+      return NextResponse.json(
+        { error: 'Failed to delete API key' },
+        { status: 500 }
+      )
+    }
 
     return NextResponse.json(
       { message: 'API key deleted successfully' },

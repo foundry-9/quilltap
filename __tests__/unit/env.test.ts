@@ -35,16 +35,14 @@ describe('Environment Validation', () => {
     expect(() => validateEnv()).not.toThrow();
   });
 
-  it('should fail without DATABASE_URL', async () => {
+  it('should succeed without DATABASE_URL (JSON store is default)', async () => {
     delete process.env.DATABASE_URL;
 
     // We need to re-import after changing env
     jest.resetModules();
 
-    await expect(async () => {
-      const { validateEnv } = await import('@/lib/env');
-      validateEnv();
-    }).rejects.toThrow();
+    const { validateEnv } = await import('@/lib/env');
+    expect(() => validateEnv()).not.toThrow();
   });
 
   it('should fail with short NEXTAUTH_SECRET', async () => {

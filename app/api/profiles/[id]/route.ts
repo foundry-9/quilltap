@@ -10,8 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
-import { Provider } from '@/lib/types/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 
 /**
  * GET /api/profiles/[id]
@@ -31,31 +30,34 @@ export async function GET(
       )
     }
 
-    const profile = await prisma.connectionProfile.findFirst({
-      where: {
-        id,
-        userId: session.user.id,
-      },
-      include: {
-        apiKey: {
-          select: {
-            id: true,
-            label: true,
-            provider: true,
-            isActive: true,
-          },
-        },
-      },
-    })
+    const repos = getRepositories()
+    const profile = await repos.connections.findById(id)
 
-    if (!profile) {
+    if (!profile || profile.userId !== session.user.id) {
       return NextResponse.json(
         { error: 'Connection profile not found' },
         { status: 404 }
       )
     }
 
-    return NextResponse.json(profile)
+    // Get associated API key if present
+    let apiKey = null
+    if (profile.apiKeyId) {
+      const key = await repos.connections.findApiKeyById(profile.apiKeyId)
+      if (key) {
+        apiKey = {
+          id: key.id,
+          label: key.label,
+          provider: key.provider,
+          isActive: key.isActive,
+        }
+      }
+    }
+
+    return NextResponse.json({
+      ...profile,
+      apiKey,
+    })
   } catch (error) {
     console.error('Failed to fetch connection profile:', error)
     return NextResponse.json(
@@ -92,15 +94,12 @@ export async function PUT(
       )
     }
 
-    // Verify ownership
-    const existingProfile = await prisma.connectionProfile.findFirst({
-      where: {
-        id,
-        userId: session.user.id,
-      },
-    })
+    const repos = getRepositories()
 
-    if (!existingProfile) {
+    // Verify ownership
+    const existingProfile = await repos.connections.findById(id)
+
+    if (!existingProfile || existingProfile.userId !== session.user.id) {
       return NextResponse.json(
         { error: 'Connection profile not found' },
         { status: 404 }
@@ -127,13 +126,8 @@ export async function PUT(
       if (apiKeyId === null) {
         updateData.apiKeyId = null
       } else {
-        // Validate the API key exists and belongs to user
-        const apiKey = await prisma.apiKey.findFirst({
-          where: {
-            id: apiKeyId,
-            userId: session.user.id,
-          },
-        })
+        // Validate the API key exists
+        const apiKey = await repos.connections.findApiKeyById(apiKeyId)
 
         if (!apiKey) {
           return NextResponse.json(
@@ -188,42 +182,45 @@ export async function PUT(
 
       // If setting as default, unset other defaults
       if (isDefault) {
-        await prisma.connectionProfile.updateMany({
-          where: {
-            userId: session.user.id,
-            isDefault: true,
-            NOT: {
-              id,
-            },
-          },
-          data: {
-            isDefault: false,
-          },
-        })
+        const allProfiles = await repos.connections.findByUserId(session.user.id)
+        for (const profile of allProfiles) {
+          if (profile.isDefault && profile.id !== id) {
+            await repos.connections.update(profile.id, { isDefault: false })
+          }
+        }
       }
 
       updateData.isDefault = isDefault
     }
 
     // Update the profile
-    const updatedProfile = await prisma.connectionProfile.update({
-      where: {
-        id,
-      },
-      data: updateData,
-      include: {
-        apiKey: {
-          select: {
-            id: true,
-            label: true,
-            provider: true,
-            isActive: true,
-          },
-        },
-      },
-    })
+    const updatedProfile = await repos.connections.update(id, updateData)
 
-    return NextResponse.json(updatedProfile)
+    if (!updatedProfile) {
+      return NextResponse.json(
+        { error: 'Failed to update connection profile' },
+        { status: 500 }
+      )
+    }
+
+    // Get associated API key if present
+    let apiKey = null
+    if (updatedProfile.apiKeyId) {
+      const key = await repos.connections.findApiKeyById(updatedProfile.apiKeyId)
+      if (key) {
+        apiKey = {
+          id: key.id,
+          label: key.label,
+          provider: key.provider,
+          isActive: key.isActive,
+        }
+      }
+    }
+
+    return NextResponse.json({
+      ...updatedProfile,
+      apiKey,
+    })
   } catch (error) {
     console.error('Failed to update connection profile:', error)
     return NextResponse.json(
@@ -251,15 +248,12 @@ export async function DELETE(
       )
     }
 
-    // Verify ownership
-    const existingProfile = await prisma.connectionProfile.findFirst({
-      where: {
-        id,
-        userId: session.user.id,
-      },
-    })
+    const repos = getRepositories()
 
-    if (!existingProfile) {
+    // Verify ownership
+    const existingProfile = await repos.connections.findById(id)
+
+    if (!existingProfile || existingProfile.userId !== session.user.id) {
       return NextResponse.json(
         { error: 'Connection profile not found' },
         { status: 404 }
@@ -267,11 +261,7 @@ export async function DELETE(
     }
 
     // Delete the profile
-    await prisma.connectionProfile.delete({
-      where: {
-        id,
-      },
-    })
+    await repos.connections.delete(id)
 
     return NextResponse.json(
       { message: 'Connection profile deleted successfully' },

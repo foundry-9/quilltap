@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 import { z } from 'zod'
 
 const addTagSchema = z.object({
@@ -25,9 +25,8 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    })
+    const repos = getRepositories()
+    const user = await repos.users.findByEmail(session.user.email)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -36,9 +35,7 @@ export async function GET(
     const profileId = id
 
     // Verify connection profile exists and belongs to user
-    const profile = await prisma.connectionProfile.findUnique({
-      where: { id: profileId },
-    })
+    const profile = await repos.connections.findById(profileId)
 
     if (!profile) {
       return NextResponse.json({ error: 'Connection profile not found' }, { status: 404 })
@@ -48,25 +45,18 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
     }
 
-    const tags = await prisma.connectionProfileTag.findMany({
-      where: { connectionProfileId: profileId },
-      include: {
-        tag: {
-          select: {
-            id: true,
-            name: true,
-            createdAt: true,
-          },
-        },
-      },
-      orderBy: {
-        tag: {
-          name: 'asc',
-        },
-      },
-    })
+    // Get tags for this profile
+    const allTags = await repos.tags.findAll()
+    const profileTags = allTags
+      .filter(tag => profile.tags.includes(tag.id))
+      .map(tag => ({
+        id: tag.id,
+        name: tag.name,
+        createdAt: tag.createdAt,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name))
 
-    return NextResponse.json({ tags: tags.map(cpt => cpt.tag) })
+    return NextResponse.json({ tags: profileTags })
   } catch (error) {
     console.error('Error fetching connection profile tags:', error)
     return NextResponse.json(
@@ -88,9 +78,8 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    })
+    const repos = getRepositories()
+    const user = await repos.users.findByEmail(session.user.email)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -99,9 +88,7 @@ export async function POST(
     const profileId = id
 
     // Verify connection profile exists and belongs to user
-    const profile = await prisma.connectionProfile.findUnique({
-      where: { id: profileId },
-    })
+    const profile = await repos.connections.findById(profileId)
 
     if (!profile) {
       return NextResponse.json({ error: 'Connection profile not found' }, { status: 404 })
@@ -115,9 +102,7 @@ export async function POST(
     const validatedData = addTagSchema.parse(body)
 
     // Verify tag exists and belongs to user
-    const tag = await prisma.tag.findUnique({
-      where: { id: validatedData.tagId },
-    })
+    const tag = await repos.tags.findById(validatedData.tagId)
 
     if (!tag) {
       return NextResponse.json({ error: 'Tag not found' }, { status: 404 })
@@ -127,25 +112,10 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
     }
 
-    // Add tag to connection profile (ignore if already exists)
-    const profileTag = await prisma.connectionProfileTag.upsert({
-      where: {
-        connectionProfileId_tagId: {
-          connectionProfileId: profileId,
-          tagId: validatedData.tagId,
-        },
-      },
-      create: {
-        connectionProfileId: profileId,
-        tagId: validatedData.tagId,
-      },
-      update: {},
-      include: {
-        tag: true,
-      },
-    })
+    // Add tag to connection profile
+    await repos.connections.addTag(profileId, validatedData.tagId)
 
-    return NextResponse.json({ tag: profileTag.tag }, { status: 201 })
+    return NextResponse.json({ tag }, { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -174,9 +144,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    })
+    const repos = getRepositories()
+    const user = await repos.users.findByEmail(session.user.email)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -193,9 +162,7 @@ export async function DELETE(
     }
 
     // Verify connection profile exists and belongs to user
-    const profile = await prisma.connectionProfile.findUnique({
-      where: { id: profileId },
-    })
+    const profile = await repos.connections.findById(profileId)
 
     if (!profile) {
       return NextResponse.json({ error: 'Connection profile not found' }, { status: 404 })
@@ -206,12 +173,7 @@ export async function DELETE(
     }
 
     // Remove tag from connection profile
-    await prisma.connectionProfileTag.deleteMany({
-      where: {
-        connectionProfileId: profileId,
-        tagId,
-      },
-    })
+    await repos.connections.removeTag(profileId, tagId)
 
     return NextResponse.json({ success: true })
   } catch (error) {

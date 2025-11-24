@@ -4,21 +4,22 @@
  */
 
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { getRepositories } from '@/lib/json-store/repositories';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    // Check database connection
-    await prisma.$queryRaw`SELECT 1`;
+    // Check JSON store connectivity by attempting to read user data
+    const repos = getRepositories();
+    await repos.users.getCurrentUser();
 
     const health = {
       status: 'healthy',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       environment: process.env.NODE_ENV,
-      database: 'connected',
+      database: 'connected', // JSON store is file-based but we keep the same API
     };
 
     return NextResponse.json(health, { status: 200 });

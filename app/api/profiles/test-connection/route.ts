@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 import { decryptApiKey } from '@/lib/encryption'
 import { Provider } from '@/lib/types/prisma'
 import { z } from 'zod'
@@ -297,15 +297,12 @@ export async function POST(req: NextRequest) {
     const { provider: providerString, apiKeyId, baseUrl } = testConnectionSchema.parse(body)
     const provider = providerString as Provider
 
+    const repos = getRepositories()
+
     // Get API key if provided
     let decryptedKey = ''
     if (apiKeyId) {
-      const apiKey = await prisma.apiKey.findFirst({
-        where: {
-          id: apiKeyId,
-          userId: session.user.id,
-        },
-      })
+      const apiKey = await repos.connections.findApiKeyById(apiKeyId)
 
       if (!apiKey) {
         return NextResponse.json(
@@ -315,9 +312,9 @@ export async function POST(req: NextRequest) {
       }
 
       decryptedKey = decryptApiKey(
-        apiKey.keyEncrypted,
-        apiKey.keyIv,
-        apiKey.keyAuthTag,
+        apiKey.ciphertext,
+        apiKey.iv,
+        apiKey.authTag,
         session.user.id
       )
     }

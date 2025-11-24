@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 import { ImageProvider } from '@/lib/types/prisma'
 import { getImageGenProvider } from '@/lib/image-gen/factory'
 import { decryptApiKey } from '@/lib/encryption'
@@ -64,13 +64,10 @@ export async function GET(request: NextRequest) {
     let models: string[] = []
 
     if (apiKeyId) {
-      // Fetch and decrypt the API key
-      const apiKey = await prisma.apiKey.findFirst({
-        where: {
-          id: apiKeyId,
-          userId: session.user.id,
-        },
-      })
+      const repos = getRepositories()
+
+      // Fetch the API key
+      const apiKey = await repos.connections.findApiKeyById(apiKeyId)
 
       if (!apiKey) {
         return NextResponse.json(
@@ -81,9 +78,9 @@ export async function GET(request: NextRequest) {
 
       try {
         const decryptedKey = decryptApiKey(
-          apiKey.keyEncrypted,
-          apiKey.keyIv,
-          apiKey.keyAuthTag,
+          apiKey.ciphertext,
+          apiKey.iv,
+          apiKey.authTag,
           session.user.id
         )
         models = await imageProvider.getAvailableModels(decryptedKey)

@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 import { importSTPersona, isMultiPersonaBackup, convertMultiPersonaBackup } from '@/lib/sillytavern/persona'
 
 export async function POST(req: NextRequest) {
@@ -16,6 +16,8 @@ export async function POST(req: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const repos = getRepositories()
 
     const body = await req.json()
     const { personaData } = body
@@ -43,24 +45,33 @@ export async function POST(req: NextRequest) {
       const createdPersonas = await Promise.all(
         personasArray.map(async (personaItem) => {
           const importedData = importSTPersona(personaItem)
-          return prisma.persona.create({
-            data: {
-              userId: session.user.id,
-              ...importedData,
-            },
-            include: {
-              characters: {
-                include: {
-                  character: {
-                    select: {
-                      id: true,
-                      name: true,
-                    },
-                  },
-                },
-              },
-            },
+          const persona = await repos.personas.create({
+            userId: session.user.id,
+            ...importedData,
+            tags: [] as string[],
+            characterLinks: [] as string[],
+            defaultImageId: null,
           })
+
+          // Get character links for response
+          const characters = await Promise.all(
+            persona.characterLinks.map(async (characterId) => {
+              const character = await repos.characters.findById(characterId)
+              return character
+                ? {
+                    character: {
+                      id: character.id,
+                      name: character.name,
+                    },
+                  }
+                : null
+            })
+          )
+
+          return {
+            ...persona,
+            characters: characters.filter(Boolean),
+          }
         })
       )
 
@@ -68,7 +79,7 @@ export async function POST(req: NextRequest) {
         {
           personas: createdPersonas,
           count: createdPersonas.length,
-          message: `Successfully imported ${createdPersonas.length} persona${createdPersonas.length !== 1 ? 's' : ''}`
+          message: `Successfully imported ${createdPersonas.length} persona${createdPersonas.length === 1 ? '' : 's'}`
         },
         { status: 201 }
       )
@@ -77,26 +88,36 @@ export async function POST(req: NextRequest) {
       const importedData = importSTPersona(personaData)
 
       // Create persona in database
-      const persona = await prisma.persona.create({
-        data: {
-          userId: session.user.id,
-          ...importedData,
-        },
-        include: {
-          characters: {
-            include: {
-              character: {
-                select: {
-                  id: true,
-                  name: true,
-                },
-              },
-            },
-          },
-        },
+      const persona = await repos.personas.create({
+        userId: session.user.id,
+        ...importedData,
+        tags: [] as string[],
+        characterLinks: [] as string[],
+        defaultImageId: null,
       })
 
-      return NextResponse.json(persona, { status: 201 })
+      // Get character links for response
+      const characters = await Promise.all(
+        persona.characterLinks.map(async (characterId) => {
+          const character = await repos.characters.findById(characterId)
+          return character
+            ? {
+                character: {
+                  id: character.id,
+                  name: character.name,
+                },
+              }
+            : null
+        })
+      )
+
+      return NextResponse.json(
+        {
+          ...persona,
+          characters: characters.filter(Boolean),
+        },
+        { status: 201 }
+      )
     }
   } catch (error) {
     console.error('Error importing persona:', error)

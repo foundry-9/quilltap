@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 import { z } from 'zod'
 
 // Validation schema
@@ -21,9 +21,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    })
+    const repos = getRepositories()
+    const user = await repos.users.findByEmail(session.user.email)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -32,33 +31,45 @@ export async function GET(req: NextRequest) {
     const searchParams = req.nextUrl.searchParams
     const search = searchParams.get('search')
 
-    const tags = await prisma.tag.findMany({
-      where: {
-        userId: user.id,
-        ...(search && {
-          nameLower: {
-            contains: search.toLowerCase(),
-          },
-        }),
-      },
-      orderBy: { name: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        createdAt: true,
-        updatedAt: true,
+    // Get all tags
+    let tags = await repos.tags.findAll()
+
+    // Filter by search if provided
+    if (search) {
+      const searchLower = search.toLowerCase()
+      tags = tags.filter(tag => tag.nameLower.includes(searchLower))
+    }
+
+    // Sort by name
+    tags.sort((a, b) => a.name.localeCompare(b.name))
+
+    // Get usage counts for each tag
+    const allCharacters = await repos.characters.findAll()
+    const allPersonas = await repos.personas.findAll()
+    const allChats = await repos.chats.findAll()
+    const allConnections = await repos.connections.findAll()
+
+    const tagsWithCounts = tags.map(tag => {
+      const characterTags = allCharacters.filter(c => c.tags.includes(tag.id)).length
+      const personaTags = allPersonas.filter(p => p.tags.includes(tag.id)).length
+      const chatTags = allChats.filter(c => c.tags.includes(tag.id)).length
+      const connectionProfileTags = allConnections.filter(c => c.tags.includes(tag.id)).length
+
+      return {
+        id: tag.id,
+        name: tag.name,
+        createdAt: tag.createdAt,
+        updatedAt: tag.updatedAt,
         _count: {
-          select: {
-            characterTags: true,
-            personaTags: true,
-            chatTags: true,
-            connectionProfileTags: true,
-          },
+          characterTags,
+          personaTags,
+          chatTags,
+          connectionProfileTags,
         },
-      },
+      }
     })
 
-    return NextResponse.json({ tags })
+    return NextResponse.json({ tags: tagsWithCounts })
   } catch (error) {
     console.error('Error fetching tags:', error)
     return NextResponse.json(
@@ -76,9 +87,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    })
+    const repos = getRepositories()
+    const user = await repos.users.findByEmail(session.user.email)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -90,26 +100,17 @@ export async function POST(req: NextRequest) {
     const nameLower = validatedData.name.toLowerCase()
 
     // Check if tag already exists (case-insensitive)
-    const existingTag = await prisma.tag.findUnique({
-      where: {
-        userId_nameLower: {
-          userId: user.id,
-          nameLower,
-        },
-      },
-    })
+    const existingTag = await repos.tags.findByName(user.id, validatedData.name)
 
     if (existingTag) {
       // Return existing tag instead of error
       return NextResponse.json({ tag: existingTag })
     }
 
-    const tag = await prisma.tag.create({
-      data: {
-        userId: user.id,
-        name: validatedData.name,
-        nameLower,
-      },
+    const tag = await repos.tags.create({
+      userId: user.id,
+      name: validatedData.name,
+      nameLower,
     })
 
     return NextResponse.json({ tag }, { status: 201 })

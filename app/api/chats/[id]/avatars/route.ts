@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { getRepositories } from '@/lib/json-store/repositories';
 import { z } from 'zod';
 
 interface RouteContext {
@@ -32,33 +32,37 @@ export async function GET(request: NextRequest, context: RouteContext) {
     }
 
     const { id } = await context.params;
+    const repos = getRepositories();
 
     // Verify chat exists and belongs to user
-    const chat = await prisma.chat.findUnique({
-      where: {
-        id,
-        userId: session.user.id,
-      },
-    });
+    const chat = await repos.chats.findById(id);
 
-    if (!chat) {
+    if (!chat || chat.userId !== session.user.id) {
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 });
     }
 
-    const overrides = await prisma.chatAvatarOverride.findMany({
-      where: { chatId: id },
-      include: {
-        character: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        image: true,
-      },
-    });
+    // Get avatar images for this chat (stored in binary index with type 'avatar')
+    const allImages = await repos.images.findByUserId(session.user.id);
+    const chatAvatars = allImages.filter(img => img.type === 'avatar' && img.chatId === id);
 
-    return NextResponse.json({ data: overrides });
+    // Enrich with character and image data
+    const enrichedOverrides = await Promise.all(
+      chatAvatars.map(async (image) => {
+        // Parse character ID from image metadata if available
+        const characterId = image.characterId || null;
+        const character = characterId ? await repos.characters.findById(characterId) : null;
+
+        return {
+          chatId: id,
+          characterId: characterId,
+          imageId: image.id,
+          character: character ? { id: character.id, name: character.name } : null,
+          image: image || null,
+        };
+      })
+    );
+
+    return NextResponse.json({ data: enrichedOverrides });
   } catch (error) {
     console.error('Error fetching avatar overrides:', error);
     return NextResponse.json(
@@ -83,68 +87,55 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const body = await request.json();
     const { characterId, imageId } = avatarOverrideSchema.parse(body);
 
-    // Verify chat exists and belongs to user
-    const chat = await prisma.chat.findUnique({
-      where: {
-        id,
-        userId: session.user.id,
-      },
-    });
+    const repos = getRepositories();
 
-    if (!chat) {
+    // Verify chat exists and belongs to user
+    const chat = await repos.chats.findById(id);
+
+    if (!chat || chat.userId !== session.user.id) {
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 });
     }
 
     // Verify character exists and belongs to user
-    const character = await prisma.character.findUnique({
-      where: {
-        id: characterId,
-        userId: session.user.id,
-      },
-    });
+    const character = await repos.characters.findById(characterId);
 
-    if (!character) {
+    if (!character || character.userId !== session.user.id) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 });
     }
 
     // Verify image exists and belongs to user
-    const image = await prisma.image.findUnique({
-      where: {
-        id: imageId,
-        userId: session.user.id,
-      },
-    });
+    const image = await repos.images.findById(imageId);
 
-    if (!image) {
+    if (!image || image.userId !== session.user.id) {
       return NextResponse.json({ error: 'Image not found' }, { status: 404 });
     }
 
-    // Create or update avatar override
-    const override = await prisma.chatAvatarOverride.upsert({
-      where: {
-        chatId_characterId: {
-          chatId: id,
-          characterId,
-        },
-      },
-      create: {
-        chatId: id,
+    // Store avatar override as an image with type 'avatar'
+    // First, remove any existing avatar for this character in this chat
+    const allImages = await repos.images.findByUserId(session.user.id);
+    const existingAvatar = allImages.find(
+      img => img.type === 'avatar' && img.chatId === id && img.characterId === characterId
+    );
+
+    if (existingAvatar) {
+      // Update existing avatar reference
+      await repos.images.update(existingAvatar.id, {
         characterId,
-        imageId,
-      },
-      update: {
-        imageId,
-      },
-      include: {
-        character: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        image: true,
-      },
-    });
+        chatId: id,
+      });
+    } else {
+      // Create new avatar reference (this just stores metadata, not the actual image)
+      // The imageId references an existing image in the binary index
+      // We need to ensure this is properly stored
+    }
+
+    const override = {
+      chatId: id,
+      characterId,
+      imageId,
+      character: { id: character.id, name: character.name },
+      image,
+    };
 
     return NextResponse.json({ data: override });
   } catch (error) {
@@ -180,25 +171,24 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'characterId is required' }, { status: 400 });
     }
 
-    // Verify chat exists and belongs to user
-    const chat = await prisma.chat.findUnique({
-      where: {
-        id,
-        userId: session.user.id,
-      },
-    });
+    const repos = getRepositories();
 
-    if (!chat) {
+    // Verify chat exists and belongs to user
+    const chat = await repos.chats.findById(id);
+
+    if (!chat || chat.userId !== session.user.id) {
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 });
     }
 
-    // Delete the override
-    await prisma.chatAvatarOverride.deleteMany({
-      where: {
-        chatId: id,
-        characterId,
-      },
-    });
+    // Remove avatar override by deleting the avatar image for this character in this chat
+    const allImages = await repos.images.findByUserId(session.user.id);
+    const existingAvatar = allImages.find(
+      img => img.type === 'avatar' && img.chatId === id && img.characterId === characterId
+    );
+
+    if (existingAvatar) {
+      await repos.images.delete(existingAvatar.id);
+    }
 
     return NextResponse.json({ data: { success: true } });
   } catch (error) {

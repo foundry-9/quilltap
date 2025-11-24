@@ -136,6 +136,7 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
           <div className="relative">
             {getAvatarSrc() ? (
               <Image
+                key={persona?.defaultImageId || 'no-image'}
                 src={getAvatarSrc()!}
                 alt={persona?.name || ''}
                 width={80}

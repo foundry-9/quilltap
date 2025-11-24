@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 import { encryptApiKey, maskApiKey } from '@/lib/encryption'
 import { Provider } from '@/lib/types/prisma'
 
@@ -28,27 +28,15 @@ export async function GET(req: NextRequest) {
       )
     }
 
-    const apiKeys = await prisma.apiKey.findMany({
-      where: {
-        userId: session.user.id,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      select: {
-        id: true,
-        provider: true,
-        label: true,
-        isActive: true,
-        lastUsed: true,
-        createdAt: true,
-        updatedAt: true,
-        keyEncrypted: true, // We'll mask this below
-      },
-    })
+    const repos = getRepositories()
+    const apiKeys = await repos.connections.getAllApiKeys()
+
+    // Sort by creation date
+    const sortedKeys = apiKeys
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
     // Mask the encrypted keys for security
-    const maskedKeys = apiKeys.map((key: any) => ({
+    const maskedKeys = sortedKeys.map((key) => ({
       id: key.id,
       provider: key.provider,
       label: key.label,
@@ -56,10 +44,14 @@ export async function GET(req: NextRequest) {
       lastUsed: key.lastUsed,
       createdAt: key.createdAt,
       updatedAt: key.updatedAt,
-      keyPreview: maskApiKey(key.keyEncrypted.substring(0, 32)), // Mask a portion
+      keyPreview: maskApiKey(key.ciphertext.substring(0, 32)), // Mask a portion
     }))
 
-    return NextResponse.json(maskedKeys)
+    const response = NextResponse.json(maskedKeys)
+    response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
+    response.headers.set('Pragma', 'no-cache')
+    response.headers.set('Expires', '0')
+    return response
   } catch (error) {
     console.error('Failed to fetch API keys:', error)
     return NextResponse.json(
@@ -117,27 +109,26 @@ export async function POST(req: NextRequest) {
     // Encrypt the API key
     const encrypted = encryptApiKey(apiKey, session.user.id)
 
+    const repos = getRepositories()
+
     // Store in database
-    const newKey = await prisma.apiKey.create({
-      data: {
-        userId: session.user.id,
-        provider: provider as Provider,
-        label: label.trim(),
-        keyEncrypted: encrypted.encrypted,
-        keyIv: encrypted.iv,
-        keyAuthTag: encrypted.authTag,
-      },
-      select: {
-        id: true,
-        provider: true,
-        label: true,
-        isActive: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+    const newKey = await repos.connections.createApiKey({
+      provider: provider as Provider,
+      label: label.trim(),
+      ciphertext: encrypted.encrypted,
+      iv: encrypted.iv,
+      authTag: encrypted.authTag,
+      isActive: true,
     })
 
-    return NextResponse.json(newKey, { status: 201 })
+    return NextResponse.json({
+      id: newKey.id,
+      provider: newKey.provider,
+      label: newKey.label,
+      isActive: newKey.isActive,
+      createdAt: newKey.createdAt,
+      updatedAt: newKey.updatedAt,
+    }, { status: 201 })
   } catch (error) {
     console.error('Failed to create API key:', error)
     return NextResponse.json(

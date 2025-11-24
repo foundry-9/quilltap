@@ -8,12 +8,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 import { decryptApiKey } from '@/lib/encryption'
 import { createLLMProvider } from '@/lib/llm/factory'
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
-import { randomUUID } from 'crypto'
 import { createHash } from 'crypto'
 import { z } from 'zod'
 
@@ -67,18 +66,12 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { prompt, profileId, tags, options = {} } = generateImageSchema.parse(body)
 
-    // Load and validate connection profile
-    const profile = await prisma.connectionProfile.findFirst({
-      where: {
-        id: profileId,
-        userId: session.user.id,
-      },
-      include: {
-        apiKey: true,
-      },
-    })
+    const repos = getRepositories()
 
-    if (!profile) {
+    // Load and validate connection profile
+    const profile = await repos.connections.findById(profileId)
+
+    if (!profile || profile.userId !== session.user.id) {
       return NextResponse.json(
         { error: 'Connection profile not found' },
         { status: 404 }
@@ -87,13 +80,16 @@ export async function POST(request: NextRequest) {
 
     // Get API key if profile has one
     let decryptedKey = ''
-    if (profile.apiKey) {
-      decryptedKey = decryptApiKey(
-        profile.apiKey.keyEncrypted,
-        profile.apiKey.keyIv,
-        profile.apiKey.keyAuthTag,
-        session.user.id
-      )
+    if (profile.apiKeyId) {
+      const apiKey = await repos.connections.findApiKeyById(profile.apiKeyId)
+      if (apiKey) {
+        decryptedKey = decryptApiKey(
+          apiKey.ciphertext,
+          apiKey.iv,
+          apiKey.authTag,
+          session.user.id
+        )
+      }
     }
 
     // Create provider instance
@@ -132,8 +128,9 @@ export async function POST(request: NextRequest) {
         const ext = mimeTypeParts[1] === 'jpeg' ? 'jpg' : mimeTypeParts[1] || 'png'
 
         // Generate unique filename
-        const hash = createHash('sha256').update(imageBuffer).digest('hex').substring(0, 8)
-        const filename = `${session.user.id}_${Date.now()}_${index}_${hash}.${ext}`
+        const hash = createHash('sha256').update(imageBuffer).digest('hex')
+        const shortHash = hash.substring(0, 8)
+        const filename = `${session.user.id}_${Date.now()}_${index}_${shortHash}.${ext}`
 
         // Create user-specific generated directory
         const userGeneratedDir = join(process.cwd(), 'public', 'uploads', 'generated', session.user.id)
@@ -145,40 +142,30 @@ export async function POST(request: NextRequest) {
 
         await writeFile(fullPath, imageBuffer)
 
-        // Create database record
-        const image = await prisma.image.create({
-          data: {
-            userId: session.user.id,
-            filename,
-            filepath,
-            mimeType: generatedImage.mimeType,
-            size: imageBuffer.length,
-            source: 'generated',
-            generationPrompt: prompt,
-            generationModel: profile.modelName,
-            tags: tags
-              ? {
-                  create: tags.map((tag) => ({
-                    tagType: tag.tagType,
-                    tagId: tag.tagId,
-                  })),
-                }
-              : undefined,
-          },
-          include: {
-            tags: true,
-          },
+        // Create database record using images repository
+        const image = await repos.images.create({
+          sha256: hash,
+          type: 'image',
+          userId: session.user.id,
+          filename,
+          relativePath: filepath,
+          mimeType: generatedImage.mimeType,
+          size: imageBuffer.length,
+          source: 'generated',
+          generationPrompt: prompt,
+          generationModel: profile.modelName,
+          tags: tags?.map(t => t.tagId) || [],
         })
 
         return {
           id: image.id,
           filename: image.filename,
-          filepath: image.filepath,
-          url: `/${image.filepath}`,
+          filepath: image.relativePath,
+          url: `/${image.relativePath}`,
           mimeType: image.mimeType,
           size: image.size,
           revisedPrompt: generatedImage.revisedPrompt,
-          tags: image.tags,
+          tags: tags || [],
         }
       })
     )

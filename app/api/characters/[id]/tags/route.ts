@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 import { z } from 'zod'
 
 const addTagSchema = z.object({
@@ -25,9 +25,8 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    })
+    const repos = getRepositories()
+    const user = await repos.users.findByEmail(session.user.email)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -36,9 +35,7 @@ export async function GET(
     const characterId = id
 
     // Verify character exists and belongs to user
-    const character = await prisma.character.findUnique({
-      where: { id: characterId },
-    })
+    const character = await repos.characters.findById(characterId)
 
     if (!character) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
@@ -48,25 +45,24 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
     }
 
-    const tags = await prisma.characterTag.findMany({
-      where: { characterId },
-      include: {
-        tag: {
-          select: {
-            id: true,
-            name: true,
-            createdAt: true,
-          },
-        },
-      },
-      orderBy: {
-        tag: {
-          name: 'asc',
-        },
-      },
-    })
+    // Get tag details for each tag ID
+    const tags = await Promise.all(
+      character.tags.map(async (tagId) => {
+        const tag = await repos.tags.findById(tagId)
+        return tag
+          ? {
+              id: tag.id,
+              name: tag.name,
+              createdAt: tag.createdAt,
+            }
+          : null
+      })
+    )
 
-    return NextResponse.json({ tags: tags.map(ct => ct.tag) })
+    // Filter out null values and sort by name
+    const validTags = tags.filter(Boolean).sort((a, b) => a!.name.localeCompare(b!.name))
+
+    return NextResponse.json({ tags: validTags })
   } catch (error) {
     console.error('Error fetching character tags:', error)
     return NextResponse.json(
@@ -88,9 +84,8 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    })
+    const repos = getRepositories()
+    const user = await repos.users.findByEmail(session.user.email)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -99,9 +94,7 @@ export async function POST(
     const characterId = id
 
     // Verify character exists and belongs to user
-    const character = await prisma.character.findUnique({
-      where: { id: characterId },
-    })
+    const character = await repos.characters.findById(characterId)
 
     if (!character) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
@@ -115,9 +108,7 @@ export async function POST(
     const validatedData = addTagSchema.parse(body)
 
     // Verify tag exists and belongs to user
-    const tag = await prisma.tag.findUnique({
-      where: { id: validatedData.tagId },
-    })
+    const tag = await repos.tags.findById(validatedData.tagId)
 
     if (!tag) {
       return NextResponse.json({ error: 'Tag not found' }, { status: 404 })
@@ -127,25 +118,10 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
     }
 
-    // Add tag to character (ignore if already exists)
-    const characterTag = await prisma.characterTag.upsert({
-      where: {
-        characterId_tagId: {
-          characterId,
-          tagId: validatedData.tagId,
-        },
-      },
-      create: {
-        characterId,
-        tagId: validatedData.tagId,
-      },
-      update: {},
-      include: {
-        tag: true,
-      },
-    })
+    // Add tag to character
+    await repos.characters.addTag(characterId, validatedData.tagId)
 
-    return NextResponse.json({ tag: characterTag.tag }, { status: 201 })
+    return NextResponse.json({ tag }, { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -174,9 +150,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    })
+    const repos = getRepositories()
+    const user = await repos.users.findByEmail(session.user.email)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -193,9 +168,7 @@ export async function DELETE(
     }
 
     // Verify character exists and belongs to user
-    const character = await prisma.character.findUnique({
-      where: { id: characterId },
-    })
+    const character = await repos.characters.findById(characterId)
 
     if (!character) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
@@ -206,12 +179,7 @@ export async function DELETE(
     }
 
     // Remove tag from character
-    await prisma.characterTag.deleteMany({
-      where: {
-        characterId,
-        tagId,
-      },
-    })
+    await repos.characters.removeTag(characterId, tagId)
 
     return NextResponse.json({ success: true })
   } catch (error) {

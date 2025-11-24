@@ -4,7 +4,7 @@
 
 import { writeFile, mkdir, readFile, unlink } from 'fs/promises'
 import { join } from 'path'
-import { randomUUID } from 'crypto'
+import { randomUUID, createHash } from 'node:crypto'
 import { FileAttachment } from './llm/base'
 
 export interface ChatFileUploadResult {
@@ -12,6 +12,7 @@ export interface ChatFileUploadResult {
   filepath: string
   mimeType: string
   size: number
+  sha256: string
   width?: number
   height?: number
 }
@@ -82,11 +83,15 @@ export async function uploadChatFile(
 
   await writeFile(fullPath, buffer)
 
+  // Compute SHA256 hash
+  const sha256 = createHash('sha256').update(buffer).digest('hex')
+
   return {
     filename,
     filepath,
     mimeType: file.type,
     size: file.size,
+    sha256,
   }
 }
 

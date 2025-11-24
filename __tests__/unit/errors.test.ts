@@ -87,55 +87,6 @@ describe('handleError', () => {
     expect(consoleErrorSpy).toHaveBeenCalledWith('API Error:', error)
   })
 
-  it('should handle Prisma P2002 error (unique constraint)', () => {
-    const prismaError = {
-      code: 'P2002',
-      meta: { target: ['email'] },
-    }
-
-    const response = handleError(prismaError)
-
-    expect(NextResponse.json).toHaveBeenCalledWith(
-      {
-        error: 'A record with this value already exists',
-        code: ErrorCode.VALIDATION_ERROR,
-        details: { target: ['email'] },
-      },
-      { status: 409 }
-    )
-  })
-
-  it('should handle Prisma P2025 error (record not found)', () => {
-    const prismaError = {
-      code: 'P2025',
-    }
-
-    const response = handleError(prismaError)
-
-    expect(NextResponse.json).toHaveBeenCalledWith(
-      {
-        error: 'Record not found',
-        code: ErrorCode.NOT_FOUND,
-      },
-      { status: 404 }
-    )
-  })
-
-  it('should handle Prisma P2003 error (foreign key constraint)', () => {
-    const prismaError = {
-      code: 'P2003',
-    }
-
-    const response = handleError(prismaError)
-
-    expect(NextResponse.json).toHaveBeenCalledWith(
-      {
-        error: 'Referenced record does not exist',
-        code: ErrorCode.VALIDATION_ERROR,
-      },
-      { status: 400 }
-    )
-  })
 
   it('should handle standard Error instances in development', () => {
     const originalEnv = process.env.NODE_ENV

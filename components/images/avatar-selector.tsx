@@ -12,7 +12,7 @@ import { ImageUploadDialog } from './image-upload-dialog';
 interface AvatarSelectorProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelect: (imageId: string) => void;
+  onSelect: (imageId: string) => void | Promise<void>;
   currentImageId?: string;
   contextType?: 'CHARACTER' | 'PERSONA' | 'CHAT';
   contextId?: string;
@@ -26,7 +26,9 @@ export function AvatarSelector({
   contextType,
   contextId,
 }: AvatarSelectorProps) {
-  const [selectedImageId, setSelectedImageId] = useState<string | undefined>(currentImageId);
+  const [selectedImageId, setSelectedImageId] = useState<string | undefined>(
+    isOpen ? currentImageId : undefined
+  );
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [galleryKey, setGalleryKey] = useState(0);
 
@@ -36,10 +38,15 @@ export function AvatarSelector({
     setSelectedImageId(image.id);
   }
 
-  function handleConfirm() {
+  async function handleConfirm() {
     if (selectedImageId) {
-      onSelect(selectedImageId);
-      onClose();
+      try {
+        await onSelect(selectedImageId);
+        // Don't call onClose() here - let the callback handle closing the modal
+      } catch (err) {
+        console.error('Error in avatar selection:', err)
+        // onSelect should handle error toasts, but let it propagate if needed
+      }
     }
   }
 

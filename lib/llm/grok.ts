@@ -197,54 +197,91 @@ export class GrokProvider extends LLMProvider {
 
     const stream = (await client.chat.completions.create(requestParams)) as unknown as AsyncIterable<any>
 
-    let fullMessage: any = null
+    // Initialize fullMessage structure to accumulate response
+    let fullMessage: any = {
+      choices: [{
+        message: {
+          role: 'assistant',
+          content: '',
+          tool_calls: []
+        },
+        finish_reason: null
+      }],
+      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
+    }
 
     for await (const chunk of stream) {
-      const content = chunk.choices[0]?.delta?.content
-      const finishReason = chunk.choices[0]?.finish_reason
+      const delta = chunk.choices?.[0]?.delta
+      const content = delta?.content
+      const finishReason = chunk.choices?.[0]?.finish_reason
       const hasUsage = chunk.usage
 
-      // Store the most recent chunk (needed for tool calls)
-      if (!fullMessage) {
-        fullMessage = chunk
-      } else {
-        // Merge tool calls if present
-        if (chunk.choices?.[0]?.tool_calls) {
-          if (!fullMessage.choices[0]) fullMessage.choices[0] = {}
-          fullMessage.choices[0].tool_calls = chunk.choices[0].tool_calls
-        }
-        // Update finish reason
-        if (finishReason) {
-          fullMessage.choices[0].finish_reason = finishReason
-        }
-        // Update usage
-        if (hasUsage) {
-          fullMessage.usage = chunk.usage
-        }
-      }
-
-      // Yield content unless this is the final chunk with usage info
-      if (content && !(finishReason && hasUsage)) {
+      // Merge delta content
+      if (content) {
+        fullMessage.choices[0].message.content += content
         yield {
           content,
           done: false,
         }
       }
 
-      // Final chunk with usage info
-      if (finishReason && hasUsage) {
-        yield {
-          content: '',
-          done: true,
-          usage: {
-            promptTokens: chunk.usage?.prompt_tokens ?? 0,
-            completionTokens: chunk.usage?.completion_tokens ?? 0,
-            totalTokens: chunk.usage?.total_tokens ?? 0,
-          },
-          attachmentResults,
-          rawResponse: fullMessage,
+      // Merge delta tool calls
+      if (delta?.tool_calls) {
+        for (const toolCall of delta.tool_calls) {
+          const index = toolCall.index ?? 0
+          
+          // Initialize tool call if it doesn't exist
+          if (!fullMessage.choices[0].message.tool_calls[index]) {
+            fullMessage.choices[0].message.tool_calls[index] = {
+              id: '',
+              type: 'function',
+              function: { name: '', arguments: '' }
+            }
+          }
+          
+          // Merge the delta into the existing tool call
+          if (toolCall.id) fullMessage.choices[0].message.tool_calls[index].id = toolCall.id
+          if (toolCall.function?.name) fullMessage.choices[0].message.tool_calls[index].function.name = toolCall.function.name
+          if (toolCall.function?.arguments) fullMessage.choices[0].message.tool_calls[index].function.arguments += toolCall.function.arguments
         }
       }
+
+      // Update finish reason
+      if (finishReason) {
+        fullMessage.choices[0].finish_reason = finishReason
+      }
+      
+      // Update usage
+      if (hasUsage) {
+        fullMessage.usage = chunk.usage
+      }
+    }
+
+    // Transform fullMessage to match what the caller expects (OpenAI response format)
+    const finalResponse = {
+      choices: [{
+        message: {
+          role: 'assistant',
+          content: fullMessage.choices[0].message.content,
+          tool_calls: fullMessage.choices[0].message.tool_calls.length > 0 
+            ? fullMessage.choices[0].message.tool_calls 
+            : undefined
+        },
+        finish_reason: fullMessage.choices[0].finish_reason
+      }],
+      usage: fullMessage.usage
+    }
+
+    yield {
+      content: '',
+      done: true,
+      usage: {
+        promptTokens: fullMessage.usage?.prompt_tokens ?? 0,
+        completionTokens: fullMessage.usage?.completion_tokens ?? 0,
+        totalTokens: fullMessage.usage?.total_tokens ?? 0,
+      },
+      attachmentResults,
+      rawResponse: finalResponse,
     }
   }
 

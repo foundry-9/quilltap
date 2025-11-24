@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { generateTOTPSecret } from '@/lib/auth/totp'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -12,16 +12,14 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { email: true, totpEnabled: true }
-    })
+    const repos = getRepositories()
+    const user = await repos.users.findById(session.user.id)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    if (user.totpEnabled) {
+    if (user.totp?.enabled) {
       return NextResponse.json(
         { error: '2FA is already enabled' },
         { status: 400 }

@@ -5,26 +5,24 @@
 
 import { POST } from '@/app/api/images/generate/route'
 import { getServerSession } from 'next-auth'
-import { prisma } from '@/lib/prisma'
 import { decryptApiKey } from '@/lib/encryption'
 import { createLLMProvider } from '@/lib/llm/factory'
-import { writeFile, mkdir } from 'fs/promises'
+import { writeFile, mkdir } from 'node:fs/promises'
+import { getRepositories } from '@/lib/json-store/repositories'
 
 // Mock dependencies
 jest.mock('next-auth')
-jest.mock('@/lib/prisma')
 jest.mock('@/lib/encryption')
 jest.mock('@/lib/llm/factory')
 jest.mock('fs/promises')
+jest.mock('@/lib/json-store/repositories')
 
 const mockGetServerSession = jest.mocked(getServerSession)
 const mockDecryptApiKey = jest.mocked(decryptApiKey)
 const mockCreateLLMProvider = jest.mocked(createLLMProvider)
 const mockWriteFile = jest.mocked(writeFile)
 const mockMkdir = jest.mocked(mkdir)
-
-// Setup prisma mocks
-const mockPrisma = prisma as jest.Mocked<typeof prisma>
+const mockGetRepositories = jest.mocked(getRepositories)
 
 // Helper to create a mock NextRequest
 function createMockRequest(body: any) {
@@ -36,16 +34,45 @@ function createMockRequest(body: any) {
 const VALID_UUID = '550e8400-e29b-41d4-a716-446655440000'
 
 describe('POST /api/images/generate', () => {
+  let mockConnectionsRepo: any
+  let mockImagesRepo: any
+
   beforeEach(() => {
     jest.clearAllMocks()
 
-    // Setup prisma mocks structure
-    mockPrisma.connectionProfile = {
+    // Setup repository mocks structure
+    mockConnectionsRepo = {
+      findById: jest.fn(),
       findFirst: jest.fn(),
-    } as any
-    mockPrisma.image = {
+      getAllApiKeys: jest.fn(),
+      findApiKeyById: jest.fn(),
+      createApiKey: jest.fn(),
+      updateApiKey: jest.fn(),
+      deleteApiKey: jest.fn(),
+      findByUserId: jest.fn(),
       create: jest.fn(),
-    } as any
+      update: jest.fn(),
+      delete: jest.fn(),
+    }
+
+    mockImagesRepo = {
+      create: jest.fn(),
+      findById: jest.fn(),
+      findByUserId: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+    }
+
+    mockGetRepositories.mockReturnValue({
+      connections: mockConnectionsRepo,
+      images: mockImagesRepo,
+      characters: {},
+      personas: {},
+      chats: {},
+      tags: {},
+      users: {},
+      imageProfiles: {},
+    })
   })
 
   it('should return 401 if user is not authenticated', async () => {
@@ -79,7 +106,7 @@ describe('POST /api/images/generate', () => {
       user: { id: 'test-user-id', email: 'test@example.com' },
     } as any)
 
-    mockPrisma.connectionProfile.findFirst.mockResolvedValueOnce(null)
+    mockConnectionsRepo.findById.mockResolvedValueOnce(null)
 
     const request = createMockRequest({
       prompt: 'test prompt',
@@ -95,7 +122,7 @@ describe('POST /api/images/generate', () => {
       user: { id: 'test-user-id', email: 'test@example.com' },
     } as any)
 
-    mockPrisma.connectionProfile.findFirst.mockResolvedValueOnce({
+    mockConnectionsRepo.findById.mockResolvedValueOnce({
       id: VALID_UUID,
       userId: 'test-user-id',
       name: 'Test Profile',
@@ -130,7 +157,7 @@ describe('POST /api/images/generate', () => {
       user: { id: 'test-user-id', email: 'test@example.com' },
     } as any)
 
-    mockPrisma.connectionProfile.findFirst.mockResolvedValueOnce({
+    mockConnectionsRepo.findById.mockResolvedValueOnce({
       id: VALID_UUID,
       userId: 'test-user-id',
       name: 'Test Profile',
@@ -142,19 +169,19 @@ describe('POST /api/images/generate', () => {
       updatedAt: new Date(),
       apiKeyId: 'test-key-id',
       baseUrl: null,
-      apiKey: {
-        id: 'test-key-id',
-        userId: 'test-user-id',
-        provider: 'OPENAI',
-        label: 'Test Key',
-        keyEncrypted: 'encrypted-key',
-        keyIv: 'iv',
-        keyAuthTag: 'tag',
-        isActive: true,
-        lastUsed: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
+    } as any)
+    mockConnectionsRepo.findApiKeyById.mockResolvedValueOnce({
+      id: 'test-key-id',
+      userId: 'test-user-id',
+      provider: 'OPENAI',
+      label: 'Test Key',
+      ciphertext: 'encrypted-key',
+      iv: 'iv',
+      authTag: 'tag',
+      isActive: true,
+      lastUsed: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     } as any)
 
     mockDecryptApiKey.mockReturnValueOnce('sk-test-api-key')
@@ -175,7 +202,7 @@ describe('POST /api/images/generate', () => {
 
     mockCreateLLMProvider.mockReturnValueOnce(mockProvider)
 
-    mockPrisma.image.create.mockResolvedValueOnce({
+    mockImagesRepo.create.mockResolvedValueOnce({
       id: 'test-image-id',
       userId: 'test-user-id',
       filename: 'test.png',
@@ -212,13 +239,11 @@ describe('POST /api/images/generate', () => {
     expect(mockProvider.generateImage).toHaveBeenCalled()
 
     // Verify new Phase 4 fields are set correctly
-    expect(mockPrisma.image.create).toHaveBeenCalledWith(
+    expect(mockImagesRepo.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({
-          source: 'generated',
-          generationPrompt: 'a beautiful landscape',
-          generationModel: 'dall-e-3',
-        }),
+        source: 'generated',
+        generationPrompt: 'a beautiful landscape',
+        generationModel: 'dall-e-3',
       })
     )
   })
@@ -228,7 +253,7 @@ describe('POST /api/images/generate', () => {
       user: { id: 'test-user-id', email: 'test@example.com' },
     } as any)
 
-    mockPrisma.connectionProfile.findFirst.mockResolvedValueOnce({
+    mockConnectionsRepo.findById.mockResolvedValueOnce({
       id: VALID_UUID,
       userId: 'test-user-id',
       name: 'Test Profile',
@@ -240,19 +265,19 @@ describe('POST /api/images/generate', () => {
       updatedAt: new Date(),
       apiKeyId: 'test-key-id',
       baseUrl: null,
-      apiKey: {
-        id: 'test-key-id',
-        userId: 'test-user-id',
-        provider: 'OPENAI',
-        label: 'Test Key',
-        keyEncrypted: 'encrypted-key',
-        keyIv: 'iv',
-        keyAuthTag: 'tag',
-        isActive: true,
-        lastUsed: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
+    } as any)
+    mockConnectionsRepo.findApiKeyById.mockResolvedValueOnce({
+      id: 'test-key-id',
+      userId: 'test-user-id',
+      provider: 'OPENAI',
+      label: 'Test Key',
+      ciphertext: 'encrypted-key',
+      iv: 'iv',
+      authTag: 'tag',
+      isActive: true,
+      lastUsed: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     } as any)
 
     mockDecryptApiKey.mockReturnValueOnce('sk-test-api-key')
@@ -272,7 +297,7 @@ describe('POST /api/images/generate', () => {
 
     mockCreateLLMProvider.mockReturnValueOnce(mockProvider)
 
-    mockPrisma.image.create.mockResolvedValueOnce({
+    mockImagesRepo.create.mockResolvedValueOnce({
       id: 'test-image-id',
       userId: 'test-user-id',
       filename: 'test.png',
@@ -325,7 +350,7 @@ describe('POST /api/images/generate', () => {
       user: { id: 'test-user-id', email: 'test@example.com' },
     } as any)
 
-    mockPrisma.connectionProfile.findFirst.mockResolvedValueOnce({
+    mockConnectionsRepo.findById.mockResolvedValueOnce({
       id: VALID_UUID,
       userId: 'test-user-id',
       name: 'Test Profile',
@@ -337,19 +362,19 @@ describe('POST /api/images/generate', () => {
       updatedAt: new Date(),
       apiKeyId: 'test-key-id',
       baseUrl: null,
-      apiKey: {
-        id: 'test-key-id',
-        userId: 'test-user-id',
-        provider: 'OPENAI',
-        label: 'Test Key',
-        keyEncrypted: 'encrypted-key',
-        keyIv: 'iv',
-        keyAuthTag: 'tag',
-        isActive: true,
-        lastUsed: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
+    } as any)
+    mockConnectionsRepo.findApiKeyById.mockResolvedValueOnce({
+      id: 'test-key-id',
+      userId: 'test-user-id',
+      provider: 'OPENAI',
+      label: 'Test Key',
+      ciphertext: 'encrypted-key',
+      iv: 'iv',
+      authTag: 'tag',
+      isActive: true,
+      lastUsed: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     } as any)
 
     mockDecryptApiKey.mockReturnValueOnce('sk-test-api-key')
@@ -369,7 +394,7 @@ describe('POST /api/images/generate', () => {
 
     mockCreateLLMProvider.mockReturnValueOnce(mockProvider)
 
-    mockPrisma.image.create.mockResolvedValueOnce({
+    mockImagesRepo.create.mockResolvedValueOnce({
       id: 'test-image-id',
       userId: 'test-user-id',
       filename: 'test.png',

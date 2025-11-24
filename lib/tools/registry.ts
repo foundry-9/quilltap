@@ -3,7 +3,7 @@
  * Manages available tools and provides provider-specific tool definitions
  */
 
-import { Provider } from '@prisma/client';
+import { Provider } from '@/lib/types/prisma';
 
 /**
  * Tool metadata and execution context

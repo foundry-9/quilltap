@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 import { exportSTCharacter, createSTCharacterPNG } from '@/lib/sillytavern/character'
 
 export async function GET(
@@ -22,18 +22,14 @@ export async function GET(
     }
 
     const { id } = await params
+    const repos = getRepositories()
     const { searchParams } = new URL(req.url)
     const format = searchParams.get('format') || 'json' // json or png
 
     // Get character
-    const character = await prisma.character.findFirst({
-      where: {
-        id,
-        userId: session.user.id,
-      },
-    })
+    const character = await repos.characters.findById(id)
 
-    if (!character) {
+    if (!character || character.userId !== session.user.id) {
       return NextResponse.json(
         { error: 'Character not found' },
         { status: 404 }

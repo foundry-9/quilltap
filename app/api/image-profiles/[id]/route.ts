@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 import { ImageProvider } from '@/lib/types/prisma'
 import { getImageGenProvider } from '@/lib/image-gen/factory'
 
@@ -32,36 +32,43 @@ export async function GET(
       )
     }
 
-    const profile = await prisma.imageProfile.findFirst({
-      where: {
-        id,
-        userId: session.user.id,
-      },
-      include: {
-        apiKey: {
-          select: {
-            id: true,
-            label: true,
-            provider: true,
-            isActive: true,
-          },
-        },
-        tags: {
-          include: {
-            tag: true,
-          },
-        },
-      },
-    })
+    const repos = getRepositories()
+    const profile = await repos.imageProfiles.findById(id)
 
-    if (!profile) {
+    if (!profile || profile.userId !== session.user.id) {
       return NextResponse.json(
         { error: 'Image profile not found' },
         { status: 404 }
       )
     }
 
-    return NextResponse.json(profile)
+    // Enrich with API key info
+    let apiKey = null
+    if (profile.apiKeyId) {
+      const key = await repos.connections.findApiKeyById(profile.apiKeyId)
+      if (key) {
+        apiKey = {
+          id: key.id,
+          label: key.label,
+          provider: key.provider,
+          isActive: key.isActive,
+        }
+      }
+    }
+
+    // Get tag details
+    const tagDetails = await Promise.all(
+      profile.tags.map(async (tagId) => {
+        const tag = await repos.tags.findById(tagId)
+        return tag ? { tagId, tag } : null
+      })
+    )
+
+    return NextResponse.json({
+      ...profile,
+      apiKey,
+      tags: tagDetails.filter(Boolean),
+    })
   } catch (error) {
     console.error('Failed to fetch image profile:', error)
     return NextResponse.json(
@@ -99,15 +106,12 @@ export async function PUT(
       )
     }
 
-    // Verify ownership
-    const existingProfile = await prisma.imageProfile.findFirst({
-      where: {
-        id,
-        userId: session.user.id,
-      },
-    })
+    const repos = getRepositories()
 
-    if (!existingProfile) {
+    // Verify ownership
+    const existingProfile = await repos.imageProfiles.findById(id)
+
+    if (!existingProfile || existingProfile.userId !== session.user.id) {
       return NextResponse.json(
         { error: 'Image profile not found' },
         { status: 404 }
@@ -118,7 +122,7 @@ export async function PUT(
     const { name, provider, apiKeyId, baseUrl, modelName, parameters, isDefault } = body
 
     // Build update data
-    const updateData: any = {}
+    const updateData: Record<string, any> = {}
 
     if (name !== undefined) {
       if (typeof name !== 'string' || name.trim().length === 0) {
@@ -129,15 +133,9 @@ export async function PUT(
       }
 
       // Check for duplicate name (excluding current profile)
-      const duplicateProfile = await prisma.imageProfile.findFirst({
-        where: {
-          userId: session.user.id,
-          name: name.trim(),
-          NOT: { id },
-        },
-      })
+      const duplicateProfile = await repos.imageProfiles.findByName(session.user.id, name.trim())
 
-      if (duplicateProfile) {
+      if (duplicateProfile && duplicateProfile.id !== id) {
         return NextResponse.json(
           { error: 'An image profile with this name already exists' },
           { status: 409 }
@@ -172,13 +170,8 @@ export async function PUT(
       if (apiKeyId === null) {
         updateData.apiKeyId = null
       } else {
-        // Validate the API key exists and belongs to user
-        const apiKey = await prisma.apiKey.findFirst({
-          where: {
-            id: apiKeyId,
-            userId: session.user.id,
-          },
-        })
+        // Validate the API key exists
+        const apiKey = await repos.connections.findApiKeyById(apiKeyId)
 
         if (!apiKey) {
           return NextResponse.json(
@@ -225,47 +218,49 @@ export async function PUT(
 
       // If setting as default, unset other defaults
       if (isDefault) {
-        await prisma.imageProfile.updateMany({
-          where: {
-            userId: session.user.id,
-            isDefault: true,
-            NOT: {
-              id,
-            },
-          },
-          data: {
-            isDefault: false,
-          },
-        })
+        await repos.imageProfiles.unsetAllDefaults(session.user.id)
       }
 
       updateData.isDefault = isDefault
     }
 
     // Update the profile
-    const updatedProfile = await prisma.imageProfile.update({
-      where: {
-        id,
-      },
-      data: updateData,
-      include: {
-        apiKey: {
-          select: {
-            id: true,
-            label: true,
-            provider: true,
-            isActive: true,
-          },
-        },
-        tags: {
-          include: {
-            tag: true,
-          },
-        },
-      },
-    })
+    const updatedProfile = await repos.imageProfiles.update(id, updateData)
 
-    return NextResponse.json(updatedProfile)
+    if (!updatedProfile) {
+      return NextResponse.json(
+        { error: 'Failed to update profile' },
+        { status: 500 }
+      )
+    }
+
+    // Enrich with API key info
+    let apiKey = null
+    if (updatedProfile.apiKeyId) {
+      const key = await repos.connections.findApiKeyById(updatedProfile.apiKeyId)
+      if (key) {
+        apiKey = {
+          id: key.id,
+          label: key.label,
+          provider: key.provider,
+          isActive: key.isActive,
+        }
+      }
+    }
+
+    // Get tag details
+    const tagDetails = await Promise.all(
+      updatedProfile.tags.map(async (tagId) => {
+        const tag = await repos.tags.findById(tagId)
+        return tag ? { tagId, tag } : null
+      })
+    )
+
+    return NextResponse.json({
+      ...updatedProfile,
+      apiKey,
+      tags: tagDetails.filter(Boolean),
+    })
   } catch (error) {
     console.error('Failed to update image profile:', error)
     return NextResponse.json(
@@ -293,15 +288,12 @@ export async function DELETE(
       )
     }
 
-    // Verify ownership
-    const existingProfile = await prisma.imageProfile.findFirst({
-      where: {
-        id,
-        userId: session.user.id,
-      },
-    })
+    const repos = getRepositories()
 
-    if (!existingProfile) {
+    // Verify ownership
+    const existingProfile = await repos.imageProfiles.findById(id)
+
+    if (!existingProfile || existingProfile.userId !== session.user.id) {
       return NextResponse.json(
         { error: 'Image profile not found' },
         { status: 404 }
@@ -309,11 +301,7 @@ export async function DELETE(
     }
 
     // Delete the profile
-    await prisma.imageProfile.delete({
-      where: {
-        id,
-      },
-    })
+    await repos.imageProfiles.delete(id)
 
     return NextResponse.json(
       { message: 'Image profile deleted successfully' },

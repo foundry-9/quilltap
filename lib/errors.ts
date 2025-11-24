@@ -63,44 +63,6 @@ export function handleError(error: unknown): NextResponse {
     )
   }
 
-  // Handle Prisma errors
-  if (error && typeof error === 'object' && 'code' in error) {
-    const prismaError = error as any
-
-    // Unique constraint violation
-    if (prismaError.code === 'P2002') {
-      return NextResponse.json(
-        {
-          error: 'A record with this value already exists',
-          code: ErrorCode.VALIDATION_ERROR,
-          details: prismaError.meta,
-        },
-        { status: 409 }
-      )
-    }
-
-    // Record not found
-    if (prismaError.code === 'P2025') {
-      return NextResponse.json(
-        {
-          error: 'Record not found',
-          code: ErrorCode.NOT_FOUND,
-        },
-        { status: 404 }
-      )
-    }
-
-    // Foreign key constraint failed
-    if (prismaError.code === 'P2003') {
-      return NextResponse.json(
-        {
-          error: 'Referenced record does not exist',
-          code: ErrorCode.VALIDATION_ERROR,
-        },
-        { status: 400 }
-      )
-    }
-  }
 
   // Handle standard Error instances
   if (error instanceof Error) {

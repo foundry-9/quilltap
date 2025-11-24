@@ -4,7 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 
 // PATCH /api/characters/:id/favorite - Toggle favorite status
 export async function PATCH(
@@ -18,33 +18,22 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    })
+    const repos = getRepositories()
+    const user = await repos.users.findByEmail(session.user.email)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
     // Verify character ownership
-    const existingCharacter = await prisma.character.findFirst({
-      where: {
-        id,
-        userId: user.id,
-      },
-    })
+    const existingCharacter = await repos.characters.findById(id)
 
-    if (!existingCharacter) {
+    if (!existingCharacter || existingCharacter.userId !== user.id) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
     }
 
     // Toggle the isFavorite property
-    const character = await prisma.character.update({
-      where: { id },
-      data: {
-        isFavorite: !existingCharacter.isFavorite,
-      },
-    })
+    const character = await repos.characters.setFavorite(id, !existingCharacter.isFavorite)
 
     return NextResponse.json({ character })
   } catch (error) {

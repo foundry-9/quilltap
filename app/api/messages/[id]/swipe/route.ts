@@ -7,9 +7,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 import { createLLMProvider } from '@/lib/llm/factory'
 import { decryptApiKey } from '@/lib/encryption'
+import type { ChatEvent, MessageEvent } from '@/lib/json-store/schemas/types'
 
 export async function POST(
   req: NextRequest,
@@ -23,139 +24,133 @@ export async function POST(
     }
 
     const { id } = await context.params
+    const repos = getRepositories()
 
-    // Get message and verify user owns the chat
-    const message = await prisma.message.findFirst({
-      where: {
-        id,
-      },
-      include: {
-        chat: {
-          select: {
-            id: true,
-            userId: true,
-            connectionProfile: {
-              include: {
-                apiKey: true,
-              },
-            },
-          },
-        },
-      },
-    })
+    // Get all chats to find which chat contains this message
+    const allChats = await repos.chats.findAll()
+    let foundChat = null
+    let foundMessage: MessageEvent | null = null
+    let allMessages: ChatEvent[] = []
 
-    if (!message) {
+    for (const chat of allChats) {
+      const messages = await repos.chats.getMessages(chat.id)
+      const message = messages.find(
+        (m): m is MessageEvent => m.type === 'message' && m.id === id
+      )
+      if (message) {
+        foundChat = chat
+        foundMessage = message
+        allMessages = messages
+        break
+      }
+    }
+
+    if (!foundMessage || !foundChat) {
       return NextResponse.json({ error: 'Message not found' }, { status: 404 })
     }
 
-    if (message.chat.userId !== session.user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
     // Only assistant messages can be swiped
-    if (message.role !== 'ASSISTANT') {
+    if (foundMessage.role !== 'ASSISTANT') {
       return NextResponse.json(
         { error: 'Only assistant messages can be swiped' },
         { status: 400 }
       )
     }
 
+    // Get connection profile for LLM access
+    const profile = await repos.connections.findById(foundChat.connectionProfileId)
+    if (!profile) {
+      return NextResponse.json({ error: 'Connection profile not found' }, { status: 404 })
+    }
+
     // Create swipe group ID if this is the first swipe
-    const swipeGroupId = message.swipeGroupId || `swipe-${message.id}`
+    const swipeGroupId = foundMessage.swipeGroupId || `swipe-${foundMessage.id}`
 
     // Update original message with swipe group ID if needed
-    if (!message.swipeGroupId) {
-      await prisma.message.update({
-        where: { id },
-        data: {
-          swipeGroupId,
-          swipeIndex: 0,
-        },
-      })
+    if (!foundMessage.swipeGroupId) {
+      // Find and update the message in the messages array
+      const messageIndex = allMessages.findIndex(
+        (m): m is MessageEvent => m.type === 'message' && m.id === id
+      )
+      if (messageIndex !== -1) {
+        const msg = allMessages[messageIndex] as MessageEvent
+        msg.swipeGroupId = swipeGroupId
+        msg.swipeIndex = 0
+      }
     }
 
     // Get the highest swipe index in this group
-    const existingSwipes = await prisma.message.findMany({
-      where: {
-        swipeGroupId,
-      },
-      orderBy: {
-        swipeIndex: 'desc',
-      },
-      take: 1,
-    })
-
-    const newSwipeIndex = existingSwipes.length > 0
-      ? (existingSwipes[0].swipeIndex || 0) + 1
-      : 1
+    const existingSwipes = allMessages.filter(
+      (m): m is MessageEvent =>
+        m.type === 'message' && m.swipeGroupId === swipeGroupId
+    )
+    const maxSwipeIndex = existingSwipes.reduce(
+      (max, m) => Math.max(max, m.swipeIndex || 0),
+      0
+    )
+    const newSwipeIndex = maxSwipeIndex + 1
 
     // Get all messages before this one for context
-    const previousMessages = await prisma.message.findMany({
-      where: {
-        chatId: message.chatId,
-        createdAt: {
-          lt: message.createdAt,
-        },
-      },
-      orderBy: {
-        createdAt: 'asc',
-      },
-    })
+    const messageCreatedAt = new Date(foundMessage.createdAt).getTime()
+    const previousMessages = allMessages.filter(
+      (m): m is MessageEvent =>
+        m.type === 'message' && new Date(m.createdAt).getTime() < messageCreatedAt
+    )
 
     // Build messages array for LLM
-    const llmMessages = previousMessages.map((m: any) => ({
+    const llmMessages = previousMessages.map((m) => ({
       role: m.role.toLowerCase() as 'system' | 'user' | 'assistant',
       content: m.content,
     }))
 
     // Get LLM provider and generate new response
-    const profile = message.chat.connectionProfile
     const provider = createLLMProvider(profile.provider, profile.baseUrl || undefined)
 
     let apiKey = ''
-    if (profile.apiKey) {
-      apiKey = decryptApiKey(
-        profile.apiKey.keyEncrypted,
-        profile.apiKey.keyIv,
-        profile.apiKey.keyAuthTag,
-        session.user.id
-      )
+    if (profile.apiKeyId) {
+      const apiKeyRecord = await repos.connections.findApiKeyById(profile.apiKeyId)
+      if (apiKeyRecord) {
+        apiKey = decryptApiKey(
+          apiKeyRecord.ciphertext,
+          apiKeyRecord.iv,
+          apiKeyRecord.authTag,
+          session.user.id
+        )
+      }
     }
 
-    const params = profile.parameters as any
+    const params = profile.parameters as Record<string, unknown>
 
     const response = await provider.sendMessage(
       {
         messages: llmMessages,
         model: profile.modelName,
-        temperature: params.temperature,
-        maxTokens: params.max_tokens,
-        topP: params.top_p,
+        temperature: params.temperature as number | undefined,
+        maxTokens: params.max_tokens as number | undefined,
+        topP: params.top_p as number | undefined,
       },
       apiKey
     )
 
     // Create new swipe message
-    const newSwipe = await prisma.message.create({
-      data: {
-        chatId: message.chatId,
-        role: 'ASSISTANT',
-        content: response.content,
-        swipeGroupId,
-        swipeIndex: newSwipeIndex,
-        tokenCount: response.usage.totalTokens,
-        rawResponse: response.raw,
-        createdAt: message.createdAt, // Keep same timestamp as original
-      },
-    })
+    const newSwipe: MessageEvent = {
+      type: 'message',
+      id: crypto.randomUUID(),
+      role: 'ASSISTANT',
+      content: response.content,
+      swipeGroupId,
+      swipeIndex: newSwipeIndex,
+      tokenCount: response.usage.totalTokens,
+      rawResponse: response.raw,
+      attachments: [],
+      createdAt: foundMessage.createdAt, // Keep same timestamp as original
+    }
+
+    // Add new swipe to the chat messages
+    await repos.chats.addMessage(foundChat.id, newSwipe)
 
     // Update chat's updatedAt timestamp
-    await prisma.chat.update({
-      where: { id: message.chatId },
-      data: {
-        updatedAt: new Date(),
-      },
-    })
+    await repos.chats.update(foundChat.id, {})
 
     return NextResponse.json(newSwipe, { status: 201 })
   } catch (error) {
@@ -179,6 +174,7 @@ export async function PUT(
     }
 
     const { id } = await context.params
+    const repos = getRepositories()
 
     const body = await req.json()
     const { swipeIndex } = body
@@ -190,42 +186,41 @@ export async function PUT(
       )
     }
 
-    // Get message and verify user owns the chat
-    const message = await prisma.message.findFirst({
-      where: {
-        id,
-      },
-      include: {
-        chat: {
-          select: {
-            userId: true,
-          },
-        },
-      },
-    })
+    // Find the message across all chats
+    const allChats = await repos.chats.findAll()
+    let foundMessage: MessageEvent | null = null
+    let allMessages: ChatEvent[] = []
 
-    if (!message) {
+    for (const chat of allChats) {
+      const messages = await repos.chats.getMessages(chat.id)
+      const message = messages.find(
+        (m): m is MessageEvent => m.type === 'message' && m.id === id
+      )
+      if (message) {
+        foundMessage = message
+        allMessages = messages
+        break
+      }
+    }
+
+    if (!foundMessage) {
       return NextResponse.json({ error: 'Message not found' }, { status: 404 })
     }
 
-    if (message.chat.userId !== session.user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
-    if (!message.swipeGroupId) {
+    if (!foundMessage.swipeGroupId) {
       return NextResponse.json(
         { error: 'Message is not part of a swipe group' },
         { status: 400 }
       )
     }
 
-    // Verify the swipe exists
-    const targetSwipe = await prisma.message.findFirst({
-      where: {
-        swipeGroupId: message.swipeGroupId,
-        swipeIndex,
-      },
-    })
+    // Find the target swipe
+    const targetSwipe = allMessages.find(
+      (m): m is MessageEvent =>
+        m.type === 'message' &&
+        m.swipeGroupId === foundMessage!.swipeGroupId &&
+        m.swipeIndex === swipeIndex
+    )
 
     if (!targetSwipe) {
       return NextResponse.json(

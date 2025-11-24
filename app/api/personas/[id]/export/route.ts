@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { getRepositories } from '@/lib/json-store/repositories'
 import { exportSTPersona } from '@/lib/sillytavern/persona'
 
 export async function GET(
@@ -21,16 +21,12 @@ export async function GET(
     }
 
     const { id } = await params
+    const repos = getRepositories()
 
     // Get persona
-    const persona = await prisma.persona.findFirst({
-      where: {
-        id,
-        userId: session.user.id,
-      },
-    })
+    const persona = await repos.personas.findById(id)
 
-    if (!persona) {
+    if (!persona || persona.userId !== session.user.id) {
       return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
     }
 

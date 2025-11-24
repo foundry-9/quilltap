@@ -1,24 +1,13 @@
 /**
- * Prisma types export
- * Re-exports types from @prisma/client and defines enum types
+ * Type definitions for Quilltap
+ * Defines enum types and interfaces used throughout the application
+ * (Migrated from Prisma to JSON store)
  */
 
-// Explicitly export Prisma-generated enums and types for Turbopack compatibility
-// (avoids "unexpected export *" warning with CommonJS modules)
-export type {
-  ApiKey,
-  ImageProfile,
-  User,
-  Message,
-  Chat,
-  Image,
-} from '@prisma/client'
-export { ImageProvider } from '@prisma/client'
-
 // Define Provider and Role as string literal union types
-// These match the Prisma schema enums and are compatible with Prisma's generated types
 export type Provider = 'OPENAI' | 'ANTHROPIC' | 'OLLAMA' | 'OPENROUTER' | 'OPENAI_COMPATIBLE' | 'GROK' | 'GAB_AI';
 export type Role = 'SYSTEM' | 'USER' | 'ASSISTANT';
+export type ImageProvider = 'OPENAI' | 'ANTHROPIC';
 
 // Export const objects with enum values for runtime validation
 export const Provider = {
@@ -35,4 +24,9 @@ export const Role = {
   SYSTEM: 'SYSTEM',
   USER: 'USER',
   ASSISTANT: 'ASSISTANT',
+} as const;
+
+export const ImageProvider = {
+  OPENAI: 'OPENAI',
+  ANTHROPIC: 'ANTHROPIC',
 } as const;
