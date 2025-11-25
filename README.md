@@ -163,7 +163,12 @@ docker-compose logs -f app
 docker-compose down
 ```
 
-The application will be available at [http://localhost:3000](http://localhost:3000)
+The application will be available at [https://localhost:3000](https://localhost:3000)
+and any JSON data written while Docker is running in development mode will be
+persisted to your local `data/` directory via a bind mount, making it easy to
+switch between Docker and local `npm run dev` workflows. The dev container generates
+and uses a self-signed certificate stored in `certs/`, so your browser will prompt
+you to trust it the first time you connect.
 
 ### Local Development
 
@@ -189,7 +194,7 @@ Edit `.env.local` with your values (see Quick Start section above).
 npm run dev
 ```
 
-The application will be available at [http://localhost:3000](http://localhost:3000)
+The application will be available at [https://localhost:3000](https://localhost:3000)
 
 All data will be stored in the `data/` directory in JSON files. The application will create this directory automatically on first run.
 
