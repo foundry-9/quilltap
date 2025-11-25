@@ -24,28 +24,39 @@ export function TagBadge({ tag, onRemove, disabled = false, size = 'md', classNa
     ? 'text-xs px-2 py-0.5'
     : 'text-sm px-3 py-1'
 
-  const baseClasses = `inline-flex items-center gap-1 rounded-full font-medium border transition-colors ${sizeClasses} ${className}`
+  const baseClasses = `inline-flex items-center gap-1 rounded-full font-medium border-2 transition-colors ${sizeClasses} ${className}`
 
   const handleRemove = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
     onRemove?.()
   }
 
+  const showEmojiOnly = computedStyle.emojiOnly && computedStyle.emoji
+
+  const textClasses = [
+    computedStyle.bold && 'font-bold',
+    computedStyle.italic && 'italic',
+    computedStyle.strikethrough && 'line-through',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   return (
     <span
-      className={baseClasses}
+      className={`${baseClasses} ${textClasses}`}
       style={{
         color: computedStyle.foregroundColor,
         borderColor: computedStyle.foregroundColor,
         backgroundColor: computedStyle.backgroundColor,
       }}
+      title={showEmojiOnly ? tag.name : undefined}
     >
       {computedStyle.emoji && (
         <span aria-hidden="true" className="text-base leading-none">
           {computedStyle.emoji}
         </span>
       )}
-      <span>{tag.name}</span>
+      {!showEmojiOnly && <span>{tag.name}</span>}
       {onRemove && (
         <button
           type="button"

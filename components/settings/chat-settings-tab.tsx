@@ -383,69 +383,116 @@ export default function ChatSettingsTab() {
           </div>
 
           {Object.keys(tagStyles).length > 0 ? (
-            Object.entries(tagStyles).map(([tagId, style]) => {
-              const label = tagLabelLookup.get(tagId) || 'Unknown tag'
-              const mergedStyle = mergeWithDefaultTagStyle(style)
+            <div className="grid gap-4 grid-cols-1 landscape:grid-cols-3 lg:grid-cols-4">
+              {Object.entries(tagStyles).map(([tagId, style]) => {
+                const label = tagLabelLookup.get(tagId) || 'Unknown tag'
+                const mergedStyle = mergeWithDefaultTagStyle(style)
 
-              return (
-                <div key={tagId} className="border border-gray-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800 shadow-sm">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <div className="font-medium text-gray-900 dark:text-white">{label}</div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">Preview:</div>
-                      <div className="mt-2">
+                return (
+                  <div key={tagId} className="border border-gray-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800 shadow-sm flex flex-col">
+                    <div className="flex-1">
+                      <div className="font-medium text-gray-900 dark:text-white text-sm">{label}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">Preview:</div>
+                      <div className="mt-2 mb-4">
                         <TagBadge tag={{ id: tagId, name: label }} styleOverride={mergedStyle} />
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveTagStyle(tagId)}
-                      disabled={tagSaving}
-                      className="self-start sm:self-auto px-3 py-1.5 text-sm rounded-md text-red-600 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50"
-                    >
-                      Remove Style
-                    </button>
+
+                    <div className="space-y-3">
+                      <label className="block text-sm text-gray-700 dark:text-gray-300">
+                        Emoji
+                        <input
+                          type="text"
+                          maxLength={8}
+                          value={mergedStyle.emoji ?? ''}
+                          onChange={(e) => handleTagStyleFieldChange(tagId, { emoji: e.target.value.trim() || null })}
+                          disabled={tagSaving}
+                          placeholder="😀"
+                          className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
+                        />
+                      </label>
+
+                      <div className="space-y-2 pt-1">
+                        <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                          <input
+                            type="checkbox"
+                            checked={mergedStyle.emojiOnly ?? false}
+                            onChange={(e) => handleTagStyleFieldChange(tagId, { emojiOnly: e.target.checked })}
+                            disabled={tagSaving || !mergedStyle.emoji}
+                            className="rounded"
+                          />
+                          <span>Show emoji only</span>
+                        </label>
+
+                        <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                          <input
+                            type="checkbox"
+                            checked={mergedStyle.bold ?? false}
+                            onChange={(e) => handleTagStyleFieldChange(tagId, { bold: e.target.checked })}
+                            disabled={tagSaving}
+                            className="rounded"
+                          />
+                          <span className="font-bold">Bold</span>
+                        </label>
+
+                        <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                          <input
+                            type="checkbox"
+                            checked={mergedStyle.italic ?? false}
+                            onChange={(e) => handleTagStyleFieldChange(tagId, { italic: e.target.checked })}
+                            disabled={tagSaving}
+                            className="rounded"
+                          />
+                          <span className="italic">Italic</span>
+                        </label>
+
+                        <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                          <input
+                            type="checkbox"
+                            checked={mergedStyle.strikethrough ?? false}
+                            onChange={(e) => handleTagStyleFieldChange(tagId, { strikethrough: e.target.checked })}
+                            disabled={tagSaving}
+                            className="rounded"
+                          />
+                          <span className="line-through">Strikethrough</span>
+                        </label>
+                      </div>
+
+                      <label className="block text-sm text-gray-700 dark:text-gray-300">
+                        Border + Font Color
+                        <input
+                          type="color"
+                          value={mergedStyle.foregroundColor}
+                          onChange={(e) => handleTagStyleFieldChange(tagId, { foregroundColor: e.target.value })}
+                          disabled={tagSaving}
+                          className="mt-1 block h-10 w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900"
+                        />
+                      </label>
+
+                      <label className="block text-sm text-gray-700 dark:text-gray-300">
+                        Background Color
+                        <input
+                          type="color"
+                          value={mergedStyle.backgroundColor}
+                          onChange={(e) => handleTagStyleFieldChange(tagId, { backgroundColor: e.target.value })}
+                          disabled={tagSaving}
+                          className="mt-1 block h-10 w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900"
+                        />
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTagStyle(tagId)}
+                        disabled={tagSaving}
+                        className="w-full px-3 py-1.5 text-sm rounded-md text-red-600 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50"
+                      >
+                        Remove Style
+                      </button>
+                    </div>
                   </div>
-
-                  <div className="mt-4 grid gap-4 sm:grid-cols-3">
-                    <label className="block text-sm text-gray-700 dark:text-gray-300">
-                      Emoji
-                      <input
-                        type="text"
-                        maxLength={8}
-                        value={mergedStyle.emoji ?? ''}
-                        onChange={(e) => handleTagStyleFieldChange(tagId, { emoji: e.target.value.trim() || null })}
-                        disabled={tagSaving}
-                        placeholder="😀"
-                        className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2"
-                      />
-                    </label>
-
-                    <label className="block text-sm text-gray-700 dark:text-gray-300">
-                      Border + Font Color
-                      <input
-                        type="color"
-                        value={mergedStyle.foregroundColor}
-                        onChange={(e) => handleTagStyleFieldChange(tagId, { foregroundColor: e.target.value })}
-                        disabled={tagSaving}
-                        className="mt-1 block h-10 w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900"
-                      />
-                    </label>
-
-                    <label className="block text-sm text-gray-700 dark:text-gray-300">
-                      Background Color
-                      <input
-                        type="color"
-                        value={mergedStyle.backgroundColor}
-                        onChange={(e) => handleTagStyleFieldChange(tagId, { backgroundColor: e.target.value })}
-                        disabled={tagSaving}
-                        className="mt-1 block h-10 w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900"
-                      />
-                    </label>
-                  </div>
-                </div>
-              )
-            })
+                )
+              })}
+            </div>
           ) : (
             <div className="text-sm text-gray-600 dark:text-gray-400 border border-dashed border-gray-300 dark:border-slate-700 rounded-lg p-4">
               No custom tag styles yet. Select a tag above to add an emoji and colors.

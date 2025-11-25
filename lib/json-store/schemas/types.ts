@@ -98,6 +98,10 @@ export const TagVisualStyleSchema = z.object({
   emoji: z.string().max(8).optional().nullable(),
   foregroundColor: HexColorSchema.default('#1f2937'),
   backgroundColor: HexColorSchema.default('#e5e7eb'),
+  emojiOnly: z.boolean().default(false),
+  bold: z.boolean().default(false),
+  italic: z.boolean().default(false),
+  strikethrough: z.boolean().default(false),
 });
 
 export type TagVisualStyle = z.infer<typeof TagVisualStyleSchema>;
