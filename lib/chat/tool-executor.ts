@@ -181,6 +181,19 @@ export function detectToolCalls(
       }
     }
 
+    // Google/Gemini format
+    if (provider === 'GOOGLE' && response?.candidates?.[0]?.content?.parts) {
+      const parts = response.candidates[0].content.parts;
+      for (const part of parts) {
+        if (part.functionCall) {
+          toolCalls.push({
+            name: part.functionCall.name,
+            arguments: part.functionCall.args || {},
+          });
+        }
+      }
+    }
+
     return toolCalls;
   } catch (error) {
     console.error('Error detecting tool calls:', error);

@@ -14,7 +14,7 @@ interface ApiKey {
 interface ImageProfile {
   id: string
   name: string
-  provider: 'OPENAI' | 'GROK' | 'GOOGLE_IMAGEN' | 'GOOGLE'
+  provider: 'OPENAI' | 'GROK' | 'GOOGLE_IMAGEN'
   apiKeyId?: string
   baseUrl?: string
   modelName: string

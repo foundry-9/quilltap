@@ -74,7 +74,7 @@ export class GoogleProvider extends LLMProvider {
 
   async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
     const client = new GoogleGenerativeAI(apiKey)
-    const model = client.getGenerativeModel({
+    const modelConfig: any = {
       model: params.model,
       safetySettings: [
         {
@@ -94,7 +94,26 @@ export class GoogleProvider extends LLMProvider {
           threshold: HarmBlockThreshold.BLOCK_NONE,
         },
       ],
-    })
+    }
+
+    // Add tools if provided
+    if (params.tools && params.tools.length > 0) {
+      modelConfig.tools = [
+        {
+          functionDeclarations: params.tools.map((tool: any) => ({
+            name: tool.name,
+            description: tool.description,
+            parameters: {
+              type: 'OBJECT',
+              properties: tool.parameters?.properties || {},
+              required: tool.parameters?.required || [],
+            },
+          })),
+        },
+      ]
+    }
+
+    const model = client.getGenerativeModel(modelConfig)
 
     const { messages, attachmentResults } = await this.formatMessagesWithAttachments(params.messages)
 
@@ -127,7 +146,7 @@ export class GoogleProvider extends LLMProvider {
 
   async *streamMessage(params: LLMParams, apiKey: string): AsyncGenerator<StreamChunk> {
     const client = new GoogleGenerativeAI(apiKey)
-    const model = client.getGenerativeModel({
+    const modelConfig: any = {
       model: params.model,
       safetySettings: [
         {
@@ -147,7 +166,26 @@ export class GoogleProvider extends LLMProvider {
           threshold: HarmBlockThreshold.BLOCK_NONE,
         },
       ],
-    })
+    }
+
+    // Add tools if provided
+    if (params.tools && params.tools.length > 0) {
+      modelConfig.tools = [
+        {
+          functionDeclarations: params.tools.map((tool: any) => ({
+            name: tool.name,
+            description: tool.description,
+            parameters: {
+              type: 'OBJECT',
+              properties: tool.parameters?.properties || {},
+              required: tool.parameters?.required || [],
+            },
+          })),
+        },
+      ]
+    }
+
+    const model = client.getGenerativeModel(modelConfig)
 
     const { messages, attachmentResults } = await this.formatMessagesWithAttachments(params.messages)
 
@@ -183,6 +221,7 @@ export class GoogleProvider extends LLMProvider {
         totalTokens: usage?.totalTokenCount ?? 0,
       },
       attachmentResults,
+      rawResponse: response,
     }
   }
 

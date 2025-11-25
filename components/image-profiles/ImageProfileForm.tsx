@@ -13,7 +13,7 @@ interface ApiKey {
 interface ImageProfile {
   id: string
   name: string
-  provider: 'OPENAI' | 'GROK' | 'GOOGLE_IMAGEN' | 'GOOGLE'
+  provider: 'OPENAI' | 'GROK' | 'GOOGLE_IMAGEN'
   apiKeyId?: string
   baseUrl?: string
   modelName: string
@@ -33,14 +33,12 @@ const IMAGE_PROVIDERS = [
   { value: 'OPENAI', label: 'OpenAI (DALL-E / GPT Image)' },
   { value: 'GROK', label: 'Grok (xAI)' },
   { value: 'GOOGLE_IMAGEN', label: 'Google Imagen' },
-  { value: 'GOOGLE', label: 'Google (Gemini / Imagen)' },
 ]
 
 const PROVIDER_MODELS: Record<string, string[]> = {
   OPENAI: ['gpt-image-1', 'dall-e-3', 'dall-e-2'],
   GROK: ['grok-2-image'],
   GOOGLE_IMAGEN: ['imagen-4.0-generate-001', 'imagen-3.0-generate-002', 'imagen-3.0-fast-generate-001'],
-  GOOGLE: ['imagen-3.0-generate-002', 'gemini-pro-vision'],
 }
 
 export function ImageProfileForm({
@@ -124,7 +122,7 @@ export function ImageProfileForm({
     const newProvider = e.target.value
     setFormData(prev => ({
       ...prev,
-      provider: newProvider as 'OPENAI' | 'GROK' | 'GOOGLE_IMAGEN' | 'GOOGLE',
+      provider: newProvider as 'OPENAI' | 'GROK' | 'GOOGLE_IMAGEN',
       modelName: PROVIDER_MODELS[newProvider]?.[0] || '',
       parameters: {}, // Reset parameters when switching providers
     }))
@@ -215,7 +213,6 @@ export function ImageProfileForm({
       if (formData.provider === 'GROK' && key.provider === 'GROK') return true
       // Google Imagen can use any provider key (generic API keys)
       if (formData.provider === 'GOOGLE_IMAGEN') return true
-      if (formData.provider === 'GOOGLE') return true
       return false
     })
   }

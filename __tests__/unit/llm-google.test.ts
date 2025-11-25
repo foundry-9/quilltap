@@ -116,7 +116,14 @@ describe('GoogleProvider', () => {
           content: '',
           done: true,
           usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
-          attachmentResults: { sent: [], failed: [] }
+          attachmentResults: { sent: [], failed: [] },
+          rawResponse: {
+            usageMetadata: {
+              promptTokenCount: 10,
+              candidatesTokenCount: 5,
+              totalTokenCount: 15,
+            },
+          },
         },
       ]);
     });

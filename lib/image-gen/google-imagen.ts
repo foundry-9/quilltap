@@ -76,10 +76,15 @@ export class GoogleImagenProvider extends ImageGenProvider {
 
   async validateApiKey(apiKey: string): Promise<boolean> {
     try {
-      // Use the models list endpoint to validate the API key
+      // Validate the API key by calling the models list endpoint with the x-goog-api-key header
       const response = await fetch(
-        `${this.baseUrl}/models?key=${apiKey}`,
-        { method: 'GET' }
+        `${this.baseUrl}/models`,
+        {
+          method: 'GET',
+          headers: {
+            'x-goog-api-key': apiKey,
+          },
+        }
       );
       return response.ok;
     } catch {
