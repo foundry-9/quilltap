@@ -138,6 +138,9 @@ export async function POST(req: NextRequest) {
       )
     } catch (error) {
       console.error('Test message failed:', error)
+      if (error instanceof Error) {
+        console.error('Error details:', { message: error.message, stack: error.stack })
+      }
       return NextResponse.json(
         {
           success: false,
