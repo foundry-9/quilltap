@@ -100,7 +100,10 @@ export async function POST(req: NextRequest) {
     // Send test message
     const testPrompt = 'Hello! Please respond with a brief greeting to confirm the connection is working.'
 
+    console.log(`[TEST-MESSAGE] Starting test for provider: ${provider}, model: ${modelName}`)
+
     try {
+      console.log('[TEST-MESSAGE] Calling sendMessage')
       const response = await llmProvider.sendMessage(
         {
           model: modelName,
@@ -117,8 +120,23 @@ export async function POST(req: NextRequest) {
         decryptedKey
       )
 
+      if (!response) {
+        console.log('[TEST-MESSAGE] Null response from provider')
+        return NextResponse.json(
+          {
+            success: false,
+            provider,
+            error: 'No response received from model',
+          },
+          { status: 500 }
+        )
+      }
+
+      console.log('[TEST-MESSAGE] Received response:', { hasContent: !!response.content, contentLength: response.content?.length })
+
       // Check if we got a response
-      if (response && response.content) {
+      if (response.content) {
+        console.log('[TEST-MESSAGE] Success - returning response')
         return NextResponse.json({
           success: true,
           provider,
@@ -128,6 +146,7 @@ export async function POST(req: NextRequest) {
         })
       }
 
+      console.log('[TEST-MESSAGE] No content in response')
       return NextResponse.json(
         {
           success: false,
@@ -137,9 +156,9 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       )
     } catch (error) {
-      console.error('Test message failed:', error)
+      console.error('[TEST-MESSAGE] Error caught:', error)
       if (error instanceof Error) {
-        console.error('Error details:', { message: error.message, stack: error.stack })
+        console.error('[TEST-MESSAGE] Error details:', { message: error.message, stack: error.stack })
       }
       return NextResponse.json(
         {
