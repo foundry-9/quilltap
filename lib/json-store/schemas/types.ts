@@ -92,11 +92,26 @@ export const UserSchema = z.object({
 
 export type User = z.infer<typeof UserSchema>;
 
+export const HexColorSchema = z.string().regex(/^#(?:[0-9a-fA-F]{3}){1,2}$/);
+
+export const TagVisualStyleSchema = z.object({
+  emoji: z.string().max(8).optional().nullable(),
+  foregroundColor: HexColorSchema.default('#1f2937'),
+  backgroundColor: HexColorSchema.default('#e5e7eb'),
+});
+
+export type TagVisualStyle = z.infer<typeof TagVisualStyleSchema>;
+
+export const TagStyleMapSchema = z.record(TagVisualStyleSchema).default({});
+
+export type TagStyleMap = z.infer<typeof TagStyleMapSchema>;
+
 export const ChatSettingsSchema = z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
   avatarDisplayMode: AvatarDisplayModeEnum.default('ALWAYS'),
   avatarDisplayStyle: z.string().default('CIRCULAR'),
+  tagStyles: TagStyleMapSchema,
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

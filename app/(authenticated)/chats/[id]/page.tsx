@@ -13,6 +13,7 @@ import { formatMessageTime } from '@/lib/format-time'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { useDebugOptional } from '@/components/providers/debug-provider'
 import DebugPanel from '@/components/debug/DebugPanel'
+import type { TagVisualStyle } from '@/lib/json-store/schemas/types'
 
 interface MessageAttachment {
   id: string
@@ -94,6 +95,8 @@ interface ChatSettings {
   id: string
   userId: string
   avatarDisplayMode: 'ALWAYS' | 'GROUP_ONLY' | 'NEVER'
+  avatarDisplayStyle?: 'CIRCULAR' | 'RECTANGULAR'
+  tagStyles?: Record<string, TagVisualStyle>
   createdAt: string
   updatedAt: string
 }
@@ -138,7 +141,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     } catch (err) {
       console.error('Failed to fetch chat settings:', err)
       // Use default settings if fetch fails
-      setChatSettings({ id: '', userId: '', avatarDisplayMode: 'ALWAYS', createdAt: '', updatedAt: '' })
+      setChatSettings({ id: '', userId: '', avatarDisplayMode: 'ALWAYS', avatarDisplayStyle: 'CIRCULAR', tagStyles: {}, createdAt: '', updatedAt: '' })
     }
   }, [])
 

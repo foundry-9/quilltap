@@ -535,12 +535,27 @@ describe('JSON Store Integration Tests', () => {
       const settings = await usersRepo.getChatSettings(user.id);
       expect(settings).toBeDefined();
       expect(settings?.avatarDisplayMode).toBe('ALWAYS');
+      expect(settings?.tagStyles).toEqual({});
 
       const updated = await usersRepo.updateChatSettings(user.id, {
         avatarDisplayMode: 'NEVER',
+        tagStyles: {
+          '123e4567-e89b-12d3-a456-426614174000': {
+            emoji: '🔥',
+            foregroundColor: '#ffffff',
+            backgroundColor: '#ff0000',
+          },
+        },
       });
 
       expect(updated?.avatarDisplayMode).toBe('NEVER');
+      expect(updated?.tagStyles).toMatchObject({
+        '123e4567-e89b-12d3-a456-426614174000': {
+          emoji: '🔥',
+          foregroundColor: '#ffffff',
+          backgroundColor: '#ff0000',
+        },
+      });
     });
   });
 });

@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
-import type { AvatarDisplayMode } from '@/lib/json-store/schemas/types'
+import { TagStyleMapSchema, type AvatarDisplayMode } from '@/lib/json-store/schemas/types'
 
 /**
  * Validate and update chat settings
@@ -18,7 +18,8 @@ import type { AvatarDisplayMode } from '@/lib/json-store/schemas/types'
 async function updateChatSettings(
   userId: string,
   avatarDisplayMode?: string,
-  avatarDisplayStyle?: string
+  avatarDisplayStyle?: string,
+  tagStyles?: unknown
 ) {
   // Validate avatarDisplayMode if provided
   if (avatarDisplayMode) {
@@ -41,6 +42,10 @@ async function updateChatSettings(
   const updateData: Record<string, any> = {}
   if (avatarDisplayMode) updateData.avatarDisplayMode = avatarDisplayMode
   if (avatarDisplayStyle) updateData.avatarDisplayStyle = avatarDisplayStyle
+  if (typeof tagStyles !== 'undefined') {
+    const validatedTagStyles = TagStyleMapSchema.parse(tagStyles)
+    updateData.tagStyles = validatedTagStyles
+  }
 
   return repos.users.updateChatSettings(userId, updateData)
 }
@@ -69,6 +74,7 @@ export async function GET(req: NextRequest) {
       chatSettings = await repos.users.updateChatSettings(session.user.id, {
         avatarDisplayMode: 'ALWAYS',
         avatarDisplayStyle: 'CIRCULAR',
+        tagStyles: {},
       })
     }
 
@@ -96,12 +102,13 @@ async function handleSettingsUpdate(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { avatarDisplayMode, avatarDisplayStyle } = body
+    const { avatarDisplayMode, avatarDisplayStyle, tagStyles } = body
 
     const chatSettings = await updateChatSettings(
       session.user.id,
       avatarDisplayMode,
-      avatarDisplayStyle
+      avatarDisplayStyle,
+      tagStyles
     )
 
     return NextResponse.json(chatSettings)

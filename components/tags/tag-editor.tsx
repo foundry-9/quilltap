@@ -6,8 +6,8 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { showAlert } from '@/lib/alert';
 import { showErrorToast } from '@/lib/toast';
+import { TagBadge } from '@/components/tags/tag-badge';
 
 export interface Tag {
   id: string;
@@ -206,31 +206,12 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
       <div className="inline-flex flex-wrap gap-2 w-auto">
         {/* Display existing tags */}
         {tags.map((tag) => (
-          <span
+          <TagBadge
             key={tag.id}
-            className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
-          >
-            {tag.name}
-            <button
-              type="button"
-              onClick={() => removeTag(tag.id)}
-              disabled={loading}
-              className="ml-2 inline-flex items-center justify-center w-4 h-4 rounded-full hover:bg-blue-200 dark:hover:bg-blue-800 focus:outline-none disabled:opacity-50"
-              aria-label={`Remove ${tag.name} tag`}
-            >
-              <svg
-                className="w-3 h-3"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </button>
-          </span>
+            tag={tag}
+            onRemove={() => removeTag(tag.id)}
+            disabled={loading}
+          />
         ))}
 
         {/* View/Delete mode - Add Tag button */}

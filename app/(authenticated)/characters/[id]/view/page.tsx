@@ -10,6 +10,7 @@ import { RecentCharacterConversations } from '@/components/character/recent-conv
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
+import { TagBadge } from '@/components/tags/tag-badge'
 
 interface Tag {
   id: string
@@ -256,12 +257,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
               <div className="mb-6">
                 <div className="flex flex-wrap gap-2">
                   {tags.map((tag) => (
-                    <span
-                      key={tag.id}
-                      className="inline-block px-3 py-1 bg-blue-200 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full text-sm font-medium"
-                    >
-                      {tag.name}
-                    </span>
+                    <TagBadge key={tag.id} tag={tag} />
                   ))}
                 </div>
               </div>
