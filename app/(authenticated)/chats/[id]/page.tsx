@@ -3,7 +3,7 @@
 import { use, useEffect, useState, useRef, useCallback } from 'react'
 import Image from 'next/image'
 import ImageModal from '@/components/chat/ImageModal'
-import ChatPhotoGalleryModal from '@/components/chat/ChatPhotoGalleryModal'
+import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
 import { showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { safeJsonParse } from '@/lib/fetch-helpers'
@@ -1071,8 +1071,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         }}
       />
 
-      {/* Chat Photo Gallery Modal */}
-      <ChatPhotoGalleryModal
+      {/* Photo Gallery Modal */}
+      <PhotoGalleryModal
+        mode="chat"
         isOpen={galleryOpen}
         onClose={() => setGalleryOpen(false)}
         chatId={id}

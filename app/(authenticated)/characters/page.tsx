@@ -6,7 +6,7 @@ import Image from 'next/image'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
-import CharacterPhotoGalleryModal from '@/components/images/CharacterPhotoGalleryModal'
+import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
 
 interface Character {
   id: string
@@ -275,7 +275,8 @@ export default function CharactersPage() {
 
       {/* Character Photo Gallery Modal */}
       {galleryCharacter && (
-        <CharacterPhotoGalleryModal
+        <PhotoGalleryModal
+          mode="character"
           isOpen={true}
           onClose={() => setGalleryCharacter(null)}
           characterId={galleryCharacter.id}

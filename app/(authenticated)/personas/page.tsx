@@ -6,7 +6,7 @@ import Image from 'next/image'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
-import PersonaPhotoGalleryModal from '@/components/images/PersonaPhotoGalleryModal'
+import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
 
 interface Persona {
   id: string
@@ -344,7 +344,8 @@ export default function PersonasPage() {
 
       {/* Persona Photo Gallery Modal */}
       {galleryPersona && (
-        <PersonaPhotoGalleryModal
+        <PhotoGalleryModal
+          mode="persona"
           isOpen={true}
           onClose={() => setGalleryPersona(null)}
           personaId={galleryPersona.id}
