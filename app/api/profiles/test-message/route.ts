@@ -132,21 +132,27 @@ export async function POST(req: NextRequest) {
         )
       }
 
-      console.log('[TEST-MESSAGE] Received response:', { hasContent: !!response.content, contentLength: response.content?.length })
+      console.log('[TEST-MESSAGE] Received response:', { hasContent: response.content !== undefined && response.content !== null, contentLength: response.content?.length })
 
-      // Check if we got a response
-      if (response.content) {
+      // Check if we got a response with content (even empty string is valid)
+      if (response.content !== undefined && response.content !== null) {
         console.log('[TEST-MESSAGE] Success - returning response')
+        const preview = response.content.substring(0, 100)
+        const isTruncated = response.content.length > 100
+        const suffix = isTruncated ? '...' : ''
+        const message = preview.length === 0
+          ? 'Test message successful! Model responded but returned empty content.'
+          : `Test message successful! Model responded: "${preview}${suffix}"`
         return NextResponse.json({
           success: true,
           provider,
           modelName,
-          message: `Test message successful! Model responded: "${response.content.substring(0, 100)}${response.content.length > 100 ? '...' : ''}"`,
+          message,
           responsePreview: response.content.substring(0, 200),
         })
       }
 
-      console.log('[TEST-MESSAGE] No content in response')
+      console.log('[TEST-MESSAGE] No content in response (undefined or null)')
       return NextResponse.json(
         {
           success: false,
