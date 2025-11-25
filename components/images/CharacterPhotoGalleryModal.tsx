@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Image from 'next/image'
-import { showSuccessToast, showErrorToast } from '@/lib/toast'
-import GalleryImageViewModal from './GalleryImageViewModal'
+import { showErrorToast } from '@/lib/toast'
+import ImageDetailModal from './ImageDetailModal'
 
 interface ImageData {
   id: string
@@ -130,55 +130,6 @@ export default function CharacterPhotoGalleryModal({
     }
   }
 
-  const handleUntag = async (imageId: string) => {
-    try {
-      const params = new URLSearchParams({
-        tagType: 'CHARACTER',
-        tagId: characterId,
-      })
-      const response = await fetch(`/api/images/${imageId}/tags?${params.toString()}`, {
-        method: 'DELETE',
-      })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || 'Failed to untag image')
-      }
-
-      showSuccessToast('Image removed from gallery')
-      // Remove the image from the list
-      setImages((prev) => prev.filter((img) => img.id !== imageId))
-      // Close the image view modal
-      setSelectedImage(null)
-      setSelectedImageIndex(-1)
-    } catch (error) {
-      console.error('Failed to untag image:', error)
-      showErrorToast(error instanceof Error ? error.message : 'Failed to untag image')
-    }
-  }
-
-  const handleDelete = async (imageId: string) => {
-    try {
-      const response = await fetch(`/api/images/${imageId}`, {
-        method: 'DELETE',
-      })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || 'Failed to delete image')
-      }
-
-      showSuccessToast('Image deleted')
-      // Remove the image from the list
-      setImages((prev) => prev.filter((img) => img.id !== imageId))
-      // Close the image view modal
-      setSelectedImage(null)
-      setSelectedImageIndex(-1)
-    } catch (error) {
-      console.error('Failed to delete image:', error)
-      showErrorToast(error instanceof Error ? error.message : 'Failed to delete image')
-    }
-  }
 
   const handleCloseImageView = () => {
     setSelectedImage(null)
@@ -295,14 +246,12 @@ export default function CharacterPhotoGalleryModal({
 
       {/* Image View Modal */}
       {selectedImage && (
-        <GalleryImageViewModal
+        <ImageDetailModal
           isOpen={true}
           onClose={handleCloseImageView}
           image={selectedImage}
           onPrev={selectedImageIndex > 0 ? handlePrevImage : undefined}
           onNext={selectedImageIndex < images.length - 1 ? handleNextImage : undefined}
-          onUntag={() => handleUntag(selectedImage.id)}
-          onDelete={() => handleDelete(selectedImage.id)}
         />
       )}
     </>

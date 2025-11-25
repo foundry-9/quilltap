@@ -1,4 +1,7 @@
 import '@testing-library/jest-dom'
+import fetchMock from 'jest-fetch-mock'
+
+fetchMock.enableMocks()
 
 // Mock next-auth before any tests import it
 jest.mock('next-auth', () => ({
@@ -141,3 +144,9 @@ jest.mock('@/lib/json-store/repositories', () => ({
   getRepositories: jest.fn(),
   resetRepositories: jest.fn(),
 }))
+
+global.fetch = jest.fn(() =>
+  Promise.resolve({
+    json: () => Promise.resolve({}),
+  }),
+) as jest.Mock

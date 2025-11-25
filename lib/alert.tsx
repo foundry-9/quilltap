@@ -11,88 +11,40 @@ import { AlertDialog } from '@/components/alert-dialog'
  */
 export function showAlert(message: string, buttons?: string[]): Promise<string | undefined> {
   return new Promise((resolve) => {
-    // Create separate containers for overlay and dialog
-    const overlayContainer = document.createElement('div')
-    overlayContainer.setAttribute('role', 'alert-dialog-overlay')
-    overlayContainer.style.position = 'fixed'
-    overlayContainer.style.inset = '0'
-    overlayContainer.style.zIndex = '9998'
-    overlayContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.3)'
-    overlayContainer.style.pointerEvents = 'auto'
+    const overlay = document.createElement('div')
+    overlay.setAttribute('role', 'alert-dialog-overlay')
+    document.body.appendChild(overlay)
+    const overlayRoot = createRoot(overlay)
 
-    const dialogContainer = document.createElement('div')
-    dialogContainer.setAttribute('role', 'alert-dialog-content')
-    dialogContainer.style.position = 'fixed'
-    dialogContainer.style.top = '50%'
-    dialogContainer.style.left = '50%'
-    dialogContainer.style.transform = 'translate(-50%, -50%)'
-    dialogContainer.style.zIndex = '9999'
-    dialogContainer.style.pointerEvents = 'auto'
-
-    document.body.appendChild(overlayContainer)
-    document.body.appendChild(dialogContainer)
-
-    const overlayRoot = createRoot(overlayContainer)
-    const dialogRoot = createRoot(dialogContainer)
+    const container = document.createElement('div')
+    container.setAttribute('role', 'alert-dialog-content')
+    document.body.appendChild(container)
+    
+    const root = createRoot(container)
 
     const handleClose = (buttonLabel?: string) => {
-      // Unmount and remove both
+      root.unmount()
       overlayRoot.unmount()
-      dialogRoot.unmount()
-      if (overlayContainer.parentNode) {
-        overlayContainer.parentNode.removeChild(overlayContainer)
+      if (container.parentNode) {
+        container.parentNode.removeChild(container)
       }
-      if (dialogContainer.parentNode) {
-        dialogContainer.parentNode.removeChild(dialogContainer)
+      if (overlay.parentNode) {
+        overlay.parentNode.removeChild(overlay)
       }
       resolve(buttonLabel)
     }
 
-    // Render the overlay
     overlayRoot.render(
-      <div onClick={() => handleClose()} />
+      <div className="fixed inset-0 bg-black opacity-50" onClick={() => handleClose()} />
     )
 
-    // Render the dialog
-    dialogRoot.render(
-      <div className="bg-white dark:bg-slate-800 rounded-lg p-6 max-w-md shadow-xl">
-        <div className="mb-6">
-          <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap break-words">
-            {message}
-          </p>
-        </div>
-        <div className="flex gap-3 justify-end">
-          {(!buttons || buttons.length === 0) && (
-            <button
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(message)
-                } catch (err) {
-                  console.error('Failed to copy to clipboard:', err)
-                }
-              }}
-              className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors"
-            >
-              Copy
-            </button>
-          )}
-          {(buttons || ['Close']).map((buttonLabel, index) => {
-            const isLast = index === (buttons || ['Close']).length - 1
-            const buttonClass = isLast
-              ? 'px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-700 dark:hover:bg-indigo-800 transition-colors'
-              : 'px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors'
-            return (
-              <button
-                key={buttonLabel}
-                onClick={() => handleClose(buttonLabel)}
-                className={buttonClass}
-              >
-                {buttonLabel}
-              </button>
-            )
-          })}
-        </div>
-      </div>
+    root.render(
+      <AlertDialog
+        message={message}
+        onClose={handleClose}
+        buttons={buttons}
+        showCopy={!buttons || buttons.length === 0}
+      />
     )
   })
 }

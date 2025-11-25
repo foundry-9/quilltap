@@ -10,12 +10,12 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { decryptApiKey } from '@/lib/encryption'
-import { Provider } from '@/lib/types/prisma'
+import { ProviderEnum, Provider } from '@/lib/json-store/schemas/types'
 import { z } from 'zod'
 
 // Validation schema
 const testConnectionSchema = z.object({
-  provider: z.enum(['OPENAI', 'ANTHROPIC', 'GROK', 'GAB_AI', 'OLLAMA', 'OPENROUTER', 'OPENAI_COMPATIBLE']),
+  provider: ProviderEnum,
   apiKeyId: z.string().optional(),
   baseUrl: z.string().optional(),
 })
@@ -294,8 +294,7 @@ export async function POST(req: NextRequest) {
 
     // Validate request body
     const body = await req.json()
-    const { provider: providerString, apiKeyId, baseUrl } = testConnectionSchema.parse(body)
-    const provider = providerString as Provider
+    const { provider, apiKeyId, baseUrl } = testConnectionSchema.parse(body)
 
     const repos = getRepositories()
 

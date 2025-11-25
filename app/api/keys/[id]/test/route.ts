@@ -10,7 +10,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { decryptApiKey } from '@/lib/encryption'
-import { Provider } from '@/lib/types/prisma'
+import { Provider } from '@/lib/json-store/schemas/types'
 
 /**
  * Test API key validity by making a simple request to the provider
@@ -42,6 +42,14 @@ async function testProviderApiKey(
           return { valid: false, error: 'Base URL required for OpenAI-compatible' }
         }
         return await testOpenAICompatible(apiKey, baseUrl)
+
+      case 'GOOGLE':
+        return await testGoogle(apiKey)
+
+      case 'GROK':
+      case 'GAB_AI':
+        // These providers use OpenAI-compatible format
+        return await testOpenAI(apiKey)
 
       default:
         return { valid: false, error: 'Unsupported provider' }
@@ -197,6 +205,36 @@ async function testOpenAICompatible(apiKey: string, baseUrl: string) {
     return {
       valid: false,
       error: 'Server unreachable',
+    }
+  }
+}
+
+/**
+ * Test Google API key
+ */
+async function testGoogle(apiKey: string) {
+  try {
+    // Test Google API key by calling the Google AI API
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models?key=' + apiKey, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (response.ok) {
+      return { valid: true }
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      return { valid: false, error: 'Invalid API key' }
+    }
+
+    return { valid: false, error: `HTTP ${response.status}` }
+  } catch (error) {
+    return {
+      valid: false,
+      error: 'Failed to connect to Google API',
     }
   }
 }

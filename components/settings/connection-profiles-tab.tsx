@@ -330,6 +330,7 @@ export default function ConnectionProfilesTab() {
     const models: Record<string, string[]> = {
       OPENAI: ['gpt-4', 'gpt-3.5-turbo', 'gpt-4-turbo'],
       ANTHROPIC: ['claude-sonnet-4-5-20250929', 'claude-haiku-4-5-20251015', 'claude-opus-4-1-20250805'],
+      GOOGLE: ['gemini-1.5-flash-latest', 'gemini-1.5-pro-latest', 'gemini-1.0-pro', 'gemini-pro-vision'],
       GROK: ['grok-beta', 'grok-2', 'grok-vision-beta'],
       GAB_AI: ['arya', 'gpt-4o'],
       OLLAMA: ['llama2', 'neural-chat', 'mistral'],
@@ -481,6 +482,7 @@ export default function ConnectionProfilesTab() {
                 >
                   <option value="OPENAI">OpenAI</option>
                   <option value="ANTHROPIC">Anthropic</option>
+                  <option value="GOOGLE">Google</option>
                   <option value="GROK">Grok</option>
                   <option value="GAB_AI">Gab AI</option>
                   <option value="OLLAMA">Ollama</option>

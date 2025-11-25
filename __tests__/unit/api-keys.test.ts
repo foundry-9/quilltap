@@ -7,7 +7,6 @@ import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals
 import { getServerSession } from 'next-auth'
 import { GET as getKeys, POST as createKey } from '@/app/api/keys/route'
 import { encryptApiKey, maskApiKey } from '@/lib/encryption'
-import { Provider } from '@/lib/types/prisma'
 import { getRepositories } from '@/lib/json-store/repositories'
 
 // Mock dependencies
@@ -92,7 +91,7 @@ describe('API Keys Routes', () => {
       const mockKeys = [
         {
           id: 'key-1',
-          provider: Provider.OPENAI,
+          provider: 'OPENAI' as const,
           label: 'My OpenAI Key',
           isActive: true,
           lastUsed: new Date('2024-01-01'),
@@ -102,7 +101,7 @@ describe('API Keys Routes', () => {
         },
         {
           id: 'key-2',
-          provider: Provider.ANTHROPIC,
+          provider: 'ANTHROPIC' as const,
           label: 'My Claude Key',
           isActive: false,
           lastUsed: null,
@@ -178,7 +177,7 @@ describe('API Keys Routes', () => {
       const mockKeys = [
         {
           id: 'key-1',
-          provider: Provider.OPENAI,
+          provider: 'OPENAI' as const,
           label: 'First',
           isActive: true,
           createdAt: '2024-01-01T00:00:00Z',
@@ -187,7 +186,7 @@ describe('API Keys Routes', () => {
         },
         {
           id: 'key-2',
-          provider: Provider.ANTHROPIC,
+          provider: 'ANTHROPIC' as const,
           label: 'Second',
           isActive: true,
           createdAt: '2024-01-03T00:00:00Z',
@@ -196,7 +195,7 @@ describe('API Keys Routes', () => {
         },
         {
           id: 'key-3',
-          provider: Provider.OPENAI,
+          provider: 'OPENAI' as const,
           label: 'Third',
           isActive: true,
           createdAt: '2024-01-02T00:00:00Z',
@@ -237,7 +236,7 @@ describe('API Keys Routes', () => {
     it('should create a new API key', async () => {
       const mockCreatedKey = {
         id: 'key-new',
-        provider: Provider.OPENAI,
+        provider: 'OPENAI' as const,
         label: 'My API Key',
         isActive: true,
         createdAt: new Date(),
@@ -355,7 +354,7 @@ describe('API Keys Routes', () => {
       ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
       mockConnectionsRepo.createApiKey.mockResolvedValue({
         id: 'key-1',
-        provider: Provider.OPENAI,
+        provider: 'OPENAI' as const,
         label: 'Trimmed',
         isActive: true,
         createdAt: new Date(),
@@ -380,7 +379,7 @@ describe('API Keys Routes', () => {
       ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
       mockConnectionsRepo.createApiKey.mockResolvedValue({
         id: 'key-1',
-        provider: Provider.OPENAI,
+        provider: 'OPENAI' as const,
         label: 'Test',
         isActive: true,
         createdAt: new Date(),

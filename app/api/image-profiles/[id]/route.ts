@@ -11,8 +11,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
-import { ImageProvider } from '@/lib/types/prisma'
+import { ImageProvider, ImageProviderEnum } from '@/lib/json-store/schemas/types'
 import { getImageGenProvider } from '@/lib/image-gen/factory'
+
+// Get the list of valid image providers from the Zod enum
+const VALID_IMAGE_PROVIDERS = ImageProviderEnum.options
 
 /**
  * GET /api/image-profiles/[id]
@@ -146,9 +149,9 @@ export async function PUT(
     }
 
     if (provider !== undefined) {
-      if (!Object.values(ImageProvider).includes(provider as ImageProvider)) {
+      if (!VALID_IMAGE_PROVIDERS.includes(provider)) {
         return NextResponse.json(
-          { error: `Invalid provider. Must be one of: ${Object.values(ImageProvider).join(', ')}` },
+          { error: `Invalid provider. Must be one of: ${VALID_IMAGE_PROVIDERS.join(', ')}` },
           { status: 400 }
         )
       }

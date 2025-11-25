@@ -11,10 +11,10 @@ import { z } from 'zod';
 // ENUMS
 // ============================================================================
 
-export const ProviderEnum = z.enum(['OPENAI', 'ANTHROPIC', 'OLLAMA', 'OPENROUTER', 'OPENAI_COMPATIBLE', 'GROK', 'GAB_AI']);
+export const ProviderEnum = z.enum(['OPENAI', 'ANTHROPIC', 'OLLAMA', 'OPENROUTER', 'OPENAI_COMPATIBLE', 'GROK', 'GAB_AI', 'GOOGLE']);
 export type Provider = z.infer<typeof ProviderEnum>;
 
-export const ImageProviderEnum = z.enum(['OPENAI', 'GROK', 'GOOGLE_IMAGEN']);
+export const ImageProviderEnum = z.enum(['OPENAI', 'GROK', 'GOOGLE_IMAGEN', 'GOOGLE']);
 export type ImageProvider = z.infer<typeof ImageProviderEnum>;
 
 export const RoleEnum = z.enum(['SYSTEM', 'USER', 'ASSISTANT', 'TOOL']);

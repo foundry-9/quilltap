@@ -10,8 +10,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
-import { Provider } from '@/lib/types/prisma'
+import { Provider, ProviderEnum } from '@/lib/json-store/schemas/types'
 import { supportsImageGeneration } from '@/lib/llm/image-capable'
+
+// Get the list of valid providers from the Zod enum
+const VALID_PROVIDERS = ProviderEnum.options
 
 /**
  * GET /api/profiles
@@ -186,7 +189,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    if (!provider || !Object.values(Provider).includes(provider as Provider)) {
+    if (!provider || !VALID_PROVIDERS.includes(provider)) {
       return NextResponse.json(
         { error: 'Invalid provider' },
         { status: 400 }

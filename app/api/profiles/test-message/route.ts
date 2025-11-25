@@ -11,12 +11,12 @@ import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { decryptApiKey } from '@/lib/encryption'
 import { createLLMProvider } from '@/lib/llm/factory'
-import { Provider } from '@/lib/types/prisma'
+import { ProviderEnum } from '@/lib/json-store/schemas/types'
 import { z } from 'zod'
 
 // Validation schema
 const testMessageSchema = z.object({
-  provider: z.enum(['OPENAI', 'ANTHROPIC', 'GROK', 'GAB_AI', 'OLLAMA', 'OPENROUTER', 'OPENAI_COMPATIBLE']),
+  provider: ProviderEnum,
   apiKeyId: z.string().optional(),
   baseUrl: z.string().optional(),
   modelName: z.string(),
