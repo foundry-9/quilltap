@@ -36,6 +36,9 @@ async function testProviderConnection(
       case 'ANTHROPIC':
         return await testAnthropic(apiKey)
 
+      case 'GOOGLE':
+        return await testGoogle(apiKey)
+
       case 'GROK':
         return await testGrok(apiKey)
 
@@ -128,6 +131,35 @@ async function testAnthropic(apiKey: string) {
     return {
       valid: false,
       error: 'Failed to connect to Anthropic',
+    }
+  }
+}
+
+/**
+ * Test Google connection
+ */
+async function testGoogle(apiKey: string) {
+  try {
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models?key=' + apiKey, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (response.ok) {
+      return { valid: true }
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      return { valid: false, error: 'Invalid API key' }
+    }
+
+    return { valid: false, error: `HTTP ${response.status}` }
+  } catch (error) {
+    return {
+      valid: false,
+      error: 'Failed to connect to Google',
     }
   }
 }
