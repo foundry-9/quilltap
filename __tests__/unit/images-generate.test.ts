@@ -36,9 +36,11 @@ const VALID_UUID = '550e8400-e29b-41d4-a716-446655440000'
 describe('POST /api/images/generate', () => {
   let mockConnectionsRepo: any
   let mockImagesRepo: any
+  let consoleErrorSpy: jest.SpiedFunction<typeof console.error>
 
   beforeEach(() => {
     jest.clearAllMocks()
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
 
     // Setup repository mocks structure
     mockConnectionsRepo = {
@@ -73,6 +75,10 @@ describe('POST /api/images/generate', () => {
       users: {},
       imageProfiles: {},
     })
+  })
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore()
   })
 
   it('should return 401 if user is not authenticated', async () => {

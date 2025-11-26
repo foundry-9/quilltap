@@ -307,6 +307,29 @@ describe('POST /api/profiles/test-message', () => {
       )
     })
 
+    it('should treat empty string responses as success with a friendly message', async () => {
+      const mockProvider = {
+        sendMessage: jest.fn().mockResolvedValue({
+          content: '',
+        }),
+      }
+      mockCreateLLMProvider.mockReturnValue(mockProvider as any)
+
+      const req = createMockRequest({
+        provider: 'OPENAI',
+        apiKeyId: 'key-123',
+        modelName: 'gpt-3.5-turbo',
+      })
+
+      const response = await testMessage(req)
+      const data = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(data.success).toBe(true)
+      expect(data.message).toBe('Test message successful! Model responded but returned empty content.')
+      expect(data.responsePreview).toBe('')
+    })
+
     it('should use default max_tokens of 50 when not provided', async () => {
       const mockProvider = {
         sendMessage: jest.fn().mockResolvedValue({

@@ -335,6 +335,80 @@ describe('POST /api/profiles/test-connection', () => {
     })
   })
 
+  describe('Google Provider', () => {
+    beforeEach(() => {
+      ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
+      mockConnectionsRepo.findApiKeyById.mockResolvedValue({
+        id: 'key-123',
+        userId: 'user-123',
+        provider: 'GOOGLE',
+        ciphertext: 'encrypted',
+        iv: 'iv',
+        authTag: 'tag',
+      })
+      ;(decryptApiKey as jest.Mock).mockReturnValue('google-test-key')
+    })
+
+    it('should successfully test Google connection', async () => {
+      ;(global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+      } as Response)
+
+      const req = createMockRequest({
+        provider: 'GOOGLE',
+        apiKeyId: 'key-123',
+      })
+
+      const response = await testConnection(req)
+      const data = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(data.valid).toBe(true)
+      expect(global.fetch).toHaveBeenCalledWith(
+        'https://generativelanguage.googleapis.com/v1beta/models?key=google-test-key',
+        expect.objectContaining({
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    })
+
+    it('should handle invalid Google API key responses', async () => {
+      ;(global.fetch as jest.Mock).mockResolvedValue({
+        ok: false,
+        status: 401,
+      } as Response)
+
+      const req = createMockRequest({
+        provider: 'GOOGLE',
+        apiKeyId: 'key-123',
+      })
+
+      const response = await testConnection(req)
+      const data = await response.json()
+
+      expect(response.status).toBe(400)
+      expect(data.valid).toBe(false)
+      expect(data.error).toBe('Invalid API key')
+    })
+
+    it('should handle Google fetch failures gracefully', async () => {
+      ;(global.fetch as jest.Mock).mockRejectedValue(new Error('Network down'))
+
+      const req = createMockRequest({
+        provider: 'GOOGLE',
+        apiKeyId: 'key-123',
+      })
+
+      const response = await testConnection(req)
+      const data = await response.json()
+
+      expect(response.status).toBe(400)
+      expect(data.valid).toBe(false)
+      expect(data.error).toBe('Failed to connect to Google')
+    })
+  })
+
   describe('Ollama Provider', () => {
     beforeEach(() => {
       ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
