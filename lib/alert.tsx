@@ -35,7 +35,12 @@ export function showAlert(message: string, buttons?: string[]): Promise<string |
     }
 
     overlayRoot.render(
-      <div className="fixed inset-0 bg-black opacity-50" onClick={() => handleClose()} />
+      <button
+        type="button"
+        className="fixed inset-0 bg-black opacity-50 z-[100] cursor-default border-none p-0"
+        onClick={() => handleClose()}
+        aria-label="Close dialog"
+      />
     )
 
     root.render(

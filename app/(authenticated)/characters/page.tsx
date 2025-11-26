@@ -207,7 +207,7 @@ export default function CharactersPage() {
                 </Link>
                 <button
                   onClick={() => setGalleryCharacter({ id: character.id, name: character.name })}
-                  className="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                  className="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 cursor-pointer"
                   title="Photos"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -223,7 +223,7 @@ export default function CharactersPage() {
                 </a>
                 <button
                   onClick={() => deleteCharacter(character.id)}
-                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 cursor-pointer"
                 >
                   Delete
                 </button>

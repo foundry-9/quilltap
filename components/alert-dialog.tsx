@@ -44,8 +44,13 @@ export function AlertDialog({ message, onClose, buttons, showCopy = true }: Aler
 
   return (
     <>
-      <div className="fixed inset-0 bg-black bg-opacity-10 pointer-events-auto z-40" onClick={() => onClose()} />
-      <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-auto">
+      <button
+        className="fixed inset-0 bg-black bg-opacity-10 pointer-events-auto z-[100] cursor-default border-none p-0"
+        onClick={() => onClose()}
+        aria-label="Close dialog"
+        type="button"
+      />
+      <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[101] pointer-events-auto">
         <div className="bg-white dark:bg-slate-800 rounded-lg p-6 max-w-md w-full shadow-xl">
         <div className="mb-6">
           <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap break-words">

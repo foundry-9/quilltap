@@ -13,6 +13,8 @@ import { z } from 'zod'
 const updateChatSchema = z.object({
   title: z.string().optional(),
   contextSummary: z.string().optional(),
+  connectionProfileId: z.string().uuid().optional(),
+  imageProfileId: z.string().uuid().nullish(),
 })
 
 // GET /api/chats/:id

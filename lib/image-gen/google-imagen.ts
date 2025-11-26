@@ -39,10 +39,7 @@ export class GoogleImagenProvider extends ImageGenProvider {
       (requestBody.parameters as Record<string, unknown>).aspectRatio =
         params.aspectRatio;
     }
-    if (params.negativePrompt) {
-      (requestBody.parameters as Record<string, unknown>).negativePrompt =
-        params.negativePrompt;
-    }
+    // Note: negativePrompt is no longer supported by Google Imagen API
     if (params.seed !== undefined) {
       (requestBody.parameters as Record<string, unknown>).seed = params.seed;
     }

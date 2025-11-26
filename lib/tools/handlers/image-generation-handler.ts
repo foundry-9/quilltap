@@ -46,7 +46,7 @@ async function saveGeneratedImage(
   imageData: string, // Base64-encoded image data
   mimeType: string,
   userId: string,
-  chatId: string | undefined,
+  _chatId: string | undefined, // Unused - images are attached to messages in the API route
   metadata: {
     prompt: string;
     revisedPrompt?: string;
@@ -90,7 +90,7 @@ async function saveGeneratedImage(
       source: 'generated',
       generationPrompt: metadata.prompt,
       generationModel: metadata.model,
-      chatId: chatId || null,
+      chatId: null,
       tags: [],
     });
 
@@ -283,6 +283,8 @@ export async function executeImageGenerationTool(
   input: unknown,
   context: ImageToolExecutionContext
 ): Promise<ImageGenerationToolOutput> {
+  let imageProfile: any = null;
+
   try {
     // 1. Validate input
     if (!validateImageGenerationInput(input)) {
@@ -301,7 +303,7 @@ export async function executeImageGenerationTool(
       return profileResult.output as ImageGenerationToolOutput;
     }
 
-    const imageProfile = profileResult.profile;
+    imageProfile = profileResult.profile;
 
     // 3. Validate provider
     try {
@@ -311,6 +313,8 @@ export async function executeImageGenerationTool(
         success: false,
         error: 'Unknown provider',
         message: `Image provider "${imageProfile.provider}" is not supported`,
+        provider: imageProfile.provider,
+        model: imageProfile.modelName,
       };
     }
 
@@ -333,21 +337,28 @@ export async function executeImageGenerationTool(
   } catch (error) {
     console.error('Image generation tool error:', error);
 
+    // Include provider and model in error response if profile was loaded
+    const errorResponse: ImageGenerationToolOutput = {
+      success: false,
+      error: 'UNKNOWN_ERROR',
+      message: `An unexpected error occurred`,
+    };
+
+    if (imageProfile) {
+      errorResponse.provider = imageProfile.provider;
+      errorResponse.model = imageProfile.modelName;
+    }
+
     if (error instanceof ImageGenerationError) {
-      return {
-        success: false,
-        error: error.code,
-        message: error.message,
-      };
+      errorResponse.error = error.code;
+      errorResponse.message = error.message;
+      return errorResponse;
     }
 
     // Unexpected error
     const errorMessage = error instanceof Error ? error.message : String(error);
-    return {
-      success: false,
-      error: 'UNKNOWN_ERROR',
-      message: `An unexpected error occurred: ${errorMessage}`,
-    };
+    errorResponse.message = `An unexpected error occurred: ${errorMessage}`;
+    return errorResponse;
   }
 }
 
