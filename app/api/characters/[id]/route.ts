@@ -4,6 +4,7 @@
 // DELETE /api/characters/:id - Delete character
 
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
@@ -110,6 +111,9 @@ export async function PUT(
     const validatedData = updateCharacterSchema.parse(body)
 
     const character = await repos.characters.update(id, validatedData)
+
+    // Revalidate the dashboard to reflect character changes
+    revalidatePath('/dashboard')
 
     return NextResponse.json({ character })
   } catch (error) {

@@ -5,6 +5,9 @@ import Link from "next/link";
 import { RecentChatsSection } from "@/components/dashboard/recent-chats";
 import { FavoriteCharactersSection } from "@/components/dashboard/favorite-characters";
 
+// Revalidate dashboard on every request to show latest character data
+export const revalidate = 0;
+
 export default async function Dashboard() {
   const session = await getServerSession(authOptions);
   const repos = getRepositories();
@@ -42,6 +45,7 @@ export default async function Dashboard() {
             return {
               id: character.id,
               name: character.name,
+              title: character.title ?? null,
               avatarUrl: character.avatarUrl ?? null,
               defaultImageId: character.defaultImageId ?? null,
               defaultImage: defaultImage
