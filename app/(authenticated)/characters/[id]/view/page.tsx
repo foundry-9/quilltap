@@ -142,8 +142,20 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     if (searchParams.get('action') === 'chat') {
       setShowChatDialog(true)
       setOpenedFromQuery(true)
+
+      // Set default profile when opening from query
+      if (character?.defaultConnectionProfileId) {
+        setSelectedProfileId(character.defaultConnectionProfileId)
+      } else if (profiles.length > 0) {
+        setSelectedProfileId(profiles[0].id)
+      }
+
+      // Set default persona if available
+      if (defaultPersonaId) {
+        setSelectedPersonaId(defaultPersonaId)
+      }
     }
-  }, [searchParams])
+  }, [searchParams, character?.defaultConnectionProfileId, profiles, defaultPersonaId])
 
   const getAvatarSrc = () => {
     if (character?.defaultImage) {

@@ -6,7 +6,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
-import { buildChatContext } from '@/lib/chat/initialize'
+import { buildChatContext, type ChatContext } from '@/lib/chat/initialize'
+import { decryptApiKey } from '@/lib/encryption'
+import { generateGreetingMessage } from '@/lib/chat/initial-greeting'
 import { z } from 'zod'
 import type { ChatEvent, ChatParticipantBase } from '@/lib/json-store/schemas/types'
 
@@ -293,19 +295,30 @@ async function buildAllParticipants(
 // Helper to create initial chat messages
 async function createInitialMessages(
   chatId: string,
-  systemPrompt: string,
-  firstMessageContent: string,
+  context: ChatContext,
+  participants: ChatParticipantBase[],
+  userId: string,
   repos: Repos
 ): Promise<void> {
   const systemMessage: ChatEvent = {
     type: 'message',
     id: crypto.randomUUID(),
     role: 'SYSTEM',
-    content: systemPrompt,
+    content: context.systemPrompt,
     attachments: [],
     createdAt: new Date().toISOString(),
   }
   await repos.chats.addMessage(chatId, systemMessage)
+
+  let firstMessageContent = (context.firstMessage || '').trim()
+
+  if (!firstMessageContent) {
+    firstMessageContent = await autoGenerateFirstMessage(context, participants, userId, repos)
+  }
+
+  if (!firstMessageContent) {
+    firstMessageContent = defaultGreeting(context.character.name)
+  }
 
   const firstMessage: ChatEvent = {
     type: 'message',
@@ -316,6 +329,97 @@ async function createInitialMessages(
     createdAt: new Date().toISOString(),
   }
   await repos.chats.addMessage(chatId, firstMessage)
+}
+
+async function autoGenerateFirstMessage(
+  context: ChatContext,
+  participants: ChatParticipantBase[],
+  userId: string,
+  repos: Repos
+): Promise<string> {
+  const participant = selectCharacterParticipant(context.character.id, participants)
+
+  if (!participant?.connectionProfileId) {
+    return ''
+  }
+
+  const connectionProfile = await repos.connections.findById(participant.connectionProfileId)
+  if (!connectionProfile) {
+    return ''
+  }
+
+  let apiKey = ''
+  if (connectionProfile.apiKeyId) {
+    const storedKey = await repos.connections.findApiKeyById(connectionProfile.apiKeyId)
+    if (!storedKey) {
+      console.warn('Connection profile is missing its API key; falling back to default greeting')
+      return ''
+    }
+
+    try {
+      apiKey = decryptApiKey(storedKey.ciphertext, storedKey.iv, storedKey.authTag, userId)
+    } catch (error) {
+      console.error('Failed to decrypt API key for greeting generation', error)
+      return ''
+    }
+  }
+
+  const rawParameters = connectionProfile.parameters as Record<string, unknown> | undefined
+  const parameters = rawParameters ?? {}
+
+  try {
+    const greeting = await generateGreetingMessage({
+      systemPrompt: context.systemPrompt,
+      characterName: context.character.name,
+      provider: connectionProfile.provider,
+      modelName: connectionProfile.modelName,
+      baseUrl: connectionProfile.baseUrl,
+      apiKey,
+      temperature: extractNumber(parameters.temperature),
+      maxTokens: extractNumber(parameters.maxTokens),
+      topP: extractNumber(parameters.topP),
+    })
+    return greeting
+  } catch (error) {
+    console.error('Failed to auto-generate greeting for chat', error)
+    return ''
+  }
+}
+
+function selectCharacterParticipant(
+  characterId: string,
+  participants: ChatParticipantBase[]
+): ChatParticipantBase | null {
+  const matches = participants
+    .filter(p => p.type === 'CHARACTER' && p.characterId === characterId)
+    .sort((a, b) => a.displayOrder - b.displayOrder)
+
+  if (matches.length > 0) {
+    return matches[0]
+  }
+
+  const firstCharacter = participants
+    .filter(p => p.type === 'CHARACTER')
+    .sort((a, b) => a.displayOrder - b.displayOrder)
+
+  return firstCharacter[0] || null
+}
+
+function extractNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && !Number.isNaN(value)) {
+    return value
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number(value)
+    return Number.isNaN(parsed) ? undefined : parsed
+  }
+
+  return undefined
+}
+
+function defaultGreeting(characterName: string): string {
+  return `Hello there! I'm ${characterName}. It's great to meet you. What's on your mind today?`
 }
 
 // POST /api/chats - Create a new chat
@@ -365,7 +469,13 @@ export async function POST(req: NextRequest) {
       lastMessageAt: null,
     })
 
-    await createInitialMessages(chat.id, context.systemPrompt, context.firstMessage, repos)
+    await createInitialMessages(
+      chat.id,
+      context,
+      participantsWithTimestamps,
+      user.id,
+      repos
+    )
 
     const enrichedParticipants = await Promise.all(
       chat.participants.map(p => enrichParticipantSummary(p, repos))
