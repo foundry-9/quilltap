@@ -3,7 +3,7 @@
 import { use, useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { showErrorToast } from '@/lib/toast'
 import MessageContent from '@/components/chat/MessageContent'
 import { RecentCharacterConversations } from '@/components/character/recent-conversations'
@@ -50,6 +50,7 @@ interface Character {
 export default function ViewCharacterPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [character, setCharacter] = useState<Character | null>(null)
@@ -61,6 +62,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>('')
   const [selectedImageProfileId, setSelectedImageProfileId] = useState<string | null>(null)
   const [creatingChat, setCreatingChat] = useState(false)
+  const [openedFromQuery, setOpenedFromQuery] = useState(false)
   const { style } = useAvatarDisplay()
 
   const fetchCharacter = useCallback(async () => {
@@ -121,6 +123,13 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     fetchProfiles()
     fetchPersonas()
   }, [fetchCharacter, fetchTags, fetchProfiles, fetchPersonas])
+
+  useEffect(() => {
+    if (searchParams.get('action') === 'chat') {
+      setShowChatDialog(true)
+      setOpenedFromQuery(true)
+    }
+  }, [searchParams])
 
   const getAvatarSrc = () => {
     if (character?.defaultImage) {
@@ -406,7 +415,13 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
 
             <div className="flex gap-3 justify-end mt-6">
               <button
-                onClick={() => setShowChatDialog(false)}
+                onClick={() => {
+                  if (openedFromQuery) {
+                    router.push('/characters')
+                  } else {
+                    setShowChatDialog(false)
+                  }
+                }}
                 className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors"
               >
                 Cancel
