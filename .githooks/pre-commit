@@ -77,7 +77,7 @@ if [ -f README.md ]; then
   fi
 
   # Replace any version number in the badge with the new version and color
-  sed "${SED_INPLACE[@]}" "s/version-[0-9]\+\.[0-9]\+\.[0-9]\+-\(green\|yellow\)/version-$NEW_VERSION-$BADGE_COLOR/" README.md
+  sed "${SED_INPLACE[@]}" -E "s/version-[0-9]+\.[0-9]+\.[0-9]+-(green|yellow)/version-$NEW_VERSION-$BADGE_COLOR/" README.md
 fi
 
 # Check if package-lock.json exists and update it as well
