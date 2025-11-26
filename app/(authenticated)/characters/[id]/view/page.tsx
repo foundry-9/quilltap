@@ -182,14 +182,27 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
 
     setCreatingChat(true)
     try {
+      const participants: any[] = [
+        {
+          type: 'CHARACTER',
+          characterId: id,
+          connectionProfileId: selectedProfileId,
+          imageProfileId: selectedImageProfileId || undefined,
+        },
+      ]
+
+      if (selectedPersonaId) {
+        participants.push({
+          type: 'PERSONA',
+          personaId: selectedPersonaId,
+        })
+      }
+
       const res = await fetch('/api/chats', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          characterId: id,
-          connectionProfileId: selectedProfileId,
-          personaId: selectedPersonaId || undefined,
-          imageProfileId: selectedImageProfileId || undefined,
+          participants,
           title: `Chat with ${character?.name}`,
         }),
       })
