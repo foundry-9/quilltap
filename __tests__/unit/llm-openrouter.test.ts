@@ -2,42 +2,38 @@
  * Unit Tests for OpenRouter Provider
  * Tests lib/llm/openrouter.ts
  * Phase 0.7: Multi-Provider Support
+ * Updated to use @openrouter/sdk
  */
 
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals'
 import { OpenRouterProvider } from '@/lib/llm/openrouter'
 import { LLMParams } from '@/lib/llm/base'
 
-// Mock global fetch
-global.fetch = jest.fn() as jest.MockedFunction<typeof fetch>
-
-// Mock the OpenAI SDK (OpenRouter uses it)
-jest.mock('openai')
-import OpenAI from 'openai'
-const mockOpenAI = jest.mocked(OpenAI)
+// Mock the OpenRouter SDK
+jest.mock('@openrouter/sdk')
+import { OpenRouter } from '@openrouter/sdk'
+const mockOpenRouter = jest.mocked(OpenRouter)
 
 describe('OpenRouterProvider', () => {
   let provider: OpenRouterProvider
-  let mockOpenAIInstance: any
+  let mockOpenRouterInstance: any
   let consoleErrorSpy: jest.SpiedFunction<typeof console.error>
 
   beforeEach(() => {
     jest.clearAllMocks()
-    ;(global.fetch as jest.MockedFunction<typeof fetch>).mockClear()
 
-    mockOpenAI.mockClear()
-
-    // Create a mock OpenAI instance
-    mockOpenAIInstance = {
+    // Create a mock OpenRouter instance
+    mockOpenRouterInstance = {
       chat: {
-        completions: {
-          create: jest.fn(),
-        },
+        send: jest.fn(),
+      },
+      models: {
+        list: jest.fn(),
       },
     }
 
-    // Mock the OpenAI constructor
-    mockOpenAI.mockImplementation(() => mockOpenAIInstance)
+    // Mock the OpenRouter constructor
+    mockOpenRouter.mockImplementation(() => mockOpenRouterInstance)
 
     provider = new OpenRouterProvider()
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
@@ -48,7 +44,7 @@ describe('OpenRouterProvider', () => {
   })
 
   describe('constructor', () => {
-    it('should create provider with default baseUrl', () => {
+    it('should create provider instance', () => {
       const provider = new OpenRouterProvider()
       expect(provider).toBeInstanceOf(OpenRouterProvider)
     })
@@ -72,36 +68,34 @@ describe('OpenRouterProvider', () => {
             message: {
               content: 'Hello! How can I help you today?',
             },
-            finish_reason: 'stop',
+            finishReason: 'stop',
           },
         ],
         usage: {
-          prompt_tokens: 20,
-          completion_tokens: 10,
-          total_tokens: 30,
+          promptTokens: 20,
+          completionTokens: 10,
+          totalTokens: 30,
         },
       }
 
-      mockOpenAIInstance.chat.completions.create.mockResolvedValue(mockResponse)
+      mockOpenRouterInstance.chat.send.mockResolvedValue(mockResponse)
 
       const result = await provider.sendMessage(mockParams, 'test-api-key')
 
-      expect(mockOpenAI).toHaveBeenCalledWith({
+      expect(mockOpenRouter).toHaveBeenCalledWith({
         apiKey: 'test-api-key',
-        baseURL: 'https://openrouter.ai/api/v1',
-        defaultHeaders: {
-          'HTTP-Referer': expect.any(String),
-          'X-Title': 'Quilltap',
-        },
+        httpReferer: expect.any(String),
+        xTitle: 'Quilltap',
       })
 
-      expect(mockOpenAIInstance.chat.completions.create).toHaveBeenCalledWith({
+      expect(mockOpenRouterInstance.chat.send).toHaveBeenCalledWith({
         model: 'anthropic/claude-3-opus',
         messages: mockParams.messages,
         temperature: 0.7,
-        max_tokens: 1000,
-        top_p: 1,
+        maxTokens: 1000,
+        topP: 1,
         stop: undefined,
+        stream: false,
       })
 
       expect(result).toEqual({
@@ -117,21 +111,19 @@ describe('OpenRouterProvider', () => {
       })
     })
 
-    it('should include proper headers for attribution', async () => {
+    it('should include proper configuration options', async () => {
       const mockResponse = {
-        choices: [{ message: { content: 'Response' }, finish_reason: 'stop' }],
-        usage: { prompt_tokens: 5, completion_tokens: 5, total_tokens: 10 },
+        choices: [{ message: { content: 'Response' }, finishReason: 'stop' }],
+        usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 },
       }
 
-      mockOpenAIInstance.chat.completions.create.mockResolvedValue(mockResponse)
+      mockOpenRouterInstance.chat.send.mockResolvedValue(mockResponse)
 
       await provider.sendMessage(mockParams, 'test-api-key')
 
-      const constructorCall = mockOpenAI.mock.calls[0][0]
-      expect(constructorCall.defaultHeaders).toEqual({
-        'HTTP-Referer': expect.any(String),
-        'X-Title': 'Quilltap',
-      })
+      const constructorCall = mockOpenRouter.mock.calls[0][0]
+      expect(constructorCall.httpReferer).toBeDefined()
+      expect(constructorCall.xTitle).toBe('Quilltap')
     })
 
     it('should support various model namespaces', async () => {
@@ -145,15 +137,15 @@ describe('OpenRouterProvider', () => {
       for (const model of models) {
         const params = { ...mockParams, model }
         const mockResponse = {
-          choices: [{ message: { content: 'Response' }, finish_reason: 'stop' }],
-          usage: { prompt_tokens: 5, completion_tokens: 5, total_tokens: 10 },
+          choices: [{ message: { content: 'Response' }, finishReason: 'stop' }],
+          usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 },
         }
 
-        mockOpenAIInstance.chat.completions.create.mockResolvedValue(mockResponse)
+        mockOpenRouterInstance.chat.send.mockResolvedValue(mockResponse)
 
         await provider.sendMessage(params, 'test-api-key')
 
-        expect(mockOpenAIInstance.chat.completions.create).toHaveBeenCalledWith(
+        expect(mockOpenRouterInstance.chat.send).toHaveBeenCalledWith(
           expect.objectContaining({ model })
         )
       }
@@ -166,44 +158,46 @@ describe('OpenRouterProvider', () => {
       }
 
       const mockResponse = {
-        choices: [{ message: { content: 'Response' }, finish_reason: 'stop' }],
-        usage: { prompt_tokens: 5, completion_tokens: 5, total_tokens: 10 },
+        choices: [{ message: { content: 'Response' }, finishReason: 'stop' }],
+        usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 },
       }
 
-      mockOpenAIInstance.chat.completions.create.mockResolvedValue(mockResponse)
+      mockOpenRouterInstance.chat.send.mockResolvedValue(mockResponse)
 
       await provider.sendMessage(minimalParams, 'test-api-key')
 
-      expect(mockOpenAIInstance.chat.completions.create).toHaveBeenCalledWith({
+      expect(mockOpenRouterInstance.chat.send).toHaveBeenCalledWith({
         model: 'openai/gpt-3.5-turbo',
         messages: minimalParams.messages,
         temperature: 0.7,
-        max_tokens: 1000,
-        top_p: 1,
+        maxTokens: 1000,
+        topP: 1,
         stop: undefined,
+        stream: false,
       })
     })
 
     it('should handle null content in response', async () => {
       const mockResponse = {
-        choices: [{ message: { content: null }, finish_reason: 'length' }],
-        usage: { prompt_tokens: 5, completion_tokens: 5, total_tokens: 10 },
+        choices: [{ message: { content: null }, finishReason: 'length' }],
+        usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 },
       }
 
-      mockOpenAIInstance.chat.completions.create.mockResolvedValue(mockResponse)
+      mockOpenRouterInstance.chat.send.mockResolvedValue(mockResponse)
 
       const result = await provider.sendMessage(mockParams, 'test-api-key')
 
       expect(result.content).toBe('')
+      expect(result.finishReason).toBe('length')
     })
 
     it('should handle missing usage information', async () => {
       const mockResponse = {
-        choices: [{ message: { content: 'Response' }, finish_reason: 'stop' }],
+        choices: [{ message: { content: 'Response' }, finishReason: 'stop' }],
         usage: undefined,
       }
 
-      mockOpenAIInstance.chat.completions.create.mockResolvedValue(mockResponse)
+      mockOpenRouterInstance.chat.send.mockResolvedValue(mockResponse)
 
       const result = await provider.sendMessage(mockParams, 'test-api-key')
 
@@ -214,9 +208,22 @@ describe('OpenRouterProvider', () => {
       })
     })
 
+    it('should handle null finishReason', async () => {
+      const mockResponse = {
+        choices: [{ message: { content: 'Response' }, finishReason: null }],
+        usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 },
+      }
+
+      mockOpenRouterInstance.chat.send.mockResolvedValue(mockResponse)
+
+      const result = await provider.sendMessage(mockParams, 'test-api-key')
+
+      expect(result.finishReason).toBe('stop')
+    })
+
     it('should propagate errors from OpenRouter API', async () => {
       const apiError = new Error('OpenRouter API Error')
-      mockOpenAIInstance.chat.completions.create.mockRejectedValue(apiError)
+      mockOpenRouterInstance.chat.send.mockRejectedValue(apiError)
 
       await expect(provider.sendMessage(mockParams, 'test-api-key')).rejects.toThrow(
         'OpenRouter API Error'
@@ -231,32 +238,44 @@ describe('OpenRouterProvider', () => {
     }
 
     it('should stream message chunks and final usage', async () => {
-      const mockStream = [
+      const mockStreamData = [
         {
-          choices: [{ delta: { content: 'Hello' }, finish_reason: null }],
+          choices: [{ delta: { content: 'Hello' }, finishReason: null }],
+          id: '1',
+          created: Date.now(),
+          model: 'anthropic/claude-3-sonnet',
+          object: 'chat.completion.chunk' as const,
         },
         {
-          choices: [{ delta: { content: ' there' }, finish_reason: null }],
+          choices: [{ delta: { content: ' there' }, finishReason: null }],
+          id: '1',
+          created: Date.now(),
+          model: 'anthropic/claude-3-sonnet',
+          object: 'chat.completion.chunk' as const,
         },
         {
-          choices: [{ delta: { content: '!' }, finish_reason: 'stop' }],
+          choices: [{ delta: { content: '!' }, finishReason: 'stop' }],
           usage: {
-            prompt_tokens: 10,
-            completion_tokens: 5,
-            total_tokens: 15,
+            promptTokens: 10,
+            completionTokens: 5,
+            totalTokens: 15,
           },
+          id: '1',
+          created: Date.now(),
+          model: 'anthropic/claude-3-sonnet',
+          object: 'chat.completion.chunk' as const,
         },
       ]
 
       const asyncIterable = {
         [Symbol.asyncIterator]: async function* () {
-          for (const chunk of mockStream) {
+          for (const chunk of mockStreamData) {
             yield chunk
           }
         },
       }
 
-      mockOpenAIInstance.chat.completions.create.mockResolvedValue(asyncIterable)
+      mockOpenRouterInstance.chat.send.mockResolvedValue(asyncIterable)
 
       const chunks: any[] = []
       for await (const chunk of provider.streamMessage(mockParams, 'test-api-key')) {
@@ -279,54 +298,66 @@ describe('OpenRouterProvider', () => {
         },
       ])
 
-      expect(mockOpenAIInstance.chat.completions.create).toHaveBeenCalledWith({
+      expect(mockOpenRouterInstance.chat.send).toHaveBeenCalledWith({
         model: 'anthropic/claude-3-sonnet',
         messages: mockParams.messages,
         temperature: 0.7,
-        max_tokens: 1000,
-        top_p: 1,
+        maxTokens: 1000,
+        topP: 1,
         stream: true,
-        stream_options: { include_usage: true },
+        streamOptions: { includeUsage: true },
       })
     })
 
-    it('should include attribution headers when streaming', async () => {
-      const mockStream: any[] = []
+    it('should include proper configuration when streaming', async () => {
+      const mockStreamData: any[] = []
       const asyncIterable = {
         [Symbol.asyncIterator]: async function* () {
-          for (const chunk of mockStream) {
+          for (const chunk of mockStreamData) {
             yield chunk
           }
         },
       }
 
-      mockOpenAIInstance.chat.completions.create.mockResolvedValue(asyncIterable)
+      mockOpenRouterInstance.chat.send.mockResolvedValue(asyncIterable)
 
       const chunks: any[] = []
       for await (const chunk of provider.streamMessage(mockParams, 'test-api-key')) {
         chunks.push(chunk)
       }
 
-      const constructorCall = mockOpenAI.mock.calls[0][0]
-      expect(constructorCall.defaultHeaders['X-Title']).toBe('Quilltap')
-      expect(constructorCall.defaultHeaders['HTTP-Referer']).toBeDefined()
+      const constructorCall = mockOpenRouter.mock.calls[0][0]
+      expect(constructorCall.xTitle).toBe('Quilltap')
+      expect(constructorCall.httpReferer).toBeDefined()
     })
 
     it('should handle empty deltas', async () => {
-      const mockStream = [
-        { choices: [{ delta: {}, finish_reason: null }] },
-        { choices: [{ delta: { content: 'Content' }, finish_reason: null }] },
+      const mockStreamData = [
+        {
+          choices: [{ delta: {}, finishReason: null }],
+          id: '1',
+          created: Date.now(),
+          model: 'anthropic/claude-3-sonnet',
+          object: 'chat.completion.chunk' as const,
+        },
+        {
+          choices: [{ delta: { content: 'Content' }, finishReason: null }],
+          id: '1',
+          created: Date.now(),
+          model: 'anthropic/claude-3-sonnet',
+          object: 'chat.completion.chunk' as const,
+        },
       ]
 
       const asyncIterable = {
         [Symbol.asyncIterator]: async function* () {
-          for (const chunk of mockStream) {
+          for (const chunk of mockStreamData) {
             yield chunk
           }
         },
       }
 
-      mockOpenAIInstance.chat.completions.create.mockResolvedValue(asyncIterable)
+      mockOpenRouterInstance.chat.send.mockResolvedValue(asyncIterable)
 
       const chunks: any[] = []
       for await (const chunk of provider.streamMessage(mockParams, 'test-api-key')) {
@@ -335,48 +366,51 @@ describe('OpenRouterProvider', () => {
 
       expect(chunks).toEqual([{ content: 'Content', done: false }])
     })
+
+    it('should throw error for non-streaming response', async () => {
+      const nonStreamResponse = {
+        choices: [{ message: { content: 'Response' }, finishReason: 'stop' }],
+      }
+
+      mockOpenRouterInstance.chat.send.mockResolvedValue(nonStreamResponse)
+
+      await expect(async () => {
+        for await (const chunk of provider.streamMessage(mockParams, 'test-api-key')) {
+          // Should throw before yielding any chunks
+        }
+      }).rejects.toThrow('Expected streaming response from OpenRouter')
+    })
   })
 
   describe('validateApiKey', () => {
-    beforeEach(() => {
-      ;(global.fetch as jest.MockedFunction<typeof fetch>).mockClear()
-    })
-
     it('should return true for valid API key', async () => {
-      ;(global.fetch as jest.MockedFunction<typeof fetch>).mockResolvedValue({
-        ok: true,
-      } as Response)
+      mockOpenRouterInstance.models.list.mockResolvedValue({ data: [] })
 
       const result = await provider.validateApiKey('valid-api-key')
 
       expect(result).toBe(true)
-      expect(global.fetch).toHaveBeenCalledWith(
-        'https://openrouter.ai/api/v1/models',
-        expect.objectContaining({
-          headers: expect.objectContaining({
-            'Authorization': 'Bearer valid-api-key',
-            'HTTP-Referer': expect.any(String),
-            'X-Title': 'Quilltap',
-          }),
-        })
-      )
+      expect(mockOpenRouter).toHaveBeenCalledWith({
+        apiKey: 'valid-api-key',
+        httpReferer: expect.any(String),
+        xTitle: 'Quilltap',
+      })
+      expect(mockOpenRouterInstance.models.list).toHaveBeenCalled()
     })
 
     it('should return false for invalid API key', async () => {
-      ;(global.fetch as jest.MockedFunction<typeof fetch>).mockResolvedValue({
-        ok: false,
-        status: 401,
-      } as Response)
+      mockOpenRouterInstance.models.list.mockRejectedValue(new Error('Unauthorized'))
 
       const result = await provider.validateApiKey('invalid-api-key')
 
       expect(result).toBe(false)
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'OpenRouter API key validation failed:',
+        expect.any(Error)
+      )
     })
 
     it('should return false on network error', async () => {
-      ;(global.fetch as jest.MockedFunction<typeof fetch>).mockRejectedValue(
-        new Error('Network error')
-      )
+      mockOpenRouterInstance.models.list.mockRejectedValue(new Error('Network error'))
 
       const result = await provider.validateApiKey('test-key')
 
@@ -389,10 +423,6 @@ describe('OpenRouterProvider', () => {
   })
 
   describe('getAvailableModels', () => {
-    beforeEach(() => {
-      ;(global.fetch as jest.MockedFunction<typeof fetch>).mockClear()
-    })
-
     it('should return list of available models', async () => {
       const mockModels = {
         data: [
@@ -402,10 +432,7 @@ describe('OpenRouterProvider', () => {
         ],
       }
 
-      ;(global.fetch as jest.MockedFunction<typeof fetch>).mockResolvedValue({
-        ok: true,
-        json: async () => mockModels,
-      } as Response)
+      mockOpenRouterInstance.models.list.mockResolvedValue(mockModels)
 
       const result = await provider.getAvailableModels('test-api-key')
 
@@ -415,21 +442,16 @@ describe('OpenRouterProvider', () => {
         'meta-llama/llama-2-70b-chat',
       ])
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        'https://openrouter.ai/api/v1/models',
-        expect.objectContaining({
-          headers: expect.objectContaining({
-            'Authorization': 'Bearer test-api-key',
-          }),
-        })
-      )
+      expect(mockOpenRouter).toHaveBeenCalledWith({
+        apiKey: 'test-api-key',
+        httpReferer: expect.any(String),
+        xTitle: 'Quilltap',
+      })
+      expect(mockOpenRouterInstance.models.list).toHaveBeenCalled()
     })
 
     it('should return empty array when no models available', async () => {
-      ;(global.fetch as jest.MockedFunction<typeof fetch>).mockResolvedValue({
-        ok: true,
-        json: async () => ({ data: [] }),
-      } as Response)
+      mockOpenRouterInstance.models.list.mockResolvedValue({ data: [] })
 
       const result = await provider.getAvailableModels('test-api-key')
 
@@ -437,10 +459,7 @@ describe('OpenRouterProvider', () => {
     })
 
     it('should return empty array when data field is missing', async () => {
-      ;(global.fetch as jest.MockedFunction<typeof fetch>).mockResolvedValue({
-        ok: true,
-        json: async () => ({}),
-      } as Response)
+      mockOpenRouterInstance.models.list.mockResolvedValue({})
 
       const result = await provider.getAvailableModels('test-api-key')
 
@@ -448,9 +467,7 @@ describe('OpenRouterProvider', () => {
     })
 
     it('should return empty array on error', async () => {
-      ;(global.fetch as jest.MockedFunction<typeof fetch>).mockRejectedValue(
-        new Error('API Error')
-      )
+      mockOpenRouterInstance.models.list.mockRejectedValue(new Error('API Error'))
 
       const result = await provider.getAvailableModels('test-api-key')
 
@@ -459,17 +476,6 @@ describe('OpenRouterProvider', () => {
         'Failed to fetch OpenRouter models:',
         expect.any(Error)
       )
-    })
-
-    it('should return empty array when response is not ok', async () => {
-      ;(global.fetch as jest.MockedFunction<typeof fetch>).mockResolvedValue({
-        ok: false,
-        status: 500,
-      } as Response)
-
-      const result = await provider.getAvailableModels('test-api-key')
-
-      expect(result).toEqual([])
     })
   })
 })

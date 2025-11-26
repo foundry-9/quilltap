@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "@/components/providers/session-provider";
 import NavWrapper from "@/components/nav-wrapper";
+import { OpenRouterMigrator } from "@/components/startup/openrouter-migrator";
 import packageJson from "@/package.json";
 
 export const metadata: Metadata = {
@@ -18,6 +19,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="font-sans">
         <Providers>
+          <OpenRouterMigrator />
           <div className="flex flex-col h-screen">
             <NavWrapper />
             <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-slate-950">

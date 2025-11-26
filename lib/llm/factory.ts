@@ -37,6 +37,10 @@ export function createLLMProvider(
       if (!baseUrl) {
         throw new Error('OpenAI-compatible provider requires baseUrl')
       }
+      // Auto-detect OpenRouter endpoint and use native OpenRouter provider
+      if (isOpenRouterEndpoint(baseUrl)) {
+        return new OpenRouterProvider()
+      }
       return new OpenAICompatibleProvider(baseUrl)
 
     case 'GROK':
@@ -50,5 +54,21 @@ export function createLLMProvider(
 
     default:
       throw new Error(`Unsupported provider: ${provider}`)
+  }
+}
+
+/**
+ * Checks if a base URL is an OpenRouter endpoint
+ */
+function isOpenRouterEndpoint(baseUrl: string): boolean {
+  try {
+    const url = new URL(baseUrl)
+    // Only accept http or https protocols
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return false
+    }
+    return url.hostname === 'openrouter.ai' || url.hostname.endsWith('.openrouter.ai')
+  } catch {
+    return false
   }
 }
