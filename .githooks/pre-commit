@@ -66,6 +66,21 @@ fi
 # Update package.json with the new version
 sed "${SED_INPLACE[@]}" "s/\"version\": \"$CURRENT_VERSION\"/\"version\": \"$NEW_VERSION\"/" package.json
 
+# Update README.md with the new version in the badge
+if [ -f README.md ]; then
+  # Determine badge color based on branch
+  CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+  if [[ "$CURRENT_BRANCH" == "release"* ]]; then
+    BADGE_COLOR="green"
+  else
+    BADGE_COLOR="yellow"
+  fi
+
+  # Replace both old and new color combinations to handle switching between branches
+  sed "${SED_INPLACE[@]}" "s/version-$CURRENT_VERSION-green/version-$NEW_VERSION-$BADGE_COLOR/" README.md
+  sed "${SED_INPLACE[@]}" "s/version-$CURRENT_VERSION-yellow/version-$NEW_VERSION-$BADGE_COLOR/" README.md
+fi
+
 # Check if package-lock.json exists and update it as well
 if [ -f package-lock.json ]; then
   npm install --package-lock-only
@@ -75,6 +90,9 @@ fi
 git add package.json
 if [ -f package-lock.json ]; then
   git add package-lock.json
+fi
+if [ -f README.md ]; then
+  git add README.md
 fi
 
 echo "✅ Version bumped: $CURRENT_VERSION → $NEW_VERSION"
