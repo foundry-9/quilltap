@@ -2,11 +2,11 @@
 // Phase 0.7: Multi-Provider Support
 // Note: OpenRouter proxies to many models, file support depends on the underlying model
 
-import OpenAI from 'openai'
+import { OpenRouter } from '@openrouter/sdk'
+import type { ChatStreamingResponseChunkData } from '@openrouter/sdk/models/chatstreamingresponsechunk'
 import { LLMProvider, LLMParams, LLMResponse, StreamChunk, type ImageGenParams, type ImageGenResponse } from './base'
 
 export class OpenRouterProvider extends LLMProvider {
-  private readonly baseUrl = 'https://openrouter.ai/api/v1'
   readonly supportsFileAttachments = false // Model-dependent, conservative default
   readonly supportedMimeTypes: string[] = []
   readonly supportsImageGeneration = true
@@ -30,16 +30,13 @@ export class OpenRouterProvider extends LLMProvider {
   async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
     const attachmentResults = this.collectAttachmentFailures(params)
 
-    const client = new OpenAI({
+    const client = new OpenRouter({
       apiKey,
-      baseURL: this.baseUrl,
-      defaultHeaders: {
-        'HTTP-Referer': process.env.NEXTAUTH_URL || 'http://localhost:3000',
-        'X-Title': 'Quilltap',
-      },
+      httpReferer: process.env.NEXTAUTH_URL || 'http://localhost:3000',
+      xTitle: 'Quilltap',
     })
 
-    // Strip attachments from messages
+    // Strip attachments from messages and convert to OpenRouter format
     const messages = params.messages.map(m => ({
       role: m.role,
       content: m.content,
@@ -49,29 +46,32 @@ export class OpenRouterProvider extends LLMProvider {
       model: params.model,
       messages,
       temperature: params.temperature ?? 0.7,
-      max_tokens: params.maxTokens ?? 1000,
-      top_p: params.topP ?? 1,
+      maxTokens: params.maxTokens ?? 1000,
+      topP: params.topP ?? 1,
       stop: params.stop,
+      stream: false,
     }
 
     // Add tools if provided
     if (params.tools && params.tools.length > 0) {
       requestParams.tools = params.tools
       // Explicitly enable tool use with "auto" - let the model decide when to use tools
-      requestParams.tool_choice = 'auto'
+      requestParams.toolChoice = 'auto'
     }
 
-    const response = await client.chat.completions.create(requestParams)
+    const response = await client.chat.send(requestParams)
 
     const choice = response.choices[0]
+    const content = choice.message.content
+    const contentStr = typeof content === 'string' ? content : ''
 
     return {
-      content: choice.message.content ?? '',
-      finishReason: choice.finish_reason,
+      content: contentStr,
+      finishReason: choice.finishReason || 'stop',
       usage: {
-        promptTokens: response.usage?.prompt_tokens ?? 0,
-        completionTokens: response.usage?.completion_tokens ?? 0,
-        totalTokens: response.usage?.total_tokens ?? 0,
+        promptTokens: response.usage?.promptTokens ?? 0,
+        completionTokens: response.usage?.completionTokens ?? 0,
+        totalTokens: response.usage?.totalTokens ?? 0,
       },
       raw: response,
       attachmentResults,
@@ -81,16 +81,13 @@ export class OpenRouterProvider extends LLMProvider {
   async *streamMessage(params: LLMParams, apiKey: string): AsyncGenerator<StreamChunk> {
     const attachmentResults = this.collectAttachmentFailures(params)
 
-    const client = new OpenAI({
+    const client = new OpenRouter({
       apiKey,
-      baseURL: this.baseUrl,
-      defaultHeaders: {
-        'HTTP-Referer': process.env.NEXTAUTH_URL || 'http://localhost:3000',
-        'X-Title': 'Quilltap',
-      },
+      httpReferer: process.env.NEXTAUTH_URL || 'http://localhost:3000',
+      xTitle: 'Quilltap',
     })
 
-    // Strip attachments from messages
+    // Strip attachments from messages and convert to OpenRouter format
     const messages = params.messages.map(m => ({
       role: m.role,
       content: m.content,
@@ -100,26 +97,32 @@ export class OpenRouterProvider extends LLMProvider {
       model: params.model,
       messages,
       temperature: params.temperature ?? 0.7,
-      max_tokens: params.maxTokens ?? 1000,
-      top_p: params.topP ?? 1,
+      maxTokens: params.maxTokens ?? 1000,
+      topP: params.topP ?? 1,
       stream: true,
-      stream_options: { include_usage: true },
+      streamOptions: { includeUsage: true },
     }
 
     // Add tools if provided
     if (params.tools && params.tools.length > 0) {
       requestParams.tools = params.tools
       // Explicitly enable tool use with "auto" - let the model decide when to use tools
-      requestParams.tool_choice = 'auto'
+      requestParams.toolChoice = 'auto'
     }
 
-    const stream = (await client.chat.completions.create(requestParams)) as unknown as AsyncIterable<any>
+    const response = await client.chat.send(requestParams)
 
-    let fullMessage: any = null
+    // Type guard to ensure we have a stream
+    if (!response || typeof (response as any)[Symbol.asyncIterator] !== 'function') {
+      throw new Error('Expected streaming response from OpenRouter')
+    }
+
+    const stream = response as unknown as AsyncIterable<ChatStreamingResponseChunkData>
+    let fullMessage: ChatStreamingResponseChunkData | null = null
 
     for await (const chunk of stream) {
-      const content = chunk.choices[0]?.delta?.content
-      const finishReason = chunk.choices[0]?.finish_reason
+      const content = chunk.choices?.[0]?.delta?.content
+      const finishReason = chunk.choices?.[0]?.finishReason
       const hasUsage = chunk.usage
 
       // Store the most recent chunk (needed for tool calls)
@@ -127,13 +130,14 @@ export class OpenRouterProvider extends LLMProvider {
         fullMessage = chunk
       } else {
         // Merge tool calls if present
-        if (chunk.choices?.[0]?.tool_calls) {
-          if (!fullMessage.choices[0]) fullMessage.choices[0] = {}
-          fullMessage.choices[0].tool_calls = chunk.choices[0].tool_calls
+        const toolCalls = chunk.choices?.[0]?.delta?.toolCalls
+        if (toolCalls) {
+          fullMessage.choices[0].delta.toolCalls ??= []
+          fullMessage.choices[0].delta.toolCalls = toolCalls
         }
         // Update finish reason
         if (finishReason) {
-          fullMessage.choices[0].finish_reason = finishReason
+          fullMessage.choices[0].finishReason = finishReason
         }
         // Update usage
         if (hasUsage) {
@@ -155,9 +159,9 @@ export class OpenRouterProvider extends LLMProvider {
           content: '',
           done: true,
           usage: {
-            promptTokens: chunk.usage?.prompt_tokens ?? 0,
-            completionTokens: chunk.usage?.completion_tokens ?? 0,
-            totalTokens: chunk.usage?.total_tokens ?? 0,
+            promptTokens: chunk.usage?.promptTokens ?? 0,
+            completionTokens: chunk.usage?.completionTokens ?? 0,
+            totalTokens: chunk.usage?.totalTokens ?? 0,
           },
           attachmentResults,
           rawResponse: fullMessage,
@@ -168,14 +172,13 @@ export class OpenRouterProvider extends LLMProvider {
 
   async validateApiKey(apiKey: string): Promise<boolean> {
     try {
-      const response = await fetch(`${this.baseUrl}/models`, {
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'HTTP-Referer': process.env.NEXTAUTH_URL || 'http://localhost:3000',
-          'X-Title': 'Quilltap',
-        },
+      const client = new OpenRouter({
+        apiKey,
+        httpReferer: process.env.NEXTAUTH_URL || 'http://localhost:3000',
+        xTitle: 'Quilltap',
       })
-      return response.ok
+      await client.models.list()
+      return true
     } catch (error) {
       console.error('OpenRouter API key validation failed:', error)
       return false
@@ -184,20 +187,14 @@ export class OpenRouterProvider extends LLMProvider {
 
   async getAvailableModels(apiKey: string): Promise<string[]> {
     try {
-      const response = await fetch(`${this.baseUrl}/models`, {
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'HTTP-Referer': process.env.NEXTAUTH_URL || 'http://localhost:3000',
-          'X-Title': 'Quilltap',
-        },
+      const client = new OpenRouter({
+        apiKey,
+        httpReferer: process.env.NEXTAUTH_URL || 'http://localhost:3000',
+        xTitle: 'Quilltap',
       })
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch models: ${response.status}`)
-      }
-
-      const data = await response.json()
-      return data.data?.map((m: any) => m.id) ?? []
+      const response = await client.models.list()
+      return response.data?.map((m: any) => m.id) ?? []
     } catch (error) {
       console.error('Failed to fetch OpenRouter models:', error)
       return []
@@ -205,34 +202,27 @@ export class OpenRouterProvider extends LLMProvider {
   }
 
   async generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse> {
+    const client = new OpenRouter({
+      apiKey,
+      httpReferer: process.env.NEXTAUTH_URL || 'http://localhost:3000',
+      xTitle: 'Quilltap',
+    })
+
     const requestBody: any = {
       model: params.model ?? 'google/gemini-2.5-flash-image-preview',
       messages: [{ role: 'user', content: params.prompt }],
-      modalities: ['image', 'text'],
+      stream: false,
+      // Note: OpenRouter SDK doesn't have direct image generation support yet
+      // We'll use chat completion with special parameters
     }
 
     if (params.aspectRatio) {
-      requestBody.image_config = { aspect_ratio: params.aspectRatio }
+      requestBody.imageConfig = { aspectRatio: params.aspectRatio }
     }
 
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': process.env.NEXTAUTH_URL || 'http://localhost:3000',
-        'X-Title': 'Quilltap',
-      },
-      body: JSON.stringify(requestBody),
-    })
+    const response = await client.chat.send(requestBody) as any
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`OpenRouter API error: ${response.status} ${errorText}`)
-    }
-
-    const data = await response.json()
-    const choice = data.choices?.[0]
+    const choice = response.choices?.[0]
     if (!choice) {
       throw new Error('No choices in OpenRouter response')
     }
@@ -242,9 +232,9 @@ export class OpenRouterProvider extends LLMProvider {
     // Check if response includes images
     if ((choice.message as any).images && Array.isArray((choice.message as any).images)) {
       for (const image of (choice.message as any).images) {
-        if (image.image_url?.url) {
+        if (image.imageUrl?.url || image.image_url?.url) {
           // Extract base64 data from data URL
-          const dataUrl = image.image_url.url
+          const dataUrl = image.imageUrl?.url || image.image_url?.url
           if (dataUrl.startsWith('data:image/')) {
             const [, base64] = dataUrl.split(',')
             const mimeType = dataUrl.match(/data:(image\/[^;]+)/)?.[1] || 'image/png'
@@ -263,7 +253,7 @@ export class OpenRouterProvider extends LLMProvider {
 
     return {
       images,
-      raw: data,
+      raw: response,
     }
   }
 }

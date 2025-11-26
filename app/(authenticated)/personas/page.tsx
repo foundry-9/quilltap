@@ -6,7 +6,8 @@ import Image from 'next/image'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
-import PersonaPhotoGalleryModal from '@/components/images/PersonaPhotoGalleryModal'
+import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
+import { TagBadge } from '@/components/tags/tag-badge'
 
 interface Persona {
   id: string
@@ -255,12 +256,11 @@ export default function PersonasPage() {
                     <p className="text-xs text-gray-600 dark:text-gray-400 mb-2 font-medium">Tags:</p>
                     <div className="flex flex-wrap gap-1">
                       {persona.tags.map((tagLink) => (
-                        <span
+                        <TagBadge
                           key={tagLink.tag.id}
-                          className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
-                        >
-                          {tagLink.tag.name}
-                        </span>
+                          tag={tagLink.tag}
+                          size="sm"
+                        />
                       ))}
                     </div>
                   </div>
@@ -344,7 +344,8 @@ export default function PersonasPage() {
 
       {/* Persona Photo Gallery Modal */}
       {galleryPersona && (
-        <PersonaPhotoGalleryModal
+        <PhotoGalleryModal
+          mode="persona"
           isOpen={true}
           onClose={() => setGalleryPersona(null)}
           personaId={galleryPersona.id}

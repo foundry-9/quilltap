@@ -11,12 +11,12 @@ import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { decryptApiKey } from '@/lib/encryption'
 import { createLLMProvider } from '@/lib/llm/factory'
-import { Provider } from '@/lib/types/prisma'
+import { ProviderEnum } from '@/lib/json-store/schemas/types'
 import { z } from 'zod'
 
 // Validation schema
 const testMessageSchema = z.object({
-  provider: z.enum(['OPENAI', 'ANTHROPIC', 'GROK', 'GAB_AI', 'OLLAMA', 'OPENROUTER', 'OPENAI_COMPATIBLE']),
+  provider: ProviderEnum,
   apiKeyId: z.string().optional(),
   baseUrl: z.string().optional(),
   modelName: z.string(),
@@ -100,7 +100,10 @@ export async function POST(req: NextRequest) {
     // Send test message
     const testPrompt = 'Hello! Please respond with a brief greeting to confirm the connection is working.'
 
+    console.log(`[TEST-MESSAGE] Starting test for provider: ${provider}, model: ${modelName}`)
+
     try {
+      console.log('[TEST-MESSAGE] Calling sendMessage')
       const response = await llmProvider.sendMessage(
         {
           model: modelName,
@@ -117,17 +120,39 @@ export async function POST(req: NextRequest) {
         decryptedKey
       )
 
-      // Check if we got a response
-      if (response && response.content) {
+      if (!response) {
+        console.log('[TEST-MESSAGE] Null response from provider')
+        return NextResponse.json(
+          {
+            success: false,
+            provider,
+            error: 'No response received from model',
+          },
+          { status: 500 }
+        )
+      }
+
+      console.log('[TEST-MESSAGE] Received response:', { hasContent: response.content !== undefined && response.content !== null, contentLength: response.content?.length })
+
+      // Check if we got a response with content (even empty string is valid)
+      if (response.content !== undefined && response.content !== null) {
+        console.log('[TEST-MESSAGE] Success - returning response')
+        const preview = response.content.substring(0, 100)
+        const isTruncated = response.content.length > 100
+        const suffix = isTruncated ? '...' : ''
+        const message = preview.length === 0
+          ? 'Test message successful! Model responded but returned empty content.'
+          : `Test message successful! Model responded: "${preview}${suffix}"`
         return NextResponse.json({
           success: true,
           provider,
           modelName,
-          message: `Test message successful! Model responded: "${response.content.substring(0, 100)}${response.content.length > 100 ? '...' : ''}"`,
+          message,
           responsePreview: response.content.substring(0, 200),
         })
       }
 
+      console.log('[TEST-MESSAGE] No content in response (undefined or null)')
       return NextResponse.json(
         {
           success: false,
@@ -137,7 +162,10 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       )
     } catch (error) {
-      console.error('Test message failed:', error)
+      console.error('[TEST-MESSAGE] Error caught:', error)
+      if (error instanceof Error) {
+        console.error('[TEST-MESSAGE] Error details:', { message: error.message, stack: error.stack })
+      }
       return NextResponse.json(
         {
           success: false,

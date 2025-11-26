@@ -7,7 +7,6 @@ import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals
 import { getServerSession } from 'next-auth'
 import { POST as testConnection } from '@/app/api/profiles/test-connection/route'
 import { decryptApiKey } from '@/lib/encryption'
-import { Provider } from '@/lib/types/prisma'
 import { getRepositories } from '@/lib/json-store/repositories'
 
 // Mock dependencies
@@ -182,7 +181,7 @@ describe('POST /api/profiles/test-connection', () => {
       mockConnectionsRepo.findApiKeyById.mockResolvedValue({
         id: 'key-123',
         userId: 'user-123',
-        provider: Provider.OPENAI,
+        provider: 'OPENAI',
         ciphertext: 'encrypted',
         iv: 'iv',
         authTag: 'tag',
@@ -261,7 +260,7 @@ describe('POST /api/profiles/test-connection', () => {
       mockConnectionsRepo.findApiKeyById.mockResolvedValue({
         id: 'key-123',
         userId: 'user-123',
-        provider: Provider.ANTHROPIC,
+        provider: 'ANTHROPIC',
         ciphertext: 'encrypted',
         iv: 'iv',
         authTag: 'tag',
@@ -388,7 +387,7 @@ describe('POST /api/profiles/test-connection', () => {
       mockConnectionsRepo.findApiKeyById.mockResolvedValue({
         id: 'key-123',
         userId: 'user-123',
-        provider: Provider.OPENROUTER,
+        provider: 'OPENROUTER',
         ciphertext: 'encrypted',
         iv: 'iv',
         authTag: 'tag',
@@ -448,7 +447,7 @@ describe('POST /api/profiles/test-connection', () => {
       mockConnectionsRepo.findApiKeyById.mockResolvedValue({
         id: 'key-123',
         userId: 'user-123',
-        provider: Provider.OPENAI_COMPATIBLE,
+        provider: 'OPENAI_COMPATIBLE',
         ciphertext: 'encrypted',
         iv: 'iv',
         authTag: 'tag',

@@ -37,6 +37,13 @@ interface RecentChatsSectionProps {
   chats: RecentChat[]
 }
 
+const dateFormatter = new Intl.DateTimeFormat('en-US', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  timeZone: 'UTC',
+})
+
 function getAvatarSrc(chat: RecentChat): string | null {
   if (chat.character.defaultImage) {
     return chat.character.defaultImage.url || `/${chat.character.defaultImage.filepath}`
@@ -93,7 +100,7 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
                   </div>
                 </div>
                 <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap flex-shrink-0">
-                  {new Date(chat.updatedAt).toLocaleDateString()}
+                  {dateFormatter.format(new Date(chat.updatedAt))}
                 </span>
               </div>
             </Link>

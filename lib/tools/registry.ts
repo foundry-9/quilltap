@@ -3,7 +3,7 @@
  * Manages available tools and provides provider-specific tool definitions
  */
 
-import { Provider } from '@/lib/types/prisma';
+import { Provider } from '@/lib/json-store/schemas/types';
 
 /**
  * Tool metadata and execution context
@@ -122,6 +122,10 @@ export class ToolRegistry {
       case 'GAB_AI':
         // Gab AI format (check their documentation)
         return this.toOpenAIFormat();
+
+      case 'GOOGLE':
+        // Google uses a similar format to Anthropic
+        return this.toGoogleFormat();
 
       default:
         return [];

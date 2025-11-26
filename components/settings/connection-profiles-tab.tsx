@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { TagEditor } from '@/components/tags/tag-editor'
+import { ModelSelector } from './model-selector'
 
 interface ApiKey {
   id: string
@@ -330,6 +331,7 @@ export default function ConnectionProfilesTab() {
     const models: Record<string, string[]> = {
       OPENAI: ['gpt-4', 'gpt-3.5-turbo', 'gpt-4-turbo'],
       ANTHROPIC: ['claude-sonnet-4-5-20250929', 'claude-haiku-4-5-20251015', 'claude-opus-4-1-20250805'],
+      GOOGLE: ['gemini-1.5-flash-latest', 'gemini-1.5-pro-latest', 'gemini-1.0-pro', 'gemini-pro-vision'],
       GROK: ['grok-beta', 'grok-2', 'grok-vision-beta'],
       GAB_AI: ['arya', 'gpt-4o'],
       OLLAMA: ['llama2', 'neural-chat', 'mistral'],
@@ -481,6 +483,7 @@ export default function ConnectionProfilesTab() {
                 >
                   <option value="OPENAI">OpenAI</option>
                   <option value="ANTHROPIC">Anthropic</option>
+                  <option value="GOOGLE">Google</option>
                   <option value="GROK">Grok</option>
                   <option value="GAB_AI">Gab AI</option>
                   <option value="OLLAMA">Ollama</option>
@@ -601,21 +604,14 @@ export default function ConnectionProfilesTab() {
                 Model *
               </label>
               {fetchedModels.length > 0 ? (
-                <select
-                  id="modelName"
-                  name="modelName"
+                <ModelSelector
+                  models={fetchedModels}
                   value={formData.modelName}
-                  onChange={handleChange}
+                  onChange={(value) => setFormData({ ...formData, modelName: value })}
+                  placeholder="Select or search a model"
                   required
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-                >
-                  <option value="">Select a model</option>
-                  {[...fetchedModels].sort().map(model => (
-                    <option key={model} value={model}>
-                      {model}
-                    </option>
-                  ))}
-                </select>
+                  showFetchedCount
+                />
               ) : (
                 <>
                   <input
@@ -635,11 +631,6 @@ export default function ConnectionProfilesTab() {
                     ))}
                   </datalist>
                 </>
-              )}
-              {fetchedModels.length > 0 && (
-                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                  Showing {fetchedModels.length} fetched models from provider
-                </p>
               )}
             </div>
 

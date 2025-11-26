@@ -15,7 +15,7 @@ import { z } from 'zod'
 
 // Validation schema
 const getModelsSchema = z.object({
-  provider: z.enum(['OPENAI', 'ANTHROPIC', 'GROK', 'GAB_AI', 'OLLAMA', 'OPENROUTER', 'OPENAI_COMPATIBLE']),
+  provider: z.enum(['OPENAI', 'ANTHROPIC', 'GOOGLE', 'GROK', 'GAB_AI', 'OLLAMA', 'OPENROUTER', 'OPENAI_COMPATIBLE']),
   apiKeyId: z.string().optional(), // Optional API key ID
   baseUrl: z.string().optional(), // Required for Ollama/OpenAI-compatible
 })
@@ -81,9 +81,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate API key requirements
-    // Ollama, Anthropic, and OpenAI-compatible providers may not need API keys for fetching models
-    // (Ollama uses local server, Anthropic returns hardcoded list, OpenAI-compatible is optional)
-    const providersWithoutRequiredKey = ['OLLAMA', 'ANTHROPIC', 'OPENAI_COMPATIBLE']
+    // Ollama, Anthropic, Google, and OpenAI-compatible providers may not need API keys for fetching models
+    // (Ollama uses local server, Anthropic returns hardcoded list, Google can fetch with key, OpenAI-compatible is optional)
+    const providersWithoutRequiredKey = ['OLLAMA', 'ANTHROPIC', 'GOOGLE', 'OPENAI_COMPATIBLE']
     if (!providersWithoutRequiredKey.includes(provider) && !decryptedKey) {
       return NextResponse.json(
         { error: `API key is required for ${provider} provider` },

@@ -15,7 +15,11 @@ const config: Config = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
     '^openid-client$': '<rootDir>/__mocks__/openid-client.ts',
+    '^@openrouter/sdk$': '<rootDir>/__mocks__/@openrouter/sdk.ts',
   },
+  transformIgnorePatterns: [
+    'node_modules/(?!(@openrouter/sdk)/)',
+  ],
   collectCoverageFrom: [
     'app/**/*.{js,jsx,ts,tsx}',
     'components/**/*.{js,jsx,ts,tsx}',

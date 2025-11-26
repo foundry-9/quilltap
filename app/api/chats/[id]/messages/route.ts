@@ -30,6 +30,15 @@ function getToolsForProvider(provider: string, imageProfileId?: string | null): 
   switch (provider) {
     case 'ANTHROPIC':
       return [anthropicImageGenerationToolDefinition]
+    case 'GOOGLE':
+      // Google uses a similar format to Anthropic but called differently
+      return [
+        {
+          name: anthropicImageGenerationToolDefinition.name,
+          description: anthropicImageGenerationToolDefinition.description,
+          parameters: anthropicImageGenerationToolDefinition.input_schema,
+        },
+      ]
     case 'OPENAI':
     case 'GROK':
     case 'OPENROUTER':

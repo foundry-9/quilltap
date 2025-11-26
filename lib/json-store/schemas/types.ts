@@ -11,7 +11,7 @@ import { z } from 'zod';
 // ENUMS
 // ============================================================================
 
-export const ProviderEnum = z.enum(['OPENAI', 'ANTHROPIC', 'OLLAMA', 'OPENROUTER', 'OPENAI_COMPATIBLE', 'GROK', 'GAB_AI']);
+export const ProviderEnum = z.enum(['OPENAI', 'ANTHROPIC', 'OLLAMA', 'OPENROUTER', 'OPENAI_COMPATIBLE', 'GROK', 'GAB_AI', 'GOOGLE']);
 export type Provider = z.infer<typeof ProviderEnum>;
 
 export const ImageProviderEnum = z.enum(['OPENAI', 'GROK', 'GOOGLE_IMAGEN']);
@@ -92,11 +92,30 @@ export const UserSchema = z.object({
 
 export type User = z.infer<typeof UserSchema>;
 
+export const HexColorSchema = z.string().regex(/^#(?:[0-9a-fA-F]{3}){1,2}$/);
+
+export const TagVisualStyleSchema = z.object({
+  emoji: z.string().max(8).optional().nullable(),
+  foregroundColor: HexColorSchema.default('#1f2937'),
+  backgroundColor: HexColorSchema.default('#e5e7eb'),
+  emojiOnly: z.boolean().default(false),
+  bold: z.boolean().default(false),
+  italic: z.boolean().default(false),
+  strikethrough: z.boolean().default(false),
+});
+
+export type TagVisualStyle = z.infer<typeof TagVisualStyleSchema>;
+
+export const TagStyleMapSchema = z.record(TagVisualStyleSchema).default({});
+
+export type TagStyleMap = z.infer<typeof TagStyleMapSchema>;
+
 export const ChatSettingsSchema = z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
   avatarDisplayMode: AvatarDisplayModeEnum.default('ALWAYS'),
   avatarDisplayStyle: z.string().default('CIRCULAR'),
+  tagStyles: TagStyleMapSchema,
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

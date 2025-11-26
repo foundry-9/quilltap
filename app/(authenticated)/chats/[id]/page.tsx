@@ -3,7 +3,9 @@
 import { use, useEffect, useState, useRef, useCallback } from 'react'
 import Image from 'next/image'
 import ImageModal from '@/components/chat/ImageModal'
-import ChatPhotoGalleryModal from '@/components/chat/ChatPhotoGalleryModal'
+import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
+import ToolPalette from '@/components/chat/ToolPalette'
+import ChatSettingsModal from '@/components/chat/ChatSettingsModal'
 import { showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { safeJsonParse } from '@/lib/fetch-helpers'
@@ -13,6 +15,7 @@ import { formatMessageTime } from '@/lib/format-time'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { useDebugOptional } from '@/components/providers/debug-provider'
 import DebugPanel from '@/components/debug/DebugPanel'
+import type { TagVisualStyle } from '@/lib/json-store/schemas/types'
 
 interface MessageAttachment {
   id: string
@@ -94,6 +97,8 @@ interface ChatSettings {
   id: string
   userId: string
   avatarDisplayMode: 'ALWAYS' | 'GROUP_ONLY' | 'NEVER'
+  avatarDisplayStyle?: 'CIRCULAR' | 'RECTANGULAR'
+  tagStyles?: Record<string, TagVisualStyle>
   createdAt: string
   updatedAt: string
 }
@@ -120,6 +125,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [modalImage, setModalImage] = useState<{ src: string; filename: string; fileId?: string } | null>(null)
   const [chatPhotoCount, setChatPhotoCount] = useState(0)
   const [galleryOpen, setGalleryOpen] = useState(false)
+  const [toolPaletteOpen, setToolPaletteOpen] = useState(false)
+  const [chatSettingsModalOpen, setChatSettingsModalOpen] = useState(false)
   const [toolExecutionStatus, setToolExecutionStatus] = useState<{ tool: string; status: 'pending' | 'success' | 'error'; message: string } | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -138,7 +145,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     } catch (err) {
       console.error('Failed to fetch chat settings:', err)
       // Use default settings if fetch fails
-      setChatSettings({ id: '', userId: '', avatarDisplayMode: 'ALWAYS', createdAt: '', updatedAt: '' })
+      setChatSettings({ id: '', userId: '', avatarDisplayMode: 'ALWAYS', avatarDisplayStyle: 'CIRCULAR', tagStyles: {}, createdAt: '', updatedAt: '' })
     }
   }, [])
 
@@ -1021,19 +1028,29 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 </svg>
               )}
             </button>
-            {/* Photo gallery button - only shown if there are photos */}
-            {chatPhotoCount > 0 && (
+            {/* Tools button - opens palette with gallery and settings */}
+            <div className="relative">
               <button
                 type="button"
-                onClick={() => setGalleryOpen(true)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setToolPaletteOpen(!toolPaletteOpen)
+                }}
                 className="px-3 py-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700"
-                title={`View chat photos (${chatPhotoCount})`}
+                title="Tools menu"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4 2 2 0 000-4zm0 0V4m0 2a2 2 0 100 4 2 2 0 000-4zm6 6v-2m0 2a2 2 0 100 4 2 2 0 000-4zm0 0v-2m0 2a2 2 0 100 4 2 2 0 000-4zm-6 6v-2m0 2a2 2 0 100 4 2 2 0 000-4zm0 0v-2m0 2a2 2 0 100 4 2 2 0 000-4z" />
                 </svg>
               </button>
-            )}
+              <ToolPalette
+                isOpen={toolPaletteOpen}
+                onClose={() => setToolPaletteOpen(false)}
+                onGalleryClick={() => setGalleryOpen(true)}
+                onSettingsClick={() => setChatSettingsModalOpen(true)}
+                chatPhotoCount={chatPhotoCount}
+              />
+            </div>
             <input
               ref={inputRef}
               type="text"
@@ -1046,9 +1063,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             <button
               type="submit"
               disabled={sending || (!input.trim() && attachedFiles.length === 0)}
-              className="px-6 py-3 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 disabled:bg-gray-400 dark:disabled:bg-gray-600"
+              className="p-3 bg-green-600 dark:bg-green-700 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-800 disabled:bg-gray-400 dark:disabled:bg-gray-600 transition-colors"
+              title="Send message"
             >
-              {sending ? 'Sending...' : 'Send'}
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
             </button>
           </form>
         </div>
@@ -1071,8 +1091,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         }}
       />
 
-      {/* Chat Photo Gallery Modal */}
-      <ChatPhotoGalleryModal
+      {/* Photo Gallery Modal */}
+      <PhotoGalleryModal
+        mode="chat"
         isOpen={galleryOpen}
         onClose={() => setGalleryOpen(false)}
         chatId={id}
@@ -1098,6 +1119,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           // Refresh photo count
           fetchChatPhotoCount()
         }}
+      />
+
+      {/* Chat Settings Modal */}
+      <ChatSettingsModal
+        isOpen={chatSettingsModalOpen}
+        onClose={() => setChatSettingsModalOpen(false)}
+        chatId={id}
+        currentProfileId={chat?.connectionProfile?.id}
+        onSuccess={fetchChat}
       />
       </div>
 

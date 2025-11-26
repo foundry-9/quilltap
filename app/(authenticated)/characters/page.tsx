@@ -6,7 +6,7 @@ import Image from 'next/image'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
-import CharacterPhotoGalleryModal from '@/components/images/CharacterPhotoGalleryModal'
+import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
 
 interface Character {
   id: string
@@ -200,15 +200,29 @@ export default function CharactersPage() {
 
               <div className="flex gap-2">
                 <Link
-                  href={`/characters/${character.id}/view`}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-center"
+                  href={`/characters/${character.id}/view?action=chat`}
+                  className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 cursor-pointer flex items-center justify-center gap-2"
+                  title="Start a chat with this character"
                 >
-                  View
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  Chat
+                </Link>
+                <Link
+                  href={`/characters/${character.id}/view`}
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 cursor-pointer flex items-center justify-center"
+                  title="View character details"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
                 </Link>
                 <button
                   onClick={() => setGalleryCharacter({ id: character.id, name: character.name })}
-                  className="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-                  title="Photos"
+                  className="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 cursor-pointer flex items-center justify-center"
+                  title="View character photos"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -216,16 +230,21 @@ export default function CharactersPage() {
                 </button>
                 <a
                   href={`/api/characters/${character.id}/export?format=json`}
-                  className="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-                  title="Export"
+                  className="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 flex items-center justify-center"
+                  title="Export character data"
                 >
-                  ↓
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v6a2 2 0 002 2h12a2 2 0 002-2v-6m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
                 </a>
                 <button
                   onClick={() => deleteCharacter(character.id)}
-                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                  className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 cursor-pointer flex items-center justify-center"
+                  title="Delete this character"
                 >
-                  Delete
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
                 </button>
               </div>
             </div>
@@ -275,7 +294,8 @@ export default function CharactersPage() {
 
       {/* Character Photo Gallery Modal */}
       {galleryCharacter && (
-        <CharacterPhotoGalleryModal
+        <PhotoGalleryModal
+          mode="character"
           isOpen={true}
           onClose={() => setGalleryCharacter(null)}
           characterId={galleryCharacter.id}

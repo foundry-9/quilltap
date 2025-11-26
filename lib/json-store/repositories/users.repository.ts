@@ -127,6 +127,7 @@ export class UsersRepository extends BaseRepository<User> {
           userId: id,
           avatarDisplayMode: 'ALWAYS' as AvatarDisplayMode,
           avatarDisplayStyle: 'CIRCULAR',
+          tagStyles: {},
           createdAt: now,
           updatedAt: now,
         },

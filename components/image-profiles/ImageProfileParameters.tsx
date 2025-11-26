@@ -1,7 +1,7 @@
 'use client'
 
 interface ImageProfileParametersProps {
-  provider: 'OPENAI' | 'GROK' | 'GOOGLE_IMAGEN'
+  provider: 'OPENAI' | 'GROK' | 'GOOGLE_IMAGEN' | 'GOOGLE'
   parameters: Record<string, any>
   onChange: (params: Record<string, any>) => void
 }
@@ -81,6 +81,7 @@ export function ImageProfileParameters({
         </div>
       )
 
+    case 'GOOGLE':
     case 'GOOGLE_IMAGEN':
       return (
         <div className="space-y-4 border-t border-gray-200 dark:border-slate-700 pt-4">

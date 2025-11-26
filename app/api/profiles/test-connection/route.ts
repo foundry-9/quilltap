@@ -10,12 +10,12 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { decryptApiKey } from '@/lib/encryption'
-import { Provider } from '@/lib/types/prisma'
+import { ProviderEnum, Provider } from '@/lib/json-store/schemas/types'
 import { z } from 'zod'
 
 // Validation schema
 const testConnectionSchema = z.object({
-  provider: z.enum(['OPENAI', 'ANTHROPIC', 'GROK', 'GAB_AI', 'OLLAMA', 'OPENROUTER', 'OPENAI_COMPATIBLE']),
+  provider: ProviderEnum,
   apiKeyId: z.string().optional(),
   baseUrl: z.string().optional(),
 })
@@ -35,6 +35,9 @@ async function testProviderConnection(
 
       case 'ANTHROPIC':
         return await testAnthropic(apiKey)
+
+      case 'GOOGLE':
+        return await testGoogle(apiKey)
 
       case 'GROK':
         return await testGrok(apiKey)
@@ -128,6 +131,35 @@ async function testAnthropic(apiKey: string) {
     return {
       valid: false,
       error: 'Failed to connect to Anthropic',
+    }
+  }
+}
+
+/**
+ * Test Google connection
+ */
+async function testGoogle(apiKey: string) {
+  try {
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models?key=' + apiKey, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (response.ok) {
+      return { valid: true }
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      return { valid: false, error: 'Invalid API key' }
+    }
+
+    return { valid: false, error: `HTTP ${response.status}` }
+  } catch (error) {
+    return {
+      valid: false,
+      error: 'Failed to connect to Google',
     }
   }
 }
@@ -294,8 +326,7 @@ export async function POST(req: NextRequest) {
 
     // Validate request body
     const body = await req.json()
-    const { provider: providerString, apiKeyId, baseUrl } = testConnectionSchema.parse(body)
-    const provider = providerString as Provider
+    const { provider, apiKeyId, baseUrl } = testConnectionSchema.parse(body)
 
     const repos = getRepositories()
 

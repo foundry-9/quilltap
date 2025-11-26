@@ -2,6 +2,7 @@
 
 import { SessionProvider } from "next-auth/react";
 import { DebugProvider } from "./debug-provider";
+import { TagStyleProvider } from "./tag-style-provider";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -10,7 +11,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
       refetchOnWindowFocus={false}
     >
       <DebugProvider>
-        {children}
+        <TagStyleProvider>
+          {children}
+        </TagStyleProvider>
       </DebugProvider>
     </SessionProvider>
   );

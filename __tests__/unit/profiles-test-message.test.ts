@@ -13,7 +13,6 @@ jest.mock('@/lib/json-store/repositories')
 
 // Import after mocking
 import { POST as testMessage } from '@/app/api/profiles/test-message/route'
-import { Provider } from '@/lib/types/prisma'
 import { getServerSession } from 'next-auth'
 import { decryptApiKey } from '@/lib/encryption'
 import { createLLMProvider } from '@/lib/llm/factory'
@@ -254,7 +253,7 @@ describe('POST /api/profiles/test-message', () => {
       mockConnectionsRepo.findApiKeyById.mockResolvedValue({
         id: 'key-123',
         userId: 'user-123',
-        provider: Provider.OPENAI,
+        provider: 'OPENAI',
         ciphertext: 'encrypted',
         iv: 'iv',
         authTag: 'tag',
@@ -398,7 +397,7 @@ describe('POST /api/profiles/test-message', () => {
       mockConnectionsRepo.findApiKeyById.mockResolvedValue({
         id: 'key-123',
         userId: 'user-123',
-        provider: Provider.OPENAI_COMPATIBLE,
+        provider: 'OPENAI_COMPATIBLE',
         ciphertext: 'encrypted',
         iv: 'iv',
         authTag: 'tag',
@@ -428,7 +427,7 @@ describe('POST /api/profiles/test-message', () => {
       mockConnectionsRepo.findApiKeyById.mockResolvedValue({
         id: 'key-123',
         userId: 'user-123',
-        provider: Provider.OPENAI,
+        provider: 'OPENAI',
         ciphertext: 'encrypted',
         iv: 'iv',
         authTag: 'tag',
@@ -558,7 +557,7 @@ describe('POST /api/profiles/test-message', () => {
       mockConnectionsRepo.findApiKeyById.mockResolvedValue({
         id: 'key-123',
         userId: 'user-123',
-        provider: Provider.ANTHROPIC,
+        provider: 'ANTHROPIC',
         ciphertext: 'encrypted',
         iv: 'iv',
         authTag: 'tag',
@@ -590,7 +589,7 @@ describe('POST /api/profiles/test-message', () => {
       mockConnectionsRepo.findApiKeyById.mockResolvedValue({
         id: 'key-123',
         userId: 'user-123',
-        provider: Provider.OPENROUTER,
+        provider: 'OPENROUTER',
         ciphertext: 'encrypted',
         iv: 'iv',
         authTag: 'tag',
