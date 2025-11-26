@@ -35,16 +35,22 @@ export async function GET(
     const allEvents = await repos.chats.getMessages(id)
     const messages = allEvents.filter(event => event.type === 'message')
 
-    // Get character
-    const character = await repos.characters.findById(chat.characterId)
+    // Get character from participants
+    const characterParticipant = chat.participants.find(p => p.type === 'CHARACTER' && p.characterId)
+    if (!characterParticipant?.characterId) {
+      return NextResponse.json({ error: 'No character in chat' }, { status: 404 })
+    }
+
+    const character = await repos.characters.findById(characterParticipant.characterId)
     if (!character) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
     }
 
-    // Get persona if set
+    // Get persona from participants if present
+    const personaParticipant = chat.participants.find(p => p.type === 'PERSONA' && p.personaId)
     let persona = null
-    if (chat.personaId) {
-      persona = await repos.personas.findById(chat.personaId)
+    if (personaParticipant?.personaId) {
+      persona = await repos.personas.findById(personaParticipant.personaId)
     }
 
     // Export to SillyTavern format

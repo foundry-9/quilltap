@@ -34,61 +34,69 @@ interface Message {
   attachments?: MessageAttachment[]
 }
 
+interface CharacterData {
+  id: string
+  name: string
+  title?: string | null
+  avatarUrl?: string
+  defaultImageId?: string
+  defaultImage?: {
+    id: string
+    filepath: string
+    url?: string
+  } | null
+}
+
+interface PersonaData {
+  id: string
+  name: string
+  title?: string | null
+  avatarUrl?: string
+  defaultImageId?: string
+  defaultImage?: {
+    id: string
+    filepath: string
+    url?: string
+  } | null
+}
+
+interface ConnectionProfileData {
+  id: string
+  name: string
+  provider?: string
+  modelName?: string
+  apiKey?: {
+    id: string
+    provider: string
+    label?: string
+  } | null
+}
+
+interface Participant {
+  id: string
+  type: 'CHARACTER' | 'PERSONA'
+  displayOrder: number
+  isActive: boolean
+  systemPromptOverride?: string | null
+  character?: CharacterData | null
+  persona?: PersonaData | null
+  connectionProfile?: ConnectionProfileData | null
+  imageProfile?: {
+    id: string
+    name: string
+    provider: string
+    modelName: string
+  } | null
+}
+
 interface Chat {
   id: string
   title: string
-  character: {
-    id: string
-    name: string
-    title?: string | null
-    avatarUrl?: string
-    defaultImageId?: string
-    defaultImage?: {
-      id: string
-      filepath: string
-      url?: string
-    } | null
-    personas: Array<{
-      persona: {
-        id: string
-        name: string
-        title?: string | null
-        avatarUrl?: string | null
-        defaultImage?: {
-          id: string
-          filepath: string
-          url?: string
-        } | null
-      }
-    }>
-  }
-  persona?: {
-    id: string
-    name: string
-    title?: string
-    avatarUrl?: string
-    defaultImageId?: string
-    defaultImage?: {
-      id: string
-      filepath: string
-      url?: string
-    } | null
-  } | null
+  participants: Participant[]
   user: {
     id: string
     name?: string | null
     image?: string | null
-  }
-  connectionProfile?: {
-    id: string
-    name: string
-    provider?: string
-    modelName?: string
-    apiKey?: {
-      id: string
-      provider: string
-      label?: string
-    }
   }
   messages: Message[]
 }
@@ -135,6 +143,19 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
+
+  // Helper functions to get character/persona from participants
+  const getFirstCharacterParticipant = () => {
+    return chat?.participants.find(p => p.type === 'CHARACTER' && p.isActive)
+  }
+
+  const getFirstPersonaParticipant = () => {
+    return chat?.participants.find(p => p.type === 'PERSONA' && p.isActive)
+  }
+
+  const getFirstCharacter = () => getFirstCharacterParticipant()?.character
+  const getFirstPersona = () => getFirstPersonaParticipant()?.persona
+  const getFirstConnectionProfile = () => getFirstCharacterParticipant()?.connectionProfile
 
   const fetchChatSettings = useCallback(async () => {
     try {
@@ -312,9 +333,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     // Debug: Log outgoing request
     const requestPayload = { content: userMessage || 'Please look at the attached file(s).', fileIds }
     let debugEntryId: string | undefined
-    const debugProviderName = chat?.connectionProfile?.name || 'LLM Provider'
-    const debugProviderType = (chat?.connectionProfile?.apiKey?.provider || 'UNKNOWN') as import('@/components/providers/debug-provider').LLMProviderType
-    const debugModel = chat?.connectionProfile?.modelName
+    const connectionProfile = getFirstConnectionProfile()
+    const debugProviderName = connectionProfile?.name || 'LLM Provider'
+    const debugProviderType = (connectionProfile?.apiKey?.provider || 'UNKNOWN') as import('@/components/providers/debug-provider').LLMProviderType
+    const debugModel = connectionProfile?.modelName
 
     if (debug?.isDebugMode) {
       debugEntryId = debug.addEntry({
@@ -584,25 +606,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   const getMessageAvatar = (message: Message) => {
     if (message.role === 'USER') {
-      // Fallback priority:
-      // 1. Chat's assigned persona (if explicitly set for this chat)
-      // 2. Character's default persona (if it has one)
-      // 3. User's avatar (fallback)
-
-      if (chat?.persona) {
+      // Use persona participant if available, otherwise fall back to user
+      const persona = getFirstPersona()
+      if (persona) {
         return {
-          name: chat.persona.name,
-          title: chat.persona.title,
-          avatarUrl: chat.persona.avatarUrl,
-          defaultImage: chat.persona.defaultImage,
-        }
-      } else if (chat?.character.personas && chat.character.personas.length > 0) {
-        const defaultPersona = chat.character.personas[0].persona
-        return {
-          name: defaultPersona.name,
-          title: defaultPersona.title,
-          avatarUrl: defaultPersona.avatarUrl,
-          defaultImage: defaultPersona.defaultImage,
+          name: persona.name,
+          title: persona.title,
+          avatarUrl: persona.avatarUrl,
+          defaultImage: persona.defaultImage,
         }
       } else if (chat?.user) {
         return {
@@ -612,12 +623,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           defaultImage: null,
         }
       }
-    } else if (message.role === 'ASSISTANT' && chat?.character) {
-      return {
-        name: chat.character.name,
-        title: chat.character.title,
-        avatarUrl: chat.character.avatarUrl,
-        defaultImage: chat.character.defaultImage,
+    } else if (message.role === 'ASSISTANT') {
+      const character = getFirstCharacter()
+      if (character) {
+        return {
+          name: character.name,
+          title: character.title,
+          avatarUrl: character.avatarUrl,
+          defaultImage: character.defaultImage,
+        }
       }
     }
     return null
@@ -724,7 +738,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               <ToolMessage
                 key={message.id}
                 message={message}
-                character={chat?.character}
+                character={getFirstCharacter() ?? undefined}
                 onImageClick={(filepath, filename, fileId) => {
                   setModalImage({ src: `/${filepath}`, filename, fileId })
                 }}
@@ -919,10 +933,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             {shouldShowAvatars() && (
               <div className="flex-shrink-0">
                 {renderAvatar({
-                  name: chat?.character.name || 'AI',
+                  name: getFirstCharacter()?.name || 'AI',
                   title: null,
-                  avatarUrl: chat?.character.avatarUrl,
-                  defaultImage: chat?.character.defaultImage,
+                  avatarUrl: getFirstCharacter()?.avatarUrl,
+                  defaultImage: getFirstCharacter()?.defaultImage,
                 })}
               </div>
             )}
@@ -1081,10 +1095,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         src={modalImage?.src || ''}
         filename={modalImage?.filename || ''}
         fileId={modalImage?.fileId}
-        characterId={chat?.character.id}
-        characterName={chat?.character.name}
-        personaId={chat?.persona?.id || chat?.character.personas?.[0]?.persona.id}
-        personaName={chat?.persona?.name || chat?.character.personas?.[0]?.persona.name}
+        characterId={getFirstCharacter()?.id}
+        characterName={getFirstCharacter()?.name}
+        personaId={getFirstPersona()?.id}
+        personaName={getFirstPersona()?.name}
         onDelete={() => {
           // Refresh chat to update message attachments
           fetchChat()
@@ -1097,10 +1111,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         isOpen={galleryOpen}
         onClose={() => setGalleryOpen(false)}
         chatId={id}
-        characterId={chat?.character.id}
-        characterName={chat?.character.name}
-        personaId={chat?.persona?.id || chat?.character.personas?.[0]?.persona.id}
-        personaName={chat?.persona?.name || chat?.character.personas?.[0]?.persona.name}
+        characterId={getFirstCharacter()?.id}
+        characterName={getFirstCharacter()?.name}
+        personaId={getFirstPersona()?.id}
+        personaName={getFirstPersona()?.name}
         onImageDeleted={(fileId) => {
           // Update messages to show deleted indicator for this file
           setMessages((prev) =>
@@ -1126,7 +1140,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         isOpen={chatSettingsModalOpen}
         onClose={() => setChatSettingsModalOpen(false)}
         chatId={id}
-        currentProfileId={chat?.connectionProfile?.id}
+        participants={chat?.participants || []}
         onSuccess={fetchChat}
       />
       </div>

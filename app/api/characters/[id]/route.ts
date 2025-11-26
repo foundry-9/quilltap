@@ -154,6 +154,18 @@ export async function DELETE(
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
     }
 
+    // Clean up any image reference if the character has a defaultImageId
+    if (existingCharacter.defaultImageId) {
+      try {
+        await repos.images.update(existingCharacter.defaultImageId, {
+          tags: [],
+        })
+      } catch (err) {
+        // Silently fail if image cleanup doesn't work - character deletion is more important
+        console.error('Failed to clean up image reference:', err)
+      }
+    }
+
     await repos.characters.delete(id)
 
     return NextResponse.json({ success: true })

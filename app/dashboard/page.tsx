@@ -75,8 +75,13 @@ export default async function Dashboard() {
           .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
           .slice(0, 5)
           .map(async (chat) => {
-            // Get character data
-            const character = await repos.characters.findById(chat.characterId);
+            // Get character from participants
+            const characterParticipant = chat.participants.find(
+              p => p.type === 'CHARACTER' && p.characterId
+            );
+            if (!characterParticipant?.characterId) return null;
+
+            const character = await repos.characters.findById(characterParticipant.characterId);
             // Skip chats without characters
             if (!character) return null;
 
@@ -85,10 +90,13 @@ export default async function Dashboard() {
               characterDefaultImage = await repos.images.findById(character.defaultImageId);
             }
 
-            // Get persona data if present
+            // Get persona data from participants if present
             let persona = null;
-            if (chat.personaId) {
-              persona = await repos.personas.findById(chat.personaId);
+            const personaParticipant = chat.participants.find(
+              p => p.type === 'PERSONA' && p.personaId
+            );
+            if (personaParticipant?.personaId) {
+              persona = await repos.personas.findById(personaParticipant.personaId);
             }
 
             // Get tags

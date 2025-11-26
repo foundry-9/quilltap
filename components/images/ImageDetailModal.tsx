@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import Image from 'next/image'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import DeletedImagePlaceholder from './DeletedImagePlaceholder'
 
 interface ImageData {
   id: string
@@ -52,6 +52,7 @@ export default function ImageDetailModal({
   const [taggedCharacterIds, setTaggedCharacterIds] = useState<Set<string>>(new Set())
   const [taggedPersonaIds, setTaggedPersonaIds] = useState<Set<string>>(new Set())
   const [taggingInProgress, setTaggingInProgress] = useState<Set<string>>(new Set())
+  const [imageMissing, setImageMissing] = useState(false)
 
   // Load characters and personas on mount
   useEffect(() => {
@@ -345,16 +346,26 @@ export default function ImageDetailModal({
         className="relative max-w-[90vw] max-h-[90vh] flex flex-col items-center justify-center gap-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <Image
-          src={imageSrc}
-          alt={image.filename}
-          width={1920}
-          height={1080}
-          className="max-w-full max-h-[70vh] w-auto h-auto object-contain"
-          priority
-        />
+        {imageMissing ? (
+          <DeletedImagePlaceholder
+            imageId={image.id}
+            filename={image.filename}
+            onCleanup={onClose}
+            width={600}
+            height={400}
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={imageSrc}
+            alt={image.filename}
+            className="max-w-full max-h-[70vh] w-auto h-auto object-contain"
+            onError={() => setImageMissing(true)}
+          />
+        )}
 
         {/* Tag buttons panel */}
+        {!imageMissing && (
         <div className="bg-black/70 backdrop-blur-sm rounded-lg p-6 w-full max-w-2xl">
           <div className="flex flex-col gap-4">
             {/* Character tags */}
@@ -422,6 +433,7 @@ export default function ImageDetailModal({
             {loadingEntities && <p className="text-gray-300 text-sm">Loading characters and personas...</p>}
           </div>
         </div>
+        )}
       </div>
 
       {/* Filename at bottom */}

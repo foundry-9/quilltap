@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useCallback, useState } from 'react'
-import Image from 'next/image'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
 import { safeJsonParse } from '@/lib/fetch-helpers'
+import DeletedImagePlaceholder from '@/components/images/DeletedImagePlaceholder'
 
 interface ChatFile {
   id: string
@@ -46,6 +46,7 @@ export default function ChatGalleryImageViewModal({
   const [isTaggedToPersona, setIsTaggedToPersona] = useState(false)
   const [isTagging, setIsTagging] = useState(false)
   const [checkingTags, setCheckingTags] = useState(true)
+  const [imageMissing, setImageMissing] = useState(false)
 
   // Check existing tags when file changes
   useEffect(() => {
@@ -310,6 +311,7 @@ export default function ChatGalleryImageViewModal({
       )}
 
       {/* Top right control buttons */}
+      {!imageMissing && (
       <div className="absolute top-4 right-4 flex gap-2 z-10">
         {/* Tag to Character button */}
         {characterId && (
@@ -383,8 +385,10 @@ export default function ChatGalleryImageViewModal({
           </svg>
         </button>
       </div>
+      )}
 
       {/* Delete button - bottom right */}
+      {!imageMissing && (
       <div className="absolute bottom-4 right-4 z-10">
         <button
           onClick={(e) => {
@@ -404,20 +408,30 @@ export default function ChatGalleryImageViewModal({
           </svg>
         </button>
       </div>
+      )}
 
       {/* Image container */}
       <div
         className="relative max-w-[90vw] max-h-[90vh] flex items-center justify-center"
         onClick={(e) => e.stopPropagation()}
       >
-        <Image
-          src={file.url}
-          alt={file.filename}
-          width={1920}
-          height={1080}
-          className="max-w-full max-h-[90vh] w-auto h-auto object-contain"
-          priority
-        />
+        {imageMissing ? (
+          <DeletedImagePlaceholder
+            imageId={file.id}
+            filename={file.filename}
+            onCleanup={onClose}
+            width={600}
+            height={400}
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={file.url}
+            alt={file.filename}
+            className="max-w-full max-h-[90vh] w-auto h-auto object-contain"
+            onError={() => setImageMissing(true)}
+          />
+        )}
       </div>
 
       {/* Filename at bottom */}

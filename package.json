@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -53,6 +53,7 @@
     "@playwright/test": "^1.49.0",
     "@tailwindcss/postcss": "^4.1.17",
     "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
     "@types/bcrypt": "^5.0.2",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.0.0",

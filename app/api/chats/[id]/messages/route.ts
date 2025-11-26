@@ -20,7 +20,7 @@ const sendMessageSchema = z.object({
 })
 
 // Helper function to get tools for a provider
-function getToolsForProvider(provider: string, imageProfileId?: string | null): any[] {
+function getToolsForProvider(provider: string, imageProfileId?: string | null): unknown[] {
   // Only include image generation tool if an image profile is configured for this chat
   if (!imageProfileId) {
     return []
@@ -77,14 +77,27 @@ export async function POST(
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
     }
 
+    // Get first active character participant
+    const characterParticipant = chat.participants.find(
+      p => p.type === 'CHARACTER' && p.isActive && p.characterId && p.connectionProfileId
+    )
+
+    if (!characterParticipant?.characterId) {
+      return NextResponse.json({ error: 'No active character in chat' }, { status: 404 })
+    }
+
+    if (!characterParticipant.connectionProfileId) {
+      return NextResponse.json({ error: 'No connection profile for character' }, { status: 404 })
+    }
+
     // Get character
-    const character = await repos.characters.findById(chat.characterId)
+    const character = await repos.characters.findById(characterParticipant.characterId)
     if (!character) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
     }
 
-    // Get connection profile with API key
-    const connectionProfile = await repos.connections.findById(chat.connectionProfileId)
+    // Get connection profile with API key from the participant
+    const connectionProfile = await repos.connections.findById(characterParticipant.connectionProfileId)
     if (!connectionProfile) {
       return NextResponse.json({ error: 'Connection profile not found' }, { status: 404 })
     }
@@ -94,10 +107,11 @@ export async function POST(
       apiKey = await repos.connections.findApiKeyById(connectionProfile.apiKeyId)
     }
 
-    // Get image profile if set
+    // Get image profile from the participant if set
     let imageProfile = null
-    if (chat.imageProfileId) {
-      imageProfile = await repos.imageProfiles.findById(chat.imageProfileId)
+    const imageProfileId = characterParticipant.imageProfileId
+    if (imageProfileId) {
+      imageProfile = await repos.imageProfiles.findById(imageProfileId)
     }
 
     // Get existing messages
@@ -161,7 +175,7 @@ export async function POST(
       ...existingMessages
         .filter(msg => msg.type === 'message')
         .map(msg => {
-          const messageEvent = msg as any;
+          const messageEvent = msg as { role: string; content: string };
           return {
             role: messageEvent.role.toLowerCase() as 'system' | 'user' | 'assistant',
             content: messageEvent.content,
@@ -196,20 +210,20 @@ export async function POST(
     )
 
     // Get parameters
-    const modelParams = connectionProfile.parameters as any
+    const modelParams = connectionProfile.parameters as Record<string, unknown>
 
     // Create streaming response
     const encoder = new TextEncoder()
     let fullResponse = ''
-    let usage: any = null
+    let usage: { totalTokens?: number } | null = null
     let attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null = null
-    let rawResponse: any = null
+    let rawResponse: unknown = null
 
     const stream = new ReadableStream({
       async start(controller) {
         try {
           // Get tools for this chat if an image profile is configured
-          const tools = getToolsForProvider(connectionProfile.provider, chat.imageProfileId)
+          const tools = getToolsForProvider(connectionProfile.provider, imageProfileId)
 
           // Send debug info about the actual LLM request (for debug panel)
           const llmRequestDetails = {
@@ -224,7 +238,7 @@ export async function POST(
             messages: messages.map((m) => ({
               role: m.role,
               contentLength: m.content.length,
-              hasAttachments: !!((m as any).attachments && (m as any).attachments.length > 0),
+              hasAttachments: !!(m as { attachments?: unknown[] }).attachments?.length,
             })),
           }
           controller.enqueue(
@@ -235,9 +249,9 @@ export async function POST(
             {
               messages,
               model: connectionProfile.modelName,
-              temperature: modelParams.temperature,
-              maxTokens: modelParams.maxTokens,
-              topP: modelParams.topP,
+              temperature: modelParams.temperature as number | undefined,
+              maxTokens: modelParams.maxTokens as number | undefined,
+              topP: modelParams.topP as number | undefined,
               tools: tools.length > 0 ? tools : undefined,
             },
             decryptedKey
@@ -282,7 +296,7 @@ export async function POST(
                   toolCall,
                   id,
                   user.id,
-                  chat.imageProfileId || undefined
+                  imageProfileId || undefined
                 )
 
                 // Collect generated image paths for ChatFile creation
@@ -305,7 +319,7 @@ export async function POST(
                 // Format tool result for display
                 const resultText = toolResult.success
                   ? toolResult.toolName === 'generate_image'
-                    ? `Generated ${(toolResult.result as any)?.length || 1} image(s)`
+                    ? `Generated ${(toolResult.result as unknown[])?.length || 1} image(s)`
                     : JSON.stringify(toolResult.result, null, 2)
                   : `Error: ${toolResult.error || 'Unknown error'}`
 
@@ -343,8 +357,8 @@ export async function POST(
               content: fullResponse,
               createdAt: new Date().toISOString(),
               tokenCount: usage?.totalTokens || null,
-              rawResponse: rawResponse || null,
-              attachments: [],
+              rawResponse: (rawResponse as Record<string, unknown>) || null,
+              attachments: [] as string[],
             }
             await repos.chats.addMessage(id, assistantMessage)
           }
@@ -367,7 +381,7 @@ export async function POST(
                   model: toolMsg.metadata?.model,
                 }),
                 createdAt: new Date().toISOString(),
-                attachments: [],
+                attachments: [] as string[],
               }
               await repos.chats.addMessage(id, toolMessage)
 
@@ -382,7 +396,7 @@ export async function POST(
                   // If we have a SHA256, we can create the record.
                   // If not, we should probably compute it, but for now let's assume it's there
                   // or use a placeholder if the schema allows (it doesn't, it requires 64 chars)
-                  
+
                   // If sha256 is missing, we can't create a valid record.
                   // However, executeToolCall should have provided it.
                   if (imagePath.sha256) {

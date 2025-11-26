@@ -44,10 +44,11 @@ export async function GET(
     // Enrich chats with related data
     const enrichedChats = await Promise.all(
       userChats.map(async (chat) => {
-        // Get persona if present
+        // Get persona participant if present
+        const personaParticipant = chat.participants.find(p => p.type === 'PERSONA' && p.personaId)
         let persona = null
-        if (chat.personaId) {
-          const personaData = await repos.personas.findById(chat.personaId)
+        if (personaParticipant?.personaId) {
+          const personaData = await repos.personas.findById(personaParticipant.personaId)
           if (personaData) {
             persona = {
               id: personaData.id,

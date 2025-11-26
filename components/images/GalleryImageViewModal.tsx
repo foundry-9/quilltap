@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useState } from 'react'
 import Image from 'next/image'
 import { showConfirmation } from '@/lib/alert'
+import DeletedImagePlaceholder from './DeletedImagePlaceholder'
 
 interface ImageData {
   id: string
@@ -35,6 +36,8 @@ export default function GalleryImageViewModal({
   onUntag,
   onDelete,
 }: GalleryImageViewModalProps) {
+  const [imageMissing, setImageMissing] = useState(false)
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -130,6 +133,7 @@ export default function GalleryImageViewModal({
       )}
 
       {/* Top right control buttons */}
+      {!imageMissing && (
       <div className="absolute top-4 right-4 flex gap-2 z-10">
         {/* Download button */}
         <button
@@ -182,8 +186,10 @@ export default function GalleryImageViewModal({
           </svg>
         </button>
       </div>
+      )}
 
       {/* Delete button - bottom right */}
+      {!imageMissing && (
       <div className="absolute bottom-4 right-4 z-10">
         <button
           onClick={(e) => {
@@ -203,20 +209,30 @@ export default function GalleryImageViewModal({
           </svg>
         </button>
       </div>
+      )}
 
       {/* Image container */}
       <div
         className="relative max-w-[90vw] max-h-[90vh] flex items-center justify-center"
         onClick={(e) => e.stopPropagation()}
       >
-        <Image
-          src={imageSrc}
-          alt={image.filename}
-          width={1920}
-          height={1080}
-          className="max-w-full max-h-[90vh] w-auto h-auto object-contain"
-          priority
-        />
+        {imageMissing ? (
+          <DeletedImagePlaceholder
+            imageId={image.id}
+            filename={image.filename}
+            onCleanup={onClose}
+            width={600}
+            height={400}
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={imageSrc}
+            alt={image.filename}
+            className="max-w-full max-h-[90vh] w-auto h-auto object-contain"
+            onError={() => setImageMissing(true)}
+          />
+        )}
       </div>
 
       {/* Filename at bottom */}

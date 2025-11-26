@@ -9,12 +9,16 @@ import { TagDisplay } from '@/components/tags/tag-display'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 
-interface Chat {
+interface ChatParticipant {
   id: string
-  title: string
-  createdAt: string
-  updatedAt: string
-  character: {
+  type: 'CHARACTER' | 'PERSONA'
+  characterId?: string | null
+  personaId?: string | null
+  connectionProfileId?: string | null
+  imageProfileId?: string | null
+  isActive: boolean
+  displayOrder: number
+  character?: {
     id: string
     name: string
     avatarUrl?: string
@@ -29,7 +33,15 @@ interface Chat {
     id: string
     name: string
     title?: string | null
-  } | null
+  }
+}
+
+interface Chat {
+  id: string
+  title: string
+  createdAt: string
+  updatedAt: string
+  participants: ChatParticipant[]
   tags: Array<{
     tag: {
       id: string
@@ -72,11 +84,29 @@ export default function ChatsPage() {
     }
   }, [highlightedChatId])
 
+  // Helper to get first character participant
+  const getFirstCharacter = (chat: Chat) => {
+    const charParticipant = chat.participants.find(
+      p => p.type === 'CHARACTER' && p.isActive && p.character
+    )
+    return charParticipant?.character
+  }
+
+  // Helper to get first persona participant
+  const getFirstPersona = (chat: Chat) => {
+    const personaParticipant = chat.participants.find(
+      p => p.type === 'PERSONA' && p.isActive && p.persona
+    )
+    return personaParticipant?.persona
+  }
+
   const getAvatarSrc = (chat: Chat): string | null => {
-    if (chat.character.defaultImage) {
-      return chat.character.defaultImage.url || `/${chat.character.defaultImage.filepath}`
+    const character = getFirstCharacter(chat)
+    if (!character) return null
+    if (character.defaultImage) {
+      return character.defaultImage.url || `/${character.defaultImage.filepath}`
     }
-    return chat.character.avatarUrl || null
+    return character.avatarUrl || null
   }
 
   const fetchChats = async () => {
@@ -333,36 +363,47 @@ export default function ChatsPage() {
               )}
               <div className="flex items-center justify-between">
                 <div className="flex items-center flex-1 gap-4">
-                  {getAvatarSrc(chat) ? (
-                    <Image
-                      src={getAvatarSrc(chat)!}
-                      alt={chat.character.name}
-                      width={48}
-                      height={48}
-                      className={getAvatarClasses(style, 'md').imageClass}
-                    />
-                  ) : (
-                    <div className={getAvatarClasses(style, 'md').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>
-                      <span className={getAvatarClasses(style, 'md').fallbackClass}>
-                        {chat.character.name.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex-1">
-                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{chat.title}</h2>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {chat.character.name}
-                      {chat.persona && ` (${chat.persona.name}${chat.persona.title ? ` - ${chat.persona.title}` : ''})`}
-                      {' •  '}{chat._count.messages} message
-                      {chat._count.messages !== 1 ? 's' : ''} • Last updated:{' '}
-                      {new Date(chat.updatedAt).toLocaleDateString()}
-                    </p>
-                    {chat.tags.length > 0 && (
-                      <div className="mt-2">
-                        <TagDisplay tags={chat.tags.map(ct => ct.tag)} />
-                      </div>
-                    )}
-                  </div>
+                  {(() => {
+                    const character = getFirstCharacter(chat)
+                    const persona = getFirstPersona(chat)
+                    const avatarSrc = getAvatarSrc(chat)
+                    const characterName = character?.name || 'Unknown'
+
+                    return (
+                      <>
+                        {avatarSrc ? (
+                          <Image
+                            src={avatarSrc}
+                            alt={characterName}
+                            width={48}
+                            height={48}
+                            className={getAvatarClasses(style, 'md').imageClass}
+                          />
+                        ) : (
+                          <div className={getAvatarClasses(style, 'md').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>
+                            <span className={getAvatarClasses(style, 'md').fallbackClass}>
+                              {characterName.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex-1">
+                          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{chat.title}</h2>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            {characterName}
+                            {persona && ` (${persona.name}${persona.title ? ` - ${persona.title}` : ''})`}
+                            {' •  '}{chat._count.messages} message
+                            {chat._count.messages !== 1 ? 's' : ''} • Last updated:{' '}
+                            {new Date(chat.updatedAt).toLocaleDateString()}
+                          </p>
+                          {chat.tags.length > 0 && (
+                            <div className="mt-2">
+                              <TagDisplay tags={chat.tags.map(ct => ct.tag)} />
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )
+                  })()}
                 </div>
 
                 <div className="flex gap-2">
