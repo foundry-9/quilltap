@@ -1,13 +1,19 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+
+interface ConnectionProfile {
+  id: string
+  name: string
+}
 
 export default function NewCharacterPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [profiles, setProfiles] = useState<ConnectionProfile[]>([])
   const [formData, setFormData] = useState({
     name: '',
     title: '',
@@ -18,7 +24,23 @@ export default function NewCharacterPage() {
     exampleDialogues: '',
     systemPrompt: '',
     avatarUrl: '',
+    defaultConnectionProfileId: '',
   })
+
+  useEffect(() => {
+    const fetchProfiles = async () => {
+      try {
+        const res = await fetch('/api/profiles')
+        if (res.ok) {
+          const data = await res.json()
+          setProfiles(data)
+        }
+      } catch (err) {
+        console.error('Failed to fetch profiles:', err)
+      }
+    }
+    fetchProfiles()
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -47,7 +69,7 @@ export default function NewCharacterPage() {
   }
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
   }
@@ -103,14 +125,13 @@ export default function NewCharacterPage() {
 
         <div>
           <label htmlFor="description" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
-            Description *
+            Description (Optional)
           </label>
           <textarea
             id="description"
             name="description"
             value={formData.description}
             onChange={handleChange}
-            required
             rows={4}
             className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
             placeholder="Describe the character's appearance, background, and key traits"
@@ -119,14 +140,13 @@ export default function NewCharacterPage() {
 
         <div>
           <label htmlFor="personality" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
-            Personality *
+            Personality (Optional)
           </label>
           <textarea
             id="personality"
             name="personality"
             value={formData.personality}
             onChange={handleChange}
-            required
             rows={4}
             className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
             placeholder="Describe the character's personality traits and behavioral patterns"
@@ -135,14 +155,13 @@ export default function NewCharacterPage() {
 
         <div>
           <label htmlFor="scenario" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
-            Scenario *
+            Scenario (Optional)
           </label>
           <textarea
             id="scenario"
             name="scenario"
             value={formData.scenario}
             onChange={handleChange}
-            required
             rows={4}
             className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
             placeholder="Describe the setting and context for conversations"
@@ -151,14 +170,13 @@ export default function NewCharacterPage() {
 
         <div>
           <label htmlFor="firstMessage" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
-            First Message *
+            First Message (Optional)
           </label>
           <textarea
             id="firstMessage"
             name="firstMessage"
             value={formData.firstMessage}
             onChange={handleChange}
-            required
             rows={3}
             className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
             placeholder="The character's opening message to start conversations"
@@ -208,6 +226,29 @@ export default function NewCharacterPage() {
             className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
             placeholder="https://example.com/avatar.png"
           />
+        </div>
+
+        <div>
+          <label htmlFor="defaultConnectionProfileId" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+            Default Connection Profile (Optional)
+          </label>
+          <select
+            id="defaultConnectionProfileId"
+            name="defaultConnectionProfileId"
+            value={formData.defaultConnectionProfileId}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+          >
+            <option value="">No default profile</option>
+            {profiles.map((profile) => (
+              <option key={profile.id} value={profile.id}>
+                {profile.name}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Can be overridden for individual chats
+          </p>
         </div>
 
         <div className="flex gap-4">

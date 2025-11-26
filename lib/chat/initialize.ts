@@ -7,10 +7,10 @@ import { processCharacterTemplates } from '@/lib/templates/processor'
 interface Character {
   id: string
   name: string
-  description: string
-  personality: string
-  scenario: string
-  firstMessage: string
+  description?: string | null
+  personality?: string | null
+  scenario?: string | null
+  firstMessage?: string | null
   exampleDialogues?: string | null
   systemPrompt?: string | null
 }
@@ -57,14 +57,14 @@ export async function buildChatContext(
   const systemPrompt = buildSystemPrompt({
     character,
     persona: persona || undefined,
-    scenario: customScenario || character.scenario,
+    scenario: customScenario || character.scenario || undefined,
   })
 
   // Process first message with templates
   const processedCharacter = processCharacterTemplates({
     character,
     persona: persona || undefined,
-    scenario: customScenario || character.scenario,
+    scenario: customScenario || character.scenario || undefined,
   })
   const firstMessage = processedCharacter.firstMessage
 
@@ -83,7 +83,7 @@ function buildSystemPrompt({
 }: {
   character: Character
   persona?: Persona
-  scenario: string
+  scenario?: string | null
 }): string {
   // Process all character templates with the current context
   const processedCharacter = processCharacterTemplates({

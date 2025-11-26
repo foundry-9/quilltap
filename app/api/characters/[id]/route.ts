@@ -21,6 +21,7 @@ const updateCharacterSchema = z.object({
   exampleDialogues: z.string().optional(),
   systemPrompt: z.string().optional(),
   avatarUrl: z.string().url().optional().or(z.literal('')),
+  defaultConnectionProfileId: z.string().uuid().optional(),
 })
 
 // GET /api/characters/:id
