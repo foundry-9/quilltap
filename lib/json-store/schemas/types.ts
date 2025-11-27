@@ -110,12 +110,41 @@ export const TagStyleMapSchema = z.record(TagVisualStyleSchema).default({});
 
 export type TagStyleMap = z.infer<typeof TagStyleMapSchema>;
 
+// ============================================================================
+// CHEAP LLM SETTINGS
+// ============================================================================
+
+export const CheapLLMStrategyEnum = z.enum(['USER_DEFINED', 'PROVIDER_CHEAPEST', 'LOCAL_FIRST']);
+export type CheapLLMStrategy = z.infer<typeof CheapLLMStrategyEnum>;
+
+export const EmbeddingProviderEnum = z.enum(['SAME_PROVIDER', 'OPENAI', 'LOCAL']);
+export type EmbeddingProvider = z.infer<typeof EmbeddingProviderEnum>;
+
+export const CheapLLMSettingsSchema = z.object({
+  /** Strategy for selecting the cheap LLM provider */
+  strategy: CheapLLMStrategyEnum.default('PROVIDER_CHEAPEST'),
+  /** If USER_DEFINED, which connection profile to use */
+  userDefinedProfileId: UUIDSchema.nullable().optional(),
+  /** Whether to fall back to local models if available */
+  fallbackToLocal: z.boolean().default(true),
+  /** Provider for generating embeddings */
+  embeddingProvider: EmbeddingProviderEnum.default('OPENAI'),
+});
+
+export type CheapLLMSettings = z.infer<typeof CheapLLMSettingsSchema>;
+
 export const ChatSettingsSchema = z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
   avatarDisplayMode: AvatarDisplayModeEnum.default('ALWAYS'),
   avatarDisplayStyle: z.string().default('CIRCULAR'),
   tagStyles: TagStyleMapSchema,
+  /** Cheap LLM settings for memory extraction and summarization */
+  cheapLLMSettings: CheapLLMSettingsSchema.default({
+    strategy: 'PROVIDER_CHEAPEST',
+    fallbackToLocal: true,
+    embeddingProvider: 'OPENAI',
+  }),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });
