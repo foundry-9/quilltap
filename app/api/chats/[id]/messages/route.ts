@@ -10,6 +10,7 @@ import { decryptApiKey } from '@/lib/encryption'
 import { loadChatFilesForLLM } from '@/lib/chat-files'
 import { detectToolCalls, executeToolCall } from '@/lib/chat/tool-executor'
 import { imageGenerationToolDefinition, anthropicImageGenerationToolDefinition } from '@/lib/tools/image-generation-tool'
+import { processMessageForMemoryAsync } from '@/lib/memory'
 import { z } from 'zod'
 
 // Validation schema
@@ -20,7 +21,7 @@ const sendMessageSchema = z.object({
 })
 
 // Helper function to get tools for a provider
-function getToolsForProvider(provider: string, imageProfileId?: string | null): unknown[] {
+function getToolsForProvider(provider: string, imageProfileId?: string | null, imageProviderType?: string): unknown[] {
   // Only include image generation tool if an image profile is configured for this chat
   if (!imageProfileId) {
     return []
@@ -28,24 +29,77 @@ function getToolsForProvider(provider: string, imageProfileId?: string | null): 
 
   // Return provider-specific tool format
   switch (provider) {
-    case 'ANTHROPIC':
+    case 'ANTHROPIC': {
+      // Check if using Grok for image generation
+      if (imageProviderType === 'GROK') {
+        return [{
+          ...anthropicImageGenerationToolDefinition,
+          input_schema: {
+            ...anthropicImageGenerationToolDefinition.input_schema,
+            properties: {
+              ...anthropicImageGenerationToolDefinition.input_schema.properties,
+              prompt: {
+                ...anthropicImageGenerationToolDefinition.input_schema.properties.prompt,
+                description: anthropicImageGenerationToolDefinition.input_schema.properties.prompt.description + ' IMPORTANT: Grok has a strict limit of 1024 bytes for image generation prompts. Keep your prompt concise and under this limit.',
+              },
+            },
+          },
+        }]
+      }
       return [anthropicImageGenerationToolDefinition]
-    case 'GOOGLE':
+    }
+    case 'GOOGLE': {
       // Google uses a similar format to Anthropic but called differently
-      return [
-        {
-          name: anthropicImageGenerationToolDefinition.name,
-          description: anthropicImageGenerationToolDefinition.description,
-          parameters: anthropicImageGenerationToolDefinition.input_schema,
-        },
-      ]
+      const baseGoogleTool = {
+        name: anthropicImageGenerationToolDefinition.name,
+        description: anthropicImageGenerationToolDefinition.description,
+        parameters: anthropicImageGenerationToolDefinition.input_schema,
+      }
+      // Check if using Grok for image generation
+      if (imageProviderType === 'GROK') {
+        return [{
+          ...baseGoogleTool,
+          parameters: {
+            ...baseGoogleTool.parameters,
+            properties: {
+              ...baseGoogleTool.parameters.properties,
+              prompt: {
+                ...baseGoogleTool.parameters.properties.prompt,
+                description: baseGoogleTool.parameters.properties.prompt.description + ' IMPORTANT: Grok has a strict limit of 1024 bytes for image generation prompts. Keep your prompt concise and under this limit.',
+              },
+            },
+          },
+        }]
+      }
+      return [baseGoogleTool]
+    }
     case 'OPENAI':
     case 'GROK':
     case 'OPENROUTER':
     case 'OLLAMA':
     case 'OPENAI_COMPATIBLE':
-    case 'GAB_AI':
+    case 'GAB_AI': {
+      // Check if using Grok for image generation
+      if (imageProviderType === 'GROK') {
+        return [{
+          ...imageGenerationToolDefinition,
+          function: {
+            ...imageGenerationToolDefinition.function,
+            parameters: {
+              ...imageGenerationToolDefinition.function.parameters,
+              properties: {
+                ...imageGenerationToolDefinition.function.parameters.properties,
+                prompt: {
+                  ...imageGenerationToolDefinition.function.parameters.properties.prompt,
+                  description: imageGenerationToolDefinition.function.parameters.properties.prompt.description + ' IMPORTANT: Grok has a strict limit of 1024 bytes for image generation prompts. Keep your prompt concise and under this limit.',
+                },
+              },
+            },
+          },
+        }]
+      }
       return [imageGenerationToolDefinition]
+    }
     default:
       return []
   }
@@ -223,7 +277,7 @@ export async function POST(
       async start(controller) {
         try {
           // Get tools for this chat if an image profile is configured
-          const tools = getToolsForProvider(connectionProfile.provider, imageProfileId)
+          const tools = getToolsForProvider(connectionProfile.provider, imageProfileId, imageProfile?.provider)
 
           // Send debug info about the actual LLM request (for debug panel)
           const llmRequestDetails = {
@@ -361,6 +415,30 @@ export async function POST(
               attachments: [] as string[],
             }
             await repos.chats.addMessage(id, assistantMessage)
+
+            // Trigger automatic memory extraction (non-blocking)
+            // This runs in the background and doesn't affect the chat response
+            try {
+              const chatSettings = await repos.users.getChatSettings(user.id)
+              if (chatSettings) {
+                const availableProfiles = await repos.connections.findByUserId(user.id)
+                processMessageForMemoryAsync({
+                  characterId: character.id,
+                  characterName: character.name,
+                  chatId: id,
+                  userMessage: content,
+                  assistantMessage: fullResponse,
+                  sourceMessageId: assistantMessageId,
+                  userId: user.id,
+                  connectionProfile,
+                  cheapLLMSettings: chatSettings.cheapLLMSettings,
+                  availableProfiles,
+                })
+              }
+            } catch (memoryError) {
+              // Never let memory processing affect the chat flow
+              console.error('Failed to trigger memory extraction:', memoryError)
+            }
           }
 
           // Save tool messages if tools were executed
