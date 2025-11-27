@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { TagEditor } from '@/components/tags/tag-editor'
+import { TagBadge } from '@/components/tags/tag-badge'
 import { ModelSelector } from './model-selector'
 
 interface ApiKey {
@@ -9,6 +10,12 @@ interface ApiKey {
   label: string
   provider: string
   isActive: boolean
+}
+
+interface Tag {
+  id: string
+  name: string
+  createdAt?: string
 }
 
 interface ConnectionProfile {
@@ -21,6 +28,7 @@ interface ConnectionProfile {
   parameters: Record<string, any>
   isDefault: boolean
   apiKey?: ApiKey | null
+  tags?: Tag[]
 }
 
 export default function ConnectionProfilesTab() {
@@ -69,7 +77,24 @@ export default function ConnectionProfilesTab() {
       const res = await fetch('/api/profiles')
       if (!res.ok) throw new Error('Failed to fetch profiles')
       const data = await res.json()
-      setProfiles(data)
+
+      // Fetch tags for each profile
+      const profilesWithTags = await Promise.all(
+        data.map(async (profile: ConnectionProfile) => {
+          try {
+            const tagsRes = await fetch(`/api/profiles/${profile.id}/tags`)
+            if (tagsRes.ok) {
+              const tagsData = await tagsRes.json()
+              return { ...profile, tags: tagsData.tags || [] }
+            }
+          } catch (err) {
+            console.error(`Error fetching tags for profile ${profile.id}:`, err)
+          }
+          return profile
+        })
+      )
+
+      setProfiles(profilesWithTags)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
@@ -424,6 +449,13 @@ export default function ConnectionProfilesTab() {
                       Max Tokens: {profile.parameters?.max_tokens ?? 1000} •
                       Top P: {profile.parameters?.top_p ?? 1}
                     </div>
+                    {profile.tags && profile.tags.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {profile.tags.map(tag => (
+                          <TagBadge key={tag.id} tag={tag} size="sm" />
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     <button
