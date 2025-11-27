@@ -19,3 +19,12 @@ export {
   type Attachment,
   type CheapLLMTaskResult,
 } from './cheap-llm-tasks'
+
+// Memory Processor (Sprint 3: Auto-Memory Formation)
+export {
+  processMessageForMemory,
+  processMessageForMemoryAsync,
+  batchProcessChatForMemories,
+  type MemoryExtractionContext,
+  type MemoryProcessingResult,
+} from './memory-processor'
