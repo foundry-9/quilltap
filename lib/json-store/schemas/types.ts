@@ -17,6 +17,9 @@ export type Provider = z.infer<typeof ProviderEnum>;
 export const ImageProviderEnum = z.enum(['OPENAI', 'GROK', 'GOOGLE_IMAGEN']);
 export type ImageProvider = z.infer<typeof ImageProviderEnum>;
 
+export const EmbeddingProfileProviderEnum = z.enum(['OPENAI', 'OLLAMA']);
+export type EmbeddingProfileProvider = z.infer<typeof EmbeddingProfileProviderEnum>;
+
 export const RoleEnum = z.enum(['SYSTEM', 'USER', 'ASSISTANT', 'TOOL']);
 export type Role = z.infer<typeof RoleEnum>;
 
@@ -125,10 +128,14 @@ export const CheapLLMSettingsSchema = z.object({
   strategy: CheapLLMStrategyEnum.default('PROVIDER_CHEAPEST'),
   /** If USER_DEFINED, which connection profile to use */
   userDefinedProfileId: UUIDSchema.nullable().optional(),
+  /** Global default cheap LLM profile - always use this if set */
+  defaultCheapProfileId: UUIDSchema.nullable().optional(),
   /** Whether to fall back to local models if available */
   fallbackToLocal: z.boolean().default(true),
   /** Provider for generating embeddings */
   embeddingProvider: EmbeddingProviderEnum.default('OPENAI'),
+  /** Embedding profile ID to use for text embeddings */
+  embeddingProfileId: UUIDSchema.nullable().optional(),
 });
 
 export type CheapLLMSettings = z.infer<typeof CheapLLMSettingsSchema>;
@@ -214,6 +221,8 @@ export const ConnectionProfileSchema = z.object({
   modelName: z.string(),
   parameters: JsonSchema.default({}),
   isDefault: z.boolean().default(false),
+  /** Whether this profile is suitable for use as a "cheap" LLM (low-cost tasks) */
+  isCheap: z.boolean().default(false),
   tags: z.array(UUIDSchema).default([]),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
@@ -561,6 +570,37 @@ export const ImageProfilesFileSchema = z.object({
 });
 
 export type ImageProfilesFile = z.infer<typeof ImageProfilesFileSchema>;
+
+// ============================================================================
+// EMBEDDING PROFILES
+// ============================================================================
+
+export const EmbeddingProfileSchema = z.object({
+  id: UUIDSchema,
+  userId: UUIDSchema,
+  name: z.string(),
+  provider: EmbeddingProfileProviderEnum,
+  apiKeyId: UUIDSchema.nullable().optional(),
+  baseUrl: z.string().nullable().optional(),
+  modelName: z.string(),
+  /** Embedding dimension size (provider-specific) */
+  dimensions: z.number().nullable().optional(),
+  isDefault: z.boolean().default(false),
+  tags: z.array(UUIDSchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type EmbeddingProfile = z.infer<typeof EmbeddingProfileSchema>;
+
+export const EmbeddingProfilesFileSchema = z.object({
+  version: z.number().default(1),
+  profiles: z.array(EmbeddingProfileSchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type EmbeddingProfilesFile = z.infer<typeof EmbeddingProfilesFileSchema>;
 
 // ============================================================================
 // MEMORY

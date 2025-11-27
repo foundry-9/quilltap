@@ -27,8 +27,10 @@ interface ConnectionProfile {
   modelName: string
   parameters: Record<string, any>
   isDefault: boolean
+  isCheap?: boolean
   apiKey?: ApiKey | null
   tags?: Tag[]
+  messageCount?: number
 }
 
 export default function ConnectionProfilesTab() {
@@ -39,6 +41,8 @@ export default function ConnectionProfilesTab() {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formLoading, setFormLoading] = useState(false)
+  const [deleteConfirming, setDeleteConfirming] = useState<string | null>(null)
+  const [cheapDefaultProfileId, setCheapDefaultProfileId] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     provider: 'OPENAI',
@@ -49,6 +53,7 @@ export default function ConnectionProfilesTab() {
     maxTokens: 1000,
     topP: 1,
     isDefault: false,
+    isCheap: false,
   })
 
   // Connection testing states
@@ -68,13 +73,27 @@ export default function ConnectionProfilesTab() {
   useEffect(() => {
     fetchProfiles()
     fetchApiKeys()
+    // Fetch chat settings to get the cheap default profile
+    const fetchChatSettings = async () => {
+      try {
+        const res = await fetch('/api/chat-settings')
+        if (res.ok) {
+          const settings = await res.json()
+          setCheapDefaultProfileId(settings.cheapLLMSettings?.defaultCheapProfileId || null)
+        }
+      } catch (err) {
+        console.error('Error fetching chat settings:', err)
+      }
+    }
+    fetchChatSettings()
   }, [])
 
   const fetchProfiles = async () => {
     try {
       setLoading(true)
       setError(null)
-      const res = await fetch('/api/profiles')
+      // Add cache busting timestamp to force fresh data
+      const res = await fetch(`/api/profiles?t=${Date.now()}`)
       if (!res.ok) throw new Error('Failed to fetch profiles')
       const data = await res.json()
 
@@ -94,7 +113,16 @@ export default function ConnectionProfilesTab() {
         })
       )
 
-      setProfiles(profilesWithTags)
+      // Count messages per profile
+      const messageCounts = await countMessagesPerProfile(profilesWithTags)
+
+      // Attach message counts to profiles
+      const profilesWithCounts = profilesWithTags.map(profile => ({
+        ...profile,
+        messageCount: messageCounts[profile.id] || 0,
+      }))
+
+      setProfiles(profilesWithCounts)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
@@ -113,6 +141,78 @@ export default function ConnectionProfilesTab() {
     }
   }
 
+  const countMessagesPerProfile = async (profilesList: ConnectionProfile[]) => {
+    try {
+      // Initialize message counts for all profiles
+      const messageCounts: Record<string, number> = {}
+      profilesList.forEach(p => {
+        messageCounts[p.id] = 0
+      })
+
+      // Fetch all chats to analyze message usage
+      const chatsRes = await fetch('/api/chats')
+      if (!chatsRes.ok) return messageCounts
+
+      const chats = await chatsRes.json()
+      if (!Array.isArray(chats)) return messageCounts
+
+      // For each chat, count messages by profile
+      await Promise.all(
+        chats.map(async (chat: any) => {
+          try {
+            // Get messages for this chat
+            const messagesRes = await fetch(`/api/chats/${chat.id}/messages`)
+            if (!messagesRes.ok) return
+
+            const messages = await messagesRes.json()
+            if (!Array.isArray(messages.messages)) return
+
+            // Get CHARACTER participants with their connection profiles
+            const characterParticipants = (chat.participants || []).filter(
+              (p: any) => p.type === 'CHARACTER'
+            )
+
+            if (characterParticipants.length === 0) return
+
+            // Count ASSISTANT messages
+            // Distribute messages among character participants based on conversation flow
+            const assistantMessages = messages.messages.filter(
+              (m: any) => m.role === 'ASSISTANT'
+            )
+
+            if (assistantMessages.length === 0) return
+
+            // Simple strategy: if only one character, assign all assistant messages to them
+            // If multiple characters, assign based on alternating pattern or message order
+            if (characterParticipants.length === 1) {
+              const profileId = characterParticipants[0].connectionProfileId
+              if (profileId && profileId in messageCounts) {
+                messageCounts[profileId] += assistantMessages.length
+              }
+            } else {
+              // For multiple participants, use a round-robin approach based on message index
+              assistantMessages.forEach((msg: any, index: number) => {
+                const participantIndex = index % characterParticipants.length
+                const profileId =
+                  characterParticipants[participantIndex].connectionProfileId
+                if (profileId && profileId in messageCounts) {
+                  messageCounts[profileId]++
+                }
+              })
+            }
+          } catch (err) {
+            console.error(`Error processing chat ${chat.id}:`, err)
+          }
+        })
+      )
+
+      return messageCounts
+    } catch (err) {
+      console.error('Error counting messages per profile:', err)
+      return {}
+    }
+  }
+
   const resetForm = () => {
     setFormData({
       name: '',
@@ -124,6 +224,7 @@ export default function ConnectionProfilesTab() {
       maxTokens: 1000,
       topP: 1,
       isDefault: false,
+      isCheap: false,
     })
     setEditingId(null)
     // Reset connection states
@@ -145,6 +246,7 @@ export default function ConnectionProfilesTab() {
       maxTokens: profile.parameters?.max_tokens ?? 1000,
       topP: profile.parameters?.top_p ?? 1,
       isDefault: profile.isDefault,
+      isCheap: profile.isCheap ?? false,
     })
     setEditingId(profile.id)
     setShowForm(true)
@@ -170,7 +272,13 @@ export default function ConnectionProfilesTab() {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...formData,
+          name: formData.name,
+          provider: formData.provider,
+          apiKeyId: formData.apiKeyId || undefined,
+          baseUrl: formData.baseUrl || undefined,
+          modelName: formData.modelName,
+          isDefault: formData.isDefault,
+          isCheap: formData.isCheap,
           parameters: {
             temperature: parseFloat(String(formData.temperature)),
             max_tokens: parseInt(String(formData.maxTokens)),
@@ -195,11 +303,11 @@ export default function ConnectionProfilesTab() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this profile?')) return
-
     try {
+      setError(null)
       const res = await fetch(`/api/profiles/${id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Failed to delete profile')
+      setDeleteConfirming(null)
       await fetchProfiles()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
@@ -416,7 +524,28 @@ export default function ConnectionProfilesTab() {
           </div>
         ) : (
           <div className="space-y-3">
-            {profiles.map(profile => (
+            {profiles
+              .toSorted((a, b) => {
+                // Default first
+                if (a.isDefault !== b.isDefault) {
+                  return a.isDefault ? -1 : 1
+                }
+                // Default cheap profile next
+                const aIsCheapDefault = a.id === cheapDefaultProfileId
+                const bIsCheapDefault = b.id === cheapDefaultProfileId
+                if (aIsCheapDefault !== bIsCheapDefault) {
+                  return aIsCheapDefault ? -1 : 1
+                }
+                // Messages per profile descending
+                const aMessages = a.messageCount ?? 0
+                const bMessages = b.messageCount ?? 0
+                if (aMessages !== bMessages) {
+                  return bMessages - aMessages
+                }
+                // Then by name
+                return a.name.localeCompare(b.name)
+              })
+              .map(profile => (
               <div
                 key={profile.id}
                 className="border border-gray-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700"
@@ -430,10 +559,25 @@ export default function ConnectionProfilesTab() {
                           Default
                         </span>
                       )}
+                      {profile.id === cheapDefaultProfileId && (
+                        <span className="px-2 py-1 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-200 text-xs rounded-full">
+                          Default Cheap
+                        </span>
+                      )}
+                      {profile.isCheap && profile.id !== cheapDefaultProfileId && (
+                        <span className="px-2 py-1 bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-200 text-xs rounded-full">
+                          Cheap
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                       {profile.provider} • {profile.modelName}
                     </p>
+                    {profile.messageCount !== undefined && (
+                      <p className="text-sm text-blue-600 dark:text-blue-400 mt-1 font-medium">
+                        {profile.messageCount} message{profile.messageCount === 1 ? '' : 's'} used
+                      </p>
+                    )}
                     {profile.apiKey && (
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         API Key: {profile.apiKey.label}
@@ -464,12 +608,35 @@ export default function ConnectionProfilesTab() {
                     >
                       Edit
                     </button>
-                    <button
-                      onClick={() => handleDelete(profile.id)}
-                      className="px-3 py-1 text-sm bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 rounded hover:bg-red-200 dark:hover:bg-red-800"
-                    >
-                      Delete
-                    </button>
+                    <div className="relative">
+                      <button
+                        onClick={() => setDeleteConfirming(deleteConfirming === profile.id ? null : profile.id)}
+                        className="px-3 py-1 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded border border-red-200 dark:border-red-900/50 hover:border-red-300 dark:hover:border-red-900/70 focus:outline-none focus:ring-2 focus:ring-red-500 dark:focus:ring-red-400"
+                      >
+                        Delete
+                      </button>
+
+                      {/* Delete Confirmation Popover */}
+                      {deleteConfirming === profile.id && (
+                        <div className="absolute right-0 top-full mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg p-3 whitespace-nowrap z-10">
+                          <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">Delete this profile?</p>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setDeleteConfirming(null)}
+                              className="px-2 py-1 text-xs bg-gray-100 dark:bg-slate-700 text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-slate-600 rounded focus:outline-none focus:ring-2 focus:ring-gray-500 dark:focus:ring-gray-400"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => handleDelete(profile.id)}
+                              className="px-2 py-1 text-xs bg-red-600 dark:bg-red-700 text-white hover:bg-red-700 dark:hover:bg-red-600 rounded focus:outline-none focus:ring-2 focus:ring-red-500 dark:focus:ring-red-400"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -723,18 +890,33 @@ export default function ConnectionProfilesTab() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 pt-2">
-              <input
-                type="checkbox"
-                id="isDefault"
-                name="isDefault"
-                checked={formData.isDefault}
-                onChange={handleChange}
-                className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
-              />
-              <label htmlFor="isDefault" className="text-sm">
-                Set as default profile
-              </label>
+            <div className="space-y-2 pt-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="isDefault"
+                  name="isDefault"
+                  checked={formData.isDefault}
+                  onChange={handleChange}
+                  className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
+                />
+                <label htmlFor="isDefault" className="text-sm">
+                  Set as default profile
+                </label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="isCheap"
+                  name="isCheap"
+                  checked={formData.isCheap}
+                  onChange={handleChange}
+                  className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
+                />
+                <label htmlFor="isCheap" className="text-sm">
+                  Mark as cheap LLM (suitable for cost-effective tasks like memory extraction)
+                </label>
+              </div>
             </div>
 
             {/* Tag Editor (only show when editing existing profile) */}

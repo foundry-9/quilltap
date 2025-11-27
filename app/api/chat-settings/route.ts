@@ -19,7 +19,8 @@ async function updateChatSettings(
   userId: string,
   avatarDisplayMode?: string,
   avatarDisplayStyle?: string,
-  tagStyles?: unknown
+  tagStyles?: unknown,
+  cheapLLMSettings?: unknown
 ) {
   // Validate avatarDisplayMode if provided
   if (avatarDisplayMode) {
@@ -45,6 +46,22 @@ async function updateChatSettings(
   if (typeof tagStyles !== 'undefined') {
     const validatedTagStyles = TagStyleMapSchema.parse(tagStyles)
     updateData.tagStyles = validatedTagStyles
+  }
+  if (typeof cheapLLMSettings !== 'undefined') {
+    // Validate cheapLLMSettings structure
+    const validStrategies = ['USER_DEFINED', 'PROVIDER_CHEAPEST', 'LOCAL_FIRST']
+    const validEmbeddingProviders = ['SAME_PROVIDER', 'OPENAI', 'LOCAL']
+
+    if (cheapLLMSettings && typeof cheapLLMSettings === 'object') {
+      const settings = cheapLLMSettings as any
+      if (settings.strategy && !validStrategies.includes(settings.strategy)) {
+        throw new Error('Invalid cheap LLM strategy')
+      }
+      if (settings.embeddingProvider && !validEmbeddingProviders.includes(settings.embeddingProvider)) {
+        throw new Error('Invalid embedding provider')
+      }
+    }
+    updateData.cheapLLMSettings = cheapLLMSettings
   }
 
   return repos.users.updateChatSettings(userId, updateData)
@@ -102,13 +119,14 @@ async function handleSettingsUpdate(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { avatarDisplayMode, avatarDisplayStyle, tagStyles } = body
+    const { avatarDisplayMode, avatarDisplayStyle, tagStyles, cheapLLMSettings } = body
 
     const chatSettings = await updateChatSettings(
       session.user.id,
       avatarDisplayMode,
       avatarDisplayStyle,
-      tagStyles
+      tagStyles,
+      cheapLLMSettings
     )
 
     return NextResponse.json(chatSettings)

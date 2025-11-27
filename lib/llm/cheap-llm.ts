@@ -34,6 +34,8 @@ export interface CheapLLMConfig {
   strategy: CheapLLMStrategy
   /** If USER_DEFINED, the connection profile ID to use */
   userDefinedProfileId?: string
+  /** Global default cheap profile ID - takes priority over strategy */
+  defaultCheapProfileId?: string
   /** Whether to fall back to local models (Ollama) if available */
   fallbackToLocal: boolean
 }
@@ -113,19 +115,43 @@ export function getCheapestModel(provider: Provider): string {
 /**
  * Selects the appropriate cheap LLM provider based on configuration
  *
+ * Selection priority (per CHEAP-LLM.md spec):
+ * 1. Global defaultCheapProfileId if set
+ * 2. USER_DEFINED strategy with userDefinedProfileId
+ * 3. Any profile with isCheap flag set to true
+ * 4. LOCAL_FIRST or fallbackToLocal using Ollama
+ * 5. Fall back to current profile's cheapest model variant
+ *
  * @param currentProfile - The current connection profile being used for chat
  * @param config - Cheap LLM configuration
  * @param availableProfiles - All available connection profiles (for USER_DEFINED strategy)
  * @param ollamaAvailable - Whether Ollama is available locally
+ * @param onNoCheapLLM - Callback when no cheap LLM is available (for toast notification)
  * @returns The selected cheap LLM configuration
  */
 export function getCheapLLMProvider(
   currentProfile: ConnectionProfile,
   config: CheapLLMConfig = DEFAULT_CHEAP_LLM_CONFIG,
   availableProfiles: ConnectionProfile[] = [],
-  ollamaAvailable: boolean = false
+  ollamaAvailable: boolean = false,
+  onNoCheapLLM?: () => void
 ): CheapLLMSelection {
-  // Strategy 1: User-defined connection profile
+  // Priority 1: Global default cheap profile (always takes precedence if set)
+  if (config.defaultCheapProfileId) {
+    const defaultCheapProfile = availableProfiles.find(p => p.id === config.defaultCheapProfileId)
+    if (defaultCheapProfile) {
+      return {
+        provider: defaultCheapProfile.provider,
+        modelName: defaultCheapProfile.modelName,
+        baseUrl: defaultCheapProfile.baseUrl || undefined,
+        connectionProfileId: defaultCheapProfile.id,
+        isLocal: defaultCheapProfile.provider === 'OLLAMA',
+      }
+    }
+    // Global default not found, fall through to other strategies
+  }
+
+  // Priority 2: User-defined connection profile (USER_DEFINED strategy)
   if (config.strategy === 'USER_DEFINED' && config.userDefinedProfileId) {
     const userProfile = availableProfiles.find(p => p.id === config.userDefinedProfileId)
     if (userProfile) {
@@ -140,7 +166,32 @@ export function getCheapLLMProvider(
     // Fall through to next strategy if profile not found
   }
 
-  // Strategy 2: Local first (prefer Ollama if available)
+  // Priority 3: Use any profile marked as "cheap" (isCheap flag)
+  const cheapProfiles = availableProfiles.filter(p => p.isCheap === true)
+  if (cheapProfiles.length > 0) {
+    // Prefer local (Ollama) cheap profiles for zero cost
+    const localCheapProfile = cheapProfiles.find(p => p.provider === 'OLLAMA')
+    if (localCheapProfile) {
+      return {
+        provider: 'OLLAMA',
+        modelName: localCheapProfile.modelName,
+        baseUrl: localCheapProfile.baseUrl || 'http://localhost:11434',
+        connectionProfileId: localCheapProfile.id,
+        isLocal: true,
+      }
+    }
+    // Use the first available cheap profile
+    const cheapProfile = cheapProfiles[0]
+    return {
+      provider: cheapProfile.provider,
+      modelName: cheapProfile.modelName,
+      baseUrl: cheapProfile.baseUrl || undefined,
+      connectionProfileId: cheapProfile.id,
+      isLocal: cheapProfile.provider === 'OLLAMA',
+    }
+  }
+
+  // Priority 4: Local first (prefer Ollama if available)
   if (config.strategy === 'LOCAL_FIRST' || (config.fallbackToLocal && ollamaAvailable)) {
     // Look for an Ollama profile in available profiles
     const ollamaProfile = availableProfiles.find(p => p.provider === 'OLLAMA')
@@ -158,7 +209,13 @@ export function getCheapLLMProvider(
     // we should still fall through to the cheapest provider
   }
 
-  // Strategy 3: Map current provider to its cheapest variant (default)
+  // Priority 5: No dedicated cheap LLM available - warn and use current profile
+  // Toast warning that no cheap LLM is configured
+  if (onNoCheapLLM) {
+    onNoCheapLLM()
+  }
+
+  // Map current provider to its cheapest variant (fallback)
   const cheapModel = getCheapestModel(currentProfile.provider)
 
   return {
@@ -307,19 +364,47 @@ export interface CheapLLMSelectionWithPricing extends CheapLLMSelection {
  * Selects the cheapest available model using real pricing data
  * This is an async version that queries the pricing cache
  *
+ * Selection priority (per CHEAP-LLM.md spec):
+ * 1. Global defaultCheapProfileId if set
+ * 2. USER_DEFINED strategy with userDefinedProfileId
+ * 3. Any profile with isCheap flag set to true
+ * 4. LOCAL_FIRST or fallbackToLocal using Ollama
+ * 5. Fall back to cheapest model across available providers
+ *
  * @param currentProfile - The current connection profile (for comparison)
  * @param userId - User ID for API key access
  * @param config - Cheap LLM configuration
  * @param availableProfiles - All available connection profiles
+ * @param onNoCheapLLM - Callback when no cheap LLM is available (for toast notification)
  * @returns The cheapest available model with pricing info
  */
 export async function getCheapLLMProviderWithPricing(
   currentProfile: ConnectionProfile,
   userId: string,
   config: CheapLLMConfig = DEFAULT_CHEAP_LLM_CONFIG,
-  availableProfiles: ConnectionProfile[] = []
+  availableProfiles: ConnectionProfile[] = [],
+  onNoCheapLLM?: () => void
 ): Promise<CheapLLMSelectionWithPricing> {
-  // Strategy 1: User-defined always wins
+  // Priority 1: Global default cheap profile (always takes precedence if set)
+  if (config.defaultCheapProfileId) {
+    const defaultCheapProfile = availableProfiles.find(p => p.id === config.defaultCheapProfileId)
+    if (defaultCheapProfile) {
+      const models = await getProviderPricing(defaultCheapProfile.provider, userId)
+      const pricing = models.find(m => m.modelId === defaultCheapProfile.modelName)
+
+      return {
+        provider: defaultCheapProfile.provider,
+        modelName: defaultCheapProfile.modelName,
+        baseUrl: defaultCheapProfile.baseUrl || undefined,
+        connectionProfileId: defaultCheapProfile.id,
+        isLocal: defaultCheapProfile.provider === 'OLLAMA',
+        pricing,
+        costTier: pricing ? calculateCostTier(pricing) : undefined,
+      }
+    }
+  }
+
+  // Priority 2: User-defined connection profile (USER_DEFINED strategy)
   if (config.strategy === 'USER_DEFINED' && config.userDefinedProfileId) {
     const userProfile = availableProfiles.find(p => p.id === config.userDefinedProfileId)
     if (userProfile) {
@@ -339,7 +424,51 @@ export async function getCheapLLMProviderWithPricing(
     }
   }
 
-  // Strategy 2: Local first (free models)
+  // Priority 3: Use any profile marked as "cheap" (isCheap flag)
+  const cheapProfiles = availableProfiles.filter(p => p.isCheap === true)
+  if (cheapProfiles.length > 0) {
+    // Prefer local (Ollama) cheap profiles for zero cost
+    const localCheapProfile = cheapProfiles.find(p => p.provider === 'OLLAMA')
+    if (localCheapProfile) {
+      const models = await getProviderPricing('OLLAMA', userId)
+      const pricing = models.find(m => m.modelId === localCheapProfile.modelName)
+
+      return {
+        provider: 'OLLAMA',
+        modelName: localCheapProfile.modelName,
+        baseUrl: localCheapProfile.baseUrl || 'http://localhost:11434',
+        connectionProfileId: localCheapProfile.id,
+        isLocal: true,
+        pricing: pricing || {
+          modelId: localCheapProfile.modelName,
+          provider: 'OLLAMA',
+          name: localCheapProfile.modelName,
+          promptCostPer1M: 0,
+          completionCostPer1M: 0,
+          contextLength: null,
+          fetchedAt: new Date().toISOString(),
+        },
+        costTier: 1, // Free
+        savingsPercent: 100, // 100% savings vs any paid model
+      }
+    }
+    // Use the first available cheap profile
+    const cheapProfile = cheapProfiles[0]
+    const models = await getProviderPricing(cheapProfile.provider, userId)
+    const pricing = models.find(m => m.modelId === cheapProfile.modelName)
+
+    return {
+      provider: cheapProfile.provider,
+      modelName: cheapProfile.modelName,
+      baseUrl: cheapProfile.baseUrl || undefined,
+      connectionProfileId: cheapProfile.id,
+      isLocal: cheapProfile.provider === 'OLLAMA',
+      pricing,
+      costTier: pricing ? calculateCostTier(pricing) : undefined,
+    }
+  }
+
+  // Priority 4: Local first (free models)
   if (config.strategy === 'LOCAL_FIRST' || config.fallbackToLocal) {
     const ollamaProfile = availableProfiles.find(p => p.provider === 'OLLAMA')
     if (ollamaProfile) {
@@ -367,7 +496,7 @@ export async function getCheapLLMProviderWithPricing(
     }
   }
 
-  // Strategy 3: Find the cheapest model across all available providers
+  // Priority 5: Find the cheapest model across all available providers
   // Get providers we have profiles for
   const availableProviders = [...new Set(availableProfiles.map(p => p.provider))]
 
@@ -403,7 +532,12 @@ export async function getCheapLLMProviderWithPricing(
     }
   }
 
-  // Fallback: Use the name-based heuristic
+  // Fallback: No dedicated cheap LLM available - warn and use current profile
+  if (onNoCheapLLM) {
+    onNoCheapLLM()
+  }
+
+  // Use the name-based heuristic
   const cheapModel = getCheapestModel(currentProfile.provider)
   const models = await getProviderPricing(currentProfile.provider, userId)
   const pricing = models.find(m => m.modelId === cheapModel)

@@ -1,24 +1,23 @@
 /**
- * Individual Connection Profile Operations
- * Phase 0.3: Core Infrastructure
+ * Individual Embedding Profile Operations
  *
- * GET    /api/profiles/[id]  - Get a specific profile
- * PUT    /api/profiles/[id]  - Update a profile
- * DELETE /api/profiles/[id]  - Delete a profile
+ * GET    /api/embedding-profiles/[id]  - Get a specific profile
+ * PUT    /api/embedding-profiles/[id]  - Update a profile
+ * DELETE /api/embedding-profiles/[id]  - Delete a profile
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
-import { ProviderEnum } from '@/lib/json-store/schemas/types'
+import { EmbeddingProfileProvider, EmbeddingProfileProviderEnum } from '@/lib/json-store/schemas/types'
 
-// Get the list of valid providers from the Zod enum
-const VALID_PROVIDERS = ProviderEnum.options
+// Get the list of valid embedding providers from the Zod enum
+const VALID_EMBEDDING_PROVIDERS = EmbeddingProfileProviderEnum.options
 
 /**
- * GET /api/profiles/[id]
- * Get a specific connection profile
+ * GET /api/embedding-profiles/[id]
+ * Get a specific embedding profile
  */
 export async function GET(
   req: NextRequest,
@@ -35,16 +34,16 @@ export async function GET(
     }
 
     const repos = getRepositories()
-    const profile = await repos.connections.findById(id)
+    const profile = await repos.embeddingProfiles.findById(id)
 
     if (!profile || profile.userId !== session.user.id) {
       return NextResponse.json(
-        { error: 'Connection profile not found' },
+        { error: 'Embedding profile not found' },
         { status: 404 }
       )
     }
 
-    // Get associated API key if present
+    // Enrich with API key info
     let apiKey = null
     if (profile.apiKeyId) {
       const key = await repos.connections.findApiKeyById(profile.apiKeyId)
@@ -58,31 +57,40 @@ export async function GET(
       }
     }
 
+    // Get tag details
+    const tagDetails = await Promise.all(
+      profile.tags.map(async (tagId) => {
+        const tag = await repos.tags.findById(tagId)
+        return tag ? { tagId, tag } : null
+      })
+    )
+
     return NextResponse.json({
       ...profile,
       apiKey,
+      tags: tagDetails.filter(Boolean),
     })
   } catch (error) {
-    console.error('Failed to fetch connection profile:', error)
+    console.error('Failed to fetch embedding profile:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch connection profile' },
+      { error: 'Failed to fetch embedding profile' },
       { status: 500 }
     )
   }
 }
 
 /**
- * PUT /api/profiles/[id]
- * Update a connection profile
+ * PUT /api/embedding-profiles/[id]
+ * Update an embedding profile
  *
  * Body: {
  *   name?: string,
- *   apiKeyId?: string,
- *   baseUrl?: string,
+ *   provider?: 'OPENAI' | 'OLLAMA',
+ *   apiKeyId?: string | null,
+ *   baseUrl?: string | null,
  *   modelName?: string,
- *   parameters?: object,
- *   isDefault?: boolean,
- *   isCheap?: boolean
+ *   dimensions?: number | null,
+ *   isDefault?: boolean
  * }
  */
 export async function PUT(
@@ -102,20 +110,20 @@ export async function PUT(
     const repos = getRepositories()
 
     // Verify ownership
-    const existingProfile = await repos.connections.findById(id)
+    const existingProfile = await repos.embeddingProfiles.findById(id)
 
     if (!existingProfile || existingProfile.userId !== session.user.id) {
       return NextResponse.json(
-        { error: 'Connection profile not found' },
+        { error: 'Embedding profile not found' },
         { status: 404 }
       )
     }
 
     const body = await req.json()
-    const { name, provider, apiKeyId, baseUrl, modelName, parameters, isDefault, isCheap } = body
+    const { name, provider, apiKeyId, baseUrl, modelName, dimensions, isDefault } = body
 
     // Build update data
-    const updateData: any = {}
+    const updateData: Record<string, any> = {}
 
     if (name !== undefined) {
       if (typeof name !== 'string' || name.trim().length === 0) {
@@ -124,16 +132,28 @@ export async function PUT(
           { status: 400 }
         )
       }
+
+      // Check for duplicate name (excluding current profile)
+      const duplicateProfile = await repos.embeddingProfiles.findByName(session.user.id, name.trim())
+
+      if (duplicateProfile && duplicateProfile.id !== id) {
+        return NextResponse.json(
+          { error: 'An embedding profile with this name already exists' },
+          { status: 409 }
+        )
+      }
+
       updateData.name = name.trim()
     }
 
     if (provider !== undefined) {
-      if (!provider || !VALID_PROVIDERS.includes(provider)) {
+      if (!VALID_EMBEDDING_PROVIDERS.includes(provider)) {
         return NextResponse.json(
-          { error: 'Invalid provider' },
+          { error: `Invalid provider. Must be one of: ${VALID_EMBEDDING_PROVIDERS.join(', ')}` },
           { status: 400 }
         )
       }
+
       updateData.provider = provider
     }
 
@@ -148,15 +168,6 @@ export async function PUT(
           return NextResponse.json(
             { error: 'API key not found' },
             { status: 404 }
-          )
-        }
-
-        // Ensure provider matches - use new provider if being updated, otherwise use existing
-        const providerToCheck = provider !== undefined ? provider : existingProfile.provider
-        if (apiKey.provider !== providerToCheck) {
-          return NextResponse.json(
-            { error: 'API key provider does not match profile provider' },
-            { status: 400 }
           )
         }
 
@@ -178,14 +189,17 @@ export async function PUT(
       updateData.modelName = modelName.trim()
     }
 
-    if (parameters !== undefined) {
-      if (typeof parameters !== 'object' || Array.isArray(parameters)) {
+    if (dimensions !== undefined) {
+      if (dimensions === null) {
+        updateData.dimensions = null
+      } else if (typeof dimensions !== 'number' || dimensions <= 0) {
         return NextResponse.json(
-          { error: 'Parameters must be an object' },
+          { error: 'Dimensions must be a positive number' },
           { status: 400 }
         )
+      } else {
+        updateData.dimensions = dimensions
       }
-      updateData.parameters = parameters
     }
 
     if (isDefault !== undefined) {
@@ -198,38 +212,23 @@ export async function PUT(
 
       // If setting as default, unset other defaults
       if (isDefault) {
-        const allProfiles = await repos.connections.findByUserId(session.user.id)
-        for (const profile of allProfiles) {
-          if (profile.isDefault && profile.id !== id) {
-            await repos.connections.update(profile.id, { isDefault: false })
-          }
-        }
+        await repos.embeddingProfiles.unsetAllDefaults(session.user.id)
       }
 
       updateData.isDefault = isDefault
     }
 
-    if (isCheap !== undefined) {
-      if (typeof isCheap !== 'boolean') {
-        return NextResponse.json(
-          { error: 'isCheap must be a boolean' },
-          { status: 400 }
-        )
-      }
-      updateData.isCheap = isCheap
-    }
-
     // Update the profile
-    const updatedProfile = await repos.connections.update(id, updateData)
+    const updatedProfile = await repos.embeddingProfiles.update(id, updateData)
 
     if (!updatedProfile) {
       return NextResponse.json(
-        { error: 'Failed to update connection profile' },
+        { error: 'Failed to update profile' },
         { status: 500 }
       )
     }
 
-    // Get associated API key if present
+    // Enrich with API key info
     let apiKey = null
     if (updatedProfile.apiKeyId) {
       const key = await repos.connections.findApiKeyById(updatedProfile.apiKeyId)
@@ -243,22 +242,31 @@ export async function PUT(
       }
     }
 
+    // Get tag details
+    const tagDetails = await Promise.all(
+      updatedProfile.tags.map(async (tagId) => {
+        const tag = await repos.tags.findById(tagId)
+        return tag ? { tagId, tag } : null
+      })
+    )
+
     return NextResponse.json({
       ...updatedProfile,
       apiKey,
+      tags: tagDetails.filter(Boolean),
     })
   } catch (error) {
-    console.error('Failed to update connection profile:', error)
+    console.error('Failed to update embedding profile:', error)
     return NextResponse.json(
-      { error: 'Failed to update connection profile' },
+      { error: 'Failed to update embedding profile' },
       { status: 500 }
     )
   }
 }
 
 /**
- * DELETE /api/profiles/[id]
- * Delete a connection profile
+ * DELETE /api/embedding-profiles/[id]
+ * Delete an embedding profile
  */
 export async function DELETE(
   req: NextRequest,
@@ -277,26 +285,26 @@ export async function DELETE(
     const repos = getRepositories()
 
     // Verify ownership
-    const existingProfile = await repos.connections.findById(id)
+    const existingProfile = await repos.embeddingProfiles.findById(id)
 
     if (!existingProfile || existingProfile.userId !== session.user.id) {
       return NextResponse.json(
-        { error: 'Connection profile not found' },
+        { error: 'Embedding profile not found' },
         { status: 404 }
       )
     }
 
     // Delete the profile
-    await repos.connections.delete(id)
+    await repos.embeddingProfiles.delete(id)
 
     return NextResponse.json(
-      { message: 'Connection profile deleted successfully' },
+      { message: 'Embedding profile deleted successfully' },
       { status: 200 }
     )
   } catch (error) {
-    console.error('Failed to delete connection profile:', error)
+    console.error('Failed to delete embedding profile:', error)
     return NextResponse.json(
-      { error: 'Failed to delete connection profile' },
+      { error: 'Failed to delete embedding profile' },
       { status: 500 }
     )
   }

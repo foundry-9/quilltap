@@ -23,7 +23,8 @@ function createMockProfile(
   id: string,
   provider: Provider,
   modelName: string,
-  baseUrl?: string
+  baseUrl?: string,
+  isCheap?: boolean
 ): ConnectionProfile {
   return {
     id,
@@ -35,6 +36,7 @@ function createMockProfile(
     apiKeyId: 'test-api-key-id',
     parameters: {},
     isDefault: false,
+    isCheap: isCheap || false,
     tags: [],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -94,6 +96,61 @@ describe('Cheap LLM Provider Selection', () => {
       'gpt-4o-mini'
     )
 
+    describe('defaultCheapProfileId (priority 1)', () => {
+      it('should use the global default cheap profile when set', () => {
+        const config: CheapLLMConfig = {
+          strategy: 'PROVIDER_CHEAPEST',
+          defaultCheapProfileId: 'cheap-profile',
+          fallbackToLocal: false,
+        }
+
+        const selection = getCheapLLMProvider(
+          anthropicProfile,
+          config,
+          [anthropicProfile, cheapUserProfile, ollamaProfile]
+        )
+
+        expect(selection.provider).toBe('OPENAI')
+        expect(selection.modelName).toBe('gpt-4o-mini')
+        expect(selection.connectionProfileId).toBe('cheap-profile')
+      })
+
+      it('should override USER_DEFINED strategy when defaultCheapProfileId is set', () => {
+        const config: CheapLLMConfig = {
+          strategy: 'USER_DEFINED',
+          userDefinedProfileId: 'anthropic-profile',
+          defaultCheapProfileId: 'cheap-profile',
+          fallbackToLocal: false,
+        }
+
+        const selection = getCheapLLMProvider(
+          anthropicProfile,
+          config,
+          [anthropicProfile, cheapUserProfile, ollamaProfile]
+        )
+
+        expect(selection.provider).toBe('OPENAI')
+        expect(selection.connectionProfileId).toBe('cheap-profile')
+      })
+
+      it('should fall through to other strategies if defaultCheapProfileId not found', () => {
+        const config: CheapLLMConfig = {
+          strategy: 'PROVIDER_CHEAPEST',
+          defaultCheapProfileId: 'non-existent-cheap-profile',
+          fallbackToLocal: false,
+        }
+
+        const selection = getCheapLLMProvider(
+          anthropicProfile,
+          config,
+          [anthropicProfile]
+        )
+
+        expect(selection.provider).toBe('ANTHROPIC')
+        expect(selection.modelName).toBe('claude-haiku-4-5-20251015')
+      })
+    })
+
     describe('PROVIDER_CHEAPEST strategy (default)', () => {
       it('should return the cheapest model for the current provider', () => {
         const selection = getCheapLLMProvider(anthropicProfile)
@@ -147,6 +204,82 @@ describe('Cheap LLM Provider Selection', () => {
 
         expect(selection.provider).toBe('ANTHROPIC')
         expect(selection.modelName).toBe('claude-haiku-4-5-20251015')
+      })
+    })
+
+    describe('isCheap profile flag (priority 3)', () => {
+      it('should use any profile marked as isCheap=true', () => {
+        const cheapOpenAIProfile = createMockProfile(
+          'cheap-openai',
+          'OPENAI',
+          'gpt-4o-mini',
+          undefined,
+          true
+        )
+
+        const selection = getCheapLLMProvider(
+          anthropicProfile,
+          DEFAULT_CHEAP_LLM_CONFIG,
+          [anthropicProfile, cheapOpenAIProfile]
+        )
+
+        expect(selection.provider).toBe('OPENAI')
+        expect(selection.modelName).toBe('gpt-4o-mini')
+        expect(selection.connectionProfileId).toBe('cheap-openai')
+      })
+
+      it('should prefer local Ollama profiles when marked as cheap', () => {
+        const cheapOllamaProfile = createMockProfile(
+          'cheap-ollama',
+          'OLLAMA',
+          'llama3.2:3b',
+          'http://localhost:11434',
+          true
+        )
+        const cheapOpenAIProfile = createMockProfile(
+          'cheap-openai',
+          'OPENAI',
+          'gpt-4o-mini',
+          undefined,
+          true
+        )
+
+        const selection = getCheapLLMProvider(
+          anthropicProfile,
+          DEFAULT_CHEAP_LLM_CONFIG,
+          [anthropicProfile, cheapOpenAIProfile, cheapOllamaProfile]
+        )
+
+        expect(selection.provider).toBe('OLLAMA')
+        expect(selection.isLocal).toBe(true)
+        expect(selection.connectionProfileId).toBe('cheap-ollama')
+      })
+
+      it('should use the first non-local cheap profile if no local cheap profile exists', () => {
+        const cheapOpenAIProfile = createMockProfile(
+          'cheap-openai',
+          'OPENAI',
+          'gpt-4o-mini',
+          undefined,
+          true
+        )
+        const cheapGoogleProfile = createMockProfile(
+          'cheap-google',
+          'GOOGLE',
+          'gemini-2.0-flash',
+          undefined,
+          true
+        )
+
+        const selection = getCheapLLMProvider(
+          anthropicProfile,
+          DEFAULT_CHEAP_LLM_CONFIG,
+          [anthropicProfile, cheapOpenAIProfile, cheapGoogleProfile]
+        )
+
+        // Should use the first cheap profile found
+        expect(selection.provider).toBe('OPENAI')
+        expect(selection.connectionProfileId).toBe('cheap-openai')
       })
     })
 
@@ -218,6 +351,50 @@ describe('Cheap LLM Provider Selection', () => {
 
         expect(selection.provider).toBe('ANTHROPIC')
         expect(selection.isLocal).toBe(false)
+      })
+    })
+
+    describe('onNoCheapLLM callback', () => {
+      it('should call onNoCheapLLM when no cheap LLM is available', () => {
+        const onNoCheapLLMCallback = jest.fn()
+
+        const config: CheapLLMConfig = {
+          strategy: 'USER_DEFINED',
+          userDefinedProfileId: 'non-existent',
+          fallbackToLocal: false,
+        }
+
+        getCheapLLMProvider(
+          anthropicProfile,
+          config,
+          [anthropicProfile],
+          false,
+          onNoCheapLLMCallback
+        )
+
+        expect(onNoCheapLLMCallback).toHaveBeenCalled()
+      })
+
+      it('should not call onNoCheapLLM when a cheap LLM is available', () => {
+        const onNoCheapLLMCallback = jest.fn()
+
+        const cheapOpenAIProfile = createMockProfile(
+          'cheap-openai',
+          'OPENAI',
+          'gpt-4o-mini',
+          undefined,
+          true
+        )
+
+        getCheapLLMProvider(
+          anthropicProfile,
+          DEFAULT_CHEAP_LLM_CONFIG,
+          [anthropicProfile, cheapOpenAIProfile],
+          false,
+          onNoCheapLLMCallback
+        )
+
+        expect(onNoCheapLLMCallback).not.toHaveBeenCalled()
       })
     })
   })

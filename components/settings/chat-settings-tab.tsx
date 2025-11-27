@@ -8,6 +8,17 @@ import { TagBadge } from '@/components/tags/tag-badge'
 
 type AvatarDisplayMode = 'ALWAYS' | 'GROUP_ONLY' | 'NEVER'
 type AvatarDisplayStyle = 'CIRCULAR' | 'RECTANGULAR'
+type CheapLLMStrategy = 'USER_DEFINED' | 'PROVIDER_CHEAPEST' | 'LOCAL_FIRST'
+type EmbeddingProvider = 'SAME_PROVIDER' | 'OPENAI' | 'LOCAL'
+
+interface CheapLLMSettings {
+  strategy: CheapLLMStrategy
+  userDefinedProfileId?: string | null
+  defaultCheapProfileId?: string | null
+  fallbackToLocal: boolean
+  embeddingProvider: EmbeddingProvider
+  embeddingProfileId?: string | null
+}
 
 interface ChatSettings {
   id: string
@@ -15,8 +26,26 @@ interface ChatSettings {
   avatarDisplayMode: AvatarDisplayMode
   avatarDisplayStyle: AvatarDisplayStyle
   tagStyles: Record<string, TagVisualStyle>
+  cheapLLMSettings: CheapLLMSettings
   createdAt: string
   updatedAt: string
+}
+
+interface ConnectionProfile {
+  id: string
+  name: string
+  provider: string
+  modelName: string
+  isDefault: boolean
+  isCheap?: boolean
+}
+
+interface EmbeddingProfile {
+  id: string
+  name: string
+  provider: string
+  modelName: string
+  isDefault: boolean
 }
 
 interface TagOption {
@@ -66,6 +95,9 @@ export default function ChatSettingsTab() {
   const [tagSaving, setTagSaving] = useState(false)
   const [tagOptions, setTagOptions] = useState<TagOption[]>([])
   const [selectedTagId, setSelectedTagId] = useState('')
+  const [connectionProfiles, setConnectionProfiles] = useState<ConnectionProfile[]>([])
+  const [embeddingProfiles, setEmbeddingProfiles] = useState<EmbeddingProfile[]>([])
+  const [loadingProfiles, setLoadingProfiles] = useState(false)
   const { updateStyles: syncTagStyleContext } = useTagStyles()
 
   const tagStyles = useMemo(() => settings?.tagStyles ?? {}, [settings?.tagStyles])
@@ -103,13 +135,37 @@ export default function ChatSettingsTab() {
     }
   }, [])
 
-  useEffect(() => {
-    fetchSettings()
-  }, [fetchSettings])
+  const fetchConnectionProfiles = useCallback(async () => {
+    try {
+      setLoadingProfiles(true)
+      const res = await fetch('/api/profiles')
+      if (!res.ok) throw new Error('Failed to fetch profiles')
+      const data = await res.json()
+      setConnectionProfiles(data)
+    } catch (err) {
+      console.error('Error loading connection profiles:', err)
+    } finally {
+      setLoadingProfiles(false)
+    }
+  }, [])
+
+  const fetchEmbeddingProfiles = useCallback(async () => {
+    try {
+      const res = await fetch('/api/embedding-profiles')
+      if (!res.ok) throw new Error('Failed to fetch embedding profiles')
+      const data = await res.json()
+      setEmbeddingProfiles(data)
+    } catch (err) {
+      console.error('Error loading embedding profiles:', err)
+    }
+  }, [])
 
   useEffect(() => {
+    fetchSettings()
     fetchTags()
-  }, [fetchTags])
+    fetchConnectionProfiles()
+    fetchEmbeddingProfiles()
+  }, [fetchSettings, fetchTags, fetchConnectionProfiles, fetchEmbeddingProfiles])
 
   const handleAvatarModeChange = async (mode: AvatarDisplayMode) => {
     if (!settings) return
@@ -227,6 +283,37 @@ export default function ChatSettingsTab() {
     persistTagStyles(rest)
   }, [applyLocalTagStyles, persistTagStyles, settings, tagStyles])
 
+  const handleCheapLLMUpdate = async (updates: Partial<CheapLLMSettings>) => {
+    if (!settings) return
+
+    try {
+      setSaving(true)
+      setError(null)
+      setSuccess(false)
+
+      const res = await fetch('/api/chat-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cheapLLMSettings: { ...settings.cheapLLMSettings, ...updates } }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to update cheap LLM settings')
+      }
+
+      const updatedSettings = await res.json()
+      setSettings(updatedSettings)
+      syncTagStyleContext(updatedSettings.tagStyles ?? {})
+      setSuccess(true)
+      setTimeout(() => setSuccess(false), 2000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleAddTagStyle = useCallback(() => {
     if (!selectedTagId || !settings) return
     const nextStyles = {
@@ -343,6 +430,180 @@ export default function ChatSettingsTab() {
               <div className="text-3xl">{style.preview}</div>
             </label>
           ))}
+        </div>
+      </div>
+
+      <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
+        <h2 className="text-xl font-semibold mb-4">Cheap LLM Settings</h2>
+        <p className="text-gray-600 dark:text-gray-400 mb-4">
+          Configure which LLM to use for background tasks like memory extraction and summarization
+        </p>
+
+        <div className="space-y-4">
+          {/* Strategy Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Strategy
+            </label>
+            <div className="space-y-2">
+              {[
+                { value: 'USER_DEFINED' as CheapLLMStrategy, label: 'User Defined', description: 'Use the profile you select below' },
+                { value: 'PROVIDER_CHEAPEST' as CheapLLMStrategy, label: 'Provider Cheapest', description: 'Automatically use the cheapest model from current provider' },
+                { value: 'LOCAL_FIRST' as CheapLLMStrategy, label: 'Local First', description: 'Prefer local/Ollama models if available' },
+              ].map((strategy) => (
+                <label
+                  key={strategy.value}
+                  className="flex items-start gap-3 p-3 border border-gray-200 dark:border-slate-700 rounded hover:bg-gray-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
+                >
+                  <input
+                    type="radio"
+                    name="cheapLLMStrategy"
+                    value={strategy.value}
+                    checked={settings?.cheapLLMSettings.strategy === strategy.value}
+                    onChange={() => handleCheapLLMUpdate({ strategy: strategy.value })}
+                    disabled={saving}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium text-sm">{strategy.label}</div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400">
+                      {strategy.description}
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* User Defined Profile Selection */}
+          {settings?.cheapLLMSettings.strategy === 'USER_DEFINED' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Select Cheap LLM Profile
+              </label>
+              <select
+                value={settings?.cheapLLMSettings.userDefinedProfileId || ''}
+                onChange={(e) => handleCheapLLMUpdate({ userDefinedProfileId: e.target.value || null })}
+                disabled={saving || loadingProfiles}
+                className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select a profile...</option>
+                {connectionProfiles.map((profile) => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.name} ({profile.provider} • {profile.modelName})
+                  </option>
+                ))}
+              </select>
+              {connectionProfiles.length === 0 && !loadingProfiles && (
+                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  No connection profiles found. Create one in the Connection Profiles tab first.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Default Cheap Profile (Global Override) */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Global Default Cheap LLM (Optional Override)
+            </label>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+              If set, this profile will always be used regardless of strategy
+            </p>
+            <select
+              value={settings?.cheapLLMSettings.defaultCheapProfileId || ''}
+              onChange={(e) => handleCheapLLMUpdate({ defaultCheapProfileId: e.target.value || null })}
+              disabled={saving || loadingProfiles}
+              className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Not set</option>
+              {connectionProfiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name} ({profile.provider} • {profile.modelName})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Fallback to Local */}
+          <label className="flex items-center gap-3 p-3 border border-gray-200 dark:border-slate-700 rounded hover:bg-gray-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+            <input
+              type="checkbox"
+              checked={settings?.cheapLLMSettings.fallbackToLocal ?? true}
+              onChange={(e) => handleCheapLLMUpdate({ fallbackToLocal: e.target.checked })}
+              disabled={saving}
+              className="rounded"
+            />
+            <div className="flex-1">
+              <div className="font-medium text-sm">Fallback to Local</div>
+              <div className="text-xs text-gray-600 dark:text-gray-400">
+                Use local Ollama models as fallback if configured strategy is unavailable
+              </div>
+            </div>
+          </label>
+
+          {/* Embedding Provider */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Embedding Provider
+            </label>
+            <div className="space-y-2">
+              {[
+                { value: 'SAME_PROVIDER' as EmbeddingProvider, label: 'Same Provider', description: 'Use embeddings from the same provider as the cheap LLM' },
+                { value: 'OPENAI' as EmbeddingProvider, label: 'OpenAI', description: 'Use OpenAI for embeddings' },
+                { value: 'LOCAL' as EmbeddingProvider, label: 'Local', description: 'Use local Ollama embeddings' },
+              ].map((provider) => (
+                <label
+                  key={provider.value}
+                  className="flex items-start gap-3 p-3 border border-gray-200 dark:border-slate-700 rounded hover:bg-gray-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
+                >
+                  <input
+                    type="radio"
+                    name="embeddingProvider"
+                    value={provider.value}
+                    checked={settings?.cheapLLMSettings.embeddingProvider === provider.value}
+                    onChange={() => handleCheapLLMUpdate({ embeddingProvider: provider.value })}
+                    disabled={saving}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium text-sm">{provider.label}</div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400">
+                      {provider.description}
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Embedding Profile Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Embedding Profile (Optional)
+            </label>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+              Specific embedding profile to use. Leave blank to use the default for the selected embedding provider.
+            </p>
+            <select
+              value={settings?.cheapLLMSettings.embeddingProfileId || ''}
+              onChange={(e) => handleCheapLLMUpdate({ embeddingProfileId: e.target.value || null })}
+              disabled={saving}
+              className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Use default for provider</option>
+              {embeddingProfiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name} ({profile.provider} • {profile.modelName})
+                </option>
+              ))}
+            </select>
+            {embeddingProfiles.length === 0 && (
+              <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                No embedding profiles found. Create one in the Embedding Profiles tab.
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
