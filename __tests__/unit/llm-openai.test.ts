@@ -85,7 +85,7 @@ describe('OpenAIProvider', () => {
         model: 'gpt-4',
         messages: mockParams.messages,
         temperature: 0.7,
-        max_tokens: 1000,
+        max_completion_tokens: 1000,
         top_p: 1,
         stop: undefined,
       })
@@ -130,8 +130,7 @@ describe('OpenAIProvider', () => {
       expect(mockOpenAIInstance.chat.completions.create).toHaveBeenCalledWith({
         model: 'gpt-3.5-turbo',
         messages: minimalParams.messages,
-        temperature: 0.7,
-        max_tokens: 1000,
+        max_completion_tokens: 1000,
         top_p: 1,
         stop: undefined,
       })
@@ -165,7 +164,7 @@ describe('OpenAIProvider', () => {
         model: 'gpt-4',
         messages: customParams.messages,
         temperature: 0.5,
-        max_tokens: 2000,
+        max_completion_tokens: 2000,
         top_p: 0.9,
         stop: ['END', 'STOP'],
       })
@@ -295,8 +294,7 @@ describe('OpenAIProvider', () => {
       expect(mockOpenAIInstance.chat.completions.create).toHaveBeenCalledWith({
         model: 'gpt-4',
         messages: mockParams.messages,
-        temperature: 0.7,
-        max_tokens: 1000,
+        max_completion_tokens: 1000,
         top_p: 1,
         stream: true,
         stream_options: { include_usage: true },
@@ -401,7 +399,7 @@ describe('OpenAIProvider', () => {
         model: 'gpt-3.5-turbo',
         messages: customParams.messages,
         temperature: 0.9,
-        max_tokens: 500,
+        max_completion_tokens: 500,
         top_p: 0.8,
         stream: true,
         stream_options: { include_usage: true },

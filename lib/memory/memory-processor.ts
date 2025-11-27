@@ -10,6 +10,7 @@ import { getRepositories } from '@/lib/json-store/repositories'
 import { extractMemoryFromMessage, extractCharacterMemoryFromMessage, MemoryCandidate } from './cheap-llm-tasks'
 import { getCheapLLMProvider, CheapLLMConfig, CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { ConnectionProfile, CheapLLMSettings, Memory } from '@/lib/json-store/schemas/types'
+import { createMemoryWithEmbedding, findSimilarMemories } from './memory-service'
 
 /**
  * Context for memory extraction
@@ -86,13 +87,42 @@ function buildExtractionContext(ctx: MemoryExtractionContext): string {
 }
 
 /**
- * Checks if a similar memory already exists
- * Uses keyword-based search for now; semantic search will be added in Sprint 4
+ * Checks if a similar memory already exists using semantic similarity
+ * Falls back to keyword-based search if embedding is not available
  */
 async function checkForDuplicateMemory(
   characterId: string,
-  candidate: MemoryCandidate
+  candidate: MemoryCandidate,
+  userId: string
 ): Promise<boolean> {
+  const content = candidate.content || ''
+  const summary = candidate.summary || ''
+
+  // Try semantic similarity first
+  try {
+    const similarMemories = await findSimilarMemories(
+      characterId,
+      content,
+      summary,
+      {
+        userId,
+        threshold: 0.85, // High threshold for duplicate detection
+      }
+    )
+
+    if (similarMemories.length > 0) {
+      console.debug(
+        `[Memory] Found ${similarMemories.length} semantically similar memories ` +
+        `(highest similarity: ${similarMemories[0].similarity.toFixed(3)})`
+      )
+      return true
+    }
+  } catch (error) {
+    // Fall back to keyword-based search
+    console.debug('[Memory] Semantic duplicate check failed, using keyword fallback')
+  }
+
+  // Fallback: keyword-based duplicate detection
   if (!candidate.keywords || candidate.keywords.length === 0) {
     return false
   }
@@ -110,8 +140,7 @@ async function checkForDuplicateMemory(
   }
 
   // Check for high overlap in content
-  // This is a simple heuristic; semantic similarity will improve this in Sprint 4
-  const candidateContent = (candidate.content || '').toLowerCase()
+  const candidateContent = content.toLowerCase()
 
   for (const memory of existingMemories) {
     const memoryContent = memory.content.toLowerCase()
@@ -128,7 +157,7 @@ async function checkForDuplicateMemory(
 
     // Also check for significant content overlap
     if (candidateContent.length > 50 && memoryContent.length > 50) {
-      // Simple substring check for now
+      // Simple substring check
       if (
         candidateContent.includes(memoryContent.substring(0, 50)) ||
         memoryContent.includes(candidateContent.substring(0, 50))
@@ -142,25 +171,30 @@ async function checkForDuplicateMemory(
 }
 
 /**
- * Creates a memory from an extraction candidate
+ * Creates a memory from an extraction candidate with embedding generation
  */
 async function createMemoryFromCandidate(
   ctx: MemoryExtractionContext,
   candidate: MemoryCandidate
 ): Promise<Memory> {
-  const repos = getRepositories()
-
-  const memory = await repos.memories.create({
-    characterId: ctx.characterId,
-    chatId: ctx.chatId,
-    content: candidate.content || '',
-    summary: candidate.summary || '',
-    keywords: candidate.keywords || [],
-    importance: candidate.importance || 0.5,
-    source: 'AUTO',
-    sourceMessageId: ctx.sourceMessageId,
-    tags: [], // Could inherit from character/chat tags in the future
-  })
+  // Use the memory service which handles embedding generation
+  const memory = await createMemoryWithEmbedding(
+    {
+      characterId: ctx.characterId,
+      chatId: ctx.chatId,
+      content: candidate.content || '',
+      summary: candidate.summary || '',
+      keywords: candidate.keywords || [],
+      importance: candidate.importance || 0.5,
+      source: 'AUTO',
+      sourceMessageId: ctx.sourceMessageId,
+      tags: [], // Could inherit from character/chat tags in the future
+    },
+    {
+      userId: ctx.userId,
+      // Embedding generation is automatic if profile is configured
+    }
+  )
 
   return memory
 }
@@ -228,7 +262,7 @@ export async function processMessageForMemory(
       const userCandidate = userMemoryResult.result
 
       if (userCandidate?.significant) {
-        const isDuplicate = await checkForDuplicateMemory(ctx.characterId, userCandidate)
+        const isDuplicate = await checkForDuplicateMemory(ctx.characterId, userCandidate, ctx.userId)
         if (!isDuplicate) {
           const memory = await createMemoryFromCandidate(ctx, userCandidate)
           memoryCreated = true
@@ -262,7 +296,7 @@ export async function processMessageForMemory(
       const charCandidate = characterMemoryResult.result
 
       if (charCandidate?.significant) {
-        const isDuplicate = await checkForDuplicateMemory(ctx.characterId, charCandidate)
+        const isDuplicate = await checkForDuplicateMemory(ctx.characterId, charCandidate, ctx.userId)
         if (!isDuplicate) {
           await createMemoryFromCandidate(ctx, charCandidate)
 

@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
+import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
 import { z } from 'zod'
 
 // Validation schema for search request
@@ -12,6 +13,7 @@ const searchMemorySchema = z.object({
   query: z.string().min(1, 'Search query is required'),
   limit: z.number().min(1).max(100).default(20),
   minImportance: z.number().min(0).max(1).optional(),
+  minScore: z.number().min(0).max(1).optional(),
   source: z.enum(['AUTO', 'MANUAL']).optional(),
 })
 
@@ -44,45 +46,40 @@ export async function POST(
     }
 
     const body = await req.json()
-    const { query, limit, minImportance, source } = searchMemorySchema.parse(body)
+    const { query, limit, minImportance, minScore, source } = searchMemorySchema.parse(body)
 
-    // For now, use text-based search (semantic search will be added in Sprint 4)
-    let memories = await repos.memories.searchByContent(characterId, query)
-
-    // Apply additional filters
-    if (minImportance !== undefined) {
-      memories = memories.filter(m => m.importance >= minImportance)
-    }
-
-    if (source) {
-      memories = memories.filter(m => m.source === source)
-    }
-
-    // Sort by importance (most important first) and limit
-    memories = memories
-      .sort((a, b) => b.importance - a.importance)
-      .slice(0, limit)
+    // Use semantic search (falls back to text search if embedding unavailable)
+    const searchResults = await searchMemoriesSemantic(characterId, query, {
+      userId: user.id,
+      limit,
+      minScore,
+      minImportance,
+      source,
+    })
 
     // Enrich with tag names
     const allTags = await repos.tags.findAll()
     const tagMap = new Map(allTags.map(t => [t.id, t]))
 
-    const memoriesWithTags = memories.map(memory => ({
-      ...memory,
-      tagDetails: memory.tags
+    const memoriesWithTags = searchResults.map(result => ({
+      ...result.memory,
+      score: result.score,
+      usedEmbedding: result.usedEmbedding,
+      tagDetails: result.memory.tags
         .map(tagId => tagMap.get(tagId))
         .filter(Boolean),
     }))
 
     // Update access times for returned memories (fire and forget)
     Promise.all(
-      memories.map(m => repos.memories.updateAccessTime(characterId, m.id))
+      searchResults.map(r => repos.memories.updateAccessTime(characterId, r.memory.id))
     ).catch(console.error)
 
     return NextResponse.json({
       memories: memoriesWithTags,
       count: memoriesWithTags.length,
       query,
+      usedEmbedding: searchResults.length > 0 ? searchResults[0].usedEmbedding : false,
     })
   } catch (error) {
     if (error instanceof z.ZodError) {

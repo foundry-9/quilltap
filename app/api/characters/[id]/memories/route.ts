@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
+import { createMemoryWithEmbedding } from '@/lib/memory/memory-service'
 import { z } from 'zod'
 
 // Validation schema for creating a memory
@@ -156,10 +157,25 @@ export async function POST(
     const body = await req.json()
     const validatedData = createMemorySchema.parse(body)
 
-    const memory = await repos.memories.create({
-      characterId,
-      ...validatedData,
-    })
+    // Create memory with embedding generation
+    const memory = await createMemoryWithEmbedding(
+      {
+        characterId,
+        content: validatedData.content,
+        summary: validatedData.summary,
+        keywords: validatedData.keywords,
+        tags: validatedData.tags,
+        importance: validatedData.importance,
+        personaId: validatedData.personaId,
+        chatId: validatedData.chatId,
+        source: validatedData.source,
+        sourceMessageId: validatedData.sourceMessageId,
+      },
+      {
+        userId: user.id,
+        // Embedding generation is automatic if profile is configured
+      }
+    )
 
     return NextResponse.json({ memory }, { status: 201 })
   } catch (error) {
