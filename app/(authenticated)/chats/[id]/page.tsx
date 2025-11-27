@@ -32,6 +32,7 @@ interface Message {
   swipeGroupId?: string | null
   swipeIndex?: number | null
   attachments?: MessageAttachment[]
+  debugMemoryLogs?: string[]
 }
 
 interface CharacterData {
@@ -115,6 +116,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const { id } = use(params)
   useAvatarDisplay()
   const debug = useDebugOptional()
+  console.log('[ChatPage] Rendered, debug available:', !!debug, 'debug.isDebugMode:', debug?.isDebugMode)
   const [chat, setChat] = useState<Chat | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -442,6 +444,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 }
               }
 
+              // Handle memory debug logs (arrive after done event)
+              if (data.debugMemoryLogs && debug?.isDebugMode && responseEntryId) {
+                debug.updateEntry(responseEntryId, { debugMemoryLogs: data.debugMemoryLogs })
+              }
+
               if (data.done) {
                 // Debug: Finalize streaming entry with stitched content
                 if (debug?.isDebugMode && responseEntryId) {
@@ -458,8 +465,33 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 setMessages((prev) => [...prev, assistantMessage])
                 setStreamingContent('')
                 setStreaming(false)
-                // Refresh chat to get tool messages
+                // Refresh chat to get tool messages and memory debug logs
                 await fetchChat()
+                // Update debug entry with memory logs from the fetched chat (with polling)
+                if (debug?.isDebugMode && responseEntryId) {
+                  let pollCount = 0
+                  const maxPolls = 20 // Poll for up to 20 seconds (1 second intervals)
+                  const pollInterval = setInterval(async () => {
+                    pollCount++
+                    try {
+                      const chatRes = await fetch(`/api/chats/${id}`)
+                      if (chatRes.ok) {
+                        const chatData = await chatRes.json()
+                        const fetchedMessage = chatData.chat.messages.find((m: Message) => m.id === data.messageId)
+                        if (fetchedMessage?.debugMemoryLogs) {
+                          debug.updateEntry(responseEntryId, { debugMemoryLogs: fetchedMessage.debugMemoryLogs })
+                          clearInterval(pollInterval)
+                        } else if (pollCount >= maxPolls) {
+                          clearInterval(pollInterval)
+                        }
+                      }
+                    } catch {
+                      if (pollCount >= maxPolls) {
+                        clearInterval(pollInterval)
+                      }
+                    }
+                  }, 1000)
+                }
                 // Clear tool status after a short delay
                 setTimeout(() => setToolExecutionStatus(null), 3000)
               }
@@ -1054,7 +1086,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 title="Tools menu"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4 2 2 0 000-4zm0 0V4m0 2a2 2 0 100 4 2 2 0 000-4zm6 6v-2m0 2a2 2 0 100 4 2 2 0 000-4zm0 0v-2m0 2a2 2 0 100 4 2 2 0 000-4zm-6 6v-2m0 2a2 2 0 100 4 2 2 0 000-4zm0 0v-2m0 2a2 2 0 100 4 2 2 0 000-4z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
               <ToolPalette

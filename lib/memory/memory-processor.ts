@@ -58,6 +58,8 @@ export interface MemoryProcessingResult {
     completionTokens: number
     totalTokens: number
   }
+  /** Debug log messages for display in frontend */
+  debugLogs?: string[]
 }
 
 /**
@@ -111,15 +113,10 @@ async function checkForDuplicateMemory(
     )
 
     if (similarMemories.length > 0) {
-      console.debug(
-        `[Memory] Found ${similarMemories.length} semantically similar memories ` +
-        `(highest similarity: ${similarMemories[0].similarity.toFixed(3)})`
-      )
       return true
     }
   } catch (error) {
     // Fall back to keyword-based search
-    console.debug('[Memory] Semantic duplicate check failed, using keyword fallback')
   }
 
   // Fallback: keyword-based duplicate detection
@@ -212,6 +209,8 @@ async function createMemoryFromCandidate(
 export async function processMessageForMemory(
   ctx: MemoryExtractionContext
 ): Promise<MemoryProcessingResult> {
+  const debugLogs: string[] = []
+
   try {
     // Get cheap LLM provider selection
     const config = toCheapLLMConfig(ctx.cheapLLMSettings)
@@ -268,21 +267,28 @@ export async function processMessageForMemory(
           memoryCreated = true
           memoryId = memory.id
 
-          console.debug(
-            `[Memory] Created USER memory for ${ctx.characterName}:\n` +
+          const logMsg = `[Memory] Created USER memory for ${ctx.characterName}:\n` +
             `  Content: ${userCandidate.content}\n` +
             `  Summary: ${userCandidate.summary}\n` +
             `  Importance: ${userCandidate.importance}\n` +
             `  Keywords: ${userCandidate.keywords?.join(', ')}`
-          )
+          debugLogs.push(logMsg)
+        } else {
+          const logMsg = `[Memory] USER memory skipped (duplicate) for ${ctx.characterName}:\n` +
+            `  Summary: ${userCandidate.summary}`
+          debugLogs.push(logMsg)
         }
+      } else {
+        const logMsg = `[Memory] USER memory not significant enough for ${ctx.characterName}:\n` +
+          `  Summary: ${userCandidate?.summary || 'N/A'}\n` +
+          `  Importance: ${userCandidate?.importance || 'N/A'}`
+        debugLogs.push(logMsg)
       }
     } else if (!userMemoryResult.success) {
-      console.error(
-        `[Memory] USER memory extraction failed for ${ctx.characterName}:\n` +
+      const logMsg = `[Memory] USER memory extraction failed for ${ctx.characterName}:\n` +
         `  Error: ${userMemoryResult.error}\n` +
         `  User message: ${ctx.userMessage.substring(0, 200)}${ctx.userMessage.length > 200 ? '...' : ''}`
-      )
+      debugLogs.push(logMsg)
     }
 
     // Process character memory
@@ -300,21 +306,28 @@ export async function processMessageForMemory(
         if (!isDuplicate) {
           await createMemoryFromCandidate(ctx, charCandidate)
 
-          console.debug(
-            `[Memory] Created CHARACTER memory for ${ctx.characterName}:\n` +
+          const logMsg = `[Memory] Created CHARACTER memory for ${ctx.characterName}:\n` +
             `  Content: ${charCandidate.content}\n` +
             `  Summary: ${charCandidate.summary}\n` +
             `  Importance: ${charCandidate.importance}\n` +
             `  Keywords: ${charCandidate.keywords?.join(', ')}`
-          )
+          debugLogs.push(logMsg)
+        } else {
+          const logMsg = `[Memory] CHARACTER memory skipped (duplicate) for ${ctx.characterName}:\n` +
+            `  Summary: ${charCandidate.summary}`
+          debugLogs.push(logMsg)
         }
+      } else {
+        const logMsg = `[Memory] CHARACTER memory not significant enough for ${ctx.characterName}:\n` +
+          `  Summary: ${charCandidate?.summary || 'N/A'}\n` +
+          `  Importance: ${charCandidate?.importance || 'N/A'}`
+        debugLogs.push(logMsg)
       }
     } else if (!characterMemoryResult.success) {
-      console.error(
-        `[Memory] CHARACTER memory extraction failed for ${ctx.characterName}:\n` +
+      const logMsg = `[Memory] CHARACTER memory extraction failed for ${ctx.characterName}:\n` +
         `  Error: ${characterMemoryResult.error}\n` +
         `  Character message: ${ctx.assistantMessage.substring(0, 200)}${ctx.assistantMessage.length > 200 ? '...' : ''}`
-      )
+      debugLogs.push(logMsg)
     }
 
     return {
@@ -322,14 +335,17 @@ export async function processMessageForMemory(
       memoryCreated,
       memoryId,
       usage: totalUsage,
+      debugLogs: debugLogs.length > 0 ? debugLogs : undefined,
     }
   } catch (error) {
     // Never let memory processing break the chat flow
-    console.error('Memory processing error:', error)
+    const errorMsg = 'Memory processing error:' + (error instanceof Error ? error.message : 'Unknown error')
+    console.error(errorMsg)
     return {
       success: false,
       memoryCreated: false,
       error: error instanceof Error ? error.message : 'Unknown error',
+      debugLogs: debugLogs.length > 0 ? debugLogs : undefined,
     }
   }
 }
@@ -341,7 +357,8 @@ export async function processMessageForMemory(
  * Use this when you want to trigger memory extraction without blocking.
  */
 export function processMessageForMemoryAsync(
-  ctx: MemoryExtractionContext
+  ctx: MemoryExtractionContext,
+  onComplete?: (result: MemoryProcessingResult) => void
 ): void {
   processMessageForMemory(ctx)
     .then(result => {
@@ -352,6 +369,8 @@ export function processMessageForMemoryAsync(
       } else if (!result.success) {
         console.warn(`[Memory] Extraction failed: ${result.error}`)
       }
+      // Call the callback with the full result
+      onComplete?.(result)
       // Silent success without memory creation is normal (not everything is significant)
     })
     .catch(error => {

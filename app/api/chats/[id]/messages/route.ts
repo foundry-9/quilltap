@@ -592,6 +592,29 @@ export async function POST(
             }
             await repos.chats.addMessage(id, assistantMessage)
 
+            // Save tool messages if tools were executed
+            const firstToolMessageId = toolMessages.length > 0
+              ? await saveToolMessages(repos, id, user.id, toolMessages, generatedImagePaths)
+              : null
+
+            // Update chat timestamp
+            await repos.chats.update(id, { updatedAt: new Date().toISOString() })
+
+            // Send final message - use assistant message ID if available, otherwise use the first tool message ID
+            const finalMessageId = assistantMessageId || firstToolMessageId
+
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  done: true,
+                  messageId: finalMessageId,
+                  usage,
+                  attachmentResults,
+                  toolsExecuted: toolMessages.length > 0,
+                })}\n\n`
+              )
+            )
+
             // Trigger automatic memory extraction (non-blocking)
             try {
               if (chatSettings) {
@@ -607,6 +630,15 @@ export async function POST(
                   connectionProfile,
                   cheapLLMSettings: chatSettings.cheapLLMSettings,
                   availableProfiles,
+                }, async (result) => {
+                  // Store memory debug logs in the assistant message if available
+                  if (result.debugLogs && result.debugLogs.length > 0 && assistantMessageId) {
+                    try {
+                      await repos.chats.updateMessage(id, assistantMessageId, { debugMemoryLogs: result.debugLogs })
+                    } catch (e) {
+                      console.error('Failed to store memory debug logs:', e)
+                    }
+                  }
                 })
 
                 // Check if we need to generate a context summary (non-blocking)
@@ -623,32 +655,14 @@ export async function POST(
             } catch (memoryError) {
               console.error('Failed to trigger memory extraction:', memoryError)
             }
+
+            // Close the stream
+            try {
+              controller.close()
+            } catch (e) {
+              // Already closed, ignore
+            }
           }
-
-          // Save tool messages if tools were executed
-          const firstToolMessageId = toolMessages.length > 0 
-            ? await saveToolMessages(repos, id, user.id, toolMessages, generatedImagePaths)
-            : null
-
-          // Update chat timestamp
-          await repos.chats.update(id, { updatedAt: new Date().toISOString() })
-
-          // Send final message - use assistant message ID if available, otherwise use the first tool message ID
-          const finalMessageId = assistantMessageId || firstToolMessageId
-
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({
-                done: true,
-                messageId: finalMessageId,
-                usage,
-                attachmentResults,
-                toolsExecuted: toolMessages.length > 0,
-              })}\n\n`
-            )
-          )
-
-          controller.close()
         } catch (error) {
           console.error('Streaming error:', error)
           controller.enqueue(

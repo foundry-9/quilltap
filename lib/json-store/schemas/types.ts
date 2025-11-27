@@ -306,6 +306,8 @@ export const MessageEventSchema = z.object({
   swipeIndex: z.number().nullable().optional(),
   attachments: z.array(UUIDSchema).default([]),
   createdAt: TimestampSchema,
+  // Debug: Memory extraction logs (Sprint 6)
+  debugMemoryLogs: z.array(z.string()).optional(),
 });
 
 export type MessageEvent = z.infer<typeof MessageEventSchema>;

@@ -357,6 +357,7 @@ function DebugEntryCard({ entry }: { entry: DebugEntry }) {
                 )}
               </div>
             )}
+
             {/* Tools */}
             {entry.llmRequestDetails.tools && entry.llmRequestDetails.tools.length > 0 && (
               <div className="group/tools">
@@ -373,6 +374,26 @@ function DebugEntryCard({ entry }: { entry: DebugEntry }) {
             )}
           </div>
         </details>
+      )}
+
+      {/* Memory Extraction Debug Logs - shown regardless of LLM Request Details */}
+      {entry.debugMemoryLogs && entry.debugMemoryLogs.length > 0 && (
+        <div className="mb-2 p-3 bg-indigo-100 dark:bg-indigo-900/60 rounded border-2 border-indigo-500 dark:border-indigo-600">
+          <div className="text-xs font-semibold text-indigo-800 dark:text-indigo-200 mb-2 flex items-center gap-1">
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+              <path fillRule="evenodd" d="M4 5a2 2 0 012-2 1 1 0 000-2H6a6 6 0 016 6v3h2a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2v-6a2 2 0 012-2h2V7a1 1 0 000 2H4z" clipRule="evenodd" />
+            </svg>
+            🧠 Memory Extraction ({entry.debugMemoryLogs.length})
+          </div>
+          <div className="space-y-2">
+            {entry.debugMemoryLogs.map((log) => (
+              <div key={`log-${log.substring(0, 50)}`} className="text-xs p-2 bg-indigo-50 dark:bg-slate-800 rounded border border-indigo-400 dark:border-indigo-500 font-mono whitespace-pre-wrap break-words text-indigo-900 dark:text-indigo-100">
+                {log}
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Final Event JSON (shown by default for completed streaming responses) */}

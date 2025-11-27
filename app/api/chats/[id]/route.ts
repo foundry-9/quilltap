@@ -345,6 +345,7 @@ export async function GET(
             swipeGroupId: event.swipeGroupId || null,
             swipeIndex: event.swipeIndex || null,
             attachments,
+            debugMemoryLogs: event.debugMemoryLogs || undefined,
           }
         })
     ).then(results => results.filter(Boolean))

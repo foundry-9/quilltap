@@ -454,6 +454,33 @@ export class ChatsRepository extends BaseRepository<ChatMetadata> {
   }
 
   /**
+   * Update a specific message in a chat
+   */
+  async updateMessage(chatId: string, messageId: string, updates: Partial<ChatEvent>): Promise<ChatEvent | null> {
+    try {
+      const messages = await this.getMessages(chatId);
+      const messageIndex = messages.findIndex(m => m.id === messageId);
+
+      if (messageIndex === -1) {
+        return null;
+      }
+
+      // Merge updates with existing message
+      const updatedMessage = { ...messages[messageIndex], ...updates };
+      const validated = ChatEventSchema.parse(updatedMessage);
+
+      // Replace all messages in the file with updated version
+      messages[messageIndex] = validated;
+      await this.jsonStore.writeJsonl(this.getChatPath(chatId), messages);
+
+      return validated;
+    } catch (error) {
+      console.error(`Failed to update message ${messageId} in chat ${chatId}:`, error);
+      return null;
+    }
+  }
+
+  /**
    * Get message count for a chat
    */
   async getMessageCount(chatId: string): Promise<number> {
