@@ -3,7 +3,7 @@
 AI-powered roleplay chat platform with multi-provider LLM support and full SillyTavern compatibility.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.5.17-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-1.5.18-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -180,7 +180,7 @@ For local development, you only need Node.js:
 npm install
 ```
 
-#### 2. Configure environment variables
+#### 2. Configure environment variables (local hosting)
 
 ```bash
 cp .env.example .env.local
@@ -202,7 +202,7 @@ All data will be stored in the `data/` directory in JSON files. The application 
 
 For production deployment with Docker, Nginx, and SSL:
 
-### Prerequisites
+### Hosting Prerequisites
 
 - A domain name pointed to your server
 - Port 80 and 443 open on your firewall
@@ -373,7 +373,7 @@ Copyright (c) 2025 Foundry-9
 
 - **Issues**: [GitHub Issues](https://github.com/foundry-9/quilltap/issues)
 - **Author**: Charles Sebold
-- **Email**: charles@sebold.tech
+- **Email**: <charles@sebold.tech>
 - **Website**: <https://foundry-9.com>
 
 ## Release History

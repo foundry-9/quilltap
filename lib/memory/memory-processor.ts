@@ -212,7 +212,7 @@ export async function processMessageForMemory(
     const candidate = result.result
 
     // Check if extraction found something significant
-    if (!candidate || !candidate.significant) {
+    if (!candidate?.significant) {
       return {
         success: true,
         memoryCreated: false,

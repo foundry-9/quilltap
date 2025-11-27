@@ -105,7 +105,151 @@ function getToolsForProvider(provider: string, imageProfileId?: string | null, i
   }
 }
 
-// POST /api/chats/:id/messages - Send message with streaming response
+// Helper function to load attached files
+async function loadAttachedFiles(repos: ReturnType<typeof getRepositories>, chatId: string, fileIds?: string[]) {
+  if (!fileIds || fileIds.length === 0) {
+    return []
+  }
+
+  const allImages = await repos.images.findByChatId(chatId)
+  return allImages
+    .filter(img => fileIds.includes(img.id))
+    .map(img => ({
+      id: img.id,
+      filepath: img.relativePath,
+      filename: img.filename,
+      mimeType: img.mimeType,
+      size: img.size,
+    }))
+}
+
+// Helper function to process tool execution results
+async function processToolResults(
+  toolCalls: Array<{ name: string; arguments: Record<string, unknown> }>,
+  chatId: string,
+  userId: string,
+  imageProfileId: string | undefined,
+  controller: ReadableStreamDefaultController,
+  encoder: TextEncoder
+) {
+  const toolMessages: Array<{ toolName: string; success: boolean; content: string; arguments?: Record<string, unknown>; metadata?: { provider?: string; model?: string } }> = []
+  const generatedImagePaths: Array<{ filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number; sha256?: string }> = []
+
+  controller.enqueue(
+    encoder.encode(`data: ${JSON.stringify({ toolsDetected: toolCalls.length })}\n\n`)
+  )
+
+  for (const toolCall of toolCalls) {
+    const toolResult = await executeToolCall(toolCall, chatId, userId, imageProfileId)
+
+    if (toolResult.success && Array.isArray(toolResult.result)) {
+      for (const img of toolResult.result) {
+        if (img.filepath) {
+          generatedImagePaths.push({
+            filename: img.filename,
+            filepath: img.filepath,
+            mimeType: img.mimeType || 'image/png',
+            size: img.size || 0,
+            width: img.width,
+            height: img.height,
+            sha256: img.sha256,
+          })
+        }
+      }
+    }
+
+    let resultText: string
+    if (!toolResult.success) {
+      resultText = `Error: ${toolResult.error || 'Unknown error'}`
+    } else if (toolResult.toolName === 'generate_image') {
+      resultText = `Generated ${(toolResult.result as unknown[])?.length || 1} image(s)`
+    } else {
+      resultText = JSON.stringify(toolResult.result, null, 2)
+    }
+
+    toolMessages.push({
+      toolName: toolResult.toolName,
+      success: toolResult.success,
+      content: resultText,
+      arguments: toolCall.arguments,
+      metadata: toolResult.metadata,
+    })
+
+    controller.enqueue(
+      encoder.encode(
+        `data: ${JSON.stringify({
+          toolResult: {
+            name: toolResult.toolName,
+            success: toolResult.success,
+            result: toolResult.result,
+          },
+        })}\n\n`
+      )
+    )
+  }
+
+  return { toolMessages, generatedImagePaths }
+}
+
+// Helper function to save tool messages and generated images
+async function saveToolMessages(
+  repos: ReturnType<typeof getRepositories>,
+  chatId: string,
+  userId: string,
+  toolMessages: Array<{ toolName: string; success: boolean; content: string; arguments?: Record<string, unknown>; metadata?: { provider?: string; model?: string } }>,
+  generatedImagePaths: Array<{ filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number; sha256?: string }>
+) {
+  let firstToolMessageId: string | null = null
+
+  for (const toolMsg of toolMessages) {
+    const toolMessageId = crypto.randomUUID()
+    const toolMessage = {
+      id: toolMessageId,
+      type: 'message' as const,
+      role: 'TOOL' as const,
+      content: JSON.stringify({
+        toolName: toolMsg.toolName,
+        success: toolMsg.success,
+        result: toolMsg.content,
+        arguments: toolMsg.arguments,
+        provider: toolMsg.metadata?.provider,
+        model: toolMsg.metadata?.model,
+      }),
+      createdAt: new Date().toISOString(),
+      attachments: [] as string[],
+    }
+    await repos.chats.addMessage(chatId, toolMessage)
+
+    if (!firstToolMessageId) {
+      firstToolMessageId = toolMessageId
+    }
+
+    for (const imagePath of generatedImagePaths) {
+      if (imagePath.sha256) {
+        await repos.images.create({
+          userId,
+          type: 'chat_file',
+          chatId,
+          messageId: toolMessageId,
+          filename: imagePath.filename,
+          relativePath: imagePath.filepath,
+          mimeType: imagePath.mimeType,
+          size: imagePath.size,
+          source: 'generated',
+          sha256: imagePath.sha256,
+          width: imagePath.width,
+          height: imagePath.height,
+          tags: [],
+        })
+      } else {
+        console.warn('Skipping chat_file creation for generated image due to missing SHA256:', imagePath.filename)
+      }
+    }
+  }
+
+  return firstToolMessageId
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -176,27 +320,7 @@ export async function POST(
     const { content, fileIds } = sendMessageSchema.parse(body)
 
     // Load file attachments if provided
-    let attachedFiles: Array<{
-      id: string
-      filepath: string
-      filename: string
-      mimeType: string
-      size: number
-    }> = []
-
-    if (fileIds && fileIds.length > 0) {
-      // Get the chat files from images repository
-      const allImages = await repos.images.findByChatId(id)
-      attachedFiles = allImages
-        .filter(img => fileIds.includes(img.id))
-        .map(img => ({
-          id: img.id,
-          filepath: img.relativePath,
-          filename: img.filename,
-          mimeType: img.mimeType,
-          size: img.size,
-        }))
-    }
+    const attachedFiles = await loadAttachedFiles(repos, id, fileIds)
 
     // Create user message event
     const userMessageId = crypto.randomUUID()
@@ -330,73 +454,16 @@ export async function POST(
             }
           }
 
-          // Note: attachment status tracking (sentToProvider, providerError) would require
-          // extending the BinaryIndexEntry schema and is deferred to a future phase
-
           // Detect and execute tool calls
-          const toolMessages: Array<{ toolName: string; success: boolean; content: string; arguments?: Record<string, unknown>; metadata?: { provider?: string; model?: string } }> = []
-          const generatedImagePaths: Array<{ filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number; sha256?: string }> = []
+          let toolMessages: Array<{ toolName: string; success: boolean; content: string; arguments?: Record<string, unknown>; metadata?: { provider?: string; model?: string } }> = []
+          let generatedImagePaths: Array<{ filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number; sha256?: string }> = []
 
           if (rawResponse) {
             const toolCalls = detectToolCalls(rawResponse, connectionProfile.provider)
-
             if (toolCalls.length > 0) {
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ toolsDetected: toolCalls.length })}\n\n`)
-              )
-
-              for (const toolCall of toolCalls) {
-                const toolResult = await executeToolCall(
-                  toolCall,
-                  id,
-                  user.id,
-                  imageProfileId || undefined
-                )
-
-                // Collect generated image paths for ChatFile creation
-                if (toolResult.success && Array.isArray(toolResult.result)) {
-                  for (const img of toolResult.result) {
-                    if (img.filepath) {
-                      generatedImagePaths.push({
-                        filename: img.filename,
-                        filepath: img.filepath,
-                        mimeType: img.mimeType || 'image/png',
-                        size: img.size || 0,
-                        width: img.width,
-                        height: img.height,
-                        sha256: img.sha256,
-                      })
-                    }
-                  }
-                }
-
-                // Format tool result for display
-                const resultText = toolResult.success
-                  ? toolResult.toolName === 'generate_image'
-                    ? `Generated ${(toolResult.result as unknown[])?.length || 1} image(s)`
-                    : JSON.stringify(toolResult.result, null, 2)
-                  : `Error: ${toolResult.error || 'Unknown error'}`
-
-                toolMessages.push({
-                  toolName: toolResult.toolName,
-                  success: toolResult.success,
-                  content: resultText,
-                  arguments: toolCall.arguments,
-                  metadata: toolResult.metadata,
-                })
-
-                controller.enqueue(
-                  encoder.encode(
-                    `data: ${JSON.stringify({
-                      toolResult: {
-                        name: toolResult.toolName,
-                        success: toolResult.success,
-                        result: toolResult.result,
-                      },
-                    })}\n\n`
-                  )
-                )
-              }
+              const results = await processToolResults(toolCalls, id, user.id, imageProfileId || undefined, controller, encoder)
+              toolMessages = results.toolMessages
+              generatedImagePaths = results.generatedImagePaths
             }
           }
 
@@ -417,7 +484,6 @@ export async function POST(
             await repos.chats.addMessage(id, assistantMessage)
 
             // Trigger automatic memory extraction (non-blocking)
-            // This runs in the background and doesn't affect the chat response
             try {
               const chatSettings = await repos.users.getChatSettings(user.id)
               if (chatSettings) {
@@ -436,70 +502,14 @@ export async function POST(
                 })
               }
             } catch (memoryError) {
-              // Never let memory processing affect the chat flow
               console.error('Failed to trigger memory extraction:', memoryError)
             }
           }
 
           // Save tool messages if tools were executed
-          let firstToolMessageId: string | null = null
-          if (toolMessages.length > 0) {
-            for (const toolMsg of toolMessages) {
-              const toolMessageId = crypto.randomUUID()
-              const toolMessage = {
-                id: toolMessageId,
-                type: 'message' as const,
-                role: 'TOOL' as const,
-                content: JSON.stringify({
-                  toolName: toolMsg.toolName,
-                  success: toolMsg.success,
-                  result: toolMsg.content,
-                  arguments: toolMsg.arguments,
-                  provider: toolMsg.metadata?.provider,
-                  model: toolMsg.metadata?.model,
-                }),
-                createdAt: new Date().toISOString(),
-                attachments: [] as string[],
-              }
-              await repos.chats.addMessage(id, toolMessage)
-
-              // Track the first tool message ID
-              if (!firstToolMessageId) {
-                firstToolMessageId = toolMessageId
-              }
-
-              // Attach generated images to images repository
-              if (generatedImagePaths.length > 0) {
-                for (const imagePath of generatedImagePaths) {
-                  // If we have a SHA256, we can create the record.
-                  // If not, we should probably compute it, but for now let's assume it's there
-                  // or use a placeholder if the schema allows (it doesn't, it requires 64 chars)
-
-                  // If sha256 is missing, we can't create a valid record.
-                  // However, executeToolCall should have provided it.
-                  if (imagePath.sha256) {
-                    await repos.images.create({
-                      userId: user.id,
-                      type: 'chat_file',
-                      chatId: id,
-                      messageId: toolMessageId,
-                      filename: imagePath.filename,
-                      relativePath: imagePath.filepath,
-                      mimeType: imagePath.mimeType,
-                      size: imagePath.size,
-                      source: 'generated',
-                      sha256: imagePath.sha256,
-                      width: imagePath.width,
-                      height: imagePath.height,
-                      tags: [],
-                    })
-                  } else {
-                    console.warn('Skipping chat_file creation for generated image due to missing SHA256:', imagePath.filename)
-                  }
-                }
-              }
-            }
-          }
+          const firstToolMessageId = toolMessages.length > 0 
+            ? await saveToolMessages(repos, id, user.id, toolMessages, generatedImagePaths)
+            : null
 
           // Update chat timestamp
           await repos.chats.update(id, { updatedAt: new Date().toISOString() })
