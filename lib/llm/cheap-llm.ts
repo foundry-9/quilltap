@@ -5,9 +5,21 @@
  * This module provides intelligent selection of cost-effective LLM providers
  * for background tasks like memory extraction, summarization, and chat titling.
  * These tasks don't require the full power of expensive models.
+ *
+ * Now enhanced with real pricing data from provider APIs (Sprint 2.1).
  */
 
 import { ConnectionProfile, Provider } from '@/lib/json-store/schemas/types'
+import {
+  ModelPricing,
+  getAverageCostPer1M,
+  calculateCostTier,
+  calculateSavings,
+} from './pricing'
+import {
+  getProviderPricing,
+  findCheapestAvailableModel,
+} from './pricing-fetcher'
 
 /**
  * Strategy for selecting the cheap LLM provider
@@ -273,4 +285,220 @@ export function validateCheapLLMConfig(
   }
 
   return { valid: true }
+}
+
+// ============================================================================
+// PRICING-AWARE SELECTION (Sprint 2.1)
+// ============================================================================
+
+/**
+ * Extended selection result with pricing information
+ */
+export interface CheapLLMSelectionWithPricing extends CheapLLMSelection {
+  /** Pricing information if available */
+  pricing?: ModelPricing
+  /** Cost tier (1-5) based on actual pricing */
+  costTier?: number
+  /** Savings percentage compared to the current/main model */
+  savingsPercent?: number
+}
+
+/**
+ * Selects the cheapest available model using real pricing data
+ * This is an async version that queries the pricing cache
+ *
+ * @param currentProfile - The current connection profile (for comparison)
+ * @param userId - User ID for API key access
+ * @param config - Cheap LLM configuration
+ * @param availableProfiles - All available connection profiles
+ * @returns The cheapest available model with pricing info
+ */
+export async function getCheapLLMProviderWithPricing(
+  currentProfile: ConnectionProfile,
+  userId: string,
+  config: CheapLLMConfig = DEFAULT_CHEAP_LLM_CONFIG,
+  availableProfiles: ConnectionProfile[] = []
+): Promise<CheapLLMSelectionWithPricing> {
+  // Strategy 1: User-defined always wins
+  if (config.strategy === 'USER_DEFINED' && config.userDefinedProfileId) {
+    const userProfile = availableProfiles.find(p => p.id === config.userDefinedProfileId)
+    if (userProfile) {
+      // Get pricing for the user-defined model
+      const models = await getProviderPricing(userProfile.provider, userId)
+      const pricing = models.find(m => m.modelId === userProfile.modelName)
+
+      return {
+        provider: userProfile.provider,
+        modelName: userProfile.modelName,
+        baseUrl: userProfile.baseUrl || undefined,
+        connectionProfileId: userProfile.id,
+        isLocal: userProfile.provider === 'OLLAMA',
+        pricing,
+        costTier: pricing ? calculateCostTier(pricing) : undefined,
+      }
+    }
+  }
+
+  // Strategy 2: Local first (free models)
+  if (config.strategy === 'LOCAL_FIRST' || config.fallbackToLocal) {
+    const ollamaProfile = availableProfiles.find(p => p.provider === 'OLLAMA')
+    if (ollamaProfile) {
+      const models = await getProviderPricing('OLLAMA', userId)
+      const pricing = models.find(m => m.modelId === ollamaProfile.modelName)
+
+      return {
+        provider: 'OLLAMA',
+        modelName: ollamaProfile.modelName,
+        baseUrl: ollamaProfile.baseUrl || 'http://localhost:11434',
+        connectionProfileId: ollamaProfile.id,
+        isLocal: true,
+        pricing: pricing || {
+          modelId: ollamaProfile.modelName,
+          provider: 'OLLAMA',
+          name: ollamaProfile.modelName,
+          promptCostPer1M: 0,
+          completionCostPer1M: 0,
+          contextLength: null,
+          fetchedAt: new Date().toISOString(),
+        },
+        costTier: 1, // Free
+        savingsPercent: 100, // 100% savings vs any paid model
+      }
+    }
+  }
+
+  // Strategy 3: Find the cheapest model across all available providers
+  // Get providers we have profiles for
+  const availableProviders = [...new Set(availableProfiles.map(p => p.provider))]
+
+  // Find the absolute cheapest available model
+  const cheapestModel = await findCheapestAvailableModel(userId, {
+    excludeProviders: availableProviders.length > 0
+      ? (['OLLAMA', 'OPENROUTER', 'OPENAI', 'ANTHROPIC', 'GOOGLE', 'GROK', 'OPENAI_COMPATIBLE', 'GAB_AI'] as Provider[])
+          .filter(p => !availableProviders.includes(p))
+      : undefined,
+  })
+
+  if (cheapestModel) {
+    // Find the connection profile for this provider
+    const profile = availableProfiles.find(p => p.provider === cheapestModel.provider)
+
+    // Get current model pricing for savings calculation
+    const currentModels = await getProviderPricing(currentProfile.provider, userId)
+    const currentPricing = currentModels.find(m => m.modelId === currentProfile.modelName)
+
+    const savingsPercent = currentPricing
+      ? calculateSavings(currentPricing, cheapestModel)
+      : undefined
+
+    return {
+      provider: cheapestModel.provider,
+      modelName: cheapestModel.modelId,
+      baseUrl: profile?.baseUrl || undefined,
+      connectionProfileId: profile?.id,
+      isLocal: cheapestModel.provider === 'OLLAMA',
+      pricing: cheapestModel,
+      costTier: calculateCostTier(cheapestModel),
+      savingsPercent,
+    }
+  }
+
+  // Fallback: Use the name-based heuristic
+  const cheapModel = getCheapestModel(currentProfile.provider)
+  const models = await getProviderPricing(currentProfile.provider, userId)
+  const pricing = models.find(m => m.modelId === cheapModel)
+
+  return {
+    provider: currentProfile.provider,
+    modelName: cheapModel,
+    baseUrl: currentProfile.baseUrl || undefined,
+    connectionProfileId: currentProfile.id,
+    isLocal: currentProfile.provider === 'OLLAMA',
+    pricing,
+    costTier: pricing ? calculateCostTier(pricing) : estimateModelCost(currentProfile.provider, cheapModel),
+  }
+}
+
+/**
+ * Get the cost tier for a model using real pricing data
+ */
+export async function getModelCostTier(
+  provider: Provider,
+  modelName: string,
+  userId: string
+): Promise<number> {
+  const models = await getProviderPricing(provider, userId)
+  const pricing = models.find(m => m.modelId === modelName)
+
+  if (pricing) {
+    return calculateCostTier(pricing)
+  }
+
+  // Fallback to heuristic
+  return estimateModelCost(provider, modelName)
+}
+
+/**
+ * Compare two models and get savings information
+ */
+export async function compareModelCosts(
+  provider1: Provider,
+  modelName1: string,
+  provider2: Provider,
+  modelName2: string,
+  userId: string
+): Promise<{
+  model1Cost: number
+  model2Cost: number
+  savingsPercent: number
+  cheaperModel: 1 | 2
+} | null> {
+  const [models1, models2] = await Promise.all([
+    getProviderPricing(provider1, userId),
+    getProviderPricing(provider2, userId),
+  ])
+
+  const pricing1 = models1.find(m => m.modelId === modelName1)
+  const pricing2 = models2.find(m => m.modelId === modelName2)
+
+  if (!pricing1 || !pricing2) {
+    return null
+  }
+
+  const cost1 = getAverageCostPer1M(pricing1)
+  const cost2 = getAverageCostPer1M(pricing2)
+
+  const cheaperModel = cost1 <= cost2 ? 1 : 2
+  const savings = cheaperModel === 1
+    ? calculateSavings(pricing2, pricing1)
+    : calculateSavings(pricing1, pricing2)
+
+  return {
+    model1Cost: cost1,
+    model2Cost: cost2,
+    savingsPercent: savings,
+    cheaperModel,
+  }
+}
+
+/**
+ * Get recommended cheap models for a provider based on real pricing
+ */
+export async function getRecommendedCheapModels(
+  provider: Provider,
+  userId: string,
+  maxCostPer1M: number = 2
+): Promise<ModelPricing[]> {
+  const models = await getProviderPricing(provider, userId)
+
+  // Filter to models under the cost threshold
+  const cheapModels = models.filter(m => getAverageCostPer1M(m) <= maxCostPer1M)
+
+  // Also include any in the hardcoded recommended list
+  const recommended = RECOMMENDED_CHEAP_MODELS[provider] || []
+  const additionalModels = models.filter(
+    m => recommended.includes(m.modelId) && !cheapModels.includes(m)
+  )
+
+  return [...cheapModels, ...additionalModels]
 }
