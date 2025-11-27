@@ -6,6 +6,7 @@ import ImageModal from '@/components/chat/ImageModal'
 import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
 import ToolPalette from '@/components/chat/ToolPalette'
 import ChatSettingsModal from '@/components/chat/ChatSettingsModal'
+import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import { showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { safeJsonParse } from '@/lib/fetch-helpers'
@@ -124,6 +125,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [sending, setSending] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
+  const [waitingForResponse, setWaitingForResponse] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
@@ -313,7 +315,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setInput('')
     setAttachedFiles([])
     setSending(true)
-    setStreaming(true)
+    setWaitingForResponse(true)
+    setStreaming(false)
     setStreamingContent('')
 
     // Build display content with file indicators
@@ -411,6 +414,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
               if (data.content) {
                 fullContent += data.content
+                setWaitingForResponse(false)
+                setStreaming(true)
                 setStreamingContent(fullContent)
               }
 
@@ -523,6 +528,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       setMessages((prev) => prev.filter((m) => m.id !== tempUserMessageId))
       setStreamingContent('')
       setStreaming(false)
+      setWaitingForResponse(false)
     } finally {
       setSending(false)
       setTimeout(() => {
@@ -959,6 +965,25 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           )
         })}
 
+        {/* Waiting for response - show large quill animation */}
+        {waitingForResponse && !streaming && (
+          <div className="flex gap-4 w-[90%] justify-start items-center">
+            {shouldShowAvatars() && (
+              <div className="flex-shrink-0">
+                {renderAvatar({
+                  name: getFirstCharacter()?.name || 'AI',
+                  title: null,
+                  avatarUrl: getFirstCharacter()?.avatarUrl,
+                  defaultImage: getFirstCharacter()?.defaultImage,
+                })}
+              </div>
+            )}
+            <div className="text-gray-500 dark:text-gray-400">
+              <QuillAnimation size="lg" />
+            </div>
+          </div>
+        )}
+
         {/* Streaming message */}
         {streaming && streamingContent && (
           <div className="flex gap-4 w-[90%] justify-start">
@@ -974,7 +999,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             )}
             <div className="flex-1 min-w-0 px-4 py-3 rounded-lg bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-white">
               <MessageContent content={streamingContent} />
-              <span className="inline-block w-2 h-4 bg-gray-400 dark:bg-gray-500 animate-pulse ml-1"></span>
+              <QuillAnimation size="sm" className="inline-block ml-2 text-gray-400 dark:text-gray-500" />
             </div>
           </div>
         )}
