@@ -140,6 +140,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [toolPaletteOpen, setToolPaletteOpen] = useState(false)
   const [chatSettingsModalOpen, setChatSettingsModalOpen] = useState(false)
   const [toolExecutionStatus, setToolExecutionStatus] = useState<{ tool: string; status: 'pending' | 'success' | 'error'; message: string } | null>(null)
+  const [showPreview, setShowPreview] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -1158,56 +1159,88 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 />
               </div>
             </div>
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={(e) => {
-                setInput(e.target.value)
-                resizeTextarea(e.target)
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && e.shiftKey) {
-                  // Shift+Enter: insert newline, don't submit
-                  e.preventDefault()
-                  const textarea = e.currentTarget
-                  const start = textarea.selectionStart
-                  const end = textarea.selectionEnd
-                  const newValue = input.substring(0, start) + '\n' + input.substring(end)
-                  setInput(newValue)
-                  // Move cursor after the inserted newline
-                  setTimeout(() => {
-                    textarea.selectionStart = textarea.selectionEnd = start + 1
-                    resizeTextarea(textarea)
-                  }, 0)
-                } else if (e.key === 'Enter' && !e.shiftKey) {
-                  // Enter (without Shift): submit form
-                  e.preventDefault()
-                  if (input.trim() || attachedFiles.length > 0) {
-                    const form = e.currentTarget.form
-                    if (form) {
-                      form.dispatchEvent(new Event('submit', { bubbles: true }))
+            {showPreview ? (
+              <div className="flex-1 px-4 py-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg overflow-y-auto"
+                style={{
+                  lineHeight: '1.5'
+                }}
+              >
+                <MessageContent content={input} />
+              </div>
+            ) : (
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value)
+                  resizeTextarea(e.target)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && e.shiftKey) {
+                    // Shift+Enter: insert newline, don't submit
+                    e.preventDefault()
+                    const textarea = e.currentTarget
+                    const start = textarea.selectionStart
+                    const end = textarea.selectionEnd
+                    const newValue = input.substring(0, start) + '\n' + input.substring(end)
+                    setInput(newValue)
+                    // Move cursor after the inserted newline
+                    setTimeout(() => {
+                      textarea.selectionStart = textarea.selectionEnd = start + 1
+                      resizeTextarea(textarea)
+                    }, 0)
+                  } else if (e.key === 'Enter' && !e.shiftKey) {
+                    // Enter (without Shift): submit form
+                    e.preventDefault()
+                    if (input.trim() || attachedFiles.length > 0) {
+                      const form = e.currentTarget.form
+                      if (form) {
+                        form.dispatchEvent(new Event('submit', { bubbles: true }))
+                      }
                     }
                   }
-                }
-              }}
-              disabled={sending}
-              rows={1}
-              placeholder={attachedFiles.length > 0 ? "Add a message (optional)..." : "Type a message..."}
-              className="flex-1 px-4 py-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 disabled:bg-gray-100 dark:disabled:bg-slate-700 resize-none overflow-y-auto"
-              style={{
-                lineHeight: '1.5'
-              }}
-            />
-            <button
-              type="submit"
-              disabled={sending || (!input.trim() && attachedFiles.length === 0)}
-              className="p-3 bg-green-600 dark:bg-green-700 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-800 disabled:bg-gray-400 dark:disabled:bg-gray-600 transition-colors"
-              title="Send message"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
-            </button>
+                }}
+                disabled={sending}
+                rows={1}
+                placeholder={attachedFiles.length > 0 ? "Add a message (optional)..." : "Type a message..."}
+                className="flex-1 px-4 py-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 disabled:bg-gray-100 dark:disabled:bg-slate-700 resize-none overflow-y-auto"
+                style={{
+                  lineHeight: '1.5'
+                }}
+              />
+            )}
+            {/* Buttons column - right side */}
+            <div className="flex flex-col gap-2">
+              {/* Send button */}
+              <button
+                type="submit"
+                disabled={sending || (!input.trim() && attachedFiles.length === 0)}
+                className="w-11 h-11 flex items-center justify-center bg-green-600 dark:bg-green-700 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-800 disabled:bg-gray-400 dark:disabled:bg-gray-600 transition-colors"
+                title="Send message"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+              </button>
+              {/* Toggle Preview button */}
+              <button
+                type="button"
+                onClick={() => setShowPreview(!showPreview)}
+                className="w-11 h-11 flex items-center justify-center border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700"
+                title="Toggle preview"
+              >
+                {showPreview ? (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                )}
+              </button>
+            </div>
           </form>
         </div>
       </div>
