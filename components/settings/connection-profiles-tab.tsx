@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { TagEditor } from '@/components/tags/tag-editor'
 import { TagBadge } from '@/components/tags/tag-badge'
 import { ModelSelector } from './model-selector'
@@ -70,78 +70,7 @@ export default function ConnectionProfilesTab() {
   const [isTestingMessage, setIsTestingMessage] = useState(false)
   const [testMessageResult, setTestMessageResult] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetchProfiles()
-    fetchApiKeys()
-    // Fetch chat settings to get the cheap default profile
-    const fetchChatSettings = async () => {
-      try {
-        const res = await fetch('/api/chat-settings')
-        if (res.ok) {
-          const settings = await res.json()
-          setCheapDefaultProfileId(settings.cheapLLMSettings?.defaultCheapProfileId || null)
-        }
-      } catch (err) {
-        console.error('Error fetching chat settings:', err)
-      }
-    }
-    fetchChatSettings()
-  }, [])
-
-  const fetchProfiles = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      // Add cache busting timestamp to force fresh data
-      const res = await fetch(`/api/profiles?t=${Date.now()}`)
-      if (!res.ok) throw new Error('Failed to fetch profiles')
-      const data = await res.json()
-
-      // Fetch tags for each profile
-      const profilesWithTags = await Promise.all(
-        data.map(async (profile: ConnectionProfile) => {
-          try {
-            const tagsRes = await fetch(`/api/profiles/${profile.id}/tags`)
-            if (tagsRes.ok) {
-              const tagsData = await tagsRes.json()
-              return { ...profile, tags: tagsData.tags || [] }
-            }
-          } catch (err) {
-            console.error(`Error fetching tags for profile ${profile.id}:`, err)
-          }
-          return profile
-        })
-      )
-
-      // Count messages per profile
-      const messageCounts = await countMessagesPerProfile(profilesWithTags)
-
-      // Attach message counts to profiles
-      const profilesWithCounts = profilesWithTags.map(profile => ({
-        ...profile,
-        messageCount: messageCounts[profile.id] || 0,
-      }))
-
-      setProfiles(profilesWithCounts)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fetchApiKeys = async () => {
-    try {
-      const res = await fetch('/api/keys')
-      if (!res.ok) throw new Error('Failed to fetch API keys')
-      const data = await res.json()
-      setApiKeys(data)
-    } catch (err) {
-      console.error('Failed to fetch API keys:', err)
-    }
-  }
-
-  const countMessagesPerProfile = async (profilesList: ConnectionProfile[]) => {
+  const countMessagesPerProfile = useCallback(async (profilesList: ConnectionProfile[]) => {
     try {
       // Initialize message counts for all profiles
       const messageCounts: Record<string, number> = {}
@@ -211,7 +140,78 @@ export default function ConnectionProfilesTab() {
       console.error('Error counting messages per profile:', err)
       return {}
     }
+  }, [])
+
+  const fetchProfiles = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      // Add cache busting timestamp to force fresh data
+      const res = await fetch(`/api/profiles?t=${Date.now()}`)
+      if (!res.ok) throw new Error('Failed to fetch profiles')
+      const data = await res.json()
+
+      // Fetch tags for each profile
+      const profilesWithTags = await Promise.all(
+        data.map(async (profile: ConnectionProfile) => {
+          try {
+            const tagsRes = await fetch(`/api/profiles/${profile.id}/tags`)
+            if (tagsRes.ok) {
+              const tagsData = await tagsRes.json()
+              return { ...profile, tags: tagsData.tags || [] }
+            }
+          } catch (err) {
+            console.error(`Error fetching tags for profile ${profile.id}:`, err)
+          }
+          return profile
+        })
+      )
+
+      // Count messages per profile
+      const messageCounts = await countMessagesPerProfile(profilesWithTags)
+
+      // Attach message counts to profiles
+      const profilesWithCounts = profilesWithTags.map(profile => ({
+        ...profile,
+        messageCount: messageCounts[profile.id] || 0,
+      }))
+
+      setProfiles(profilesWithCounts)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setLoading(false)
+    }
+  }, [countMessagesPerProfile])
+
+  const fetchApiKeys = async () => {
+    try {
+      const res = await fetch('/api/keys')
+      if (!res.ok) throw new Error('Failed to fetch API keys')
+      const data = await res.json()
+      setApiKeys(data)
+    } catch (err) {
+      console.error('Failed to fetch API keys:', err)
+    }
   }
+
+  useEffect(() => {
+    fetchProfiles()
+    fetchApiKeys()
+    // Fetch chat settings to get the cheap default profile
+    const fetchChatSettings = async () => {
+      try {
+        const res = await fetch('/api/chat-settings')
+        if (res.ok) {
+          const settings = await res.json()
+          setCheapDefaultProfileId(settings.cheapLLMSettings?.defaultCheapProfileId || null)
+        }
+      } catch (err) {
+        console.error('Error fetching chat settings:', err)
+      }
+    }
+    fetchChatSettings()
+  }, [fetchProfiles])
 
   const resetForm = () => {
     setFormData({

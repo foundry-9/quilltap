@@ -11,6 +11,8 @@ import { loadChatFilesForLLM } from '@/lib/chat-files'
 import { detectToolCalls, executeToolCall } from '@/lib/chat/tool-executor'
 import { imageGenerationToolDefinition, anthropicImageGenerationToolDefinition } from '@/lib/tools/image-generation-tool'
 import { processMessageForMemoryAsync } from '@/lib/memory'
+import { buildContext } from '@/lib/chat/context-manager'
+import { checkAndGenerateSummaryIfNeeded } from '@/lib/chat/context-summary'
 import { z } from 'zod'
 
 // Validation schema
@@ -347,24 +349,73 @@ export async function POST(
     // Load file data for LLM
     const fileAttachments = await loadChatFilesForLLM(attachedFiles)
 
-    // Prepare messages for LLM
-    // Filter to only message events and exclude TOOL messages - they should not be sent to the LLM
-    const messages = [
-      ...existingMessages
-        .filter(msg => msg.type === 'message')
-        .map(msg => {
-          const messageEvent = msg as { role: string; content: string };
-          return {
-            role: messageEvent.role.toLowerCase() as 'system' | 'user' | 'assistant',
-            content: messageEvent.content,
-          };
-        }),
-      {
-        role: 'user' as const,
-        content,
-        attachments: fileAttachments.length > 0 ? fileAttachments : undefined,
-      },
-    ]
+    // Get persona if available
+    const personaParticipant = chat.participants.find(
+      p => p.type === 'PERSONA' && p.isActive && p.personaId
+    )
+    let persona: { name: string; description: string } | null = null
+    if (personaParticipant?.personaId) {
+      const personaData = await repos.personas.findById(personaParticipant.personaId)
+      if (personaData) {
+        persona = { name: personaData.name, description: personaData.description }
+      }
+    }
+
+    // Get chat settings for embedding profile
+    const chatSettings = await repos.users.getChatSettings(user.id)
+
+    // Build context with intelligent token management
+    // Filter existing messages to only USER and ASSISTANT messages (exclude TOOL, SYSTEM)
+    const conversationMessages = existingMessages
+      .filter(msg => msg.type === 'message')
+      .filter(msg => {
+        const role = (msg as { role: string }).role
+        return role === 'USER' || role === 'ASSISTANT'
+      })
+      .map(msg => {
+        const messageEvent = msg as { role: string; content: string; id?: string }
+        return {
+          role: messageEvent.role,
+          content: messageEvent.content,
+          id: messageEvent.id,
+        }
+      })
+
+    const builtContext = await buildContext({
+      provider: connectionProfile.provider,
+      modelName: connectionProfile.modelName,
+      userId: user.id,
+      character,
+      persona,
+      chat,
+      existingMessages: conversationMessages,
+      newUserMessage: content,
+      systemPromptOverride: characterParticipant.systemPromptOverride,
+      embeddingProfileId: chatSettings?.cheapLLMSettings?.embeddingProfileId || undefined,
+      skipMemories: false,
+      maxMemories: 10,
+      minMemoryImportance: 0.3,
+    })
+
+    // Log context building results for debugging
+    if (builtContext.warnings.length > 0) {
+      console.warn('[Context Manager] Warnings:', builtContext.warnings)
+    }
+
+    // Prepare final messages for LLM (add attachments to the last user message)
+    const messages = builtContext.messages.map((msg, idx) => {
+      if (idx === builtContext.messages.length - 1 && msg.role === 'user' && fileAttachments.length > 0) {
+        return {
+          role: msg.role,
+          content: msg.content,
+          attachments: fileAttachments,
+        }
+      }
+      return {
+        role: msg.role,
+        content: msg.content,
+      }
+    })
 
     // Get API key
     if (!apiKey) {
@@ -418,6 +469,22 @@ export async function POST(
               contentLength: m.content.length,
               hasAttachments: !!(m as { attachments?: unknown[] }).attachments?.length,
             })),
+            // Context management info
+            contextManagement: {
+              tokenUsage: builtContext.tokenUsage,
+              budget: {
+                total: builtContext.budget.totalLimit,
+                responseReserve: builtContext.budget.responseReserve,
+              },
+              memoriesIncluded: builtContext.memoriesIncluded,
+              messagesIncluded: builtContext.messagesIncluded,
+              messagesTruncated: builtContext.messagesTruncated,
+              includedSummary: builtContext.includedSummary,
+              // Debug content for viewing in debug panel
+              debugMemories: builtContext.debugMemories,
+              debugSummary: builtContext.debugSummary,
+              debugSystemPrompt: builtContext.debugSystemPrompt,
+            },
           }
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({ debugLLMRequest: llmRequestDetails })}\n\n`)
@@ -485,7 +552,6 @@ export async function POST(
 
             // Trigger automatic memory extraction (non-blocking)
             try {
-              const chatSettings = await repos.users.getChatSettings(user.id)
               if (chatSettings) {
                 const availableProfiles = await repos.connections.findByUserId(user.id)
                 processMessageForMemoryAsync({
@@ -500,6 +566,17 @@ export async function POST(
                   cheapLLMSettings: chatSettings.cheapLLMSettings,
                   availableProfiles,
                 })
+
+                // Check if we need to generate a context summary (non-blocking)
+                checkAndGenerateSummaryIfNeeded(
+                  id,
+                  connectionProfile.provider,
+                  connectionProfile.modelName,
+                  user.id,
+                  connectionProfile,
+                  chatSettings.cheapLLMSettings,
+                  availableProfiles
+                )
               }
             } catch (memoryError) {
               console.error('Failed to trigger memory extraction:', memoryError)

@@ -55,6 +55,28 @@ export interface DebugEntry {
     hasTools?: boolean;
     tools?: unknown[];
     messages?: Array<{ role: string; contentLength: number; hasAttachments?: boolean }>;
+    // Context management info (Sprint 5)
+    contextManagement?: {
+      tokenUsage: {
+        systemPrompt: number;
+        memories: number;
+        summary: number;
+        recentMessages: number;
+        total: number;
+      };
+      budget: {
+        total: number;
+        responseReserve: number;
+      };
+      memoriesIncluded: number;
+      messagesIncluded: number;
+      messagesTruncated: boolean;
+      includedSummary: boolean;
+      // Debug content for viewing
+      debugMemories?: Array<{ summary: string; importance: number; score: number }>;
+      debugSummary?: string;
+      debugSystemPrompt?: string;
+    };
   };
 }
 
