@@ -64,6 +64,11 @@ export interface CheapLLMTaskResult<T> {
 }
 
 /**
+ * Session-level cache for profiles that don't support custom temperature
+ */
+const profilesWithoutCustomTemp = new Set<string>()
+
+/**
  * Gets the decrypted API key for a cheap LLM selection
  */
 async function getApiKeyForSelection(
@@ -116,22 +121,72 @@ async function executeCheapLLMTask<T>(
       selection.baseUrl
     )
 
-    const response: LLMResponse = await provider.sendMessage(
-      {
-        messages,
-        model: selection.modelName,
-        temperature: 0.3, // Lower temperature for more consistent outputs
-        maxTokens: 1000,
-      },
-      apiKey
-    )
+    // Create a key for this profile to cache temperature support
+    const profileKey = `${selection.provider}:${selection.modelName}`
 
-    const result = parseResponse(response.content)
+    // Check if we already know this profile doesn't support custom temperature
+    if (profilesWithoutCustomTemp.has(profileKey)) {
+      const response: LLMResponse = await provider.sendMessage(
+        {
+          messages,
+          model: selection.modelName,
+          maxTokens: 1000,
+        },
+        apiKey
+      )
 
-    return {
-      success: true,
-      result,
-      usage: response.usage,
+      const result = parseResponse(response.content)
+
+      return {
+        success: true,
+        result,
+        usage: response.usage,
+      }
+    }
+
+    // Try with lower temperature for more consistent outputs
+    try {
+      const response: LLMResponse = await provider.sendMessage(
+        {
+          messages,
+          model: selection.modelName,
+          temperature: 0.3, // Lower temperature for more consistent outputs
+          maxTokens: 1000,
+        },
+        apiKey
+      )
+
+      const result = parseResponse(response.content)
+
+      return {
+        success: true,
+        result,
+        usage: response.usage,
+      }
+    } catch (error) {
+      // If temperature is not supported, cache it and retry with default temperature
+      const errorMessage = error instanceof Error ? error.message : ''
+      if (errorMessage.includes('temperature') || errorMessage.includes('does not support')) {
+        profilesWithoutCustomTemp.add(profileKey)
+
+        const response: LLMResponse = await provider.sendMessage(
+          {
+            messages,
+            model: selection.modelName,
+            maxTokens: 1000,
+          },
+          apiKey
+        )
+
+        const result = parseResponse(response.content)
+
+        return {
+          success: true,
+          result,
+          usage: response.usage,
+        }
+      }
+      throw error
     }
   } catch (error) {
     return {
@@ -142,20 +197,53 @@ async function executeCheapLLMTask<T>(
 }
 
 /**
- * Memory extraction prompt template
+ * Memory extraction prompt template for user memories
  */
-const MEMORY_EXTRACTION_PROMPT = `Analyze this conversation exchange. If there is something significant worth remembering about the user/persona for future conversations, extract it.
+const USER_MEMORY_EXTRACTION_PROMPT = `You are extracting memories about a USER from their conversation with a CHARACTER.
+Analyze the conversation exchange below and identify if there is something significant about the USER that should be remembered for future conversations.
 
 Criteria for significance:
-- Personal information shared (preferences, history, relationships)
-- Emotional moments or important decisions
-- Facts that should persist across conversations
-- Changes in character development or relationships
+- Personal information about the USER (preferences, history, relationships, traits)
+- Emotional moments or important decisions involving the USER
+- Facts about the USER that should persist across conversations
+- Changes in how the USER relates to or feels about the CHARACTER
+
+IMPORTANT: Only extract memories about the USER based on what the USER says/does, not about the CHARACTER's responses or behavior.
+The memory should capture something we learn about the USER from this exchange.
 
 If significant, respond with JSON only (no markdown, no code blocks):
 {
   "significant": true,
-  "content": "Full memory content with details",
+  "content": "Full memory content describing what we learned about the user",
+  "summary": "Brief 1-sentence summary",
+  "keywords": ["keyword1", "keyword2"],
+  "importance": 0.0-1.0
+}
+
+If not significant, respond with JSON only:
+{ "significant": false }
+
+Do not include any text outside the JSON object.`
+
+/**
+ * Memory extraction prompt template for character memories
+ */
+const CHARACTER_MEMORY_EXTRACTION_PROMPT = `You are extracting memories about a CHARACTER from their conversation with a USER.
+Analyze the conversation exchange below and identify if there is something significant about the CHARACTER that should be remembered for future conversations.
+
+Criteria for significance:
+- Personal information the CHARACTER shares about themselves (preferences, history, relationships, traits, background)
+- Emotional moments or important decisions the CHARACTER experiences or reveals
+- Facts about the CHARACTER that should persist across conversations
+- Changes in the CHARACTER's personality, relationships, or circumstances
+
+IMPORTANT: Only extract memories about the CHARACTER based on what the CHARACTER says/does, not about the USER's responses.
+The memory should capture something we learn about the CHARACTER from this exchange.
+
+If significant, respond with JSON only (no markdown, no code blocks):
+{
+  "significant": true,
+  "content": "Full memory content describing what we learned about the character",
   "summary": "Brief 1-sentence summary",
   "keywords": ["keyword1", "keyword2"],
   "importance": 0.0-1.0
@@ -186,15 +274,79 @@ export async function extractMemoryFromMessage(
   const messages: LLMMessage[] = [
     {
       role: 'system',
-      content: MEMORY_EXTRACTION_PROMPT,
+      content: USER_MEMORY_EXTRACTION_PROMPT,
     },
     {
       role: 'user',
-      content: `Context: ${context}
+      content: `${context}
 
-User message: ${userMessage}
+CONVERSATION:
+USER: ${userMessage}
 
-Assistant response: ${assistantMessage}`,
+CHARACTER: ${assistantMessage}`,
+    },
+  ]
+
+  return executeCheapLLMTask(
+    selection,
+    messages,
+    userId,
+    (content: string): MemoryCandidate => {
+      try {
+        // Clean the response - remove markdown code blocks if present
+        let cleanContent = content.trim()
+        if (cleanContent.startsWith('```json')) {
+          cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
+        } else if (cleanContent.startsWith('```')) {
+          cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
+        }
+
+        const parsed = JSON.parse(cleanContent)
+        return {
+          significant: parsed.significant === true,
+          content: parsed.content,
+          summary: parsed.summary,
+          keywords: parsed.keywords || [],
+          importance: typeof parsed.importance === 'number' ? parsed.importance : 0.5,
+        }
+      } catch {
+        // If JSON parsing fails, assume not significant
+        return { significant: false }
+      }
+    }
+  )
+}
+
+/**
+ * Extracts a potential memory about the CHARACTER from a message exchange
+ *
+ * @param userMessage - The user's message
+ * @param assistantMessage - The character's response
+ * @param characterName - The character's name for context
+ * @param selection - The cheap LLM provider selection
+ * @param userId - The user ID for API key retrieval
+ * @returns A memory candidate or null if nothing significant
+ */
+export async function extractCharacterMemoryFromMessage(
+  userMessage: string,
+  assistantMessage: string,
+  characterName: string,
+  selection: CheapLLMSelection,
+  userId: string
+): Promise<CheapLLMTaskResult<MemoryCandidate>> {
+  const messages: LLMMessage[] = [
+    {
+      role: 'system',
+      content: CHARACTER_MEMORY_EXTRACTION_PROMPT,
+    },
+    {
+      role: 'user',
+      content: `Character: ${characterName}
+
+CONVERSATION:
+USER: ${userMessage}
+
+CHARACTER: ${assistantMessage}`,
     },
   ]
 
@@ -482,9 +634,13 @@ export async function batchExtractMemories(
     .map((e, i) => `Exchange ${i + 1}:\nUser: ${e.userMessage}\nAssistant: ${e.assistantMessage}`)
     .join('\n\n---\n\n')
 
-  const batchPrompt = `Analyze these conversation exchanges. For each exchange, determine if there is something significant worth remembering.
+  const batchPrompt = `Analyze these conversation exchanges. For each exchange, determine if there is something significant worth remembering about the user/character.
 
-${MEMORY_EXTRACTION_PROMPT.replace('this conversation exchange', 'each exchange')}
+Criteria for significance:
+- Personal information shared (preferences, history, relationships, traits)
+- Emotional moments or important decisions
+- Facts that should persist across conversations
+- Changes in character development or relationships
 
 Respond with a JSON array of results, one for each exchange:
 [

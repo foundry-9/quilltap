@@ -96,10 +96,14 @@ export class OpenAIProvider extends LLMProvider {
     const requestParams: any = {
       model: params.model,
       messages: messages as ChatCompletionMessageParam[],
-      temperature: params.temperature ?? 0.7,
-      max_tokens: params.maxTokens ?? 1000,
+      max_completion_tokens: params.maxTokens ?? 1000,
       top_p: params.topP ?? 1,
       stop: params.stop,
+    }
+
+    // Only include temperature if explicitly provided - some models don't support custom values
+    if (params.temperature !== undefined) {
+      requestParams.temperature = params.temperature
     }
 
     // Add tools if provided
@@ -137,11 +141,15 @@ export class OpenAIProvider extends LLMProvider {
     const requestParams: any = {
       model: params.model,
       messages: messages as ChatCompletionMessageParam[],
-      temperature: params.temperature ?? 0.7,
-      max_tokens: params.maxTokens ?? 1000,
+      max_completion_tokens: params.maxTokens ?? 1000,
       top_p: params.topP ?? 1,
       stream: true,
       stream_options: { include_usage: true },
+    }
+
+    // Only include temperature if explicitly provided - some models don't support custom values
+    if (params.temperature !== undefined) {
+      requestParams.temperature = params.temperature
     }
 
     // Add tools if provided

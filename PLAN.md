@@ -34,7 +34,7 @@ Memory {
 
 ### 1.2 Storage Structure
 
-```
+```text
 data/
 ├── memories/
 │   ├── by-character/
@@ -86,6 +86,7 @@ function getCheapLLMProvider(currentProvider: string, config: CheapLLMConfig) {
 ### 2.2 Connection Profile Extension
 
 Add to connection profile settings:
+
 - `cheapLLMStrategy`: enum of the three strategies
 - `cheapLLMProfileId`: if user-defined, which profile to use
 - `embeddingProvider`: 'SAME_PROVIDER' | 'OPENAI' | 'LOCAL'
@@ -156,6 +157,7 @@ class VectorStore {
 Modify `app/api/chats/[id]/messages/route.ts`:
 
 After each message exchange:
+
 1. Queue cheap LLM task: "Is there something significant worth remembering?"
 2. If yes, extract memory candidate
 3. Check for duplicates/similar memories
@@ -164,7 +166,7 @@ After each message exchange:
 
 ### 4.2 Memory Extraction Prompt
 
-```
+```text
 Analyze this conversation exchange. If there is something significant worth
 remembering about the user/persona for future conversations, extract it.
 
@@ -269,7 +271,7 @@ Modify `app/(authenticated)/characters/[id]/edit/page.tsx`:
 
 ### 6.4 Memory API Routes
 
-```
+```text
 GET    /api/characters/[id]/memories           # List all memories
 POST   /api/characters/[id]/memories           # Create memory
 GET    /api/characters/[id]/memories/[memId]   # Get specific memory
@@ -321,7 +323,7 @@ Modify chat initialization to:
 
 Add to system prompt template:
 
-```
+```markdown
 ## Character Memories
 {Relevant memories about the user and past interactions}
 
@@ -350,32 +352,38 @@ This allows the LLM to explicitly request memory lookup during conversation.
 ## Implementation Order
 
 ### Sprint 1: Foundation (Core Infrastructure)
+
 1. Memory schema and types
 2. Memory repository with basic CRUD
 3. Memory API routes
 4. Basic memory list UI
 
 ### Sprint 2: Cheap LLM System
+
 1. Cheap LLM provider selection
 2. Connection profile extension
 3. Basic cheap LLM tasks (summarization)
 
 ### Sprint 3: Auto-Memory Formation
+
 1. Message processing hook
 2. Memory extraction prompts
 3. Automatic memory creation
 
 ### Sprint 4: Vector Database
+
 1. Embedding provider abstraction
 2. Vector store implementation
 3. Semantic search integration
 
 ### Sprint 5: Context Management
+
 1. Token counting
 2. Context budget system
 3. Intelligent context building
 
 ### Sprint 6: Full UI & Housekeeping
+
 1. Complete memory editor UI
 2. Housekeeping system
 3. Memory deep-dive tool
@@ -385,22 +393,26 @@ This allows the LLM to explicitly request memory lookup during conversation.
 ## Technical Decisions & Rationale
 
 ### Why JSONL for Memories?
+
 - Consistent with existing chat storage pattern
 - Easy append-only writes for new memories
 - Line-based format allows streaming reads
 
 ### Why In-Memory Vector Store?
+
 - Simplicity for MVP
 - Typical character has <1000 memories
 - Cosine similarity on 1000 vectors is fast
 - Can migrate to SQLite/DuckDB/Pinecone later if needed
 
 ### Why Background Processing?
+
 - Chat response latency is critical
 - Memory extraction can run async
 - Better UX with non-blocking operations
 
 ### Token Limit Safety
+
 - Always reserve buffer (10% of limit)
 - Graceful degradation: reduce memories before messages
 - Log warnings when approaching limits

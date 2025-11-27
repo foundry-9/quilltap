@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { MemoryCard } from './memory-card'
 import { MemoryEditor } from './memory-editor'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { showConfirmation } from '@/lib/alert'
 
 interface Tag {
   id: string
@@ -69,7 +70,8 @@ export function MemoryList({ characterId }: MemoryListProps) {
   }, [fetchMemories])
 
   const handleDelete = async (memoryId: string) => {
-    if (!confirm('Are you sure you want to delete this memory?')) return
+    const confirmed = await showConfirmation('Are you sure you want to delete this memory?')
+    if (!confirmed) return
 
     setDeletingId(memoryId)
     try {

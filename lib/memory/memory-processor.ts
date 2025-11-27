@@ -7,7 +7,7 @@
  */
 
 import { getRepositories } from '@/lib/json-store/repositories'
-import { extractMemoryFromMessage, MemoryCandidate } from './cheap-llm-tasks'
+import { extractMemoryFromMessage, extractCharacterMemoryFromMessage, MemoryCandidate } from './cheap-llm-tasks'
 import { getCheapLLMProvider, CheapLLMConfig, CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { ConnectionProfile, CheapLLMSettings, Memory } from '@/lib/json-store/schemas/types'
 
@@ -191,53 +191,103 @@ export async function processMessageForMemory(
     // Build context for extraction
     const extractionContext = buildExtractionContext(ctx)
 
-    // Call cheap LLM for memory extraction
-    const result = await extractMemoryFromMessage(
-      ctx.userMessage,
-      ctx.assistantMessage,
-      extractionContext,
-      selection,
-      ctx.userId
-    )
+    // Extract memories for both user and character
+    const [userMemoryResult, characterMemoryResult] = await Promise.all([
+      extractMemoryFromMessage(
+        ctx.userMessage,
+        ctx.assistantMessage,
+        extractionContext,
+        selection,
+        ctx.userId
+      ),
+      extractCharacterMemoryFromMessage(
+        ctx.userMessage,
+        ctx.assistantMessage,
+        ctx.characterName,
+        selection,
+        ctx.userId
+      ),
+    ])
 
-    if (!result.success) {
-      return {
-        success: false,
-        memoryCreated: false,
-        error: result.error || 'Memory extraction failed',
-        usage: result.usage,
-      }
+    let memoryCreated = false
+    let memoryId: string | undefined = undefined
+    let totalUsage = {
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
     }
 
-    const candidate = result.result
-
-    // Check if extraction found something significant
-    if (!candidate?.significant) {
-      return {
-        success: true,
-        memoryCreated: false,
-        usage: result.usage,
-      }
+    // Process user memory
+    if (userMemoryResult.success && userMemoryResult.usage) {
+      totalUsage.promptTokens += userMemoryResult.usage.promptTokens
+      totalUsage.completionTokens += userMemoryResult.usage.completionTokens
+      totalUsage.totalTokens += userMemoryResult.usage.totalTokens
     }
 
-    // Check for duplicate memories
-    const isDuplicate = await checkForDuplicateMemory(ctx.characterId, candidate)
-    if (isDuplicate) {
-      return {
-        success: true,
-        memoryCreated: false,
-        usage: result.usage,
+    if (userMemoryResult.success) {
+      const userCandidate = userMemoryResult.result
+
+      if (userCandidate?.significant) {
+        const isDuplicate = await checkForDuplicateMemory(ctx.characterId, userCandidate)
+        if (!isDuplicate) {
+          const memory = await createMemoryFromCandidate(ctx, userCandidate)
+          memoryCreated = true
+          memoryId = memory.id
+
+          console.debug(
+            `[Memory] Created USER memory for ${ctx.characterName}:\n` +
+            `  Content: ${userCandidate.content}\n` +
+            `  Summary: ${userCandidate.summary}\n` +
+            `  Importance: ${userCandidate.importance}\n` +
+            `  Keywords: ${userCandidate.keywords?.join(', ')}`
+          )
+        }
       }
+    } else if (!userMemoryResult.success) {
+      console.error(
+        `[Memory] USER memory extraction failed for ${ctx.characterName}:\n` +
+        `  Error: ${userMemoryResult.error}\n` +
+        `  User message: ${ctx.userMessage.substring(0, 200)}${ctx.userMessage.length > 200 ? '...' : ''}`
+      )
     }
 
-    // Create the memory
-    const memory = await createMemoryFromCandidate(ctx, candidate)
+    // Process character memory
+    if (characterMemoryResult.success && characterMemoryResult.usage) {
+      totalUsage.promptTokens += characterMemoryResult.usage.promptTokens
+      totalUsage.completionTokens += characterMemoryResult.usage.completionTokens
+      totalUsage.totalTokens += characterMemoryResult.usage.totalTokens
+    }
+
+    if (characterMemoryResult.success) {
+      const charCandidate = characterMemoryResult.result
+
+      if (charCandidate?.significant) {
+        const isDuplicate = await checkForDuplicateMemory(ctx.characterId, charCandidate)
+        if (!isDuplicate) {
+          await createMemoryFromCandidate(ctx, charCandidate)
+
+          console.debug(
+            `[Memory] Created CHARACTER memory for ${ctx.characterName}:\n` +
+            `  Content: ${charCandidate.content}\n` +
+            `  Summary: ${charCandidate.summary}\n` +
+            `  Importance: ${charCandidate.importance}\n` +
+            `  Keywords: ${charCandidate.keywords?.join(', ')}`
+          )
+        }
+      }
+    } else if (!characterMemoryResult.success) {
+      console.error(
+        `[Memory] CHARACTER memory extraction failed for ${ctx.characterName}:\n` +
+        `  Error: ${characterMemoryResult.error}\n` +
+        `  Character message: ${ctx.assistantMessage.substring(0, 200)}${ctx.assistantMessage.length > 200 ? '...' : ''}`
+      )
+    }
 
     return {
       success: true,
-      memoryCreated: true,
-      memoryId: memory.id,
-      usage: result.usage,
+      memoryCreated,
+      memoryId,
+      usage: totalUsage,
     }
   } catch (error) {
     // Never let memory processing break the chat flow
