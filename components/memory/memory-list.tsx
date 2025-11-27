@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { MemoryCard } from './memory-card'
 import { MemoryEditor } from './memory-editor'
+import { HousekeepingDialog } from './housekeeping-dialog'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
 
@@ -43,6 +44,7 @@ export function MemoryList({ characterId }: MemoryListProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [editingMemory, setEditingMemory] = useState<Memory | null>(null)
   const [showEditor, setShowEditor] = useState(false)
+  const [showHousekeeping, setShowHousekeeping] = useState(false)
 
   const fetchMemories = useCallback(async () => {
     try {
@@ -109,6 +111,11 @@ export function MemoryList({ characterId }: MemoryListProps) {
     fetchMemories()
   }
 
+  const handleHousekeepingComplete = () => {
+    setShowHousekeeping(false)
+    fetchMemories()
+  }
+
   if (loading && memories.length === 0) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -124,12 +131,23 @@ export function MemoryList({ characterId }: MemoryListProps) {
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
           Memories ({memories.length})
         </h3>
-        <button
-          onClick={handleCreate}
-          className="px-3 py-1.5 bg-blue-600 dark:bg-blue-700 text-white text-sm rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800"
-        >
-          Add Memory
-        </button>
+        <div className="flex gap-2">
+          {memories.length > 0 && (
+            <button
+              onClick={() => setShowHousekeeping(true)}
+              className="px-3 py-1.5 bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-white text-sm rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600"
+              title="Clean up old and low-importance memories"
+            >
+              Cleanup
+            </button>
+          )}
+          <button
+            onClick={handleCreate}
+            className="px-3 py-1.5 bg-blue-600 dark:bg-blue-700 text-white text-sm rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800"
+          >
+            Add Memory
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -211,6 +229,15 @@ export function MemoryList({ characterId }: MemoryListProps) {
           memory={editingMemory}
           onClose={handleEditorClose}
           onSave={handleEditorSave}
+        />
+      )}
+
+      {/* Housekeeping Dialog */}
+      {showHousekeeping && (
+        <HousekeepingDialog
+          characterId={characterId}
+          onClose={() => setShowHousekeeping(false)}
+          onComplete={handleHousekeepingComplete}
         />
       )}
     </div>

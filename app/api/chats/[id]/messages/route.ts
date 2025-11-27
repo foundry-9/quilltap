@@ -8,8 +8,9 @@ import { getRepositories } from '@/lib/json-store/repositories'
 import { createLLMProvider } from '@/lib/llm/factory'
 import { decryptApiKey } from '@/lib/encryption'
 import { loadChatFilesForLLM } from '@/lib/chat-files'
-import { detectToolCalls, executeToolCall } from '@/lib/chat/tool-executor'
+import { detectToolCalls, executeToolCallWithContext, type ToolExecutionContext } from '@/lib/chat/tool-executor'
 import { imageGenerationToolDefinition, anthropicImageGenerationToolDefinition } from '@/lib/tools/image-generation-tool'
+import { memorySearchToolDefinition, anthropicMemorySearchToolDefinition, getGoogleMemorySearchTool } from '@/lib/tools/memory-search-tool'
 import { processMessageForMemoryAsync } from '@/lib/memory'
 import { buildContext } from '@/lib/chat/context-manager'
 import { checkAndGenerateSummaryIfNeeded } from '@/lib/chat/context-summary'
@@ -23,57 +24,77 @@ const sendMessageSchema = z.object({
 })
 
 // Helper function to get tools for a provider
-function getToolsForProvider(provider: string, imageProfileId?: string | null, imageProviderType?: string): unknown[] {
-  // Only include image generation tool if an image profile is configured for this chat
-  if (!imageProfileId) {
-    return []
+function getToolsForProvider(
+  provider: string,
+  options: {
+    imageProfileId?: string | null
+    imageProviderType?: string
+    enableMemorySearch?: boolean
   }
+): unknown[] {
+  const tools: unknown[] = []
+  const { imageProfileId, imageProviderType, enableMemorySearch } = options
 
   // Return provider-specific tool format
   switch (provider) {
     case 'ANTHROPIC': {
-      // Check if using Grok for image generation
-      if (imageProviderType === 'GROK') {
-        return [{
-          ...anthropicImageGenerationToolDefinition,
-          input_schema: {
-            ...anthropicImageGenerationToolDefinition.input_schema,
-            properties: {
-              ...anthropicImageGenerationToolDefinition.input_schema.properties,
-              prompt: {
-                ...anthropicImageGenerationToolDefinition.input_schema.properties.prompt,
-                description: anthropicImageGenerationToolDefinition.input_schema.properties.prompt.description + ' IMPORTANT: Grok has a strict limit of 1024 bytes for image generation prompts. Keep your prompt concise and under this limit.',
+      // Add image generation tool if configured
+      if (imageProfileId) {
+        if (imageProviderType === 'GROK') {
+          tools.push({
+            ...anthropicImageGenerationToolDefinition,
+            input_schema: {
+              ...anthropicImageGenerationToolDefinition.input_schema,
+              properties: {
+                ...anthropicImageGenerationToolDefinition.input_schema.properties,
+                prompt: {
+                  ...anthropicImageGenerationToolDefinition.input_schema.properties.prompt,
+                  description: anthropicImageGenerationToolDefinition.input_schema.properties.prompt.description + ' IMPORTANT: Grok has a strict limit of 1024 bytes for image generation prompts. Keep your prompt concise and under this limit.',
+                },
               },
             },
-          },
-        }]
+          })
+        } else {
+          tools.push(anthropicImageGenerationToolDefinition)
+        }
       }
-      return [anthropicImageGenerationToolDefinition]
+      // Add memory search tool
+      if (enableMemorySearch) {
+        tools.push(anthropicMemorySearchToolDefinition)
+      }
+      break
     }
     case 'GOOGLE': {
-      // Google uses a similar format to Anthropic but called differently
-      const baseGoogleTool = {
-        name: anthropicImageGenerationToolDefinition.name,
-        description: anthropicImageGenerationToolDefinition.description,
-        parameters: anthropicImageGenerationToolDefinition.input_schema,
-      }
-      // Check if using Grok for image generation
-      if (imageProviderType === 'GROK') {
-        return [{
-          ...baseGoogleTool,
-          parameters: {
-            ...baseGoogleTool.parameters,
-            properties: {
-              ...baseGoogleTool.parameters.properties,
-              prompt: {
-                ...baseGoogleTool.parameters.properties.prompt,
-                description: baseGoogleTool.parameters.properties.prompt.description + ' IMPORTANT: Grok has a strict limit of 1024 bytes for image generation prompts. Keep your prompt concise and under this limit.',
+      // Add image generation tool if configured
+      if (imageProfileId) {
+        const baseGoogleImageTool = {
+          name: anthropicImageGenerationToolDefinition.name,
+          description: anthropicImageGenerationToolDefinition.description,
+          parameters: anthropicImageGenerationToolDefinition.input_schema,
+        }
+        if (imageProviderType === 'GROK') {
+          tools.push({
+            ...baseGoogleImageTool,
+            parameters: {
+              ...baseGoogleImageTool.parameters,
+              properties: {
+                ...baseGoogleImageTool.parameters.properties,
+                prompt: {
+                  ...baseGoogleImageTool.parameters.properties.prompt,
+                  description: baseGoogleImageTool.parameters.properties.prompt.description + ' IMPORTANT: Grok has a strict limit of 1024 bytes for image generation prompts. Keep your prompt concise and under this limit.',
+                },
               },
             },
-          },
-        }]
+          })
+        } else {
+          tools.push(baseGoogleImageTool)
+        }
       }
-      return [baseGoogleTool]
+      // Add memory search tool
+      if (enableMemorySearch) {
+        tools.push(getGoogleMemorySearchTool())
+      }
+      break
     }
     case 'OPENAI':
     case 'GROK':
@@ -81,30 +102,40 @@ function getToolsForProvider(provider: string, imageProfileId?: string | null, i
     case 'OLLAMA':
     case 'OPENAI_COMPATIBLE':
     case 'GAB_AI': {
-      // Check if using Grok for image generation
-      if (imageProviderType === 'GROK') {
-        return [{
-          ...imageGenerationToolDefinition,
-          function: {
-            ...imageGenerationToolDefinition.function,
-            parameters: {
-              ...imageGenerationToolDefinition.function.parameters,
-              properties: {
-                ...imageGenerationToolDefinition.function.parameters.properties,
-                prompt: {
-                  ...imageGenerationToolDefinition.function.parameters.properties.prompt,
-                  description: imageGenerationToolDefinition.function.parameters.properties.prompt.description + ' IMPORTANT: Grok has a strict limit of 1024 bytes for image generation prompts. Keep your prompt concise and under this limit.',
+      // Add image generation tool if configured
+      if (imageProfileId) {
+        if (imageProviderType === 'GROK') {
+          tools.push({
+            ...imageGenerationToolDefinition,
+            function: {
+              ...imageGenerationToolDefinition.function,
+              parameters: {
+                ...imageGenerationToolDefinition.function.parameters,
+                properties: {
+                  ...imageGenerationToolDefinition.function.parameters.properties,
+                  prompt: {
+                    ...imageGenerationToolDefinition.function.parameters.properties.prompt,
+                    description: imageGenerationToolDefinition.function.parameters.properties.prompt.description + ' IMPORTANT: Grok has a strict limit of 1024 bytes for image generation prompts. Keep your prompt concise and under this limit.',
+                  },
                 },
               },
             },
-          },
-        }]
+          })
+        } else {
+          tools.push(imageGenerationToolDefinition)
+        }
       }
-      return [imageGenerationToolDefinition]
+      // Add memory search tool
+      if (enableMemorySearch) {
+        tools.push(memorySearchToolDefinition)
+      }
+      break
     }
     default:
-      return []
+      break
   }
+
+  return tools
 }
 
 // Helper function to load attached files
@@ -128,9 +159,7 @@ async function loadAttachedFiles(repos: ReturnType<typeof getRepositories>, chat
 // Helper function to process tool execution results
 async function processToolResults(
   toolCalls: Array<{ name: string; arguments: Record<string, unknown> }>,
-  chatId: string,
-  userId: string,
-  imageProfileId: string | undefined,
+  toolContext: ToolExecutionContext,
   controller: ReadableStreamDefaultController,
   encoder: TextEncoder
 ) {
@@ -142,7 +171,7 @@ async function processToolResults(
   )
 
   for (const toolCall of toolCalls) {
-    const toolResult = await executeToolCall(toolCall, chatId, userId, imageProfileId)
+    const toolResult = await executeToolCallWithContext(toolCall, toolContext)
 
     if (toolResult.success && Array.isArray(toolResult.result)) {
       for (const img of toolResult.result) {
@@ -448,11 +477,24 @@ export async function POST(
     let attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null = null
     let rawResponse: unknown = null
 
+    // Prepare tool execution context
+    const toolContext: ToolExecutionContext = {
+      chatId: id,
+      userId: user.id,
+      imageProfileId: imageProfileId || undefined,
+      characterId: character.id,
+      embeddingProfileId: chatSettings?.cheapLLMSettings?.embeddingProfileId || undefined,
+    }
+
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          // Get tools for this chat if an image profile is configured
-          const tools = getToolsForProvider(connectionProfile.provider, imageProfileId, imageProfile?.provider)
+          // Get tools for this chat (image generation if configured, memory search always enabled)
+          const tools = getToolsForProvider(connectionProfile.provider, {
+            imageProfileId,
+            imageProviderType: imageProfile?.provider,
+            enableMemorySearch: true, // Always enable memory search for characters
+          })
 
           // Send debug info about the actual LLM request (for debug panel)
           const llmRequestDetails = {
@@ -528,7 +570,7 @@ export async function POST(
           if (rawResponse) {
             const toolCalls = detectToolCalls(rawResponse, connectionProfile.provider)
             if (toolCalls.length > 0) {
-              const results = await processToolResults(toolCalls, id, user.id, imageProfileId || undefined, controller, encoder)
+              const results = await processToolResults(toolCalls, toolContext, controller, encoder)
               toolMessages = results.toolMessages
               generatedImagePaths = results.generatedImagePaths
             }

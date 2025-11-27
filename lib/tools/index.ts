@@ -31,3 +31,23 @@ export {
   ImageGenerationError,
   type ImageToolExecutionContext,
 } from './handlers/image-generation-handler';
+
+// Memory Search Tool (Sprint 6)
+export {
+  memorySearchToolDefinition,
+  anthropicMemorySearchToolDefinition,
+  getOpenAIMemorySearchTool,
+  getAnthropicMemorySearchTool,
+  getGoogleMemorySearchTool,
+  validateMemorySearchInput,
+  type MemorySearchToolInput,
+  type MemorySearchToolOutput,
+  type MemorySearchResult,
+} from './memory-search-tool';
+
+export {
+  executeMemorySearchTool,
+  formatMemorySearchResults,
+  MemorySearchError,
+  type MemorySearchToolContext,
+} from './handlers/memory-search-handler';

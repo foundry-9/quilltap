@@ -28,3 +28,13 @@ export {
   type MemoryExtractionContext,
   type MemoryProcessingResult,
 } from './memory-processor'
+
+// Housekeeping (Sprint 6: Memory Cleanup)
+export {
+  runHousekeeping,
+  getHousekeepingPreview,
+  needsHousekeeping,
+  type HousekeepingOptions,
+  type HousekeepingResult,
+  type HousekeepingDetail,
+} from './housekeeping'

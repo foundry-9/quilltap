@@ -3,7 +3,13 @@
  * Detects and executes LLM tool calls during message processing
  */
 
-import { executeImageGenerationTool, type ImageToolExecutionContext } from '@/lib/tools';
+import {
+  executeImageGenerationTool,
+  executeMemorySearchTool,
+  formatMemorySearchResults,
+  type ImageToolExecutionContext,
+  type MemorySearchToolContext,
+} from '@/lib/tools';
 
 export interface ToolCallRequest {
   name: string;
@@ -19,6 +25,17 @@ export interface ToolResult {
     provider?: string;
     model?: string;
   };
+}
+
+/**
+ * Extended context for tool execution
+ */
+export interface ToolExecutionContext {
+  chatId: string;
+  userId: string;
+  imageProfileId?: string;
+  characterId?: string;
+  embeddingProfileId?: string;
 }
 
 /**
@@ -58,7 +75,7 @@ export function formatToolResult(
 }
 
 /**
- * Execute an image generation tool call
+ * Execute a tool call (legacy signature for backwards compatibility)
  */
 export async function executeToolCall(
   toolCall: ToolCallRequest,
@@ -66,7 +83,24 @@ export async function executeToolCall(
   userId: string,
   imageProfileId?: string
 ): Promise<ToolResult> {
+  return executeToolCallWithContext(toolCall, {
+    chatId,
+    userId,
+    imageProfileId,
+  });
+}
+
+/**
+ * Execute a tool call with full context
+ */
+export async function executeToolCallWithContext(
+  toolCall: ToolCallRequest,
+  context: ToolExecutionContext
+): Promise<ToolResult> {
+  const { chatId, userId, imageProfileId, characterId, embeddingProfileId } = context;
+
   try {
+    // Handle image generation
     if (toolCall.name === 'generate_image') {
       // If no image profile is configured, return error
       if (!imageProfileId) {
@@ -79,13 +113,13 @@ export async function executeToolCall(
       }
 
       // Execute image generation tool
-      const context: ImageToolExecutionContext = {
+      const imageContext: ImageToolExecutionContext = {
         userId,
         profileId: imageProfileId,
         chatId,
       };
 
-      const result = await executeImageGenerationTool(toolCall.arguments, context);
+      const result = await executeImageGenerationTool(toolCall.arguments, imageContext);
 
       return {
         toolName: 'generate_image',
@@ -96,6 +130,45 @@ export async function executeToolCall(
           provider: result.provider,
           model: result.model,
         },
+      };
+    }
+
+    // Handle memory search
+    if (toolCall.name === 'search_memories') {
+      // If no character is configured, return error
+      if (!characterId) {
+        return {
+          toolName: 'search_memories',
+          success: false,
+          result: null,
+          error: 'Memory search requires a character context',
+        };
+      }
+
+      // Execute memory search tool
+      const memoryContext: MemorySearchToolContext = {
+        userId,
+        characterId,
+        embeddingProfileId,
+      };
+
+      const result = await executeMemorySearchTool(toolCall.arguments, memoryContext);
+
+      // Format results for LLM consumption
+      const formattedResult = result.success && result.memories
+        ? formatMemorySearchResults(result.memories)
+        : result.error || 'No memories found';
+
+      return {
+        toolName: 'search_memories',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          memories: result.memories,
+          totalFound: result.totalFound,
+          query: result.query,
+        } : null,
+        error: result.success ? undefined : result.error,
       };
     }
 
