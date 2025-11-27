@@ -141,11 +141,25 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [chatSettingsModalOpen, setChatSettingsModalOpen] = useState(false)
   const [toolExecutionStatus, setToolExecutionStatus] = useState<{ tool: string; status: 'pending' | 'success' | 'error'; message: string } | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  const getTextareaMaxHeight = () => {
+    if (typeof globalThis === 'undefined' || !globalThis.window) return 200
+    const windowHeight = globalThis.window.innerHeight
+    const isMobilePortrait = globalThis.window.matchMedia('(max-width: 640px) and (orientation: portrait)').matches
+    return isMobilePortrait ? windowHeight / 2 : windowHeight / 3
+  }
+
+  const resizeTextarea = (textarea: HTMLTextAreaElement) => {
+    textarea.style.height = 'auto'
+    const maxHeight = getTextareaMaxHeight()
+    const newHeight = Math.min(textarea.scrollHeight, maxHeight)
+    textarea.style.height = newHeight + 'px'
   }
 
   // Helper functions to get character/persona from participants
@@ -249,8 +263,22 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     const timer = setTimeout(() => {
       inputRef.current?.focus()
       inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      if (inputRef.current) {
+        resizeTextarea(inputRef.current)
+      }
     }, 100)
     return () => clearTimeout(timer)
+  }, [])
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (inputRef.current) {
+        resizeTextarea(inputRef.current)
+      }
+    }
+
+    globalThis.window?.addEventListener('resize', handleResize)
+    return () => globalThis.window?.removeEventListener('resize', handleResize)
   }, [])
 
   // Handle file selection
@@ -318,6 +346,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setWaitingForResponse(true)
     setStreaming(false)
     setStreamingContent('')
+    // Reset textarea to one line
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto'
+      resizeTextarea(inputRef.current)
+    }
 
     // Build display content with file indicators
     const displayContent = messageAttachments.length > 0
@@ -1081,55 +1114,89 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/markdown,text/csv"
               className="hidden"
             />
-            {/* Attach file button */}
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={sending || uploadingFile}
-              className="px-3 py-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Attach file"
-            >
-              {uploadingFile ? (
-                <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-              ) : (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                </svg>
-              )}
-            </button>
-            {/* Tools button - opens palette with gallery and settings */}
-            <div className="relative">
+            {/* Buttons column */}
+            <div className="flex flex-col gap-2">
+              {/* Attach file button */}
               <button
                 type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setToolPaletteOpen(!toolPaletteOpen)
-                }}
-                className="px-3 py-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700"
-                title="Tools menu"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={sending || uploadingFile}
+                className="w-11 h-11 flex items-center justify-center border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Attach file"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
+                {uploadingFile ? (
+                  <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                  </svg>
+                )}
               </button>
-              <ToolPalette
-                isOpen={toolPaletteOpen}
-                onClose={() => setToolPaletteOpen(false)}
-                onGalleryClick={() => setGalleryOpen(true)}
-                onSettingsClick={() => setChatSettingsModalOpen(true)}
-                chatPhotoCount={chatPhotoCount}
-              />
+              {/* Tools button - opens palette with gallery and settings */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setToolPaletteOpen(!toolPaletteOpen)
+                  }}
+                  className="w-11 h-11 flex items-center justify-center border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700"
+                  title="Tools menu"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </button>
+                <ToolPalette
+                  isOpen={toolPaletteOpen}
+                  onClose={() => setToolPaletteOpen(false)}
+                  onGalleryClick={() => setGalleryOpen(true)}
+                  onSettingsClick={() => setChatSettingsModalOpen(true)}
+                  chatPhotoCount={chatPhotoCount}
+                />
+              </div>
             </div>
-            <input
+            <textarea
               ref={inputRef}
-              type="text"
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => {
+                setInput(e.target.value)
+                resizeTextarea(e.target)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && e.shiftKey) {
+                  // Shift+Enter: insert newline, don't submit
+                  e.preventDefault()
+                  const textarea = e.currentTarget
+                  const start = textarea.selectionStart
+                  const end = textarea.selectionEnd
+                  const newValue = input.substring(0, start) + '\n' + input.substring(end)
+                  setInput(newValue)
+                  // Move cursor after the inserted newline
+                  setTimeout(() => {
+                    textarea.selectionStart = textarea.selectionEnd = start + 1
+                    resizeTextarea(textarea)
+                  }, 0)
+                } else if (e.key === 'Enter' && !e.shiftKey) {
+                  // Enter (without Shift): submit form
+                  e.preventDefault()
+                  if (input.trim() || attachedFiles.length > 0) {
+                    const form = e.currentTarget.form
+                    if (form) {
+                      form.dispatchEvent(new Event('submit', { bubbles: true }))
+                    }
+                  }
+                }
+              }}
               disabled={sending}
+              rows={1}
               placeholder={attachedFiles.length > 0 ? "Add a message (optional)..." : "Type a message..."}
-              className="flex-1 px-4 py-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 disabled:bg-gray-100 dark:disabled:bg-slate-700"
+              className="flex-1 px-4 py-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 disabled:bg-gray-100 dark:disabled:bg-slate-700 resize-none overflow-y-auto"
+              style={{
+                lineHeight: '1.5'
+              }}
             />
             <button
               type="submit"
