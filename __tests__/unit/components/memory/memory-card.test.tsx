@@ -55,9 +55,13 @@ describe('MemoryCard', () => {
     it('should render update date', () => {
       render(<MemoryCard memory={mockMemory} />);
 
-      // The component shows dates, just verify date format is present
-      const dateText = screen.getByText(/Dec 31, 2024/i);
-      expect(dateText).toBeInTheDocument();
+      // Match against the same formatted date string the component renders
+      const expectedDate = new Date(mockMemory.createdAt).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+      expect(screen.getByText(expectedDate)).toBeInTheDocument();
     });
 
     it('should render source badge', () => {

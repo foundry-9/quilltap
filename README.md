@@ -3,11 +3,11 @@
 AI-powered roleplay chat platform with multi-provider LLM support and full SillyTavern compatibility.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.6.1-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-1.6.2-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
-Quilltap is a modern, self-hosted chat platform designed for AI-powered roleplay conversations. It provides a sleek web interface for chatting with AI characters using your own API keys from multiple LLM providers.
+[Quilltap](https://github.com/foundry-9/quilltap) is a modern, self-hosted chat platform designed for AI-powered roleplay conversations. It provides a sleek web interface for chatting with AI characters using your own API keys from multiple LLM providers.
 
 **Key Features:**
 
@@ -487,7 +487,14 @@ Copyright (c) 2025 Foundry-9
   - Add Google provider support to connection profile testing endpoints
   - Add Google to API key provider dropdown in UI
 - **1.5:** Memory system
-  - In-progress: automatic memory and housecleaning
+  - Character memory management
+  - Editable via a rich UI for browsing
+  - Cheap LLM setup for memory summarization
+  - Semantic embeddings and search
+  - Improved chat composer with Markdown preview, auto-sizing
+  - Default theme font improvements
+  - Improved diagnostics include memory system
+- **1.6:** TO BE DETERMINED
 
 ## Acknowledgments
 
@@ -499,4 +506,4 @@ Built with these excellent open source projects:
 - [Zod](https://zod.dev/) - TypeScript-first schema validation
 - [Docker](https://www.docker.com/) - Containerization
 
-Special thanks to the [SillyTavern](https://github.com/SillyTavern/SillyTavern) project for inspiring the character format and import/export compatibility.
+Special thanks to the [SillyTavern](https://github.com/SillyTavern/SillyTavern) project for pioneering this space and inspiring the character format and import/export compatibility.
