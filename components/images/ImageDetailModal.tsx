@@ -263,7 +263,6 @@ export default function ImageDetailModal({
         ? `/api/characters/${entityId}/avatar`
         : `/api/personas/${entityId}/avatar`
 
-      console.log(`[ImageDetailModal] Setting avatar for ${entityType} ${entityId} to image ${image.id}`)
       const response = await fetch(endpoint, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -275,7 +274,6 @@ export default function ImageDetailModal({
         throw new Error(data.error || 'Failed to set avatar')
       }
 
-      console.log(`[ImageDetailModal] Avatar set successfully, calling onAvatarSet callback`)
       // Update local state
       if (entityType === 'character') {
         setCharacters((prev) =>

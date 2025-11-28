@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import ImageDetailModal from './ImageDetailModal'
+import { ImageUploadDialog } from './image-upload-dialog'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 
 interface GalleryImage {
@@ -41,7 +42,6 @@ export function EmbeddedPhotoGallery({
   onAvatarChange,
   onRefresh
 }: EmbeddedPhotoGalleryProps) {
-  console.log('[EmbeddedPhotoGallery] Component mounted/updated with onRefresh:', typeof onRefresh, onRefresh)
   const [allImages, setAllImages] = useState<GalleryImage[]>([])
   const [loading, setLoading] = useState(true)
   const [thumbnailSizeIndex, setThumbnailSizeIndex] = useState(DEFAULT_THUMBNAIL_INDEX)
@@ -50,6 +50,9 @@ export function EmbeddedPhotoGallery({
   const [showOnlyTagged, setShowOnlyTagged] = useState(true)
   const [updatingTag, setUpdatingTag] = useState<string | null>(null)
   const [settingAvatar, setSettingAvatar] = useState<string | null>(null)
+  const [showUploadDialog, setShowUploadDialog] = useState(false)
+  const [deletingImage, setDeletingImage] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
   const thumbnailSize = THUMBNAIL_SIZES[thumbnailSizeIndex]
 
@@ -81,6 +84,14 @@ export function EmbeddedPhotoGallery({
   useEffect(() => {
     fetchImages()
   }, [fetchImages])
+
+  // Clear confirm delete after 3 seconds
+  useEffect(() => {
+    if (confirmDelete) {
+      const timer = setTimeout(() => setConfirmDelete(null), 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [confirmDelete])
 
   const handleImageError = (imageId: string) => {
     setMissingImages(prev => new Set(prev).add(imageId))
@@ -202,6 +213,43 @@ export function EmbeddedPhotoGallery({
     }
   }
 
+  const handleDeleteImage = async (e: React.MouseEvent, image: GalleryImage) => {
+    e.stopPropagation()
+
+    // If not confirmed yet, show confirmation
+    if (confirmDelete !== image.id) {
+      setConfirmDelete(image.id)
+      return
+    }
+
+    setDeletingImage(image.id)
+    setConfirmDelete(null)
+
+    try {
+      const res = await fetch(`/api/images/${image.id}`, {
+        method: 'DELETE',
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to delete image')
+      }
+
+      // Remove from local state
+      setAllImages(prev => prev.filter(img => img.id !== image.id))
+      showSuccessToast('Image deleted')
+    } catch (error) {
+      showErrorToast(error instanceof Error ? error.message : 'Failed to delete image')
+    } finally {
+      setDeletingImage(null)
+    }
+  }
+
+  const handleUploadSuccess = () => {
+    setShowUploadDialog(false)
+    fetchImages()
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -239,6 +287,17 @@ export function EmbeddedPhotoGallery({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Upload Button */}
+          <button
+            onClick={() => setShowUploadDialog(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 rounded-md transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            Upload
+          </button>
+
           {/* Clear Avatar Button */}
           {onAvatarChange && currentAvatarId && (
             <button
@@ -411,6 +470,31 @@ export function EmbeddedPhotoGallery({
                         )}
                       </button>
                     )}
+
+                    {/* Delete button */}
+                    {!isAvatar && (
+                      <button
+                        onClick={(e) => handleDeleteImage(e, image)}
+                        disabled={deletingImage === image.id}
+                        className={`p-1.5 rounded-full shadow-md transition-colors ${
+                          confirmDelete === image.id
+                            ? 'bg-red-500 text-white'
+                            : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-red-500 hover:text-white'
+                        } ${deletingImage === image.id ? 'opacity-50' : ''}`}
+                        title={confirmDelete === image.id ? 'Click again to confirm delete' : 'Delete image'}
+                      >
+                        {deletingImage === image.id ? (
+                          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        )}
+                      </button>
+                    )}
                   </div>
                 </div>
               )
@@ -428,22 +512,22 @@ export function EmbeddedPhotoGallery({
           onPrev={selectedIndex > 0 ? handlePrevious : undefined}
           onNext={selectedIndex < images.length - 1 ? handleNext : undefined}
           onAvatarSet={() => {
-            console.log('[EmbeddedPhotoGallery] Avatar was set, refreshing...')
-            console.log('[EmbeddedPhotoGallery] onRefresh exists?', typeof onRefresh, onRefresh)
-            // Refresh images to update avatar indicators
             fetchImages()
-            // Notify parent component to refresh its data
-            // (API was already called by ImageDetailModal, just need to refresh UI)
-            console.log('[EmbeddedPhotoGallery] Calling onRefresh callback')
             if (onRefresh) {
               onRefresh()
-              console.log('[EmbeddedPhotoGallery] onRefresh called')
-            } else {
-              console.log('[EmbeddedPhotoGallery] onRefresh is not defined!')
             }
           }}
         />
       )}
+
+      {/* Upload Dialog */}
+      <ImageUploadDialog
+        isOpen={showUploadDialog}
+        onClose={() => setShowUploadDialog(false)}
+        onSuccess={handleUploadSuccess}
+        contextType={entityType === 'character' ? 'CHARACTER' : 'PERSONA'}
+        contextId={entityId}
+      />
     </div>
   )
 }

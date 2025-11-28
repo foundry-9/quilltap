@@ -48,26 +48,27 @@ export function EntityTabs({ tabs, defaultTab, persistToUrl = true, children }: 
   return (
     <div>
       {/* Tab Navigation */}
-      <div className="border-b border-gray-200 dark:border-slate-700 mb-6">
-        <nav className="flex gap-1 -mb-px overflow-x-auto" aria-label="Tabs">
+      <div className="mb-6">
+        <nav className="flex flex-wrap gap-1" aria-label="Tabs">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => handleTabChange(tab.id)}
               className={`
-                flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap
-                border-b-2 transition-colors
+                flex items-center gap-2 px-4 py-2.5 text-sm font-medium
+                rounded-t-lg border border-b-0 transition-colors min-w-fit
                 ${activeTab === tab.id
-                  ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
-                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-slate-600'
+                  ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 border-gray-200 dark:border-slate-700 relative after:absolute after:bottom-[-1px] after:left-0 after:right-0 after:h-[1px] after:bg-white dark:after:bg-slate-800'
+                  : 'bg-gray-100 dark:bg-slate-700/50 text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-700'
                 }
               `}
             >
-              {tab.icon}
-              {tab.label}
+              <span className="flex-shrink-0">{tab.icon}</span>
+              <span>{tab.label}</span>
             </button>
           ))}
         </nav>
+        <div className="border-b border-gray-200 dark:border-slate-700"></div>
       </div>
 
       {/* Tab Content */}

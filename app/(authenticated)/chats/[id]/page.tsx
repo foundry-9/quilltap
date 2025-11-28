@@ -117,7 +117,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const { id } = use(params)
   useAvatarDisplay()
   const debug = useDebugOptional()
-  console.log('[ChatPage] Rendered, debug available:', !!debug, 'debug.isDebugMode:', debug?.isDebugMode)
   const [chat, setChat] = useState<Chat | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')

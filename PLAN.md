@@ -27,6 +27,7 @@ PhysicalDescriptionSchema = z.object({
 Physical descriptions will be stored **embedded within each character/persona JSON file** as an array field `physicalDescriptions: PhysicalDescription[]`. This follows the existing pattern for `personaLinks`, `tags`, and `avatarOverrides`.
 
 **Rationale:**
+
 - Descriptions are tightly coupled to their parent entity
 - No need for cross-entity queries
 - Simpler CRUD operations (no separate repository needed)
@@ -35,11 +36,13 @@ Physical descriptions will be stored **embedded within each character/persona JS
 ### Schema Updates
 
 **CharacterSchema additions:**
+
 ```typescript
 physicalDescriptions: z.array(PhysicalDescriptionSchema).default([]),
 ```
 
 **PersonaSchema additions:**
+
 ```typescript
 physicalDescriptions: z.array(PhysicalDescriptionSchema).default([]),
 ```
@@ -71,20 +74,24 @@ physicalDescriptions: z.array(PhysicalDescriptionSchema).default([]),
 ### Tab Structure for Character View/Edit Pages
 
 **Tab 1: Character Details** (current content)
+
 - Name, title, description, personality, scenario
 - First message, example dialogues, system prompt
 - Default persona selector
 - Tags
 
 **Tab 2: Associated Profiles**
+
 - Default Connection Profile selector
 - (Future: Default Image Profile, Embedding Profile)
 
 **Tab 3: Photo Gallery**
+
 - PhotoGalleryModal embedded as tab content
 - Character-tagged images grid
 
 **Tab 4: Physical Descriptions**
+
 - List of existing descriptions with cards
 - Add new description button
 - Edit/delete actions on each card
@@ -93,37 +100,44 @@ physicalDescriptions: z.array(PhysicalDescriptionSchema).default([]),
 ### Tab Structure for Persona Pages
 
 **Tab 1: Persona Details** (current content)
+
 - Name, title, description
 - Personality traits
 - Tags
 
 **Tab 2: Photo Gallery**
+
 - PhotoGalleryModal embedded as tab content
 
 **Tab 3: Physical Descriptions**
+
 - Same structure as character descriptions
 
 ## Components to Create
 
 ### 1. PhysicalDescriptionList
+
 - Displays all descriptions for an entity
 - Grid of cards showing name + prompt previews
 - Add button triggers editor
 - Click card to view full description
 
 ### 2. PhysicalDescriptionEditor
+
 - Modal or inline form for create/edit
 - Fields: name (required), short/medium/long/complete prompts (with char counters)
 - Freeform Markdown textarea with preview toggle
 - Save/Cancel buttons
 
 ### 3. PhysicalDescriptionCard
+
 - Card display of single description
 - Shows name, truncated prompts
 - Edit/Delete action buttons
 - Expand to view full freeform description (rendered Markdown)
 
 ### 4. CharacterTabs / PersonaTabs
+
 - Tab navigation component
 - Manages active tab state
 - Renders appropriate content per tab
@@ -131,6 +145,7 @@ physicalDescriptions: z.array(PhysicalDescriptionSchema).default([]),
 ## Implementation Steps
 
 ### Phase 1: Schema & Data Layer
+
 1. Add `PhysicalDescriptionSchema` to `lib/json-store/schemas/types.ts`
 2. Add `physicalDescriptions` field to `CharacterSchema`
 3. Add `physicalDescriptions` field to `PersonaSchema`
@@ -141,24 +156,28 @@ physicalDescriptions: z.array(PhysicalDescriptionSchema).default([]),
 5. Add same helper methods to `personas.repository.ts`
 
 ### Phase 2: API Endpoints
+
 1. Create `/api/characters/[id]/descriptions/route.ts` (GET, POST)
 2. Create `/api/characters/[id]/descriptions/[descId]/route.ts` (GET, PUT, DELETE)
 3. Create `/api/personas/[id]/descriptions/route.ts` (GET, POST)
 4. Create `/api/personas/[id]/descriptions/[descId]/route.ts` (GET, PUT, DELETE)
 
 ### Phase 3: UI Components
+
 1. Create `components/physical-descriptions/physical-description-card.tsx`
 2. Create `components/physical-descriptions/physical-description-editor.tsx`
 3. Create `components/physical-descriptions/physical-description-list.tsx`
 4. Create `components/tabs/entity-tabs.tsx` (reusable tab component)
 
 ### Phase 4: Character Pages Refactor
+
 1. Refactor `/characters/[id]/view/page.tsx` to use tabs
 2. Refactor `/characters/[id]/edit/page.tsx` to use tabs
 3. Integrate PhotoGalleryModal as tab content
 4. Integrate PhysicalDescriptionList in Descriptions tab
 
 ### Phase 5: Persona Pages Refactor
+
 1. Refactor `/personas/[id]/page.tsx` to use tabs
 2. Integrate PhotoGalleryModal as tab content
 3. Integrate PhysicalDescriptionList in Descriptions tab
@@ -166,6 +185,7 @@ physicalDescriptions: z.array(PhysicalDescriptionSchema).default([]),
 ## File Changes Summary
 
 ### New Files
+
 - `lib/json-store/schemas/types.ts` (modify - add PhysicalDescriptionSchema)
 - `app/api/characters/[id]/descriptions/route.ts`
 - `app/api/characters/[id]/descriptions/[descId]/route.ts`
@@ -177,6 +197,7 @@ physicalDescriptions: z.array(PhysicalDescriptionSchema).default([]),
 - `components/tabs/entity-tabs.tsx`
 
 ### Modified Files
+
 - `lib/json-store/schemas/types.ts` - Add schemas
 - `lib/json-store/repositories/characters.repository.ts` - Add description methods
 - `lib/json-store/repositories/personas.repository.ts` - Add description methods

@@ -132,7 +132,6 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
   const [avatarRefreshKey, setAvatarRefreshKey] = useState(0)
 
   const fetchCharacter = useCallback(async () => {
-    console.log('[EditCharacterPage] fetchCharacter called')
     try {
       const res = await fetch(`/api/characters/${id}`, {
         cache: 'no-store',
@@ -143,12 +142,8 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
       if (!res.ok) throw new Error('Failed to fetch character')
       const data = await res.json()
       const char = data.character
-      console.log('[EditCharacterPage] Fetched character with defaultImageId:', char.defaultImageId)
       setCharacter((prev) => {
-        console.log('[EditCharacterPage] Previous defaultImageId:', prev?.defaultImageId)
-        // Force refresh if defaultImageId changed
         if (prev?.defaultImageId !== char.defaultImageId) {
-          console.log('[EditCharacterPage] Avatar changed! Incrementing refresh key')
           setAvatarRefreshKey(k => k + 1)
         }
         return char

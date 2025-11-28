@@ -71,7 +71,6 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
   })
 
   const fetchPersona = useCallback(async () => {
-    console.log('[PersonaPage] fetchPersona called')
     try {
       const res = await fetch(`/api/personas/${id}`, {
         cache: 'no-store',
@@ -81,12 +80,8 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
       })
       if (!res.ok) throw new Error('Failed to fetch persona')
       const p = await res.json()
-      console.log('[PersonaPage] Fetched persona with defaultImageId:', p.defaultImageId)
       setPersona((prev) => {
-        console.log('[PersonaPage] Previous defaultImageId:', prev?.defaultImageId)
-        // Force refresh if defaultImageId changed
         if (prev?.defaultImageId !== p.defaultImageId) {
-          console.log('[PersonaPage] Avatar changed! Incrementing refresh key')
           setAvatarRefreshKey(k => k + 1)
         }
         return p
