@@ -149,19 +149,19 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  const getTextareaMaxHeight = () => {
+  const getTextareaMaxHeight = useCallback(() => {
     if (typeof globalThis === 'undefined' || !globalThis.window) return 200
     const windowHeight = globalThis.window.innerHeight
     const isMobilePortrait = globalThis.window.matchMedia('(max-width: 640px) and (orientation: portrait)').matches
     return isMobilePortrait ? windowHeight / 2 : windowHeight / 3
-  }
+  }, [])
 
-  const resizeTextarea = (textarea: HTMLTextAreaElement) => {
+  const resizeTextarea = useCallback((textarea: HTMLTextAreaElement) => {
     textarea.style.height = 'auto'
     const maxHeight = getTextareaMaxHeight()
     const newHeight = Math.min(textarea.scrollHeight, maxHeight)
     textarea.style.height = newHeight + 'px'
-  }
+  }, [getTextareaMaxHeight])
 
   // Helper functions to get character/persona from participants
   const getFirstCharacterParticipant = () => {
@@ -269,7 +269,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       }
     }, 100)
     return () => clearTimeout(timer)
-  }, [])
+  }, [resizeTextarea])
 
   useEffect(() => {
     const handleResize = () => {
@@ -280,7 +280,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
     globalThis.window?.addEventListener('resize', handleResize)
     return () => globalThis.window?.removeEventListener('resize', handleResize)
-  }, [])
+  }, [resizeTextarea])
 
   // Handle file selection
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
