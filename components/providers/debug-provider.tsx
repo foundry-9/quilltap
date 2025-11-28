@@ -55,7 +55,31 @@ export interface DebugEntry {
     hasTools?: boolean;
     tools?: unknown[];
     messages?: Array<{ role: string; contentLength: number; hasAttachments?: boolean }>;
+    // Context management info (Sprint 5)
+    contextManagement?: {
+      tokenUsage: {
+        systemPrompt: number;
+        memories: number;
+        summary: number;
+        recentMessages: number;
+        total: number;
+      };
+      budget: {
+        total: number;
+        responseReserve: number;
+      };
+      memoriesIncluded: number;
+      messagesIncluded: number;
+      messagesTruncated: boolean;
+      includedSummary: boolean;
+      // Debug content for viewing
+      debugMemories?: Array<{ summary: string; importance: number; score: number }>;
+      debugSummary?: string;
+      debugSystemPrompt?: string;
+    };
   };
+  // Memory extraction debug logs (Sprint 6)
+  debugMemoryLogs?: string[];
 }
 
 interface DebugContextValue {
@@ -180,12 +204,14 @@ function parseSSEAndStitchContent(rawData: string): {
   finalMetadata: DebugEntry['finalMetadata'];
   llmRequestDetails: DebugEntry['llmRequestDetails'];
   finalEvent: DebugEntry['finalEvent'];
+  debugMemoryLogs?: string[];
 } {
   const lines = rawData.split('\n');
   let stitchedContent = '';
   const finalMetadata: DebugEntry['finalMetadata'] = {};
   let llmRequestDetails: DebugEntry['llmRequestDetails'] = undefined;
   let finalEvent: DebugEntry['finalEvent'] = undefined;
+  let debugMemoryLogs: string[] | undefined = undefined;
 
   for (const line of lines) {
     if (line.startsWith('data: ')) {
@@ -195,6 +221,11 @@ function parseSSEAndStitchContent(rawData: string): {
         // Capture LLM request debug info
         if (data.debugLLMRequest) {
           llmRequestDetails = data.debugLLMRequest;
+        }
+
+        // Capture memory debug logs
+        if (data.debugMemoryLogs && Array.isArray(data.debugMemoryLogs)) {
+          debugMemoryLogs = data.debugMemoryLogs;
         }
 
         // Stitch content together
@@ -222,7 +253,7 @@ function parseSSEAndStitchContent(rawData: string): {
     }
   }
 
-  return { stitchedContent, finalMetadata, llmRequestDetails, finalEvent };
+  return { stitchedContent, finalMetadata, llmRequestDetails, finalEvent, debugMemoryLogs };
 }
 
 let entryIdCounter = 0;
@@ -265,7 +296,7 @@ export function DebugProvider({ children }: { children: ReactNode }) {
   const finalizeStreamingEntry = useCallback((id: string) => {
     entriesRef.current = entriesRef.current.map(entry => {
       if (entry.id === id && entry.contentType === 'text/event-stream') {
-        const { stitchedContent, finalMetadata, llmRequestDetails, finalEvent } = parseSSEAndStitchContent(entry.data);
+        const { stitchedContent, finalMetadata, llmRequestDetails, finalEvent, debugMemoryLogs } = parseSSEAndStitchContent(entry.data);
         return {
           ...entry,
           status: 'complete' as const,
@@ -273,6 +304,7 @@ export function DebugProvider({ children }: { children: ReactNode }) {
           finalMetadata,
           llmRequestDetails,
           finalEvent,
+          debugMemoryLogs,
         };
       }
       return entry;

@@ -16,6 +16,7 @@ import { OpenRouterProvider } from '@/lib/llm/openrouter'
 import { OpenAICompatibleProvider } from '@/lib/llm/openai-compatible'
 import { GrokProvider } from '@/lib/llm/grok'
 import { GabAIProvider } from '@/lib/llm/gab-ai'
+import { GoogleProvider } from '@/lib/llm/google'
 
 describe('createLLMProvider', () => {
   describe('OpenAI provider', () => {
@@ -128,6 +129,40 @@ describe('createLLMProvider', () => {
     })
   })
 
+  describe('Google provider', () => {
+    it('should create a Google provider', () => {
+      const provider = createLLMProvider('GOOGLE')
+
+      expect(provider).toBeInstanceOf(GoogleProvider)
+    })
+
+    it('should ignore baseUrl parameter for Google provider', () => {
+      const provider = createLLMProvider('GOOGLE', 'https://example.com')
+
+      expect(provider).toBeInstanceOf(GoogleProvider)
+    })
+  })
+
+  describe('OpenAI-compatible OpenRouter detection', () => {
+    it('should create OpenRouter provider when baseUrl points to openrouter.ai', () => {
+      const provider = createLLMProvider('OPENAI_COMPATIBLE', 'https://openrouter.ai/api/v1')
+
+      expect(provider).toBeInstanceOf(OpenRouterProvider)
+    })
+
+    it('should create OpenRouter provider when baseUrl points to openrouter subdomain', () => {
+      const provider = createLLMProvider('OPENAI_COMPATIBLE', 'https://edge.openrouter.ai/v1')
+
+      expect(provider).toBeInstanceOf(OpenRouterProvider)
+    })
+
+    it('should create OpenAI-compatible provider for non-OpenRouter base URLs', () => {
+      const provider = createLLMProvider('OPENAI_COMPATIBLE', 'https://custom-host/v1')
+
+      expect(provider).toBeInstanceOf(OpenAICompatibleProvider)
+    })
+  })
+
   describe('Invalid provider names', () => {
     it('should throw error for invalid provider name', () => {
       expect(() => {
@@ -170,6 +205,7 @@ describe('createLLMProvider', () => {
         { name: 'OPENAI_COMPATIBLE', instance: OpenAICompatibleProvider, requiresBaseUrl: true },
         { name: 'GROK', instance: GrokProvider, requiresBaseUrl: false },
         { name: 'GAB_AI', instance: GabAIProvider, requiresBaseUrl: false },
+        { name: 'GOOGLE', instance: GoogleProvider, requiresBaseUrl: false },
       ]
 
       validProviders.forEach(({ name, instance, requiresBaseUrl }) => {

@@ -17,6 +17,9 @@ export type Provider = z.infer<typeof ProviderEnum>;
 export const ImageProviderEnum = z.enum(['OPENAI', 'GROK', 'GOOGLE_IMAGEN']);
 export type ImageProvider = z.infer<typeof ImageProviderEnum>;
 
+export const EmbeddingProfileProviderEnum = z.enum(['OPENAI', 'OLLAMA']);
+export type EmbeddingProfileProvider = z.infer<typeof EmbeddingProfileProviderEnum>;
+
 export const RoleEnum = z.enum(['SYSTEM', 'USER', 'ASSISTANT', 'TOOL']);
 export type Role = z.infer<typeof RoleEnum>;
 
@@ -110,12 +113,45 @@ export const TagStyleMapSchema = z.record(TagVisualStyleSchema).default({});
 
 export type TagStyleMap = z.infer<typeof TagStyleMapSchema>;
 
+// ============================================================================
+// CHEAP LLM SETTINGS
+// ============================================================================
+
+export const CheapLLMStrategyEnum = z.enum(['USER_DEFINED', 'PROVIDER_CHEAPEST', 'LOCAL_FIRST']);
+export type CheapLLMStrategy = z.infer<typeof CheapLLMStrategyEnum>;
+
+export const EmbeddingProviderEnum = z.enum(['SAME_PROVIDER', 'OPENAI', 'LOCAL']);
+export type EmbeddingProvider = z.infer<typeof EmbeddingProviderEnum>;
+
+export const CheapLLMSettingsSchema = z.object({
+  /** Strategy for selecting the cheap LLM provider */
+  strategy: CheapLLMStrategyEnum.default('PROVIDER_CHEAPEST'),
+  /** If USER_DEFINED, which connection profile to use */
+  userDefinedProfileId: UUIDSchema.nullable().optional(),
+  /** Global default cheap LLM profile - always use this if set */
+  defaultCheapProfileId: UUIDSchema.nullable().optional(),
+  /** Whether to fall back to local models if available */
+  fallbackToLocal: z.boolean().default(true),
+  /** Provider for generating embeddings */
+  embeddingProvider: EmbeddingProviderEnum.default('OPENAI'),
+  /** Embedding profile ID to use for text embeddings */
+  embeddingProfileId: UUIDSchema.nullable().optional(),
+});
+
+export type CheapLLMSettings = z.infer<typeof CheapLLMSettingsSchema>;
+
 export const ChatSettingsSchema = z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
   avatarDisplayMode: AvatarDisplayModeEnum.default('ALWAYS'),
   avatarDisplayStyle: z.string().default('CIRCULAR'),
   tagStyles: TagStyleMapSchema,
+  /** Cheap LLM settings for memory extraction and summarization */
+  cheapLLMSettings: CheapLLMSettingsSchema.default({
+    strategy: 'PROVIDER_CHEAPEST',
+    fallbackToLocal: true,
+    embeddingProvider: 'OPENAI',
+  }),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });
@@ -185,6 +221,8 @@ export const ConnectionProfileSchema = z.object({
   modelName: z.string(),
   parameters: JsonSchema.default({}),
   isDefault: z.boolean().default(false),
+  /** Whether this profile is suitable for use as a "cheap" LLM (low-cost tasks) */
+  isCheap: z.boolean().default(false),
   tags: z.array(UUIDSchema).default([]),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
@@ -201,14 +239,15 @@ export const CharacterSchema = z.object({
   userId: UUIDSchema,
   name: z.string(),
   title: z.string().nullable().optional(),
-  description: z.string(),
-  personality: z.string(),
-  scenario: z.string(),
-  firstMessage: z.string(),
+  description: z.string().nullable().optional(),
+  personality: z.string().nullable().optional(),
+  scenario: z.string().nullable().optional(),
+  firstMessage: z.string().nullable().optional(),
   exampleDialogues: z.string().nullable().optional(),
   systemPrompt: z.string().nullable().optional(),
   avatarUrl: z.string().nullable().optional(),
   defaultImageId: UUIDSchema.nullable().optional(),
+  defaultConnectionProfileId: UUIDSchema.nullable().optional(),
   sillyTavernData: JsonSchema.nullable().optional(),
   isFavorite: z.boolean().default(false),
 
@@ -267,6 +306,8 @@ export const MessageEventSchema = z.object({
   swipeIndex: z.number().nullable().optional(),
   attachments: z.array(UUIDSchema).default([]),
   createdAt: TimestampSchema,
+  // Debug: Memory extraction logs (Sprint 6)
+  debugMemoryLogs: z.array(z.string()).optional(),
 });
 
 export type MessageEvent = z.infer<typeof MessageEventSchema>;
@@ -287,7 +328,118 @@ export const ChatEventSchema = z.union([
 
 export type ChatEvent = z.infer<typeof ChatEventSchema>;
 
+// ============================================================================
+// CHAT PARTICIPANTS
+// ============================================================================
+
+export const ParticipantTypeEnum = z.enum(['CHARACTER', 'PERSONA']);
+export type ParticipantType = z.infer<typeof ParticipantTypeEnum>;
+
+export const ChatParticipantSchema = z.object({
+  id: UUIDSchema,
+
+  // Participant type and identity
+  type: ParticipantTypeEnum,
+  characterId: UUIDSchema.nullable().optional(),  // Set when type is CHARACTER
+  personaId: UUIDSchema.nullable().optional(),    // Set when type is PERSONA
+
+  // LLM configuration (for AI characters only)
+  connectionProfileId: UUIDSchema.nullable().optional(),  // Required for CHARACTER, null for PERSONA
+  imageProfileId: UUIDSchema.nullable().optional(),       // Image generation profile
+
+  // Per-chat customization
+  systemPromptOverride: z.string().nullable().optional(),  // Custom scenario/context for this chat
+
+  // Display and state
+  displayOrder: z.number().default(0),   // For ordering in UI
+  isActive: z.boolean().default(true),   // Temporarily disable without removing
+
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+}).refine(
+  (data) => {
+    // Must have characterId if type is CHARACTER
+    if (data.type === 'CHARACTER') {
+      return data.characterId != null;
+    }
+    // Must have personaId if type is PERSONA
+    if (data.type === 'PERSONA') {
+      return data.personaId != null;
+    }
+    return false;
+  },
+  { message: 'CHARACTER participants must have characterId, PERSONA participants must have personaId' }
+).refine(
+  (data) => {
+    // CHARACTER participants must have a connectionProfileId
+    if (data.type === 'CHARACTER') {
+      return data.connectionProfileId != null;
+    }
+    return true;
+  },
+  { message: 'CHARACTER participants must have a connectionProfileId' }
+);
+
+export type ChatParticipant = z.infer<typeof ChatParticipantSchema>;
+
+// Schema without refinements for internal use (e.g., parsing before validation)
+export const ChatParticipantBaseSchema = z.object({
+  id: UUIDSchema,
+  type: ParticipantTypeEnum,
+  characterId: UUIDSchema.nullable().optional(),
+  personaId: UUIDSchema.nullable().optional(),
+  connectionProfileId: UUIDSchema.nullable().optional(),
+  imageProfileId: UUIDSchema.nullable().optional(),
+  systemPromptOverride: z.string().nullable().optional(),
+  displayOrder: z.number().default(0),
+  isActive: z.boolean().default(true),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type ChatParticipantBase = z.infer<typeof ChatParticipantBaseSchema>;
+
 export const ChatMetadataSchema = z.object({
+  id: UUIDSchema,
+  userId: UUIDSchema,
+
+  // Participants array (replaces characterId, personaId, connectionProfileId, imageProfileId)
+  participants: z.array(ChatParticipantBaseSchema).default([]),
+
+  title: z.string(),
+  contextSummary: z.string().nullable().optional(),
+  sillyTavernMetadata: JsonSchema.nullable().optional(),
+  tags: z.array(UUIDSchema).default([]),
+  messageCount: z.number().default(0),
+  lastMessageAt: TimestampSchema.nullable().optional(),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+}).refine(
+  (data) => data.participants.length > 0,
+  { message: 'Chat must have at least one participant' }
+);
+
+export type ChatMetadata = z.infer<typeof ChatMetadataSchema>;
+
+// Schema without participant validation for migration/backwards compatibility
+export const ChatMetadataBaseSchema = z.object({
+  id: UUIDSchema,
+  userId: UUIDSchema,
+  participants: z.array(ChatParticipantBaseSchema).default([]),
+  title: z.string(),
+  contextSummary: z.string().nullable().optional(),
+  sillyTavernMetadata: JsonSchema.nullable().optional(),
+  tags: z.array(UUIDSchema).default([]),
+  messageCount: z.number().default(0),
+  lastMessageAt: TimestampSchema.nullable().optional(),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type ChatMetadataBase = z.infer<typeof ChatMetadataBaseSchema>;
+
+// Legacy schema for migration (matches old format)
+export const ChatMetadataLegacySchema = z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
   characterId: UUIDSchema,
@@ -304,7 +456,7 @@ export const ChatMetadataSchema = z.object({
   updatedAt: TimestampSchema,
 });
 
-export type ChatMetadata = z.infer<typeof ChatMetadataSchema>;
+export type ChatMetadataLegacy = z.infer<typeof ChatMetadataLegacySchema>;
 
 // ============================================================================
 // IMAGES & BINARIES
@@ -420,3 +572,70 @@ export const ImageProfilesFileSchema = z.object({
 });
 
 export type ImageProfilesFile = z.infer<typeof ImageProfilesFileSchema>;
+
+// ============================================================================
+// EMBEDDING PROFILES
+// ============================================================================
+
+export const EmbeddingProfileSchema = z.object({
+  id: UUIDSchema,
+  userId: UUIDSchema,
+  name: z.string(),
+  provider: EmbeddingProfileProviderEnum,
+  apiKeyId: UUIDSchema.nullable().optional(),
+  baseUrl: z.string().nullable().optional(),
+  modelName: z.string(),
+  /** Embedding dimension size (provider-specific) */
+  dimensions: z.number().nullable().optional(),
+  isDefault: z.boolean().default(false),
+  tags: z.array(UUIDSchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type EmbeddingProfile = z.infer<typeof EmbeddingProfileSchema>;
+
+export const EmbeddingProfilesFileSchema = z.object({
+  version: z.number().default(1),
+  profiles: z.array(EmbeddingProfileSchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type EmbeddingProfilesFile = z.infer<typeof EmbeddingProfilesFileSchema>;
+
+// ============================================================================
+// MEMORY
+// ============================================================================
+
+export const MemorySourceEnum = z.enum(['AUTO', 'MANUAL']);
+export type MemorySource = z.infer<typeof MemorySourceEnum>;
+
+export const MemorySchema = z.object({
+  id: UUIDSchema,
+  characterId: UUIDSchema,
+  personaId: UUIDSchema.nullable().optional(),      // Optional: specific persona interaction
+  chatId: UUIDSchema.nullable().optional(),         // Optional: source chat reference
+  content: z.string(),                              // The actual memory content
+  summary: z.string(),                              // Distilled version for context injection
+  keywords: z.array(z.string()).default([]),        // For text-based search
+  tags: z.array(UUIDSchema).default([]),            // Derived from character/persona/chat tags
+  importance: z.number().min(0).max(1).default(0.5), // 0-1 scale for prioritization
+  embedding: z.array(z.number()).nullable().optional(), // Vector embedding for semantic search
+  source: MemorySourceEnum.default('MANUAL'),       // How it was created
+  sourceMessageId: UUIDSchema.nullable().optional(), // If auto-created, which message triggered it
+  lastAccessedAt: TimestampSchema.nullable().optional(), // For housekeeping decisions
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type Memory = z.infer<typeof MemorySchema>;
+
+export const MemoriesFileSchema = z.object({
+  version: z.number().default(1),
+  memories: z.array(MemorySchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type MemoriesFile = z.infer<typeof MemoriesFileSchema>;

@@ -8,6 +8,7 @@ import { useState } from "react";
 import { useDebugOptional } from "@/components/providers/debug-provider";
 import { useChatContext } from "@/components/providers/chat-context";
 import { TagDropdown } from "@/components/tags/tag-dropdown";
+import { routeSupportsDebug } from "@/lib/navigation/route-flags";
 
 interface DashboardNavProps {
   user: {
@@ -25,6 +26,7 @@ export default function DashboardNav({ user }: DashboardNavProps) {
 
   // Check if we're in a chat conversation
   const isInChat = pathname?.match(/^\/chats\/[^/]+$/);
+  const supportsDebugToggle = routeSupportsDebug(pathname);
 
   return (
     <nav className="border-b border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900">
@@ -91,7 +93,7 @@ export default function DashboardNav({ user }: DashboardNavProps) {
             )}
 
             {/* Debug toggle button */}
-            {debug && (
+            {debug && supportsDebugToggle && (
               <button
                 onClick={debug.toggleDebugMode}
                 className={`p-2 rounded-md transition-colors ${
@@ -103,15 +105,11 @@ export default function DashboardNav({ user }: DashboardNavProps) {
               >
                 <svg
                   className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+                  viewBox="0 -0.5 17 17"
+                  fill="currentColor"
                 >
                   <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
+                    d="M15.732,2.509 L13.495,0.274 C13.064,-0.159 12.346,-0.141 11.892,0.312 C11.848,0.356 11.817,0.411 11.8,0.471 C11.241,2.706 11.253,3.487 11.346,3.794 L5.081,10.059 L3.162,8.142 L0.872,10.432 C0.123,11.18 -0.503,13.91 0.795,15.207 C2.092,16.504 4.819,15.875 5.566,15.128 L7.86,12.836 L5.981,10.958 L12.265,4.675 C12.607,4.752 13.423,4.732 15.535,4.205 C15.595,4.188 15.65,4.158 15.694,4.114 C16.147,3.661 16.163,2.941 15.732,2.509 L15.732,2.509 Z M15.15,3.459 C14.047,3.77 12.765,4.046 12.481,3.992 L12.046,3.557 C11.984,3.291 12.262,1.996 12.576,0.886 C12.757,0.752 12.989,0.748 13.129,0.888 L15.147,2.906 C15.285,3.045 15.281,3.277 15.15,3.459 L15.15,3.459 Z"
                   />
                 </svg>
               </button>

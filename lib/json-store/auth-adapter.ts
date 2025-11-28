@@ -9,7 +9,7 @@
  * - Verification token handling
  */
 
-import { Adapter, AdapterUser, AdapterAccount } from '@auth/core/adapters';
+import { Adapter, AdapterUser, AdapterAccount } from 'next-auth/adapters';
 import { JsonStore } from './core/json-store';
 import { UsersRepository } from './repositories/users.repository';
 import { z } from 'zod';

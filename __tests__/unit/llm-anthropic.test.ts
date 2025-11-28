@@ -78,7 +78,6 @@ describe('AnthropicProvider', () => {
         messages: [{ role: 'user', content: 'Hello!' }],
         max_tokens: 1000,
         temperature: 0.7,
-        top_p: 1,
       })
 
       expect(result).toEqual({
@@ -123,8 +122,7 @@ describe('AnthropicProvider', () => {
           { role: 'user', content: 'How are you?' },
         ],
         max_tokens: 1000,
-        temperature: 0.7,
-        top_p: 1,
+        temperature: 1,
       })
     })
 
@@ -149,8 +147,7 @@ describe('AnthropicProvider', () => {
         system: undefined,
         messages: [{ role: 'user', content: 'Test' }],
         max_tokens: 1000,
-        temperature: 0.7,
-        top_p: 1,
+        temperature: 1,
       })
     })
 
@@ -179,7 +176,6 @@ describe('AnthropicProvider', () => {
         messages: [{ role: 'user', content: 'Test' }],
         max_tokens: 2000,
         temperature: 0.5,
-        top_p: 0.9,
       })
     })
 
@@ -288,7 +284,7 @@ describe('AnthropicProvider', () => {
         system: undefined,
         messages: [{ role: 'user', content: 'Hello!' }],
         max_tokens: 1000,
-        temperature: 0.7,
+        temperature: 1,
         stream: true,
       })
     })

@@ -11,10 +11,18 @@ import { GrokProvider } from './grok'
 import { GabAIProvider } from './gab-ai'
 import { GoogleProvider } from './google'
 
-type Provider = 'OPENAI' | 'ANTHROPIC' | 'OLLAMA' | 'OPENROUTER' | 'OPENAI_COMPATIBLE' | 'GROK' | 'GAB_AI' | 'GOOGLE'
+export type ProviderName =
+  | 'OPENAI'
+  | 'ANTHROPIC'
+  | 'OLLAMA'
+  | 'OPENROUTER'
+  | 'OPENAI_COMPATIBLE'
+  | 'GROK'
+  | 'GAB_AI'
+  | 'GOOGLE'
 
 export function createLLMProvider(
-  provider: Provider,
+  provider: ProviderName,
   baseUrl?: string
 ): LLMProvider {
   switch (provider) {

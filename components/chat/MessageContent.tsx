@@ -60,41 +60,41 @@ export default function MessageContent({ content, className = '' }: MessageConte
     },
     // Paragraph spacing
     p({ children }) {
-      return <p className="mb-2 last:mb-0">{children}</p>
+      return <p className="font-georgia mb-2 last:mb-0">{children}</p>
     },
     // Headings
     h1({ children }) {
-      return <h1 className="text-2xl font-bold mb-2 mt-4 first:mt-0">{children}</h1>
+      return <h1 className="font-georgia text-2xl font-bold mb-2 mt-4 first:mt-0">{children}</h1>
     },
     h2({ children }) {
-      return <h2 className="text-xl font-bold mb-2 mt-3 first:mt-0">{children}</h2>
+      return <h2 className="font-georgia text-xl font-bold mb-2 mt-3 first:mt-0">{children}</h2>
     },
     h3({ children }) {
-      return <h3 className="text-lg font-semibold mb-2 mt-3 first:mt-0">{children}</h3>
+      return <h3 className="font-georgia text-lg font-semibold mb-2 mt-3 first:mt-0">{children}</h3>
     },
     h4({ children }) {
-      return <h4 className="text-base font-semibold mb-1 mt-2 first:mt-0">{children}</h4>
+      return <h4 className="font-georgia text-base font-semibold mb-1 mt-2 first:mt-0">{children}</h4>
     },
     h5({ children }) {
-      return <h5 className="text-sm font-semibold mb-1 mt-2 first:mt-0">{children}</h5>
+      return <h5 className="font-georgia text-sm font-semibold mb-1 mt-2 first:mt-0">{children}</h5>
     },
     h6({ children }) {
-      return <h6 className="text-xs font-semibold mb-1 mt-2 first:mt-0">{children}</h6>
+      return <h6 className="font-georgia text-xs font-semibold mb-1 mt-2 first:mt-0">{children}</h6>
     },
     // Lists
     ul({ children }) {
-      return <ul className="list-disc list-inside mb-2 ml-4">{children}</ul>
+      return <ul className="font-georgia list-disc list-inside mb-2 ml-4">{children}</ul>
     },
     ol({ children }) {
-      return <ol className="list-decimal list-inside mb-2 ml-4">{children}</ol>
+      return <ol className="font-georgia list-decimal list-inside mb-2 ml-4">{children}</ol>
     },
     li({ children }) {
-      return <li className="mb-1">{children}</li>
+      return <li className="font-georgia mb-1">{children}</li>
     },
     // Blockquotes
     blockquote({ children }) {
       return (
-        <blockquote className="border-l-4 border-gray-300 dark:border-gray-600 pl-4 py-1 my-2 italic">
+        <blockquote className="font-georgia border-l-4 border-gray-300 dark:border-gray-600 pl-4 py-1 my-2 italic">
           {children}
         </blockquote>
       )
@@ -127,14 +127,14 @@ export default function MessageContent({ content, className = '' }: MessageConte
     },
     th({ children }) {
       return (
-        <th className="border border-gray-300 dark:border-gray-600 px-4 py-2 text-left font-semibold">
+        <th className="font-georgia border border-gray-300 dark:border-gray-600 px-4 py-2 text-left font-semibold">
           {children}
         </th>
       )
     },
     td({ children }) {
       return (
-        <td className="border border-gray-300 dark:border-gray-600 px-4 py-2">
+        <td className="font-georgia border border-gray-300 dark:border-gray-600 px-4 py-2">
           {children}
         </td>
       )

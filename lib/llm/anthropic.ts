@@ -121,8 +121,16 @@ export class AnthropicProvider extends LLMProvider {
       system: systemMessage?.content,
       messages,
       max_tokens: params.maxTokens ?? 1000,
-      temperature: params.temperature ?? 0.7,
-      top_p: params.topP ?? 1,
+    }
+
+    // Anthropic API requires either temperature OR top_p, not both
+    if (params.temperature !== undefined) {
+      requestParams.temperature = params.temperature
+    } else if (params.topP !== undefined) {
+      requestParams.top_p = params.topP
+    } else {
+      // Default to temperature if neither is specified
+      requestParams.temperature = 1.0
     }
 
     // Add tools if provided
@@ -158,8 +166,17 @@ export class AnthropicProvider extends LLMProvider {
       system: systemMessage?.content,
       messages,
       max_tokens: params.maxTokens ?? 1000,
-      temperature: params.temperature ?? 0.7,
       stream: true,
+    }
+
+    // Anthropic API requires either temperature OR top_p, not both
+    if (params.temperature !== undefined) {
+      requestParams.temperature = params.temperature
+    } else if (params.topP !== undefined) {
+      requestParams.top_p = params.topP
+    } else {
+      // Default to temperature if neither is specified
+      requestParams.temperature = 1.0
     }
 
     // Add tools if provided

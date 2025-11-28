@@ -14,6 +14,8 @@ import { UsersRepository } from './users.repository';
 import { ConnectionProfilesRepository } from './connection-profiles.repository';
 import { ImagesRepository } from './images.repository';
 import { ImageProfilesRepository } from './image-profiles.repository';
+import { EmbeddingProfilesRepository } from './embedding-profiles.repository';
+import { MemoriesRepository } from './memories.repository';
 
 /**
  * All repositories available from JsonStore
@@ -27,6 +29,8 @@ export interface RepositoryContainer {
   connections: ConnectionProfilesRepository;
   images: ImagesRepository;
   imageProfiles: ImageProfilesRepository;
+  embeddingProfiles: EmbeddingProfilesRepository;
+  memories: MemoriesRepository;
 }
 
 /**
@@ -42,6 +46,8 @@ export function createRepositories(jsonStore: JsonStore): RepositoryContainer {
     connections: new ConnectionProfilesRepository(jsonStore),
     images: new ImagesRepository(jsonStore),
     imageProfiles: new ImageProfilesRepository(jsonStore),
+    embeddingProfiles: new EmbeddingProfilesRepository(jsonStore),
+    memories: new MemoriesRepository(jsonStore),
   };
 }
 
@@ -80,3 +86,5 @@ export { UsersRepository } from './users.repository';
 export { ConnectionProfilesRepository } from './connection-profiles.repository';
 export { ImagesRepository } from './images.repository';
 export { ImageProfilesRepository } from './image-profiles.repository';
+export { EmbeddingProfilesRepository } from './embedding-profiles.repository';
+export { MemoriesRepository } from './memories.repository';

@@ -128,6 +128,11 @@ export class UsersRepository extends BaseRepository<User> {
           avatarDisplayMode: 'ALWAYS' as AvatarDisplayMode,
           avatarDisplayStyle: 'CIRCULAR',
           tagStyles: {},
+          cheapLLMSettings: {
+            strategy: 'PROVIDER_CHEAPEST',
+            fallbackToLocal: true,
+            embeddingProvider: 'OPENAI',
+          },
           createdAt: now,
           updatedAt: now,
         },

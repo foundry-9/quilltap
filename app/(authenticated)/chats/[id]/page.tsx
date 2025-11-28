@@ -6,6 +6,7 @@ import ImageModal from '@/components/chat/ImageModal'
 import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
 import ToolPalette from '@/components/chat/ToolPalette'
 import ChatSettingsModal from '@/components/chat/ChatSettingsModal'
+import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import { showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { safeJsonParse } from '@/lib/fetch-helpers'
@@ -32,63 +33,72 @@ interface Message {
   swipeGroupId?: string | null
   swipeIndex?: number | null
   attachments?: MessageAttachment[]
+  debugMemoryLogs?: string[]
+}
+
+interface CharacterData {
+  id: string
+  name: string
+  title?: string | null
+  avatarUrl?: string
+  defaultImageId?: string
+  defaultImage?: {
+    id: string
+    filepath: string
+    url?: string
+  } | null
+}
+
+interface PersonaData {
+  id: string
+  name: string
+  title?: string | null
+  avatarUrl?: string
+  defaultImageId?: string
+  defaultImage?: {
+    id: string
+    filepath: string
+    url?: string
+  } | null
+}
+
+interface ConnectionProfileData {
+  id: string
+  name: string
+  provider?: string
+  modelName?: string
+  apiKey?: {
+    id: string
+    provider: string
+    label?: string
+  } | null
+}
+
+interface Participant {
+  id: string
+  type: 'CHARACTER' | 'PERSONA'
+  displayOrder: number
+  isActive: boolean
+  systemPromptOverride?: string | null
+  character?: CharacterData | null
+  persona?: PersonaData | null
+  connectionProfile?: ConnectionProfileData | null
+  imageProfile?: {
+    id: string
+    name: string
+    provider: string
+    modelName: string
+  } | null
 }
 
 interface Chat {
   id: string
   title: string
-  character: {
-    id: string
-    name: string
-    title?: string | null
-    avatarUrl?: string
-    defaultImageId?: string
-    defaultImage?: {
-      id: string
-      filepath: string
-      url?: string
-    } | null
-    personas: Array<{
-      persona: {
-        id: string
-        name: string
-        title?: string | null
-        avatarUrl?: string | null
-        defaultImage?: {
-          id: string
-          filepath: string
-          url?: string
-        } | null
-      }
-    }>
-  }
-  persona?: {
-    id: string
-    name: string
-    title?: string
-    avatarUrl?: string
-    defaultImageId?: string
-    defaultImage?: {
-      id: string
-      filepath: string
-      url?: string
-    } | null
-  } | null
+  participants: Participant[]
   user: {
     id: string
     name?: string | null
     image?: string | null
-  }
-  connectionProfile?: {
-    id: string
-    name: string
-    provider?: string
-    modelName?: string
-    apiKey?: {
-      id: string
-      provider: string
-      label?: string
-    }
   }
   messages: Message[]
 }
@@ -107,6 +117,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const { id } = use(params)
   useAvatarDisplay()
   const debug = useDebugOptional()
+  console.log('[ChatPage] Rendered, debug available:', !!debug, 'debug.isDebugMode:', debug?.isDebugMode)
   const [chat, setChat] = useState<Chat | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -114,6 +125,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [sending, setSending] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
+  const [waitingForResponse, setWaitingForResponse] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
@@ -128,13 +140,41 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [toolPaletteOpen, setToolPaletteOpen] = useState(false)
   const [chatSettingsModalOpen, setChatSettingsModalOpen] = useState(false)
   const [toolExecutionStatus, setToolExecutionStatus] = useState<{ tool: string; status: 'pending' | 'success' | 'error'; message: string } | null>(null)
+  const [showPreview, setShowPreview] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
+
+  const getTextareaMaxHeight = useCallback(() => {
+    if (typeof globalThis === 'undefined' || !globalThis.window) return 200
+    const windowHeight = globalThis.window.innerHeight
+    const isMobilePortrait = globalThis.window.matchMedia('(max-width: 640px) and (orientation: portrait)').matches
+    return isMobilePortrait ? windowHeight / 2 : windowHeight / 3
+  }, [])
+
+  const resizeTextarea = useCallback((textarea: HTMLTextAreaElement) => {
+    textarea.style.height = 'auto'
+    const maxHeight = getTextareaMaxHeight()
+    const newHeight = Math.min(textarea.scrollHeight, maxHeight)
+    textarea.style.height = newHeight + 'px'
+  }, [getTextareaMaxHeight])
+
+  // Helper functions to get character/persona from participants
+  const getFirstCharacterParticipant = () => {
+    return chat?.participants.find(p => p.type === 'CHARACTER' && p.isActive)
+  }
+
+  const getFirstPersonaParticipant = () => {
+    return chat?.participants.find(p => p.type === 'PERSONA' && p.isActive)
+  }
+
+  const getFirstCharacter = () => getFirstCharacterParticipant()?.character
+  const getFirstPersona = () => getFirstPersonaParticipant()?.persona
+  const getFirstConnectionProfile = () => getFirstCharacterParticipant()?.connectionProfile
 
   const fetchChatSettings = useCallback(async () => {
     try {
@@ -224,9 +264,23 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     const timer = setTimeout(() => {
       inputRef.current?.focus()
       inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      if (inputRef.current) {
+        resizeTextarea(inputRef.current)
+      }
     }, 100)
     return () => clearTimeout(timer)
-  }, [])
+  }, [resizeTextarea])
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (inputRef.current) {
+        resizeTextarea(inputRef.current)
+      }
+    }
+
+    globalThis.window?.addEventListener('resize', handleResize)
+    return () => globalThis.window?.removeEventListener('resize', handleResize)
+  }, [resizeTextarea])
 
   // Handle file selection
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -290,8 +344,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setInput('')
     setAttachedFiles([])
     setSending(true)
-    setStreaming(true)
+    setWaitingForResponse(true)
+    setStreaming(false)
     setStreamingContent('')
+    // Reset textarea to one line
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto'
+      resizeTextarea(inputRef.current)
+    }
 
     // Build display content with file indicators
     const displayContent = messageAttachments.length > 0
@@ -312,9 +372,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     // Debug: Log outgoing request
     const requestPayload = { content: userMessage || 'Please look at the attached file(s).', fileIds }
     let debugEntryId: string | undefined
-    const debugProviderName = chat?.connectionProfile?.name || 'LLM Provider'
-    const debugProviderType = (chat?.connectionProfile?.apiKey?.provider || 'UNKNOWN') as import('@/components/providers/debug-provider').LLMProviderType
-    const debugModel = chat?.connectionProfile?.modelName
+    const connectionProfile = getFirstConnectionProfile()
+    const debugProviderName = connectionProfile?.name || 'LLM Provider'
+    const debugProviderType = (connectionProfile?.apiKey?.provider || 'UNKNOWN') as import('@/components/providers/debug-provider').LLMProviderType
+    const debugModel = connectionProfile?.modelName
 
     if (debug?.isDebugMode) {
       debugEntryId = debug.addEntry({
@@ -387,6 +448,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
               if (data.content) {
                 fullContent += data.content
+                setWaitingForResponse(false)
+                setStreaming(true)
                 setStreamingContent(fullContent)
               }
 
@@ -420,6 +483,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 }
               }
 
+              // Handle memory debug logs (arrive after done event)
+              if (data.debugMemoryLogs && debug?.isDebugMode && responseEntryId) {
+                debug.updateEntry(responseEntryId, { debugMemoryLogs: data.debugMemoryLogs })
+              }
+
               if (data.done) {
                 // Debug: Finalize streaming entry with stitched content
                 if (debug?.isDebugMode && responseEntryId) {
@@ -436,8 +504,33 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 setMessages((prev) => [...prev, assistantMessage])
                 setStreamingContent('')
                 setStreaming(false)
-                // Refresh chat to get tool messages
+                // Refresh chat to get tool messages and memory debug logs
                 await fetchChat()
+                // Update debug entry with memory logs from the fetched chat (with polling)
+                if (debug?.isDebugMode && responseEntryId) {
+                  let pollCount = 0
+                  const maxPolls = 20 // Poll for up to 20 seconds (1 second intervals)
+                  const pollInterval = setInterval(async () => {
+                    pollCount++
+                    try {
+                      const chatRes = await fetch(`/api/chats/${id}`)
+                      if (chatRes.ok) {
+                        const chatData = await chatRes.json()
+                        const fetchedMessage = chatData.chat.messages.find((m: Message) => m.id === data.messageId)
+                        if (fetchedMessage?.debugMemoryLogs) {
+                          debug.updateEntry(responseEntryId, { debugMemoryLogs: fetchedMessage.debugMemoryLogs })
+                          clearInterval(pollInterval)
+                        } else if (pollCount >= maxPolls) {
+                          clearInterval(pollInterval)
+                        }
+                      }
+                    } catch {
+                      if (pollCount >= maxPolls) {
+                        clearInterval(pollInterval)
+                      }
+                    }
+                  }, 1000)
+                }
                 // Clear tool status after a short delay
                 setTimeout(() => setToolExecutionStatus(null), 3000)
               }
@@ -469,6 +562,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       setMessages((prev) => prev.filter((m) => m.id !== tempUserMessageId))
       setStreamingContent('')
       setStreaming(false)
+      setWaitingForResponse(false)
     } finally {
       setSending(false)
       setTimeout(() => {
@@ -584,25 +678,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   const getMessageAvatar = (message: Message) => {
     if (message.role === 'USER') {
-      // Fallback priority:
-      // 1. Chat's assigned persona (if explicitly set for this chat)
-      // 2. Character's default persona (if it has one)
-      // 3. User's avatar (fallback)
-
-      if (chat?.persona) {
+      // Use persona participant if available, otherwise fall back to user
+      const persona = getFirstPersona()
+      if (persona) {
         return {
-          name: chat.persona.name,
-          title: chat.persona.title,
-          avatarUrl: chat.persona.avatarUrl,
-          defaultImage: chat.persona.defaultImage,
-        }
-      } else if (chat?.character.personas && chat.character.personas.length > 0) {
-        const defaultPersona = chat.character.personas[0].persona
-        return {
-          name: defaultPersona.name,
-          title: defaultPersona.title,
-          avatarUrl: defaultPersona.avatarUrl,
-          defaultImage: defaultPersona.defaultImage,
+          name: persona.name,
+          title: persona.title,
+          avatarUrl: persona.avatarUrl,
+          defaultImage: persona.defaultImage,
         }
       } else if (chat?.user) {
         return {
@@ -612,12 +695,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           defaultImage: null,
         }
       }
-    } else if (message.role === 'ASSISTANT' && chat?.character) {
-      return {
-        name: chat.character.name,
-        title: chat.character.title,
-        avatarUrl: chat.character.avatarUrl,
-        defaultImage: chat.character.defaultImage,
+    } else if (message.role === 'ASSISTANT') {
+      const character = getFirstCharacter()
+      if (character) {
+        return {
+          name: character.name,
+          title: character.title,
+          avatarUrl: character.avatarUrl,
+          defaultImage: character.defaultImage,
+        }
       }
     }
     return null
@@ -724,7 +810,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               <ToolMessage
                 key={message.id}
                 message={message}
-                character={chat?.character}
+                character={getFirstCharacter() ?? undefined}
                 onImageClick={(filepath, filename, fileId) => {
                   setModalImage({ src: `/${filepath}`, filename, fileId })
                 }}
@@ -913,22 +999,41 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           )
         })}
 
+        {/* Waiting for response - show large quill animation */}
+        {waitingForResponse && !streaming && (
+          <div className="flex gap-4 w-[90%] justify-start items-center">
+            {shouldShowAvatars() && (
+              <div className="flex-shrink-0">
+                {renderAvatar({
+                  name: getFirstCharacter()?.name || 'AI',
+                  title: null,
+                  avatarUrl: getFirstCharacter()?.avatarUrl,
+                  defaultImage: getFirstCharacter()?.defaultImage,
+                })}
+              </div>
+            )}
+            <div className="text-gray-500 dark:text-gray-400">
+              <QuillAnimation size="lg" />
+            </div>
+          </div>
+        )}
+
         {/* Streaming message */}
         {streaming && streamingContent && (
           <div className="flex gap-4 w-[90%] justify-start">
             {shouldShowAvatars() && (
               <div className="flex-shrink-0">
                 {renderAvatar({
-                  name: chat?.character.name || 'AI',
+                  name: getFirstCharacter()?.name || 'AI',
                   title: null,
-                  avatarUrl: chat?.character.avatarUrl,
-                  defaultImage: chat?.character.defaultImage,
+                  avatarUrl: getFirstCharacter()?.avatarUrl,
+                  defaultImage: getFirstCharacter()?.defaultImage,
                 })}
               </div>
             )}
             <div className="flex-1 min-w-0 px-4 py-3 rounded-lg bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-white">
               <MessageContent content={streamingContent} />
-              <span className="inline-block w-2 h-4 bg-gray-400 dark:bg-gray-500 animate-pulse ml-1"></span>
+              <QuillAnimation size="sm" className="inline-block ml-2 text-gray-400 dark:text-gray-500" />
             </div>
           </div>
         )}
@@ -1010,66 +1115,132 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/markdown,text/csv"
               className="hidden"
             />
-            {/* Attach file button */}
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={sending || uploadingFile}
-              className="px-3 py-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Attach file"
-            >
-              {uploadingFile ? (
-                <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-              ) : (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                </svg>
-              )}
-            </button>
-            {/* Tools button - opens palette with gallery and settings */}
-            <div className="relative">
+            {/* Buttons column */}
+            <div className="flex flex-col gap-2">
+              {/* Attach file button */}
               <button
                 type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setToolPaletteOpen(!toolPaletteOpen)
+                onClick={() => fileInputRef.current?.click()}
+                disabled={sending || uploadingFile}
+                className="w-11 h-11 flex items-center justify-center border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Attach file"
+              >
+                {uploadingFile ? (
+                  <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                  </svg>
+                )}
+              </button>
+              {/* Tools button - opens palette with gallery and settings */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setToolPaletteOpen(!toolPaletteOpen)
+                  }}
+                  className="w-11 h-11 flex items-center justify-center border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700"
+                  title="Tools menu"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </button>
+                <ToolPalette
+                  isOpen={toolPaletteOpen}
+                  onClose={() => setToolPaletteOpen(false)}
+                  onGalleryClick={() => setGalleryOpen(true)}
+                  onSettingsClick={() => setChatSettingsModalOpen(true)}
+                  chatPhotoCount={chatPhotoCount}
+                />
+              </div>
+            </div>
+            {showPreview ? (
+              <div className="flex-1 px-4 py-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg overflow-y-auto"
+                style={{
+                  lineHeight: '1.5'
                 }}
-                className="px-3 py-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700"
-                title="Tools menu"
+              >
+                <MessageContent content={input} />
+              </div>
+            ) : (
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value)
+                  resizeTextarea(e.target)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && e.shiftKey) {
+                    // Shift+Enter: insert newline, don't submit
+                    e.preventDefault()
+                    const textarea = e.currentTarget
+                    const start = textarea.selectionStart
+                    const end = textarea.selectionEnd
+                    const newValue = input.substring(0, start) + '\n' + input.substring(end)
+                    setInput(newValue)
+                    // Move cursor after the inserted newline
+                    setTimeout(() => {
+                      textarea.selectionStart = textarea.selectionEnd = start + 1
+                      resizeTextarea(textarea)
+                    }, 0)
+                  } else if (e.key === 'Enter' && !e.shiftKey) {
+                    // Enter (without Shift): submit form
+                    e.preventDefault()
+                    if (input.trim() || attachedFiles.length > 0) {
+                      const form = e.currentTarget.form
+                      if (form) {
+                        form.dispatchEvent(new Event('submit', { bubbles: true }))
+                      }
+                    }
+                  }
+                }}
+                disabled={sending}
+                rows={1}
+                placeholder={attachedFiles.length > 0 ? "Add a message (optional)..." : "Type a message..."}
+                className="flex-1 px-4 py-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 disabled:bg-gray-100 dark:disabled:bg-slate-700 resize-none overflow-y-auto"
+                style={{
+                  lineHeight: '1.5'
+                }}
+              />
+            )}
+            {/* Buttons column - right side */}
+            <div className="flex flex-col gap-2">
+              {/* Send button */}
+              <button
+                type="submit"
+                disabled={sending || (!input.trim() && attachedFiles.length === 0)}
+                className="w-11 h-11 flex items-center justify-center bg-green-600 dark:bg-green-700 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-800 disabled:bg-gray-400 dark:disabled:bg-gray-600 transition-colors"
+                title="Send message"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4 2 2 0 000-4zm0 0V4m0 2a2 2 0 100 4 2 2 0 000-4zm6 6v-2m0 2a2 2 0 100 4 2 2 0 000-4zm0 0v-2m0 2a2 2 0 100 4 2 2 0 000-4zm-6 6v-2m0 2a2 2 0 100 4 2 2 0 000-4zm0 0v-2m0 2a2 2 0 100 4 2 2 0 000-4z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                 </svg>
               </button>
-              <ToolPalette
-                isOpen={toolPaletteOpen}
-                onClose={() => setToolPaletteOpen(false)}
-                onGalleryClick={() => setGalleryOpen(true)}
-                onSettingsClick={() => setChatSettingsModalOpen(true)}
-                chatPhotoCount={chatPhotoCount}
-              />
+              {/* Toggle Preview button */}
+              <button
+                type="button"
+                onClick={() => setShowPreview(!showPreview)}
+                className="w-11 h-11 flex items-center justify-center border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700"
+                title="Toggle preview"
+              >
+                {showPreview ? (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                )}
+              </button>
             </div>
-            <input
-              ref={inputRef}
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              disabled={sending}
-              placeholder={attachedFiles.length > 0 ? "Add a message (optional)..." : "Type a message..."}
-              className="flex-1 px-4 py-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 disabled:bg-gray-100 dark:disabled:bg-slate-700"
-            />
-            <button
-              type="submit"
-              disabled={sending || (!input.trim() && attachedFiles.length === 0)}
-              className="p-3 bg-green-600 dark:bg-green-700 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-800 disabled:bg-gray-400 dark:disabled:bg-gray-600 transition-colors"
-              title="Send message"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
-            </button>
           </form>
         </div>
       </div>
@@ -1081,10 +1252,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         src={modalImage?.src || ''}
         filename={modalImage?.filename || ''}
         fileId={modalImage?.fileId}
-        characterId={chat?.character.id}
-        characterName={chat?.character.name}
-        personaId={chat?.persona?.id || chat?.character.personas?.[0]?.persona.id}
-        personaName={chat?.persona?.name || chat?.character.personas?.[0]?.persona.name}
+        characterId={getFirstCharacter()?.id}
+        characterName={getFirstCharacter()?.name}
+        personaId={getFirstPersona()?.id}
+        personaName={getFirstPersona()?.name}
         onDelete={() => {
           // Refresh chat to update message attachments
           fetchChat()
@@ -1097,10 +1268,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         isOpen={galleryOpen}
         onClose={() => setGalleryOpen(false)}
         chatId={id}
-        characterId={chat?.character.id}
-        characterName={chat?.character.name}
-        personaId={chat?.persona?.id || chat?.character.personas?.[0]?.persona.id}
-        personaName={chat?.persona?.name || chat?.character.personas?.[0]?.persona.name}
+        characterId={getFirstCharacter()?.id}
+        characterName={getFirstCharacter()?.name}
+        personaId={getFirstPersona()?.id}
+        personaName={getFirstPersona()?.name}
         onImageDeleted={(fileId) => {
           // Update messages to show deleted indicator for this file
           setMessages((prev) =>
@@ -1126,7 +1297,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         isOpen={chatSettingsModalOpen}
         onClose={() => setChatSettingsModalOpen(false)}
         chatId={id}
-        currentProfileId={chat?.connectionProfile?.id}
+        participants={chat?.participants || []}
         onSuccess={fetchChat}
       />
       </div>

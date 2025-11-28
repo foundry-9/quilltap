@@ -57,8 +57,15 @@ export async function POST(
       )
     }
 
-    // Get connection profile for LLM access
-    const profile = await repos.connections.findById(foundChat.connectionProfileId)
+    // Get connection profile from first active character participant
+    const characterParticipant = foundChat.participants.find(
+      p => p.type === 'CHARACTER' && p.isActive && p.connectionProfileId
+    )
+    if (!characterParticipant?.connectionProfileId) {
+      return NextResponse.json({ error: 'No connection profile configured' }, { status: 404 })
+    }
+
+    const profile = await repos.connections.findById(characterParticipant.connectionProfileId)
     if (!profile) {
       return NextResponse.json({ error: 'Connection profile not found' }, { status: 404 })
     }

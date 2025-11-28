@@ -32,14 +32,15 @@ interface Character {
   id: string
   name: string
   title?: string | null
-  description: string
-  personality: string
-  scenario: string
-  firstMessage: string
-  exampleDialogues?: string
+  description?: string | null
+  personality?: string | null
+  scenario?: string | null
+  firstMessage?: string | null
+  exampleDialogues?: string | null
   systemPrompt?: string
   avatarUrl?: string
   defaultImageId?: string
+  defaultConnectionProfileId?: string
   defaultImage?: {
     id: string
     filepath: string
@@ -63,6 +64,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const [selectedImageProfileId, setSelectedImageProfileId] = useState<string | null>(null)
   const [creatingChat, setCreatingChat] = useState(false)
   const [openedFromQuery, setOpenedFromQuery] = useState(false)
+  const [defaultPersonaId, setDefaultPersonaId] = useState<string>('')
   const { style } = useAvatarDisplay()
 
   const fetchCharacter = useCallback(async () => {
@@ -95,10 +97,6 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       if (res.ok) {
         const data = await res.json()
         setProfiles(data.map((p: any) => ({ id: p.id, name: p.name })))
-        // Set first profile as default if available
-        if (data.length > 0) {
-          setSelectedProfileId(data[0].id)
-        }
       }
     } catch (err) {
       console.error('Failed to fetch profiles:', err)
@@ -117,19 +115,47 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     }
   }, [])
 
+  const fetchDefaultPersona = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/characters/${id}/personas`)
+      if (res.ok) {
+        const data = await res.json()
+        const defaultPersona = data.find((cp: any) => cp.isDefault)
+        if (defaultPersona) {
+          setDefaultPersonaId(defaultPersona.personaId)
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch default persona:', err)
+    }
+  }, [id])
+
   useEffect(() => {
     fetchCharacter()
     fetchTags()
     fetchProfiles()
     fetchPersonas()
-  }, [fetchCharacter, fetchTags, fetchProfiles, fetchPersonas])
+    fetchDefaultPersona()
+  }, [fetchCharacter, fetchTags, fetchProfiles, fetchPersonas, fetchDefaultPersona])
 
   useEffect(() => {
     if (searchParams.get('action') === 'chat') {
       setShowChatDialog(true)
       setOpenedFromQuery(true)
+
+      // Set default profile when opening from query
+      if (character?.defaultConnectionProfileId) {
+        setSelectedProfileId(character.defaultConnectionProfileId)
+      } else if (profiles.length > 0) {
+        setSelectedProfileId(profiles[0].id)
+      }
+
+      // Set default persona if available
+      if (defaultPersonaId) {
+        setSelectedPersonaId(defaultPersonaId)
+      }
     }
-  }, [searchParams])
+  }, [searchParams, character?.defaultConnectionProfileId, profiles, defaultPersonaId])
 
   const getAvatarSrc = () => {
     if (character?.defaultImage) {
@@ -139,10 +165,24 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   }
 
   const handleStartChat = () => {
-    if (profiles.length === 0) {
+    // Use character's default connection profile if available
+    if (character?.defaultConnectionProfileId) {
+      setSelectedProfileId(character.defaultConnectionProfileId)
+    } else if (profiles.length === 0) {
       showErrorToast('No connection profiles available. Please set up a profile first.')
       return
+    } else {
+      // Fall back to first profile if no default is set
+      setSelectedProfileId(profiles[0].id)
     }
+
+    // Use character's default persona if available
+    if (defaultPersonaId) {
+      setSelectedPersonaId(defaultPersonaId)
+    } else {
+      setSelectedPersonaId('')
+    }
+
     setShowChatDialog(true)
   }
 
@@ -154,14 +194,27 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
 
     setCreatingChat(true)
     try {
+      const participants: any[] = [
+        {
+          type: 'CHARACTER',
+          characterId: id,
+          connectionProfileId: selectedProfileId,
+          imageProfileId: selectedImageProfileId || undefined,
+        },
+      ]
+
+      if (selectedPersonaId) {
+        participants.push({
+          type: 'PERSONA',
+          personaId: selectedPersonaId,
+        })
+      }
+
       const res = await fetch('/api/chats', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          characterId: id,
-          connectionProfileId: selectedProfileId,
-          personaId: selectedPersonaId || undefined,
-          imageProfileId: selectedImageProfileId || undefined,
+          participants,
           title: `Chat with ${character?.name}`,
         }),
       })
@@ -274,41 +327,49 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
 
             {/* Main Content */}
             <div className="space-y-6">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-            Description
-          </h2>
-          <div className="text-gray-700 dark:text-gray-300">
-            <MessageContent content={character?.description || ''} />
+        {character?.description && (
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              Description
+            </h2>
+            <div className="text-gray-700 dark:text-gray-300">
+              <MessageContent content={character.description} />
+            </div>
           </div>
-        </div>
+        )}
 
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-            Personality
-          </h2>
-          <div className="text-gray-700 dark:text-gray-300">
-            <MessageContent content={character?.personality || ''} />
+        {character?.personality && (
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              Personality
+            </h2>
+            <div className="text-gray-700 dark:text-gray-300">
+              <MessageContent content={character.personality} />
+            </div>
           </div>
-        </div>
+        )}
 
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-            Scenario
-          </h2>
-          <div className="text-gray-700 dark:text-gray-300">
-            <MessageContent content={character?.scenario || ''} />
+        {character?.scenario && (
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              Scenario
+            </h2>
+            <div className="text-gray-700 dark:text-gray-300">
+              <MessageContent content={character.scenario} />
+            </div>
           </div>
-        </div>
+        )}
 
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-            First Message
-          </h2>
-          <div className="text-gray-700 dark:text-gray-300">
-            <MessageContent content={character?.firstMessage || ''} />
+        {character?.firstMessage && (
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              First Message
+            </h2>
+            <div className="text-gray-700 dark:text-gray-300">
+              <MessageContent content={character.firstMessage} />
+            </div>
           </div>
-        </div>
+        )}
 
         {character?.exampleDialogues && (
           <div>
@@ -331,6 +392,22 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                 {character.systemPrompt}
               </code>
             </pre>
+          </div>
+        )}
+
+        {character?.defaultConnectionProfileId && (
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              Default Connection Profile
+            </h2>
+            <div className="text-gray-700 dark:text-gray-300">
+              <p className="text-sm">
+                This character uses a default connection profile for chats, which can be overridden per individual chat.
+              </p>
+              <p className="text-sm mt-2">
+                Profile ID: <code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-xs">{character.defaultConnectionProfileId}</code>
+              </p>
+            </div>
           </div>
         )}
             </div>

@@ -171,9 +171,9 @@ function DebugEntryCard({ entry }: { entry: DebugEntry }) {
 
       {/* LLM Request Details (shown for incoming responses with debug info) */}
       {entry.llmRequestDetails && (
-        <details className="border-b border-cyan-200 dark:border-cyan-800 group/details">
+        <details className="border-b border-cyan-200 dark:border-cyan-800 group/details [&[open]>summary>svg.chevron]:rotate-90">
           <summary className="px-3 py-2 text-xs cursor-pointer select-none bg-cyan-50 dark:bg-cyan-950/30 text-cyan-700 dark:text-cyan-400 hover:bg-cyan-100 dark:hover:bg-cyan-900/30 flex items-center gap-1 group">
-            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+            <svg className="chevron w-3 h-3 transition-transform duration-200" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
             </svg>
             <span className="font-semibold">LLM Request Details</span>
@@ -224,6 +224,140 @@ function DebugEntryCard({ entry }: { entry: DebugEntry }) {
                 </div>
               </div>
             )}
+            {/* Context Management Info */}
+            {entry.llmRequestDetails.contextManagement && (
+              <div className="mb-2 p-2 bg-violet-50 dark:bg-violet-950/30 rounded border border-violet-200 dark:border-violet-800">
+                <div className="text-xs font-semibold text-violet-700 dark:text-violet-400 mb-2 flex items-center gap-1">
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+                  </svg>
+                  Context Management
+                </div>
+                {/* Token usage breakdown */}
+                <div className="grid grid-cols-2 gap-1 text-xs mb-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">System Prompt:</span>
+                    <span className="font-mono text-violet-600 dark:text-violet-400">
+                      {entry.llmRequestDetails.contextManagement.tokenUsage.systemPrompt.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">Memories:</span>
+                    <span className="font-mono text-violet-600 dark:text-violet-400">
+                      {entry.llmRequestDetails.contextManagement.tokenUsage.memories.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">Summary:</span>
+                    <span className="font-mono text-violet-600 dark:text-violet-400">
+                      {entry.llmRequestDetails.contextManagement.tokenUsage.summary.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">Messages:</span>
+                    <span className="font-mono text-violet-600 dark:text-violet-400">
+                      {entry.llmRequestDetails.contextManagement.tokenUsage.recentMessages.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+                {/* Total usage bar */}
+                <div className="mb-2">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-gray-600 dark:text-gray-400">
+                      Total: {entry.llmRequestDetails.contextManagement.tokenUsage.total.toLocaleString()} / {entry.llmRequestDetails.contextManagement.budget.total.toLocaleString()}
+                    </span>
+                    <span className="font-semibold text-violet-700 dark:text-violet-400">
+                      {Math.round((entry.llmRequestDetails.contextManagement.tokenUsage.total / entry.llmRequestDetails.contextManagement.budget.total) * 100)}%
+                    </span>
+                  </div>
+                  <div className="h-2 bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-violet-500 to-purple-500 transition-all"
+                      style={{
+                        width: `${Math.min(100, (entry.llmRequestDetails.contextManagement.tokenUsage.total / entry.llmRequestDetails.contextManagement.budget.total) * 100)}%`
+                      }}
+                    />
+                  </div>
+                </div>
+                {/* Status badges */}
+                <div className="flex flex-wrap gap-1 mb-2">
+                  <span className="text-xs px-1.5 py-0.5 bg-violet-200 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300 rounded">
+                    {entry.llmRequestDetails.contextManagement.memoriesIncluded} memories
+                  </span>
+                  <span className="text-xs px-1.5 py-0.5 bg-violet-200 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300 rounded">
+                    {entry.llmRequestDetails.contextManagement.messagesIncluded} messages
+                  </span>
+                  {entry.llmRequestDetails.contextManagement.includedSummary && (
+                    <span className="text-xs px-1.5 py-0.5 bg-green-200 dark:bg-green-900/50 text-green-700 dark:text-green-300 rounded">
+                      Has Summary
+                    </span>
+                  )}
+                  {entry.llmRequestDetails.contextManagement.messagesTruncated && (
+                    <span className="text-xs px-1.5 py-0.5 bg-amber-200 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 rounded">
+                      Truncated
+                    </span>
+                  )}
+                </div>
+
+                {/* Expandable: View Memories */}
+                {entry.llmRequestDetails.contextManagement.debugMemories && entry.llmRequestDetails.contextManagement.debugMemories.length > 0 && (
+                  <details className="mb-2 [&[open]>summary>svg.chevron]:rotate-90">
+                    <summary className="text-xs cursor-pointer select-none text-violet-600 dark:text-violet-400 hover:text-violet-800 dark:hover:text-violet-300 flex items-center gap-1">
+                      <svg className="chevron w-3 h-3 transition-transform duration-200" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                      </svg>
+                      View Memories ({entry.llmRequestDetails.contextManagement.debugMemories.length})
+                    </summary>
+                    <div className="mt-1 p-2 bg-violet-100 dark:bg-violet-900/30 rounded border border-violet-300 dark:border-violet-700 max-h-[200px] overflow-y-auto">
+                      {entry.llmRequestDetails.contextManagement.debugMemories.map((mem, idx) => (
+                        <div key={idx} className="text-xs mb-2 last:mb-0 pb-2 last:pb-0 border-b last:border-b-0 border-violet-200 dark:border-violet-700">
+                          <div className="text-gray-800 dark:text-gray-200">{mem.summary}</div>
+                          <div className="flex gap-2 mt-1 text-violet-600 dark:text-violet-400">
+                            <span>Score: {(mem.score * 100).toFixed(0)}%</span>
+                            <span>Importance: {(mem.importance * 100).toFixed(0)}%</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+
+                {/* Expandable: View Summary */}
+                {entry.llmRequestDetails.contextManagement.debugSummary && (
+                  <details className="mb-2 [&[open]>summary>svg.chevron]:rotate-90">
+                    <summary className="text-xs cursor-pointer select-none text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300 flex items-center gap-1">
+                      <svg className="chevron w-3 h-3 transition-transform duration-200" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                      </svg>
+                      View Conversation Summary
+                    </summary>
+                    <div className="mt-1 p-2 bg-green-100 dark:bg-green-900/30 rounded border border-green-300 dark:border-green-700 max-h-[200px] overflow-y-auto">
+                      <div className="text-xs text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
+                        {entry.llmRequestDetails.contextManagement.debugSummary}
+                      </div>
+                    </div>
+                  </details>
+                )}
+
+                {/* Expandable: View System Prompt */}
+                {entry.llmRequestDetails.contextManagement.debugSystemPrompt && (
+                  <details className="[&[open]>summary>svg.chevron]:rotate-90">
+                    <summary className="text-xs cursor-pointer select-none text-yellow-600 dark:text-yellow-400 hover:text-yellow-800 dark:hover:text-yellow-300 flex items-center gap-1">
+                      <svg className="chevron w-3 h-3 transition-transform duration-200" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                      </svg>
+                      View System Prompt ({entry.llmRequestDetails.contextManagement.tokenUsage.systemPrompt.toLocaleString()} tokens)
+                    </summary>
+                    <div className="mt-1 p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded border border-yellow-300 dark:border-yellow-700 max-h-[300px] overflow-y-auto">
+                      <div className="text-xs text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-mono">
+                        {entry.llmRequestDetails.contextManagement.debugSystemPrompt}
+                      </div>
+                    </div>
+                  </details>
+                )}
+              </div>
+            )}
+
             {/* Tools */}
             {entry.llmRequestDetails.tools && entry.llmRequestDetails.tools.length > 0 && (
               <div className="group/tools">
@@ -240,6 +374,26 @@ function DebugEntryCard({ entry }: { entry: DebugEntry }) {
             )}
           </div>
         </details>
+      )}
+
+      {/* Memory Extraction Debug Logs - shown regardless of LLM Request Details */}
+      {entry.debugMemoryLogs && entry.debugMemoryLogs.length > 0 && (
+        <div className="mb-2 p-3 bg-indigo-100 dark:bg-indigo-900/60 rounded border-2 border-indigo-500 dark:border-indigo-600">
+          <div className="text-xs font-semibold text-indigo-800 dark:text-indigo-200 mb-2 flex items-center gap-1">
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+              <path fillRule="evenodd" d="M4 5a2 2 0 012-2 1 1 0 000-2H6a6 6 0 016 6v3h2a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2v-6a2 2 0 012-2h2V7a1 1 0 000 2H4z" clipRule="evenodd" />
+            </svg>
+            🧠 Memory Extraction ({entry.debugMemoryLogs.length})
+          </div>
+          <div className="space-y-2">
+            {entry.debugMemoryLogs.map((log) => (
+              <div key={`log-${log.substring(0, 50)}`} className="text-xs p-2 bg-indigo-50 dark:bg-slate-800 rounded border border-indigo-400 dark:border-indigo-500 font-mono whitespace-pre-wrap break-words text-indigo-900 dark:text-indigo-100">
+                {log}
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Final Event JSON (shown by default for completed streaming responses) */}
@@ -270,9 +424,9 @@ function DebugEntryCard({ entry }: { entry: DebugEntry }) {
 
       {/* Stitched Content (collapsible, for completed streaming responses) */}
       {hasStitchedContent && (
-        <details className="border-b border-emerald-200 dark:border-emerald-800 group/stitched">
+        <details className="border-b border-emerald-200 dark:border-emerald-800 group/stitched [&[open]>summary>svg.chevron]:rotate-90">
           <summary className="px-3 py-2 text-xs cursor-pointer select-none bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 flex items-center gap-1 group">
-            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+            <svg className="chevron w-3 h-3 transition-transform duration-200" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
             </svg>
             <span className="font-semibold">Stitched Response Content</span>
@@ -312,9 +466,9 @@ function DebugEntryCard({ entry }: { entry: DebugEntry }) {
       )}
 
       {/* Raw Data (collapsible) */}
-      <details className="group/raw">
+      <details className="group/raw [&[open]>summary>svg.chevron]:rotate-90">
         <summary className="px-3 py-2 text-xs cursor-pointer select-none text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-1 group">
-          <svg className="w-3 h-3 transition-transform details-open:rotate-90" fill="currentColor" viewBox="0 0 20 20">
+          <svg className="chevron w-3 h-3 transition-transform duration-200" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
           </svg>
           {isOutgoing ? 'Show request payload' : hasStitchedContent ? 'Show raw SSE data' : 'Show response data'}

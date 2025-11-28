@@ -3,7 +3,7 @@
 AI-powered roleplay chat platform with multi-provider LLM support and full SillyTavern compatibility.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.4.22-green.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-1.5.30-green.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -11,13 +11,15 @@ Quilltap is a modern, self-hosted chat platform designed for AI-powered roleplay
 
 **Key Features:**
 
-- 🤖 Multi-provider support (OpenAI, Anthropic, Ollama, OpenRouter, and OpenAI-compatible APIs)
+- 🤖 Multi-provider support (OpenAI, Anthropic, Google Gemini, Grok, Gab AI, Ollama, OpenRouter, and OpenAI-compatible APIs)
+- 🧠 Cheap LLM + embedding pipeline for automatic memories, summaries, and semantic search
+- 🎨 Native image generation profiles (OpenAI, Google Imagen, Grok, OpenRouter)
 - 🎭 Full character and persona management
 - 💬 Real-time streaming responses
 - 🔄 SillyTavern import/export compatibility
 - 🔐 Secure encrypted API key storage
+- 🔒 Google OAuth plus local email/password login with optional TOTP 2FA
 - 🐳 Docker-based deployment
-- 🔒 OAuth authentication (Google) with local email/password auth planned
 
 ## What Can It Do?
 
@@ -47,27 +49,46 @@ Quilltap is a modern, self-hosted chat platform designed for AI-powered roleplay
 ### Image & Avatar Management
 
 - Upload images via file or URL
+- Generate new art for characters and chats using your configured image providers
 - Image gallery with tagging system
 - Assign avatars to characters and personas
 - Chat-specific avatar overrides
 - User-specific secure image storage
 
+### Image Generation
+
+- Create reusable image generation profiles for OpenAI (DALL·E 3), Google Imagen, Grok, or OpenRouter providers
+- Launch the generation dialog directly from chats to iterate on prompts and send results back into the conversation
+- Automatically collect output in the image gallery for reuse as avatars, personas, or reference shots
+- Fine-tune quality, style, aspect ratio, and provider-specific parameters per profile with global defaults in Settings
+
+### Memory & Embeddings
+
+- Configure Cheap LLM strategies (user-defined profile, provider cheapest, or local-first) to drive summarization and housekeeping tasks
+- Flag any connection profile as "cheap" or set a global default cheap profile for automated jobs
+- Manage dedicated embedding profiles (OpenAI `text-embedding-3` family or local Ollama embeddings) for semantic recall
+- Memory search automatically prefers embeddings when available and falls back to keyword heuristics when not
+
 ### Multi-Provider Support
 
-Configure connections to any of these providers:
+Configure dedicated connection profiles for each provider you want to use:
 
-- **OpenAI** (GPT-4, GPT-3.5-turbo, etc.)
-- **Anthropic** (Claude 3.5 Sonnet, Opus, Haiku, etc.)
-- **Ollama** (Local LLM hosting)
-- **OpenRouter** (Access to multiple models through one API)
-- **OpenAI-Compatible** (LM Studio, vLLM, text-generation-webui, etc.)
+| Provider | Capabilities |
+|----------|--------------|
+| **OpenAI** | GPT-4o, GPT-4o-mini, GPT-4.1, GPT-3.5 legacy models, tool/function calling, file attachments, and DALL·E 3 image generation. |
+| **Anthropic** | Claude 3/4 families (Opus, Sonnet, Haiku) with streaming, image understanding, and tool/JSON output control. |
+| **Google Gemini** | Gemini 2.0 Flash/Pro with multimodal inputs plus Imagen 3 image generation through Google Generative AI. |
+| **Grok (xAI)** | Grok 2 and Grok 2 Mini via the OpenAI-compatible xAI endpoint, multimodal attachments, and native image generation. |
+| **Gab AI** | OpenAI-compatible chat API focused on text-only completions—ideal for low-cost narration where attachments aren't needed. |
+| **Ollama** | Local/offline models (Llama 3.2, Phi-3, etc.) reachable at `http://localhost:11434`, perfect for the Local First cheap-LLM strategy. |
+| **OpenRouter** | Access 100+ hosted models through the OpenRouter SDK with streaming, pricing sync, and optional image generation (model-dependent). |
+| **OpenAI-Compatible** | Generic connector for LM Studio, vLLM, Text Generation Web UI, and any other OpenAI-format API you want to self-host. |
 
 ### Security & Privacy
 
 - AES-256-GCM encryption for API keys
 - Per-user encryption keys
-- OAuth authentication (Google)
-- Optional local email/password authentication with TOTP 2FA (planned for v1.1+)
+- OAuth authentication (Google) plus local email/password login with optional TOTP 2FA
 - Rate limiting and security headers
 - All data stored in JSON files in your data directory (completely portable)
 
@@ -77,7 +98,7 @@ Quilltap is built on a modern stack:
 
 - **Frontend & Backend**: Next.js 14+ with TypeScript
 - **Data Store**: JSON-based file storage with atomic writes and JSONL append-only support
-- **Authentication**: NextAuth.js with Google OAuth
+- **Authentication**: NextAuth.js with Google OAuth plus local email/password + optional TOTP 2FA
 - **Styling**: Tailwind CSS
 - **Deployment**: Docker + Docker Compose (single container, no database service needed)
 - **Production**: Nginx reverse proxy with Let's Encrypt SSL
@@ -150,7 +171,7 @@ Add these values to your `.env.local` file.
 #### 5. Start the application
 
 ```bash
-# Start all services (database + app)
+# Start the development container
 docker-compose up
 
 # Or run in background
@@ -180,7 +201,7 @@ For local development, you only need Node.js:
 npm install
 ```
 
-#### 2. Configure environment variables
+#### 2. Configure environment variables (local hosting)
 
 ```bash
 cp .env.example .env.local
@@ -202,7 +223,7 @@ All data will be stored in the `data/` directory in JSON files. The application 
 
 For production deployment with Docker, Nginx, and SSL:
 
-### Prerequisites
+### Hosting Prerequisites
 
 - A domain name pointed to your server
 - Port 80 and 443 open on your firewall
@@ -240,14 +261,15 @@ The application automatically creates the `data/` directory for storing all data
 
 Quilltap stores all data in JSON files in the `data/` directory:
 
-```
+```text
 data/
-├── characters/           # Character definitions
-├── personas/            # User personas
-├── chats/              # Conversations
-├── auth/               # Authentication data (sessions, accounts)
-├── settings/           # Application settings
-└── binaries/           # Image files
+├── auth/                 # NextAuth data (accounts.json, sessions.jsonl)
+├── binaries/             # Binary metadata index (image/file attachments)
+├── characters/           # Character JSON definitions (one file per character)
+├── chats/                # Conversation logs (per-chat JSONL + index)
+├── personas/             # Persona JSON definitions
+├── settings/             # App prefs (general.json, image-profiles.json, connection-profiles.json)
+└── tags/                 # tags.json lookup table
 ```
 
 ### Backup & Restore
@@ -294,17 +316,19 @@ Optional environment variables:
 
 Once logged in, you'll need to:
 
-1. **Add API Keys**: Go to Settings → API Keys and add keys for your LLM providers
-2. **Create Connection Profiles**: Configure how you want to connect to each provider (model, temperature, etc.)
-3. **Create Characters**: Set up characters for roleplay
-4. **Start Chatting**: Create a new chat with a character and connection profile
+1. **Add API Keys**: Settings → API Keys for each provider you plan to use
+2. **Create LLM Connection Profiles**: Configure provider, model, temperature, and mark any profile as the default or "cheap"
+3. **Configure Image Profiles (optional)**: Settings → Image Profiles for OpenAI, Google Imagen, Grok, or OpenRouter image generation
+4. **Configure Embeddings & Cheap LLM settings (optional)**: Settings → Embedding Profiles and Chat Settings to pick embedding providers and Cheap LLM strategy
+5. **Create Characters**: Set up characters/personas for roleplay
+6. **Start Chatting**: Launch a new chat with a character and selected connection profile
 
 ## Tech Stack
 
 - **Framework**: Next.js 16 (App Router)
 - **Language**: TypeScript 5.6
 - **Data Storage**: JSON files with atomic writes and JSONL append-only support
-- **Authentication**: NextAuth.js 4.24 with Google OAuth
+- **Authentication**: NextAuth.js 4.24 with Google OAuth, email/password login, and TOTP 2FA
 - **Encryption**: AES-256-GCM for sensitive data
 - **Styling**: Tailwind CSS 4.1
 - **Container**: Docker + Docker Compose
@@ -317,7 +341,7 @@ Once logged in, you'll need to:
 - [Deployment Guide](docs/DEPLOYMENT.md) - Production deployment instructions
 - [Development Progress](DEVELOPMENT.md) - Feature completion status
 - [Roadmap](features/ROADMAP.md) - Technical architecture and implementation details
-- [Local User Authentication](features/LOCAL_USER_AUTH.md) - Email/password + TOTP 2FA implementation plan (planned)
+- [Local User Authentication](features/LOCAL_USER_AUTH.md) - Original implementation plan for email/password + TOTP 2FA
 
 ## Troubleshooting
 
@@ -372,8 +396,98 @@ Copyright (c) 2025 Foundry-9
 
 - **Issues**: [GitHub Issues](https://github.com/foundry-9/quilltap/issues)
 - **Author**: Charles Sebold
-- **Email**: charles@sebold.tech
+- **Email**: <charles@sebold.tech>
 - **Website**: <https://foundry-9.com>
+
+## Release History
+
+## Version History
+
+- **1.0:** Production Ready
+  - Complete tag system implementation across all entities
+  - Full image management capabilities
+  - Production deployment infrastructure (Docker, Nginx, SSL)
+  - Two new LLM providers (Grok, Gab AI)
+  - Comprehensive logging, rate limiting, and environment utilities
+  - Extensive test coverage (1000+ new test lines)
+  - Detailed API and deployment documentation
+  - Reorganized routes with proper authentication layer
+  - Enhanced UI components for settings and dashboard
+- **1.1:** Quality of Life and Features
+  - UI/UX Enhancements
+    - Toast notification system for user feedback
+    - Styled dialog boxes replacing JavaScript alerts
+    - Message timestamps display
+    - Auto-scroll and highlight animation for new messages
+    - Dark mode support across persona pages and dialogs
+    - Dashboard updates with live counts and recent chats
+    - Footer placement improvements
+    - Two-mode toggle for tag management
+  - Character & Persona Features
+    - Favorite characters functionality
+    - Character view page enhancements
+    - Character edit page with persona linking
+    - Avatar photos and photo management
+    - Image gallery system with tagging
+    - Persona display name/title support
+    - Multi-persona import format support
+  - Chat Features
+    - Multiple chat imports support
+    - SillyTavern chat import with sorting
+    - Markdown rendering in chat and character views
+    - Tags and persona display in chat lists
+    - Improved modal dialogs
+    - SillyTavern-compatible story string template support
+  - Tag System
+    - Comprehensive tag system implementation
+    - Tag display in chat lists
+  - Provider Support
+    - Gab AI added as first-class provider
+    - Grok added as first-class provider
+    - Multi-provider support (Phase 0.7)
+    - Connection testing functionality for profiles
+    - Fetch Models and Test Message for OPENAI_COMPATIBLE and ANTHROPIC providers
+    - Anthropic model list updated with Claude 4/4.5 models
+    - Models sorted alphabetically in UI dropdowns
+  - Testing & Development
+    - Comprehensive unit tests for avatar display and layout
+    - Unit tests for image utilities and alert dialog
+    - Unit tests for Phase 0.7 multi-provider support
+    - Comprehensive front-end and back-end test suite
+    - Playwright test configuration
+    - GitHub Actions CI/CD with Jest
+    - Pre-commit hooks with lint and test checks
+  - Infrastructure
+    - SSL configuration
+    - Security improvements to maskApiKey (fixed-length masking)
+    - Package overrides for npm audit vulnerabilities
+- **1.2:** Image Support
+  - Local User Authentication - Complete email/password auth implementation with signup/signin pages
+  - Two-Factor Authentication (2FA) - TOTP-based 2FA setup and management
+  - Image Generation System - Multi-provider support (OpenAI, Google Imagen, Grok) with:
+  - Image generation dialog and UI components
+  - Image profile management system
+  - Chat integration for generated images
+  - Image galleries and modals
+  - Chat File Management - Support for file attachments in chats
+  - Tool System - Tool executor framework with image generation tool support
+  - Database Schema Enhancements - Added fields for:
+  - Character titles and avatar display styles
+  - Image profiles and generation settings
+  - User passwords, TOTP secrets, 2FA status (still in progress)
+- **1.3:** JSON not databases
+  - Moved from Postgres to JSON stores in files
+- **1.4:** Improved provider support and tags
+  - Add separate Chat and View buttons on Characters page
+  - Migrate OpenRouter to native SDK with auto-conversion
+  - Add searchable model selector for 10+ models
+  - Enhance tag appearance settings with layout and styling options
+  - Add customizable tag styling
+  - Consolidate Google Imagen profiles and enable image generation tool for Google Gemini
+  - Add Google provider support to connection profile testing endpoints
+  - Add Google to API key provider dropdown in UI
+- **1.5:** Memory system
+  - In-progress: automatic memory and housecleaning
 
 ## Acknowledgments
 

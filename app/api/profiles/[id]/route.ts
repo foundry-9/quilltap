@@ -11,6 +11,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
+import { ProviderEnum } from '@/lib/json-store/schemas/types'
+
+// Get the list of valid providers from the Zod enum
+const VALID_PROVIDERS = ProviderEnum.options
 
 /**
  * GET /api/profiles/[id]
@@ -77,7 +81,8 @@ export async function GET(
  *   baseUrl?: string,
  *   modelName?: string,
  *   parameters?: object,
- *   isDefault?: boolean
+ *   isDefault?: boolean,
+ *   isCheap?: boolean
  * }
  */
 export async function PUT(
@@ -107,7 +112,7 @@ export async function PUT(
     }
 
     const body = await req.json()
-    const { name, apiKeyId, baseUrl, modelName, parameters, isDefault } = body
+    const { name, provider, apiKeyId, baseUrl, modelName, parameters, isDefault, isCheap } = body
 
     // Build update data
     const updateData: any = {}
@@ -120,6 +125,16 @@ export async function PUT(
         )
       }
       updateData.name = name.trim()
+    }
+
+    if (provider !== undefined) {
+      if (!provider || !VALID_PROVIDERS.includes(provider)) {
+        return NextResponse.json(
+          { error: 'Invalid provider' },
+          { status: 400 }
+        )
+      }
+      updateData.provider = provider
     }
 
     if (apiKeyId !== undefined) {
@@ -136,8 +151,9 @@ export async function PUT(
           )
         }
 
-        // Ensure provider matches
-        if (apiKey.provider !== existingProfile.provider) {
+        // Ensure provider matches - use new provider if being updated, otherwise use existing
+        const providerToCheck = provider !== undefined ? provider : existingProfile.provider
+        if (apiKey.provider !== providerToCheck) {
           return NextResponse.json(
             { error: 'API key provider does not match profile provider' },
             { status: 400 }
@@ -191,6 +207,16 @@ export async function PUT(
       }
 
       updateData.isDefault = isDefault
+    }
+
+    if (isCheap !== undefined) {
+      if (typeof isCheap !== 'boolean') {
+        return NextResponse.json(
+          { error: 'isCheap must be a boolean' },
+          { status: 400 }
+        )
+      }
+      updateData.isCheap = isCheap
     }
 
     // Update the profile

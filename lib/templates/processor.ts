@@ -92,7 +92,7 @@ export function buildTemplateContext({
     name: string
     description?: string | null
   } | null
-  scenario?: string
+  scenario?: string | null
 }): TemplateContext {
   return {
     // Character data
@@ -144,7 +144,7 @@ export function processCharacterTemplates({
     name: string
     description?: string | null
   } | null
-  scenario?: string
+  scenario?: string | null
 }): {
   description: string
   personality: string

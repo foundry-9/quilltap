@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import Image from 'next/image'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import ChatGalleryImageViewModal from '@/components/chat/ChatGalleryImageViewModal'
 import ImageDetailModal from './ImageDetailModal'
+import DeletedImagePlaceholder from './DeletedImagePlaceholder'
 
 interface ChatFile {
   id: string
@@ -75,6 +75,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
   const [loading, setLoading] = useState(true)
   const [thumbnailSizeIndex, setThumbnailSizeIndex] = useState(DEFAULT_THUMBNAIL_INDEX)
   const [selectedIndex, setSelectedIndex] = useState(-1)
+  const [missingImages, setMissingImages] = useState<Set<string>>(new Set())
 
   const { mode, isOpen, onClose } = props
   const chatId = mode === 'chat' ? props.chatId : undefined
@@ -238,16 +239,41 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
           const id = item.kind === 'chat' ? item.data.id : item.data.id
           const src = item.kind === 'chat' ? item.data.url : item.data.url || `/${item.data.filepath}`
           const alt = item.kind === 'chat' ? item.data.filename : item.data.filename
+          const isMissing = missingImages.has(id)
+
+          // Use div for missing images (contains button), button for valid images
+          const Container = isMissing ? 'div' : 'button'
+          const containerProps = isMissing
+            ? {}
+            : {
+                onClick: () => setSelectedIndex(index),
+                type: 'button' as const,
+              }
 
           return (
-            <button
+            <Container
               key={id}
-              onClick={() => setSelectedIndex(index)}
+              {...containerProps}
               className="relative rounded overflow-hidden hover:ring-2 hover:ring-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
               style={{ width: thumbnailSize, height: thumbnailSize }}
             >
-              <Image src={src} alt={alt} fill className="object-cover" sizes={`${thumbnailSize}px`} />
-            </button>
+              {isMissing ? (
+                <DeletedImagePlaceholder
+                  imageId={id}
+                  filename={alt}
+                  onCleanup={loadItems}
+                  className="w-full h-full absolute inset-0 !p-2"
+                />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={src}
+                  alt={alt}
+                  className="w-full h-full object-cover"
+                  onError={() => setMissingImages((prev) => new Set(prev).add(id))}
+                />
+              )}
+            </Container>
           )
         })}
       </div>

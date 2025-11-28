@@ -4,6 +4,7 @@
 // DELETE /api/characters/:id - Delete character
 
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
@@ -20,6 +21,7 @@ const updateCharacterSchema = z.object({
   exampleDialogues: z.string().optional(),
   systemPrompt: z.string().optional(),
   avatarUrl: z.string().url().optional().or(z.literal('')),
+  defaultConnectionProfileId: z.string().uuid().optional().or(z.literal('').transform(() => undefined)),
 })
 
 // GET /api/characters/:id
@@ -111,6 +113,9 @@ export async function PUT(
 
     const character = await repos.characters.update(id, validatedData)
 
+    // Revalidate the dashboard to reflect character changes
+    revalidatePath('/dashboard')
+
     return NextResponse.json({ character })
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -152,6 +157,18 @@ export async function DELETE(
 
     if (!existingCharacter || existingCharacter.userId !== user.id) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
+    }
+
+    // Clean up any image reference if the character has a defaultImageId
+    if (existingCharacter.defaultImageId) {
+      try {
+        await repos.images.update(existingCharacter.defaultImageId, {
+          tags: [],
+        })
+      } catch (err) {
+        // Silently fail if image cleanup doesn't work - character deletion is more important
+        console.error('Failed to clean up image reference:', err)
+      }
     }
 
     await repos.characters.delete(id)

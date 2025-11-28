@@ -8,8 +8,12 @@ import { getRepositories } from '@/lib/json-store/repositories'
 import { createLLMProvider } from '@/lib/llm/factory'
 import { decryptApiKey } from '@/lib/encryption'
 import { loadChatFilesForLLM } from '@/lib/chat-files'
-import { detectToolCalls, executeToolCall } from '@/lib/chat/tool-executor'
+import { detectToolCalls, executeToolCallWithContext, type ToolExecutionContext } from '@/lib/chat/tool-executor'
 import { imageGenerationToolDefinition, anthropicImageGenerationToolDefinition } from '@/lib/tools/image-generation-tool'
+import { memorySearchToolDefinition, anthropicMemorySearchToolDefinition, getGoogleMemorySearchTool } from '@/lib/tools/memory-search-tool'
+import { processMessageForMemoryAsync } from '@/lib/memory'
+import { buildContext } from '@/lib/chat/context-manager'
+import { checkAndGenerateSummaryIfNeeded } from '@/lib/chat/context-summary'
 import { z } from 'zod'
 
 // Validation schema
@@ -20,38 +24,263 @@ const sendMessageSchema = z.object({
 })
 
 // Helper function to get tools for a provider
-function getToolsForProvider(provider: string, imageProfileId?: string | null): any[] {
-  // Only include image generation tool if an image profile is configured for this chat
-  if (!imageProfileId) {
-    return []
+function getToolsForProvider(
+  provider: string,
+  options: {
+    imageProfileId?: string | null
+    imageProviderType?: string
+    enableMemorySearch?: boolean
   }
+): unknown[] {
+  const tools: unknown[] = []
+  const { imageProfileId, imageProviderType, enableMemorySearch } = options
 
   // Return provider-specific tool format
   switch (provider) {
-    case 'ANTHROPIC':
-      return [anthropicImageGenerationToolDefinition]
-    case 'GOOGLE':
-      // Google uses a similar format to Anthropic but called differently
-      return [
-        {
+    case 'ANTHROPIC': {
+      // Add image generation tool if configured
+      if (imageProfileId) {
+        if (imageProviderType === 'GROK') {
+          tools.push({
+            ...anthropicImageGenerationToolDefinition,
+            input_schema: {
+              ...anthropicImageGenerationToolDefinition.input_schema,
+              properties: {
+                ...anthropicImageGenerationToolDefinition.input_schema.properties,
+                prompt: {
+                  ...anthropicImageGenerationToolDefinition.input_schema.properties.prompt,
+                  description: anthropicImageGenerationToolDefinition.input_schema.properties.prompt.description + ' IMPORTANT: Grok has a strict limit of 1024 bytes for image generation prompts. Keep your prompt concise and under this limit.',
+                },
+              },
+            },
+          })
+        } else {
+          tools.push(anthropicImageGenerationToolDefinition)
+        }
+      }
+      // Add memory search tool
+      if (enableMemorySearch) {
+        tools.push(anthropicMemorySearchToolDefinition)
+      }
+      break
+    }
+    case 'GOOGLE': {
+      // Add image generation tool if configured
+      if (imageProfileId) {
+        const baseGoogleImageTool = {
           name: anthropicImageGenerationToolDefinition.name,
           description: anthropicImageGenerationToolDefinition.description,
           parameters: anthropicImageGenerationToolDefinition.input_schema,
-        },
-      ]
+        }
+        if (imageProviderType === 'GROK') {
+          tools.push({
+            ...baseGoogleImageTool,
+            parameters: {
+              ...baseGoogleImageTool.parameters,
+              properties: {
+                ...baseGoogleImageTool.parameters.properties,
+                prompt: {
+                  ...baseGoogleImageTool.parameters.properties.prompt,
+                  description: baseGoogleImageTool.parameters.properties.prompt.description + ' IMPORTANT: Grok has a strict limit of 1024 bytes for image generation prompts. Keep your prompt concise and under this limit.',
+                },
+              },
+            },
+          })
+        } else {
+          tools.push(baseGoogleImageTool)
+        }
+      }
+      // Add memory search tool
+      if (enableMemorySearch) {
+        tools.push(getGoogleMemorySearchTool())
+      }
+      break
+    }
     case 'OPENAI':
     case 'GROK':
     case 'OPENROUTER':
     case 'OLLAMA':
     case 'OPENAI_COMPATIBLE':
-    case 'GAB_AI':
-      return [imageGenerationToolDefinition]
+    case 'GAB_AI': {
+      // Add image generation tool if configured
+      if (imageProfileId) {
+        if (imageProviderType === 'GROK') {
+          tools.push({
+            ...imageGenerationToolDefinition,
+            function: {
+              ...imageGenerationToolDefinition.function,
+              parameters: {
+                ...imageGenerationToolDefinition.function.parameters,
+                properties: {
+                  ...imageGenerationToolDefinition.function.parameters.properties,
+                  prompt: {
+                    ...imageGenerationToolDefinition.function.parameters.properties.prompt,
+                    description: imageGenerationToolDefinition.function.parameters.properties.prompt.description + ' IMPORTANT: Grok has a strict limit of 1024 bytes for image generation prompts. Keep your prompt concise and under this limit.',
+                  },
+                },
+              },
+            },
+          })
+        } else {
+          tools.push(imageGenerationToolDefinition)
+        }
+      }
+      // Add memory search tool
+      if (enableMemorySearch) {
+        tools.push(memorySearchToolDefinition)
+      }
+      break
+    }
     default:
-      return []
+      break
   }
+
+  return tools
 }
 
-// POST /api/chats/:id/messages - Send message with streaming response
+// Helper function to load attached files
+async function loadAttachedFiles(repos: ReturnType<typeof getRepositories>, chatId: string, fileIds?: string[]) {
+  if (!fileIds || fileIds.length === 0) {
+    return []
+  }
+
+  const allImages = await repos.images.findByChatId(chatId)
+  return allImages
+    .filter(img => fileIds.includes(img.id))
+    .map(img => ({
+      id: img.id,
+      filepath: img.relativePath,
+      filename: img.filename,
+      mimeType: img.mimeType,
+      size: img.size,
+    }))
+}
+
+// Helper function to process tool execution results
+async function processToolResults(
+  toolCalls: Array<{ name: string; arguments: Record<string, unknown> }>,
+  toolContext: ToolExecutionContext,
+  controller: ReadableStreamDefaultController,
+  encoder: TextEncoder
+) {
+  const toolMessages: Array<{ toolName: string; success: boolean; content: string; arguments?: Record<string, unknown>; metadata?: { provider?: string; model?: string } }> = []
+  const generatedImagePaths: Array<{ filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number; sha256?: string }> = []
+
+  controller.enqueue(
+    encoder.encode(`data: ${JSON.stringify({ toolsDetected: toolCalls.length })}\n\n`)
+  )
+
+  for (const toolCall of toolCalls) {
+    const toolResult = await executeToolCallWithContext(toolCall, toolContext)
+
+    if (toolResult.success && Array.isArray(toolResult.result)) {
+      for (const img of toolResult.result) {
+        if (img.filepath) {
+          generatedImagePaths.push({
+            filename: img.filename,
+            filepath: img.filepath,
+            mimeType: img.mimeType || 'image/png',
+            size: img.size || 0,
+            width: img.width,
+            height: img.height,
+            sha256: img.sha256,
+          })
+        }
+      }
+    }
+
+    let resultText: string
+    if (!toolResult.success) {
+      resultText = `Error: ${toolResult.error || 'Unknown error'}`
+    } else if (toolResult.toolName === 'generate_image') {
+      resultText = `Generated ${(toolResult.result as unknown[])?.length || 1} image(s)`
+    } else {
+      resultText = JSON.stringify(toolResult.result, null, 2)
+    }
+
+    toolMessages.push({
+      toolName: toolResult.toolName,
+      success: toolResult.success,
+      content: resultText,
+      arguments: toolCall.arguments,
+      metadata: toolResult.metadata,
+    })
+
+    controller.enqueue(
+      encoder.encode(
+        `data: ${JSON.stringify({
+          toolResult: {
+            name: toolResult.toolName,
+            success: toolResult.success,
+            result: toolResult.result,
+          },
+        })}\n\n`
+      )
+    )
+  }
+
+  return { toolMessages, generatedImagePaths }
+}
+
+// Helper function to save tool messages and generated images
+async function saveToolMessages(
+  repos: ReturnType<typeof getRepositories>,
+  chatId: string,
+  userId: string,
+  toolMessages: Array<{ toolName: string; success: boolean; content: string; arguments?: Record<string, unknown>; metadata?: { provider?: string; model?: string } }>,
+  generatedImagePaths: Array<{ filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number; sha256?: string }>
+) {
+  let firstToolMessageId: string | null = null
+
+  for (const toolMsg of toolMessages) {
+    const toolMessageId = crypto.randomUUID()
+    const toolMessage = {
+      id: toolMessageId,
+      type: 'message' as const,
+      role: 'TOOL' as const,
+      content: JSON.stringify({
+        toolName: toolMsg.toolName,
+        success: toolMsg.success,
+        result: toolMsg.content,
+        arguments: toolMsg.arguments,
+        provider: toolMsg.metadata?.provider,
+        model: toolMsg.metadata?.model,
+      }),
+      createdAt: new Date().toISOString(),
+      attachments: [] as string[],
+    }
+    await repos.chats.addMessage(chatId, toolMessage)
+
+    if (!firstToolMessageId) {
+      firstToolMessageId = toolMessageId
+    }
+
+    for (const imagePath of generatedImagePaths) {
+      if (imagePath.sha256) {
+        await repos.images.create({
+          userId,
+          type: 'chat_file',
+          chatId,
+          messageId: toolMessageId,
+          filename: imagePath.filename,
+          relativePath: imagePath.filepath,
+          mimeType: imagePath.mimeType,
+          size: imagePath.size,
+          source: 'generated',
+          sha256: imagePath.sha256,
+          width: imagePath.width,
+          height: imagePath.height,
+          tags: [],
+        })
+      } else {
+        console.warn('Skipping chat_file creation for generated image due to missing SHA256:', imagePath.filename)
+      }
+    }
+  }
+
+  return firstToolMessageId
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -77,14 +306,27 @@ export async function POST(
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
     }
 
+    // Get first active character participant
+    const characterParticipant = chat.participants.find(
+      p => p.type === 'CHARACTER' && p.isActive && p.characterId && p.connectionProfileId
+    )
+
+    if (!characterParticipant?.characterId) {
+      return NextResponse.json({ error: 'No active character in chat' }, { status: 404 })
+    }
+
+    if (!characterParticipant.connectionProfileId) {
+      return NextResponse.json({ error: 'No connection profile for character' }, { status: 404 })
+    }
+
     // Get character
-    const character = await repos.characters.findById(chat.characterId)
+    const character = await repos.characters.findById(characterParticipant.characterId)
     if (!character) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
     }
 
-    // Get connection profile with API key
-    const connectionProfile = await repos.connections.findById(chat.connectionProfileId)
+    // Get connection profile with API key from the participant
+    const connectionProfile = await repos.connections.findById(characterParticipant.connectionProfileId)
     if (!connectionProfile) {
       return NextResponse.json({ error: 'Connection profile not found' }, { status: 404 })
     }
@@ -94,10 +336,11 @@ export async function POST(
       apiKey = await repos.connections.findApiKeyById(connectionProfile.apiKeyId)
     }
 
-    // Get image profile if set
+    // Get image profile from the participant if set
     let imageProfile = null
-    if (chat.imageProfileId) {
-      imageProfile = await repos.imageProfiles.findById(chat.imageProfileId)
+    const imageProfileId = characterParticipant.imageProfileId
+    if (imageProfileId) {
+      imageProfile = await repos.imageProfiles.findById(imageProfileId)
     }
 
     // Get existing messages
@@ -108,27 +351,7 @@ export async function POST(
     const { content, fileIds } = sendMessageSchema.parse(body)
 
     // Load file attachments if provided
-    let attachedFiles: Array<{
-      id: string
-      filepath: string
-      filename: string
-      mimeType: string
-      size: number
-    }> = []
-
-    if (fileIds && fileIds.length > 0) {
-      // Get the chat files from images repository
-      const allImages = await repos.images.findByChatId(id)
-      attachedFiles = allImages
-        .filter(img => fileIds.includes(img.id))
-        .map(img => ({
-          id: img.id,
-          filepath: img.relativePath,
-          filename: img.filename,
-          mimeType: img.mimeType,
-          size: img.size,
-        }))
-    }
+    const attachedFiles = await loadAttachedFiles(repos, id, fileIds)
 
     // Create user message event
     const userMessageId = crypto.randomUUID()
@@ -155,24 +378,73 @@ export async function POST(
     // Load file data for LLM
     const fileAttachments = await loadChatFilesForLLM(attachedFiles)
 
-    // Prepare messages for LLM
-    // Filter to only message events and exclude TOOL messages - they should not be sent to the LLM
-    const messages = [
-      ...existingMessages
-        .filter(msg => msg.type === 'message')
-        .map(msg => {
-          const messageEvent = msg as any;
-          return {
-            role: messageEvent.role.toLowerCase() as 'system' | 'user' | 'assistant',
-            content: messageEvent.content,
-          };
-        }),
-      {
-        role: 'user' as const,
-        content,
-        attachments: fileAttachments.length > 0 ? fileAttachments : undefined,
-      },
-    ]
+    // Get persona if available
+    const personaParticipant = chat.participants.find(
+      p => p.type === 'PERSONA' && p.isActive && p.personaId
+    )
+    let persona: { name: string; description: string } | null = null
+    if (personaParticipant?.personaId) {
+      const personaData = await repos.personas.findById(personaParticipant.personaId)
+      if (personaData) {
+        persona = { name: personaData.name, description: personaData.description }
+      }
+    }
+
+    // Get chat settings for embedding profile
+    const chatSettings = await repos.users.getChatSettings(user.id)
+
+    // Build context with intelligent token management
+    // Filter existing messages to only USER and ASSISTANT messages (exclude TOOL, SYSTEM)
+    const conversationMessages = existingMessages
+      .filter(msg => msg.type === 'message')
+      .filter(msg => {
+        const role = (msg as { role: string }).role
+        return role === 'USER' || role === 'ASSISTANT'
+      })
+      .map(msg => {
+        const messageEvent = msg as { role: string; content: string; id?: string }
+        return {
+          role: messageEvent.role,
+          content: messageEvent.content,
+          id: messageEvent.id,
+        }
+      })
+
+    const builtContext = await buildContext({
+      provider: connectionProfile.provider,
+      modelName: connectionProfile.modelName,
+      userId: user.id,
+      character,
+      persona,
+      chat,
+      existingMessages: conversationMessages,
+      newUserMessage: content,
+      systemPromptOverride: characterParticipant.systemPromptOverride,
+      embeddingProfileId: chatSettings?.cheapLLMSettings?.embeddingProfileId || undefined,
+      skipMemories: false,
+      maxMemories: 10,
+      minMemoryImportance: 0.3,
+    })
+
+    // Log context building results for debugging
+    if (builtContext.warnings.length > 0) {
+      console.warn('[Context Manager] Warnings:', builtContext.warnings)
+    }
+
+    // Prepare final messages for LLM (add attachments to the last user message)
+    const messages = builtContext.messages.map((msg, idx) => {
+      if (idx === builtContext.messages.length - 1 && msg.role === 'user' && fileAttachments.length > 0) {
+        return {
+          role: msg.role,
+          content: msg.content,
+          attachments: fileAttachments,
+        }
+      }
+      return {
+        role: msg.role,
+        content: msg.content,
+      }
+    })
 
     // Get API key
     if (!apiKey) {
@@ -196,20 +468,33 @@ export async function POST(
     )
 
     // Get parameters
-    const modelParams = connectionProfile.parameters as any
+    const modelParams = connectionProfile.parameters as Record<string, unknown>
 
     // Create streaming response
     const encoder = new TextEncoder()
     let fullResponse = ''
-    let usage: any = null
+    let usage: { totalTokens?: number } | null = null
     let attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null = null
-    let rawResponse: any = null
+    let rawResponse: unknown = null
+
+    // Prepare tool execution context
+    const toolContext: ToolExecutionContext = {
+      chatId: id,
+      userId: user.id,
+      imageProfileId: imageProfileId || undefined,
+      characterId: character.id,
+      embeddingProfileId: chatSettings?.cheapLLMSettings?.embeddingProfileId || undefined,
+    }
 
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          // Get tools for this chat if an image profile is configured
-          const tools = getToolsForProvider(connectionProfile.provider, chat.imageProfileId)
+          // Get tools for this chat (image generation if configured, memory search always enabled)
+          const tools = getToolsForProvider(connectionProfile.provider, {
+            imageProfileId,
+            imageProviderType: imageProfile?.provider,
+            enableMemorySearch: true, // Always enable memory search for characters
+          })
 
           // Send debug info about the actual LLM request (for debug panel)
           const llmRequestDetails = {
@@ -224,8 +509,24 @@ export async function POST(
             messages: messages.map((m) => ({
               role: m.role,
               contentLength: m.content.length,
-              hasAttachments: !!((m as any).attachments && (m as any).attachments.length > 0),
+              hasAttachments: !!(m as { attachments?: unknown[] }).attachments?.length,
             })),
+            // Context management info
+            contextManagement: {
+              tokenUsage: builtContext.tokenUsage,
+              budget: {
+                total: builtContext.budget.totalLimit,
+                responseReserve: builtContext.budget.responseReserve,
+              },
+              memoriesIncluded: builtContext.memoriesIncluded,
+              messagesIncluded: builtContext.messagesIncluded,
+              messagesTruncated: builtContext.messagesTruncated,
+              includedSummary: builtContext.includedSummary,
+              // Debug content for viewing in debug panel
+              debugMemories: builtContext.debugMemories,
+              debugSummary: builtContext.debugSummary,
+              debugSystemPrompt: builtContext.debugSystemPrompt,
+            },
           }
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({ debugLLMRequest: llmRequestDetails })}\n\n`)
@@ -235,9 +536,9 @@ export async function POST(
             {
               messages,
               model: connectionProfile.modelName,
-              temperature: modelParams.temperature,
-              maxTokens: modelParams.maxTokens,
-              topP: modelParams.topP,
+              temperature: modelParams.temperature as number | undefined,
+              maxTokens: modelParams.maxTokens as number | undefined,
+              topP: modelParams.topP as number | undefined,
               tools: tools.length > 0 ? tools : undefined,
             },
             decryptedKey
@@ -262,73 +563,16 @@ export async function POST(
             }
           }
 
-          // Note: attachment status tracking (sentToProvider, providerError) would require
-          // extending the BinaryIndexEntry schema and is deferred to a future phase
-
           // Detect and execute tool calls
-          const toolMessages: Array<{ toolName: string; success: boolean; content: string; arguments?: Record<string, unknown>; metadata?: { provider?: string; model?: string } }> = []
-          const generatedImagePaths: Array<{ filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number; sha256?: string }> = []
+          let toolMessages: Array<{ toolName: string; success: boolean; content: string; arguments?: Record<string, unknown>; metadata?: { provider?: string; model?: string } }> = []
+          let generatedImagePaths: Array<{ filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number; sha256?: string }> = []
 
           if (rawResponse) {
             const toolCalls = detectToolCalls(rawResponse, connectionProfile.provider)
-
             if (toolCalls.length > 0) {
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ toolsDetected: toolCalls.length })}\n\n`)
-              )
-
-              for (const toolCall of toolCalls) {
-                const toolResult = await executeToolCall(
-                  toolCall,
-                  id,
-                  user.id,
-                  chat.imageProfileId || undefined
-                )
-
-                // Collect generated image paths for ChatFile creation
-                if (toolResult.success && Array.isArray(toolResult.result)) {
-                  for (const img of toolResult.result) {
-                    if (img.filepath) {
-                      generatedImagePaths.push({
-                        filename: img.filename,
-                        filepath: img.filepath,
-                        mimeType: img.mimeType || 'image/png',
-                        size: img.size || 0,
-                        width: img.width,
-                        height: img.height,
-                        sha256: img.sha256,
-                      })
-                    }
-                  }
-                }
-
-                // Format tool result for display
-                const resultText = toolResult.success
-                  ? toolResult.toolName === 'generate_image'
-                    ? `Generated ${(toolResult.result as any)?.length || 1} image(s)`
-                    : JSON.stringify(toolResult.result, null, 2)
-                  : `Error: ${toolResult.error || 'Unknown error'}`
-
-                toolMessages.push({
-                  toolName: toolResult.toolName,
-                  success: toolResult.success,
-                  content: resultText,
-                  arguments: toolCall.arguments,
-                  metadata: toolResult.metadata,
-                })
-
-                controller.enqueue(
-                  encoder.encode(
-                    `data: ${JSON.stringify({
-                      toolResult: {
-                        name: toolResult.toolName,
-                        success: toolResult.success,
-                        result: toolResult.result,
-                      },
-                    })}\n\n`
-                  )
-                )
-              }
+              const results = await processToolResults(toolCalls, toolContext, controller, encoder)
+              toolMessages = results.toolMessages
+              generatedImagePaths = results.generatedImagePaths
             }
           }
 
@@ -343,91 +587,82 @@ export async function POST(
               content: fullResponse,
               createdAt: new Date().toISOString(),
               tokenCount: usage?.totalTokens || null,
-              rawResponse: rawResponse || null,
-              attachments: [],
+              rawResponse: (rawResponse as Record<string, unknown>) || null,
+              attachments: [] as string[],
             }
             await repos.chats.addMessage(id, assistantMessage)
-          }
 
-          // Save tool messages if tools were executed
-          let firstToolMessageId: string | null = null
-          if (toolMessages.length > 0) {
-            for (const toolMsg of toolMessages) {
-              const toolMessageId = crypto.randomUUID()
-              const toolMessage = {
-                id: toolMessageId,
-                type: 'message' as const,
-                role: 'TOOL' as const,
-                content: JSON.stringify({
-                  toolName: toolMsg.toolName,
-                  success: toolMsg.success,
-                  result: toolMsg.content,
-                  arguments: toolMsg.arguments,
-                  provider: toolMsg.metadata?.provider,
-                  model: toolMsg.metadata?.model,
-                }),
-                createdAt: new Date().toISOString(),
-                attachments: [],
-              }
-              await repos.chats.addMessage(id, toolMessage)
+            // Save tool messages if tools were executed
+            const firstToolMessageId = toolMessages.length > 0
+              ? await saveToolMessages(repos, id, user.id, toolMessages, generatedImagePaths)
+              : null
 
-              // Track the first tool message ID
-              if (!firstToolMessageId) {
-                firstToolMessageId = toolMessageId
-              }
+            // Update chat timestamp
+            await repos.chats.update(id, { updatedAt: new Date().toISOString() })
 
-              // Attach generated images to images repository
-              if (generatedImagePaths.length > 0) {
-                for (const imagePath of generatedImagePaths) {
-                  // If we have a SHA256, we can create the record.
-                  // If not, we should probably compute it, but for now let's assume it's there
-                  // or use a placeholder if the schema allows (it doesn't, it requires 64 chars)
-                  
-                  // If sha256 is missing, we can't create a valid record.
-                  // However, executeToolCall should have provided it.
-                  if (imagePath.sha256) {
-                    await repos.images.create({
-                      userId: user.id,
-                      type: 'chat_file',
-                      chatId: id,
-                      messageId: toolMessageId,
-                      filename: imagePath.filename,
-                      relativePath: imagePath.filepath,
-                      mimeType: imagePath.mimeType,
-                      size: imagePath.size,
-                      source: 'generated',
-                      sha256: imagePath.sha256,
-                      width: imagePath.width,
-                      height: imagePath.height,
-                      tags: [],
-                    })
-                  } else {
-                    console.warn('Skipping chat_file creation for generated image due to missing SHA256:', imagePath.filename)
+            // Send final message - use assistant message ID if available, otherwise use the first tool message ID
+            const finalMessageId = assistantMessageId || firstToolMessageId
+
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  done: true,
+                  messageId: finalMessageId,
+                  usage,
+                  attachmentResults,
+                  toolsExecuted: toolMessages.length > 0,
+                })}\n\n`
+              )
+            )
+
+            // Trigger automatic memory extraction (non-blocking)
+            try {
+              if (chatSettings) {
+                const availableProfiles = await repos.connections.findByUserId(user.id)
+                processMessageForMemoryAsync({
+                  characterId: character.id,
+                  characterName: character.name,
+                  chatId: id,
+                  userMessage: content,
+                  assistantMessage: fullResponse,
+                  sourceMessageId: assistantMessageId,
+                  userId: user.id,
+                  connectionProfile,
+                  cheapLLMSettings: chatSettings.cheapLLMSettings,
+                  availableProfiles,
+                }, async (result) => {
+                  // Store memory debug logs in the assistant message if available
+                  if (result.debugLogs && result.debugLogs.length > 0 && assistantMessageId) {
+                    try {
+                      await repos.chats.updateMessage(id, assistantMessageId, { debugMemoryLogs: result.debugLogs })
+                    } catch (e) {
+                      console.error('Failed to store memory debug logs:', e)
+                    }
                   }
-                }
+                })
+
+                // Check if we need to generate a context summary (non-blocking)
+                checkAndGenerateSummaryIfNeeded(
+                  id,
+                  connectionProfile.provider,
+                  connectionProfile.modelName,
+                  user.id,
+                  connectionProfile,
+                  chatSettings.cheapLLMSettings,
+                  availableProfiles
+                )
               }
+            } catch (memoryError) {
+              console.error('Failed to trigger memory extraction:', memoryError)
+            }
+
+            // Close the stream
+            try {
+              controller.close()
+            } catch (e) {
+              // Already closed, ignore
             }
           }
-
-          // Update chat timestamp
-          await repos.chats.update(id, { updatedAt: new Date().toISOString() })
-
-          // Send final message - use assistant message ID if available, otherwise use the first tool message ID
-          const finalMessageId = assistantMessageId || firstToolMessageId
-
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({
-                done: true,
-                messageId: finalMessageId,
-                usage,
-                attachmentResults,
-                toolsExecuted: toolMessages.length > 0,
-              })}\n\n`
-            )
-          )
-
-          controller.close()
         } catch (error) {
           console.error('Streaming error:', error)
           controller.enqueue(

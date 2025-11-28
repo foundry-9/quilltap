@@ -179,6 +179,7 @@ export async function POST(req: NextRequest) {
       modelName,
       parameters = {},
       isDefault = false,
+      isCheap = false,
     } = body
 
     // Validation
@@ -253,6 +254,7 @@ export async function POST(req: NextRequest) {
       modelName: modelName.trim(),
       parameters: parameters,
       isDefault,
+      isCheap,
       tags: [],
     })
 

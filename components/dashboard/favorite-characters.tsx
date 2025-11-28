@@ -8,6 +8,7 @@ import { getAvatarClasses } from '@/lib/avatar-styles'
 interface FavoriteCharacter {
   id: string
   name: string
+  title?: string | null
   defaultImageId: string | null
   defaultImage: {
     id: string
@@ -65,6 +66,11 @@ export function FavoriteCharactersSection({ characters }: FavoriteCharactersProp
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white text-center truncate w-full px-1">
               {character.name}
             </h3>
+            {character.title && (
+              <p className="text-xs text-gray-600 dark:text-gray-400 text-center truncate w-full px-1">
+                {character.title}
+              </p>
+            )}
           </Link>
         ))}
       </div>

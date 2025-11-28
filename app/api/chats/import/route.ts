@@ -8,6 +8,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { importSTChat } from '@/lib/sillytavern/chat'
+import type { ChatParticipantBase } from '@/lib/json-store/schemas/types'
 
 export async function POST(req: NextRequest) {
   try {
@@ -93,12 +94,46 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Build participants array
+    const now = new Date().toISOString()
+    const participants: ChatParticipantBase[] = []
+
+    // Add character participant
+    participants.push({
+      id: crypto.randomUUID(),
+      type: 'CHARACTER',
+      characterId,
+      personaId: null,
+      connectionProfileId,
+      imageProfileId: null,
+      systemPromptOverride: null,
+      displayOrder: 0,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    })
+
+    // Add persona participant if specified
+    if (personaId) {
+      participants.push({
+        id: crypto.randomUUID(),
+        type: 'PERSONA',
+        characterId: null,
+        personaId,
+        connectionProfileId: null,
+        imageProfileId: null,
+        systemPromptOverride: null,
+        displayOrder: 1,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+      })
+    }
+
     // Create chat in database
     const chat = await repos.chats.create({
       userId: session.user.id,
-      characterId,
-      personaId: personaId || null,
-      connectionProfileId,
+      participants,
       title: title || `Chat with ${character.name}`,
       sillyTavernMetadata: importedData.metadata || null,
       tags: Array.from(tagIds),
@@ -147,7 +182,7 @@ export async function POST(req: NextRequest) {
         },
       }))
 
-    // Build response similar to Prisma's include
+    // Build response with participants
     const completeChat = {
       ...chat,
       messages: messageEvents.map(msg => ({
@@ -162,6 +197,7 @@ export async function POST(req: NextRequest) {
         tokenCount: msg.tokenCount || null,
         rawResponse: msg.rawResponse || null,
       })),
+      // Include character and persona for backwards compatibility
       character: {
         ...character,
         defaultImage,

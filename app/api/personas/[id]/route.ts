@@ -155,6 +155,18 @@ export async function DELETE(
       return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
     }
 
+    // Clean up any image reference if the persona has a defaultImageId
+    if (existing.defaultImageId) {
+      try {
+        await repos.images.update(existing.defaultImageId, {
+          tags: [],
+        })
+      } catch (err) {
+        // Silently fail if image cleanup doesn't work - persona deletion is more important
+        console.error('Failed to clean up image reference:', err)
+      }
+    }
+
     await repos.personas.delete(id)
 
     return NextResponse.json({ success: true })

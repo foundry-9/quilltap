@@ -152,3 +152,4 @@ public/uploads/*
 backups/*
 data/
 data-backup/
+temp/

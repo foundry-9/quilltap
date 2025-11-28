@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { AvatarSelector } from '@/components/images/avatar-selector'
 import { ImageUploadDialog } from '@/components/images/image-upload-dialog'
 import { TagEditor } from '@/components/tags/tag-editor'
+import { MemoryList } from '@/components/memory'
 import { showAlert, showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 
@@ -13,19 +14,25 @@ interface Character {
   id: string
   name: string
   title?: string | null
-  description: string
-  personality: string
-  scenario: string
-  firstMessage: string
-  exampleDialogues?: string
+  description?: string | null
+  personality?: string | null
+  scenario?: string | null
+  firstMessage?: string | null
+  exampleDialogues?: string | null
   systemPrompt?: string
   avatarUrl?: string
   defaultImageId?: string
+  defaultConnectionProfileId?: string
   defaultImage?: {
     id: string
     filepath: string
     url?: string
   }
+}
+
+interface ConnectionProfile {
+  id: string
+  name: string
 }
 
 interface Persona {
@@ -51,6 +58,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
   const [showAvatarSelector, setShowAvatarSelector] = useState(false)
   const [character, setCharacter] = useState<Character | null>(null)
   const [personas, setPersonas] = useState<Persona[]>([])
+  const [profiles, setProfiles] = useState<ConnectionProfile[]>([])
   const [defaultPersonaId, setDefaultPersonaId] = useState<string>('')
   const [loadingPersonas, setLoadingPersonas] = useState(false)
   const [formData, setFormData] = useState({
@@ -63,6 +71,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
     exampleDialogues: '',
     systemPrompt: '',
     avatarUrl: '',
+    defaultConnectionProfileId: '',
   })
   const [originalFormData, setOriginalFormData] = useState({
     name: '',
@@ -74,6 +83,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
     exampleDialogues: '',
     systemPrompt: '',
     avatarUrl: '',
+    defaultConnectionProfileId: '',
   })
   const [originalDefaultPersonaId, setOriginalDefaultPersonaId] = useState<string>('')
 
@@ -87,13 +97,14 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
       const initialFormData = {
         name: char.name,
         title: char.title || '',
-        description: char.description,
-        personality: char.personality,
-        scenario: char.scenario,
-        firstMessage: char.firstMessage,
+        description: char.description || '',
+        personality: char.personality || '',
+        scenario: char.scenario || '',
+        firstMessage: char.firstMessage || '',
         exampleDialogues: char.exampleDialogues || '',
         systemPrompt: char.systemPrompt || '',
         avatarUrl: char.avatarUrl || '',
+        defaultConnectionProfileId: char.defaultConnectionProfileId || '',
       }
       setFormData(initialFormData)
       setOriginalFormData(initialFormData)
@@ -133,11 +144,24 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
     }
   }, [id])
 
+  const fetchProfiles = useCallback(async () => {
+    try {
+      const res = await fetch('/api/profiles')
+      if (res.ok) {
+        const data = await res.json()
+        setProfiles(data)
+      }
+    } catch (err) {
+      console.error('Failed to fetch profiles:', err)
+    }
+  }, [])
+
   useEffect(() => {
     fetchCharacter()
     fetchPersonas()
     fetchDefaultPersona()
-  }, [fetchCharacter, fetchPersonas, fetchDefaultPersona])
+    fetchProfiles()
+  }, [fetchCharacter, fetchPersonas, fetchDefaultPersona, fetchProfiles])
 
   const hasChanges = JSON.stringify(formData) !== JSON.stringify(originalFormData) || defaultPersonaId !== originalDefaultPersonaId
 
@@ -191,7 +215,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
   }
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
   }
@@ -341,14 +365,13 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
 
         <div>
           <label htmlFor="description" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
-            Description *
+            Description (Optional)
           </label>
           <textarea
             id="description"
             name="description"
             value={formData.description}
             onChange={handleChange}
-            required
             rows={4}
             className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
             placeholder="Describe the character's appearance, background, and key traits"
@@ -357,14 +380,13 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
 
         <div>
           <label htmlFor="personality" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
-            Personality *
+            Personality (Optional)
           </label>
           <textarea
             id="personality"
             name="personality"
             value={formData.personality}
             onChange={handleChange}
-            required
             rows={4}
             className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
             placeholder="Describe the character's personality traits and behavioral patterns"
@@ -373,14 +395,13 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
 
         <div>
           <label htmlFor="scenario" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
-            Scenario *
+            Scenario (Optional)
           </label>
           <textarea
             id="scenario"
             name="scenario"
             value={formData.scenario}
             onChange={handleChange}
-            required
             rows={4}
             className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
             placeholder="Describe the setting and context for conversations"
@@ -389,14 +410,13 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
 
         <div>
           <label htmlFor="firstMessage" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
-            First Message *
+            First Message (Optional)
           </label>
           <textarea
             id="firstMessage"
             name="firstMessage"
             value={formData.firstMessage}
             onChange={handleChange}
-            required
             rows={3}
             className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
             placeholder="The character's opening message to start conversations"
@@ -433,6 +453,29 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
           />
         </div>
 
+        <div>
+          <label htmlFor="defaultConnectionProfileId" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+            Default Connection Profile (Optional)
+          </label>
+          <select
+            id="defaultConnectionProfileId"
+            name="defaultConnectionProfileId"
+            value={formData.defaultConnectionProfileId}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+          >
+            <option value="">No default profile</option>
+            {profiles.map((profile) => (
+              <option key={profile.id} value={profile.id}>
+                {profile.name}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Can be overridden for individual chats
+          </p>
+        </div>
+
         {/* Default Persona Selector */}
         {personas.length > 0 && (
           <div>
@@ -466,6 +509,11 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
 
         {/* Tag Editor */}
         <TagEditor entityType="character" entityId={id} />
+
+        {/* Memories Section */}
+        <div className="pt-6 border-t border-gray-200 dark:border-slate-700">
+          <MemoryList characterId={id} />
+        </div>
 
         <div className="flex gap-4">
           <button

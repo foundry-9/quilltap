@@ -6,9 +6,9 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import Image from 'next/image';
 import { showConfirmation } from '@/lib/alert';
 import { showErrorToast } from '@/lib/toast';
+import DeletedImagePlaceholder from './DeletedImagePlaceholder';
 
 export interface ImageData {
   id: string;
@@ -39,6 +39,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
   const [images, setImages] = useState<ImageData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [missingImages, setMissingImages] = useState<Set<string>>(new Set());
 
   const loadImages = useCallback(async () => {
     try {
@@ -115,6 +116,14 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
     );
   }
 
+  const handleImageError = (imageId: string) => {
+    setMissingImages((prev) => new Set(prev).add(imageId))
+  }
+
+  const handleCleanupMissing = () => {
+    loadImages()
+  }
+
   return (
     <div className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 ${className}`}>
       {images.map((image) => (
@@ -128,38 +137,58 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
           onClick={() => onSelectImage?.(image)}
         >
           <div className="aspect-square relative bg-gray-100 dark:bg-gray-800">
-            <Image
-              src={image.url || `/${image.filepath}`}
-              alt={image.filename}
-              fill
-              className="object-cover"
-              sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-            />
+            {missingImages.has(image.id) ? (
+              <DeletedImagePlaceholder
+                imageId={image.id}
+                filename={image.filename}
+                onCleanup={handleCleanupMissing}
+                className="w-full h-full absolute inset-0"
+              />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={image.url || `/${image.filepath}`}
+                alt={image.filename}
+                className="w-full h-full object-cover"
+                onError={() => {
+                  handleImageError(image.id)
+                }}
+                onLoad={(e) => {
+                  // Check if the image actually loaded or if it's a broken image icon
+                  const img = e.target as HTMLImageElement
+                  if (img.naturalWidth === 0 || img.naturalHeight === 0) {
+                    handleImageError(image.id)
+                  }
+                }}
+              />
+            )}
           </div>
 
           {/* Overlay with actions */}
-          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all opacity-0 group-hover:opacity-100">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDeleteImage(image.id);
-              }}
-              className="absolute bottom-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors"
-              title="Delete image"
-              aria-label="Delete image"
-            >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </button>
-          </div>
+          {!missingImages.has(image.id) && (
+            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all opacity-0 group-hover:opacity-100">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleDeleteImage(image.id)
+                }}
+                className="absolute bottom-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors"
+                title="Delete image"
+                aria-label="Delete image"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path
+                    fillRule="evenodd"
+                    d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+            </div>
+          )}
 
           {/* Selected indicator */}
-          {selectedImageId === image.id && (
+          {selectedImageId === image.id && !missingImages.has(image.id) && (
             <div className="absolute top-2 right-2 bg-blue-500 text-white rounded-full p-1">
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                 <path
