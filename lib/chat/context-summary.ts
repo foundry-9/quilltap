@@ -8,7 +8,7 @@
 
 import { getRepositories } from '@/lib/json-store/repositories'
 import { getCheapLLMProvider } from '@/lib/llm/cheap-llm'
-import { updateContextSummary, summarizeChat, ChatMessage } from '@/lib/memory/cheap-llm-tasks'
+import { updateContextSummary, summarizeChat, ChatMessage, generateTitleFromSummary } from '@/lib/memory/cheap-llm-tasks'
 import { countMessagesTokens } from '@/lib/tokens/token-counter'
 import { getModelContextLimit, shouldSummarizeConversation } from '@/lib/llm/model-context-data'
 import { Provider, ConnectionProfile, CheapLLMSettings } from '@/lib/json-store/schemas/types'
@@ -238,6 +238,22 @@ export async function generateContextSummary(
         createdAt: new Date().toISOString(),
       }
       await repos.chats.addMessage(chatId, summaryEvent)
+
+      // Generate a title from the summary using the cheap LLM
+      try {
+        const titleResult = await generateTitleFromSummary(result.summary, cheapLLM, userId)
+        if (titleResult.success && titleResult.result) {
+          await repos.chats.update(chatId, {
+            title: titleResult.result,
+            updatedAt: new Date().toISOString(),
+          })
+          console.log(`[Context Summary] Generated title for chat ${chatId}: ${titleResult.result}`)
+        } else {
+          console.warn(`[Context Summary] Failed to generate title for chat ${chatId}: ${titleResult.error}`)
+        }
+      } catch (titleError) {
+        console.error(`[Context Summary] Error generating title for chat ${chatId}:`, titleError)
+      }
     }
 
     return result

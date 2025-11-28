@@ -655,13 +655,43 @@ export async function POST(
             } catch (memoryError) {
               console.error('Failed to trigger memory extraction:', memoryError)
             }
+          } else if (toolMessages.length > 0) {
+            // Even if there's no text response, send done event if tools were executed
+            const firstToolMessageId = await saveToolMessages(repos, id, user.id, toolMessages, generatedImagePaths)
+            await repos.chats.update(id, { updatedAt: new Date().toISOString() })
 
-            // Close the stream
-            try {
-              controller.close()
-            } catch (e) {
-              // Already closed, ignore
-            }
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  done: true,
+                  messageId: firstToolMessageId,
+                  usage,
+                  attachmentResults,
+                  toolsExecuted: true,
+                })}\n\n`
+              )
+            )
+          } else {
+            // No response content and no tool execution - still need to send done to close the stream
+            console.warn(`[Chat Messages] Empty response for chat ${id}`)
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  done: true,
+                  messageId: null,
+                  usage,
+                  attachmentResults,
+                  toolsExecuted: false,
+                })}\n\n`
+              )
+            )
+          }
+
+          // Close the stream
+          try {
+            controller.close()
+          } catch (e) {
+            // Already closed, ignore
           }
         } catch (error) {
           console.error('Streaming error:', error)

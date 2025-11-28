@@ -437,6 +437,18 @@ The title should:
 Respond with only the title, no quotes or additional text.`
 
 /**
+ * Chat title from summary prompt template
+ */
+const CHAT_TITLE_FROM_SUMMARY_PROMPT = `Generate a short, descriptive title for this conversation based on the summary provided.
+The title should:
+- Be under 60 characters
+- Capture the main topic or theme of the conversation
+- Be engaging but not clickbait
+- Be concise and clear
+
+Respond with only the title, no quotes or additional text.`
+
+/**
  * Generates or updates a chat title
  *
  * @param messages - Recent chat messages
@@ -485,6 +497,48 @@ export async function titleChat(
       // Truncate if too long
       if (title.length > 50) {
         title = title.substring(0, 47) + '...'
+      }
+      return title
+    }
+  )
+}
+
+/**
+ * Generates a chat title from a summary
+ *
+ * @param summary - The conversation summary
+ * @param selection - The cheap LLM provider selection
+ * @param userId - The user ID for API key retrieval
+ * @returns A new title for the chat
+ */
+export async function generateTitleFromSummary(
+  summary: string,
+  selection: CheapLLMSelection,
+  userId: string
+): Promise<CheapLLMTaskResult<string>> {
+  const llmMessages: LLMMessage[] = [
+    {
+      role: 'system',
+      content: CHAT_TITLE_FROM_SUMMARY_PROMPT,
+    },
+    {
+      role: 'user',
+      content: `Summary:\n${summary}`,
+    },
+  ]
+
+  return executeCheapLLMTask(
+    selection,
+    llmMessages,
+    userId,
+    (content: string): string => {
+      // Clean up the title
+      let title = content.trim()
+      // Remove quotes if present
+      title = title.replace(/^["']|["']$/g, '')
+      // Truncate if too long (60 characters max)
+      if (title.length > 60) {
+        title = title.substring(0, 57) + '...'
       }
       return title
     }
