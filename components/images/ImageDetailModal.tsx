@@ -24,11 +24,13 @@ interface ImageData {
 interface Character {
   id: string
   name: string
+  defaultImageId?: string | null
 }
 
 interface Persona {
   id: string
   name: string
+  defaultImageId?: string | null
 }
 
 interface ImageDetailModalProps {
@@ -37,6 +39,7 @@ interface ImageDetailModalProps {
   image: ImageData
   onPrev?: () => void
   onNext?: () => void
+  onAvatarSet?: () => void // Callback when avatar is set to refresh parent
 }
 
 export default function ImageDetailModal({
@@ -45,6 +48,7 @@ export default function ImageDetailModal({
   image,
   onPrev,
   onNext,
+  onAvatarSet,
 }: ImageDetailModalProps) {
   const [characters, setCharacters] = useState<Character[]>([])
   const [personas, setPersonas] = useState<Persona[]>([])
@@ -52,6 +56,7 @@ export default function ImageDetailModal({
   const [taggedCharacterIds, setTaggedCharacterIds] = useState<Set<string>>(new Set())
   const [taggedPersonaIds, setTaggedPersonaIds] = useState<Set<string>>(new Set())
   const [taggingInProgress, setTaggingInProgress] = useState<Set<string>>(new Set())
+  const [settingAvatar, setSettingAvatar] = useState<Set<string>>(new Set())
   const [imageMissing, setImageMissing] = useState(false)
 
   // Load characters and personas on mount
@@ -248,6 +253,57 @@ export default function ImageDetailModal({
     }
   }
 
+  const setAsAvatar = async (entityType: 'character' | 'persona', entityId: string) => {
+    const key = `${entityType}-${entityId}-avatar`
+
+    try {
+      setSettingAvatar((prev) => new Set(prev).add(key))
+
+      const endpoint = entityType === 'character'
+        ? `/api/characters/${entityId}/avatar`
+        : `/api/personas/${entityId}/avatar`
+
+      console.log(`[ImageDetailModal] Setting avatar for ${entityType} ${entityId} to image ${image.id}`)
+      const response = await fetch(endpoint, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageId: image.id }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to set avatar')
+      }
+
+      console.log(`[ImageDetailModal] Avatar set successfully, calling onAvatarSet callback`)
+      // Update local state
+      if (entityType === 'character') {
+        setCharacters((prev) =>
+          prev.map((char) =>
+            char.id === entityId ? { ...char, defaultImageId: image.id } : char
+          )
+        )
+      } else {
+        setPersonas((prev) =>
+          prev.map((persona) =>
+            persona.id === entityId ? { ...persona, defaultImageId: image.id } : persona
+          )
+        )
+      }
+
+      showSuccessToast(`Set as avatar for ${entityType}`)
+      onAvatarSet?.()
+    } catch (error) {
+      showErrorToast(error instanceof Error ? error.message : 'Failed to set avatar')
+    } finally {
+      setSettingAvatar((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(key)
+        return newSet
+      })
+    }
+  }
+
   const handleDownload = async () => {
     try {
       const src = image.url || `/${image.filepath}`
@@ -372,27 +428,46 @@ export default function ImageDetailModal({
             {!loadingEntities && characters.length > 0 && (
               <div>
                 <h3 className="text-white font-semibold mb-3">Tag to Character</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div className="flex flex-col gap-2">
                   {characters.map((character) => {
                     const isTagged = taggedCharacterIds.has(character.id)
                     const isLoading = taggingInProgress.has(`char-${character.id}`)
+                    const isAvatar = character.defaultImageId === image.id
+                    const isSettingAvatar = settingAvatar.has(`character-${character.id}-avatar`)
 
                     return (
-                      <button
-                        key={character.id}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          toggleCharacterTag(character.id)
-                        }}
-                        disabled={isLoading}
-                        className={`px-4 py-2 rounded transition-all font-medium text-sm ${
-                          isTagged
-                            ? 'bg-blue-600 text-white hover:bg-blue-700 ring-2 ring-blue-400'
-                            : 'bg-gray-600 text-gray-100 hover:bg-gray-700'
-                        } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                        {isLoading ? '...' : character.name}
-                      </button>
+                      <div key={character.id} className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            toggleCharacterTag(character.id)
+                          }}
+                          disabled={isLoading}
+                          className={`flex-1 px-4 py-2 rounded transition-all font-medium text-sm flex items-center justify-between ${
+                            isTagged
+                              ? 'bg-blue-600 text-white hover:bg-blue-700 ring-2 ring-blue-400'
+                              : 'bg-gray-600 text-gray-100 hover:bg-gray-700'
+                          } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          <span>{isLoading ? '...' : character.name}</span>
+                          {isAvatar && (
+                            <span className="ml-2 text-xs bg-green-500 px-2 py-0.5 rounded">Avatar</span>
+                          )}
+                        </button>
+                        {isTagged && !isAvatar && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setAsAvatar('character', character.id)
+                            }}
+                            disabled={isSettingAvatar}
+                            className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded text-sm font-medium transition-colors disabled:opacity-50"
+                            title="Set as avatar"
+                          >
+                            {isSettingAvatar ? '...' : 'Set Avatar'}
+                          </button>
+                        )}
+                      </div>
                     )
                   })}
                 </div>
@@ -403,27 +478,46 @@ export default function ImageDetailModal({
             {!loadingEntities && personas.length > 0 && (
               <div>
                 <h3 className="text-white font-semibold mb-3">Tag to Persona</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div className="flex flex-col gap-2">
                   {personas.map((persona) => {
                     const isTagged = taggedPersonaIds.has(persona.id)
                     const isLoading = taggingInProgress.has(`persona-${persona.id}`)
+                    const isAvatar = persona.defaultImageId === image.id
+                    const isSettingAvatar = settingAvatar.has(`persona-${persona.id}-avatar`)
 
                     return (
-                      <button
-                        key={persona.id}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          togglePersonaTag(persona.id)
-                        }}
-                        disabled={isLoading}
-                        className={`px-4 py-2 rounded transition-all font-medium text-sm ${
-                          isTagged
-                            ? 'bg-purple-600 text-white hover:bg-purple-700 ring-2 ring-purple-400'
-                            : 'bg-gray-600 text-gray-100 hover:bg-gray-700'
-                        } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                        {isLoading ? '...' : persona.name}
-                      </button>
+                      <div key={persona.id} className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            togglePersonaTag(persona.id)
+                          }}
+                          disabled={isLoading}
+                          className={`flex-1 px-4 py-2 rounded transition-all font-medium text-sm flex items-center justify-between ${
+                            isTagged
+                              ? 'bg-purple-600 text-white hover:bg-purple-700 ring-2 ring-purple-400'
+                              : 'bg-gray-600 text-gray-100 hover:bg-gray-700'
+                          } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          <span>{isLoading ? '...' : persona.name}</span>
+                          {isAvatar && (
+                            <span className="ml-2 text-xs bg-green-500 px-2 py-0.5 rounded">Avatar</span>
+                          )}
+                        </button>
+                        {isTagged && !isAvatar && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setAsAvatar('persona', persona.id)
+                            }}
+                            disabled={isSettingAvatar}
+                            className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded text-sm font-medium transition-colors disabled:opacity-50"
+                            title="Set as avatar"
+                          >
+                            {isSettingAvatar ? '...' : 'Set Avatar'}
+                          </button>
+                        )}
+                      </div>
                     )
                   })}
                 </div>

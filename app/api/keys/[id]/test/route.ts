@@ -47,9 +47,10 @@ async function testProviderApiKey(
         return await testGoogle(apiKey)
 
       case 'GROK':
+        return await testGrok(apiKey)
+
       case 'GAB_AI':
-        // These providers use OpenAI-compatible format
-        return await testOpenAI(apiKey)
+        return await testGabAI(apiKey)
 
       default:
         return { valid: false, error: 'Unsupported provider' }
@@ -235,6 +236,62 @@ async function testGoogle(apiKey: string) {
     return {
       valid: false,
       error: 'Failed to connect to Google API',
+    }
+  }
+}
+
+/**
+ * Test Grok API key
+ */
+async function testGrok(apiKey: string) {
+  try {
+    const response = await fetch('https://api.x.ai/v1/models', {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+    })
+
+    if (response.ok) {
+      return { valid: true }
+    }
+
+    const error = await response.json()
+    return {
+      valid: false,
+      error: error.error?.message || 'Invalid API key',
+    }
+  } catch (error) {
+    return {
+      valid: false,
+      error: 'Failed to connect to Grok',
+    }
+  }
+}
+
+/**
+ * Test Gab AI API key
+ */
+async function testGabAI(apiKey: string) {
+  try {
+    const response = await fetch('https://gab.ai/v1/models', {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+    })
+
+    if (response.ok) {
+      return { valid: true }
+    }
+
+    const error = await response.json()
+    return {
+      valid: false,
+      error: error.error?.message || 'Invalid API key',
+    }
+  } catch (error) {
+    return {
+      valid: false,
+      error: 'Failed to connect to Gab AI',
     }
   }
 }

@@ -59,6 +59,10 @@ export async function GET(request: NextRequest) {
       repos.personas.findByUserId(session.user.id),
     ]);
 
+    // Build tag type lookup maps
+    const characterIds = new Set(allCharacters.map(c => c.id));
+    const personaIds = new Set(allPersonas.map(p => p.id));
+
     const data = images.map(img => {
       // Count characters using this image as default
       const charactersUsingAsDefault = allCharacters.filter(
@@ -80,6 +84,18 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      // Determine tag type for each tag ID
+      const tags = img.tags.map(tagId => {
+        let tagType: 'CHARACTER' | 'PERSONA' | 'CHAT' | 'THEME' = 'THEME';
+        if (characterIds.has(tagId)) {
+          tagType = 'CHARACTER';
+        } else if (personaIds.has(tagId)) {
+          tagType = 'PERSONA';
+        }
+        // Note: CHAT tags would require loading chats, but we don't currently use those
+        return { tagId, tagType };
+      });
+
       return {
         id: img.id,
         userId: img.userId,
@@ -95,7 +111,7 @@ export async function GET(request: NextRequest) {
         generationModel: img.generationModel,
         createdAt: img.createdAt,
         updatedAt: img.updatedAt,
-        tags: img.tags.map(tagId => ({ tagId, tagType: 'THEME' })), // Simplified tag structure
+        tags,
         _count: {
           charactersUsingAsDefault,
           personasUsingAsDefault,

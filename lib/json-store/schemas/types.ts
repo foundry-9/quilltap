@@ -234,6 +234,21 @@ export type ConnectionProfile = z.infer<typeof ConnectionProfileSchema>;
 // CHARACTER & PERSONA
 // ============================================================================
 
+// Physical Description for image generation prompts
+export const PhysicalDescriptionSchema = z.object({
+  id: UUIDSchema,
+  name: z.string().min(1),
+  shortPrompt: z.string().max(350).nullable().optional(),
+  mediumPrompt: z.string().max(500).nullable().optional(),
+  longPrompt: z.string().max(750).nullable().optional(),
+  completePrompt: z.string().max(1000).nullable().optional(),
+  fullDescription: z.string().nullable().optional(),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type PhysicalDescription = z.infer<typeof PhysicalDescriptionSchema>;
+
 export const CharacterSchema = z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
@@ -261,6 +276,7 @@ export const CharacterSchema = z.object({
     chatId: UUIDSchema,
     imageId: UUIDSchema,
   })).default([]),
+  physicalDescriptions: z.array(PhysicalDescriptionSchema).default([]),
 
   // Timestamps
   createdAt: TimestampSchema,
@@ -283,6 +299,7 @@ export const PersonaSchema = z.object({
   // Relationships
   characterLinks: z.array(UUIDSchema).default([]),
   tags: z.array(UUIDSchema).default([]),
+  physicalDescriptions: z.array(PhysicalDescriptionSchema).default([]),
 
   // Timestamps
   createdAt: TimestampSchema,

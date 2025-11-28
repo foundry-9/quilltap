@@ -268,23 +268,37 @@ export default function ConnectionProfilesTab() {
       const method = editingId ? 'PUT' : 'POST'
       const url = editingId ? `/api/profiles/${editingId}` : '/api/profiles'
 
+      // Build request body
+      const requestBody: any = {
+        name: formData.name,
+        provider: formData.provider,
+        modelName: formData.modelName,
+        isDefault: formData.isDefault,
+        isCheap: formData.isCheap,
+        parameters: {
+          temperature: parseFloat(String(formData.temperature)),
+          max_tokens: parseInt(String(formData.maxTokens)),
+          top_p: parseFloat(String(formData.topP)),
+        },
+      }
+
+      // Always include apiKeyId when editing (to support changes)
+      // Only include when truthy for new profiles
+      if (editingId) {
+        requestBody.apiKeyId = formData.apiKeyId || null
+      } else if (formData.apiKeyId) {
+        requestBody.apiKeyId = formData.apiKeyId
+      }
+
+      // Only include baseUrl if set
+      if (formData.baseUrl) {
+        requestBody.baseUrl = formData.baseUrl
+      }
+
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: formData.name,
-          provider: formData.provider,
-          apiKeyId: formData.apiKeyId || undefined,
-          baseUrl: formData.baseUrl || undefined,
-          modelName: formData.modelName,
-          isDefault: formData.isDefault,
-          isCheap: formData.isCheap,
-          parameters: {
-            temperature: parseFloat(String(formData.temperature)),
-            max_tokens: parseInt(String(formData.maxTokens)),
-            top_p: parseFloat(String(formData.topP)),
-          },
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       if (!res.ok) {
@@ -295,6 +309,7 @@ export default function ConnectionProfilesTab() {
       resetForm()
       setShowForm(false)
       await fetchProfiles()
+      await fetchApiKeys()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {

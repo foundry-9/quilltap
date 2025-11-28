@@ -51,6 +51,7 @@ export async function POST(req: NextRequest) {
             tags: [] as string[],
             characterLinks: [] as string[],
             defaultImageId: null,
+            physicalDescriptions: [],
           })
 
           // Get character links for response
@@ -94,6 +95,7 @@ export async function POST(req: NextRequest) {
         tags: [] as string[],
         characterLinks: [] as string[],
         defaultImageId: null,
+        physicalDescriptions: [],
       })
 
       // Get character links for response
