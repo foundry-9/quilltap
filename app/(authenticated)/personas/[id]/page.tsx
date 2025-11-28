@@ -2,6 +2,7 @@
 
 import { use, useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { AvatarSelector } from '@/components/images/avatar-selector'
 import { ImageUploadDialog } from '@/components/images/image-upload-dialog'
@@ -57,6 +58,7 @@ const EDIT_PERSONA_TABS: Tab[] = [
 
 export default function EditPersonaPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
+  const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -119,8 +121,8 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
         throw new Error(data.error || 'Failed to update persona')
       }
 
-      await fetchPersona()
       showSuccessToast('Persona saved successfully!')
+      router.push('/personas')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {

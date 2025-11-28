@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { showConfirmation } from '@/lib/alert'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
@@ -72,7 +73,8 @@ export default function PersonasPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this persona?')) return
+    const confirmed = await showConfirmation('Are you sure you want to delete this persona?')
+    if (!confirmed) return
 
     try {
       const response = await fetch(`/api/personas/${id}`, {
