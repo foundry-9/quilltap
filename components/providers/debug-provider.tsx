@@ -80,6 +80,13 @@ export interface DebugEntry {
   };
   // Memory extraction debug logs (Sprint 6)
   debugMemoryLogs?: string[];
+  // Tool invocations and results
+  toolResults?: Array<{
+    name: string;
+    success: boolean;
+    result?: unknown;
+    timestamp?: number;
+  }>;
 }
 
 interface DebugContextValue {
@@ -205,6 +212,7 @@ function parseSSEAndStitchContent(rawData: string): {
   llmRequestDetails: DebugEntry['llmRequestDetails'];
   finalEvent: DebugEntry['finalEvent'];
   debugMemoryLogs?: string[];
+  toolResults?: DebugEntry['toolResults'];
 } {
   const lines = rawData.split('\n');
   let stitchedContent = '';
@@ -212,6 +220,7 @@ function parseSSEAndStitchContent(rawData: string): {
   let llmRequestDetails: DebugEntry['llmRequestDetails'] = undefined;
   let finalEvent: DebugEntry['finalEvent'] = undefined;
   let debugMemoryLogs: string[] | undefined = undefined;
+  const toolResults: Array<{ name: string; success: boolean; result?: unknown; timestamp?: number }> = [];
 
   for (const line of lines) {
     if (line.startsWith('data: ')) {
@@ -226,6 +235,16 @@ function parseSSEAndStitchContent(rawData: string): {
         // Capture memory debug logs
         if (data.debugMemoryLogs && Array.isArray(data.debugMemoryLogs)) {
           debugMemoryLogs = data.debugMemoryLogs;
+        }
+
+        // Capture tool results
+        if (data.toolResult) {
+          toolResults.push({
+            name: data.toolResult.name,
+            success: data.toolResult.success,
+            result: data.toolResult.result,
+            timestamp: Date.now(),
+          });
         }
 
         // Stitch content together
@@ -253,7 +272,14 @@ function parseSSEAndStitchContent(rawData: string): {
     }
   }
 
-  return { stitchedContent, finalMetadata, llmRequestDetails, finalEvent, debugMemoryLogs };
+  return {
+    stitchedContent,
+    finalMetadata,
+    llmRequestDetails,
+    finalEvent,
+    debugMemoryLogs,
+    toolResults: toolResults.length > 0 ? toolResults : undefined,
+  };
 }
 
 let entryIdCounter = 0;
@@ -296,7 +322,7 @@ export function DebugProvider({ children }: { children: ReactNode }) {
   const finalizeStreamingEntry = useCallback((id: string) => {
     entriesRef.current = entriesRef.current.map(entry => {
       if (entry.id === id && entry.contentType === 'text/event-stream') {
-        const { stitchedContent, finalMetadata, llmRequestDetails, finalEvent, debugMemoryLogs } = parseSSEAndStitchContent(entry.data);
+        const { stitchedContent, finalMetadata, llmRequestDetails, finalEvent, debugMemoryLogs, toolResults } = parseSSEAndStitchContent(entry.data);
         return {
           ...entry,
           status: 'complete' as const,
@@ -305,6 +331,7 @@ export function DebugProvider({ children }: { children: ReactNode }) {
           llmRequestDetails,
           finalEvent,
           debugMemoryLogs,
+          toolResults,
         };
       }
       return entry;

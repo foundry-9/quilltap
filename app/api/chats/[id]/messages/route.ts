@@ -394,21 +394,43 @@ export async function POST(
     const chatSettings = await repos.users.getChatSettings(user.id)
 
     // Build context with intelligent token management
-    // Filter existing messages to only USER and ASSISTANT messages (exclude TOOL, SYSTEM)
+    // Filter existing messages to include USER, ASSISTANT, and TOOL messages (exclude SYSTEM)
+    // IMPORTANT: Tool results must be included so LLM knows tools were already executed
     const conversationMessages = existingMessages
       .filter(msg => msg.type === 'message')
       .filter(msg => {
         const role = (msg as { role: string }).role
-        return role === 'USER' || role === 'ASSISTANT'
+        return role === 'USER' || role === 'ASSISTANT' || role === 'TOOL'
       })
       .map(msg => {
         const messageEvent = msg as { role: string; content: string; id?: string }
+
+        // For TOOL messages, parse the content and format as a user message
+        // indicating the tool result (LLMs expect tool results as user messages)
+        if (messageEvent.role === 'TOOL') {
+          try {
+            const toolData = JSON.parse(messageEvent.content)
+            // toolData.result is already a formatted string, don't stringify again
+            const resultText = toolData.result || 'No result'
+
+            return {
+              role: 'USER' as const, // Tool results sent back as user messages
+              content: `[Tool Result: ${toolData.toolName}]\n${resultText}`,
+              id: messageEvent.id,
+            }
+          } catch {
+            // If parsing fails, skip this message
+            return null
+          }
+        }
+
         return {
           role: messageEvent.role,
           content: messageEvent.content,
           id: messageEvent.id,
         }
       })
+      .filter((msg): msg is NonNullable<typeof msg> => msg !== null)
 
     const builtContext = await buildContext({
       provider: connectionProfile.provider,
