@@ -53,6 +53,7 @@ export function EntityTabs({ tabs, defaultTab, persistToUrl = true, children }: 
           {tabs.map((tab) => (
             <button
               key={tab.id}
+              type="button"
               onClick={() => handleTabChange(tab.id)}
               className={`
                 flex items-center gap-2 px-4 py-2.5 text-sm font-medium

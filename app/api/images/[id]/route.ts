@@ -30,7 +30,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     const image = await repos.images.findById(id);
 
-    if (!image) {
+    if (!image || image.userId !== session.user.id) {
       return NextResponse.json({ error: 'Image not found' }, { status: 404 });
     }
 
@@ -78,10 +78,10 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     const { id } = await context.params;
     const repos = getRepositories();
 
-    // Check if image exists
+    // Check if image exists and belongs to user
     const image = await repos.images.findById(id);
 
-    if (!image) {
+    if (!image || image.userId !== session.user.id) {
       return NextResponse.json({ error: 'Image not found' }, { status: 404 });
     }
 

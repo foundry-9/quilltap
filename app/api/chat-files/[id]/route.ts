@@ -38,10 +38,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const repos = getRepositories()
 
-    // Get the chat file (binary entry with type chat_file)
+    // Get the chat file (can be any image with a chatId)
     const chatFile = await repos.images.findById(id)
 
-    if (!chatFile || chatFile.type !== 'chat_file') {
+    if (!chatFile || !chatFile.chatId) {
       return NextResponse.json({ error: 'Chat file not found' }, { status: 404 })
     }
 

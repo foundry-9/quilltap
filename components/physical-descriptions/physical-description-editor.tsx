@@ -51,8 +51,7 @@ export function PhysicalDescriptionEditor({
     setFormData({ ...formData, [name]: value })
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSave = async () => {
     setSaving(true)
 
     try {
@@ -106,6 +105,7 @@ export function PhysicalDescriptionEditor({
               {isEditing ? 'Edit Description' : 'New Physical Description'}
             </h2>
             <button
+              type="button"
               onClick={onClose}
               className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
             >
@@ -116,7 +116,7 @@ export function PhysicalDescriptionEditor({
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <div className="p-6 space-y-4">
           {/* Name */}
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -267,14 +267,15 @@ export function PhysicalDescriptionEditor({
               Cancel
             </button>
             <button
-              type="submit"
+              type="button"
+              onClick={handleSave}
               disabled={saving || !formData.name.trim()}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {saving ? 'Saving...' : isEditing ? 'Update' : 'Create'}
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   )
