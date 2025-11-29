@@ -3,6 +3,7 @@
 import { SessionProvider } from "next-auth/react";
 import { DebugProvider } from "./debug-provider";
 import { TagStyleProvider } from "./tag-style-provider";
+import { QuickHideProvider } from "./quick-hide-provider";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -12,7 +13,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
     >
       <DebugProvider>
         <TagStyleProvider>
-          {children}
+          <QuickHideProvider>
+            {children}
+          </QuickHideProvider>
         </TagStyleProvider>
       </DebugProvider>
     </SessionProvider>

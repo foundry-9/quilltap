@@ -7,11 +7,18 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { z } from 'zod'
+import type { Tag } from '@/lib/json-store/schemas/types'
 
 // Validation schema
-const updateTagSchema = z.object({
-  name: z.string().min(1, 'Tag name is required').max(50),
-})
+const updateTagSchema = z
+  .object({
+    name: z.string().min(1, 'Tag name is required').max(50).optional(),
+    quickHide: z.boolean().optional(),
+  })
+  .refine(
+    (data) => typeof data.name !== 'undefined' || typeof data.quickHide !== 'undefined',
+    { message: 'At least one field must be provided' }
+  )
 
 // PUT /api/tags/[id] - Update tag name
 export async function PUT(
@@ -48,25 +55,33 @@ export async function PUT(
     const body = await req.json()
     const validatedData = updateTagSchema.parse(body)
 
-    const nameLower = validatedData.name.toLowerCase()
+    const updateData: Partial<Tag> = {}
 
-    // Check if another tag with this name already exists
-    const allTags = await repos.tags.findByUserId(user.id)
-    const duplicateTag = allTags.find(
-      tag => tag.nameLower === nameLower && tag.id !== tagId
-    )
+    if (typeof validatedData.name !== 'undefined') {
+      const nameLower = validatedData.name.toLowerCase()
 
-    if (duplicateTag) {
-      return NextResponse.json(
-        { error: 'A tag with this name already exists' },
-        { status: 400 }
+      // Check if another tag with this name already exists
+      const allTags = await repos.tags.findByUserId(user.id)
+      const duplicateTag = allTags.find(
+        tag => tag.nameLower === nameLower && tag.id !== tagId
       )
+
+      if (duplicateTag) {
+        return NextResponse.json(
+          { error: 'A tag with this name already exists' },
+          { status: 400 }
+        )
+      }
+
+      updateData.name = validatedData.name
+      updateData.nameLower = nameLower
     }
 
-    const tag = await repos.tags.update(tagId, {
-      name: validatedData.name,
-      nameLower,
-    })
+    if (typeof validatedData.quickHide !== 'undefined') {
+      updateData.quickHide = validatedData.quickHide
+    }
+
+    const tag = await repos.tags.update(tagId, updateData)
 
     return NextResponse.json({ tag })
   } catch (error) {

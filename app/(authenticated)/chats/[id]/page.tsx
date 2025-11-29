@@ -18,6 +18,9 @@ import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { useDebugOptional } from '@/components/providers/debug-provider'
 import DebugPanel from '@/components/debug/DebugPanel'
 import type { TagVisualStyle } from '@/lib/json-store/schemas/types'
+import { useChatContext } from '@/components/providers/chat-context'
+import { useQuickHide } from '@/components/providers/quick-hide-provider'
+import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 
 interface MessageAttachment {
   id: string
@@ -145,6 +148,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const chatContext = useChatContext()
+  const { shouldHideByIds, hiddenTagIds } = useQuickHide()
+  const quickHideActive = hiddenTagIds.size > 0
+  const isCurrentChat = chatContext.chatId === id
+  const chatTags = chatContext.tags.map(tag => tag.id)
+  const awaitingTagInfo = quickHideActive && isCurrentChat && !chatContext.tagsFetched
+  const chatHidden = quickHideActive && isCurrentChat && chatContext.tagsFetched && shouldHideByIds(chatTags)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -771,6 +781,22 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             </div>
           )}
         </div>
+      </div>
+    )
+  }
+
+  if (awaitingTagInfo) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-lg text-gray-600 dark:text-gray-400">Loading chat...</p>
+      </div>
+    )
+  }
+
+  if (chatHidden) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex items-center justify-center">
+        <HiddenPlaceholder />
       </div>
     )
   }

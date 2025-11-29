@@ -97,6 +97,7 @@ export class TagsRepository extends BaseRepository<Tag> {
 
     const tag: Tag = {
       ...data,
+      quickHide: typeof data.quickHide === 'boolean' ? data.quickHide : false,
       id,
       createdAt: now,
       updatedAt: now,

@@ -1,10 +1,12 @@
 'use client'
 
+import { useMemo } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { TagDisplay } from '@/components/tags/tag-display'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
+import { useQuickHide } from '@/components/providers/quick-hide-provider'
 
 interface RecentChat {
   id: string
@@ -53,15 +55,20 @@ function getAvatarSrc(chat: RecentChat): string | null {
 
 export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
   const { style } = useAvatarDisplay()
+  const { shouldHideByIds } = useQuickHide()
+  const visibleChats = useMemo(
+    () => chats.filter(chat => !shouldHideByIds(chat.tags.map(ct => ct.tag.id))),
+    [chats, shouldHideByIds]
+  )
 
   return (
     <div className="mt-8">
       <h3 className="mb-4 text-xl font-semibold text-gray-900 dark:text-white">
         Recent Chats
       </h3>
-      {chats.length > 0 ? (
+      {visibleChats.length > 0 ? (
         <div className="space-y-3 max-h-96 overflow-y-auto">
-          {chats.map((chat) => (
+          {visibleChats.map((chat) => (
             <Link
               key={chat.id}
               href={`/chats/${chat.id}`}

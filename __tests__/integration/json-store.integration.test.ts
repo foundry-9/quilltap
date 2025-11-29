@@ -199,6 +199,7 @@ describe('JSON Store Integration Tests', () => {
         userId: 'user-123',
         name: 'Fantasy',
         nameLower: 'fantasy',
+        quickHide: false,
       });
 
       expect(tag.id).toBeDefined();
@@ -213,12 +214,14 @@ describe('JSON Store Integration Tests', () => {
         userId: 'user-123',
         name: 'Fantasy',
         nameLower: 'fantasy',
+        quickHide: false,
       });
 
       await tagsRepo.create({
         userId: 'user-123',
         name: 'Sci-Fi',
         nameLower: 'sci-fi',
+        quickHide: false,
       });
 
       const tags = await tagsRepo.findByUserId('user-123');
@@ -230,6 +233,7 @@ describe('JSON Store Integration Tests', () => {
         userId: 'user-123',
         name: 'Fantasy',
         nameLower: 'fantasy',
+        quickHide: false,
       });
 
       const found = await tagsRepo.findByName('user-123', 'fantasy');
@@ -244,6 +248,7 @@ describe('JSON Store Integration Tests', () => {
         userId: 'user-123',
         name: 'Fantasy',
         nameLower: 'fantasy',
+        quickHide: false,
       });
 
       const updated = await tagsRepo.update(tag.id, {
@@ -260,6 +265,7 @@ describe('JSON Store Integration Tests', () => {
         userId: 'user-123',
         name: 'Fantasy',
         nameLower: 'fantasy',
+        quickHide: false,
       });
 
       const deleted = await tagsRepo.delete(tag.id);

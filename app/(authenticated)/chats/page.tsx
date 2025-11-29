@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { showConfirmation } from '@/lib/alert'
@@ -8,6 +8,7 @@ import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { TagDisplay } from '@/components/tags/tag-display'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
+import { useQuickHide } from '@/components/providers/quick-hide-provider'
 
 interface ChatParticipant {
   id: string
@@ -63,6 +64,12 @@ export default function ChatsPage() {
   const [highlightedChatId, setHighlightedChatId] = useState<string | null>(null)
   const importedChatRef = useRef<HTMLDivElement>(null)
   const { style } = useAvatarDisplay()
+  const { shouldHideByIds } = useQuickHide()
+
+  const visibleChats = useMemo(
+    () => chats.filter(chat => !shouldHideByIds(chat.tags.map(ct => ct.tag.id))),
+    [chats, shouldHideByIds]
+  )
 
   useEffect(() => {
     fetchChats()
@@ -338,7 +345,7 @@ export default function ChatsPage() {
         </div>
       </div>
 
-      {chats.length === 0 ? (
+      {visibleChats.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-lg text-gray-600 dark:text-gray-400 mb-4">No chats yet</p>
           <Link
@@ -350,7 +357,7 @@ export default function ChatsPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {chats.map((chat) => (
+          {visibleChats.map((chat) => (
             <div
               key={chat.id}
               ref={highlightedChatId === chat.id ? importedChatRef : null}

@@ -136,6 +136,7 @@ async function exportPrismaToJson(options: { dryRun: boolean; verbose: boolean }
             userId: tag.userId,
             name: tag.name,
             nameLower: tag.nameLower,
+            quickHide: (tag as { quickHide?: boolean }).quickHide ?? false,
           });
         }
         stats.summary.tags++;

@@ -12,6 +12,7 @@ export default function NavWrapper() {
   const pathname = usePathname();
   const [tags, setTags] = useState<Tag[]>([]);
   const [tagsLoading, setTagsLoading] = useState(false);
+  const [tagsFetched, setTagsFetched] = useState(false);
   const [chatId, setChatId] = useState<string | null>(null);
 
   // Extract chat ID from pathname
@@ -28,10 +29,14 @@ export default function NavWrapper() {
   useEffect(() => {
     if (!chatId) {
       setTags([]);
+      setTagsFetched(true);
+      setTagsLoading(false);
       return;
     }
 
     const fetchTags = async () => {
+      setTagsFetched(false);
+      setTagsLoading(true);
       try {
         const res = await fetch(`/api/chats/${chatId}/tags`);
         if (res.ok) {
@@ -40,6 +45,9 @@ export default function NavWrapper() {
         }
       } catch (err) {
         console.error('Error loading tags:', err);
+      } finally {
+        setTagsLoading(false);
+        setTagsFetched(true);
       }
     };
 
@@ -98,6 +106,7 @@ export default function NavWrapper() {
     chatTitle: null,
     tags,
     tagsLoading,
+    tagsFetched,
     onTagAdd: handleTagAdd,
     onTagRemove: handleTagRemove,
   };

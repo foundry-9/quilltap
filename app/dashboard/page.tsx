@@ -55,6 +55,7 @@ export default async function Dashboard() {
                     url: null,
                   }
                 : null,
+              tags: character.tags ?? [],
             };
           })
       )

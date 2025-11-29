@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
@@ -9,6 +9,7 @@ import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
 import { TagBadge } from '@/components/tags/tag-badge'
+import { useQuickHide } from '@/components/providers/quick-hide-provider'
 
 interface Persona {
   id: string
@@ -46,6 +47,12 @@ export default function PersonasPage() {
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [galleryPersona, setGalleryPersona] = useState<{ id: string; name: string } | null>(null)
   const { style } = useAvatarDisplay()
+  const { shouldHideByIds } = useQuickHide()
+
+  const visiblePersonas = useMemo(
+    () => personas.filter(persona => !shouldHideByIds(persona.tags.map(tagLink => tagLink.tag.id))),
+    [personas, shouldHideByIds]
+  )
 
   const getAvatarSrc = (persona: Persona): string | null => {
     if (persona.defaultImage) {
@@ -170,7 +177,7 @@ export default function PersonasPage() {
         </div>
       )}
 
-      {personas.length === 0 ? (
+      {visiblePersonas.length === 0 ? (
         <div className="text-center py-12">
           <svg
             className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-600"
@@ -200,7 +207,7 @@ export default function PersonasPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {personas.map((persona) => (
+          {visiblePersonas.map((persona) => (
             <div
               key={persona.id}
               className="border border-gray-200 dark:border-slate-700 rounded-lg p-6 hover:shadow-lg transition-shadow bg-white dark:bg-slate-800 flex flex-col"

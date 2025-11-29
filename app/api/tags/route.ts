@@ -58,6 +58,7 @@ export async function GET(req: NextRequest) {
       return {
         id: tag.id,
         name: tag.name,
+        quickHide: tag.quickHide,
         createdAt: tag.createdAt,
         updatedAt: tag.updatedAt,
         _count: {
@@ -111,6 +112,7 @@ export async function POST(req: NextRequest) {
       userId: user.id,
       name: validatedData.name,
       nameLower,
+      quickHide: false,
     })
 
     return NextResponse.json({ tag }, { status: 201 })

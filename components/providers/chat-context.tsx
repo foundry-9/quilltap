@@ -8,6 +8,7 @@ interface ChatContextType {
   chatTitle: string | null;
   tags: Tag[];
   tagsLoading: boolean;
+  tagsFetched: boolean;
   onTagAdd: (tagName: string) => Promise<void>;
   onTagRemove: (tagId: string) => Promise<void>;
 }
@@ -32,6 +33,7 @@ export function useChatContext() {
       chatTitle: null,
       tags: [],
       tagsLoading: false,
+      tagsFetched: true,
       onTagAdd: async () => {},
       onTagRemove: async () => {},
     };

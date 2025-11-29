@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useTagStyles } from '@/components/providers/tag-style-provider'
 import { DEFAULT_TAG_STYLE, mergeWithDefaultTagStyle } from '@/lib/tags/styles'
 import type { TagVisualStyle } from '@/lib/json-store/schemas/types'
 import { TagBadge } from '@/components/tags/tag-badge'
+import { useQuickHide } from '@/components/providers/quick-hide-provider'
 
 type AvatarDisplayMode = 'ALWAYS' | 'GROUP_ONLY' | 'NEVER'
 type AvatarDisplayStyle = 'CIRCULAR' | 'RECTANGULAR'
@@ -52,6 +53,7 @@ interface EmbeddingProfile {
 interface TagOption {
   id: string
   name: string
+  quickHide?: boolean
 }
 
 const AVATAR_MODES: { value: AvatarDisplayMode; label: string; description: string }[] = [
@@ -96,10 +98,13 @@ export default function ChatSettingsTab() {
   const [tagSaving, setTagSaving] = useState(false)
   const [tagOptions, setTagOptions] = useState<TagOption[]>([])
   const [selectedTagId, setSelectedTagId] = useState('')
+  const [quickHideSavingId, setQuickHideSavingId] = useState<string | null>(null)
   const [connectionProfiles, setConnectionProfiles] = useState<ConnectionProfile[]>([])
   const [embeddingProfiles, setEmbeddingProfiles] = useState<EmbeddingProfile[]>([])
   const [loadingProfiles, setLoadingProfiles] = useState(false)
   const { updateStyles: syncTagStyleContext } = useTagStyles()
+  const { refresh: refreshQuickHideTags } = useQuickHide()
+  const tagFetchIdRef = useRef(0)
 
   const tagStyles = useMemo(() => settings?.tagStyles ?? {}, [settings?.tagStyles])
 
@@ -124,13 +129,20 @@ export default function ChatSettingsTab() {
   }, [syncTagStyleContext])
 
   const fetchTags = useCallback(async () => {
+    const requestId = ++tagFetchIdRef.current
     try {
-      const res = await fetch('/api/tags')
+      const res = await fetch('/api/tags', { cache: 'no-store' })
       if (!res.ok) {
         throw new Error('Failed to load tags')
       }
       const data = await res.json()
-      setTagOptions((data.tags || []).map((tag: any) => ({ id: tag.id, name: tag.name })))
+      if (tagFetchIdRef.current === requestId) {
+        setTagOptions((data.tags || []).map((tag: any) => ({
+          id: tag.id,
+          name: tag.name,
+          quickHide: Boolean(tag.quickHide),
+        })))
+      }
     } catch (err) {
       console.error('Error loading tags', err)
     }
@@ -326,10 +338,50 @@ export default function ChatSettingsTab() {
     setSelectedTagId('')
   }, [applyLocalTagStyles, persistTagStyles, selectedTagId, settings, tagStyles])
 
+  const handleQuickHideToggle = useCallback(
+    async (tagId: string, nextValue: boolean) => {
+      setQuickHideSavingId(tagId)
+      setError(null)
+      try {
+        const res = await fetch(`/api/tags/${tagId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ quickHide: nextValue }),
+        })
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update quick-hide')
+        }
+
+        const { tag } = await res.json()
+        setTagOptions(prev =>
+          prev.map(option =>
+            option.id === tagId ? { ...option, quickHide: tag.quickHide } : option
+          )
+        )
+        await refreshQuickHideTags()
+        await fetchTags()
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to update quick-hide')
+      } finally {
+        setQuickHideSavingId(current => (current === tagId ? null : current))
+      }
+    },
+    [fetchTags, refreshQuickHideTags]
+  )
+
   const tagLabelLookup = useMemo(() => {
     const entries = new Map<string, string>()
     for (const tag of tagOptions) {
       entries.set(tag.id, tag.name)
+    }
+    return entries
+  }, [tagOptions])
+
+  const tagMetadataLookup = useMemo(() => {
+    const entries = new Map<string, TagOption>()
+    for (const tag of tagOptions) {
+      entries.set(tag.id, tag)
     }
     return entries
   }, [tagOptions])
@@ -712,6 +764,8 @@ export default function ChatSettingsTab() {
               {Object.entries(tagStyles).map(([tagId, style]) => {
                 const label = tagLabelLookup.get(tagId) || 'Unknown tag'
                 const mergedStyle = mergeWithDefaultTagStyle(style)
+                const tagMeta = tagMetadataLookup.get(tagId)
+                const quickHideEnabled = Boolean(tagMeta?.quickHide)
 
                 return (
                   <div key={tagId} className="border border-gray-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800 shadow-sm flex flex-col">
@@ -781,6 +835,22 @@ export default function ChatSettingsTab() {
                           />
                           <span className="line-through">Strikethrough</span>
                         </label>
+
+                        <div className="pt-2 mt-2 border-t border-dashed border-gray-200 dark:border-slate-700">
+                          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                            <input
+                              type="checkbox"
+                              checked={quickHideEnabled}
+                              onChange={(e) => handleQuickHideToggle(tagId, e.target.checked)}
+                              disabled={quickHideSavingId === tagId}
+                              className="rounded"
+                            />
+                            <span>Enable quick-hide button</span>
+                          </label>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Adds this tag to the navbar quick-hide controls.
+                          </p>
+                        </div>
                       </div>
 
                       <label className="block text-sm text-gray-700 dark:text-gray-300">

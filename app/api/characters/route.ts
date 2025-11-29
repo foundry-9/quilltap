@@ -70,6 +70,7 @@ export async function GET(req: NextRequest) {
             : null,
           isFavorite: character.isFavorite,
           createdAt: character.createdAt,
+          tags: character.tags || [],
           updatedAt: character.updatedAt,
           _count: {
             chats: chats.length,

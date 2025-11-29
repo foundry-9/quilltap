@@ -564,6 +564,7 @@ export const TagSchema = z.object({
   userId: UUIDSchema,
   name: z.string(),
   nameLower: z.string(),
+  quickHide: z.boolean().default(false),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

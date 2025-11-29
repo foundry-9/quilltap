@@ -16,6 +16,8 @@ import { EntityTabs, Tab } from '@/components/tabs'
 import { EmbeddedPhotoGallery } from '@/components/images/EmbeddedPhotoGallery'
 import { PhysicalDescriptionList } from '@/components/physical-descriptions'
 import { MemoryList } from '@/components/memory/memory-list'
+import { useQuickHide } from '@/components/providers/quick-hide-provider'
+import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 
 interface Tag {
   id: string
@@ -152,6 +154,10 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const [savingImageProfile, setSavingImageProfile] = useState(false)
   const [defaultImageProfileId, setDefaultImageProfileId] = useState<string>('')
   const { style } = useAvatarDisplay()
+  const { shouldHideByIds, hiddenTagIds } = useQuickHide()
+  const quickHideActive = hiddenTagIds.size > 0
+  const characterTagIds = character?.tags || []
+  const { shouldHideByIds, hiddenTagIds } = useQuickHide()
 
   const fetchCharacter = useCallback(async () => {
     try {
@@ -659,6 +665,14 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
             ← Back to Characters
           </Link>
         </div>
+      </div>
+    )
+  }
+
+  if (quickHideActive && character && shouldHideByIds(characterTagIds)) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-slate-900">
+        <HiddenPlaceholder />
       </div>
     )
   }

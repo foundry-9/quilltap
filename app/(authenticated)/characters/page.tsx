@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
+import { useQuickHide } from '@/components/providers/quick-hide-provider'
 
 interface Character {
   id: string
@@ -21,6 +22,7 @@ interface Character {
   }
   isFavorite: boolean
   createdAt: string
+  tags?: string[]
   _count: {
     chats: number
   }
@@ -32,6 +34,12 @@ export default function CharactersPage() {
   const [error, setError] = useState<string | null>(null)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const { style } = useAvatarDisplay()
+  const { shouldHideByIds } = useQuickHide()
+
+  const visibleCharacters = useMemo(
+    () => characters.filter(character => !shouldHideByIds(character.tags || [])),
+    [characters, shouldHideByIds]
+  )
 
   useEffect(() => {
     fetchCharacters()
@@ -139,7 +147,7 @@ export default function CharactersPage() {
         </div>
       </div>
 
-      {characters.length === 0 ? (
+      {visibleCharacters.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-lg text-gray-600 dark:text-gray-300 mb-4">No characters yet</p>
           <Link
@@ -151,7 +159,7 @@ export default function CharactersPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {characters.map((character) => (
+          {visibleCharacters.map((character) => (
             <div
               key={character.id}
               className="border border-gray-200 dark:border-slate-700 rounded-lg p-6 hover:shadow-lg transition-shadow bg-white dark:bg-slate-800"
