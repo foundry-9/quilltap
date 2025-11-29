@@ -8,7 +8,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getRepositories } from '@/lib/json-store/repositories';
-import { uploadImage, importImageFromUrl } from '@/lib/images';
+import { uploadImage, importImageFromUrl } from '@/lib/images-v2';
+import { findFilesByCategory, findFilesByUserId, addFileTag, getFileUrl } from '@/lib/file-manager';
 import { z } from 'zod';
 
 const importFromUrlSchema = z.object({
@@ -36,15 +37,13 @@ export async function GET(request: NextRequest) {
 
     const repos = getRepositories();
     const searchParams = request.nextUrl.searchParams;
-    const tagType = searchParams.get('tagType') as 'CHARACTER' | 'PERSONA' | 'CHAT' | 'THEME' | null;
     const tagId = searchParams.get('tagId');
 
-    // Get all images for user
-    let images = await repos.images.findByUserId(session.user.id);
+    // Get all image files
+    let allImages = await findFilesByCategory('IMAGE');
+    let images = allImages.filter(img => img.userId === session.user.id);
 
     // Filter by tag if provided
-    // Note: In the JSON store, tags are stored as an array of tag IDs on the image
-    // The tagType/tagId filtering was Prisma-specific; we filter by tagId here
     if (tagId) {
       images = images.filter(img => img.tags.includes(tagId));
     }
@@ -92,21 +91,25 @@ export async function GET(request: NextRequest) {
         } else if (personaIds.has(tagId)) {
           tagType = 'PERSONA';
         }
-        // Note: CHAT tags would require loading chats, but we don't currently use those
         return { tagId, tagType };
       });
 
+      // Map source to old format
+      const source = img.source === 'UPLOADED' ? 'upload' :
+                     img.source === 'IMPORTED' ? 'import' :
+                     img.source === 'GENERATED' ? 'generated' : 'upload';
+
       return {
         id: img.id,
-        userId: img.userId,
-        filename: img.filename,
-        filepath: img.relativePath,
-        url: null,
+        userId: session.user.id,
+        filename: img.originalFilename,
+        filepath: getFileUrl(img.id, img.originalFilename),
+        url: img.source === 'IMPORTED' ? img.description : null,
         mimeType: img.mimeType,
         size: img.size,
         width: img.width,
         height: img.height,
-        source: img.source,
+        source,
         generationPrompt: img.generationPrompt,
         generationModel: img.generationModel,
         createdAt: img.createdAt,
@@ -141,7 +144,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const repos = getRepositories();
     const contentType = request.headers.get('content-type') || '';
 
     // Handle URL import (JSON payload)
@@ -149,38 +151,33 @@ export async function POST(request: NextRequest) {
       const body = await request.json();
       const { url, tags } = importFromUrlSchema.parse(body);
 
-      // Import image from URL
-      const imageData = await importImageFromUrl(url, session.user.id);
+      // Build linkedTo array from tags
+      const linkedTo = tags ? tags.map(t => t.tagId) : [];
 
-      // Create image record in JSON store
-      const image = await repos.images.create({
+      // Import image from URL (creates file entry automatically)
+      const imageData = await importImageFromUrl(url, session.user.id, linkedTo);
+
+      // Add tags to the file
+      if (tags) {
+        for (const tag of tags) {
+          await addFileTag(imageData.id, tag.tagId);
+        }
+      }
+
+      // Transform response to match expected format
+      const responseData = {
+        id: imageData.id,
         userId: session.user.id,
-        sha256: crypto.randomUUID().replaceAll('-', '') + crypto.randomUUID().replaceAll('-', ''),
-        type: 'image',
         filename: imageData.filename,
-        relativePath: imageData.filepath,
+        filepath: imageData.filepath,
+        url: url,
         mimeType: imageData.mimeType,
         size: imageData.size,
         width: imageData.width,
         height: imageData.height,
         source: 'import',
-        tags: tags ? tags.map(t => t.tagId) : [],
-      });
-
-      // Transform response to match expected format
-      const responseData = {
-        id: image.id,
-        userId: image.userId,
-        filename: image.filename,
-        filepath: image.relativePath,
-        url: url,
-        mimeType: image.mimeType,
-        size: image.size,
-        width: image.width,
-        height: image.height,
-        source: image.source,
-        createdAt: image.createdAt,
-        updatedAt: image.updatedAt,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
         tags: tags || [],
       };
 
@@ -207,38 +204,33 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Upload image
-      const imageData = await uploadImage(file, session.user.id);
+      // Build linkedTo array from tags
+      const linkedTo = tags ? tags.map(t => t.tagId) : [];
 
-      // Create image record in JSON store
-      const image = await repos.images.create({
+      // Upload image (creates file entry automatically)
+      const imageData = await uploadImage(file, session.user.id, linkedTo);
+
+      // Add tags to the file
+      if (tags) {
+        for (const tag of tags) {
+          await addFileTag(imageData.id, tag.tagId);
+        }
+      }
+
+      // Transform response to match expected format
+      const responseData = {
+        id: imageData.id,
         userId: session.user.id,
-        sha256: crypto.randomUUID().replaceAll('-', '') + crypto.randomUUID().replaceAll('-', ''),
-        type: 'image',
         filename: imageData.filename,
-        relativePath: imageData.filepath,
+        filepath: imageData.filepath,
+        url: null,
         mimeType: imageData.mimeType,
         size: imageData.size,
         width: imageData.width,
         height: imageData.height,
         source: 'upload',
-        tags: tags ? tags.map(t => t.tagId) : [],
-      });
-
-      // Transform response to match expected format
-      const responseData = {
-        id: image.id,
-        userId: image.userId,
-        filename: image.filename,
-        filepath: image.relativePath,
-        url: null,
-        mimeType: image.mimeType,
-        size: image.size,
-        width: image.width,
-        height: image.height,
-        source: image.source,
-        createdAt: image.createdAt,
-        updatedAt: image.updatedAt,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
         tags: tags || [],
       };
 

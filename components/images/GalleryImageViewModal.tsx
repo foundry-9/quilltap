@@ -64,7 +64,8 @@ export default function GalleryImageViewModal({
 
   const handleDownload = async () => {
     try {
-      const src = image.url || `/${image.filepath}`
+      const filepath = image.url || image.filepath;
+      const src = filepath.startsWith('/') ? filepath : `/${filepath}`;
       const response = await fetch(src)
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)

@@ -3,9 +3,7 @@
  * Handles execution of image generation tool calls from LLMs
  */
 
-import { writeFile, mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createFile, getFileUrl } from '@/lib/file-manager';
 import { getRepositories } from '@/lib/json-store/repositories';
 import { decryptApiKey } from '@/lib/encryption';
 import { getImageGenProvider } from '@/lib/image-gen/factory';
@@ -63,53 +61,41 @@ async function saveGeneratedImage(
     // Decode base64 to buffer
     const buffer = Buffer.from(imageData, 'base64');
 
-    // Generate filename
+    // Generate original filename
     const ext = mimeType.split('/')[1] || 'png';
-    const filename = `${userId}_${Date.now()}_${randomUUID()}.${ext}`;
+    const originalFilename = `generated_${Date.now()}.${ext}`;
 
-    // Create user-specific directory for generated images
-    const userDir = join(process.cwd(), 'public', 'uploads', 'generated', userId);
-    await mkdir(userDir, { recursive: true });
+    // Build linkedTo array
+    const linkedTo = chatId ? [chatId] : [];
 
-    // Save file
-    const filepath = join('uploads', 'generated', userId, filename);
-    const fullPath = join(process.cwd(), 'public', filepath);
-
-    await writeFile(fullPath, buffer);
-
-    // Create database record using JsonStore
-    const repos = getRepositories();
-
-    // Generate SHA256 hash for the image
-    const crypto = await import('node:crypto');
-    const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
-
-    const image = await repos.images.create({
-      sha256,
-      type: 'image',
-      userId,
-      filename,
-      relativePath: filepath,
+    // Create file entry using file manager
+    const fileEntry = await createFile({
+      buffer,
+      originalFilename,
       mimeType,
-      size: buffer.length,
-      source: 'generated',
+      source: 'GENERATED',
+      category: 'IMAGE',
+      userId,
+      linkedTo,
+      tags: chatId ? [chatId] : [],
       generationPrompt: metadata.prompt,
       generationModel: metadata.model,
-      chatId: chatId || null,
-      tags: chatId ? [chatId] : [],
+      generationRevisedPrompt: metadata.revisedPrompt,
     });
 
+    const filepath = getFileUrl(fileEntry.id, fileEntry.originalFilename);
+
     return {
-      id: image.id,
-      url: `/api/images/${image.id}`,
-      filename,
+      id: fileEntry.id,
+      url: `/api/images/${fileEntry.id}`,
+      filename: fileEntry.originalFilename,
       revisedPrompt: metadata.revisedPrompt,
       filepath,
-      mimeType,
-      size: buffer.length,
-      width: image.width ?? undefined,
-      height: image.height ?? undefined,
-      sha256,
+      mimeType: fileEntry.mimeType,
+      size: fileEntry.size,
+      width: fileEntry.width ?? undefined,
+      height: fileEntry.height ?? undefined,
+      sha256: fileEntry.sha256,
     };
   } catch (error) {
     throw new ImageGenerationError(

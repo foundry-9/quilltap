@@ -304,6 +304,7 @@ async function exportPrismaToJson(options: { dryRun: boolean; verbose: boolean }
             tags: tagIds,
             messageCount: 0,
             lastMessageAt: null,
+            lastRenameCheckInterchange: 0,
           });
 
           // Export messages

@@ -14,6 +14,7 @@ export {
   updateContextSummary,
   describeAttachment,
   batchExtractMemories,
+  considerTitleUpdate,
   type MemoryCandidate,
   type ChatMessage,
   type Attachment,

@@ -69,24 +69,30 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     // Check if this file has already been copied to the gallery with this tag
-    // Look for an image type entry with same filepath/sha256 and the tag
+    // Use SHA256 hash for more reliable comparison (files might be stored at different paths)
     const allImages = await repos.images.findByUserId(session.user.id)
     const existingImage = allImages.find(
       img => img.type === 'image' &&
-             img.relativePath === chatFile.relativePath &&
+             img.sha256 === chatFile.sha256 &&
              img.tags.includes(tagId)
     )
 
     if (existingImage) {
-      return NextResponse.json(
-        { error: 'Image already tagged', details: 'This image is already in the gallery with this tag' },
-        { status: 400 }
-      )
+      // Image is already tagged - this is idempotent, so return success
+      // This handles the case where the user clicks tag multiple times or the request is retried
+      return NextResponse.json({
+        data: {
+          imageId: existingImage.id,
+          tagType,
+          tagId,
+          alreadyTagged: true,
+        },
+      })
     }
 
-    // Check if image already exists in gallery (by filepath)
+    // Check if image already exists in gallery (by SHA256 hash - more reliable than relativePath)
     let image = allImages.find(
-      img => img.type === 'image' && img.relativePath === chatFile.relativePath
+      img => img.type === 'image' && img.sha256 === chatFile.sha256
     )
 
     // If image doesn't exist in gallery, create it
@@ -183,7 +189,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     let canDeleteFromDisk = true
     if (file.type === 'chat_file') {
       const galleryImage = allImages.find(
-        img => img.type === 'image' && img.relativePath === file.relativePath
+        img => img.type === 'image' && img.sha256 === file.sha256
       )
       canDeleteFromDisk = !galleryImage
     }

@@ -713,7 +713,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const getAvatarSrc = (avatar: ReturnType<typeof getMessageAvatar>) => {
     if (!avatar) return null
     if (avatar.defaultImage) {
-      return avatar.defaultImage.url || `/${avatar.defaultImage.filepath}`
+      const filepath = avatar.defaultImage.url || avatar.defaultImage.filepath;
+      return filepath.startsWith('/') ? filepath : `/${filepath}`;
     }
     return avatar.avatarUrl || null
   }
@@ -1338,7 +1339,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             ...prev,
             ...images.map((img) => ({
               ...img,
-              url: `/${img.filepath}`,
+              url: img.filepath.startsWith('/') ? img.filepath : `/${img.filepath}`,
             })),
           ])
           fetchChatPhotoCount()

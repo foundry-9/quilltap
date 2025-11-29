@@ -8,10 +8,64 @@
 
 import { getRepositories } from '@/lib/json-store/repositories'
 import { getCheapLLMProvider } from '@/lib/llm/cheap-llm'
-import { updateContextSummary, summarizeChat, ChatMessage, generateTitleFromSummary } from '@/lib/memory/cheap-llm-tasks'
+import { updateContextSummary, summarizeChat, ChatMessage, generateTitleFromSummary, considerTitleUpdate } from '@/lib/memory/cheap-llm-tasks'
 import { countMessagesTokens } from '@/lib/tokens/token-counter'
 import { getModelContextLimit, shouldSummarizeConversation } from '@/lib/llm/model-context-data'
 import { Provider, ConnectionProfile, CheapLLMSettings } from '@/lib/json-store/schemas/types'
+
+/**
+ * Calculates the number of interchanges in a chat
+ * An interchange is one user message + one assistant response
+ */
+export function calculateInterchangeCount(messages: Array<{ role?: string; type?: string }>): number {
+  let userMessages = 0
+  let assistantMessages = 0
+  
+  for (const msg of messages) {
+    // Skip non-message types (like context-summary, tool-result, etc.)
+    if (msg.type && msg.type !== 'message') {
+      continue
+    }
+    
+    const role = msg.role?.toUpperCase()
+    if (role === 'USER') {
+      userMessages++
+    } else if (role === 'ASSISTANT') {
+      assistantMessages++
+    }
+  }
+  
+  // An interchange is complete when both user and assistant have spoken
+  // Return the minimum of the two (limiting factor)
+  return Math.min(userMessages, assistantMessages)
+}
+
+/**
+ * Determines if we should check for title update at this interchange count
+ * Checks at: 2, 3, 5, 7, 10, then every 10 after
+ */
+export function shouldCheckTitleAtInterchange(
+  currentInterchange: number,
+  lastCheckedInterchange: number
+): boolean {
+  // Never check at 0 or 1
+  if (currentInterchange < 2) {
+    return false
+  }
+  
+  // If we haven't checked yet, and we're at one of the early checkpoints
+  const earlyCheckpoints = [2, 3, 5, 7, 10]
+  if (earlyCheckpoints.includes(currentInterchange) && currentInterchange > lastCheckedInterchange) {
+    return true
+  }
+  
+  // After 10, check every 10 interchanges
+  if (currentInterchange >= 10 && currentInterchange % 10 === 0 && currentInterchange > lastCheckedInterchange) {
+    return true
+  }
+  
+  return false
+}
 
 /**
  * Options for generating a context summary
@@ -304,7 +358,106 @@ export function generateContextSummaryAsync(options: GenerateSummaryOptions): vo
 }
 
 /**
+ * Considers updating the chat title based on recent messages
+ * Runs asynchronously in the background
+ */
+async function considerTitleUpdateAsync(
+  chatId: string,
+  userId: string,
+  connectionProfile: ConnectionProfile,
+  cheapLLMSettings: CheapLLMSettings,
+  availableProfiles: ConnectionProfile[],
+  currentInterchange: number
+): Promise<void> {
+  try {
+    const repos = getRepositories()
+    const chat = await repos.chats.findById(chatId)
+
+    if (!chat) {
+      console.warn(`[Title Update] Chat ${chatId} not found`)
+      return
+    }
+
+    // Get cheap LLM provider
+    const cheapLLM = getCheapLLMProvider(
+      connectionProfile,
+      {
+        strategy: cheapLLMSettings.strategy,
+        userDefinedProfileId: cheapLLMSettings.userDefinedProfileId ?? undefined,
+        defaultCheapProfileId: cheapLLMSettings.defaultCheapProfileId ?? undefined,
+        fallbackToLocal: cheapLLMSettings.fallbackToLocal,
+      },
+      availableProfiles
+    )
+    if (!cheapLLM) {
+      console.warn(`[Title Update] No cheap LLM available for chat ${chatId}`)
+      return
+    }
+    
+    // Get messages for context
+    const allMessages = await repos.chats.getMessages(chatId)
+    const conversationMessages: ChatMessage[] = allMessages
+      .filter(msg => msg.type === 'message')
+      .filter(msg => {
+        const role = (msg as { role: string }).role
+        return role === 'USER' || role === 'ASSISTANT'
+      })
+      .map(msg => ({
+        role: (msg as { role: string }).role.toLowerCase() as 'user' | 'assistant',
+        content: (msg as { content: string }).content,
+      }))
+    
+    if (conversationMessages.length === 0) {
+      return
+    }
+    
+    // Get recent messages since last check
+    // We'll take the last 10 messages as "recent" context
+    const recentMessages = conversationMessages.slice(-10)
+    
+    // Use existing summary if available, otherwise use current title
+    const context = chat.contextSummary || chat.title
+    
+    // Ask the cheap LLM if title needs updating
+    const considerationResult = await considerTitleUpdate(
+      chat.title,
+      recentMessages,
+      context,
+      cheapLLM,
+      userId
+    )
+    
+    if (considerationResult.success && considerationResult.result) {
+      const { needsNewTitle, reason, suggestedTitle } = considerationResult.result
+      
+      console.log(`[Title Update] Chat ${chatId} - needsNewTitle: ${needsNewTitle}, reason: ${reason}`)
+      
+      if (needsNewTitle && suggestedTitle) {
+        // Update the chat title
+        await repos.chats.update(chatId, {
+          title: suggestedTitle,
+          lastRenameCheckInterchange: currentInterchange,
+          updatedAt: new Date().toISOString(),
+        })
+        console.log(`[Title Update] Updated title for chat ${chatId} to: "${suggestedTitle}"`)
+      } else {
+        // Still update the last check interchange even if no title change
+        await repos.chats.update(chatId, {
+          lastRenameCheckInterchange: currentInterchange,
+          updatedAt: new Date().toISOString(),
+        })
+      }
+    } else {
+      console.warn(`[Title Update] Failed for chat ${chatId}: ${considerationResult.error}`)
+    }
+  } catch (error) {
+    console.error(`[Title Update] Error for chat ${chatId}:`, error)
+  }
+}
+
+/**
  * Check and generate summary if needed after a message
+ * Also checks if title should be updated based on interchange count
  * Call this after message exchanges to maintain context
  */
 export async function checkAndGenerateSummaryIfNeeded(
@@ -316,6 +469,36 @@ export async function checkAndGenerateSummaryIfNeeded(
   cheapLLMSettings: CheapLLMSettings,
   availableProfiles: ConnectionProfile[]
 ): Promise<void> {
+  const repos = getRepositories()
+  const chat = await repos.chats.findById(chatId)
+  
+  if (!chat) {
+    return
+  }
+  
+  // Get all messages to calculate interchange count
+  const allMessages = await repos.chats.getMessages(chatId)
+  const currentInterchange = calculateInterchangeCount(allMessages)
+  
+  // Check if we should consider updating the title
+  const lastCheckedInterchange = chat.lastRenameCheckInterchange || 0
+  if (shouldCheckTitleAtInterchange(currentInterchange, lastCheckedInterchange)) {
+    console.log(`[Title Update] Checking title at interchange ${currentInterchange} for chat ${chatId}`)
+
+    // Run title consideration in background (non-blocking)
+    considerTitleUpdateAsync(
+      chatId,
+      userId,
+      connectionProfile,
+      cheapLLMSettings,
+      availableProfiles,
+      currentInterchange
+    ).catch(error => {
+      console.error(`[Title Update] Background error for chat ${chatId}:`, error)
+    })
+  }
+  
+  // Original summary check logic
   const needsCheck = await chatNeedsSummary(chatId, provider, modelName)
 
   if (needsCheck.needsSummary) {
@@ -331,3 +514,4 @@ export async function checkAndGenerateSummaryIfNeeded(
     })
   }
 }
+

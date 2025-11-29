@@ -6,7 +6,6 @@ import Image from 'next/image'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
-import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
 
 interface Character {
   id: string
@@ -32,7 +31,6 @@ export default function CharactersPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
-  const [galleryCharacter, setGalleryCharacter] = useState<{ id: string; name: string } | null>(null)
   const { style } = useAvatarDisplay()
 
   useEffect(() => {
@@ -211,23 +209,15 @@ export default function CharactersPage() {
                 </Link>
                 <Link
                   href={`/characters/${character.id}/view`}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 cursor-pointer flex items-center justify-center"
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 cursor-pointer flex items-center justify-center gap-2 flex-1"
                   title="View character details"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                   </svg>
+                  View
                 </Link>
-                <button
-                  onClick={() => setGalleryCharacter({ id: character.id, name: character.name })}
-                  className="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 cursor-pointer flex items-center justify-center"
-                  title="View character photos"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </button>
                 <a
                   href={`/api/characters/${character.id}/export?format=json`}
                   className="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 flex items-center justify-center"
@@ -292,16 +282,6 @@ export default function CharactersPage() {
         </div>
       )}
 
-      {/* Character Photo Gallery Modal */}
-      {galleryCharacter && (
-        <PhotoGalleryModal
-          mode="character"
-          isOpen={true}
-          onClose={() => setGalleryCharacter(null)}
-          characterId={galleryCharacter.id}
-          characterName={galleryCharacter.name}
-        />
-      )}
     </div>
   )
 }

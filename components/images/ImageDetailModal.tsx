@@ -304,7 +304,8 @@ export default function ImageDetailModal({
 
   const handleDownload = async () => {
     try {
-      const src = image.url || `/${image.filepath}`
+      const filepath = image.url || image.filepath;
+      const src = filepath.startsWith('/') ? filepath : `/${filepath}`;
       const response = await fetch(src)
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
@@ -322,7 +323,8 @@ export default function ImageDetailModal({
 
   if (!isOpen) return null
 
-  const imageSrc = image.url || `/${image.filepath}`
+  const filepath = image.url || image.filepath;
+  const imageSrc = filepath.startsWith('/') ? filepath : `/${filepath}`;
 
   return (
     <div

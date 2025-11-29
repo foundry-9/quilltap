@@ -138,6 +138,7 @@ export async function POST(req: NextRequest) {
       sillyTavernMetadata: importedData.metadata || null,
       tags: Array.from(tagIds),
       messageCount: importedData.messages.length,
+      lastRenameCheckInterchange: 0,
     })
 
     // Add messages to the chat

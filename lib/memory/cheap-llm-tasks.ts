@@ -546,6 +546,110 @@ export async function generateTitleFromSummary(
 }
 
 /**
+ * Prompt for considering whether a chat title should be updated
+ */
+const CHAT_TITLE_CONSIDERATION_PROMPT = `You are a chat title evaluator. You will be given:
+1. The current chat title
+2. A previous summary or title (if available)
+3. Recent messages from the chat
+
+Determine if the conversation has shifted topic significantly enough to warrant a new title.
+Consider:
+- Is the current title still accurate?
+- Has the main topic or focus changed?
+- Are they discussing something substantially different now?
+
+Respond with a JSON object:
+{
+  "needsNewTitle": true/false,
+  "reason": "brief explanation",
+  "suggestedTitle": "new title if needsNewTitle is true, otherwise null"
+}
+
+Keep suggested titles under 60 characters, descriptive, and engaging.`
+
+/**
+ * Evaluates whether a chat needs a new title based on recent messages
+ * This is a lighter-weight check than full summarization
+ *
+ * @param currentTitle - The current chat title
+ * @param recentMessages - Recent messages (just the new ones since last check)
+ * @param existingSummaryOrTitle - Previous summary or title for context
+ * @param selection - The cheap LLM provider selection
+ * @param userId - The user ID for API key retrieval
+ * @returns Whether title needs updating and suggested new title
+ */
+export async function considerTitleUpdate(
+  currentTitle: string,
+  recentMessages: ChatMessage[],
+  existingSummaryOrTitle: string | null,
+  selection: CheapLLMSelection,
+  userId: string
+): Promise<CheapLLMTaskResult<{ needsNewTitle: boolean; reason: string; suggestedTitle: string | null }>> {
+  // Format recent messages
+  const conversationText = recentMessages
+    .map(m => `${m.role.toUpperCase()}: ${m.content.substring(0, 500)}`) // Truncate long messages
+    .join('\n\n')
+
+  const contextInfo = existingSummaryOrTitle 
+    ? `Previous context: ${existingSummaryOrTitle}`
+    : 'No previous context'
+
+  const llmMessages: LLMMessage[] = [
+    {
+      role: 'system',
+      content: CHAT_TITLE_CONSIDERATION_PROMPT,
+    },
+    {
+      role: 'user',
+      content: `Current Title: "${currentTitle}"\n\n${contextInfo}\n\nRecent Messages:\n${conversationText}`,
+    },
+  ]
+
+  return executeCheapLLMTask(
+    selection,
+    llmMessages,
+    userId,
+    (content: string): { needsNewTitle: boolean; reason: string; suggestedTitle: string | null } => {
+      try {
+        // Clean the response - remove markdown code blocks if present
+        let cleanContent = content.trim()
+        if (cleanContent.startsWith('```json')) {
+          cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
+        } else if (cleanContent.startsWith('```')) {
+          cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
+        }
+
+        const parsed = JSON.parse(cleanContent)
+        
+        let suggestedTitle = parsed.suggestedTitle
+        if (suggestedTitle && typeof suggestedTitle === 'string') {
+          // Clean up the title
+          suggestedTitle = suggestedTitle.trim().replace(/^["']/, '').replace(/["']$/, '')
+          // Truncate if too long
+          if (suggestedTitle.length > 60) {
+            suggestedTitle = suggestedTitle.substring(0, 57) + '...'
+          }
+        }
+
+        return {
+          needsNewTitle: parsed.needsNewTitle === true,
+          reason: parsed.reason || 'No reason provided',
+          suggestedTitle: suggestedTitle || null,
+        }
+      } catch {
+        // If JSON parsing fails, assume no update needed
+        return {
+          needsNewTitle: false,
+          reason: 'Failed to parse response',
+          suggestedTitle: null,
+        }
+      }
+    }
+  )
+}
+
+/**
  * Context summary update prompt template
  */
 const CONTEXT_SUMMARY_PROMPT = `You are updating a running summary of a conversation.

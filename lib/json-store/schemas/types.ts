@@ -431,6 +431,7 @@ export const ChatMetadataSchema = z.object({
   tags: z.array(UUIDSchema).default([]),
   messageCount: z.number().default(0),
   lastMessageAt: TimestampSchema.nullable().optional(),
+  lastRenameCheckInterchange: z.number().default(0),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
@@ -451,6 +452,7 @@ export const ChatMetadataBaseSchema = z.object({
   tags: z.array(UUIDSchema).default([]),
   messageCount: z.number().default(0),
   lastMessageAt: TimestampSchema.nullable().optional(),
+  lastRenameCheckInterchange: z.number().default(0),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });
@@ -471,6 +473,7 @@ export const ChatMetadataLegacySchema = z.object({
   tags: z.array(UUIDSchema).default([]),
   messageCount: z.number().default(0),
   lastMessageAt: TimestampSchema.nullable().optional(),
+  lastRenameCheckInterchange: z.number().default(0),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });
@@ -481,6 +484,7 @@ export type ChatMetadataLegacy = z.infer<typeof ChatMetadataLegacySchema>;
 // IMAGES & BINARIES
 // ============================================================================
 
+// Legacy BinaryIndexEntry schema (for migration)
 export const BinaryIndexEntrySchema = z.object({
   id: UUIDSchema,
   sha256: z.string().length(64),
@@ -504,6 +508,52 @@ export const BinaryIndexEntrySchema = z.object({
 });
 
 export type BinaryIndexEntry = z.infer<typeof BinaryIndexEntrySchema>;
+
+// ============================================================================
+// CENTRALIZED FILE MANAGEMENT
+// ============================================================================
+
+export const FileSourceEnum = z.enum(['UPLOADED', 'GENERATED', 'IMPORTED', 'SYSTEM']);
+export type FileSource = z.infer<typeof FileSourceEnum>;
+
+export const FileCategoryEnum = z.enum(['IMAGE', 'DOCUMENT', 'AVATAR', 'ATTACHMENT', 'EXPORT']);
+export type FileCategory = z.infer<typeof FileCategoryEnum>;
+
+export const FileEntrySchema = z.object({
+  // Identity & Storage
+  id: UUIDSchema,                          // File UUID (also the base filename in storage)
+  userId: UUIDSchema,                      // Owner of the file
+  sha256: z.string().length(64),           // Content hash for deduplication
+  originalFilename: z.string(),            // Original filename from upload/generation
+  mimeType: z.string(),                    // Specific MIME type
+  size: z.number(),                        // File size in bytes
+
+  // Image metadata (if applicable)
+  width: z.number().nullable().optional(),
+  height: z.number().nullable().optional(),
+
+  // Linking - array of IDs this file is associated with
+  linkedTo: z.array(UUIDSchema).default([]),  // messageId, chatId, characterId, personaId, etc.
+
+  // Classification
+  source: FileSourceEnum,                  // Where the file came from
+  category: FileCategoryEnum,              // What type of file it is
+
+  // Generation metadata (for AI-generated files)
+  generationPrompt: z.string().nullable().optional(),
+  generationModel: z.string().nullable().optional(),
+  generationRevisedPrompt: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),  // AI description or user-provided description
+
+  // Tags
+  tags: z.array(UUIDSchema).default([]),
+
+  // Timestamps
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type FileEntry = z.infer<typeof FileEntrySchema>;
 
 // ============================================================================
 // TAGS

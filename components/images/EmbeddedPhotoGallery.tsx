@@ -98,7 +98,9 @@ export function EmbeddedPhotoGallery({
   }
 
   const getImageUrl = (image: GalleryImage) => {
-    return image.url || `/${image.filepath}`
+    if (image.url) return image.url;
+    // filepath already includes leading slash from API
+    return image.filepath.startsWith('/') ? image.filepath : `/${image.filepath}`;
   }
 
   const handlePrevious = () => {

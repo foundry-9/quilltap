@@ -467,6 +467,7 @@ export async function POST(req: NextRequest) {
       tags: Array.from(buildResult.tags),
       messageCount: 0,
       lastMessageAt: null,
+      lastRenameCheckInterchange: 0,
     })
 
     await createInitialMessages(

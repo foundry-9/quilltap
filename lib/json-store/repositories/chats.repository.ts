@@ -104,6 +104,7 @@ export class ChatsRepository extends BaseRepository<ChatMetadata> {
           tags: legacy.tags,
           messageCount: legacy.messageCount,
           lastMessageAt: legacy.lastMessageAt,
+          lastRenameCheckInterchange: 0,
           createdAt: legacy.createdAt,
           updatedAt: legacy.updatedAt,
         };

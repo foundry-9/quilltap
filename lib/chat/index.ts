@@ -26,6 +26,8 @@ export {
   chatNeedsSummary,
   clearContextSummary,
   checkAndGenerateSummaryIfNeeded,
+  calculateInterchangeCount,
+  shouldCheckTitleAtInterchange,
   type GenerateSummaryOptions,
   type SummaryGenerationResult,
 } from './context-summary'
