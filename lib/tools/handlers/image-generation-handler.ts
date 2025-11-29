@@ -15,6 +15,9 @@ import {
   GeneratedImageResult,
   validateImageGenerationInput,
 } from '@/lib/tools/image-generation-tool';
+import { preparePromptExpansion } from '@/lib/image-gen/prompt-expansion';
+import { craftImagePrompt } from '@/lib/memory/cheap-llm-tasks';
+import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm';
 
 /**
  * Execution context for image generation tool
@@ -23,6 +26,8 @@ export interface ImageToolExecutionContext {
   userId: string;
   profileId: string;
   chatId?: string;
+  /** ID of the participant calling the tool (for resolving {{me}}) */
+  callingParticipantId?: string;
 }
 
 /**
@@ -46,7 +51,7 @@ async function saveGeneratedImage(
   imageData: string, // Base64-encoded image data
   mimeType: string,
   userId: string,
-  _chatId: string | undefined, // Unused - images are attached to messages in the API route
+  chatId: string | undefined, // Now used to tag the image with the chat
   metadata: {
     prompt: string;
     revisedPrompt?: string;
@@ -90,8 +95,8 @@ async function saveGeneratedImage(
       source: 'generated',
       generationPrompt: metadata.prompt,
       generationModel: metadata.model,
-      chatId: null,
-      tags: [],
+      chatId: chatId || null,
+      tags: chatId ? [chatId] : [],
     });
 
     return {
@@ -237,6 +242,18 @@ async function generateImagesWithProvider(
     imageProfile.modelName
   );
 
+  console.log('[Image Generation] Sending to Provider:', {
+    provider: imageProfile.provider,
+    model: imageProfile.modelName,
+    prompt: mergedParams.prompt,
+    otherParams: {
+      n: mergedParams.n,
+      size: mergedParams.size,
+      quality: mergedParams.quality,
+      style: mergedParams.style,
+    },
+  })
+
   // Generate images
   let generationResponse;
   try {
@@ -273,6 +290,118 @@ async function generateImagesWithProvider(
       'Failed to save generated images',
       error instanceof Error ? error.message : String(error)
     );
+  }
+}
+
+/**
+ * Expand prompt with character/persona placeholders using cheap LLM
+ */
+async function expandPromptWithDescriptions(
+  originalPrompt: string,
+  userId: string,
+  provider: string,
+  chatId?: string,
+  callingParticipantId?: string
+): Promise<{ expandedPrompt: string; wasExpanded: boolean }> {
+  try {
+    // Map ImageProvider string to the enum type
+    const imageProvider = provider as 'OPENAI' | 'GROK' | 'GOOGLE_IMAGEN';
+
+    // Prepare expansion context
+    const expansionContext = await preparePromptExpansion(
+      originalPrompt,
+      userId,
+      imageProvider,
+      chatId,
+      callingParticipantId
+    );
+
+    // If no placeholders found, return original
+    if (!expansionContext.hasPlaceholders || !expansionContext.placeholders) {
+      return {
+        expandedPrompt: originalPrompt,
+        wasExpanded: false,
+      };
+    }
+
+    // Get cheap LLM selection
+    const repos = getRepositories();
+    const allProfiles = await repos.connections.findByUserId(userId);
+    const cheapLLMConfig = DEFAULT_CHEAP_LLM_CONFIG;
+
+    // For now, use a simple default profile selection
+    // In production, you might want to pass the current connection profile
+    const defaultProfile = allProfiles.find(p => p.isDefault) || allProfiles[0];
+
+    if (!defaultProfile) {
+      // No profiles available, return original prompt
+      return {
+        expandedPrompt: originalPrompt,
+        wasExpanded: false,
+      };
+    }
+
+    const cheapLLMSelection = getCheapLLMProvider(
+      defaultProfile,
+      cheapLLMConfig,
+      allProfiles,
+      false // ollamaAvailable - could be detected
+    );
+
+    // Craft the image prompt using cheap LLM
+    console.log('[Image Generation] Cheap LLM Input:', {
+      originalPrompt: expansionContext.originalPrompt,
+      placeholderCount: expansionContext.placeholders?.length,
+      provider: expansionContext.provider,
+    })
+
+    const craftResult = await craftImagePrompt(
+      {
+        originalPrompt: expansionContext.originalPrompt,
+        placeholders: expansionContext.placeholders,
+        targetLength: expansionContext.targetLength,
+        provider: expansionContext.provider,
+      },
+      cheapLLMSelection,
+      userId
+    );
+
+    console.log('[Image Generation] Cheap LLM Output:', {
+      success: craftResult.success,
+      expandedPrompt: craftResult.result,
+    })
+
+    if (craftResult.success && craftResult.result) {
+      return {
+        expandedPrompt: craftResult.result,
+        wasExpanded: true,
+      };
+    }
+
+    // If crafting failed, fall back to simple substitution using the longest available description
+    let fallbackPrompt = originalPrompt;
+    for (const placeholder of expansionContext.placeholders) {
+      const description =
+        placeholder.tiers.complete ||
+        placeholder.tiers.long ||
+        placeholder.tiers.medium ||
+        placeholder.tiers.short ||
+        placeholder.name;
+
+      fallbackPrompt = fallbackPrompt.replace(placeholder.placeholder, description);
+    }
+
+    return {
+      expandedPrompt: fallbackPrompt,
+      wasExpanded: true,
+    };
+  } catch (error) {
+    console.error('Prompt expansion failed:', error);
+    // On error, return original prompt
+    return {
+      expandedPrompt: originalPrompt,
+      wasExpanded: false,
+    };
   }
 }
 
@@ -318,21 +447,51 @@ export async function executeImageGenerationTool(
       };
     }
 
-    // 4. Generate images
+    // 4. Expand prompt with character/persona descriptions if needed
+    let expandedPrompt = toolInput.prompt;
+    try {
+      const expandResult = await expandPromptWithDescriptions(
+        toolInput.prompt,
+        context.userId,
+        imageProfile.provider,
+        context.chatId,
+        context.callingParticipantId
+      );
+      expandedPrompt = expandResult.expandedPrompt;
+    } catch (error) {
+      // If expansion fails, just use the original prompt
+      console.warn('Prompt expansion failed, using original prompt:', error instanceof Error ? error.message : String(error));
+      expandedPrompt = toolInput.prompt;
+    }
+
+    // Update the tool input with the expanded prompt
+    const finalInput = {
+      ...toolInput,
+      prompt: expandedPrompt,
+    };
+
+    console.log('[Image Generation] Final Input to Provider:', {
+      originalPrompt: toolInput.prompt,
+      expandedPrompt: expandedPrompt,
+      wasExpanded: expandedPrompt !== toolInput.prompt,
+    })
+
+    // 5. Generate images
     const savedImages = await generateImagesWithProvider(
-      toolInput,
+      finalInput,
       imageProfile,
       context.userId,
       context.chatId
     );
 
-    // 5. Return success response
+    // 6. Return success response
     return {
       success: true,
       images: savedImages,
       message: `Successfully generated ${savedImages.length} image(s) using ${imageProfile.modelName}`,
       provider: imageProfile.provider,
       model: imageProfile.modelName,
+      expandedPrompt: expandedPrompt,
     };
   } catch (error) {
     console.error('Image generation tool error:', error);
