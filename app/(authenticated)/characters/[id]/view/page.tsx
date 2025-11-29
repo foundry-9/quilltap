@@ -61,6 +61,7 @@ interface Character {
     filepath: string
     url?: string
   }
+  tags?: string[]
 }
 
 const CHARACTER_TABS: Tab[] = [
@@ -157,7 +158,6 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const { shouldHideByIds, hiddenTagIds } = useQuickHide()
   const quickHideActive = hiddenTagIds.size > 0
   const characterTagIds = character?.tags || []
-  const { shouldHideByIds, hiddenTagIds } = useQuickHide()
 
   const fetchCharacter = useCallback(async () => {
     try {
