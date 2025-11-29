@@ -14,6 +14,11 @@ import { memorySearchToolDefinition, anthropicMemorySearchToolDefinition, getGoo
 import { processMessageForMemoryAsync } from '@/lib/memory'
 import { buildContext } from '@/lib/chat/context-manager'
 import { checkAndGenerateSummaryIfNeeded } from '@/lib/chat/context-summary'
+import {
+  processFileAttachmentFallback,
+  formatFallbackAsMessagePrefix,
+  type FallbackResult,
+} from '@/lib/chat/file-attachment-fallback'
 import { z } from 'zod'
 
 // Validation schema
@@ -378,6 +383,36 @@ export async function POST(
     // Load file data for LLM
     const fileAttachments = await loadChatFilesForLLM(attachedFiles)
 
+    // Process file attachment fallbacks if provider doesn't support them
+    const fallbackResults: FallbackResult[] = []
+    let messageContentPrefix = ''
+
+    if (fileAttachments.length > 0 && attachedFiles.length > 0) {
+      for (let i = 0; i < fileAttachments.length; i++) {
+        const fileAttachment = fileAttachments[i]
+        const fileMetadata = attachedFiles[i]
+
+        const fallbackResult = await processFileAttachmentFallback(
+          fileMetadata,
+          fileAttachment,
+          connectionProfile,
+          repos,
+          user.id
+        )
+
+        fallbackResults.push(fallbackResult)
+
+        // Add fallback content to message prefix
+        const fallbackPrefix = formatFallbackAsMessagePrefix(fallbackResult)
+        if (fallbackPrefix) {
+          messageContentPrefix += fallbackPrefix
+        }
+      }
+    }
+
+    // If we have fallback content, prepend it to the user's message
+    const finalUserMessageContent = messageContentPrefix ? messageContentPrefix + content : content
+
     // Get persona if available
     const personaParticipant = chat.participants.find(
       p => p.type === 'PERSONA' && p.isActive && p.personaId
@@ -394,21 +429,43 @@ export async function POST(
     const chatSettings = await repos.users.getChatSettings(user.id)
 
     // Build context with intelligent token management
-    // Filter existing messages to only USER and ASSISTANT messages (exclude TOOL, SYSTEM)
+    // Filter existing messages to include USER, ASSISTANT, and TOOL messages (exclude SYSTEM)
+    // IMPORTANT: Tool results must be included so LLM knows tools were already executed
     const conversationMessages = existingMessages
       .filter(msg => msg.type === 'message')
       .filter(msg => {
         const role = (msg as { role: string }).role
-        return role === 'USER' || role === 'ASSISTANT'
+        return role === 'USER' || role === 'ASSISTANT' || role === 'TOOL'
       })
       .map(msg => {
         const messageEvent = msg as { role: string; content: string; id?: string }
+
+        // For TOOL messages, parse the content and format as a user message
+        // indicating the tool result (LLMs expect tool results as user messages)
+        if (messageEvent.role === 'TOOL') {
+          try {
+            const toolData = JSON.parse(messageEvent.content)
+            // toolData.result is already a formatted string, don't stringify again
+            const resultText = toolData.result || 'No result'
+
+            return {
+              role: 'USER' as const, // Tool results sent back as user messages
+              content: `[Tool Result: ${toolData.toolName}]\n${resultText}`,
+              id: messageEvent.id,
+            }
+          } catch {
+            // If parsing fails, skip this message
+            return null
+          }
+        }
+
         return {
           role: messageEvent.role,
           content: messageEvent.content,
           id: messageEvent.id,
         }
       })
+      .filter((msg): msg is NonNullable<typeof msg> => msg !== null)
 
     const builtContext = await buildContext({
       provider: connectionProfile.provider,
@@ -418,7 +475,7 @@ export async function POST(
       persona,
       chat,
       existingMessages: conversationMessages,
-      newUserMessage: content,
+      newUserMessage: finalUserMessageContent,
       systemPromptOverride: characterParticipant.systemPromptOverride,
       embeddingProfileId: chatSettings?.cheapLLMSettings?.embeddingProfileId || undefined,
       skipMemories: false,
@@ -432,12 +489,19 @@ export async function POST(
     }
 
     // Prepare final messages for LLM (add attachments to the last user message)
+    // Filter out attachments that were processed via fallback
+    const attachmentsToSend = fileAttachments.filter((_, idx) => {
+      const fallback = fallbackResults[idx]
+      // Don't send as attachment if it was converted to text or description
+      return !fallback || (fallback.type !== 'text' && fallback.type !== 'image_description')
+    })
+
     const messages = builtContext.messages.map((msg, idx) => {
-      if (idx === builtContext.messages.length - 1 && msg.role === 'user' && fileAttachments.length > 0) {
+      if (idx === builtContext.messages.length - 1 && msg.role === 'user' && attachmentsToSend.length > 0) {
         return {
           role: msg.role,
           content: msg.content,
-          attachments: fileAttachments,
+          attachments: attachmentsToSend,
         }
       }
       return {
@@ -531,6 +595,19 @@ export async function POST(
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({ debugLLMRequest: llmRequestDetails })}\n\n`)
           )
+
+          // Send fallback processing info if any files were processed
+          if (fallbackResults.length > 0) {
+            const fallbackInfo = fallbackResults.map((result, idx) => ({
+              filename: result.processingMetadata?.originalFilename || 'Unknown',
+              type: result.type,
+              usedImageDescriptionLLM: result.processingMetadata?.usedImageDescriptionLLM || false,
+              error: result.error,
+            }))
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ fileProcessing: fallbackInfo })}\n\n`)
+            )
+          }
 
           for await (const chunk of provider.streamMessage(
             {
@@ -655,13 +732,43 @@ export async function POST(
             } catch (memoryError) {
               console.error('Failed to trigger memory extraction:', memoryError)
             }
+          } else if (toolMessages.length > 0) {
+            // Even if there's no text response, send done event if tools were executed
+            const firstToolMessageId = await saveToolMessages(repos, id, user.id, toolMessages, generatedImagePaths)
+            await repos.chats.update(id, { updatedAt: new Date().toISOString() })
 
-            // Close the stream
-            try {
-              controller.close()
-            } catch (e) {
-              // Already closed, ignore
-            }
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  done: true,
+                  messageId: firstToolMessageId,
+                  usage,
+                  attachmentResults,
+                  toolsExecuted: true,
+                })}\n\n`
+              )
+            )
+          } else {
+            // No response content and no tool execution - still need to send done to close the stream
+            console.warn(`[Chat Messages] Empty response for chat ${id}`)
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  done: true,
+                  messageId: null,
+                  usage,
+                  attachmentResults,
+                  toolsExecuted: false,
+                })}\n\n`
+              )
+            )
+          }
+
+          // Close the stream
+          try {
+            controller.close()
+          } catch (e) {
+            // Already closed, ignore
           }
         } catch (error) {
           console.error('Streaming error:', error)

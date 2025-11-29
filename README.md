@@ -3,11 +3,11 @@
 AI-powered roleplay chat platform with multi-provider LLM support and full SillyTavern compatibility.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.5.30-green.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-1.6.17-green.svg)](package.json)
 
 ## What is Quilltap?
 
-Quilltap is a modern, self-hosted chat platform designed for AI-powered roleplay conversations. It provides a sleek web interface for chatting with AI characters using your own API keys from multiple LLM providers.
+[Quilltap](https://github.com/foundry-9/quilltap) is a modern, self-hosted chat platform designed for AI-powered roleplay conversations. It provides a sleek web interface for chatting with AI characters using your own API keys from multiple LLM providers.
 
 **Key Features:**
 
@@ -487,7 +487,33 @@ Copyright (c) 2025 Foundry-9
   - Add Google provider support to connection profile testing endpoints
   - Add Google to API key provider dropdown in UI
 - **1.5:** Memory system
-  - In-progress: automatic memory and housecleaning
+  - Character memory management
+  - Editable via a rich UI for browsing
+  - Cheap LLM setup for memory summarization
+  - Semantic embeddings and search
+  - Improved chat composer with Markdown preview, auto-sizing
+  - Default theme font improvements
+  - Improved diagnostics include memory system
+- **1.6:** Physical descriptions, JSON store polish, and attachment fallbacks
+  - JSON data store finalized with atomic writes, advisory file locking, schema versioning, and full CLI/docs to migrate/validate Prisma exports into the JSON repositories.
+  - Centralized file manager moves every upload into `data/files`, serves them via `/api/files/[id]`, and ships migration/cleanup scripts plus UI fixes so galleries and avatars consistently load from `/data/files/storage/*`.
+  - Attachment UX now shows each provider's supported file types in connection profiles and adds a cheap-LLM-powered fallback that inlines text files, generates descriptions for images, and streams status events when providers lack native support.
+  - Cheap LLM + embedding controls let you mark profiles as "cheap," pick provider strategies or user-defined defaults, manage dedicated OpenAI/Ollama embedding profiles, and fall back to keyword heuristics when embeddings are unavailable while powering summaries/memories.
+  - Characters and personas gain tabbed detail/edit pages plus a physical description editor with short/medium/long/complete tiers that feed galleries, chat context, and other tooling.
+  - Image generation prompt expansion now understands `{{Character}}`/`{{me}}` placeholders, pulls those physical description tiers, and has the cheap LLM craft provider-sized prompts before handing them to Grok, Imagen, DALL·E, etc.
+
+## Roadmap
+
+- [ ] Finish local email/password and TOTP/MFA login
+- [ ] Add backends for files (S3 to start, for better hosting)
+- [ ] [Plugin system](features/plugins.md) to extend functionality and allow updates for volatile things like LLM support, image support, etc.
+- [ ] Multiple themes and plugin downloadable themes
+- [ ] Enhanced roleplay options using more complex templates
+- [ ] "Visual Novel" options?
+- [ ] Worldbook/Lore
+- [ ] General SSE-based MCP support
+- [ ] Console logging in a window with all log entries at various log levels showing and persisting there
+- [ ] Python script support
 
 ## Acknowledgments
 
@@ -499,4 +525,4 @@ Built with these excellent open source projects:
 - [Zod](https://zod.dev/) - TypeScript-first schema validation
 - [Docker](https://www.docker.com/) - Containerization
 
-Special thanks to the [SillyTavern](https://github.com/SillyTavern/SillyTavern) project for inspiring the character format and import/export compatibility.
+Special thanks to the [SillyTavern](https://github.com/SillyTavern/SillyTavern) project for pioneering this space and inspiring the character format and import/export compatibility.

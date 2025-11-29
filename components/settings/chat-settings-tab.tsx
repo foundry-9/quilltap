@@ -27,6 +27,7 @@ interface ChatSettings {
   avatarDisplayStyle: AvatarDisplayStyle
   tagStyles: Record<string, TagVisualStyle>
   cheapLLMSettings: CheapLLMSettings
+  imageDescriptionProfileId?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -601,6 +602,69 @@ export default function ChatSettingsTab() {
             {embeddingProfiles.length === 0 && (
               <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
                 No embedding profiles found. Create one in the Embedding Profiles tab.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Image Description Profile */}
+      <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
+        <h2 className="text-xl font-semibold mb-4">Image Description Profile</h2>
+        <p className="text-gray-600 dark:text-gray-400 mb-4">
+          When you attach an image to a chat with a provider that doesn&apos;t support images (like Ollama, OpenRouter, etc.),
+          this profile will be used to generate a text description of the image.
+        </p>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Image Description Profile
+            </label>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+              Select a vision-capable profile (like gpt-4o-mini, claude-haiku-4-5, or gemini-2.0-flash) to describe images.
+              If not set, the system will automatically use any available vision-capable profile.
+            </p>
+            <select
+              value={settings?.imageDescriptionProfileId || ''}
+              onChange={async (e) => {
+                const newValue = e.target.value || null
+                try {
+                  setSaving(true)
+                  const res = await fetch('/api/chat-settings', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ imageDescriptionProfileId: newValue }),
+                  })
+                  if (!res.ok) throw new Error('Failed to update settings')
+                  await fetchSettings()
+                  setSuccess(true)
+                  setTimeout(() => setSuccess(false), 3000)
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : 'Failed to save')
+                } finally {
+                  setSaving(false)
+                }
+              }}
+              disabled={saving || loadingProfiles}
+              className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Auto-select vision-capable profile</option>
+              {connectionProfiles
+                .filter(profile => {
+                  // Only show vision-capable providers
+                  const visionProviders = ['OPENAI', 'ANTHROPIC', 'GOOGLE', 'GROK']
+                  return visionProviders.includes(profile.provider)
+                })
+                .map((profile) => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.name} ({profile.provider} • {profile.modelName})
+                  </option>
+                ))}
+            </select>
+            {connectionProfiles.filter(p => ['OPENAI', 'ANTHROPIC', 'GOOGLE', 'GROK'].includes(p.provider)).length === 0 && (
+              <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                No vision-capable profiles found. Create an OpenAI, Anthropic, Google, or Grok profile in the Connection Profiles tab.
               </p>
             )}
           </div>

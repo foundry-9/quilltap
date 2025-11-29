@@ -237,7 +237,11 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
       <div className="flex flex-wrap gap-2 justify-center" style={{ maxWidth: `${containerWidth}px` }}>
         {items.map((item, index) => {
           const id = item.kind === 'chat' ? item.data.id : item.data.id
-          const src = item.kind === 'chat' ? item.data.url : item.data.url || `/${item.data.filepath}`
+          let src = item.data.url || item.data.filepath;
+          // filepath already includes leading slash from API
+          if (!src.startsWith('/') && item.kind !== 'chat') {
+            src = `/${src}`;
+          }
           const alt = item.kind === 'chat' ? item.data.filename : item.data.filename
           const isMissing = missingImages.has(id)
 

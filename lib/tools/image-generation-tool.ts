@@ -58,6 +58,7 @@ export interface ImageGenerationToolOutput {
   message?: string;
   provider?: string;
   model?: string;
+  expandedPrompt?: string;
 }
 
 /**
@@ -75,7 +76,7 @@ export const imageGenerationToolDefinition = {
         prompt: {
           type: 'string',
           description:
-            'A detailed description of the image to generate. Be specific about style, composition, colors, mood, lighting, and any other visual elements. Example: "A serene mountain landscape with snow-capped peaks reflected in a crystal-clear alpine lake at sunset, with warm orange and pink hues in the sky"',
+            'A detailed description of the image to generate. Be specific about style, composition, colors, mood, lighting, and any other visual elements. IMPORTANT: You can use {{placeholders}} to reference characters and personas - use {{CharacterName}} for any character, {{PersonaName}} for any persona, or {{me}}/{{I}} to refer to yourself (the character you are playing). The system will automatically expand these with physical descriptions. Examples: "{{me}} in a forest clearing at sunset", "{{Alice}} and {{me}} having coffee together", "A serene mountain landscape with snow-capped peaks"',
           minLength: 1,
           maxLength: 4000,
         },
@@ -138,7 +139,7 @@ export const anthropicImageGenerationToolDefinition = {
       prompt: {
         type: 'string',
         description:
-          'A detailed description of the image to generate. Be specific about style, composition, colors, mood, lighting, and any other visual elements. Example: "A serene mountain landscape with snow-capped peaks reflected in a crystal-clear alpine lake at sunset, with warm orange and pink hues in the sky"',
+          'A detailed description of the image to generate. Be specific about style, composition, colors, mood, lighting, and any other visual elements. IMPORTANT: You can use {{placeholders}} to reference characters and personas - use {{CharacterName}} for any character, {{PersonaName}} for any persona, or {{me}}/{{I}} to refer to yourself (the character you are playing). The system will automatically expand these with physical descriptions. Examples: "{{me}} in a forest clearing at sunset", "{{Alice}} and {{me}} having coffee together", "A serene mountain landscape with snow-capped peaks"',
         minLength: 1,
         maxLength: 4000,
       },

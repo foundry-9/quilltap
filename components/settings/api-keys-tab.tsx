@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { showConfirmation } from '@/lib/alert'
 
 interface ApiKey {
   id: string
@@ -77,7 +78,8 @@ export default function ApiKeysTab() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this API key?')) return
+    const confirmed = await showConfirmation('Are you sure you want to delete this API key?')
+    if (!confirmed) return
 
     try {
       const res = await fetch(`/api/keys/${id}`, { method: 'DELETE' })

@@ -34,12 +34,16 @@ interface ToolMessageProps {
 }
 
 interface ToolResult {
-  toolName: string
-  success: boolean
-  result: string
+  tool?: string
+  toolName?: string
+  initiatedBy?: 'user' | 'character'
+  success?: boolean
+  result?: string
   arguments?: Record<string, unknown>
   provider?: string
   model?: string
+  prompt?: string
+  images?: Array<{ id: string; filename: string }>
 }
 
 export default function ToolMessage({ message, character, onImageClick, onAttachmentDeleted }: ToolMessageProps) {
@@ -53,10 +57,18 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
   }
 
   try {
-    toolData = JSON.parse(message.content)
+    const parsed = JSON.parse(message.content)
+    // Handle both old format (toolName) and new format (tool)
+    toolData = {
+      ...parsed,
+      toolName: parsed.toolName || parsed.tool || 'unknown',
+    }
   } catch {
     // If parsing fails, use defaults
   }
+
+  // Determine if character initiated this or user did
+  const showCharacterName = toolData.initiatedBy !== 'user' && character
 
   // Get image attachments
   const imageAttachments = (message.attachments || []).filter((a) =>
@@ -72,7 +84,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
     },
   }
 
-  const info = toolInfo[toolData.toolName] || {
+  const info = toolInfo[toolData.toolName!] || {
     displayName: toolData.toolName,
     icon: '⚙️',
     bgColor: 'bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700',
@@ -100,9 +112,14 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
           <div className="flex items-center gap-2 mb-2">
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2">
-                {character && (
+                {showCharacterName && (
                   <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">
-                    {character.name} requested
+                    {character?.name} requested
+                  </span>
+                )}
+                {toolData.initiatedBy === 'user' && (
+                  <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">
+                    You requested
                   </span>
                 )}
                 <span className="font-semibold text-sm text-gray-900 dark:text-white">
@@ -122,24 +139,39 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
           </div>
 
           {/* Tool result */}
-          <div className="text-sm text-gray-700 dark:text-gray-300">
-            {toolData.result}
-          </div>
+          {toolData.result && (
+            <div className="text-sm text-gray-700 dark:text-gray-300">
+              {toolData.result}
+            </div>
+          )}
+
+          {/* Generated images for user-initiated image generation */}
+          {toolData.tool === 'generate_image' && toolData.images && toolData.images.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-3">
+              {toolData.images.map((img) => (
+                <div key={img.id} className="text-xs text-gray-600 dark:text-gray-400 px-2 py-1 bg-purple-100 dark:bg-purple-900 rounded">
+                  {img.filename}
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* View source button */}
-          {toolData.arguments && Object.keys(toolData.arguments).length > 0 && (
+          {(toolData.arguments || toolData.prompt) && (
             <div className="mt-3">
               <button
                 onClick={() => setShowSource(!showSource)}
                 className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors underline"
                 type="button"
               >
-                {showSource ? '▼ Hide' : '▶ View'} source
+                {showSource ? '▼ Hide' : '▶ View'} {toolData.tool === 'generate_image' ? 'prompt' : 'source'}
               </button>
               {showSource && (
                 <div className="mt-2 bg-gray-900 dark:bg-gray-800 rounded p-3 overflow-x-auto">
                   <pre className="text-xs text-gray-100 font-mono whitespace-pre-wrap break-words">
-                    {JSON.stringify(toolData.arguments, null, 2)}
+                    {toolData.tool === 'generate_image' && toolData.prompt
+                      ? toolData.prompt
+                      : JSON.stringify(toolData.arguments || {}, null, 2)}
                   </pre>
                 </div>
               )}

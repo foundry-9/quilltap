@@ -7,7 +7,7 @@
 
 import { JsonStore } from '../core/json-store';
 import { BaseRepository } from './base.repository';
-import { Persona, PersonaSchema } from '../schemas/types';
+import { Persona, PersonaSchema, PhysicalDescription } from '../schemas/types';
 
 export class PersonasRepository extends BaseRepository<Persona> {
   constructor(jsonStore: JsonStore) {
@@ -183,5 +183,115 @@ export class PersonasRepository extends BaseRepository<Persona> {
 
     persona.characterLinks = persona.characterLinks.filter(id => id !== characterId);
     return await this.update(personaId, { characterLinks: persona.characterLinks });
+  }
+
+  // ============================================================================
+  // PHYSICAL DESCRIPTIONS
+  // ============================================================================
+
+  /**
+   * Add a physical description to a persona
+   */
+  async addDescription(
+    personaId: string,
+    data: Omit<PhysicalDescription, 'id' | 'createdAt' | 'updatedAt'>
+  ): Promise<PhysicalDescription | null> {
+    const persona = await this.findById(personaId);
+    if (!persona) {
+      return null;
+    }
+
+    const now = this.getCurrentTimestamp();
+    const description: PhysicalDescription = {
+      ...data,
+      id: this.generateId(),
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    persona.physicalDescriptions = persona.physicalDescriptions || [];
+    persona.physicalDescriptions.push(description);
+    await this.update(personaId, { physicalDescriptions: persona.physicalDescriptions });
+
+    return description;
+  }
+
+  /**
+   * Update a physical description
+   */
+  async updateDescription(
+    personaId: string,
+    descriptionId: string,
+    data: Partial<Omit<PhysicalDescription, 'id' | 'createdAt' | 'updatedAt'>>
+  ): Promise<PhysicalDescription | null> {
+    const persona = await this.findById(personaId);
+    if (!persona) {
+      return null;
+    }
+
+    const descriptions = persona.physicalDescriptions || [];
+    const index = descriptions.findIndex(d => d.id === descriptionId);
+    if (index === -1) {
+      return null;
+    }
+
+    const now = this.getCurrentTimestamp();
+    const updated: PhysicalDescription = {
+      ...descriptions[index],
+      ...data,
+      id: descriptions[index].id,
+      createdAt: descriptions[index].createdAt,
+      updatedAt: now,
+    };
+
+    descriptions[index] = updated;
+    await this.update(personaId, { physicalDescriptions: descriptions });
+
+    return updated;
+  }
+
+  /**
+   * Remove a physical description from a persona
+   */
+  async removeDescription(personaId: string, descriptionId: string): Promise<boolean> {
+    const persona = await this.findById(personaId);
+    if (!persona) {
+      return false;
+    }
+
+    const descriptions = persona.physicalDescriptions || [];
+    const filtered = descriptions.filter(d => d.id !== descriptionId);
+
+    if (filtered.length === descriptions.length) {
+      return false; // Description not found
+    }
+
+    await this.update(personaId, { physicalDescriptions: filtered });
+    return true;
+  }
+
+  /**
+   * Get a single physical description by ID
+   */
+  async getDescription(personaId: string, descriptionId: string): Promise<PhysicalDescription | null> {
+    const persona = await this.findById(personaId);
+    if (!persona) {
+      return null;
+    }
+
+    const descriptions = persona.physicalDescriptions || [];
+    return descriptions.find(d => d.id === descriptionId) || null;
+  }
+
+  /**
+   * Get all physical descriptions for a persona
+   */
+  async getDescriptions(personaId: string): Promise<PhysicalDescription[]> {
+    const persona = await this.findById(personaId);
+    if (!persona) {
+      return [];
+    }
+
+    return persona.physicalDescriptions || [];
   }
 }

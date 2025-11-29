@@ -124,6 +124,9 @@ export class ConnectionProfilesRepository extends BaseRepository<ConnectionProfi
     file.llmProfiles.push(validated);
     await this.writeProfilesFile(file);
 
+    // Force cache clear to ensure subsequent reads get fresh data
+    this.jsonStore.clearCache();
+
     return validated;
   }
 
@@ -153,6 +156,9 @@ export class ConnectionProfilesRepository extends BaseRepository<ConnectionProfi
     file.llmProfiles[index] = validated;
     await this.writeProfilesFile(file);
 
+    // Force cache clear to ensure subsequent reads get fresh data
+    this.jsonStore.clearCache();
+
     return validated;
   }
 
@@ -170,6 +176,10 @@ export class ConnectionProfilesRepository extends BaseRepository<ConnectionProfi
     }
 
     await this.writeProfilesFile(file);
+    
+    // Force cache clear to ensure subsequent reads get fresh data
+    this.jsonStore.clearCache();
+    
     return true;
   }
 
@@ -244,6 +254,9 @@ export class ConnectionProfilesRepository extends BaseRepository<ConnectionProfi
     file.apiKeys.push(validated);
     await this.writeProfilesFile(file);
 
+    // Force cache clear to ensure subsequent reads get fresh data
+    this.jsonStore.clearCache();
+
     return validated;
   }
 
@@ -273,6 +286,9 @@ export class ConnectionProfilesRepository extends BaseRepository<ConnectionProfi
     file.apiKeys[index] = validated;
     await this.writeProfilesFile(file);
 
+    // Force cache clear to ensure subsequent reads get fresh data
+    this.jsonStore.clearCache();
+
     return validated;
   }
 
@@ -290,6 +306,10 @@ export class ConnectionProfilesRepository extends BaseRepository<ConnectionProfi
     }
 
     await this.writeProfilesFile(file);
+    
+    // Force cache clear to ensure subsequent reads get fresh data
+    this.jsonStore.clearCache();
+    
     return true;
   }
 

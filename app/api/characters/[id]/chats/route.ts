@@ -1,5 +1,9 @@
 // Character Chats API: Get recent chats involving this character
 // GET /api/characters/:id/chats - List recent chats with this character
+// Query params:
+//   - search: Search in title and message content
+//   - limit: Number of results (default 10)
+//   - offset: Pagination offset (default 0)
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
@@ -25,6 +29,12 @@ export async function GET(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
+    // Parse query parameters
+    const { searchParams } = new URL(req.url)
+    const search = searchParams.get('search')?.toLowerCase() || ''
+    const limit = parseInt(searchParams.get('limit') || '10', 10)
+    const offset = parseInt(searchParams.get('offset') || '0', 10)
+
     // Verify character belongs to user
     const character = await repos.characters.findById(id)
 
@@ -35,15 +45,40 @@ export async function GET(
     // Get chats with this character
     const allChats = await repos.chats.findByCharacterId(id)
 
-    // Filter by user and sort by updatedAt descending, take 10
-    const userChats = allChats
+    // Filter by user and sort by updatedAt descending
+    let userChats = allChats
       .filter((chat) => chat.userId === user.id)
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-      .slice(0, 10)
+
+    // Pre-fetch messages for search if needed, and for enrichment
+    const chatsWithMessages = await Promise.all(
+      userChats.map(async (chat) => {
+        const allMessages = await repos.chats.getMessages(chat.id)
+        return { chat, messages: allMessages }
+      })
+    )
+
+    // Apply search filter if provided
+    let filteredChats = chatsWithMessages
+    if (search) {
+      filteredChats = chatsWithMessages.filter(({ chat, messages }) => {
+        // Search in title
+        if (chat.title?.toLowerCase().includes(search)) {
+          return true
+        }
+        // Search in message content
+        return messages.some(msg =>
+          msg.type === 'message' && msg.content.toLowerCase().includes(search)
+        )
+      })
+    }
+
+    // Apply pagination
+    const paginatedChats = filteredChats.slice(offset, offset + limit)
 
     // Enrich chats with related data
     const enrichedChats = await Promise.all(
-      userChats.map(async (chat) => {
+      paginatedChats.map(async ({ chat, messages }) => {
         // Get persona participant if present
         const personaParticipant = chat.participants.find(p => p.type === 'PERSONA' && p.personaId)
         let persona = null
@@ -59,11 +94,10 @@ export async function GET(
         }
 
         // Get last 3 messages for preview
-        const allMessages = await repos.chats.getMessages(chat.id)
-        const recentMessages = allMessages
+        const recentMessages = messages
+          .filter((msg) => msg.type === 'message')
           .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
           .slice(0, 3)
-          .filter((msg) => msg.type === 'message')
           .map((msg) => ({
             id: msg.id,
             role: msg.role,

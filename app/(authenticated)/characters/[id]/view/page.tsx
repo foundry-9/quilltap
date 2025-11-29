@@ -4,13 +4,18 @@ import { use, useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { showErrorToast } from '@/lib/toast'
+import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import MessageContent from '@/components/chat/MessageContent'
-import { RecentCharacterConversations } from '@/components/character/recent-conversations'
+import { CharacterConversationsTab } from '@/components/character/character-conversations-tab'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 import { TagBadge } from '@/components/tags/tag-badge'
+import { TagEditor } from '@/components/tags/tag-editor'
+import { EntityTabs, Tab } from '@/components/tabs'
+import { EmbeddedPhotoGallery } from '@/components/images/EmbeddedPhotoGallery'
+import { PhysicalDescriptionList } from '@/components/physical-descriptions'
+import { MemoryList } from '@/components/memory/memory-list'
 
 interface Tag {
   id: string
@@ -26,6 +31,14 @@ interface Persona {
   id: string
   name: string
   title: string | null
+}
+
+interface ImageProfile {
+  id: string
+  name: string
+  provider: string
+  modelName: string
+  isDefault: boolean
 }
 
 interface Character {
@@ -48,6 +61,73 @@ interface Character {
   }
 }
 
+const CHARACTER_TABS: Tab[] = [
+  {
+    id: 'details',
+    label: 'Details',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'conversations',
+    label: 'Conversations',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'memories',
+    label: 'Memories',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'tags',
+    label: 'Tags',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'profiles',
+    label: 'Associated Profiles',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'gallery',
+    label: 'Photo Gallery',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'descriptions',
+    label: 'Physical Descriptions',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+    ),
+  },
+]
+
 export default function ViewCharacterPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
@@ -65,14 +145,30 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const [creatingChat, setCreatingChat] = useState(false)
   const [openedFromQuery, setOpenedFromQuery] = useState(false)
   const [defaultPersonaId, setDefaultPersonaId] = useState<string>('')
+  const [avatarRefreshKey, setAvatarRefreshKey] = useState(0)
+  const [imageProfiles, setImageProfiles] = useState<ImageProfile[]>([])
+  const [savingConnectionProfile, setSavingConnectionProfile] = useState(false)
+  const [savingPersona, setSavingPersona] = useState(false)
+  const [savingImageProfile, setSavingImageProfile] = useState(false)
+  const [defaultImageProfileId, setDefaultImageProfileId] = useState<string>('')
   const { style } = useAvatarDisplay()
 
   const fetchCharacter = useCallback(async () => {
     try {
-      const res = await fetch(`/api/characters/${id}`)
+      const res = await fetch(`/api/characters/${id}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+        }
+      })
       if (!res.ok) throw new Error('Failed to fetch character')
       const data = await res.json()
-      setCharacter(data.character)
+      setCharacter((prev) => {
+        if (prev?.defaultImageId !== data.character.defaultImageId) {
+          setAvatarRefreshKey(k => k + 1)
+        }
+        return data.character
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
@@ -130,13 +226,26 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     }
   }, [id])
 
+  const fetchImageProfiles = useCallback(async () => {
+    try {
+      const res = await fetch('/api/image-profiles')
+      if (res.ok) {
+        const data = await res.json()
+        setImageProfiles(data)
+      }
+    } catch (err) {
+      console.error('Failed to fetch image profiles:', err)
+    }
+  }, [])
+
   useEffect(() => {
     fetchCharacter()
     fetchTags()
     fetchProfiles()
     fetchPersonas()
     fetchDefaultPersona()
-  }, [fetchCharacter, fetchTags, fetchProfiles, fetchPersonas, fetchDefaultPersona])
+    fetchImageProfiles()
+  }, [fetchCharacter, fetchTags, fetchProfiles, fetchPersonas, fetchDefaultPersona, fetchImageProfiles])
 
   useEffect(() => {
     if (searchParams.get('action') === 'chat') {
@@ -158,10 +267,18 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   }, [searchParams, character?.defaultConnectionProfileId, profiles, defaultPersonaId])
 
   const getAvatarSrc = () => {
+    let src = null
     if (character?.defaultImage) {
-      return character.defaultImage.url || `/${character.defaultImage.filepath}`
+      src = character.defaultImage.url || `/${character.defaultImage.filepath}`
+    } else {
+      src = character?.avatarUrl
     }
-    return character?.avatarUrl
+    // Add cache-busting parameter based on defaultImageId to force reload when avatar changes
+    if (src && character?.defaultImageId) {
+      const separator = src.includes('?') ? '&' : '?'
+      src = `${src}${separator}v=${character.defaultImageId}`
+    }
+    return src
   }
 
   const handleStartChat = () => {
@@ -233,6 +350,295 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     }
   }
 
+  const handleSaveConnectionProfile = async (profileId: string) => {
+    setSavingConnectionProfile(true)
+    try {
+      const res = await fetch(`/api/characters/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          defaultConnectionProfileId: profileId || undefined,
+        }),
+      })
+      if (!res.ok) throw new Error('Failed to update connection profile')
+      await fetchCharacter()
+      showSuccessToast('Connection profile updated')
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update connection profile')
+    } finally {
+      setSavingConnectionProfile(false)
+    }
+  }
+
+  const handleSaveDefaultPersona = async (personaId: string) => {
+    setSavingPersona(true)
+    try {
+      // First, remove the current default if there is one
+      if (defaultPersonaId) {
+        await fetch(`/api/characters/${id}/personas?personaId=${defaultPersonaId}`, {
+          method: 'DELETE',
+        })
+      }
+
+      // If a new persona is selected, link it as default
+      if (personaId) {
+        const res = await fetch(`/api/characters/${id}/personas`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            personaId,
+            isDefault: true,
+          }),
+        })
+        if (!res.ok) throw new Error('Failed to link persona')
+      }
+
+      setDefaultPersonaId(personaId)
+      showSuccessToast(personaId ? 'Default persona updated' : 'Default persona removed')
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update persona')
+      await fetchDefaultPersona() // Revert to server state
+    } finally {
+      setSavingPersona(false)
+    }
+  }
+
+  const renderTabContent = (activeTab: string) => {
+    switch (activeTab) {
+      case 'details':
+        return (
+          <div className="space-y-6">
+            {/* Edit Button Header */}
+            <div className="flex justify-end">
+              <Link
+                href={`/characters/${id}/edit`}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 font-medium text-sm"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Edit Character
+              </Link>
+            </div>
+
+            {/* Main Content */}
+            <div className="space-y-6">
+              {character?.description && (
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                    Description
+                  </h2>
+                  <div className="text-gray-700 dark:text-gray-300">
+                    <MessageContent content={character.description} />
+                  </div>
+                </div>
+              )}
+
+              {character?.personality && (
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                    Personality
+                  </h2>
+                  <div className="text-gray-700 dark:text-gray-300">
+                    <MessageContent content={character.personality} />
+                  </div>
+                </div>
+              )}
+
+              {character?.scenario && (
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                    Scenario
+                  </h2>
+                  <div className="text-gray-700 dark:text-gray-300">
+                    <MessageContent content={character.scenario} />
+                  </div>
+                </div>
+              )}
+
+              {character?.firstMessage && (
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                    First Message
+                  </h2>
+                  <div className="text-gray-700 dark:text-gray-300">
+                    <MessageContent content={character.firstMessage} />
+                  </div>
+                </div>
+              )}
+
+              {character?.exampleDialogues && (
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                    Example Dialogues
+                  </h2>
+                  <div className="text-gray-700 dark:text-gray-300">
+                    <MessageContent content={character.exampleDialogues} />
+                  </div>
+                </div>
+              )}
+
+              {character?.systemPrompt && (
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                    System Prompt
+                  </h2>
+                  <pre className="bg-gray-900 dark:bg-gray-950 text-gray-100 p-4 rounded-md overflow-hidden my-2">
+                    <code className="text-sm whitespace-pre-wrap break-words">
+                      {character.systemPrompt}
+                    </code>
+                  </pre>
+                </div>
+              )}
+            </div>
+          </div>
+        )
+
+      case 'conversations':
+        return (
+          <CharacterConversationsTab characterId={id} characterName={character?.name || 'Character'} />
+        )
+
+      case 'memories':
+        return (
+          <MemoryList characterId={id} />
+        )
+
+      case 'tags':
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Character Tags
+                </h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Tags help organize and categorize this character. They can also be used for filtering and searching.
+                </p>
+              </div>
+            </div>
+            <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-6">
+              <TagEditor entityType="character" entityId={id} />
+            </div>
+          </div>
+        )
+
+      case 'profiles':
+        return (
+          <div className="space-y-8">
+            {/* Connection Profile Section */}
+            <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                Default Connection Profile
+              </h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                The default AI provider and model to use when chatting with this character. Can be overridden per chat.
+              </p>
+              <div className="flex items-center gap-3">
+                <select
+                  value={character?.defaultConnectionProfileId || ''}
+                  onChange={(e) => handleSaveConnectionProfile(e.target.value)}
+                  disabled={savingConnectionProfile}
+                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 disabled:opacity-50"
+                >
+                  <option value="">No default profile</option>
+                  {profiles.map((profile) => (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.name}
+                    </option>
+                  ))}
+                </select>
+                {savingConnectionProfile && (
+                  <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-r-transparent"></div>
+                    Saving...
+                  </div>
+                )}
+              </div>
+              {profiles.length === 0 && (
+                <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">
+                  No connection profiles available. <Link href="/settings" className="underline hover:no-underline">Create one in Settings</Link>.
+                </p>
+              )}
+            </div>
+
+            {/* Persona Section */}
+            <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                Default Persona
+              </h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                The default persona to use when chatting with this character. Represents &quot;you&quot; in the conversation.
+              </p>
+              <div className="flex items-center gap-3">
+                <select
+                  value={defaultPersonaId}
+                  onChange={(e) => handleSaveDefaultPersona(e.target.value)}
+                  disabled={savingPersona}
+                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 disabled:opacity-50"
+                >
+                  <option value="">No default persona</option>
+                  {personas.map((persona) => (
+                    <option key={persona.id} value={persona.id}>
+                      {persona.title ? `${persona.name} (${persona.title})` : persona.name}
+                    </option>
+                  ))}
+                </select>
+                {savingPersona && (
+                  <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-r-transparent"></div>
+                    Saving...
+                  </div>
+                )}
+              </div>
+              {personas.length === 0 && (
+                <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">
+                  No personas available. <Link href="/personas/new" className="underline hover:no-underline">Create one</Link>.
+                </p>
+              )}
+            </div>
+
+            {/* Image Profile Section */}
+            <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                Image Generation Profile
+              </h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                The default image generation profile for creating images during chats. Optional.
+              </p>
+              <ImageProfilePicker
+                value={defaultImageProfileId || null}
+                onChange={(profileId) => setDefaultImageProfileId(profileId || '')}
+                characterId={id}
+              />
+            </div>
+          </div>
+        )
+
+      case 'gallery':
+        return (
+          <EmbeddedPhotoGallery
+            entityType="character"
+            entityId={id}
+            entityName={character?.name || 'Character'}
+            currentAvatarId={character?.defaultImageId}
+            onRefresh={fetchCharacter}
+          />
+        )
+
+      case 'descriptions':
+        return (
+          <PhysicalDescriptionList
+            entityType="character"
+            entityId={id}
+          />
+        )
+
+      default:
+        return null
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -259,7 +665,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="min-h-screen px-4 py-8">
-      <div className="mx-auto">
+      <div className="mx-auto max-w-[800px]">
         <Link
           href="/characters"
           className="text-blue-600 dark:text-blue-400 hover:underline mb-4 inline-block"
@@ -270,11 +676,11 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           <div className="flex items-center gap-4 flex-grow">
             <div className="relative">
               {getAvatarSrc() ? (
-                <Image
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={`${character?.defaultImageId || 'no-image'}-${avatarRefreshKey}`}
                   src={getAvatarSrc()!}
                   alt={character?.name || ''}
-                  width={80}
-                  height={80}
                   className={getAvatarClasses(style, 'lg').imageClass}
                 />
               ) : (
@@ -301,128 +707,13 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
             >
               Start Chat
             </button>
-            <Link
-              href={`/characters/${id}/edit`}
-              className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 font-medium whitespace-nowrap text-center"
-            >
-              Edit
-            </Link>
           </div>
         </div>
 
-        {/* Two-column layout: content on left, conversations on right on wide screens */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-          {/* Left Column: Character Details */}
-          <div className="xl:col-span-2">
-            {/* Tags Section */}
-            {tags.length > 0 && (
-              <div className="mb-6">
-                <div className="flex flex-wrap gap-2">
-                  {tags.map((tag) => (
-                    <TagBadge key={tag.id} tag={tag} />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Main Content */}
-            <div className="space-y-6">
-        {character?.description && (
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              Description
-            </h2>
-            <div className="text-gray-700 dark:text-gray-300">
-              <MessageContent content={character.description} />
-            </div>
-          </div>
-        )}
-
-        {character?.personality && (
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              Personality
-            </h2>
-            <div className="text-gray-700 dark:text-gray-300">
-              <MessageContent content={character.personality} />
-            </div>
-          </div>
-        )}
-
-        {character?.scenario && (
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              Scenario
-            </h2>
-            <div className="text-gray-700 dark:text-gray-300">
-              <MessageContent content={character.scenario} />
-            </div>
-          </div>
-        )}
-
-        {character?.firstMessage && (
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              First Message
-            </h2>
-            <div className="text-gray-700 dark:text-gray-300">
-              <MessageContent content={character.firstMessage} />
-            </div>
-          </div>
-        )}
-
-        {character?.exampleDialogues && (
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              Example Dialogues
-            </h2>
-            <div className="text-gray-700 dark:text-gray-300">
-              <MessageContent content={character.exampleDialogues} />
-            </div>
-          </div>
-        )}
-
-        {character?.systemPrompt && (
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              System Prompt
-            </h2>
-            <pre className="bg-gray-900 dark:bg-gray-950 text-gray-100 p-4 rounded-md overflow-hidden my-2">
-              <code className="text-sm whitespace-pre-wrap break-words">
-                {character.systemPrompt}
-              </code>
-            </pre>
-          </div>
-        )}
-
-        {character?.defaultConnectionProfileId && (
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              Default Connection Profile
-            </h2>
-            <div className="text-gray-700 dark:text-gray-300">
-              <p className="text-sm">
-                This character uses a default connection profile for chats, which can be overridden per individual chat.
-              </p>
-              <p className="text-sm mt-2">
-                Profile ID: <code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-xs">{character.defaultConnectionProfileId}</code>
-              </p>
-            </div>
-          </div>
-        )}
-            </div>
-          </div>
-
-          {/* Right Column: Recent Conversations */}
-          <div className="xl:col-span-1">
-            <div className="sticky top-8">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                Recent Conversations
-              </h2>
-              <RecentCharacterConversations characterId={id} />
-            </div>
-          </div>
-        </div>
+        {/* Tabbed Content */}
+        <EntityTabs tabs={CHARACTER_TABS} defaultTab="details">
+          {renderTabContent}
+        </EntityTabs>
       </div>
 
       {/* Chat Creation Dialog */}

@@ -5,7 +5,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
-import { uploadChatFile } from '@/lib/chat-files'
+import { uploadChatFile } from '@/lib/chat-files-v2'
+import { findFilesLinkedTo, getFileUrl } from '@/lib/file-manager'
 
 // POST /api/chats/:id/files - Upload a file
 export async function POST(
@@ -41,33 +42,17 @@ export async function POST(
       return NextResponse.json({ error: 'No file provided' }, { status: 400 })
     }
 
-    // Upload the file
-    const uploadResult = await uploadChatFile(file, chatId)
-
-    // Save to images repository
-    const chatFile = await repos.images.create({
-      userId: user.id,
-      type: 'chat_file',
-      chatId,
-      filename: uploadResult.filename,
-      relativePath: uploadResult.filepath || `chats/${chatId}/${uploadResult.filename}`,
-      mimeType: uploadResult.mimeType,
-      size: uploadResult.size,
-      sha256: uploadResult.sha256,
-      source: 'upload',
-      width: uploadResult.width,
-      height: uploadResult.height,
-      tags: [],
-    })
+    // Upload the file (creates file entry automatically)
+    const uploadResult = await uploadChatFile(file, chatId, user.id)
 
     return NextResponse.json({
       file: {
-        id: chatFile.id,
+        id: uploadResult.id,
         filename: file.name, // Original filename for display
-        filepath: chatFile.relativePath,
-        mimeType: chatFile.mimeType,
-        size: chatFile.size,
-        url: `/${chatFile.relativePath}`,
+        filepath: uploadResult.filepath,
+        mimeType: uploadResult.mimeType,
+        size: uploadResult.size,
+        url: getFileUrl(uploadResult.id, file.name),
       },
     })
   } catch (error) {
@@ -116,19 +101,19 @@ export async function GET(
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
     }
 
-    // Get all files for this chat from images repository
-    const chatFiles = await repos.images.findByChatId(chatId)
+    // Get all files linked to this chat
+    const chatFiles = await findFilesLinkedTo(chatId)
 
     // Format files for response
     const allFiles = chatFiles.map((f) => ({
       id: f.id,
-      filename: f.filename,
-      filepath: f.relativePath,
+      filename: f.originalFilename,
+      filepath: getFileUrl(f.id, f.originalFilename),
       mimeType: f.mimeType,
       size: f.size,
-      url: `/${f.relativePath}`,
+      url: getFileUrl(f.id, f.originalFilename),
       createdAt: f.createdAt,
-      type: f.type === 'image' ? 'generatedImage' as const : 'chatFile' as const,
+      type: f.source === 'GENERATED' ? 'generatedImage' as const : 'chatFile' as const,
     }))
 
     // Sort by creation time, newest first

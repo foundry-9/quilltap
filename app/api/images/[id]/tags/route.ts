@@ -61,9 +61,16 @@ export async function POST(request: NextRequest, context: RouteContext) {
       }
     }
 
-    // Check if tag already exists
+    // Check if tag already exists - if it does, just return success (idempotent)
     if (image.tags.includes(tagId)) {
-      return NextResponse.json({ error: 'Tag already exists' }, { status: 400 });
+      return NextResponse.json({
+        data: {
+          imageId: id,
+          tagType,
+          tagId,
+          alreadyTagged: true,
+        }
+      });
     }
 
     // Add tag to image

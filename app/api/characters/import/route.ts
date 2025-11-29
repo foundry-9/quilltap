@@ -95,6 +95,7 @@ export async function POST(req: NextRequest) {
       personaLinks: [] as { personaId: string; isDefault: boolean }[],
       avatarOverrides: [] as { chatId: string; imageId: string }[],
       defaultImageId: null,
+      physicalDescriptions: [],
     })
 
     // Get chat count for response (will be 0 for new character)

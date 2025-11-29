@@ -143,6 +143,7 @@ export async function POST(req: NextRequest) {
       tags: [] as string[],
       characterLinks: [] as string[],
       defaultImageId: null,
+      physicalDescriptions: [],
     })
 
     return NextResponse.json(persona, { status: 201 })

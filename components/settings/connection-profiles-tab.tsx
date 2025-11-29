@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { TagEditor } from '@/components/tags/tag-editor'
 import { TagBadge } from '@/components/tags/tag-badge'
 import { ModelSelector } from './model-selector'
+import { getAttachmentSupportDescription } from '@/lib/llm/attachment-support'
 
 interface ApiKey {
   id: string
@@ -268,23 +269,37 @@ export default function ConnectionProfilesTab() {
       const method = editingId ? 'PUT' : 'POST'
       const url = editingId ? `/api/profiles/${editingId}` : '/api/profiles'
 
+      // Build request body
+      const requestBody: any = {
+        name: formData.name,
+        provider: formData.provider,
+        modelName: formData.modelName,
+        isDefault: formData.isDefault,
+        isCheap: formData.isCheap,
+        parameters: {
+          temperature: parseFloat(String(formData.temperature)),
+          max_tokens: parseInt(String(formData.maxTokens)),
+          top_p: parseFloat(String(formData.topP)),
+        },
+      }
+
+      // Always include apiKeyId when editing (to support changes)
+      // Only include when truthy for new profiles
+      if (editingId) {
+        requestBody.apiKeyId = formData.apiKeyId || null
+      } else if (formData.apiKeyId) {
+        requestBody.apiKeyId = formData.apiKeyId
+      }
+
+      // Only include baseUrl if set
+      if (formData.baseUrl) {
+        requestBody.baseUrl = formData.baseUrl
+      }
+
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: formData.name,
-          provider: formData.provider,
-          apiKeyId: formData.apiKeyId || undefined,
-          baseUrl: formData.baseUrl || undefined,
-          modelName: formData.modelName,
-          isDefault: formData.isDefault,
-          isCheap: formData.isCheap,
-          parameters: {
-            temperature: parseFloat(String(formData.temperature)),
-            max_tokens: parseInt(String(formData.maxTokens)),
-            top_p: parseFloat(String(formData.topP)),
-          },
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       if (!res.ok) {
@@ -295,6 +310,7 @@ export default function ConnectionProfilesTab() {
       resetForm()
       setShowForm(false)
       await fetchProfiles()
+      await fetchApiKeys()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
@@ -573,6 +589,9 @@ export default function ConnectionProfilesTab() {
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                       {profile.provider} • {profile.modelName}
                     </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                      {getAttachmentSupportDescription(profile.provider as any, profile.baseUrl ?? undefined)}
+                    </p>
                     {profile.messageCount !== undefined && (
                       <p className="text-sm text-blue-600 dark:text-blue-400 mt-1 font-medium">
                         {profile.messageCount} message{profile.messageCount === 1 ? '' : 's'} used
@@ -689,6 +708,9 @@ export default function ConnectionProfilesTab() {
                   <option value="OPENROUTER">OpenRouter</option>
                   <option value="OPENAI_COMPATIBLE">OpenAI Compatible</option>
                 </select>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                  File attachments: {getAttachmentSupportDescription(formData.provider as any, formData.baseUrl || undefined)}
+                </p>
               </div>
             </div>
 

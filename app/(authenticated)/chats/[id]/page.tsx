@@ -6,6 +6,7 @@ import ImageModal from '@/components/chat/ImageModal'
 import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
 import ToolPalette from '@/components/chat/ToolPalette'
 import ChatSettingsModal from '@/components/chat/ChatSettingsModal'
+import GenerateImageDialog from '@/components/chat/GenerateImageDialog'
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import { showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
@@ -117,7 +118,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const { id } = use(params)
   useAvatarDisplay()
   const debug = useDebugOptional()
-  console.log('[ChatPage] Rendered, debug available:', !!debug, 'debug.isDebugMode:', debug?.isDebugMode)
   const [chat, setChat] = useState<Chat | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -139,6 +139,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [galleryOpen, setGalleryOpen] = useState(false)
   const [toolPaletteOpen, setToolPaletteOpen] = useState(false)
   const [chatSettingsModalOpen, setChatSettingsModalOpen] = useState(false)
+  const [generateImageDialogOpen, setGenerateImageDialogOpen] = useState(false)
   const [toolExecutionStatus, setToolExecutionStatus] = useState<{ tool: string; status: 'pending' | 'success' | 'error'; message: string } | null>(null)
   const [showPreview, setShowPreview] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -712,7 +713,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const getAvatarSrc = (avatar: ReturnType<typeof getMessageAvatar>) => {
     if (!avatar) return null
     if (avatar.defaultImage) {
-      return avatar.defaultImage.url || `/${avatar.defaultImage.filepath}`
+      const filepath = avatar.defaultImage.url || avatar.defaultImage.filepath;
+      return filepath.startsWith('/') ? filepath : `/${filepath}`;
     }
     return avatar.avatarUrl || null
   }
@@ -1154,8 +1156,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   isOpen={toolPaletteOpen}
                   onClose={() => setToolPaletteOpen(false)}
                   onGalleryClick={() => setGalleryOpen(true)}
+                  onGenerateImageClick={() => setGenerateImageDialogOpen(true)}
                   onSettingsClick={() => setChatSettingsModalOpen(true)}
                   chatPhotoCount={chatPhotoCount}
+                  hasImageProfile={chat?.participants.some(p => p.imageProfile) ?? false}
                 />
               </div>
             </div>
@@ -1299,6 +1303,47 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         chatId={id}
         participants={chat?.participants || []}
         onSuccess={fetchChat}
+      />
+
+      {/* Generate Image Dialog */}
+      <GenerateImageDialog
+        isOpen={generateImageDialogOpen}
+        onClose={() => setGenerateImageDialogOpen(false)}
+        chatId={id}
+        participants={chat?.participants || []}
+        imageProfileId={chat?.participants.find(p => p.type === 'CHARACTER' && p.isActive)?.imageProfile?.id}
+        onImagesGenerated={(images, prompt) => {
+          // Save tool result message to chat
+          fetch(`/api/chats/${id}/tool-results`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tool: 'generate_image',
+              initiatedBy: 'user',
+              prompt,
+              images: images.map(img => ({
+                id: img.id,
+                filename: img.filename,
+              })),
+            }),
+          })
+            .then((res) => res.json())
+            .then(() => {
+              // Refresh chat to show the new tool message
+              fetchChat()
+            })
+            .catch((err) => console.error('Failed to save tool result:', err))
+
+          // Attach generated images to the next message
+          setAttachedFiles((prev) => [
+            ...prev,
+            ...images.map((img) => ({
+              ...img,
+              url: img.filepath.startsWith('/') ? img.filepath : `/${img.filepath}`,
+            })),
+          ])
+          fetchChatPhotoCount()
+        }}
       />
       </div>
 
