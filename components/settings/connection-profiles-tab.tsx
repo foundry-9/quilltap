@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { TagEditor } from '@/components/tags/tag-editor'
 import { TagBadge } from '@/components/tags/tag-badge'
 import { ModelSelector } from './model-selector'
+import { getAttachmentSupportDescription } from '@/lib/llm/attachment-support'
 
 interface ApiKey {
   id: string
@@ -588,6 +589,9 @@ export default function ConnectionProfilesTab() {
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                       {profile.provider} • {profile.modelName}
                     </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                      {getAttachmentSupportDescription(profile.provider as any, profile.baseUrl ?? undefined)}
+                    </p>
                     {profile.messageCount !== undefined && (
                       <p className="text-sm text-blue-600 dark:text-blue-400 mt-1 font-medium">
                         {profile.messageCount} message{profile.messageCount === 1 ? '' : 's'} used
@@ -704,6 +708,9 @@ export default function ConnectionProfilesTab() {
                   <option value="OPENROUTER">OpenRouter</option>
                   <option value="OPENAI_COMPATIBLE">OpenAI Compatible</option>
                 </select>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                  File attachments: {getAttachmentSupportDescription(formData.provider as any, formData.baseUrl || undefined)}
+                </p>
               </div>
             </div>
 

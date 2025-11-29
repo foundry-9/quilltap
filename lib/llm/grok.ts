@@ -1,22 +1,19 @@
 // Grok Provider Implementation
 // Based on OpenAI-Compatible Provider
 // Grok API is OpenAI-compatible and uses base URL: https://api.x.ai/v1
-// Grok supports file uploads (images, PDFs, documents) as of November 2025
+// Grok supports image uploads as of November 2025
+// Text and PDF files are handled via the fallback system for better compatibility
 
 import OpenAI from 'openai'
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
 import { LLMProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage, type ImageGenParams, type ImageGenResponse } from './base'
 
-// Grok supports images and documents (as of Nov 2025)
+// Grok supports images (text/PDF handled via fallback system)
 const GROK_SUPPORTED_MIME_TYPES = [
   'image/jpeg',
   'image/png',
   'image/gif',
   'image/webp',
-  'application/pdf',
-  'text/plain',
-  'text/markdown',
-  'text/csv',
 ]
 
 type GrokMessageContent = string | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string; detail?: 'auto' | 'low' | 'high' } }>

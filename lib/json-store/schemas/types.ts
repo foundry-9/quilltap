@@ -152,6 +152,8 @@ export const ChatSettingsSchema = z.object({
     fallbackToLocal: true,
     embeddingProvider: 'OPENAI',
   }),
+  /** Profile ID to use for image description fallback (when provider doesn't support images) */
+  imageDescriptionProfileId: UUIDSchema.nullable().optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

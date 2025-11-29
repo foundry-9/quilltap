@@ -14,6 +14,11 @@ import { memorySearchToolDefinition, anthropicMemorySearchToolDefinition, getGoo
 import { processMessageForMemoryAsync } from '@/lib/memory'
 import { buildContext } from '@/lib/chat/context-manager'
 import { checkAndGenerateSummaryIfNeeded } from '@/lib/chat/context-summary'
+import {
+  processFileAttachmentFallback,
+  formatFallbackAsMessagePrefix,
+  type FallbackResult,
+} from '@/lib/chat/file-attachment-fallback'
 import { z } from 'zod'
 
 // Validation schema
@@ -378,6 +383,36 @@ export async function POST(
     // Load file data for LLM
     const fileAttachments = await loadChatFilesForLLM(attachedFiles)
 
+    // Process file attachment fallbacks if provider doesn't support them
+    const fallbackResults: FallbackResult[] = []
+    let messageContentPrefix = ''
+
+    if (fileAttachments.length > 0 && attachedFiles.length > 0) {
+      for (let i = 0; i < fileAttachments.length; i++) {
+        const fileAttachment = fileAttachments[i]
+        const fileMetadata = attachedFiles[i]
+
+        const fallbackResult = await processFileAttachmentFallback(
+          fileMetadata,
+          fileAttachment,
+          connectionProfile,
+          repos,
+          user.id
+        )
+
+        fallbackResults.push(fallbackResult)
+
+        // Add fallback content to message prefix
+        const fallbackPrefix = formatFallbackAsMessagePrefix(fallbackResult)
+        if (fallbackPrefix) {
+          messageContentPrefix += fallbackPrefix
+        }
+      }
+    }
+
+    // If we have fallback content, prepend it to the user's message
+    const finalUserMessageContent = messageContentPrefix ? messageContentPrefix + content : content
+
     // Get persona if available
     const personaParticipant = chat.participants.find(
       p => p.type === 'PERSONA' && p.isActive && p.personaId
@@ -440,7 +475,7 @@ export async function POST(
       persona,
       chat,
       existingMessages: conversationMessages,
-      newUserMessage: content,
+      newUserMessage: finalUserMessageContent,
       systemPromptOverride: characterParticipant.systemPromptOverride,
       embeddingProfileId: chatSettings?.cheapLLMSettings?.embeddingProfileId || undefined,
       skipMemories: false,
@@ -454,12 +489,19 @@ export async function POST(
     }
 
     // Prepare final messages for LLM (add attachments to the last user message)
+    // Filter out attachments that were processed via fallback
+    const attachmentsToSend = fileAttachments.filter((_, idx) => {
+      const fallback = fallbackResults[idx]
+      // Don't send as attachment if it was converted to text or description
+      return !fallback || (fallback.type !== 'text' && fallback.type !== 'image_description')
+    })
+
     const messages = builtContext.messages.map((msg, idx) => {
-      if (idx === builtContext.messages.length - 1 && msg.role === 'user' && fileAttachments.length > 0) {
+      if (idx === builtContext.messages.length - 1 && msg.role === 'user' && attachmentsToSend.length > 0) {
         return {
           role: msg.role,
           content: msg.content,
-          attachments: fileAttachments,
+          attachments: attachmentsToSend,
         }
       }
       return {
@@ -553,6 +595,19 @@ export async function POST(
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({ debugLLMRequest: llmRequestDetails })}\n\n`)
           )
+
+          // Send fallback processing info if any files were processed
+          if (fallbackResults.length > 0) {
+            const fallbackInfo = fallbackResults.map((result, idx) => ({
+              filename: result.processingMetadata?.originalFilename || 'Unknown',
+              type: result.type,
+              usedImageDescriptionLLM: result.processingMetadata?.usedImageDescriptionLLM || false,
+              error: result.error,
+            }))
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ fileProcessing: fallbackInfo })}\n\n`)
+            )
+          }
 
           for await (const chunk of provider.streamMessage(
             {

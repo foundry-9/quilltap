@@ -20,7 +20,8 @@ async function updateChatSettings(
   avatarDisplayMode?: string,
   avatarDisplayStyle?: string,
   tagStyles?: unknown,
-  cheapLLMSettings?: unknown
+  cheapLLMSettings?: unknown,
+  imageDescriptionProfileId?: string | null
 ) {
   // Validate avatarDisplayMode if provided
   if (avatarDisplayMode) {
@@ -62,6 +63,9 @@ async function updateChatSettings(
       }
     }
     updateData.cheapLLMSettings = cheapLLMSettings
+  }
+  if (typeof imageDescriptionProfileId !== 'undefined') {
+    updateData.imageDescriptionProfileId = imageDescriptionProfileId
   }
 
   return repos.users.updateChatSettings(userId, updateData)
@@ -119,14 +123,15 @@ async function handleSettingsUpdate(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { avatarDisplayMode, avatarDisplayStyle, tagStyles, cheapLLMSettings } = body
+    const { avatarDisplayMode, avatarDisplayStyle, tagStyles, cheapLLMSettings, imageDescriptionProfileId } = body
 
     const chatSettings = await updateChatSettings(
       session.user.id,
       avatarDisplayMode,
       avatarDisplayStyle,
       tagStyles,
-      cheapLLMSettings
+      cheapLLMSettings,
+      imageDescriptionProfileId
     )
 
     return NextResponse.json(chatSettings)
