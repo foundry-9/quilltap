@@ -3,7 +3,7 @@
 AI-powered roleplay chat platform with multi-provider LLM support and full SillyTavern compatibility.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.7.3-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-1.7.4-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -501,6 +501,8 @@ Copyright (c) 2025 Foundry-9
   - Cheap LLM + embedding controls let you mark profiles as "cheap," pick provider strategies or user-defined defaults, manage dedicated OpenAI/Ollama embedding profiles, and fall back to keyword heuristics when embeddings are unavailable while powering summaries/memories.
   - Characters and personas gain tabbed detail/edit pages plus a physical description editor with short/medium/long/complete tiers that feed galleries, chat context, and other tooling.
   - Image generation prompt expansion now understands `{{Character}}`/`{{me}}` placeholders, pulls those physical description tiers, and has the cheap LLM craft provider-sized prompts before handing them to Grok, Imagen, DALL·E, etc.
+- **1.7:** To Be Determined
+  - Quick-hide for sensitive tags, hit one button and watch everything tagged that way disappear, toggle it back and it reappears
 
 ## Roadmap
 
