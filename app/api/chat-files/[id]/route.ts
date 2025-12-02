@@ -1,16 +1,19 @@
 /**
  * Chat File API Routes
- * POST /api/chat-files/:id/tag - Copy to gallery and tag image
- * DELETE /api/chat-files/:id - Delete chat file
+ * POST /api/chat-files/:id - Tag a chat file with CHARACTER/PERSONA
+ * DELETE /api/chat-files/:id - Delete a chat file
+ *
+ * All operations use the file-manager system exclusively.
+ * Legacy gallery entries are no longer created or managed here.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
+import { logger } from '@/lib/logger'
 import { z } from 'zod'
-import fs from 'fs/promises'
-import path from 'path'
+import { findFileById, addFileTag, deleteFile } from '@/lib/file-manager'
 
 interface RouteContext {
   params: Promise<{ id: string }>
@@ -23,12 +26,13 @@ const tagSchema = z.object({
 
 /**
  * POST /api/chat-files/:id
- * Copy chat file to gallery and optionally tag it
+ * Tag a chat file with a CHARACTER or PERSONA
  */
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
+      logger.debug('POST /api/chat-files/[id] - Unauthorized: no session')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -36,22 +40,53 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const body = await request.json()
     const { tagType, tagId } = tagSchema.parse(body)
 
+    logger.debug('POST /api/chat-files/[id] - Tagging file', {
+      fileId: id,
+      tagType,
+      tagId,
+      userId: session.user.id,
+    })
+
     const repos = getRepositories()
 
-    // Get the chat file (can be any image with a chatId)
-    const chatFile = await repos.images.findById(id)
+    // Get the file from the file-manager system
+    const fileEntry = await findFileById(id)
 
-    if (!chatFile || !chatFile.chatId) {
-      return NextResponse.json({ error: 'Chat file not found' }, { status: 404 })
+    if (!fileEntry) {
+      logger.debug('POST /api/chat-files/[id] - File not found', { fileId: id })
+      return NextResponse.json({ error: 'File not found' }, { status: 404 })
     }
 
-    // Verify chat belongs to user by checking the chatId
-    if (chatFile.chatId) {
-      const chat = await repos.chats.findById(chatFile.chatId)
-      if (!chat || chat.userId !== session.user.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      }
-    } else if (chatFile.userId !== session.user.id) {
+    // Verify file belongs to user
+    if (fileEntry.userId !== session.user.id) {
+      logger.debug('POST /api/chat-files/[id] - File does not belong to user', {
+        fileId: id,
+        fileUserId: fileEntry.userId,
+        sessionUserId: session.user.id,
+      })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Verify the file is linked to a chat
+    const chatId = fileEntry.linkedTo.find(linkId => linkId.startsWith('chat-') || linkId.length === 36)
+    if (!chatId) {
+      logger.debug('POST /api/chat-files/[id] - File not linked to a chat', {
+        fileId: id,
+        linkedTo: fileEntry.linkedTo,
+      })
+      return NextResponse.json({ error: 'File is not associated with a chat' }, { status: 400 })
+    }
+
+    // Verify chat belongs to user
+    const chat = await repos.chats.findById(chatId)
+    if (!chat || chat.userId !== session.user.id) {
+      logger.debug('POST /api/chat-files/[id] - Chat does not belong to user', {
+        fileId: id,
+        chatId,
+        chatExists: !!chat,
+        chatUserId: chat?.userId,
+        sessionUserId: session.user.id,
+      })
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -59,30 +94,50 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (tagType === 'CHARACTER') {
       const character = await repos.characters.findById(tagId)
       if (!character || character.userId !== session.user.id) {
+        logger.debug('POST /api/chat-files/[id] - Character not found or unauthorized', {
+          fileId: id,
+          tagId,
+          characterExists: !!character,
+          characterUserId: character?.userId,
+          sessionUserId: session.user.id,
+        })
         return NextResponse.json({ error: 'Character not found' }, { status: 404 })
       }
+      logger.debug('POST /api/chat-files/[id] - Character verified', {
+        fileId: id,
+        characterId: tagId,
+        characterName: character.name,
+      })
     } else if (tagType === 'PERSONA') {
       const persona = await repos.personas.findById(tagId)
       if (!persona || persona.userId !== session.user.id) {
+        logger.debug('POST /api/chat-files/[id] - Persona not found or unauthorized', {
+          fileId: id,
+          tagId,
+          personaExists: !!persona,
+          personaUserId: persona?.userId,
+          sessionUserId: session.user.id,
+        })
         return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
       }
+      logger.debug('POST /api/chat-files/[id] - Persona verified', {
+        fileId: id,
+        personaId: tagId,
+        personaName: persona.name,
+      })
     }
 
-    // Check if this file has already been copied to the gallery with this tag
-    // Use SHA256 hash for more reliable comparison (files might be stored at different paths)
-    const allImages = await repos.images.findByUserId(session.user.id)
-    const existingImage = allImages.find(
-      img => img.type === 'image' &&
-             img.sha256 === chatFile.sha256 &&
-             img.tags.includes(tagId)
-    )
-
-    if (existingImage) {
-      // Image is already tagged - this is idempotent, so return success
-      // This handles the case where the user clicks tag multiple times or the request is retried
+    // Check if tag already exists on this file
+    const alreadyTagged = fileEntry.tags.includes(tagId)
+    if (alreadyTagged) {
+      logger.debug('POST /api/chat-files/[id] - File already tagged', {
+        fileId: id,
+        tagType,
+        tagId,
+      })
       return NextResponse.json({
         data: {
-          imageId: existingImage.id,
+          fileId: id,
           tagType,
           tagId,
           alreadyTagged: true,
@@ -90,51 +145,41 @@ export async function POST(request: NextRequest, context: RouteContext) {
       })
     }
 
-    // Check if image already exists in gallery (by SHA256 hash - more reliable than relativePath)
-    let image = allImages.find(
-      img => img.type === 'image' && img.sha256 === chatFile.sha256
-    )
+    // Add the tag to the file
+    logger.debug('POST /api/chat-files/[id] - Adding tag to file', {
+      fileId: id,
+      tagType,
+      tagId,
+    })
+    const updatedFileEntry = await addFileTag(id, tagId)
 
-    // If image doesn't exist in gallery, create it
-    if (!image) {
-      image = await repos.images.create({
-        sha256: chatFile.sha256,
-        type: 'image',
-        userId: session.user.id,
-        filename: chatFile.filename,
-        relativePath: chatFile.relativePath,
-        mimeType: chatFile.mimeType,
-        size: chatFile.size,
-        source: chatFile.source || 'upload',
-        width: chatFile.width ?? undefined,
-        height: chatFile.height ?? undefined,
-        tags: [tagId],
-      })
-    } else {
-      // Add tag to existing image
-      await repos.images.addTag(image.id, tagId)
-      const updatedImage = await repos.images.findById(image.id)
-      if (updatedImage) {
-        image = updatedImage
-      }
-    }
+    logger.debug('POST /api/chat-files/[id] - Tag added successfully', {
+      fileId: id,
+      tagType,
+      tagId,
+      updatedTags: updatedFileEntry.tags,
+    })
 
     return NextResponse.json({
       data: {
-        imageId: image.id,
+        fileId: id,
         tagType,
         tagId,
       },
     })
   } catch (error) {
-    console.error('Error tagging chat file:', error)
+    logger.error(
+      'Error tagging chat file',
+      { context: 'POST /api/chat-files/[id]' },
+      error instanceof Error ? error : undefined
+    )
 
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Validation error', details: error.errors }, { status: 400 })
     }
 
     return NextResponse.json(
-      { error: 'Failed to tag image', details: error instanceof Error ? error.message : String(error) },
+      { error: 'Failed to tag file', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     )
   }
@@ -142,78 +187,90 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
 /**
  * DELETE /api/chat-files/:id
- * Delete a chat file or generated image in a chat
+ * Delete a chat file and its physical file
  */
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
+      logger.debug('DELETE /api/chat-files/[id] - Unauthorized: no session')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const { id } = await context.params
 
+    logger.debug('DELETE /api/chat-files/[id] - Deleting file', {
+      fileId: id,
+      userId: session.user.id,
+    })
+
     const repos = getRepositories()
 
-    // Get the file (can be chat_file or image)
-    const file = await repos.images.findById(id)
+    // Get the file from file-manager
+    const fileEntry = await findFileById(id)
 
-    if (!file) {
+    if (!fileEntry) {
+      logger.debug('DELETE /api/chat-files/[id] - File not found', { fileId: id })
       return NextResponse.json({ error: 'File not found' }, { status: 404 })
     }
 
-    // Accept both 'chat_file' (uploaded) and 'image' (generated in chat) types
-    if (file.type !== 'chat_file' && file.type !== 'image') {
-      return NextResponse.json({ error: 'File not found' }, { status: 404 })
-    }
-
-    // For images, require a chatId to ensure they belong to a chat
-    if (file.type === 'image' && !file.chatId) {
-      return NextResponse.json({ error: 'Invalid file for deletion' }, { status: 400 })
-    }
-
-    // Verify the file belongs to a chat that belongs to the user
-    if (file.chatId) {
-      const chat = await repos.chats.findById(file.chatId)
-      if (!chat || chat.userId !== session.user.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      }
-    } else if (file.userId !== session.user.id) {
+    // Verify file belongs to user
+    if (fileEntry.userId !== session.user.id) {
+      logger.debug('DELETE /api/chat-files/[id] - File does not belong to user', {
+        fileId: id,
+        fileUserId: fileEntry.userId,
+        sessionUserId: session.user.id,
+      })
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Check if this file is being used elsewhere
-    const allImages = await repos.images.findByUserId(session.user.id)
-    
-    // For chat_file type, check if there's a corresponding image in gallery
-    let canDeleteFromDisk = true
-    if (file.type === 'chat_file') {
-      const galleryImage = allImages.find(
-        img => img.type === 'image' && img.sha256 === file.sha256
-      )
-      canDeleteFromDisk = !galleryImage
+    // Verify the file is linked to a chat
+    const chatId = fileEntry.linkedTo.find(linkId => linkId.startsWith('chat-') || linkId.length === 36)
+    if (!chatId) {
+      logger.debug('DELETE /api/chat-files/[id] - File not linked to a chat', {
+        fileId: id,
+        linkedTo: fileEntry.linkedTo,
+      })
+      return NextResponse.json({ error: 'File is not associated with a chat' }, { status: 400 })
     }
 
-    // Delete the database record
-    const deleted = await repos.images.delete(id)
-    
+    // Verify chat belongs to user
+    const chat = await repos.chats.findById(chatId)
+    if (!chat || chat.userId !== session.user.id) {
+      logger.debug('DELETE /api/chat-files/[id] - Chat does not belong to user', {
+        fileId: id,
+        chatId,
+        chatExists: !!chat,
+        chatUserId: chat?.userId,
+        sessionUserId: session.user.id,
+      })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Delete the file from file-manager (both entry and physical file)
+    logger.debug('DELETE /api/chat-files/[id] - Deleting file from file-manager', {
+      fileId: id,
+      filename: fileEntry.originalFilename,
+    })
+    const deleted = await deleteFile(id)
+
     if (!deleted) {
-      return NextResponse.json({ error: 'Failed to delete file' }, { status: 500 })
+      logger.debug('DELETE /api/chat-files/[id] - File not found in file-manager', { fileId: id })
+      return NextResponse.json({ error: 'File not found' }, { status: 404 })
     }
 
-    // Only delete the file from disk if it's not referenced elsewhere
-    if (canDeleteFromDisk) {
-      const fullPath = path.join(process.cwd(), 'public', file.relativePath)
-      try {
-        await fs.unlink(fullPath)
-      } catch (err) {
-        // File might already be deleted, that's ok
-      }
-    }
+    logger.debug('DELETE /api/chat-files/[id] - File deleted successfully', {
+      fileId: id,
+      filename: fileEntry.originalFilename,
+    })
 
     return NextResponse.json({ data: { success: true } })
   } catch (error) {
-    console.error('Error deleting file:', error)
+    logger.error(
+      'Error deleting file',
+      { context: 'DELETE /api/chat-files/[id]' },
+      error instanceof Error ? error : undefined
+    )
     return NextResponse.json(
       { error: 'Failed to delete file', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }

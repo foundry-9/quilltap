@@ -3,6 +3,8 @@
  * Supports SillyTavern V2 character format
  */
 
+import { logger } from '@/lib/logger'
+
 export interface STCharacterV2 {
   name: string
   description: string
@@ -148,7 +150,7 @@ export async function parseSTCharacterPNG(
 
     return null
   } catch (error) {
-    console.error('Error parsing ST character PNG:', error)
+    logger.error('Error parsing ST character PNG', { context: {} }, error instanceof Error ? error : undefined)
     return null
   }
 }

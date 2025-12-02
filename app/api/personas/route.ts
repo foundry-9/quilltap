@@ -8,6 +8,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
+import { findFileById, getFileUrl } from '@/lib/file-manager'
+import { logger } from '@/lib/logger'
 
 export async function GET(req: NextRequest) {
   try {
@@ -28,10 +30,17 @@ export async function GET(req: NextRequest) {
     // Enrich personas with related data
     const enrichedPersonas = await Promise.all(
       personas.map(async (persona) => {
-        // Get default image if present
+        // Get default image from file-manager if present
         let defaultImage = null
         if (persona.defaultImageId) {
-          defaultImage = await repos.images.findById(persona.defaultImageId)
+          const fileEntry = await findFileById(persona.defaultImageId)
+          if (fileEntry) {
+            defaultImage = {
+              id: fileEntry.id,
+              filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename),
+              url: null,
+            }
+          }
         }
 
         // Get character links
@@ -59,13 +68,7 @@ export async function GET(req: NextRequest) {
 
         return {
           ...persona,
-          defaultImage: defaultImage
-            ? {
-                id: defaultImage.id,
-                filepath: defaultImage.relativePath,
-                url: null,
-              }
-            : null,
+          defaultImage,
           characters: characters.filter(Boolean),
           tags: tags.filter(Boolean),
         }
@@ -102,7 +105,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(enrichedPersonas)
   } catch (error) {
-    console.error('Error fetching personas:', error)
+    logger.error('Error fetching personas:', error as Error)
     return NextResponse.json(
       { error: 'Failed to fetch personas' },
       { status: 500 }
@@ -148,7 +151,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(persona, { status: 201 })
   } catch (error) {
-    console.error('Error creating persona:', error)
+    logger.error('Error creating persona:', error as Error)
     return NextResponse.json(
       { error: 'Failed to create persona' },
       { status: 500 }

@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
+import { logger } from '@/lib/logger'
 import { z } from 'zod'
 
 const createDescriptionSchema = z.object({
@@ -51,7 +52,7 @@ export async function GET(
 
     return NextResponse.json({ descriptions })
   } catch (error) {
-    console.error('Error fetching character descriptions:', error)
+    logger.error('Error fetching character descriptions', { context: 'GET /api/characters/[id]/descriptions' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to fetch character descriptions' },
       { status: 500 }
@@ -110,7 +111,7 @@ export async function POST(
       )
     }
 
-    console.error('Error creating character description:', error)
+    logger.error('Error creating character description', { context: 'POST /api/characters/[id]/descriptions' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to create character description' },
       { status: 500 }

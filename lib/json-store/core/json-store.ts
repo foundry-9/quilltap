@@ -12,6 +12,7 @@
  * - In-memory caching for hot data (optional)
  */
 
+import { logger } from '@/lib/logger'
 import * as fs from 'fs';
 import * as path from 'path';
 import { promisify } from 'util';
@@ -134,7 +135,7 @@ export class JsonStore {
       await unlink(lockPath);
     } catch (error: any) {
       if (error.code !== 'ENOENT') {
-        console.error(`Failed to release lock for ${filePath}:`, error);
+        logger.error(`Failed to release lock for ${filePath}`, { context: { filePath } }, error instanceof Error ? error : undefined);
       }
     }
   }

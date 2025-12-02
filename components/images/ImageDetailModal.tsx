@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import DeletedImagePlaceholder from './DeletedImagePlaceholder'
 
@@ -78,7 +79,7 @@ export default function ImageDetailModal({
           setPersonas(personasData.personas || [])
         }
       } catch (error) {
-        console.error('Failed to load entities:', error)
+        clientLogger.error('Failed to load entities:', { error: error instanceof Error ? error.message : String(error) })
       } finally {
         setLoadingEntities(false)
       }
@@ -317,7 +318,7 @@ export default function ImageDetailModal({
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
     } catch (error) {
-      console.error('Failed to download image:', error)
+      clientLogger.error('Failed to download image:', { error: error instanceof Error ? error.message : String(error) })
     }
   }
 

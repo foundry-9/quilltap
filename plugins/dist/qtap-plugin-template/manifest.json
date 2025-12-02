@@ -1,0 +1,80 @@
+{
+  "$schema": "schemas/plugin-manifest.schema.json",
+  "name": "qtap-plugin-template",
+  "title": "Quilltap Plugin Template",
+  "description": "A comprehensive template plugin for Quilltap demonstrating all available plugin capabilities and configuration options.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Charles Sebold",
+    "email": "charles@sebold.tech",
+    "url": "https://foundry-9.com"
+  },
+  "license": "MIT",
+  "main": "index.js",
+  "homepage": "https://github.com/foundry-9/quilltap/tree/main/plugins/qtap-plugin-template",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/foundry-9/quilltap.git"
+  },
+  "compatibility": {
+    "quilltapVersion": ">=1.7.0",
+    "nodeVersion": ">=18.0.0"
+  },
+  "capabilities": [
+    "API_ROUTES"
+  ],
+  "frontend": "REACT",
+  "styling": "TAILWIND",
+  "typescript": false,
+  "hooks": [],
+  "apiRoutes": [
+    {
+      "path": "/api/example",
+      "handler": "exampleHandler.js",
+      "methods": ["GET", "POST"],
+      "description": "An example API route that returns a simple JSON response",
+      "requiresAuth": true
+    }
+  ],
+  "components": [],
+  "models": [],
+  "configSchema": [
+    {
+      "key": "exampleSetting",
+      "label": "Example Setting",
+      "type": "text",
+      "default": "default value",
+      "required": false,
+      "description": "An example configuration setting for demonstration purposes"
+    },
+    {
+      "key": "enableFeature",
+      "label": "Enable Feature",
+      "type": "boolean",
+      "default": false,
+      "required": false,
+      "description": "Toggle to enable or disable the example feature"
+    }
+  ],
+  "defaultConfig": {
+    "exampleSetting": "default value",
+    "enableFeature": false
+  },
+  "permissions": {
+    "fileSystem": [],
+    "network": [],
+    "environment": [],
+    "database": false,
+    "userData": false
+  },
+  "sandboxed": true,
+  "keywords": [
+    "quilltap",
+    "plugin",
+    "template",
+    "example"
+  ],
+  "category": "UTILITY",
+  "enabledByDefault": false,
+  "status": "STABLE"
+}

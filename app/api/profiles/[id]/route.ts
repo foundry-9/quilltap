@@ -11,10 +11,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
-import { ProviderEnum } from '@/lib/json-store/schemas/types'
+import { logger } from '@/lib/logger'
 
-// Get the list of valid providers from the Zod enum
-const VALID_PROVIDERS = ProviderEnum.options
+// Disable caching for this route
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 /**
  * GET /api/profiles/[id]
@@ -63,7 +64,7 @@ export async function GET(
       apiKey,
     })
   } catch (error) {
-    console.error('Failed to fetch connection profile:', error)
+    logger.error('Failed to fetch connection profile', { context: 'GET /api/profiles/:id' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to fetch connection profile' },
       { status: 500 }
@@ -112,7 +113,7 @@ export async function PUT(
     }
 
     const body = await req.json()
-    const { name, provider, apiKeyId, baseUrl, modelName, parameters, isDefault, isCheap } = body
+    const { name, provider, apiKeyId, baseUrl, modelName, parameters, isDefault, isCheap, allowWebSearch } = body
 
     // Build update data
     const updateData: any = {}
@@ -128,9 +129,9 @@ export async function PUT(
     }
 
     if (provider !== undefined) {
-      if (!provider || !VALID_PROVIDERS.includes(provider)) {
+      if (typeof provider !== 'string' || provider.trim().length === 0) {
         return NextResponse.json(
-          { error: 'Invalid provider' },
+          { error: 'Provider must be a non-empty string' },
           { status: 400 }
         )
       }
@@ -219,6 +220,16 @@ export async function PUT(
       updateData.isCheap = isCheap
     }
 
+    if (allowWebSearch !== undefined) {
+      if (typeof allowWebSearch !== 'boolean') {
+        return NextResponse.json(
+          { error: 'allowWebSearch must be a boolean' },
+          { status: 400 }
+        )
+      }
+      updateData.allowWebSearch = allowWebSearch
+    }
+
     // Update the profile
     const updatedProfile = await repos.connections.update(id, updateData)
 
@@ -248,7 +259,7 @@ export async function PUT(
       apiKey,
     })
   } catch (error) {
-    console.error('Failed to update connection profile:', error)
+    logger.error('Failed to update connection profile', { context: 'PUT /api/profiles/:id' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to update connection profile' },
       { status: 500 }
@@ -294,7 +305,7 @@ export async function DELETE(
       { status: 200 }
     )
   } catch (error) {
-    console.error('Failed to delete connection profile:', error)
+    logger.error('Failed to delete connection profile', { context: 'DELETE /api/profiles/:id' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to delete connection profile' },
       { status: 500 }

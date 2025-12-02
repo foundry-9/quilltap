@@ -8,6 +8,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { z } from 'zod'
+import { logger } from '@/lib/logger'
 
 const updateDescriptionSchema = z.object({
   name: z.string().min(1).optional(),
@@ -56,7 +57,7 @@ export async function GET(
 
     return NextResponse.json({ description })
   } catch (error) {
-    console.error('Error fetching persona description:', error)
+    logger.error('Error fetching persona description:', error as Error)
     return NextResponse.json(
       { error: 'Failed to fetch persona description' },
       { status: 500 }
@@ -112,7 +113,7 @@ export async function PUT(
       )
     }
 
-    console.error('Error updating persona description:', error)
+    logger.error('Error updating persona description:', error as Error)
     return NextResponse.json(
       { error: 'Failed to update persona description' },
       { status: 500 }
@@ -158,7 +159,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error deleting persona description:', error)
+    logger.error('Error deleting persona description:', error as Error)
     return NextResponse.json(
       { error: 'Failed to delete persona description' },
       { status: 500 }

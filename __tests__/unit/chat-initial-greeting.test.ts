@@ -1,9 +1,9 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals'
 import { generateGreetingMessage } from '@/lib/chat/initial-greeting'
-import { createLLMProvider } from '@/lib/llm/factory'
+import { createLLMProvider } from '@/lib/llm'
 import type { LLMProvider } from '@/lib/llm/base'
 
-jest.mock('@/lib/llm/factory')
+jest.mock('@/lib/llm/plugin-factory')
 
 const mockCreateProvider = jest.mocked(createLLMProvider)
 

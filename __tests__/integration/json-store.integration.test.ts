@@ -16,10 +16,20 @@ import { UsersRepository } from '@/lib/json-store/repositories/users.repository'
 import { ImagesRepository } from '@/lib/json-store/repositories/images.repository';
 import { ConnectionProfilesRepository } from '@/lib/json-store/repositories/connection-profiles.repository';
 
+// Test UUIDs - using valid UUID format
+const TEST_USER_ID = '11111111-1111-1111-1111-111111111111';
+const TEST_CHARACTER_ID = '22222222-2222-2222-2222-222222222222';
+const TEST_CONNECTION_PROFILE_ID = '33333333-3333-3333-3333-333333333333';
+const TEST_TAG_ID_1 = '44444444-4444-4444-4444-444444444444';
+const TEST_TAG_ID_2 = '55555555-5555-5555-5555-555555555555';
+const TEST_MESSAGE_ID_1 = '66666666-6666-6666-6666-666666666666';
+const TEST_MESSAGE_ID_2 = '77777777-7777-7777-7777-777777777777';
+const TEST_CHAR_LINK_ID = '88888888-8888-8888-8888-888888888888';
+
 // Helper function to create minimal character data
 function createCharacterData(overrides: any = {}) {
   return {
-    userId: 'user-123',
+    userId: TEST_USER_ID,
     name: 'Test Character',
     description: 'A test character',
     personality: 'Test personality',
@@ -36,9 +46,9 @@ function createCharacterData(overrides: any = {}) {
 // Helper function to create minimal chat data
 function createChatData(overrides: any = {}) {
   return {
-    userId: 'user-123',
-    characterId: 'char-123',
-    connectionProfileId: 'profile-123',
+    userId: TEST_USER_ID,
+    characterId: TEST_CHARACTER_ID,
+    connectionProfileId: TEST_CONNECTION_PROFILE_ID,
     title: 'Test Chat',
     tags: [],
     messageCount: 0,
@@ -49,7 +59,7 @@ function createChatData(overrides: any = {}) {
 // Helper function to create minimal persona data
 function createPersonaData(overrides: any = {}) {
   return {
-    userId: 'user-123',
+    userId: TEST_USER_ID,
     name: 'Test Persona',
     description: 'A test persona',
     tags: [],
@@ -61,7 +71,7 @@ function createPersonaData(overrides: any = {}) {
 // Helper function to create minimal connection profile data
 function createConnectionData(overrides: any = {}) {
   return {
-    userId: 'user-123',
+    userId: TEST_USER_ID,
     name: 'Test Profile',
     provider: 'OPENAI' as const,
     modelName: 'gpt-4',
@@ -123,7 +133,7 @@ describe('JSON Store Integration Tests', () => {
 
       expect(character.id).toBeDefined();
       expect(character.name).toBe('Alice');
-      expect(character.userId).toBe('user-123');
+      expect(character.userId).toBe(TEST_USER_ID);
 
       const retrieved = await charactersRepo.findById(character.id);
       expect(retrieved).toEqual(character);
@@ -133,7 +143,7 @@ describe('JSON Store Integration Tests', () => {
       await charactersRepo.create(createCharacterData({ name: 'Alice' }));
       await charactersRepo.create(createCharacterData({ name: 'Bob' }));
 
-      const characters = await charactersRepo.findByUserId('user-123');
+      const characters = await charactersRepo.findByUserId(TEST_USER_ID);
       expect(characters).toHaveLength(2);
       expect(characters.map(c => c.name)).toContain('Alice');
       expect(characters.map(c => c.name)).toContain('Bob');
@@ -172,14 +182,14 @@ describe('JSON Store Integration Tests', () => {
         createCharacterData({ name: 'Alice' })
       );
 
-      let updated = await charactersRepo.addTag(character.id, 'tag-1');
-      expect(updated?.tags).toContain('tag-1');
+      let updated = await charactersRepo.addTag(character.id, TEST_TAG_ID_1);
+      expect(updated?.tags).toContain(TEST_TAG_ID_1);
 
-      updated = await charactersRepo.addTag(character.id, 'tag-2');
+      updated = await charactersRepo.addTag(character.id, TEST_TAG_ID_2);
       expect(updated?.tags).toHaveLength(2);
 
-      updated = await charactersRepo.removeTag(character.id, 'tag-1');
-      expect(updated?.tags).toEqual(['tag-2']);
+      updated = await charactersRepo.removeTag(character.id, TEST_TAG_ID_1);
+      expect(updated?.tags).toEqual([TEST_TAG_ID_2]);
     });
   });
 
@@ -196,9 +206,10 @@ describe('JSON Store Integration Tests', () => {
 
     it('should create and retrieve a tag', async () => {
       const tag = await tagsRepo.create({
-        userId: 'user-123',
+        userId: TEST_USER_ID,
         name: 'Fantasy',
         nameLower: 'fantasy',
+        quickHide: false,
       });
 
       expect(tag.id).toBeDefined();
@@ -210,40 +221,44 @@ describe('JSON Store Integration Tests', () => {
 
     it('should find tags by user ID', async () => {
       await tagsRepo.create({
-        userId: 'user-123',
+        userId: TEST_USER_ID,
         name: 'Fantasy',
         nameLower: 'fantasy',
+        quickHide: false,
       });
 
       await tagsRepo.create({
-        userId: 'user-123',
+        userId: TEST_USER_ID,
         name: 'Sci-Fi',
         nameLower: 'sci-fi',
+        quickHide: false,
       });
 
-      const tags = await tagsRepo.findByUserId('user-123');
+      const tags = await tagsRepo.findByUserId(TEST_USER_ID);
       expect(tags).toHaveLength(2);
     });
 
     it('should find tag by name (case-insensitive)', async () => {
       await tagsRepo.create({
-        userId: 'user-123',
+        userId: TEST_USER_ID,
         name: 'Fantasy',
         nameLower: 'fantasy',
+        quickHide: false,
       });
 
-      const found = await tagsRepo.findByName('user-123', 'fantasy');
+      const found = await tagsRepo.findByName(TEST_USER_ID, 'fantasy');
       expect(found?.name).toBe('Fantasy');
 
-      const notFound = await tagsRepo.findByName('user-123', 'NonExistent');
+      const notFound = await tagsRepo.findByName(TEST_USER_ID, 'NonExistent');
       expect(notFound).toBeNull();
     });
 
     it('should update a tag', async () => {
       const tag = await tagsRepo.create({
-        userId: 'user-123',
+        userId: TEST_USER_ID,
         name: 'Fantasy',
         nameLower: 'fantasy',
+        quickHide: false,
       });
 
       const updated = await tagsRepo.update(tag.id, {
@@ -257,9 +272,10 @@ describe('JSON Store Integration Tests', () => {
 
     it('should delete a tag', async () => {
       const tag = await tagsRepo.create({
-        userId: 'user-123',
+        userId: TEST_USER_ID,
         name: 'Fantasy',
         nameLower: 'fantasy',
+        quickHide: false,
       });
 
       const deleted = await tagsRepo.delete(tag.id);
@@ -296,14 +312,14 @@ describe('JSON Store Integration Tests', () => {
 
       const message = await chatsRepo.addMessage(chat.id, {
         type: 'message',
-        id: 'msg-1',
+        id: TEST_MESSAGE_ID_1,
         role: 'USER',
         content: 'Hello',
         createdAt: new Date().toISOString(),
         attachments: [],
       });
 
-      expect(message.id).toBe('msg-1');
+      expect(message.id).toBe(TEST_MESSAGE_ID_1);
 
       const messages = await chatsRepo.getMessages(chat.id);
       expect(messages).toHaveLength(1);
@@ -315,7 +331,7 @@ describe('JSON Store Integration Tests', () => {
 
       await chatsRepo.addMessage(chat.id, {
         type: 'message',
-        id: 'msg-1',
+        id: TEST_MESSAGE_ID_1,
         role: 'USER',
         content: 'Hi',
         createdAt: new Date().toISOString(),
@@ -324,7 +340,7 @@ describe('JSON Store Integration Tests', () => {
 
       await chatsRepo.addMessage(chat.id, {
         type: 'message',
-        id: 'msg-2',
+        id: TEST_MESSAGE_ID_2,
         role: 'ASSISTANT',
         content: 'Hello',
         createdAt: new Date().toISOString(),
@@ -339,7 +355,7 @@ describe('JSON Store Integration Tests', () => {
       await chatsRepo.create(createChatData({ title: 'Chat 1' }));
       await chatsRepo.create(createChatData({ title: 'Chat 2' }));
 
-      const chats = await chatsRepo.findByUserId('user-123');
+      const chats = await chatsRepo.findByUserId(TEST_USER_ID);
       expect(chats).toHaveLength(2);
     });
   });
@@ -372,11 +388,11 @@ describe('JSON Store Integration Tests', () => {
         createPersonaData({ name: 'Persona', description: 'Description' })
       );
 
-      let updated = await personasRepo.addCharacterLink(persona.id, 'char-1');
-      expect(updated?.characterLinks).toContain('char-1');
+      let updated = await personasRepo.addCharacterLink(persona.id, TEST_CHAR_LINK_ID);
+      expect(updated?.characterLinks).toContain(TEST_CHAR_LINK_ID);
 
-      updated = await personasRepo.removeCharacterLink(persona.id, 'char-1');
-      expect(updated?.characterLinks).not.toContain('char-1');
+      updated = await personasRepo.removeCharacterLink(persona.id, TEST_CHAR_LINK_ID);
+      expect(updated?.characterLinks).not.toContain(TEST_CHAR_LINK_ID);
     });
   });
 
@@ -395,7 +411,7 @@ describe('JSON Store Integration Tests', () => {
       const entry = await imagesRepo.create({
         sha256: 'a'.repeat(64),
         type: 'image',
-        userId: 'user-123',
+        userId: TEST_USER_ID,
         filename: 'test.png',
         relativePath: 'binaries/aaa.../raw',
         mimeType: 'image/png',
@@ -417,7 +433,7 @@ describe('JSON Store Integration Tests', () => {
       await imagesRepo.create({
         sha256: 'a'.repeat(64),
         type: 'image',
-        userId: 'user-123',
+        userId: TEST_USER_ID,
         filename: 'image1.png',
         relativePath: 'binaries/aaa.../raw',
         mimeType: 'image/png',
@@ -428,7 +444,7 @@ describe('JSON Store Integration Tests', () => {
         tags: [],
       });
 
-      const images = await imagesRepo.findByUserId('user-123');
+      const images = await imagesRepo.findByUserId(TEST_USER_ID);
       expect(images).toHaveLength(1);
       expect(images[0].filename).toBe('image1.png');
     });
@@ -487,7 +503,7 @@ describe('JSON Store Integration Tests', () => {
         createConnectionData({ name: 'Default Profile', isDefault: true })
       );
 
-      const found = await connectionRepo.findDefault('user-123');
+      const found = await connectionRepo.findDefault(TEST_USER_ID);
       expect(found?.id).toBe(profile.id);
     });
   });

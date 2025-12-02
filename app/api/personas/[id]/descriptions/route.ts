@@ -7,6 +7,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { z } from 'zod'
+import { logger } from '@/lib/logger'
 
 const createDescriptionSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -51,7 +52,7 @@ export async function GET(
 
     return NextResponse.json({ descriptions })
   } catch (error) {
-    console.error('Error fetching persona descriptions:', error)
+    logger.error('Error fetching persona descriptions:', error as Error)
     return NextResponse.json(
       { error: 'Failed to fetch persona descriptions' },
       { status: 500 }
@@ -110,7 +111,7 @@ export async function POST(
       )
     }
 
-    console.error('Error creating persona description:', error)
+    logger.error('Error creating persona description:', error as Error)
     return NextResponse.json(
       { error: 'Failed to create persona description' },
       { status: 500 }

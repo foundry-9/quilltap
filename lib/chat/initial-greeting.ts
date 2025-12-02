@@ -1,12 +1,12 @@
 // Initial Greeting Helper
 // Generates a first message for a chat when no scripted greeting exists
 
-import { createLLMProvider, type ProviderName } from '@/lib/llm/factory'
+import { createLLMProvider } from '@/lib/llm'
 
 export type GreetingRequest = {
   systemPrompt: string
   characterName: string
-  provider: ProviderName
+  provider: string
   modelName: string
   apiKey?: string
   baseUrl?: string | null
@@ -29,7 +29,7 @@ export async function generateGreetingMessage({
   maxTokens,
   topP,
 }: GreetingRequest): Promise<string> {
-  const providerClient = createLLMProvider(provider, baseUrl || undefined)
+  const providerClient = await createLLMProvider(provider, baseUrl || undefined)
 
   const augmentedSystemPrompt = `${systemPrompt}\n\nYou are starting a brand new conversation. Before the user says anything, open with a concise greeting that fits ${characterName}'s established voice. Keep it to one or two sentences.`
 

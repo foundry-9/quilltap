@@ -9,6 +9,8 @@
  * See docs/MIGRATION.md for details about the migration.
  */
 
+import { logger } from '@/lib/logger';
+
 // Stub implementations for backwards compatibility
 interface ModelInfo {
   name: string;
@@ -32,8 +34,9 @@ interface PrismaMetadata {
  * The application now uses JSON file storage exclusively
  */
 export async function generatePrismaMetadata(): Promise<PrismaMetadata> {
-  console.warn(
-    'WARNING: generatePrismaMetadata is deprecated. The application now uses JSON store exclusively.'
+  logger.warn(
+    'generatePrismaMetadata is deprecated. The application now uses JSON store exclusively.',
+    { context: 'generatePrismaMetadata' }
   );
   return {
     version: '0.7.0',
@@ -55,6 +58,6 @@ export async function savePrismaMetadata(
   _metadata: PrismaMetadata,
   _outputDir = './data/cache'
 ): Promise<string> {
-  console.warn('WARNING: savePrismaMetadata is deprecated. The application now uses JSON store exclusively.');
+  logger.warn('savePrismaMetadata is deprecated. The application now uses JSON store exclusively.', { context: 'savePrismaMetadata' });
   return '';
 }

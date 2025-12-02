@@ -7,7 +7,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
+import { findFileById, getFileUrl } from '@/lib/file-manager'
 import { importSTChat } from '@/lib/sillytavern/chat'
+import { logger } from '@/lib/logger'
 import type { ChatParticipantBase } from '@/lib/json-store/schemas/types'
 
 export async function POST(req: NextRequest) {
@@ -160,10 +162,17 @@ export async function POST(req: NextRequest) {
     const messages = await repos.chats.getMessages(chat.id)
     const messageEvents = messages.filter(m => m.type === 'message')
 
-    // Get character's default image
+    // Get character's default image from file-manager
     let defaultImage = null
     if (character.defaultImageId) {
-      defaultImage = await repos.images.findById(character.defaultImageId)
+      const fileEntry = await findFileById(character.defaultImageId)
+      if (fileEntry) {
+        defaultImage = {
+          id: fileEntry.id,
+          filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename),
+          url: null,
+        }
+      }
     }
 
     // Get tags data
@@ -214,7 +223,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(completeChat, { status: 201 })
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
-    console.error('Error importing chat:', errorMessage, error)
+    logger.error('Error importing chat', { context: 'POST /api/chats/import', errorMessage }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: errorMessage || 'Failed to import chat' },
       { status: 500 }

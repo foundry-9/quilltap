@@ -12,6 +12,7 @@
 import { Adapter, AdapterUser, AdapterAccount } from 'next-auth/adapters';
 import { JsonStore } from './core/json-store';
 import { UsersRepository } from './repositories/users.repository';
+import { logger } from '@/lib/logger';
 import { z } from 'zod';
 import { Account, Session, VerificationToken as VerificationTokenType } from './schemas/types';
 import crypto from 'node:crypto';
@@ -42,7 +43,7 @@ export function JsonStoreAdapter(jsonStore: JsonStore): Adapter {
       await jsonStore.ensureDir('auth');
       await jsonStore.writeJson('auth/accounts.json', accounts);
     } catch (error) {
-      console.error('Failed to save accounts:', error);
+      logger.error('Failed to save accounts', { context: 'JsonStoreAdapter.saveAccounts' }, error instanceof Error ? error : undefined);
       throw error;
     }
   }
@@ -72,7 +73,7 @@ export function JsonStoreAdapter(jsonStore: JsonStore): Adapter {
   return {
     async createUser(user: Omit<AdapterUser, 'id'>): Promise<AdapterUser> {
       try {
-        console.log('[Auth Adapter] Creating user:', user.email);
+        logger.debug('Creating user', { context: 'JsonStoreAdapter.createUser', email: user.email });
         const created = await usersRepo.create({
           email: user.email,
           emailVerified: user.emailVerified ? (user.emailVerified instanceof Date ? user.emailVerified.toISOString() : user.emailVerified) : null,
@@ -80,7 +81,7 @@ export function JsonStoreAdapter(jsonStore: JsonStore): Adapter {
           name: user.name,
           passwordHash: null,
         });
-        console.log('[Auth Adapter] User created:', created.id);
+        logger.debug('User created', { context: 'JsonStoreAdapter.createUser', userId: created.id });
 
         return {
           id: created.id,
@@ -90,7 +91,7 @@ export function JsonStoreAdapter(jsonStore: JsonStore): Adapter {
           name: created.name,
         };
       } catch (error) {
-        console.error('[Auth Adapter] Failed to create user:', error);
+        logger.error('Failed to create user', { context: 'JsonStoreAdapter.createUser', email: user.email }, error instanceof Error ? error : undefined);
         throw error;
       }
     },
@@ -168,7 +169,7 @@ export function JsonStoreAdapter(jsonStore: JsonStore): Adapter {
 
     async deleteUser(userId: string): Promise<void> {
       // In single-user system, we don't delete
-      console.warn('User deletion not supported in single-user system');
+      logger.warn('User deletion not supported in single-user system', { context: 'JsonStoreAdapter.deleteUser', userId });
     },
 
     async linkAccount(account: AdapterAccount): Promise<void> {
@@ -177,7 +178,7 @@ export function JsonStoreAdapter(jsonStore: JsonStore): Adapter {
         accounts.push(account as unknown as Account);
         await saveAccounts(accounts);
       } catch (error) {
-        console.error('Failed to link account:', error);
+        logger.error('Failed to link account', { context: 'JsonStoreAdapter.linkAccount', provider: account.provider }, error instanceof Error ? error : undefined);
         throw error;
       }
     },

@@ -10,6 +10,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { z } from 'zod';
 import { executeImageGenerationTool } from '@/lib/tools/handlers/image-generation-handler';
+import { logger } from '@/lib/logger';
 
 const generateImageSchema = z.object({
   prompt: z.string().min(1).max(4000),
@@ -102,7 +103,7 @@ export async function POST(
       },
     });
   } catch (error) {
-    console.error('Error generating images:', error);
+    logger.error('Error generating images:', error as Error);
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(

@@ -11,6 +11,8 @@ import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { EntityTabs, Tab } from '@/components/tabs'
 import { EmbeddedPhotoGallery } from '@/components/images/EmbeddedPhotoGallery'
 import { PhysicalDescriptionList } from '@/components/physical-descriptions'
+import { useQuickHide } from '@/components/providers/quick-hide-provider'
+import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 
 interface Persona {
   id: string
@@ -24,6 +26,7 @@ interface Persona {
     filepath: string
     url?: string
   }
+  tags?: string[]
 }
 
 const EDIT_PERSONA_TABS: Tab[] = [
@@ -71,6 +74,7 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
     title: '',
     description: '',
   })
+  const { shouldHideByIds, hiddenTagIds } = useQuickHide()
 
   const fetchPersona = useCallback(async () => {
     try {
@@ -172,6 +176,14 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
     return (
       <div className="flex items-center justify-center min-h-screen">
         <p className="text-lg">Loading persona...</p>
+      </div>
+    )
+  }
+
+  if (hiddenTagIds.size > 0 && persona && shouldHideByIds(persona.tags || [])) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-slate-900">
+        <HiddenPlaceholder />
       </div>
     )
   }

@@ -1,0 +1,12 @@
+{
+  "name": "qtap-plugin-grok",
+  "version": "1.0.0",
+  "description": "Grok xAI provider plugin for Quilltap",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "author": "Foundry-9",
+  "license": "MIT",
+  "peerDependencies": {
+    "openai": ">=4.0.0"
+  }
+}

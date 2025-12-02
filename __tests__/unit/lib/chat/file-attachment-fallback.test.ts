@@ -10,7 +10,7 @@ import type { FileAttachment } from '@/lib/llm/base'
 jest.mock('@/lib/llm/connection-profile-utils', () => ({
   profileSupportsMimeType: jest.fn(),
 }))
-jest.mock('@/lib/llm/factory', () => ({
+jest.mock('@/lib/llm/plugin-factory', () => ({
   createLLMProvider: jest.fn(),
 }))
 jest.mock('@/lib/encryption', () => ({
@@ -30,7 +30,7 @@ import {
   formatFallbackAsMessagePrefix,
 } from '@/lib/chat/file-attachment-fallback'
 import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils'
-import { createLLMProvider } from '@/lib/llm/factory'
+import { createLLMProvider } from '@/lib/llm'
 import { decryptApiKey } from '@/lib/encryption'
 import { readFile } from 'fs/promises'
 

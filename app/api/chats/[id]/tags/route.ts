@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
+import { logger } from '@/lib/logger'
 import { z } from 'zod'
 
 const addTagSchema = z.object({
@@ -58,7 +59,7 @@ export async function GET(
 
     return NextResponse.json({ tags: chatTags })
   } catch (error) {
-    console.error('Error fetching chat tags:', error)
+    logger.error('Error fetching chat tags', { endpoint: '/api/chats/[id]/tags', method: 'GET' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to fetch chat tags' },
       { status: 500 }
@@ -124,7 +125,7 @@ export async function POST(
       )
     }
 
-    console.error('Error adding tag to chat:', error)
+    logger.error('Error adding tag to chat', { endpoint: '/api/chats/[id]/tags', method: 'POST' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to add tag to chat' },
       { status: 500 }
@@ -177,7 +178,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error removing tag from chat:', error)
+    logger.error('Error removing tag from chat', { endpoint: '/api/chats/[id]/tags', method: 'DELETE' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to remove tag from chat' },
       { status: 500 }

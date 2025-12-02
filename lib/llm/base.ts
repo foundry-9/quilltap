@@ -48,6 +48,8 @@ export interface LLMParams {
   topP?: number
   stop?: string[]
   tools?: any[] // Provider-specific tool definitions (OpenAI function_calling, Anthropic tool_use, etc.)
+  // Native web search - when enabled, provider will use its built-in web search capability
+  webSearchEnabled?: boolean
 }
 
 export interface LLMResponse {
@@ -92,6 +94,9 @@ export abstract class LLMProvider {
 
   // Whether this provider supports image generation
   abstract readonly supportsImageGeneration: boolean
+
+  // Whether this provider supports web search
+  abstract readonly supportsWebSearch: boolean
 
   abstract sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse>
   abstract streamMessage(params: LLMParams, apiKey: string): AsyncGenerator<StreamChunk>

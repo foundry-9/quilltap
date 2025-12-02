@@ -7,6 +7,7 @@
  */
 
 import crypto from 'crypto'
+import { logger } from '@/lib/logger'
 
 const ALGORITHM = 'aes-256-gcm'
 const MASTER_PEPPER = process.env.ENCRYPTION_MASTER_PEPPER!
@@ -24,8 +25,9 @@ if (!MASTER_PEPPER) {
 }
 
 if (MASTER_PEPPER.length < 32) {
-  console.warn(
-    'WARNING: ENCRYPTION_MASTER_PEPPER should be at least 32 characters for security'
+  logger.warn(
+    'ENCRYPTION_MASTER_PEPPER should be at least 32 characters for security',
+    { context: 'encryption.init', pepperLength: MASTER_PEPPER.length }
   )
 }
 
@@ -141,7 +143,7 @@ export function testEncryption(): boolean {
 
     return decrypted === testApiKey
   } catch (error) {
-    console.error('Encryption test failed:', error)
+    logger.error('Encryption test failed', { context: 'encryption.testEncryption' }, error instanceof Error ? error : undefined)
     return false
   }
 }

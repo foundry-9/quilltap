@@ -1,0 +1,22 @@
+{
+  "name": "qtap-plugin-template",
+  "version": "0.1.0",
+  "description": "Plugin template for Quilltap (ships with Quilltap)",
+  "keywords": [
+    "quilltap",
+    "plugin"
+  ],
+  "license": "MIT",
+  "author": "Charles Sebold <charles@sebold.tech>",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}

@@ -3,6 +3,8 @@
  * Detects and executes LLM tool calls during message processing
  */
 
+import { logger } from '@/lib/logger'
+import { providerRegistry } from '@/lib/plugins/provider-registry'
 import {
   executeImageGenerationTool,
   executeMemorySearchTool,
@@ -10,6 +12,11 @@ import {
   type ImageToolExecutionContext,
   type MemorySearchToolContext,
 } from '@/lib/tools';
+import {
+  executeWebSearchTool,
+  formatWebSearchResults,
+  type WebSearchToolContext,
+} from '@/lib/tools/handlers/web-search-handler';
 
 export interface ToolCallRequest {
   name: string;
@@ -172,6 +179,33 @@ export async function executeToolCallWithContext(
       };
     }
 
+    // Handle web search
+    if (toolCall.name === 'search_web') {
+      // Execute web search tool
+      const webSearchContext: WebSearchToolContext = {
+        userId,
+      };
+
+      const result = await executeWebSearchTool(toolCall.arguments, webSearchContext);
+
+      // Format results for LLM consumption
+      const formattedResult = result.success && result.results
+        ? formatWebSearchResults(result.results)
+        : result.error || 'No search results found';
+
+      return {
+        toolName: 'search_web',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          results: result.results,
+          totalFound: result.totalFound,
+          query: result.query,
+        } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
     // Unknown tool
     return {
       toolName: toolCall.name,
@@ -191,22 +225,36 @@ export async function executeToolCallWithContext(
 
 /**
  * Detect tool calls in LLM response
- * Different providers format tool calls differently
+ * Uses plugin's parseToolCalls method when available, with fallback to legacy detection
  */
 export function detectToolCalls(
-  response: any,
+  response: unknown,
   provider: string
 ): ToolCallRequest[] {
-  const toolCalls: ToolCallRequest[] = [];
+  logger.debug('Detecting tool calls', { context: 'tool-executor', provider })
 
   try {
+    // Try to use plugin's parseToolCalls method
+    const plugin = providerRegistry.getProvider(provider)
+    if (plugin?.parseToolCalls) {
+      logger.debug('Using plugin parseToolCalls', { context: 'tool-executor', provider })
+      const toolCalls = plugin.parseToolCalls(response)
+      logger.debug('Detected tool calls via plugin', { context: 'tool-executor', count: toolCalls.length, provider })
+      return toolCalls
+    }
+
+    // Fallback to legacy detection for backwards compatibility
+    logger.debug('Plugin parseToolCalls not available, using fallback', { context: 'tool-executor', provider })
+
+    const toolCalls: ToolCallRequest[] = [];
+
     // OpenAI format - supports both direct tool_calls and nested in choices[0].message
     if (provider === 'OPENAI') {
-      let toolCallsArray = response?.tool_calls;
+      let toolCallsArray = (response as any)?.tool_calls;
 
       // Check nested structure from streaming responses
-      if (!toolCallsArray && response?.choices?.[0]?.message?.tool_calls) {
-        toolCallsArray = response.choices[0].message.tool_calls;
+      if (!toolCallsArray && (response as any)?.choices?.[0]?.message?.tool_calls) {
+        toolCallsArray = (response as any).choices[0].message.tool_calls;
       }
 
       if (toolCallsArray && toolCallsArray.length > 0) {
@@ -222,8 +270,8 @@ export function detectToolCalls(
     }
 
     // Anthropic format
-    if (provider === 'ANTHROPIC' && response?.content) {
-      for (const block of response.content) {
+    if (provider === 'ANTHROPIC' && (response as any)?.content) {
+      for (const block of (response as any).content) {
         if (block.type === 'tool_use') {
           toolCalls.push({
             name: block.name,
@@ -235,11 +283,11 @@ export function detectToolCalls(
 
     // Grok format (similar to OpenAI)
     if (provider === 'GROK') {
-      let toolCallsArray = response?.tool_calls;
+      let toolCallsArray = (response as any)?.tool_calls;
 
       // Check nested structure from streaming responses
-      if (!toolCallsArray && response?.choices?.[0]?.message?.tool_calls) {
-        toolCallsArray = response.choices[0].message.tool_calls;
+      if (!toolCallsArray && (response as any)?.choices?.[0]?.message?.tool_calls) {
+        toolCallsArray = (response as any).choices[0].message.tool_calls;
       }
 
       if (toolCallsArray && toolCallsArray.length > 0) {
@@ -255,8 +303,8 @@ export function detectToolCalls(
     }
 
     // Google/Gemini format
-    if (provider === 'GOOGLE' && response?.candidates?.[0]?.content?.parts) {
-      const parts = response.candidates[0].content.parts;
+    if (provider === 'GOOGLE' && (response as any)?.candidates?.[0]?.content?.parts) {
+      const parts = (response as any).candidates[0].content.parts;
       for (const part of parts) {
         if (part.functionCall) {
           toolCalls.push({
@@ -267,9 +315,10 @@ export function detectToolCalls(
       }
     }
 
+    logger.debug('Detected tool calls via fallback', { context: 'tool-executor', count: toolCalls.length, provider })
     return toolCalls;
   } catch (error) {
-    console.error('Error detecting tool calls:', error);
+    logger.error('Error detecting tool calls', { context: 'tool-executor', provider }, error instanceof Error ? error : undefined);
     return [];
   }
 }

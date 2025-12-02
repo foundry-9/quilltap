@@ -8,6 +8,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { z } from 'zod'
+import { logger } from '@/lib/logger'
 
 const addTagSchema = z.object({
   tagId: z.string().uuid(),
@@ -64,7 +65,7 @@ export async function GET(
 
     return NextResponse.json({ tags: validTags })
   } catch (error) {
-    console.error('Error fetching character tags:', error)
+    logger.error('Error fetching character tags', { context: 'GET /api/characters/[id]/tags' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to fetch character tags' },
       { status: 500 }
@@ -130,7 +131,7 @@ export async function POST(
       )
     }
 
-    console.error('Error adding tag to character:', error)
+    logger.error('Error adding tag to character', { context: 'POST /api/characters/[id]/tags' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to add tag to character' },
       { status: 500 }
@@ -183,7 +184,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error removing tag from character:', error)
+    logger.error('Error removing tag from character', { context: 'DELETE /api/characters/[id]/tags' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to remove tag from character' },
       { status: 500 }

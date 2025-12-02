@@ -73,6 +73,20 @@ const nextConfig = {
       };
     }
 
+    // Exclude plugins directory from webpack bundling - plugins are loaded dynamically at runtime
+    if (isServer) {
+      config.externals = config.externals || [];
+      if (Array.isArray(config.externals)) {
+        config.externals.push(({ context, request }, callback) => {
+          // Exclude any requests that point to the plugins/dist directory
+          if (request && request.includes('plugins/dist/')) {
+            return callback(null, `commonjs ${request}`);
+          }
+          callback();
+        });
+      }
+    }
+
     // Production optimizations
     if (process.env.NODE_ENV === 'production') {
       config.optimization = {

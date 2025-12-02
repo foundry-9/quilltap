@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
+import { logger } from '@/lib/logger'
 import { z } from 'zod'
 
 const updateDescriptionSchema = z.object({
@@ -56,7 +57,7 @@ export async function GET(
 
     return NextResponse.json({ description })
   } catch (error) {
-    console.error('Error fetching character description:', error)
+    logger.error('Error fetching character description', { context: 'GET /api/characters/[id]/descriptions/[descId]' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to fetch character description' },
       { status: 500 }
@@ -112,7 +113,7 @@ export async function PUT(
       )
     }
 
-    console.error('Error updating character description:', error)
+    logger.error('Error updating character description', { context: 'PUT /api/characters/[id]/descriptions/[descId]' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to update character description' },
       { status: 500 }
@@ -158,7 +159,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error deleting character description:', error)
+    logger.error('Error deleting character description', { context: 'DELETE /api/characters/[id]/descriptions/[descId]' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to delete character description' },
       { status: 500 }

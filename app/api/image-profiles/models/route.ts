@@ -9,19 +9,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
-import { ImageProvider, ImageProviderEnum } from '@/lib/json-store/schemas/types'
-import { getImageGenProvider } from '@/lib/image-gen/factory'
+import { createImageProvider } from '@/lib/llm/plugin-factory'
 import { decryptApiKey } from '@/lib/encryption'
-
-// Get the list of valid image providers from the Zod enum
-const VALID_IMAGE_PROVIDERS = ImageProviderEnum.options
+import { logger } from '@/lib/logger'
 
 /**
  * GET /api/image-profiles/models
  * Get available models for an image generation provider
  *
  * Query params:
- *   - provider: ImageProvider (OPENAI, GROK, GOOGLE_IMAGEN, GOOGLE)
+ *   - provider: ImageProvider (dynamic, depends on registered plugins)
  *   - apiKeyId: (optional) API key ID to use for validation
  */
 export async function GET(request: NextRequest) {
@@ -45,17 +42,10 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Validate provider
-    if (!VALID_IMAGE_PROVIDERS.includes(provider as ImageProvider)) {
-      return NextResponse.json(
-        { error: `Invalid provider. Must be one of: ${VALID_IMAGE_PROVIDERS.join(', ')}` },
-        { status: 400 }
-      )
-    }
-
+    // Validate provider by attempting to get it
     let imageProvider
     try {
-      imageProvider = getImageGenProvider(provider)
+      imageProvider = createImageProvider(provider)
     } catch {
       return NextResponse.json(
         { error: `Provider ${provider} is not available` },
@@ -88,7 +78,7 @@ export async function GET(request: NextRequest) {
         )
         models = await imageProvider.getAvailableModels(decryptedKey)
       } catch (error) {
-        console.error('Failed to get models with API key:', error)
+        logger.error('Failed to get models with API key', { context: 'GET /api/image-profiles/models', provider }, error instanceof Error ? error : undefined)
         // Fall back to default models on error
         models = imageProvider.supportedModels
       }
@@ -103,7 +93,7 @@ export async function GET(request: NextRequest) {
       supportedModels: imageProvider.supportedModels,
     })
   } catch (error) {
-    console.error('Failed to fetch models:', error)
+    logger.error('Failed to fetch models', { context: 'GET /api/image-profiles/models' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to fetch models' },
       { status: 500 }

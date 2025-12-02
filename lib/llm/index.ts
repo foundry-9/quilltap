@@ -4,19 +4,11 @@
  * Central export point for LLM-related functionality
  */
 
-// Provider implementations
+// Provider base class
 export { LLMProvider } from './base'
-export { OpenAIProvider } from './openai'
-export { AnthropicProvider } from './anthropic'
-export { GoogleProvider } from './google'
-export { GrokProvider } from './grok'
-export { OllamaProvider } from './ollama'
-export { OpenRouterProvider } from './openrouter'
-export { OpenAICompatibleProvider } from './openai-compatible'
-export { GabAIProvider } from './gab-ai'
 
-// Factory
-export { createLLMProvider, type ProviderName } from './factory'
+// Factory (now uses plugin registry)
+export { createLLMProvider, createImageProvider, getAllAvailableProviders, getAllAvailableImageProviders, isProviderFromPlugin } from './plugin-factory'
 
 // Types
 export type {
@@ -57,8 +49,7 @@ export {
 // Image generation support
 export {
   supportsImageGeneration,
-  IMAGE_CAPABLE_PROVIDERS,
-  type ImageCapableProvider,
+  getImageCapableProviders,
 } from './image-capable'
 
 // Context and pricing utilities

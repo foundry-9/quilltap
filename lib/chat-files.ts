@@ -5,6 +5,7 @@
 import { writeFile, mkdir, readFile, unlink } from 'fs/promises'
 import { join } from 'path'
 import { randomUUID, createHash } from 'node:crypto'
+import { logger } from '@/lib/logger'
 import { FileAttachment } from './llm/base'
 
 export interface ChatFileUploadResult {
@@ -131,7 +132,7 @@ export async function loadChatFilesForLLM(
         data,
       })
     } catch (error) {
-      console.error(`Failed to load chat file ${file.id}:`, error)
+      logger.error(`Failed to load chat file`, { context: 'loadChatFilesForLLM', fileId: file.id }, error instanceof Error ? error : undefined)
       // Skip files that can't be loaded
     }
   }

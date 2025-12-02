@@ -3,6 +3,7 @@
 import { useEffect, useCallback, useState } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
+import { clientLogger } from '@/lib/client-logger'
 import { safeJsonParse } from '@/lib/fetch-helpers'
 import DeletedImagePlaceholder from '@/components/images/DeletedImagePlaceholder'
 
@@ -73,7 +74,7 @@ export default function ChatGalleryImageViewModal({
           }
         }
       } catch (error) {
-        console.error('Failed to check tags:', error)
+        clientLogger.error('Failed to check tags:', { error: error instanceof Error ? error.message : String(error) })
       } finally {
         setCheckingTags(false)
       }
@@ -118,7 +119,7 @@ export default function ChatGalleryImageViewModal({
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
     } catch (error) {
-      console.error('Failed to download image:', error)
+      clientLogger.error('Failed to download image:', { error: error instanceof Error ? error.message : String(error) })
     }
   }
 
@@ -151,43 +152,25 @@ export default function ChatGalleryImageViewModal({
           showSuccessToast(`Removed from ${characterName || 'character'}'s gallery`)
         }
       } else {
-        // Add tag using the appropriate endpoint based on file type
-        const isGeneratedImage = file.type === 'generatedImage'
-
-        if (isGeneratedImage) {
-          // For generated images, use /api/images/{id}/tags
-          const res = await fetch(`/api/images/${file.id}/tags`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              tagType: 'CHARACTER',
-              tagId: characterId,
-            }),
-          })
-          if (!res.ok) {
-            const data = await safeJsonParse<{ error?: string }>(res)
-            throw new Error(data.error || 'Failed to tag image')
-          }
-        } else {
-          // For chat files, use /api/chat-files/{id} to copy to gallery and tag
-          const res = await fetch(`/api/chat-files/${file.id}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              tagType: 'CHARACTER',
-              tagId: characterId,
-            }),
-          })
-          if (!res.ok) {
-            const data = await safeJsonParse<{ error?: string }>(res)
-            throw new Error(data.error || 'Failed to tag image')
-          }
+        // Add tag - both generated images and chat files use the same endpoint
+        // Both need to be copied to gallery first if not already there
+        const res = await fetch(`/api/chat-files/${file.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tagType: 'CHARACTER',
+            tagId: characterId,
+          }),
+        })
+        if (!res.ok) {
+          const data = await safeJsonParse<{ error?: string }>(res)
+          throw new Error(data.error || 'Failed to tag image')
         }
         setIsTaggedToCharacter(true)
         showSuccessToast(`Added to ${characterName || 'character'}'s gallery`)
       }
     } catch (error) {
-      console.error('Failed to toggle character tag:', error)
+      clientLogger.error('Failed to toggle character tag:', { error: error instanceof Error ? error.message : String(error) })
       showErrorToast(error instanceof Error ? error.message : 'Failed to update tag')
     } finally {
       setIsTagging(false)
@@ -223,43 +206,25 @@ export default function ChatGalleryImageViewModal({
           showSuccessToast(`Removed from ${personaName || 'persona'}'s gallery`)
         }
       } else {
-        // Add tag using the appropriate endpoint based on file type
-        const isGeneratedImage = file.type === 'generatedImage'
-
-        if (isGeneratedImage) {
-          // For generated images, use /api/images/{id}/tags
-          const res = await fetch(`/api/images/${file.id}/tags`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              tagType: 'PERSONA',
-              tagId: personaId,
-            }),
-          })
-          if (!res.ok) {
-            const data = await safeJsonParse<{ error?: string }>(res)
-            throw new Error(data.error || 'Failed to tag image')
-          }
-        } else {
-          // For chat files, use /api/chat-files/{id} to copy to gallery and tag
-          const res = await fetch(`/api/chat-files/${file.id}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              tagType: 'PERSONA',
-              tagId: personaId,
-            }),
-          })
-          if (!res.ok) {
-            const data = await safeJsonParse<{ error?: string }>(res)
-            throw new Error(data.error || 'Failed to tag image')
-          }
+        // Add tag - both generated images and chat files use the same endpoint
+        // Both need to be copied to gallery first if not already there
+        const res = await fetch(`/api/chat-files/${file.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tagType: 'PERSONA',
+            tagId: personaId,
+          }),
+        })
+        if (!res.ok) {
+          const data = await safeJsonParse<{ error?: string }>(res)
+          throw new Error(data.error || 'Failed to tag image')
         }
         setIsTaggedToPersona(true)
         showSuccessToast(`Added to ${personaName || 'persona'}'s gallery`)
       }
     } catch (error) {
-      console.error('Failed to toggle persona tag:', error)
+      clientLogger.error('Failed to toggle persona tag:', { error: error instanceof Error ? error.message : String(error) })
       showErrorToast(error instanceof Error ? error.message : 'Failed to update tag')
     } finally {
       setIsTagging(false)

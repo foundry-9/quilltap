@@ -10,6 +10,7 @@ import { authOptions } from '@/lib/auth';
 import { getRepositories } from '@/lib/json-store/repositories';
 import { uploadImage, importImageFromUrl } from '@/lib/images-v2';
 import { findFilesByCategory, findFilesByUserId, addFileTag, getFileUrl } from '@/lib/file-manager';
+import { logger } from '@/lib/logger';
 import { z } from 'zod';
 
 const importFromUrlSchema = z.object({
@@ -125,7 +126,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ data });
   } catch (error) {
-    console.error('Error fetching images:', error);
+    logger.error('Error fetching images:', {}, error as Error);
     return NextResponse.json(
       { error: 'Failed to fetch images', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
@@ -239,7 +240,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ error: 'Invalid content type' }, { status: 400 });
   } catch (error) {
-    console.error('Error uploading/importing image:', error);
+    logger.error('Error uploading/importing image:', {}, error as Error);
 
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Validation error', details: error.errors }, { status: 400 });

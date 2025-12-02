@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { disableTOTP } from '@/lib/auth/totp'
+import { logger } from '@/lib/logger'
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -24,7 +25,7 @@ export async function POST(req: NextRequest) {
       message: '2FA disabled successfully'
     })
   } catch (error) {
-    console.error('Disable 2FA error:', error)
+    logger.error('Disable 2FA error', { context: 'POST /api/auth/2fa/disable' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to disable 2FA' },
       { status: 500 }

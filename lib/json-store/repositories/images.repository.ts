@@ -1,9 +1,28 @@
 /**
- * Images Repository
+ * Images Repository (DEPRECATED)
  *
- * Handles CRUD operations for BinaryIndexEntry (images, files, avatars).
- * Image metadata is stored in: data/binaries/index.jsonl
- * Binary payloads are stored in: data/binaries/{sha256}/raw
+ * @deprecated This repository is deprecated as of the dual-system migration.
+ * All image/file operations should now use the file-manager system instead.
+ * See: lib/file-manager/index.ts
+ *
+ * This repository is kept for:
+ * 1. Running the consolidate-images migration script
+ * 2. Reference during the transition period
+ * 3. Backward compatibility with any legacy code still being updated
+ *
+ * DO NOT USE THIS REPOSITORY FOR NEW CODE.
+ * Use the file-manager functions instead:
+ * - findFileById() instead of findById()
+ * - findFilesByCategory('IMAGE') instead of findByType('image')
+ * - addFileTag() instead of addTag()
+ * - etc.
+ *
+ * Old structure (legacy):
+ * - data/binaries/index.jsonl (BinaryIndexEntry format)
+ *
+ * New structure (use this):
+ * - public/data/files/files.jsonl (FileEntry format)
+ * - public/data/files/storage/{id}.{ext}
  */
 
 import { JsonStore } from '../core/json-store';

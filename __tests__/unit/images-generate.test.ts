@@ -6,14 +6,14 @@
 import { POST } from '@/app/api/images/generate/route'
 import { getServerSession } from 'next-auth'
 import { decryptApiKey } from '@/lib/encryption'
-import { createLLMProvider } from '@/lib/llm/factory'
+import { createLLMProvider } from '@/lib/llm'
 import { writeFile, mkdir } from 'node:fs/promises'
 import { getRepositories } from '@/lib/json-store/repositories'
 
 // Mock dependencies
 jest.mock('next-auth')
 jest.mock('@/lib/encryption')
-jest.mock('@/lib/llm/factory')
+jest.mock('@/lib/llm/plugin-factory')
 jest.mock('fs/promises')
 jest.mock('@/lib/json-store/repositories')
 

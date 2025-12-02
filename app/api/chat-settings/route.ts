@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
+import { logger } from '@/lib/logger'
 import { TagStyleMapSchema, type AvatarDisplayMode } from '@/lib/json-store/schemas/types'
 
 /**
@@ -101,7 +102,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(chatSettings)
   } catch (error) {
-    console.error('Error fetching chat settings:', error)
+    logger.error('Error fetching chat settings', { context: 'GET /api/chat-settings' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to fetch chat settings' },
       { status: 500 }
@@ -136,7 +137,7 @@ async function handleSettingsUpdate(req: NextRequest) {
 
     return NextResponse.json(chatSettings)
   } catch (error) {
-    console.error('Error updating chat settings:', error)
+    logger.error('Error updating chat settings', { context: 'PUT/POST /api/chat-settings' }, error instanceof Error ? error : undefined)
     const errorMessage = error instanceof Error ? error.message : 'Failed to update chat settings'
     const status = errorMessage.includes('Invalid') ? 400 : 500
     return NextResponse.json(

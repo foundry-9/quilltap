@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { clientLogger } from '@/lib/client-logger'
 
 interface AlertDialogProps {
   message: string
@@ -27,7 +28,7 @@ export function AlertDialog({ message, onClose, buttons, showCopy = true }: Aler
       await navigator.clipboard.writeText(message)
       // Optional: You could add a visual feedback here
     } catch (err) {
-      console.error('Failed to copy to clipboard:', err)
+      clientLogger.error('Failed to copy to clipboard:', { error: err instanceof Error ? err.message : String(err) })
     }
   }
 

@@ -11,6 +11,7 @@ import {
   rebuildVectorIndex,
 } from '@/lib/memory/memory-service'
 import { z } from 'zod'
+import { logger } from '@/lib/logger'
 
 // Validation schema for generate request
 const generateEmbeddingsSchema = z.object({
@@ -100,7 +101,7 @@ export async function POST(
       )
     }
 
-    console.error('Error generating embeddings:', error)
+    logger.error('Error generating embeddings', {}, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to generate embeddings' },
       { status: 500 }
@@ -156,7 +157,7 @@ export async function PUT(
       )
     }
 
-    console.error('Error rebuilding vector index:', error)
+    logger.error('Error rebuilding vector index', {}, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to rebuild vector index' },
       { status: 500 }
@@ -211,7 +212,7 @@ export async function GET(
       embeddingProfileName: defaultProfile?.name || null,
     })
   } catch (error) {
-    console.error('Error getting embedding status:', error)
+    logger.error('Error getting embedding status', {}, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to get embedding status' },
       { status: 500 }

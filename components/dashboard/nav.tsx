@@ -7,7 +7,9 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useDebugOptional } from "@/components/providers/debug-provider";
 import { useChatContext } from "@/components/providers/chat-context";
+import { useQuickHide } from "@/components/providers/quick-hide-provider";
 import { TagDropdown } from "@/components/tags/tag-dropdown";
+import { TagBadge } from "@/components/tags/tag-badge";
 import { routeSupportsDebug } from "@/lib/navigation/route-flags";
 
 interface DashboardNavProps {
@@ -23,6 +25,7 @@ export default function DashboardNav({ user }: DashboardNavProps) {
   const pathname = usePathname();
   const chat = useChatContext();
   const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
+  const { quickHideTags, hiddenTagIds, toggleTag } = useQuickHide();
 
   // Check if we're in a chat conversation
   const isInChat = pathname?.match(/^\/chats\/[^/]+$/);
@@ -118,6 +121,29 @@ export default function DashboardNav({ user }: DashboardNavProps) {
               <p className="text-sm font-medium text-gray-900 dark:text-white">{user.name}</p>
               <p className="text-xs text-gray-500 dark:text-gray-400">{user.email}</p>
             </div>
+            {quickHideTags.length > 0 && (
+              <div className="flex max-w-xs flex-wrap items-center justify-end gap-2">
+                {quickHideTags.map(tag => {
+                  const isActive = hiddenTagIds.has(tag.id)
+                  return (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      onClick={() => toggleTag(tag.id)}
+                      aria-pressed={isActive}
+                      className={`rounded-full border px-1 py-0.5 transition-all ${
+                        isActive
+                          ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-400 dark:border-blue-400 dark:bg-blue-900/40 dark:ring-blue-500'
+                          : 'border-gray-300 bg-white hover:border-blue-400 dark:border-slate-600 dark:bg-slate-800 dark:hover:border-blue-400'
+                      }`}
+                      title={isActive ? 'Show items with this tag' : 'Hide items with this tag'}
+                    >
+                      <TagBadge tag={tag} size="sm" className="pointer-events-none" />
+                    </button>
+                  )
+                })}
+              </div>
+            )}
             {user.image && (
               <Image
                 src={user.image}

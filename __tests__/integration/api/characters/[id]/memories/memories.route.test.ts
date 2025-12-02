@@ -13,6 +13,35 @@ import { getRepositories } from '@/lib/json-store/repositories';
 jest.mock('next-auth');
 jest.mock('@/lib/json-store/repositories');
 
+// Create mock repository functions
+const createMockRepositories = () => ({
+  users: {
+    findByEmail: jest.fn(),
+    findById: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+  },
+  characters: {
+    findById: jest.fn(),
+    findByUserId: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+  },
+  memories: {
+    findByCharacterId: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+  },
+  tags: {
+    findAll: jest.fn(),
+    findById: jest.fn(),
+    findByUserId: jest.fn(),
+  },
+});
+
 // We'll need to import the actual route handlers after the mocks are set up
 // For now, we'll focus on the test structure
 
@@ -69,8 +98,12 @@ describe('GET /api/characters/[id]/memories', () => {
     },
   ];
 
+  let mockRepos: ReturnType<typeof createMockRepositories>;
+
   beforeEach(() => {
     jest.clearAllMocks();
+    mockRepos = createMockRepositories();
+    (getRepositories as jest.MockedFunction<typeof getRepositories>).mockReturnValue(mockRepos as any);
   });
 
   describe('authentication and authorization', () => {
@@ -86,9 +119,7 @@ describe('GET /api/characters/[id]/memories', () => {
       const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const mockRepos = getRepositories as jest.MockedFunction<typeof getRepositories>;
-      const repos = mockRepos();
-      (repos.users.findByEmail as jest.Mock).mockResolvedValue(null);
+      mockRepos.users.findByEmail.mockResolvedValue(null);
 
       // expect(response.status).toBe(404);
     });
@@ -97,10 +128,8 @@ describe('GET /api/characters/[id]/memories', () => {
       const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const mockRepos = getRepositories as jest.MockedFunction<typeof getRepositories>;
-      const repos = mockRepos();
-      (repos.users.findByEmail as jest.Mock).mockResolvedValue(mockUser);
-      (repos.characters.findById as jest.Mock).mockResolvedValue(null);
+      mockRepos.users.findByEmail.mockResolvedValue(mockUser);
+      mockRepos.characters.findById.mockResolvedValue(null);
 
       // expect(response.status).toBe(404);
     });
@@ -109,10 +138,8 @@ describe('GET /api/characters/[id]/memories', () => {
       const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const mockRepos = getRepositories as jest.MockedFunction<typeof getRepositories>;
-      const repos = mockRepos();
-      (repos.users.findByEmail as jest.Mock).mockResolvedValue(mockUser);
-      (repos.characters.findById as jest.Mock).mockResolvedValue({
+      mockRepos.users.findByEmail.mockResolvedValue(mockUser);
+      mockRepos.characters.findById.mockResolvedValue({
         ...mockCharacter,
         userId: 'different-user-id',
       });
@@ -126,12 +153,10 @@ describe('GET /api/characters/[id]/memories', () => {
       const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const mockRepos = getRepositories as jest.MockedFunction<typeof getRepositories>;
-      const repos = mockRepos();
-      (repos.users.findByEmail as jest.Mock).mockResolvedValue(mockUser);
-      (repos.characters.findById as jest.Mock).mockResolvedValue(mockCharacter);
-      (repos.memories.findByCharacterId as jest.Mock).mockResolvedValue(mockMemories);
-      (repos.tags.findAll as jest.Mock).mockResolvedValue(mockTags);
+      mockRepos.users.findByEmail.mockResolvedValue(mockUser);
+      mockRepos.characters.findById.mockResolvedValue(mockCharacter);
+      mockRepos.memories.findByCharacterId.mockResolvedValue(mockMemories);
+      mockRepos.tags.findAll.mockResolvedValue(mockTags);
 
       // Response would have:
       // - status 200
@@ -144,12 +169,10 @@ describe('GET /api/characters/[id]/memories', () => {
       const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const mockRepos = getRepositories as jest.MockedFunction<typeof getRepositories>;
-      const repos = mockRepos();
-      (repos.users.findByEmail as jest.Mock).mockResolvedValue(mockUser);
-      (repos.characters.findById as jest.Mock).mockResolvedValue(mockCharacter);
-      (repos.memories.findByCharacterId as jest.Mock).mockResolvedValue([]);
-      (repos.tags.findAll as jest.Mock).mockResolvedValue([]);
+      mockRepos.users.findByEmail.mockResolvedValue(mockUser);
+      mockRepos.characters.findById.mockResolvedValue(mockCharacter);
+      mockRepos.memories.findByCharacterId.mockResolvedValue([]);
+      mockRepos.tags.findAll.mockResolvedValue([]);
 
       // Response would have:
       // - status 200
@@ -163,12 +186,10 @@ describe('GET /api/characters/[id]/memories', () => {
       const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const mockRepos = getRepositories as jest.MockedFunction<typeof getRepositories>;
-      const repos = mockRepos();
-      (repos.users.findByEmail as jest.Mock).mockResolvedValue(mockUser);
-      (repos.characters.findById as jest.Mock).mockResolvedValue(mockCharacter);
-      (repos.memories.findByCharacterId as jest.Mock).mockResolvedValue(mockMemories);
-      (repos.tags.findAll as jest.Mock).mockResolvedValue(mockTags);
+      mockRepos.users.findByEmail.mockResolvedValue(mockUser);
+      mockRepos.characters.findById.mockResolvedValue(mockCharacter);
+      mockRepos.memories.findByCharacterId.mockResolvedValue(mockMemories);
+      mockRepos.tags.findAll.mockResolvedValue(mockTags);
 
       // Query: ?search=Memory 1
       // Expected: Only first memory returned
@@ -178,12 +199,10 @@ describe('GET /api/characters/[id]/memories', () => {
       const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const mockRepos = getRepositories as jest.MockedFunction<typeof getRepositories>;
-      const repos = mockRepos();
-      (repos.users.findByEmail as jest.Mock).mockResolvedValue(mockUser);
-      (repos.characters.findById as jest.Mock).mockResolvedValue(mockCharacter);
-      (repos.memories.findByCharacterId as jest.Mock).mockResolvedValue(mockMemories);
-      (repos.tags.findAll as jest.Mock).mockResolvedValue(mockTags);
+      mockRepos.users.findByEmail.mockResolvedValue(mockUser);
+      mockRepos.characters.findById.mockResolvedValue(mockCharacter);
+      mockRepos.memories.findByCharacterId.mockResolvedValue(mockMemories);
+      mockRepos.tags.findAll.mockResolvedValue(mockTags);
 
       // Query: ?minImportance=0.5
       // Expected: Only first memory (0.8 >= 0.5) returned
@@ -193,12 +212,10 @@ describe('GET /api/characters/[id]/memories', () => {
       const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const mockRepos = getRepositories as jest.MockedFunction<typeof getRepositories>;
-      const repos = mockRepos();
-      (repos.users.findByEmail as jest.Mock).mockResolvedValue(mockUser);
-      (repos.characters.findById as jest.Mock).mockResolvedValue(mockCharacter);
-      (repos.memories.findByCharacterId as jest.Mock).mockResolvedValue(mockMemories);
-      (repos.tags.findAll as jest.Mock).mockResolvedValue(mockTags);
+      mockRepos.users.findByEmail.mockResolvedValue(mockUser);
+      mockRepos.characters.findById.mockResolvedValue(mockCharacter);
+      mockRepos.memories.findByCharacterId.mockResolvedValue(mockMemories);
+      mockRepos.tags.findAll.mockResolvedValue(mockTags);
 
       // Query: ?source=AUTO
       // Expected: Only second memory returned
@@ -208,12 +225,10 @@ describe('GET /api/characters/[id]/memories', () => {
       const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const mockRepos = getRepositories as jest.MockedFunction<typeof getRepositories>;
-      const repos = mockRepos();
-      (repos.users.findByEmail as jest.Mock).mockResolvedValue(mockUser);
-      (repos.characters.findById as jest.Mock).mockResolvedValue(mockCharacter);
-      (repos.memories.findByCharacterId as jest.Mock).mockResolvedValue(mockMemories);
-      (repos.tags.findAll as jest.Mock).mockResolvedValue(mockTags);
+      mockRepos.users.findByEmail.mockResolvedValue(mockUser);
+      mockRepos.characters.findById.mockResolvedValue(mockCharacter);
+      mockRepos.memories.findByCharacterId.mockResolvedValue(mockMemories);
+      mockRepos.tags.findAll.mockResolvedValue(mockTags);
 
       // Query: ?source=MANUAL&minImportance=0.7
       // Expected: Only first memory returned
@@ -225,12 +240,10 @@ describe('GET /api/characters/[id]/memories', () => {
       const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const mockRepos = getRepositories as jest.MockedFunction<typeof getRepositories>;
-      const repos = mockRepos();
-      (repos.users.findByEmail as jest.Mock).mockResolvedValue(mockUser);
-      (repos.characters.findById as jest.Mock).mockResolvedValue(mockCharacter);
-      (repos.memories.findByCharacterId as jest.Mock).mockResolvedValue(mockMemories);
-      (repos.tags.findAll as jest.Mock).mockResolvedValue(mockTags);
+      mockRepos.users.findByEmail.mockResolvedValue(mockUser);
+      mockRepos.characters.findById.mockResolvedValue(mockCharacter);
+      mockRepos.memories.findByCharacterId.mockResolvedValue(mockMemories);
+      mockRepos.tags.findAll.mockResolvedValue(mockTags);
 
       // Default sorting should have newer memories first
     });
@@ -239,12 +252,10 @@ describe('GET /api/characters/[id]/memories', () => {
       const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const mockRepos = getRepositories as jest.MockedFunction<typeof getRepositories>;
-      const repos = mockRepos();
-      (repos.users.findByEmail as jest.Mock).mockResolvedValue(mockUser);
-      (repos.characters.findById as jest.Mock).mockResolvedValue(mockCharacter);
-      (repos.memories.findByCharacterId as jest.Mock).mockResolvedValue(mockMemories);
-      (repos.tags.findAll as jest.Mock).mockResolvedValue(mockTags);
+      mockRepos.users.findByEmail.mockResolvedValue(mockUser);
+      mockRepos.characters.findById.mockResolvedValue(mockCharacter);
+      mockRepos.memories.findByCharacterId.mockResolvedValue(mockMemories);
+      mockRepos.tags.findAll.mockResolvedValue(mockTags);
 
       // Query: ?sortBy=updatedAt
     });
@@ -253,12 +264,10 @@ describe('GET /api/characters/[id]/memories', () => {
       const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const mockRepos = getRepositories as jest.MockedFunction<typeof getRepositories>;
-      const repos = mockRepos();
-      (repos.users.findByEmail as jest.Mock).mockResolvedValue(mockUser);
-      (repos.characters.findById as jest.Mock).mockResolvedValue(mockCharacter);
-      (repos.memories.findByCharacterId as jest.Mock).mockResolvedValue(mockMemories);
-      (repos.tags.findAll as jest.Mock).mockResolvedValue(mockTags);
+      mockRepos.users.findByEmail.mockResolvedValue(mockUser);
+      mockRepos.characters.findById.mockResolvedValue(mockCharacter);
+      mockRepos.memories.findByCharacterId.mockResolvedValue(mockMemories);
+      mockRepos.tags.findAll.mockResolvedValue(mockTags);
 
       // Query: ?sortBy=importance
     });
@@ -267,12 +276,10 @@ describe('GET /api/characters/[id]/memories', () => {
       const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const mockRepos = getRepositories as jest.MockedFunction<typeof getRepositories>;
-      const repos = mockRepos();
-      (repos.users.findByEmail as jest.Mock).mockResolvedValue(mockUser);
-      (repos.characters.findById as jest.Mock).mockResolvedValue(mockCharacter);
-      (repos.memories.findByCharacterId as jest.Mock).mockResolvedValue(mockMemories);
-      (repos.tags.findAll as jest.Mock).mockResolvedValue(mockTags);
+      mockRepos.users.findByEmail.mockResolvedValue(mockUser);
+      mockRepos.characters.findById.mockResolvedValue(mockCharacter);
+      mockRepos.memories.findByCharacterId.mockResolvedValue(mockMemories);
+      mockRepos.tags.findAll.mockResolvedValue(mockTags);
 
       // Query: ?sortOrder=asc should reverse the order
     });
@@ -283,16 +290,14 @@ describe('GET /api/characters/[id]/memories', () => {
       const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const mockRepos = getRepositories as jest.MockedFunction<typeof getRepositories>;
-      const repos = mockRepos();
-      (repos.users.findByEmail as jest.Mock).mockResolvedValue(mockUser);
-      (repos.characters.findById as jest.Mock).mockResolvedValue(mockCharacter);
+      mockRepos.users.findByEmail.mockResolvedValue(mockUser);
+      mockRepos.characters.findById.mockResolvedValue(mockCharacter);
       const memoriesWithTags = [{
         ...mockMemories[0],
         tags: ['550e8400-e29b-41d4-a716-446655440005'],
       }];
-      (repos.memories.findByCharacterId as jest.Mock).mockResolvedValue(memoriesWithTags);
-      (repos.tags.findAll as jest.Mock).mockResolvedValue(mockTags);
+      mockRepos.memories.findByCharacterId.mockResolvedValue(memoriesWithTags);
+      mockRepos.tags.findAll.mockResolvedValue(mockTags);
 
       // Each memory should have tagDetails array with tag objects
     });
@@ -301,12 +306,10 @@ describe('GET /api/characters/[id]/memories', () => {
       const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const mockRepos = getRepositories as jest.MockedFunction<typeof getRepositories>;
-      const repos = mockRepos();
-      (repos.users.findByEmail as jest.Mock).mockResolvedValue(mockUser);
-      (repos.characters.findById as jest.Mock).mockResolvedValue(mockCharacter);
-      (repos.memories.findByCharacterId as jest.Mock).mockResolvedValue(mockMemories);
-      (repos.tags.findAll as jest.Mock).mockResolvedValue(mockTags);
+      mockRepos.users.findByEmail.mockResolvedValue(mockUser);
+      mockRepos.characters.findById.mockResolvedValue(mockCharacter);
+      mockRepos.memories.findByCharacterId.mockResolvedValue(mockMemories);
+      mockRepos.tags.findAll.mockResolvedValue(mockTags);
 
       // Response should include count matching the length of memories array
     });
@@ -330,8 +333,12 @@ describe('POST /api/characters/[id]/memories', () => {
     name: 'Test Character',
   };
 
+  let mockRepos: ReturnType<typeof createMockRepositories>;
+
   beforeEach(() => {
     jest.clearAllMocks();
+    mockRepos = createMockRepositories();
+    (getRepositories as jest.MockedFunction<typeof getRepositories>).mockReturnValue(mockRepos as any);
   });
 
   describe('authentication and authorization', () => {
@@ -346,10 +353,8 @@ describe('POST /api/characters/[id]/memories', () => {
       const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const mockRepos = getRepositories as jest.MockedFunction<typeof getRepositories>;
-      const repos = mockRepos();
-      (repos.users.findByEmail as jest.Mock).mockResolvedValue(mockUser);
-      (repos.characters.findById as jest.Mock).mockResolvedValue({
+      mockRepos.users.findByEmail.mockResolvedValue(mockUser);
+      mockRepos.characters.findById.mockResolvedValue({
         ...mockCharacter,
         userId: 'different-user-id',
       });
@@ -363,10 +368,8 @@ describe('POST /api/characters/[id]/memories', () => {
       const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const mockRepos = getRepositories as jest.MockedFunction<typeof getRepositories>;
-      const repos = mockRepos();
-      (repos.users.findByEmail as jest.Mock).mockResolvedValue(mockUser);
-      (repos.characters.findById as jest.Mock).mockResolvedValue(mockCharacter);
+      mockRepos.users.findByEmail.mockResolvedValue(mockUser);
+      mockRepos.characters.findById.mockResolvedValue(mockCharacter);
 
       const newMemory = {
         id: '550e8400-e29b-41d4-a716-446655440003',
@@ -381,7 +384,7 @@ describe('POST /api/characters/[id]/memories', () => {
         updatedAt: '2025-01-01T00:00:00Z',
       };
 
-      (repos.memories.create as jest.Mock).mockResolvedValue(newMemory);
+      mockRepos.memories.create.mockResolvedValue(newMemory);
 
       // Request body:
       // {
@@ -396,10 +399,8 @@ describe('POST /api/characters/[id]/memories', () => {
       const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const mockRepos = getRepositories as jest.MockedFunction<typeof getRepositories>;
-      const repos = mockRepos();
-      (repos.users.findByEmail as jest.Mock).mockResolvedValue(mockUser);
-      (repos.characters.findById as jest.Mock).mockResolvedValue(mockCharacter);
+      mockRepos.users.findByEmail.mockResolvedValue(mockUser);
+      mockRepos.characters.findById.mockResolvedValue(mockCharacter);
 
       const newMemory = {
         id: '550e8400-e29b-41d4-a716-446655440003',
@@ -414,7 +415,7 @@ describe('POST /api/characters/[id]/memories', () => {
         updatedAt: '2025-01-01T00:00:00Z',
       };
 
-      (repos.memories.create as jest.Mock).mockResolvedValue(newMemory);
+      mockRepos.memories.create.mockResolvedValue(newMemory);
 
       // Request body with minimal fields should result in defaults applied
     });
@@ -425,10 +426,8 @@ describe('POST /api/characters/[id]/memories', () => {
       const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const mockRepos = getRepositories as jest.MockedFunction<typeof getRepositories>;
-      const repos = mockRepos();
-      (repos.users.findByEmail as jest.Mock).mockResolvedValue(mockUser);
-      (repos.characters.findById as jest.Mock).mockResolvedValue(mockCharacter);
+      mockRepos.users.findByEmail.mockResolvedValue(mockUser);
+      mockRepos.characters.findById.mockResolvedValue(mockCharacter);
 
       // Request body:
       // {
@@ -442,10 +441,8 @@ describe('POST /api/characters/[id]/memories', () => {
       const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const mockRepos = getRepositories as jest.MockedFunction<typeof getRepositories>;
-      const repos = mockRepos();
-      (repos.users.findByEmail as jest.Mock).mockResolvedValue(mockUser);
-      (repos.characters.findById as jest.Mock).mockResolvedValue(mockCharacter);
+      mockRepos.users.findByEmail.mockResolvedValue(mockUser);
+      mockRepos.characters.findById.mockResolvedValue(mockCharacter);
 
       // Request body:
       // {
@@ -459,10 +456,8 @@ describe('POST /api/characters/[id]/memories', () => {
       const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const mockRepos = getRepositories as jest.MockedFunction<typeof getRepositories>;
-      const repos = mockRepos();
-      (repos.users.findByEmail as jest.Mock).mockResolvedValue(mockUser);
-      (repos.characters.findById as jest.Mock).mockResolvedValue(mockCharacter);
+      mockRepos.users.findByEmail.mockResolvedValue(mockUser);
+      mockRepos.characters.findById.mockResolvedValue(mockCharacter);
 
       // Request body:
       // {
@@ -478,10 +473,8 @@ describe('POST /api/characters/[id]/memories', () => {
       const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const mockRepos = getRepositories as jest.MockedFunction<typeof getRepositories>;
-      const repos = mockRepos();
-      (repos.users.findByEmail as jest.Mock).mockResolvedValue(mockUser);
-      (repos.characters.findById as jest.Mock).mockResolvedValue(mockCharacter);
+      mockRepos.users.findByEmail.mockResolvedValue(mockUser);
+      mockRepos.characters.findById.mockResolvedValue(mockCharacter);
 
       // Request body:
       // {
@@ -497,10 +490,8 @@ describe('POST /api/characters/[id]/memories', () => {
       const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const mockRepos = getRepositories as jest.MockedFunction<typeof getRepositories>;
-      const repos = mockRepos();
-      (repos.users.findByEmail as jest.Mock).mockResolvedValue(mockUser);
-      (repos.characters.findById as jest.Mock).mockResolvedValue(mockCharacter);
+      mockRepos.users.findByEmail.mockResolvedValue(mockUser);
+      mockRepos.characters.findById.mockResolvedValue(mockCharacter);
 
       // Request body:
       // {
@@ -518,11 +509,9 @@ describe('POST /api/characters/[id]/memories', () => {
       const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const mockRepos = getRepositories as jest.MockedFunction<typeof getRepositories>;
-      const repos = mockRepos();
-      (repos.users.findByEmail as jest.Mock).mockResolvedValue(mockUser);
-      (repos.characters.findById as jest.Mock).mockResolvedValue(mockCharacter);
-      (repos.memories.create as jest.Mock).mockRejectedValue(new Error('Database error'));
+      mockRepos.users.findByEmail.mockResolvedValue(mockUser);
+      mockRepos.characters.findById.mockResolvedValue(mockCharacter);
+      mockRepos.memories.create.mockRejectedValue(new Error('Database error'));
 
       // Expected status: 500
       // Expected error message about failure to create memory

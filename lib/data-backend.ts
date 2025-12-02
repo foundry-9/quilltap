@@ -5,6 +5,8 @@
  * This file is retained for historical reference.
  */
 
+import { logger } from '@/lib/logger'
+
 export type DataBackend = 'json';
 
 /**
@@ -25,5 +27,5 @@ export function shouldUseJsonStore(): boolean {
  * Log backend configuration
  */
 export function logBackendConfig(): void {
-  console.log('[Data Backend] Using: JSON');
+  logger.info('Data backend configuration', { context: { backend: 'JSON' } });
 }

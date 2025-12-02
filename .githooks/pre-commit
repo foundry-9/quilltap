@@ -85,6 +85,14 @@ if [ -f package-lock.json ]; then
   npm install --package-lock-only
 fi
 
+# Bump versions for plugins
+if [ -f ./plugins/dist/qtap-plugin-template/schemas/plugin-manifest.json ]; then
+  npm run generate:schemas
+  npm run build:plugins
+  git add ./plugins/dist/qtap-plugin-template/schemas/plugin-manifest.json
+  git add ./plugins
+fi
+
 # Stage the updated package files
 git add package.json
 if [ -f package-lock.json ]; then

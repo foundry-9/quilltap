@@ -1,0 +1,59 @@
+{
+  "$schema": "../qtap-plugin-template/schemas/plugin-manifest.schema.json",
+  "name": "qtap-plugin-openai-compatible",
+  "title": "OpenAI-Compatible Provider",
+  "description": "Provides support for OpenAI-compatible APIs including LM Studio, vLLM, Text Generation Web UI, and other compatible services",
+  "version": "1.0.0",
+  "author": {
+    "name": "Foundry-9",
+    "email": "charles@sebold.tech",
+    "url": "https://foundry-9.com"
+  },
+  "license": "MIT",
+  "compatibility": {
+    "quilltapVersion": ">=1.7.0",
+    "nodeVersion": ">=18.0.0"
+  },
+  "capabilities": ["LLM_PROVIDER"],
+  "category": "PROVIDER",
+  "main": "index.js",
+  "typescript": true,
+  "frontend": "REACT",
+  "styling": "TAILWIND",
+  "enabledByDefault": true,
+  "status": "STABLE",
+  "keywords": ["openai", "compatible", "lm-studio", "vllm", "text-generation-webui", "llm", "ai", "chat", "local"],
+  "providerConfig": {
+    "providerName": "OPENAI_COMPATIBLE",
+    "displayName": "OpenAI-Compatible",
+    "description": "OpenAI-compatible API provider for local and remote LLM services",
+    "abbreviation": "OAC",
+    "colors": {
+      "bg": "bg-slate-100",
+      "text": "text-slate-800",
+      "icon": "text-slate-600"
+    },
+    "requiresApiKey": false,
+    "requiresBaseUrl": true,
+    "apiKeyLabel": "API Key (optional)",
+    "baseUrlLabel": "Base URL",
+    "baseUrlPlaceholder": "http://localhost:8080/v1",
+    "baseUrlDefault": "http://localhost:8080/v1",
+    "capabilities": {
+      "chat": true,
+      "imageGeneration": false,
+      "embeddings": false,
+      "webSearch": false
+    },
+    "attachmentSupport": {
+      "supported": false,
+      "mimeTypes": [],
+      "description": "File attachments are not supported. Attachment support varies by implementation."
+    }
+  },
+  "permissions": {
+    "network": ["localhost", "127.0.0.1", "*"],
+    "userData": false,
+    "database": false
+  }
+}

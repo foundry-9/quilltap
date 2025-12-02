@@ -8,6 +8,7 @@ import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { createMemoryWithEmbedding } from '@/lib/memory/memory-service'
 import { z } from 'zod'
+import { logger } from '@/lib/logger'
 
 // Validation schema for creating a memory
 const createMemorySchema = z.object({
@@ -118,7 +119,7 @@ export async function GET(
       count: memoriesWithTags.length,
     })
   } catch (error) {
-    console.error('Error fetching memories:', error)
+    logger.error('Error fetching memories', {}, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to fetch memories' },
       { status: 500 }
@@ -186,7 +187,7 @@ export async function POST(
       )
     }
 
-    console.error('Error creating memory:', error)
+    logger.error('Error creating memory', {}, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to create memory' },
       { status: 500 }

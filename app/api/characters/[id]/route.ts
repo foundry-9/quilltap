@@ -1,13 +1,16 @@
 // Character API: Get, Update, Delete
 // GET /api/characters/:id - Get character by ID
 // PUT /api/characters/:id - Update character
-// DELETE /api/characters/:id - Delete character
+// DELETE /api/characters/:id - Delete character (supports cascade deletion)
 
 import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
+import { findFileById, getFileUrl } from '@/lib/file-manager'
+import { executeCascadeDelete } from '@/lib/cascade-delete'
+import { logger } from '@/lib/logger'
 import { z } from 'zod'
 
 // Validation schema for updates
@@ -49,10 +52,17 @@ export async function GET(
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
     }
 
-    // Get default image if present
+    // Get default image from file-manager if present
     let defaultImage = null
     if (character.defaultImageId) {
-      defaultImage = await repos.images.findById(character.defaultImageId)
+      const fileEntry = await findFileById(character.defaultImageId)
+      if (fileEntry) {
+        defaultImage = {
+          id: fileEntry.id,
+          filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename),
+          url: null,
+        }
+      }
     }
 
     // Get chat count
@@ -60,13 +70,7 @@ export async function GET(
 
     const enrichedCharacter = {
       ...character,
-      defaultImage: defaultImage
-        ? {
-            id: defaultImage.id,
-            filepath: defaultImage.relativePath,
-            url: null,
-          }
-        : null,
+      defaultImage,
       _count: {
         chats: chats.length,
       },
@@ -74,7 +78,7 @@ export async function GET(
 
     return NextResponse.json({ character: enrichedCharacter })
   } catch (error) {
-    console.error('Error fetching character:', error)
+    logger.error('Error fetching character', { context: 'GET /api/characters/:id' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to fetch character' },
       { status: 500 }
@@ -125,7 +129,7 @@ export async function PUT(
       )
     }
 
-    console.error('Error updating character:', error)
+    logger.error('Error updating character', { context: 'PUT /api/characters/:id' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to update character' },
       { status: 500 }
@@ -134,6 +138,9 @@ export async function PUT(
 }
 
 // DELETE /api/characters/:id
+// Query params:
+//   - cascadeChats: 'true' to delete exclusive chats
+//   - cascadeImages: 'true' to delete exclusive images
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -159,23 +166,32 @@ export async function DELETE(
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
     }
 
-    // Clean up any image reference if the character has a defaultImageId
-    if (existingCharacter.defaultImageId) {
-      try {
-        await repos.images.update(existingCharacter.defaultImageId, {
-          tags: [],
-        })
-      } catch (err) {
-        // Silently fail if image cleanup doesn't work - character deletion is more important
-        console.error('Failed to clean up image reference:', err)
-      }
+    // Parse cascade options from query params
+    const { searchParams } = new URL(req.url)
+    const cascadeChats = searchParams.get('cascadeChats') === 'true'
+    const cascadeImages = searchParams.get('cascadeImages') === 'true'
+
+    // Execute cascade delete
+    const result = await executeCascadeDelete(id, {
+      deleteExclusiveChats: cascadeChats,
+      deleteExclusiveImages: cascadeImages,
+    })
+
+    if (!result.success) {
+      return NextResponse.json(
+        { error: 'Failed to delete character' },
+        { status: 500 }
+      )
     }
 
-    await repos.characters.delete(id)
-
-    return NextResponse.json({ success: true })
+    return NextResponse.json({
+      success: true,
+      deletedChats: result.deletedChats,
+      deletedImages: result.deletedImages,
+      deletedMemories: result.deletedMemories,
+    })
   } catch (error) {
-    console.error('Error deleting character:', error)
+    logger.error('Error deleting character', { context: 'DELETE /api/characters/:id' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to delete character' },
       { status: 500 }

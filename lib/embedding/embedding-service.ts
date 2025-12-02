@@ -6,6 +6,7 @@
  * when embedding is not available.
  */
 
+import { logger } from '@/lib/logger'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { EmbeddingProfile, EmbeddingProfileProvider } from '@/lib/json-store/schemas/types'
 
@@ -287,7 +288,7 @@ export async function prepareForSearch(
     }
   } catch (error) {
     // Log the error but don't throw - fall back to text search
-    console.warn('Embedding failed, falling back to text search:', error)
+    logger.warn('Embedding failed, falling back to text search', { context: 'embedding-service', error: error instanceof Error ? error.message : String(error) })
     return extractSearchTerms(text)
   }
 }

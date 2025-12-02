@@ -12,6 +12,7 @@ import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { EntityTabs, Tab } from '@/components/tabs'
 import { EmbeddedPhotoGallery } from '@/components/images/EmbeddedPhotoGallery'
 import { PhysicalDescriptionList } from '@/components/physical-descriptions'
+import { clientLogger } from '@/lib/client-logger'
 
 interface Character {
   id: string
@@ -177,7 +178,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
       const data = await res.json()
       setPersonas(data)
     } catch (err) {
-      console.error('Error fetching personas:', err)
+      clientLogger.error('Error fetching personas', { error: err instanceof Error ? err.message : String(err) })
     } finally {
       setLoadingPersonas(false)
     }
@@ -194,7 +195,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
         setOriginalDefaultPersonaId(defaultPersona.personaId)
       }
     } catch (err) {
-      console.error('Error fetching default persona:', err)
+      clientLogger.error('Error fetching default persona', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [id])
 
@@ -206,7 +207,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
         setProfiles(data)
       }
     } catch (err) {
-      console.error('Failed to fetch profiles:', err)
+      clientLogger.error('Failed to fetch profiles', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [])
 

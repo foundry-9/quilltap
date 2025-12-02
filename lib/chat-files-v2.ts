@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 import { FileAttachment } from './llm/base';
 import { createFile, findFileById, deleteFile, readFile, readFileAsBase64 } from './file-manager';
 import type { FileEntry } from './json-store/schemas/types';
+import { logger } from '@/lib/logger';
 
 export interface ChatFileUploadResult {
   id: string;
@@ -114,13 +115,14 @@ export async function uploadChatFile(
 export async function loadChatFilesForLLM(
   fileIds: string[]
 ): Promise<FileAttachment[]> {
+  logger.debug('Loading chat files for LLM', { fileIds });
   const attachments: FileAttachment[] = [];
 
   for (const fileId of fileIds) {
     try {
       const fileEntry = await findFileById(fileId);
       if (!fileEntry) {
-        console.error(`File not found: ${fileId}`);
+        logger.error(`File not found: ${fileId}`, { fileId });
         continue;
       }
 
@@ -135,12 +137,21 @@ export async function loadChatFilesForLLM(
         size: fileEntry.size,
         data,
       });
+
+      logger.debug('Loaded chat file', {
+        fileId: fileEntry.id,
+        filename: fileEntry.originalFilename,
+        mimeType: fileEntry.mimeType,
+        size: fileEntry.size,
+        dataLength: data?.length || 0,
+      });
     } catch (error) {
-      console.error(`Failed to load chat file ${fileId}:`, error);
+      logger.error(`Failed to load chat file ${fileId}:`, {}, error instanceof Error ? error : new Error(String(error)));
       // Skip files that can't be loaded
     }
   }
 
+  logger.debug('Loaded chat files for LLM', { count: attachments.length });
   return attachments;
 }
 

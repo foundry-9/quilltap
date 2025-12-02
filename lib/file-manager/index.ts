@@ -377,10 +377,11 @@ export async function deleteFile(id: string): Promise<boolean> {
 
 /**
  * Get the public URL path for a file
+ * Returns path WITHOUT leading slash since frontend components add it
  */
 export function getFileUrl(fileId: string, originalFilename: string): string {
   const ext = extname(originalFilename);
-  return `/data/files/storage/${fileId}${ext}`;
+  return `data/files/storage/${fileId}${ext}`;
 }
 
 /**

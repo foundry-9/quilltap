@@ -7,6 +7,7 @@ import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { uploadChatFile } from '@/lib/chat-files-v2'
 import { findFilesLinkedTo, getFileUrl } from '@/lib/file-manager'
+import { logger } from '@/lib/logger'
 
 // POST /api/chats/:id/files - Upload a file
 export async function POST(
@@ -56,7 +57,7 @@ export async function POST(
       },
     })
   } catch (error) {
-    console.error('Error uploading chat file:', error)
+    logger.error('Error uploading chat file:', {}, error as Error)
 
     if (error instanceof Error) {
       // Return validation errors with 400
@@ -123,7 +124,7 @@ export async function GET(
       files: allFiles,
     })
   } catch (error) {
-    console.error('Error listing chat files:', error)
+    logger.error('Error listing chat files:', {}, error as Error)
     return NextResponse.json(
       { error: 'Failed to list files' },
       { status: 500 }

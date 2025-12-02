@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "1.6.17",
+  "version": "1.7.30",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -17,10 +17,14 @@
     "dev": "next dev",
     "devssl": "next dev --experimental-https --experimental-https-key ./certs/localhost-key.pem --experimental-https-cert ./certs/localhost.pem",
     "build": "npm run lint && next build",
+    "build:plugins": "tsx scripts/build-plugins.ts",
     "start": "next start",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "test": "jest",
+    "test": "LOG_LEVEL=error npm run test:all",
+    "test:unit": "LOG_LEVEL=error jest",
+    "test:integration": "LOG_LEVEL=error jest --config jest.integration.config.ts",
+    "test:all": "LOG_LEVEL=error jest && LOG_LEVEL=error jest --config jest.integration.config.ts",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:e2e": "playwright test",
@@ -28,7 +32,10 @@
     "test:e2e:headed": "playwright test --headed",
     "migrate-files": "tsx scripts/migrate-files.ts",
     "migrate-files:dry-run": "tsx scripts/migrate-files.ts --dry-run",
-    "cleanup-old-files": "tsx scripts/cleanup-old-files.ts"
+    "consolidate-images": "tsx scripts/consolidate-images.ts",
+    "consolidate-images:dry-run": "tsx scripts/consolidate-images.ts --dry-run",
+    "cleanup-old-files": "tsx scripts/cleanup-old-files.ts",
+    "generate:schemas": "tsx scripts/generate-plugin-manifest-schema.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.0",
@@ -65,7 +72,8 @@
     "@types/react-dom": "^19.2.3",
     "@types/react-syntax-highlighter": "^15.5.13",
     "@types/speakeasy": "^2.0.10",
-    "autoprefixer": "^10.4.0",
+    "autoprefixer": "^10.4.22",
+    "dotenv": "^17.2.3",
     "eslint": "^9.39.1",
     "eslint-config-next": "^16.0.5",
     "jest": "^30.2.0",
@@ -75,7 +83,8 @@
     "ts-jest": "^29.4.5",
     "ts-node": "^10.9.2",
     "tsx": "^4.7.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "zod-to-json-schema": "^3.25.0"
   },
   "overrides": {
     "glob": "^12.0.0",

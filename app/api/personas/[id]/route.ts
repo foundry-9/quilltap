@@ -9,6 +9,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
+import { findFileById, getFileUrl } from '@/lib/file-manager'
+import { logger } from '@/lib/logger'
 
 export async function GET(
   req: NextRequest,
@@ -30,10 +32,17 @@ export async function GET(
       return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
     }
 
-    // Get default image if present
+    // Get default image from file-manager if present
     let defaultImage = null
     if (persona.defaultImageId) {
-      defaultImage = await repos.images.findById(persona.defaultImageId)
+      const fileEntry = await findFileById(persona.defaultImageId)
+      if (fileEntry) {
+        defaultImage = {
+          id: fileEntry.id,
+          filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename),
+          url: null,
+        }
+      }
     }
 
     // Get character links with details
@@ -54,19 +63,13 @@ export async function GET(
 
     const enrichedPersona = {
       ...persona,
-      defaultImage: defaultImage
-        ? {
-            id: defaultImage.id,
-            filepath: defaultImage.relativePath,
-            url: null,
-          }
-        : null,
+      defaultImage,
       characters: characters.filter(Boolean),
     }
 
     return NextResponse.json(enrichedPersona)
   } catch (error) {
-    console.error('Error fetching persona:', error)
+    logger.error('Error fetching persona', { context: 'GET /api/personas/:id' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to fetch persona' },
       { status: 500 }
@@ -109,24 +112,25 @@ export async function PUT(
 
     const persona = await repos.personas.update(id, updateData)
 
-    // Get default image for response
+    // Get default image from file-manager for response
     let defaultImage = null
     if (persona?.defaultImageId) {
-      defaultImage = await repos.images.findById(persona.defaultImageId)
+      const fileEntry = await findFileById(persona.defaultImageId)
+      if (fileEntry) {
+        defaultImage = {
+          id: fileEntry.id,
+          filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename),
+          url: null,
+        }
+      }
     }
 
     return NextResponse.json({
       ...persona,
-      defaultImage: defaultImage
-        ? {
-            id: defaultImage.id,
-            filepath: defaultImage.relativePath,
-            url: null,
-          }
-        : null,
+      defaultImage,
     })
   } catch (error) {
-    console.error('Error updating persona:', error)
+    logger.error('Error updating persona', { context: 'PUT /api/personas/:id' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to update persona' },
       { status: 500 }
@@ -155,23 +159,14 @@ export async function DELETE(
       return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
     }
 
-    // Clean up any image reference if the persona has a defaultImageId
-    if (existing.defaultImageId) {
-      try {
-        await repos.images.update(existing.defaultImageId, {
-          tags: [],
-        })
-      } catch (err) {
-        // Silently fail if image cleanup doesn't work - persona deletion is more important
-        console.error('Failed to clean up image reference:', err)
-      }
-    }
+    // Note: We don't delete the image file when deleting a persona
+    // The image may be used elsewhere or the user may want to keep it in their gallery
 
     await repos.personas.delete(id)
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error deleting persona:', error)
+    logger.error('Error deleting persona', { context: 'DELETE /api/personas/:id' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to delete persona' },
       { status: 500 }

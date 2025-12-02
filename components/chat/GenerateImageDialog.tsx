@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 
 interface EntityOption {
@@ -89,7 +90,7 @@ export default function GenerateImageDialog({
 
       setAllEntities(entities)
     } catch (error) {
-      console.error('Error loading entities:', error)
+      clientLogger.error('Error loading entities', { error: error instanceof Error ? error.message : String(error) })
       showErrorToast('Failed to load characters and personas')
     }
   }
@@ -180,7 +181,7 @@ export default function GenerateImageDialog({
       if (error instanceof Error) {
         showErrorToast(error.message)
       } else {
-        console.error('Unexpected error during image generation:', error)
+        clientLogger.error('Unexpected error during image generation', { error: String(error) })
         showErrorToast('Failed to generate image')
       }
     } finally {

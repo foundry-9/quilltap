@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { clientLogger } from '@/lib/client-logger'
 import { ImageProfileForm } from '@/components/image-profiles/ImageProfileForm'
 import { ProviderBadge } from '@/components/image-profiles/ProviderIcon'
 
@@ -59,7 +60,7 @@ export default function ImageProfilesTab() {
       const data = await res.json()
       setApiKeys(data)
     } catch (err) {
-      console.error('Failed to fetch API keys:', err)
+      clientLogger.error('Failed to fetch API keys', { error: err instanceof Error ? err.message : String(err) })
     }
   }
 

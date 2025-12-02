@@ -6,7 +6,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
+import { findFileById, getFileUrl } from '@/lib/file-manager'
 import { z } from 'zod'
+import { logger } from '@/lib/logger'
 
 // Validation schema
 const createCharacterSchema = z.object({
@@ -45,10 +47,17 @@ export async function GET(req: NextRequest) {
     // Enrich characters with related data (defaultImage and chat count)
     const enrichedCharacters = await Promise.all(
       characters.map(async (character) => {
-        // Get default image if present
+        // Get default image from file-manager if present
         let defaultImage = null
         if (character.defaultImageId) {
-          defaultImage = await repos.images.findById(character.defaultImageId)
+          const fileEntry = await findFileById(character.defaultImageId)
+          if (fileEntry) {
+            defaultImage = {
+              id: fileEntry.id,
+              filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename),
+              url: null,
+            }
+          }
         }
 
         // Get chat count for this character
@@ -61,15 +70,10 @@ export async function GET(req: NextRequest) {
           description: character.description,
           avatarUrl: character.avatarUrl,
           defaultImageId: character.defaultImageId,
-          defaultImage: defaultImage
-            ? {
-                id: defaultImage.id,
-                filepath: defaultImage.relativePath,
-                url: null,
-              }
-            : null,
+          defaultImage,
           isFavorite: character.isFavorite,
           createdAt: character.createdAt,
+          tags: character.tags || [],
           updatedAt: character.updatedAt,
           _count: {
             chats: chats.length,
@@ -80,7 +84,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ characters: enrichedCharacters })
   } catch (error) {
-    console.error('Error fetching characters:', error)
+    logger.error('Error fetching characters:', error as Error)
     return NextResponse.json(
       { error: 'Failed to fetch characters' },
       { status: 500 }
@@ -135,7 +139,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    console.error('Error creating character:', error)
+    logger.error('Error creating character:', error as Error)
     return NextResponse.json(
       { error: 'Failed to create character' },
       { status: 500 }

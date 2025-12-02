@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { clientLogger } from '@/lib/client-logger'
 
 interface ConnectionProfile {
   id: string
@@ -36,7 +37,7 @@ export default function NewCharacterPage() {
           setProfiles(data)
         }
       } catch (err) {
-        console.error('Failed to fetch profiles:', err)
+        clientLogger.error('Failed to fetch profiles', { error: err instanceof Error ? err.message : String(err) })
       }
     }
     fetchProfiles()

@@ -11,11 +11,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
-import { ImageProvider, ImageProviderEnum } from '@/lib/json-store/schemas/types'
-import { getImageGenProvider } from '@/lib/image-gen/factory'
-
-// Get the list of valid image providers from the Zod enum
-const VALID_IMAGE_PROVIDERS = ImageProviderEnum.options
+import { createImageProvider } from '@/lib/llm/plugin-factory'
+import { logger } from '@/lib/logger'
 
 /**
  * GET /api/image-profiles/[id]
@@ -73,7 +70,7 @@ export async function GET(
       tags: tagDetails.filter(Boolean),
     })
   } catch (error) {
-    console.error('Failed to fetch image profile:', error)
+    logger.error('Failed to fetch image profile', { context: 'GET /api/image-profiles/[id]' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to fetch image profile' },
       { status: 500 }
@@ -149,16 +146,16 @@ export async function PUT(
     }
 
     if (provider !== undefined) {
-      if (!VALID_IMAGE_PROVIDERS.includes(provider)) {
+      if (typeof provider !== 'string' || provider.trim().length === 0) {
         return NextResponse.json(
-          { error: `Invalid provider. Must be one of: ${VALID_IMAGE_PROVIDERS.join(', ')}` },
+          { error: 'Provider must be a non-empty string' },
           { status: 400 }
         )
       }
 
       // Verify provider is available
       try {
-        getImageGenProvider(provider)
+        createImageProvider(provider)
       } catch {
         return NextResponse.json(
           { error: `Provider ${provider} is not available` },
@@ -265,7 +262,7 @@ export async function PUT(
       tags: tagDetails.filter(Boolean),
     })
   } catch (error) {
-    console.error('Failed to update image profile:', error)
+    logger.error('Failed to update image profile', { context: 'PUT /api/image-profiles/[id]' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to update image profile' },
       { status: 500 }
@@ -311,7 +308,7 @@ export async function DELETE(
       { status: 200 }
     )
   } catch (error) {
-    console.error('Failed to delete image profile:', error)
+    logger.error('Failed to delete image profile', { context: 'DELETE /api/image-profiles/[id]' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to delete image profile' },
       { status: 500 }

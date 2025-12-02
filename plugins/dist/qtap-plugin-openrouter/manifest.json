@@ -1,0 +1,56 @@
+{
+  "$schema": "../qtap-plugin-template/schemas/plugin-manifest.schema.json",
+  "name": "qtap-plugin-openrouter",
+  "title": "OpenRouter Provider",
+  "description": "Provides access to 100+ models including GPT-4, Claude, Gemini, Llama and more via OpenRouter API",
+  "version": "1.0.0",
+  "author": {
+    "name": "Foundry-9",
+    "email": "charles@sebold.tech",
+    "url": "https://foundry-9.com"
+  },
+  "license": "MIT",
+  "compatibility": {
+    "quilltapVersion": ">=1.7.0",
+    "nodeVersion": ">=18.0.0"
+  },
+  "capabilities": ["LLM_PROVIDER", "IMAGE_PROVIDER"],
+  "category": "PROVIDER",
+  "main": "index.js",
+  "typescript": true,
+  "frontend": "REACT",
+  "styling": "TAILWIND",
+  "enabledByDefault": true,
+  "status": "STABLE",
+  "keywords": ["openrouter", "gpt-4", "claude", "gemini", "llama", "llm", "ai", "chat", "models"],
+  "providerConfig": {
+    "providerName": "OPENROUTER",
+    "displayName": "OpenRouter",
+    "description": "OpenRouter provides access to 100+ models including GPT-4, Claude, Gemini, Llama and more with unified pricing",
+    "abbreviation": "ORT",
+    "colors": {
+      "bg": "bg-orange-100",
+      "text": "text-orange-800",
+      "icon": "text-orange-600"
+    },
+    "requiresApiKey": true,
+    "requiresBaseUrl": false,
+    "apiKeyLabel": "OpenRouter API Key",
+    "capabilities": {
+      "chat": true,
+      "imageGeneration": false,
+      "embeddings": false,
+      "webSearch": false
+    },
+    "attachmentSupport": {
+      "supported": false,
+      "mimeTypes": [],
+      "description": "File attachment support depends on the underlying model"
+    }
+  },
+  "permissions": {
+    "network": ["openrouter.ai"],
+    "userData": false,
+    "database": false
+  }
+}

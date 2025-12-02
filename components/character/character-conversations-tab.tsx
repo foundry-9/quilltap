@@ -1,7 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import Link from 'next/link'
+import { TagDisplay } from '@/components/tags/tag-display'
+import { useQuickHide } from '@/components/providers/quick-hide-provider'
 
 interface Message {
   id: string
@@ -24,6 +26,15 @@ interface Chat {
     title?: string | null
   } | null
   messages: Message[]
+  tags?: Array<{
+    tag: {
+      id: string
+      name: string
+    }
+  }>
+  _count?: {
+    messages: number
+  }
 }
 
 interface CharacterConversationsTabProps {
@@ -36,6 +47,11 @@ const CHATS_PER_PAGE = 10
 export function CharacterConversationsTab({ characterId, characterName }: CharacterConversationsTabProps) {
   const [chats, setChats] = useState<Chat[]>([])
   const [loading, setLoading] = useState(true)
+  const { shouldHideByIds } = useQuickHide()
+  const visibleChats = useMemo(
+    () => chats.filter(chat => !shouldHideByIds((chat.tags || []).map(ct => ct.tag.id))),
+    [chats, shouldHideByIds]
+  )
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -43,6 +59,7 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
   const [page, setPage] = useState(0)
   const observerRef = useRef<IntersectionObserver | null>(null)
   const loadMoreRef = useRef<HTMLDivElement | null>(null)
+  const [deletingChatId, setDeletingChatId] = useState<string | null>(null)
 
   const fetchChats = useCallback(async (pageNum: number, search: string, append: boolean = false) => {
     if (pageNum === 0) {
@@ -118,6 +135,25 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value)
     setPage(0)
+  }
+
+  const deleteChat = async (chatId: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const confirmed = confirm('Are you sure you want to delete this chat?')
+    if (!confirmed) return
+
+    setDeletingChatId(chatId)
+    try {
+      const res = await fetch(`/api/chats/${chatId}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Failed to delete chat')
+      setChats(chats.filter(c => c.id !== chatId))
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete chat')
+    } finally {
+      setDeletingChatId(null)
+    }
   }
 
   const formatDate = (dateString: string) => {
@@ -202,7 +238,7 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
       </div>
 
       {/* Conversations List */}
-      {chats.length === 0 ? (
+      {visibleChats.length === 0 ? (
         <div className="text-center py-12 border border-dashed border-gray-300 dark:border-slate-600 rounded-lg">
           <svg
             className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
@@ -233,35 +269,66 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
           )}
         </div>
       ) : (
-        <div className="space-y-2">
-          {chats.map((chat) => (
-            <Link
+        <div className="space-y-4">
+          {visibleChats.map((chat) => (
+            <div
               key={chat.id}
-              href={`/chats/${chat.id}`}
-              className="block p-4 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-sm transition-all"
+              className="flex items-start justify-between gap-4 p-4 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 hover:shadow-sm transition-all"
             >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
+              <Link
+                href={`/chats/${chat.id}`}
+                className="flex-1 min-w-0 block"
+              >
+                <div className="flex items-center gap-2 mb-1">
                   <h3 className="font-medium text-gray-900 dark:text-white truncate">
                     {chat.title || `Chat with ${characterName}`}
                   </h3>
+                  <span className="inline-block bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100 text-sm font-semibold px-3 py-1 rounded-full flex-shrink-0">
+                    {chat._count?.messages ?? chat.messages.length}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
                   {chat.persona && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    <>
                       as {chat.persona.title ? `${chat.persona.name} (${chat.persona.title})` : chat.persona.name}
-                    </p>
+                      {' \u2022 '}
+                    </>
                   )}
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">
-                    {getPreviewText(chat.messages)}
-                  </p>
-                </div>
-                <div className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
                   {formatDate(chat.updatedAt)}
-                </div>
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-1 mt-2">
+                  {getPreviewText(chat.messages)}
+                </p>
+                {chat.tags && chat.tags.length > 0 && (
+                  <div className="mt-2">
+                    <TagDisplay tags={chat.tags.map(ct => ct.tag)} />
+                  </div>
+                )}
+              </Link>
+
+              <div className="flex flex-col gap-2 flex-shrink-0">
+                <Link
+                  href={`/chats/${chat.id}`}
+                  className="w-10 h-10 flex items-center justify-center bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors"
+                  title="Open chat"
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5z" />
+                    <path d="M6 11l2 2 4-4" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </Link>
+                <button
+                  onClick={(e) => deleteChat(chat.id, e)}
+                  disabled={deletingChatId === chat.id}
+                  className="w-10 h-10 flex items-center justify-center bg-red-600 dark:bg-red-700 text-white rounded hover:bg-red-700 dark:hover:bg-red-800 disabled:opacity-50 transition-colors"
+                  title="Delete chat"
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </button>
               </div>
-              <div className="mt-2 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                <span>{chat.messages.length} message{chat.messages.length !== 1 ? 's' : ''}</span>
-              </div>
-            </Link>
+            </div>
           ))}
 
           {/* Load more trigger */}
@@ -272,7 +339,7 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
                 Loading more...
               </div>
             )}
-            {!hasMore && chats.length > 0 && (
+            {!hasMore && visibleChats.length > 0 && (
               <p className="text-center text-sm text-gray-400 dark:text-gray-500">
                 No more conversations
               </p>

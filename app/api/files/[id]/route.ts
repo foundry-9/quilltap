@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { findFileById, readFile, deleteFile, removeFileLink } from '@/lib/file-manager';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/files/:id
@@ -46,7 +47,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('Error serving file:', error);
+    logger.error('Error serving file', { context: 'GET /api/files/[id]' }, error instanceof Error ? error : undefined);
     return NextResponse.json(
       { error: 'Failed to serve file' },
       { status: 500 }
@@ -96,7 +97,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error deleting file:', error);
+    logger.error('Error deleting file', { context: 'DELETE /api/files/[id]' }, error instanceof Error ? error : undefined);
     return NextResponse.json(
       { error: 'Failed to delete file' },
       { status: 500 }
@@ -146,7 +147,7 @@ export async function PATCH(
 
     return NextResponse.json({ success: true, file: updated });
   } catch (error) {
-    console.error('Error unlinking file:', error);
+    logger.error('Error unlinking file', { context: 'PATCH /api/files/[id]' }, error instanceof Error ? error : undefined);
     return NextResponse.json(
       { error: 'Failed to unlink file' },
       { status: 500 }

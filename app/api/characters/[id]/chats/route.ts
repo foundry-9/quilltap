@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
+import { logger } from '@/lib/logger'
 
 // GET /api/characters/:id/chats - Get recent chats for this character
 export async function GET(
@@ -93,6 +94,18 @@ export async function GET(
           }
         }
 
+        // Get tags
+        const tagData = await Promise.all(
+          (chat.tags || []).map(async (tagId) => {
+            const tag = await repos.tags.findById(tagId)
+            return tag ? { tag: { id: tag.id, name: tag.name } } : null
+          })
+        )
+        logger.debug('Fetched tags for chat', { context: 'GET /api/characters/:id/chats', chatId: chat.id, tagCount: tagData.filter(Boolean).length })
+
+        // Get all messages and count them for badge
+        const messageCount = messages.filter((msg) => msg.type === 'message').length
+
         // Get last 3 messages for preview
         const recentMessages = messages
           .filter((msg) => msg.type === 'message')
@@ -116,13 +129,17 @@ export async function GET(
           },
           persona,
           messages: recentMessages,
+          tags: tagData.filter((tag): tag is { tag: { id: string; name: string } } => tag !== null),
+          _count: {
+            messages: messageCount,
+          },
         }
       })
     )
 
     return NextResponse.json({ chats: enrichedChats })
   } catch (error) {
-    console.error('Error fetching character chats:', error)
+    logger.error('Error fetching character chats', { context: 'GET /api/characters/:id/chats' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to fetch chats' },
       { status: 500 }

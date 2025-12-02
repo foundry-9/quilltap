@@ -10,8 +10,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
-import { ImageProviderEnum, type ImageProvider } from '@/lib/json-store/schemas/types'
-import { getImageGenProvider } from '@/lib/image-gen/factory'
+import { logger } from '@/lib/logger'
+import { createImageProvider } from '@/lib/llm/plugin-factory'
 
 /**
  * GET /api/image-profiles
@@ -123,7 +123,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(enrichedProfiles)
   } catch (error) {
-    console.error('Failed to fetch image profiles:', error)
+    logger.error('Failed to fetch image profiles', { endpoint: '/api/image-profiles', method: 'GET' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to fetch image profiles' },
       { status: 500 }
@@ -180,18 +180,16 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Validate provider
-    const validProviders = ImageProviderEnum.options
-    if (!provider || !validProviders.includes(provider)) {
+    // Validate provider by attempting to get it
+    if (!provider || typeof provider !== 'string') {
       return NextResponse.json(
-        { error: `Invalid provider. Must be one of: ${validProviders.join(', ')}` },
+        { error: 'Provider is required' },
         { status: 400 }
       )
     }
 
-    // Verify provider is available (can instantiate)
     try {
-      getImageGenProvider(provider)
+      createImageProvider(provider)
     } catch {
       return NextResponse.json(
         { error: `Provider ${provider} is not available` },
@@ -251,7 +249,7 @@ export async function POST(req: NextRequest) {
     const profile = await repos.imageProfiles.create({
       userId: session.user.id,
       name: name.trim(),
-      provider: provider as ImageProvider,
+      provider: provider,
       apiKeyId: apiKeyId || null,
       baseUrl: baseUrl || null,
       modelName: modelName.trim(),
@@ -276,7 +274,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ...profile, apiKey }, { status: 201 })
   } catch (error) {
-    console.error('Failed to create image profile:', error)
+    logger.error('Failed to create image profile', { endpoint: '/api/image-profiles', method: 'POST' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to create image profile' },
       { status: 500 }

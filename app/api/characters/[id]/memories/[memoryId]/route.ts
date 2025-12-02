@@ -8,6 +8,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { z } from 'zod'
+import { logger } from '@/lib/logger'
 
 // Validation schema for updating a memory
 const updateMemorySchema = z.object({
@@ -66,11 +67,13 @@ export async function GET(
     }
 
     // Update access time (fire and forget)
-    repos.memories.updateAccessTime(characterId, memoryId).catch(console.error)
+    repos.memories.updateAccessTime(characterId, memoryId).catch(err =>
+      logger.warn('Failed to update memory access time', { characterId, memoryId, error: err instanceof Error ? err.message : String(err) })
+    )
 
     return NextResponse.json({ memory: memoryWithTags })
   } catch (error) {
-    console.error('Error fetching memory:', error)
+    logger.error('Error fetching memory', {}, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to fetch memory' },
       { status: 500 }
@@ -130,7 +133,7 @@ export async function PUT(
       )
     }
 
-    console.error('Error updating memory:', error)
+    logger.error('Error updating memory', {}, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to update memory' },
       { status: 500 }
@@ -176,7 +179,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error deleting memory:', error)
+    logger.error('Error deleting memory', {}, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to delete memory' },
       { status: 500 }

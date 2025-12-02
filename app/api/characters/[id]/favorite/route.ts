@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
+import { logger } from '@/lib/logger'
 
 // PATCH /api/characters/:id/favorite - Toggle favorite status
 export async function PATCH(
@@ -37,7 +38,7 @@ export async function PATCH(
 
     return NextResponse.json({ character })
   } catch (error) {
-    console.error('Error toggling character favorite:', error)
+    logger.error('Error toggling character favorite', { context: 'PATCH /api/characters/[id]/favorite' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to toggle favorite' },
       { status: 500 }

@@ -8,6 +8,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { importSTPersona, isMultiPersonaBackup, convertMultiPersonaBackup } from '@/lib/sillytavern/persona'
+import { logger } from '@/lib/logger'
 
 export async function POST(req: NextRequest) {
   try {
@@ -122,7 +123,7 @@ export async function POST(req: NextRequest) {
       )
     }
   } catch (error) {
-    console.error('Error importing persona:', error)
+    logger.error('Error importing persona:', error as Error)
     return NextResponse.json(
       { error: 'Failed to import persona' },
       { status: 500 }

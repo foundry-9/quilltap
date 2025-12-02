@@ -1,0 +1,56 @@
+{
+  "$schema": "../qtap-plugin-template/schemas/plugin-manifest.schema.json",
+  "name": "qtap-plugin-gab-ai",
+  "title": "Gab AI Provider",
+  "description": "Provides Gab AI language models for Quilltap",
+  "version": "1.0.0",
+  "author": {
+    "name": "Foundry-9",
+    "email": "charles@sebold.tech",
+    "url": "https://foundry-9.com"
+  },
+  "license": "MIT",
+  "compatibility": {
+    "quilltapVersion": ">=1.7.0",
+    "nodeVersion": ">=18.0.0"
+  },
+  "capabilities": ["LLM_PROVIDER"],
+  "category": "PROVIDER",
+  "main": "index.js",
+  "typescript": true,
+  "frontend": "REACT",
+  "styling": "TAILWIND",
+  "enabledByDefault": true,
+  "status": "STABLE",
+  "keywords": ["gab", "gab-ai", "llm", "ai", "chat"],
+  "providerConfig": {
+    "providerName": "GAB_AI",
+    "displayName": "Gab AI",
+    "description": "Gab AI language models for chat completions",
+    "abbreviation": "GAB",
+    "colors": {
+      "bg": "bg-green-100",
+      "text": "text-green-800",
+      "icon": "text-green-600"
+    },
+    "requiresApiKey": true,
+    "requiresBaseUrl": false,
+    "apiKeyLabel": "Gab AI API Key",
+    "capabilities": {
+      "chat": true,
+      "imageGeneration": false,
+      "embeddings": false,
+      "webSearch": false
+    },
+    "attachmentSupport": {
+      "supported": false,
+      "mimeTypes": [],
+      "description": "No attachment support (text only)"
+    }
+  },
+  "permissions": {
+    "network": ["api.gab.com"],
+    "userData": false,
+    "database": false
+  }
+}

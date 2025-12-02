@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { clientLogger } from '@/lib/client-logger'
 import MessageContent from '@/components/chat/MessageContent'
 import { CharacterConversationsTab } from '@/components/character/character-conversations-tab'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
@@ -16,6 +17,8 @@ import { EntityTabs, Tab } from '@/components/tabs'
 import { EmbeddedPhotoGallery } from '@/components/images/EmbeddedPhotoGallery'
 import { PhysicalDescriptionList } from '@/components/physical-descriptions'
 import { MemoryList } from '@/components/memory/memory-list'
+import { useQuickHide } from '@/components/providers/quick-hide-provider'
+import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 
 interface Tag {
   id: string
@@ -59,6 +62,7 @@ interface Character {
     filepath: string
     url?: string
   }
+  tags?: string[]
 }
 
 const CHARACTER_TABS: Tab[] = [
@@ -152,6 +156,9 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const [savingImageProfile, setSavingImageProfile] = useState(false)
   const [defaultImageProfileId, setDefaultImageProfileId] = useState<string>('')
   const { style } = useAvatarDisplay()
+  const { shouldHideByIds, hiddenTagIds } = useQuickHide()
+  const quickHideActive = hiddenTagIds.size > 0
+  const characterTagIds = character?.tags || []
 
   const fetchCharacter = useCallback(async () => {
     try {
@@ -183,7 +190,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       const data = await res.json()
       setTags(data.tags || [])
     } catch (err) {
-      console.error('Failed to fetch tags:', err)
+      clientLogger.error('Failed to fetch tags:', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [id])
 
@@ -195,7 +202,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
         setProfiles(data.map((p: any) => ({ id: p.id, name: p.name })))
       }
     } catch (err) {
-      console.error('Failed to fetch profiles:', err)
+      clientLogger.error('Failed to fetch profiles:', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [])
 
@@ -207,7 +214,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
         setPersonas(data.map((p: any) => ({ id: p.id, name: p.name, title: p.title })))
       }
     } catch (err) {
-      console.error('Failed to fetch personas:', err)
+      clientLogger.error('Failed to fetch personas:', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [])
 
@@ -222,7 +229,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
         }
       }
     } catch (err) {
-      console.error('Failed to fetch default persona:', err)
+      clientLogger.error('Failed to fetch default persona:', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [id])
 
@@ -234,7 +241,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
         setImageProfiles(data)
       }
     } catch (err) {
-      console.error('Failed to fetch image profiles:', err)
+      clientLogger.error('Failed to fetch image profiles:', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [])
 
@@ -659,6 +666,14 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
             ← Back to Characters
           </Link>
         </div>
+      </div>
+    )
+  }
+
+  if (quickHideActive && character && shouldHideByIds(characterTagIds)) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-slate-900">
+        <HiddenPlaceholder />
       </div>
     )
   }

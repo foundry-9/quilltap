@@ -8,6 +8,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { exportSTPersona } from '@/lib/sillytavern/persona'
+import { logger } from '@/lib/logger'
 
 export async function GET(
   req: NextRequest,
@@ -41,7 +42,7 @@ export async function GET(
       },
     })
   } catch (error) {
-    console.error('Error exporting persona:', error)
+    logger.error('Error exporting persona', { context: 'personas-export-GET' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to export persona' },
       { status: 500 }

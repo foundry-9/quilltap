@@ -81,6 +81,14 @@ export const PROVIDER_ATTACHMENT_CAPABILITIES = {
   },
 } as const
 
+// Type for known provider keys
+type KnownProvider = keyof typeof PROVIDER_ATTACHMENT_CAPABILITIES
+
+// Check if a provider is a known provider with static capabilities
+function isKnownProvider(provider: string): provider is KnownProvider {
+  return provider in PROVIDER_ATTACHMENT_CAPABILITIES
+}
+
 /**
  * Get supported MIME types for a provider
  * Returns an empty array if the provider doesn't support file attachments
@@ -90,10 +98,13 @@ export const PROVIDER_ATTACHMENT_CAPABILITIES = {
  * @returns Array of supported MIME types (empty if no support)
  */
 export function getSupportedMimeTypes(provider: Provider, baseUrl?: string): string[] {
-  // Use the static provider capabilities instead of instantiating providers
-  // This is more reliable and doesn't require provider instances
-  const capabilities = PROVIDER_ATTACHMENT_CAPABILITIES[provider]
-  return capabilities ? [...capabilities.types] : []
+  // Use the static provider capabilities for known providers
+  // Unknown/dynamic providers return empty array (they should register capabilities via plugins)
+  if (isKnownProvider(provider)) {
+    const capabilities = PROVIDER_ATTACHMENT_CAPABILITIES[provider]
+    return capabilities ? [...capabilities.types] : []
+  }
+  return []
 }
 
 /**

@@ -8,6 +8,7 @@
 import { JsonStore } from '../core/json-store';
 import { BaseRepository } from './base.repository';
 import { Persona, PersonaSchema, PhysicalDescription } from '../schemas/types';
+import { logger } from '@/lib/logger';
 
 export class PersonasRepository extends BaseRepository<Persona> {
   constructor(jsonStore: JsonStore) {
@@ -44,7 +45,7 @@ export class PersonasRepository extends BaseRepository<Persona> {
         }
       }
     } catch (error) {
-      console.error('Error listing personas:', error);
+      logger.error('Error listing personas:', {}, error as Error);
     }
     return personas;
   }
@@ -120,7 +121,7 @@ export class PersonasRepository extends BaseRepository<Persona> {
       await this.jsonStore.deleteFile(filePath);
       return true;
     } catch (error) {
-      console.error(`Failed to delete persona ${id}:`, error);
+      logger.error(`Failed to delete persona ${id}:`, {}, error as Error);
       return false;
     }
   }

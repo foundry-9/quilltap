@@ -10,7 +10,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { decryptApiKey } from '@/lib/encryption'
-import { createLLMProvider } from '@/lib/llm/factory'
+import { createLLMProvider } from '@/lib/llm'
+import { logger } from '@/lib/logger'
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { createHash } from 'crypto'
@@ -93,7 +94,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create provider instance
-    const provider = createLLMProvider(profile.provider as any, profile.baseUrl ?? undefined)
+    const provider = await createLLMProvider(profile.provider as any, profile.baseUrl ?? undefined)
 
     // Verify provider supports image generation
     if (!provider.supportsImageGeneration) {
@@ -180,7 +181,7 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error('Error generating images:', error)
+    logger.error('Error generating images', { endpoint: '/api/images/generate', method: 'POST' }, error instanceof Error ? error : undefined)
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(

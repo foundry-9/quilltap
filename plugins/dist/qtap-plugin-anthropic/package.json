@@ -1,0 +1,12 @@
+{
+  "name": "qtap-plugin-anthropic",
+  "version": "1.0.0",
+  "description": "Anthropic provider plugin for Quilltap",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "author": "Foundry-9",
+  "license": "MIT",
+  "peerDependencies": {
+    "@anthropic-ai/sdk": ">=0.20.0"
+  }
+}

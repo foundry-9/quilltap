@@ -3,6 +3,9 @@
  * Provides consistent logging format across the application
  */
 
+import { LogTransport, ConsoleTransport, FileTransport } from '@/lib/logging/transports';
+import { env } from '@/lib/env';
+
 export enum LogLevel {
   ERROR = 'error',
   WARN = 'warn',
@@ -26,18 +29,49 @@ interface LogContext {
   [key: string]: any;
 }
 
+/**
+ * Initialize transports based on environment configuration
+ */
+function initializeTransports(): LogTransport[] {
+  const transports: LogTransport[] = [];
+  const output = env.LOG_OUTPUT || 'console';
+
+  if (output === 'console' || output === 'both') {
+    transports.push(new ConsoleTransport());
+  }
+
+  if (output === 'file' || output === 'both') {
+    const maxFileSize = env.LOG_FILE_MAX_SIZE ? Number.parseInt(env.LOG_FILE_MAX_SIZE) : undefined;
+    const maxFiles = env.LOG_FILE_MAX_FILES ? Number.parseInt(env.LOG_FILE_MAX_FILES) : undefined;
+
+    transports.push(new FileTransport(
+      env.LOG_FILE_PATH || './logs',
+      maxFileSize,
+      maxFiles
+    ));
+  }
+
+  return transports;
+}
+
 class Logger {
   private context: LogContext;
+  private transports: LogTransport[];
+  private minLevel: number;
 
-  constructor(context: LogContext = {}) {
+  constructor(context: LogContext = {}, transports?: LogTransport[], minLevel?: LogLevel) {
     this.context = context;
+    this.transports = transports || initializeTransports();
+    this.minLevel = minLevel ? LOG_LEVELS[minLevel] : CURRENT_LEVEL;
   }
 
   /**
    * Create a child logger with additional context
    */
   child(additionalContext: LogContext): Logger {
-    return new Logger({ ...this.context, ...additionalContext });
+    // Find the LogLevel key that matches this.minLevel value
+    const levelKey = Object.keys(LOG_LEVELS).find(key => LOG_LEVELS[key as LogLevel] === this.minLevel) as LogLevel | undefined;
+    return new Logger({ ...this.context, ...additionalContext }, this.transports, levelKey);
   }
 
   /**
@@ -77,53 +111,39 @@ class Logger {
     context?: LogContext,
     error?: Error
   ): void {
-    if (LOG_LEVELS[level] > CURRENT_LEVEL) {
+    if (LOG_LEVELS[level] > this.minLevel) {
       return;
     }
 
     const timestamp = new Date().toISOString();
-    const logData: LogContext & {
-      timestamp: string;
-      level: LogLevel;
-      message: string;
-      error?: {
-        name: string;
-        message: string;
-        stack?: string;
-      };
-    } = {
+    const logData = {
       timestamp,
       level,
       message,
-      ...this.context,
-      ...context,
-    };
-
-    if (error) {
-      logData.error = {
+      context: {
+        ...this.context,
+        ...context,
+      },
+      error: error ? {
         name: error.name,
         message: error.message,
         stack: error.stack,
-      };
-    }
+      } : undefined,
+    };
 
-    // In production, you might want to send this to a logging service
-    // For now, we'll use structured console logging
-    const logString = JSON.stringify(logData);
-
-    switch (level) {
-      case LogLevel.ERROR:
-        console.error(logString);
-        break;
-      case LogLevel.WARN:
-        console.warn(logString);
-        break;
-      case LogLevel.INFO:
-        console.info(logString);
-        break;
-      case LogLevel.DEBUG:
-        console.debug(logString);
-        break;
+    // Write to all configured transports
+    for (const transport of this.transports) {
+      try {
+        const result = transport.write(logData);
+        // Handle async transports
+        if (result instanceof Promise) {
+          result.catch((err) => {
+            console.error('Transport write failed:', err);
+          });
+        }
+      } catch (err) {
+        console.error('Transport write failed:', err);
+      }
     }
   }
 

@@ -18,6 +18,7 @@ const { getRepositories } = require('@/lib/json-store/repositories');
 const { createHash } = require('crypto');
 const fs = require('fs/promises');
 const path = require('path');
+const { logger } = require('@/lib/logger');
 
 interface ExportStats {
   timestamp: string;
@@ -78,18 +79,17 @@ async function exportPrismaToJson(options: { dryRun: boolean; verbose: boolean }
   };
 
   try {
-    console.log('🚀 Starting Prisma → JSON export...');
+    logger.info('Starting Prisma → JSON export...');
     if (options.dryRun) {
-      console.log('⚠️  DRY RUN MODE - No data will be written');
+      logger.info('DRY RUN MODE - No data will be written');
     }
-    console.log('');
 
     const repos = getRepositories();
 
     // ========================================================================
     // EXPORT USERS & SETTINGS
     // ========================================================================
-    console.log('📝 Exporting users and settings...');
+    logger.info('Exporting users and settings...');
     try {
       const users = await prisma.user.findMany();
       for (const user of users) {
@@ -117,17 +117,17 @@ async function exportPrismaToJson(options: { dryRun: boolean; verbose: boolean }
         }
         stats.summary.users++;
       }
-      console.log(`  ✓ Exported ${users.length} user(s)`);
+      logger.info(`Exported ${users.length} user(s)`);
     } catch (error: any) {
       const msg = `Failed to export users: ${error.message}`;
       stats.errors.push(msg);
-      console.error(`  ✗ ${msg}`);
+      logger.error(`${msg}`, {}, error as Error);
     }
 
     // ========================================================================
     // EXPORT TAGS
     // ========================================================================
-    console.log('🏷️  Exporting tags...');
+    logger.info('Exporting tags...');
     try {
       const tags = await prisma.tag.findMany();
       for (const tag of tags) {
@@ -136,21 +136,22 @@ async function exportPrismaToJson(options: { dryRun: boolean; verbose: boolean }
             userId: tag.userId,
             name: tag.name,
             nameLower: tag.nameLower,
+            quickHide: (tag as { quickHide?: boolean }).quickHide ?? false,
           });
         }
         stats.summary.tags++;
       }
-      console.log(`  ✓ Exported ${tags.length} tag(s)`);
+      logger.info(`Exported ${tags.length} tag(s)`);
     } catch (error: any) {
       const msg = `Failed to export tags: ${error.message}`;
       stats.errors.push(msg);
-      console.error(`  ✗ ${msg}`);
+      logger.error(`${msg}`, {}, error as Error);
     }
 
     // ========================================================================
     // EXPORT CONNECTION PROFILES & API KEYS
     // ========================================================================
-    console.log('🔌 Exporting connection profiles...');
+    logger.info('Exporting connection profiles...');
     try {
       const profiles = await prisma.connectionProfile.findMany({
         include: { tags: true },
@@ -172,7 +173,7 @@ async function exportPrismaToJson(options: { dryRun: boolean; verbose: boolean }
         }
         stats.summary.connectionProfiles++;
       }
-      console.log(`  ✓ Exported ${profiles.length} connection profile(s)`);
+      logger.info(`Exported ${profiles.length} connection profile(s)`);
 
       const apiKeys = await prisma.apiKey.findMany();
       for (const key of apiKeys) {
@@ -189,17 +190,17 @@ async function exportPrismaToJson(options: { dryRun: boolean; verbose: boolean }
         }
         stats.summary.apiKeys++;
       }
-      console.log(`  ✓ Exported ${apiKeys.length} API key(s)`);
+      logger.info(`Exported ${apiKeys.length} API key(s)`);
     } catch (error: any) {
       const msg = `Failed to export profiles/keys: ${error.message}`;
       stats.errors.push(msg);
-      console.error(`  ✗ ${msg}`);
+      logger.error(`${msg}`, {}, error as Error);
     }
 
     // ========================================================================
     // EXPORT CHARACTERS
     // ========================================================================
-    console.log('👤 Exporting characters...');
+    logger.info('Exporting characters...');
     try {
       const characters = await prisma.character.findMany({
         include: {
@@ -241,17 +242,17 @@ async function exportPrismaToJson(options: { dryRun: boolean; verbose: boolean }
         }
         stats.summary.characters++;
       }
-      console.log(`  ✓ Exported ${characters.length} character(s)`);
+      logger.info(`Exported ${characters.length} character(s)`);
     } catch (error: any) {
       const msg = `Failed to export characters: ${error.message}`;
       stats.errors.push(msg);
-      console.error(`  ✗ ${msg}`);
+      logger.error(`${msg}`, {}, error as Error);
     }
 
     // ========================================================================
     // EXPORT PERSONAS
     // ========================================================================
-    console.log('🎭 Exporting personas...');
+    logger.info('Exporting personas...');
     try {
       const personas = await prisma.persona.findMany({
         include: { tags: true },
@@ -274,17 +275,17 @@ async function exportPrismaToJson(options: { dryRun: boolean; verbose: boolean }
         }
         stats.summary.personas++;
       }
-      console.log(`  ✓ Exported ${personas.length} persona(s)`);
+      logger.info(`Exported ${personas.length} persona(s)`);
     } catch (error: any) {
       const msg = `Failed to export personas: ${error.message}`;
       stats.errors.push(msg);
-      console.error(`  ✗ ${msg}`);
+      logger.error(`${msg}`, {}, error as Error);
     }
 
     // ========================================================================
     // EXPORT CHATS & MESSAGES
     // ========================================================================
-    console.log('💬 Exporting chats...');
+    logger.info('Exporting chats...');
     try {
       const chats = await prisma.chat.findMany({
         include: { tags: true },
@@ -331,17 +332,17 @@ async function exportPrismaToJson(options: { dryRun: boolean; verbose: boolean }
         }
         stats.summary.chats++;
       }
-      console.log(`  ✓ Exported ${chats.length} chat(s) with ${stats.summary.messages} messages`);
+      logger.info(`Exported ${chats.length} chat(s) with ${stats.summary.messages} messages`);
     } catch (error: any) {
       const msg = `Failed to export chats: ${error.message}`;
       stats.errors.push(msg);
-      console.error(`  ✗ ${msg}`);
+      logger.error(`${msg}`, {}, error as Error);
     }
 
     // ========================================================================
     // EXPORT IMAGES
     // ========================================================================
-    console.log('🖼️  Exporting images...');
+    logger.info('Exporting images...');
     try {
       const images = await prisma.image.findMany({
         include: { tags: true },
@@ -370,83 +371,74 @@ async function exportPrismaToJson(options: { dryRun: boolean; verbose: boolean }
         }
         stats.summary.images++;
       }
-      console.log(`  ✓ Exported ${images.length} image(s)`);
+      logger.info(`Exported ${images.length} image(s)`);
     } catch (error: any) {
       const msg = `Failed to export images: ${error.message}`;
       stats.errors.push(msg);
-      console.error(`  ✗ ${msg}`);
+      logger.error(`${msg}`, {}, error as Error);
     }
 
     // ========================================================================
     // EXPORT AUTH DATA
     // ========================================================================
-    console.log('🔐 Exporting authentication data...');
+    logger.info('Exporting authentication data...');
     try {
       const accounts = await prisma.account.findMany();
       stats.summary.accounts = accounts.length;
-      console.log(`  ✓ Found ${accounts.length} account(s)`);
+      logger.info(`Found ${accounts.length} account(s)`);
 
       const sessions = await prisma.session.findMany();
       stats.summary.sessions = sessions.length;
-      console.log(`  ✓ Found ${sessions.length} session(s)`);
+      logger.info(`Found ${sessions.length} session(s)`);
 
       const tokens = await prisma.verificationToken.findMany();
       stats.summary.verificationTokens = tokens.length;
-      console.log(`  ✓ Found ${tokens.length} verification token(s)`);
+      logger.info(`Found ${tokens.length} verification token(s)`);
     } catch (error: any) {
       const msg = `Failed to export auth data: ${error.message}`;
       stats.errors.push(msg);
-      console.error(`  ✗ ${msg}`);
+      logger.error(`${msg}`, {}, error as Error);
     }
 
     // ========================================================================
     // SUMMARY
     // ========================================================================
-    console.log('');
-    console.log('═'.repeat(60));
-    console.log('📊 EXPORT SUMMARY');
-    console.log('═'.repeat(60));
-    console.log(`  Timestamp: ${stats.timestamp}`);
-    console.log(`  Duration: ${((Date.now() - startTime) / 1000).toFixed(2)}s`);
-    console.log('');
-    console.log('  Data exported:');
-    console.log(`    • Users: ${stats.summary.users}`);
-    console.log(`    • Characters: ${stats.summary.characters}`);
-    console.log(`    • Personas: ${stats.summary.personas}`);
-    console.log(`    • Chats: ${stats.summary.chats}`);
-    console.log(`    • Messages: ${stats.summary.messages}`);
-    console.log(`    • Tags: ${stats.summary.tags}`);
-    console.log(`    • Images: ${stats.summary.images}`);
-    console.log(`    • Connection Profiles: ${stats.summary.connectionProfiles}`);
-    console.log(`    • API Keys: ${stats.summary.apiKeys}`);
-    console.log(`    • Auth Accounts: ${stats.summary.accounts}`);
-    console.log(`    • Sessions: ${stats.summary.sessions}`);
-    console.log(`    • Verification Tokens: ${stats.summary.verificationTokens}`);
-    console.log('');
+    logger.info('EXPORT SUMMARY');
+    logger.info(`Timestamp: ${stats.timestamp}`);
+    logger.info(`Duration: ${((Date.now() - startTime) / 1000).toFixed(2)}s`);
+    logger.info('Data exported:');
+    logger.info(`  Users: ${stats.summary.users}`);
+    logger.info(`  Characters: ${stats.summary.characters}`);
+    logger.info(`  Personas: ${stats.summary.personas}`);
+    logger.info(`  Chats: ${stats.summary.chats}`);
+    logger.info(`  Messages: ${stats.summary.messages}`);
+    logger.info(`  Tags: ${stats.summary.tags}`);
+    logger.info(`  Images: ${stats.summary.images}`);
+    logger.info(`  Connection Profiles: ${stats.summary.connectionProfiles}`);
+    logger.info(`  API Keys: ${stats.summary.apiKeys}`);
+    logger.info(`  Auth Accounts: ${stats.summary.accounts}`);
+    logger.info(`  Sessions: ${stats.summary.sessions}`);
+    logger.info(`  Verification Tokens: ${stats.summary.verificationTokens}`);
 
     if (stats.errors.length > 0) {
-      console.log('  ❌ Errors:');
+      logger.error('Errors:');
       for (const error of stats.errors) {
-        console.log(`    • ${error}`);
+        logger.error(`  ${error}`);
       }
-      console.log('');
     }
 
     if (stats.warnings.length > 0) {
-      console.log('  ⚠️  Warnings:');
+      logger.warn('Warnings:');
       for (const warning of stats.warnings) {
-        console.log(`    • ${warning}`);
+        logger.warn(`  ${warning}`);
       }
-      console.log('');
     }
 
     if (options.dryRun) {
-      console.log('  (Dry run - no data was actually written)');
+      logger.info('Dry run - no data was actually written');
     } else {
-      console.log('  ✅ Export completed successfully!');
+      logger.info('Export completed successfully!');
     }
-
-    console.log('═'.repeat(60));
     return stats;
   } finally {
     await prisma.$disconnect();
@@ -466,7 +458,7 @@ if (require.main === module) {
       process.exit(stats.errors.length > 0 ? 1 : 0);
     })
     .catch(error => {
-      console.error('❌ Export failed:', error);
+      logger.error('Export failed:', {}, error as Error);
       process.exit(1);
     });
 }

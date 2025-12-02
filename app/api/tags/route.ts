@@ -7,6 +7,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { z } from 'zod'
+import { logger } from '@/lib/logger'
 
 // Validation schema
 const createTagSchema = z.object({
@@ -58,6 +59,7 @@ export async function GET(req: NextRequest) {
       return {
         id: tag.id,
         name: tag.name,
+        quickHide: tag.quickHide,
         createdAt: tag.createdAt,
         updatedAt: tag.updatedAt,
         _count: {
@@ -71,7 +73,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ tags: tagsWithCounts })
   } catch (error) {
-    console.error('Error fetching tags:', error)
+    logger.error('Error fetching tags:', error as Error)
     return NextResponse.json(
       { error: 'Failed to fetch tags' },
       { status: 500 }
@@ -111,6 +113,7 @@ export async function POST(req: NextRequest) {
       userId: user.id,
       name: validatedData.name,
       nameLower,
+      quickHide: false,
     })
 
     return NextResponse.json({ tag }, { status: 201 })
@@ -122,7 +125,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    console.error('Error creating tag:', error)
+    logger.error('Error creating tag:', error as Error)
     return NextResponse.json(
       { error: 'Failed to create tag' },
       { status: 500 }

@@ -1,9 +1,11 @@
 'use client'
 
+import { useMemo } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
+import { useQuickHide } from '@/components/providers/quick-hide-provider'
 
 interface FavoriteCharacter {
   id: string
@@ -16,6 +18,7 @@ interface FavoriteCharacter {
     url?: string | null
   } | null
   avatarUrl: string | null
+  tags?: string[]
 }
 
 interface FavoriteCharactersProps {
@@ -31,8 +34,13 @@ function getAvatarSrc(character: FavoriteCharacter): string | null {
 
 export function FavoriteCharactersSection({ characters }: FavoriteCharactersProps) {
   const { style } = useAvatarDisplay()
+  const { shouldHideByIds } = useQuickHide()
+  const visibleCharacters = useMemo(
+    () => characters.filter(character => !shouldHideByIds(character.tags || [])),
+    [characters, shouldHideByIds]
+  )
 
-  if (characters.length === 0) {
+  if (visibleCharacters.length === 0) {
     return null
   }
 
@@ -42,7 +50,7 @@ export function FavoriteCharactersSection({ characters }: FavoriteCharactersProp
         Your Favorite Characters
       </h2>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-        {characters.map((character) => (
+        {visibleCharacters.map((character) => (
           <Link
             key={character.id}
             href={`/characters/${character.id}/view`}

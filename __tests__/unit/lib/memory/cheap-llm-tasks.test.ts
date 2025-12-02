@@ -8,12 +8,12 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 
 // Mock the dependencies
-jest.mock('@/lib/llm/factory')
+jest.mock('@/lib/llm/plugin-factory')
 jest.mock('@/lib/json-store/repositories')
 jest.mock('@/lib/encryption')
 
 // Import the mocked modules
-import { createLLMProvider } from '@/lib/llm/factory'
+import { createLLMProvider } from '@/lib/llm'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { decryptApiKey } from '@/lib/encryption'
 

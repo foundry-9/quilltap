@@ -9,19 +9,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
-import { ImageProvider, ImageProviderEnum } from '@/lib/json-store/schemas/types'
-import { getImageGenProvider } from '@/lib/image-gen/factory'
+import { createImageProvider } from '@/lib/llm/plugin-factory'
 import { decryptApiKey } from '@/lib/encryption'
-
-// Get the list of valid image providers from the Zod enum
-const VALID_IMAGE_PROVIDERS = ImageProviderEnum.options
+import { logger } from '@/lib/logger'
 
 /**
  * POST /api/image-profiles/validate-key
  * Validate an API key for image generation
  *
  * Body: {
- *   provider: ImageProvider,
+ *   provider: string (dynamic, depends on registered plugins),
  *   apiKeyId?: string (optional - if provided, uses stored key)
  *   apiKey?: string (optional - if provided, validates the key directly)
  * }
@@ -53,17 +50,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Validate provider
-    if (!VALID_IMAGE_PROVIDERS.includes(provider as ImageProvider)) {
-      return NextResponse.json(
-        { error: `Invalid provider. Must be one of: ${VALID_IMAGE_PROVIDERS.join(', ')}` },
-        { status: 400 }
-      )
-    }
-
+    // Validate provider by attempting to get it
     let imageProvider
     try {
-      imageProvider = getImageGenProvider(provider)
+      imageProvider = createImageProvider(provider)
     } catch {
       return NextResponse.json(
         { error: `Provider ${provider} is not available` },
@@ -95,7 +85,7 @@ export async function POST(request: NextRequest) {
           session.user.id
         )
       } catch (error) {
-        console.error('Failed to decrypt API key:', error)
+        logger.error('Failed to decrypt API key', { context: 'validate-key' }, error instanceof Error ? error : undefined)
         return NextResponse.json(
           { error: 'Failed to decrypt API key' },
           { status: 500 }
@@ -129,13 +119,13 @@ export async function POST(request: NextRequest) {
         try {
           models = await imageProvider.getAvailableModels(keyToValidate)
         } catch (error) {
-          console.error('Failed to fetch models:', error)
+          logger.error('Failed to fetch models', { context: 'validate-key', provider }, error instanceof Error ? error : undefined)
           // Key is valid but models fetch failed - still return success
           models = imageProvider.supportedModels
         }
       }
     } catch (error) {
-      console.error('API key validation error:', error)
+      logger.error('API key validation error', { context: 'validate-key', provider }, error instanceof Error ? error : undefined)
       isValid = false
     }
 
@@ -147,7 +137,7 @@ export async function POST(request: NextRequest) {
       models: isValid ? models : undefined,
     })
   } catch (error) {
-    console.error('Failed to validate API key:', error)
+    logger.error('Failed to validate API key', { context: 'validate-key' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to validate API key' },
       { status: 500 }

@@ -11,10 +11,9 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { encryptApiKey, maskApiKey } from '@/lib/encryption'
-import { ProviderEnum, Provider } from '@/lib/json-store/schemas/types'
-
-// Get the list of valid providers from the Zod enum
-const VALID_PROVIDERS = ProviderEnum.options
+import { Provider } from '@/lib/json-store/schemas/types'
+import { getAllAvailableProviders } from '@/lib/llm'
+import { logger } from '@/lib/logger'
 
 /**
  * GET /api/keys
@@ -56,7 +55,7 @@ export async function GET(req: NextRequest) {
     response.headers.set('Expires', '0')
     return response
   } catch (error) {
-    console.error('Failed to fetch API keys:', error)
+    logger.error('Failed to fetch API keys', { context: 'keys-GET' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to fetch API keys' },
       { status: 500 }
@@ -88,11 +87,18 @@ export async function POST(req: NextRequest) {
     const { provider, label, apiKey } = body
 
     // Validation
-    if (!provider || !VALID_PROVIDERS.includes(provider)) {
+    if (!provider || typeof provider !== 'string' || provider.trim().length === 0) {
       return NextResponse.json(
         { error: 'Invalid provider' },
         { status: 400 }
       )
+    }
+
+    // Check if provider is registered (optional - could validate against plugin registry)
+    const availableProviders = getAllAvailableProviders()
+    if (!availableProviders.includes(provider)) {
+      logger.warn('API key created for unregistered provider', { provider, context: 'keys-POST' })
+      // Note: We allow this to support custom providers and future plugins
     }
 
     if (!label || typeof label !== 'string' || label.trim().length === 0) {
@@ -133,7 +139,7 @@ export async function POST(req: NextRequest) {
       updatedAt: newKey.updatedAt,
     }, { status: 201 })
   } catch (error) {
-    console.error('Failed to create API key:', error)
+    logger.error('Failed to create API key', { context: 'keys-POST' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to create API key' },
       { status: 500 }

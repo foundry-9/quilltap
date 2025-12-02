@@ -11,6 +11,7 @@ import { extractMemoryFromMessage, extractCharacterMemoryFromMessage, MemoryCand
 import { getCheapLLMProvider, CheapLLMConfig, CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { ConnectionProfile, CheapLLMSettings, Memory } from '@/lib/json-store/schemas/types'
 import { createMemoryWithEmbedding, findSimilarMemories } from './memory-service'
+import { logger } from '@/lib/logger'
 
 /**
  * Context for memory extraction
@@ -340,7 +341,7 @@ export async function processMessageForMemory(
   } catch (error) {
     // Never let memory processing break the chat flow
     const errorMsg = 'Memory processing error:' + (error instanceof Error ? error.message : 'Unknown error')
-    console.error(errorMsg)
+    logger.error(errorMsg, { characterId: ctx.characterId, userId: ctx.userId }, error instanceof Error ? error : undefined)
     return {
       success: false,
       memoryCreated: false,
@@ -363,18 +364,19 @@ export function processMessageForMemoryAsync(
   processMessageForMemory(ctx)
     .then(result => {
       if (result.memoryCreated) {
-        console.log(
-          `[Memory] Created memory ${result.memoryId} for character ${ctx.characterId}`
+        logger.info(
+          '[Memory] Created memory for character',
+          { memoryId: result.memoryId, characterId: ctx.characterId, userId: ctx.userId }
         )
       } else if (!result.success) {
-        console.warn(`[Memory] Extraction failed: ${result.error}`)
+        logger.warn(`[Memory] Extraction failed: ${result.error}`, { characterId: ctx.characterId, userId: ctx.userId })
       }
       // Call the callback with the full result
       onComplete?.(result)
       // Silent success without memory creation is normal (not everything is significant)
     })
     .catch(error => {
-      console.error('[Memory] Async processing error:', error)
+      logger.error('[Memory] Async processing error', { characterId: ctx.characterId, userId: ctx.userId }, error instanceof Error ? error : undefined)
     })
 }
 
