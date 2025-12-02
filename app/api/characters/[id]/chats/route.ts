@@ -94,6 +94,15 @@ export async function GET(
           }
         }
 
+        // Get tags
+        const tagData = await Promise.all(
+          (chat.tags || []).map(async (tagId) => {
+            const tag = await repos.tags.findById(tagId)
+            return tag ? { tag: { id: tag.id, name: tag.name } } : null
+          })
+        )
+        logger.debug('Fetched tags for chat', { context: 'GET /api/characters/:id/chats', chatId: chat.id, tagCount: tagData.filter(Boolean).length })
+
         // Get all messages and count them for badge
         const messageCount = messages.filter((msg) => msg.type === 'message').length
 
@@ -120,6 +129,7 @@ export async function GET(
           },
           persona,
           messages: recentMessages,
+          tags: tagData.filter((tag): tag is { tag: { id: string; name: string } } => tag !== null),
           _count: {
             messages: messageCount,
           },

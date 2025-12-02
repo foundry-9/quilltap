@@ -1,7 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import Link from 'next/link'
+import { TagDisplay } from '@/components/tags/tag-display'
+import { useQuickHide } from '@/components/providers/quick-hide-provider'
 
 interface Message {
   id: string
@@ -24,6 +26,12 @@ interface Chat {
     title?: string | null
   } | null
   messages: Message[]
+  tags?: Array<{
+    tag: {
+      id: string
+      name: string
+    }
+  }>
   _count?: {
     messages: number
   }
@@ -39,6 +47,11 @@ const CHATS_PER_PAGE = 10
 export function CharacterConversationsTab({ characterId, characterName }: CharacterConversationsTabProps) {
   const [chats, setChats] = useState<Chat[]>([])
   const [loading, setLoading] = useState(true)
+  const { shouldHideByIds } = useQuickHide()
+  const visibleChats = useMemo(
+    () => chats.filter(chat => !shouldHideByIds((chat.tags || []).map(ct => ct.tag.id))),
+    [chats, shouldHideByIds]
+  )
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -225,7 +238,7 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
       </div>
 
       {/* Conversations List */}
-      {chats.length === 0 ? (
+      {visibleChats.length === 0 ? (
         <div className="text-center py-12 border border-dashed border-gray-300 dark:border-slate-600 rounded-lg">
           <svg
             className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
@@ -257,7 +270,7 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
         </div>
       ) : (
         <div className="space-y-4">
-          {chats.map((chat) => (
+          {visibleChats.map((chat) => (
             <div
               key={chat.id}
               className="flex items-start justify-between gap-4 p-4 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 hover:shadow-sm transition-all"
@@ -286,6 +299,11 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
                 <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-1 mt-2">
                   {getPreviewText(chat.messages)}
                 </p>
+                {chat.tags && chat.tags.length > 0 && (
+                  <div className="mt-2">
+                    <TagDisplay tags={chat.tags.map(ct => ct.tag)} />
+                  </div>
+                )}
               </Link>
 
               <div className="flex flex-col gap-2 flex-shrink-0">
@@ -321,7 +339,7 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
                 Loading more...
               </div>
             )}
-            {!hasMore && chats.length > 0 && (
+            {!hasMore && visibleChats.length > 0 && (
               <p className="text-center text-sm text-gray-400 dark:text-gray-500">
                 No more conversations
               </p>
