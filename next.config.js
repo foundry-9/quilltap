@@ -6,7 +6,6 @@ const nextConfig = {
   // Experimental features
   experimental: {
     turbopackUseSystemTlsCerts: true,
-    instrumentationHook: true,
   },
 
   // Image optimization configuration
