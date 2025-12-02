@@ -10,10 +10,14 @@
  *   tsx scripts/build-plugins.ts
  */
 
+// Load environment variables before importing anything that uses env
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
+dotenv.config();
+
 import { readdirSync, statSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { transpileAllPlugins } from '../lib/plugins/plugin-transpiler';
-import { logger } from '../lib/logger';
 
 interface PluginManifest {
   name: string;
@@ -24,7 +28,10 @@ interface PluginManifest {
 /**
  * Discover all plugins in the plugins/dist directory
  */
-function discoverPlugins() {
+async function discoverPlugins() {
+  // Import logger here after env is loaded
+  const { logger } = await import('../lib/logger');
+
   const cwd = process.cwd();
   const pluginsDir = join(cwd, 'plugins', 'dist');
 
@@ -69,6 +76,7 @@ function discoverPlugins() {
 
     return plugins;
   } catch (err) {
+    const { logger } = await import('../lib/logger');
     logger.error('Failed to discover plugins', {
       context: 'build-plugins',
       error: err instanceof Error ? err.message : String(err),
@@ -83,7 +91,7 @@ function discoverPlugins() {
 async function main() {
   console.log('🔨 Building TypeScript plugins...\n');
 
-  const plugins = discoverPlugins();
+  const plugins = await discoverPlugins();
 
   if (plugins.length === 0) {
     console.log('No TypeScript plugins found to build.');

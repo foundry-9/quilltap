@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "1.7.24",
+  "version": "1.7.25",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -71,6 +71,7 @@
     "@types/react-syntax-highlighter": "^15.5.13",
     "@types/speakeasy": "^2.0.10",
     "autoprefixer": "^10.4.22",
+    "dotenv": "^17.2.3",
     "eslint": "^9.39.1",
     "eslint-config-next": "^16.0.5",
     "jest": "^30.2.0",

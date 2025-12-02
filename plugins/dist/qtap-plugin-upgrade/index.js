@@ -4443,7 +4443,7 @@ var import_node_path = __toESM(require("node:path"));
 // package.json
 var package_default = {
   name: "quilltap",
-  version: "1.7.21",
+  version: "1.7.23",
   private: true,
   author: {
     name: "Charles Sebold",

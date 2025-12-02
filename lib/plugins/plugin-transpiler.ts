@@ -17,7 +17,6 @@
  * platform-specific binaries at build time.
  */
 
-import { logger } from '@/lib/logger';
 import { resolve, dirname, join } from 'node:path';
 import { stat, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -152,6 +151,7 @@ export async function transpilePlugin(
   entryFile: string,
   outputFile: string
 ): Promise<TranspileResult> {
+  const { logger } = await import('@/lib/logger');
   const pluginName = dirname(outputFile).split('/').pop() || 'unknown';
 
   // Check if we need to recompile
@@ -273,6 +273,7 @@ export async function transpileAllPlugins(
     failed: number;
   };
 }> {
+  const { logger } = await import('@/lib/logger');
   const startTime = Date.now();
   const results: TranspileResult[] = [];
   let compiled = 0;
