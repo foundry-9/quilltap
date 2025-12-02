@@ -1,0 +1,56 @@
+{
+  "$schema": "../qtap-plugin-template/schemas/plugin-manifest.schema.json",
+  "name": "qtap-plugin-anthropic",
+  "title": "Anthropic Provider",
+  "description": "Provides Anthropic Claude models for Quilltap",
+  "version": "1.0.0",
+  "author": {
+    "name": "Foundry-9",
+    "email": "charles@sebold.tech",
+    "url": "https://foundry-9.com"
+  },
+  "license": "MIT",
+  "compatibility": {
+    "quilltapVersion": ">=1.7.0",
+    "nodeVersion": ">=18.0.0"
+  },
+  "capabilities": ["LLM_PROVIDER"],
+  "category": "PROVIDER",
+  "main": "index.js",
+  "typescript": true,
+  "frontend": "REACT",
+  "styling": "TAILWIND",
+  "enabledByDefault": true,
+  "status": "STABLE",
+  "keywords": ["anthropic", "claude", "llm", "ai", "chat"],
+  "providerConfig": {
+    "providerName": "ANTHROPIC",
+    "displayName": "Anthropic",
+    "description": "Anthropic Claude models with support for image and PDF analysis",
+    "abbreviation": "ANT",
+    "colors": {
+      "bg": "bg-purple-100",
+      "text": "text-purple-800",
+      "icon": "text-purple-600"
+    },
+    "requiresApiKey": true,
+    "requiresBaseUrl": false,
+    "apiKeyLabel": "Anthropic API Key",
+    "capabilities": {
+      "chat": true,
+      "imageGeneration": false,
+      "embeddings": false,
+      "webSearch": false
+    },
+    "attachmentSupport": {
+      "supported": true,
+      "mimeTypes": ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"],
+      "description": "Images (JPEG, PNG, GIF, WebP) and PDFs"
+    }
+  },
+  "permissions": {
+    "network": ["api.anthropic.com"],
+    "userData": false,
+    "database": false
+  }
+}

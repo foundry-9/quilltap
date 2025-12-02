@@ -7,14 +7,18 @@
 
 import { z } from 'zod';
 
+// Export plugin manifest schema
+export * from './plugin-manifest';
+
 // ============================================================================
 // ENUMS
 // ============================================================================
 
-export const ProviderEnum = z.enum(['OPENAI', 'ANTHROPIC', 'OLLAMA', 'OPENROUTER', 'OPENAI_COMPATIBLE', 'GROK', 'GAB_AI', 'GOOGLE']);
+// Providers are now dynamic from plugins, so we use string validation
+export const ProviderEnum = z.string().min(1, 'Provider is required');
 export type Provider = z.infer<typeof ProviderEnum>;
 
-export const ImageProviderEnum = z.enum(['OPENAI', 'GROK', 'GOOGLE_IMAGEN']);
+export const ImageProviderEnum = z.string().min(1, 'Image provider is required');
 export type ImageProvider = z.infer<typeof ImageProviderEnum>;
 
 export const EmbeddingProfileProviderEnum = z.enum(['OPENAI', 'OLLAMA']);
@@ -225,6 +229,8 @@ export const ConnectionProfileSchema = z.object({
   isDefault: z.boolean().default(false),
   /** Whether this profile is suitable for use as a "cheap" LLM (low-cost tasks) */
   isCheap: z.boolean().default(false),
+  /** Whether web search is allowed for this profile (only if provider supports it) */
+  allowWebSearch: z.boolean().default(false),
   tags: z.array(UUIDSchema).default([]),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

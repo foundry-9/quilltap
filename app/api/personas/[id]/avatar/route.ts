@@ -8,6 +8,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getRepositories } from '@/lib/json-store/repositories';
 import { z } from 'zod';
+import { logger } from '@/lib/logger';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -72,11 +73,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       },
     });
   } catch (error) {
-    console.error('Error updating persona avatar:', error);
-
     if (error instanceof z.ZodError) {
+      logger.warn('Validation error updating persona avatar', { context: 'personas-avatar-PATCH', id: context.params })
       return NextResponse.json({ error: 'Validation error', details: error.errors }, { status: 400 });
     }
+
+    logger.error('Error updating persona avatar', { context: 'personas-avatar-PATCH' }, error instanceof Error ? error : undefined);
 
     return NextResponse.json(
       { error: 'Failed to update persona avatar', details: error instanceof Error ? error.message : String(error) },

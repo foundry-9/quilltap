@@ -7,6 +7,7 @@ import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
 import { z } from 'zod'
+import { logger } from '@/lib/logger'
 
 // Validation schema for search request
 const searchMemorySchema = z.object({
@@ -73,7 +74,9 @@ export async function POST(
     // Update access times for returned memories (fire and forget)
     Promise.all(
       searchResults.map(r => repos.memories.updateAccessTime(characterId, r.memory.id))
-    ).catch(console.error)
+    ).catch(err =>
+      logger.warn('Failed to update memory access times after search', { characterId, error: err instanceof Error ? err.message : String(err) })
+    )
 
     return NextResponse.json({
       memories: memoriesWithTags,
@@ -89,7 +92,7 @@ export async function POST(
       )
     }
 
-    console.error('Error searching memories:', error)
+    logger.error('Error searching memories', {}, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to search memories' },
       { status: 500 }

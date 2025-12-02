@@ -7,12 +7,13 @@
  */
 
 import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils'
-import { createLLMProvider } from '@/lib/llm/factory'
+import { createLLMProvider } from '@/lib/llm'
 import { decryptApiKey } from '@/lib/encryption'
 import type { ConnectionProfile } from '@/lib/json-store/schemas/types'
 import type { FileAttachment } from '@/lib/llm/base'
 import { join } from 'path'
 import { readFile } from 'fs/promises'
+import { logger } from '@/lib/logger'
 
 /**
  * Get image description profile from repos
@@ -200,7 +201,7 @@ export async function generateImageDescription(
     }
 
     // Create provider instance
-    const provider = createLLMProvider(
+    const provider = await createLLMProvider(
       imageDescProfile.provider as any,
       imageDescProfile.baseUrl || undefined
     )
@@ -215,7 +216,7 @@ export async function generateImageDescription(
     // They use internal reasoning tokens that don't appear in output
     const isReasoningModel = imageDescProfile.modelName.toLowerCase().match(/o1|o3|gpt-5|reasoning/)
     if (isReasoningModel && maxTokens < 4000) {
-      console.warn('[Image Fallback] Reasoning model detected, increasing maxTokens from', maxTokens, 'to 4000')
+      logger.warn('[Image Fallback] Reasoning model detected, increasing maxTokens from ' + maxTokens + ' to 4000')
       maxTokens = 4000
     }
 
@@ -249,10 +250,14 @@ export async function generateImageDescription(
     const trimmedContent = response.content.trim()
 
     if (trimmedContent.length === 0) {
-      console.error('[Image Fallback] Empty response from image description LLM')
-      console.error('[Image Fallback] Provider:', imageDescProfile.provider, 'Model:', imageDescProfile.modelName)
-      console.error('[Image Fallback] Image:', file.filename, 'MIME:', file.mimeType)
-      console.error('[Image Fallback] Response metadata:', JSON.stringify(response, null, 2))
+      logger.error('[Image Fallback] Empty response from image description LLM', {
+        provider: imageDescProfile.provider,
+        model: imageDescProfile.modelName,
+        filename: file.filename,
+        mimeType: file.mimeType,
+        responseMetadata: JSON.stringify(response, null, 2)
+      })
+
 
       // Check if this is a reasoning model that hit the token limit
       if (response.finishReason === 'length' && isReasoningModel) {
@@ -295,8 +300,11 @@ export async function generateImageDescription(
       trimmedContent.length < 20 // Very short responses are suspicious
     ) {
       // Response might be an error, log it and return unsupported
-      console.warn('[Image Fallback] Suspicious response from image description LLM:', response.content)
-      console.warn('[Image Fallback] Provider:', imageDescProfile.provider, 'Model:', imageDescProfile.modelName)
+      logger.warn('[Image Fallback] Suspicious response from image description LLM', {
+        content: response.content,
+        provider: imageDescProfile.provider,
+        model: imageDescProfile.modelName
+      })
 
       return {
         type: 'unsupported',
@@ -311,8 +319,10 @@ export async function generateImageDescription(
       }
     }
 
-    console.log('[Image Fallback] Successfully generated description for:', file.filename)
-    console.log('[Image Fallback] Description length:', trimmedContent.length, 'characters')
+    logger.info('[Image Fallback] Successfully generated description', {
+      filename: file.filename,
+      descriptionLength: trimmedContent.length
+    })
 
     return {
       type: 'image_description',
@@ -327,7 +337,7 @@ export async function generateImageDescription(
       },
     }
   } catch (error) {
-    console.error('[Image Fallback] Error generating description:', error)
+    logger.error('[Image Fallback] Error generating description:', {}, error instanceof Error ? error : new Error(String(error)))
     return {
       type: 'unsupported',
       error: `Failed to generate image description: ${error instanceof Error ? error.message : 'Unknown error'}`,

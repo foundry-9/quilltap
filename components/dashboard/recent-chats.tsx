@@ -12,6 +12,7 @@ interface RecentChat {
   id: string
   title: string
   updatedAt: string | Date
+  messageCount: number
   character: {
     name: string
     avatarUrl?: string | null
@@ -80,21 +81,26 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
                     <Image
                       src={getAvatarSrc(chat)!}
                       alt={chat.character.name}
-                      width={40}
-                      height={40}
-                      className={getAvatarClasses(style, 'sm').imageClass}
+                      width={64}
+                      height={64}
+                      className={getAvatarClasses(style, 'lg').imageClass}
                     />
                   ) : (
-                    <div className={getAvatarClasses(style, 'sm').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>
-                      <span className={getAvatarClasses(style, 'sm').fallbackClass}>
+                    <div className={getAvatarClasses(style, 'lg').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>
+                      <span className={getAvatarClasses(style, 'lg').fallbackClass}>
                         {chat.character.name.charAt(0).toUpperCase()}
                       </span>
                     </div>
                   )}
                   <div className="flex-grow min-w-0">
-                    <h4 className="font-semibold text-gray-900 dark:text-white truncate">
-                      {chat.title}
-                    </h4>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="font-semibold text-gray-900 dark:text-white truncate">
+                        {chat.title}
+                      </h4>
+                      <span className="inline-block bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100 text-sm font-semibold px-3 py-1 rounded-full flex-shrink-0">
+                        {chat.messageCount}
+                      </span>
+                    </div>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 truncate">
                       with {chat.character.name}
                       {chat.persona && ` as ${chat.persona.name}${chat.persona.title ? ` - ${chat.persona.title}` : ''}`}

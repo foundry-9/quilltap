@@ -11,6 +11,7 @@ import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import { showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { safeJsonParse } from '@/lib/fetch-helpers'
+import { clientLogger } from '@/lib/client-logger'
 import MessageContent from '@/components/chat/MessageContent'
 import ToolMessage from '@/components/chat/ToolMessage'
 import { formatMessageTime } from '@/lib/format-time'
@@ -194,7 +195,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       const data = await res.json()
       setChatSettings(data)
     } catch (err) {
-      console.error('Failed to fetch chat settings:', err)
+      clientLogger.error('Failed to fetch chat settings:', { error: err instanceof Error ? err.message : String(err) })
       // Use default settings if fetch fails
       setChatSettings({ id: '', userId: '', avatarDisplayMode: 'ALWAYS', avatarDisplayStyle: 'CIRCULAR', tagStyles: {}, createdAt: '', updatedAt: '' })
     }
@@ -257,7 +258,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         setChatPhotoCount(imageCount)
       }
     } catch (err) {
-      console.error('Failed to fetch chat photo count:', err)
+      clientLogger.error('Failed to fetch chat photo count:', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [id])
 
@@ -323,7 +324,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       }])
       showSuccessToast('File attached')
     } catch (err) {
-      console.error('Error uploading file:', err)
+      clientLogger.error('Error uploading file:', { error: err instanceof Error ? err.message : String(err) })
       showErrorToast(err instanceof Error ? err.message : 'Failed to upload file')
     } finally {
       setUploadingFile(false)
@@ -358,10 +359,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setWaitingForResponse(true)
     setStreaming(false)
     setStreamingContent('')
-    // Reset textarea to one line
+    // Reset textarea to minimum height (single line)
     if (inputRef.current) {
       inputRef.current.style.height = 'auto'
-      resizeTextarea(inputRef.current)
     }
 
     // Build display content with file indicators
@@ -429,7 +429,16 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       }
 
       if (!res.ok) {
-        throw new Error('Failed to send message')
+        // Try to get error details from response
+        let errorMessage = 'Failed to send message'
+        try {
+          const errorData = await res.json()
+          errorMessage = errorData.error || errorData.message || errorMessage
+        } catch {
+          // If JSON parsing fails, use status text
+          errorMessage = res.statusText || errorMessage
+        }
+        throw new Error(errorMessage)
       }
 
       // Handle streaming response
@@ -550,13 +559,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 throw new Error(data.error)
               }
             } catch (parseError) {
-              console.error('Failed to parse SSE data:', parseError)
+              clientLogger.error('Failed to parse SSE data:', { error: parseError instanceof Error ? parseError.message : String(parseError) })
             }
           }
         }
       }
     } catch (err) {
-      console.error('Error sending message:', err)
+      clientLogger.error('Error sending message:', { error: err instanceof Error ? err.message : String(err) })
       showErrorToast(err instanceof Error ? err.message : 'Failed to send message')
 
       // Debug: Mark entries as error
@@ -820,12 +829,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const isDebugMode = debug?.isDebugMode ?? false
 
   return (
-    <div className="flex h-screen bg-white dark:bg-slate-900">
+    <div className="flex h-full bg-white dark:bg-slate-900">
       {/* Main chat area */}
-      <div className={`flex flex-col flex-1 ${isDebugMode ? 'w-1/2' : 'w-full'}`}>
+      <div className={`flex flex-col flex-1 min-h-0 ${isDebugMode ? 'w-1/2' : 'w-full'}`}>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-slate-900">
+      <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-slate-900 min-h-0">
         <div className={`${isDebugMode ? '' : 'mx-auto max-w-[800px]'} p-4 space-y-4`}>
         {messages.map((message) => {
           const isEditing = editingMessageId === message.id
@@ -914,7 +923,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                               className="relative group/thumb overflow-hidden rounded border border-gray-300 dark:border-slate-600 hover:border-blue-500 dark:hover:border-blue-400 transition-colors"
                             >
                               <Image
-                                src={`/${attachment.filepath}`}
+                                src={`/${attachment.filepath.startsWith('/') ? attachment.filepath.slice(1) : attachment.filepath}`}
                                 alt={attachment.filename}
                                 width={80}
                                 height={80}
@@ -1071,7 +1080,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       </div>
 
       {/* Input */}
-      <div className="bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700">
+      <div className="flex-shrink-0 bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700">
         <div className={`${isDebugMode ? '' : 'mx-auto max-w-[800px]'} p-4`}>
           {/* Tool execution status indicator */}
           {toolExecutionStatus && (
@@ -1358,7 +1367,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               // Refresh chat to show the new tool message
               fetchChat()
             })
-            .catch((err) => console.error('Failed to save tool result:', err))
+            .catch((err) => clientLogger.error('Failed to save tool result:', { error: err instanceof Error ? err.message : String(err) }))
 
           // Attach generated images to the next message
           setAttachedFiles((prev) => [

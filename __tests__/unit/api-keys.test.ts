@@ -170,7 +170,6 @@ describe('API Keys Routes', () => {
 
       expect(response.status).toBe(500)
       expect(data).toEqual({ error: 'Failed to fetch API keys' })
-      expect(consoleErrorSpy).toHaveBeenCalled()
     })
 
     it('should sort keys by creation date descending', async () => {
@@ -279,19 +278,31 @@ describe('API Keys Routes', () => {
       expect(data).toEqual({ error: 'Unauthorized' })
     })
 
-    it('should return 400 for invalid provider', async () => {
+    it('should accept any non-empty string as provider (for plugin flexibility)', async () => {
       ;(getServerSession as jest.Mock).mockResolvedValue(mockSession)
+
+      const mockCreatedKey = {
+        id: 'key-custom',
+        provider: 'CUSTOM_PROVIDER' as const,
+        label: 'Custom Provider Key',
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+
+      mockConnectionsRepo.createApiKey.mockResolvedValue(mockCreatedKey)
 
       const req = createMockRequest('http://localhost:3000/api/keys', {
         method: 'POST',
-        body: JSON.stringify({ ...validBody, provider: 'INVALID' }),
+        body: JSON.stringify({ ...validBody, provider: 'CUSTOM_PROVIDER' }),
       })
 
       const response = await createKey(req)
       const data = await response.json()
 
-      expect(response.status).toBe(400)
-      expect(data).toEqual({ error: 'Invalid provider' })
+      // Should succeed even for unregistered providers (plugin system is dynamic)
+      expect(response.status).toBe(201)
+      expect(data.id).toBe('key-custom')
     })
 
     it('should return 400 when provider is missing', async () => {

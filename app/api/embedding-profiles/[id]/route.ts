@@ -10,10 +10,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
-import { EmbeddingProfileProvider, EmbeddingProfileProviderEnum } from '@/lib/json-store/schemas/types'
-
-// Get the list of valid embedding providers from the Zod enum
-const VALID_EMBEDDING_PROVIDERS = EmbeddingProfileProviderEnum.options
+import { logger } from '@/lib/logger'
 
 /**
  * GET /api/embedding-profiles/[id]
@@ -71,7 +68,7 @@ export async function GET(
       tags: tagDetails.filter(Boolean),
     })
   } catch (error) {
-    console.error('Failed to fetch embedding profile:', error)
+    logger.error('Failed to fetch embedding profile', { endpoint: '/api/embedding-profiles/[id]', method: 'GET' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to fetch embedding profile' },
       { status: 500 }
@@ -147,9 +144,9 @@ export async function PUT(
     }
 
     if (provider !== undefined) {
-      if (!VALID_EMBEDDING_PROVIDERS.includes(provider)) {
+      if (typeof provider !== 'string' || provider.trim().length === 0) {
         return NextResponse.json(
-          { error: `Invalid provider. Must be one of: ${VALID_EMBEDDING_PROVIDERS.join(', ')}` },
+          { error: 'Provider must be a non-empty string' },
           { status: 400 }
         )
       }
@@ -256,7 +253,7 @@ export async function PUT(
       tags: tagDetails.filter(Boolean),
     })
   } catch (error) {
-    console.error('Failed to update embedding profile:', error)
+    logger.error('Failed to update embedding profile', { endpoint: '/api/embedding-profiles/[id]', method: 'PUT' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to update embedding profile' },
       { status: 500 }
@@ -302,7 +299,7 @@ export async function DELETE(
       { status: 200 }
     )
   } catch (error) {
-    console.error('Failed to delete embedding profile:', error)
+    logger.error('Failed to delete embedding profile', { endpoint: '/api/embedding-profiles/[id]', method: 'DELETE' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to delete embedding profile' },
       { status: 500 }

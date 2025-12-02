@@ -1,0 +1,56 @@
+{
+  "$schema": "../qtap-plugin-template/schemas/plugin-manifest.schema.json",
+  "name": "qtap-plugin-openai",
+  "title": "OpenAI Provider",
+  "description": "Provides OpenAI GPT models and DALL-E image generation for Quilltap",
+  "version": "1.0.0",
+  "author": {
+    "name": "Foundry-9",
+    "email": "charles@sebold.tech",
+    "url": "https://foundry-9.com"
+  },
+  "license": "MIT",
+  "compatibility": {
+    "quilltapVersion": ">=1.7.0",
+    "nodeVersion": ">=18.0.0"
+  },
+  "capabilities": ["LLM_PROVIDER", "IMAGE_PROVIDER"],
+  "category": "PROVIDER",
+  "main": "index.js",
+  "typescript": true,
+  "frontend": "REACT",
+  "styling": "TAILWIND",
+  "enabledByDefault": true,
+  "status": "STABLE",
+  "keywords": ["openai", "gpt", "gpt-4", "dalle", "llm", "ai", "chat"],
+  "providerConfig": {
+    "providerName": "OPENAI",
+    "displayName": "OpenAI",
+    "description": "OpenAI GPT models including GPT-4o and DALL-E image generation",
+    "abbreviation": "OAI",
+    "colors": {
+      "bg": "bg-green-100",
+      "text": "text-green-800",
+      "icon": "text-green-600"
+    },
+    "requiresApiKey": true,
+    "requiresBaseUrl": false,
+    "apiKeyLabel": "OpenAI API Key",
+    "capabilities": {
+      "chat": true,
+      "imageGeneration": true,
+      "embeddings": false,
+      "webSearch": true
+    },
+    "attachmentSupport": {
+      "supported": true,
+      "mimeTypes": ["image/jpeg", "image/png", "image/gif", "image/webp"],
+      "description": "Images only (JPEG, PNG, GIF, WebP)"
+    }
+  },
+  "permissions": {
+    "network": ["api.openai.com"],
+    "userData": false,
+    "database": false
+  }
+}

@@ -22,6 +22,7 @@ import {
   ChatParticipantBase,
   ChatParticipantBaseSchema,
 } from '../schemas/types';
+import { logger } from '@/lib/logger';
 
 // Type for raw data that might be legacy or new format
 type RawChatData = Record<string, unknown>;
@@ -254,7 +255,7 @@ export class ChatsRepository extends BaseRepository<ChatMetadata> {
     try {
       await this.jsonStore.deleteFile(this.getChatPath(id));
     } catch (error) {
-      console.warn(`Failed to delete chat messages file for ${id}:`, error);
+      logger.warn(`Failed to delete chat messages file for ${id}:`, { error: error instanceof Error ? error.message : String(error) });
     }
 
     return true;
@@ -476,7 +477,7 @@ export class ChatsRepository extends BaseRepository<ChatMetadata> {
 
       return validated;
     } catch (error) {
-      console.error(`Failed to update message ${messageId} in chat ${chatId}:`, error);
+      logger.error(`Failed to update message ${messageId} in chat ${chatId}:`, {}, error instanceof Error ? error : new Error(String(error)));
       return null;
     }
   }
@@ -508,7 +509,7 @@ export class ChatsRepository extends BaseRepository<ChatMetadata> {
 
       return true;
     } catch (error) {
-      console.error(`Failed to clear messages for chat ${chatId}:`, error);
+      logger.error(`Failed to clear messages for chat ${chatId}:`, {}, error instanceof Error ? error : new Error(String(error)));
       return false;
     }
   }
@@ -542,7 +543,7 @@ export class ChatsRepository extends BaseRepository<ChatMetadata> {
 
       return { migrated: migratedCount, total: rawEntries.length };
     } catch (error) {
-      console.error('Failed to migrate chats:', error);
+      logger.error('Failed to migrate chats:', {}, error instanceof Error ? error : new Error(String(error)));
       return { migrated: 0, total: 0 };
     }
   }

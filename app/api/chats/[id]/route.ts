@@ -9,6 +9,7 @@ import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { z } from 'zod'
 import type { ChatParticipantBase, ChatMetadata } from '@/lib/json-store/schemas/types'
+import { logger } from '@/lib/logger'
 
 // Validation schema for chat updates
 const updateChatSchema = z.object({
@@ -363,7 +364,7 @@ export async function GET(
 
     return NextResponse.json({ chat })
   } catch (error) {
-    console.error('Error fetching chat:', error)
+    logger.error('Error fetching chat', { context: 'GET /api/chats/:id' }, error instanceof Error ? error : undefined)
     return NextResponse.json({ error: 'Failed to fetch chat' }, { status: 500 })
   }
 }
@@ -459,7 +460,7 @@ export async function PUT(
       )
     }
 
-    console.error('Error updating chat:', error)
+    logger.error('Error updating chat', { context: 'PUT /api/chats/:id' }, error instanceof Error ? error : undefined)
     return NextResponse.json({ error: 'Failed to update chat' }, { status: 500 })
   }
 }
@@ -493,7 +494,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error deleting chat:', error)
+    logger.error('Error deleting chat', { context: 'DELETE /api/chats/:id' }, error instanceof Error ? error : undefined)
     return NextResponse.json({ error: 'Failed to delete chat' }, { status: 500 })
   }
 }

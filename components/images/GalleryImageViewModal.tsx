@@ -2,6 +2,7 @@
 
 import { useEffect, useCallback, useState } from 'react'
 import Image from 'next/image'
+import { clientLogger } from '@/lib/client-logger'
 import { showConfirmation } from '@/lib/alert'
 import DeletedImagePlaceholder from './DeletedImagePlaceholder'
 
@@ -77,7 +78,7 @@ export default function GalleryImageViewModal({
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
     } catch (error) {
-      console.error('Failed to download image:', error)
+      clientLogger.error('Failed to download image:', { error: error instanceof Error ? error.message : String(error) })
     }
   }
 

@@ -9,6 +9,7 @@ import { getRepositories } from '@/lib/json-store/repositories'
 import { buildChatContext, type ChatContext } from '@/lib/chat/initialize'
 import { decryptApiKey } from '@/lib/encryption'
 import { generateGreetingMessage } from '@/lib/chat/initial-greeting'
+import { logger } from '@/lib/logger'
 import { z } from 'zod'
 import type { ChatEvent, ChatParticipantBase } from '@/lib/json-store/schemas/types'
 
@@ -159,7 +160,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ chats })
   } catch (error) {
-    console.error('Error fetching chats:', error)
+    logger.error('Error fetching chats', { context: 'GET /api/chats' }, error instanceof Error ? error : undefined)
     return NextResponse.json({ error: 'Failed to fetch chats' }, { status: 500 })
   }
 }
@@ -352,14 +353,14 @@ async function autoGenerateFirstMessage(
   if (connectionProfile.apiKeyId) {
     const storedKey = await repos.connections.findApiKeyById(connectionProfile.apiKeyId)
     if (!storedKey) {
-      console.warn('Connection profile is missing its API key; falling back to default greeting')
+      logger.warn('Connection profile is missing its API key; falling back to default greeting', { context: 'autoGenerateFirstMessage' })
       return ''
     }
 
     try {
       apiKey = decryptApiKey(storedKey.ciphertext, storedKey.iv, storedKey.authTag, userId)
     } catch (error) {
-      console.error('Failed to decrypt API key for greeting generation', error)
+      logger.error('Failed to decrypt API key for greeting generation', { context: 'autoGenerateFirstMessage' }, error instanceof Error ? error : undefined)
       return ''
     }
   }
@@ -381,7 +382,7 @@ async function autoGenerateFirstMessage(
     })
     return greeting
   } catch (error) {
-    console.error('Failed to auto-generate greeting for chat', error)
+    logger.error('Failed to auto-generate greeting for chat', { context: 'autoGenerateFirstMessage' }, error instanceof Error ? error : undefined)
     return ''
   }
 }
@@ -493,7 +494,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    console.error('Error creating chat:', error)
+    logger.error('Error creating chat', { context: 'POST /api/chats' }, error instanceof Error ? error : undefined)
     return NextResponse.json({ error: 'Failed to create chat' }, { status: 500 })
   }
 }

@@ -1,5 +1,6 @@
 # Logs
 logs
+!app/api/logs
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -153,3 +154,10 @@ backups/*
 data/
 data-backup/
 temp/
+# Plugins - ignore everything except documentation and dist/ directory
+plugins/*
+!plugins/*.md
+!plugins/dist/
+
+# Ignore node_modules everywhere under plugins, including under dist
+plugins/**/node_modules/

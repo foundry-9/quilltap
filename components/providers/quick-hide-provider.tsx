@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { useSession } from 'next-auth/react'
+import { clientLogger } from '@/lib/client-logger'
 
 interface QuickHideTag {
   id: string
@@ -59,7 +60,7 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
         return next.size === prev.size ? prev : next
       })
     } catch (error) {
-      console.warn('Unable to load quick-hide tags', error)
+      clientLogger.warn('Unable to load quick-hide tags', { error: error instanceof Error ? error.message : String(error) })
       setQuickHideTags([])
     } finally {
       setLoading(false)
@@ -81,7 +82,7 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
         }
       }
     } catch (error) {
-      console.warn('Unable to load quick-hide preferences', error)
+      clientLogger.warn('Unable to load quick-hide preferences', { error: error instanceof Error ? error.message : String(error) })
     } finally {
       setStorageReady(true)
     }
@@ -94,7 +95,7 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(hiddenTagIds)))
     } catch (error) {
-      console.warn('Unable to persist quick-hide preferences', error)
+      clientLogger.warn('Unable to persist quick-hide preferences', { error: error instanceof Error ? error.message : String(error) })
     }
   }, [hiddenTagIds, storageReady])
 

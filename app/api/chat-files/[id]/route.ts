@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
+import { logger } from '@/lib/logger'
 import { z } from 'zod'
 import fs from 'fs/promises'
 import path from 'path'
@@ -127,7 +128,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       },
     })
   } catch (error) {
-    console.error('Error tagging chat file:', error)
+    logger.error('Error tagging chat file', { context: 'POST /api/chat-files/[id]' }, error instanceof Error ? error : undefined)
 
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Validation error', details: error.errors }, { status: 400 })
@@ -213,7 +214,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json({ data: { success: true } })
   } catch (error) {
-    console.error('Error deleting file:', error)
+    logger.error('Error deleting file', { context: 'DELETE /api/chat-files/[id]' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to delete file', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }

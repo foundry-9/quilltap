@@ -7,6 +7,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { z } from 'zod'
+import { logger } from '@/lib/logger'
 
 // Validation schema
 const createCharacterSchema = z.object({
@@ -81,7 +82,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ characters: enrichedCharacters })
   } catch (error) {
-    console.error('Error fetching characters:', error)
+    logger.error('Error fetching characters:', error as Error)
     return NextResponse.json(
       { error: 'Failed to fetch characters' },
       { status: 500 }
@@ -136,7 +137,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    console.error('Error creating character:', error)
+    logger.error('Error creating character:', error as Error)
     return NextResponse.json(
       { error: 'Failed to create character' },
       { status: 500 }

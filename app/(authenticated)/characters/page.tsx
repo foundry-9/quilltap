@@ -7,6 +7,8 @@ import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
+import { CharacterDeleteDialog } from '@/components/character-delete-dialog'
+import { clientLogger } from '@/lib/client-logger'
 
 interface Character {
   id: string
@@ -33,6 +35,7 @@ export default function CharactersPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
+  const [deleteDialogCharacter, setDeleteDialogCharacter] = useState<Character | null>(null)
   const { style } = useAvatarDisplay()
   const { shouldHideByIds } = useQuickHide()
 
@@ -65,13 +68,39 @@ export default function CharactersPage() {
     }
   }
 
-  const deleteCharacter = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this character?')) return
+  const openDeleteDialog = (character: Character) => {
+    setDeleteDialogCharacter(character)
+  }
+
+  const handleDeleteConfirm = async (options: { cascadeChats: boolean; cascadeImages: boolean }) => {
+    if (!deleteDialogCharacter) return
+
+    const id = deleteDialogCharacter.id
+    const params = new URLSearchParams()
+    if (options.cascadeChats) params.set('cascadeChats', 'true')
+    if (options.cascadeImages) params.set('cascadeImages', 'true')
 
     try {
-      const res = await fetch(`/api/characters/${id}`, { method: 'DELETE' })
+      const url = `/api/characters/${id}${params.toString() ? `?${params.toString()}` : ''}`
+      const res = await fetch(url, { method: 'DELETE' })
       if (!res.ok) throw new Error('Failed to delete character')
+
+      const result = await res.json()
       setCharacters(characters.filter((c) => c.id !== id))
+      setDeleteDialogCharacter(null)
+
+      // Show success message with details
+      const deletedItems: string[] = ['Character deleted']
+      if (result.deletedChats > 0) {
+        deletedItems.push(`${result.deletedChats} chat${result.deletedChats === 1 ? '' : 's'} deleted`)
+      }
+      if (result.deletedImages > 0) {
+        deletedItems.push(`${result.deletedImages} image${result.deletedImages === 1 ? '' : 's'} deleted`)
+      }
+      if (result.deletedMemories > 0) {
+        deletedItems.push(`${result.deletedMemories} memor${result.deletedMemories === 1 ? 'y' : 'ies'} deleted`)
+      }
+      showSuccessToast(deletedItems.join('. '))
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to delete character')
     }
@@ -107,7 +136,7 @@ export default function CharactersPage() {
       showSuccessToast('Character imported successfully!')
     } catch (err) {
       showErrorToast('Failed to import character. Make sure it\'s a valid SillyTavern PNG or JSON file.')
-      console.error(err)
+      clientLogger.error('Failed to import character', { error: err instanceof Error ? err.message : String(err) })
     }
   }
 
@@ -236,7 +265,7 @@ export default function CharactersPage() {
                   </svg>
                 </a>
                 <button
-                  onClick={() => deleteCharacter(character.id)}
+                  onClick={() => openDeleteDialog(character)}
                   className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 cursor-pointer flex items-center justify-center"
                   title="Delete this character"
                 >
@@ -288,6 +317,16 @@ export default function CharactersPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Delete Character Dialog */}
+      {deleteDialogCharacter && (
+        <CharacterDeleteDialog
+          characterId={deleteDialogCharacter.id}
+          characterName={deleteDialogCharacter.name}
+          onClose={() => setDeleteDialogCharacter(null)}
+          onConfirm={handleDeleteConfirm}
+        />
       )}
 
     </div>

@@ -12,6 +12,7 @@ import { updateContextSummary, summarizeChat, ChatMessage, generateTitleFromSumm
 import { countMessagesTokens } from '@/lib/tokens/token-counter'
 import { getModelContextLimit, shouldSummarizeConversation } from '@/lib/llm/model-context-data'
 import { Provider, ConnectionProfile, CheapLLMSettings } from '@/lib/json-store/schemas/types'
+import { logger } from '@/lib/logger'
 
 /**
  * Calculates the number of interchanges in a chat
@@ -301,12 +302,12 @@ export async function generateContextSummary(
             title: titleResult.result,
             updatedAt: new Date().toISOString(),
           })
-          console.log(`[Context Summary] Generated title for chat ${chatId}: ${titleResult.result}`)
+          logger.info(`[Context Summary] Generated title for chat ${chatId}: ${titleResult.result}`)
         } else {
-          console.warn(`[Context Summary] Failed to generate title for chat ${chatId}: ${titleResult.error}`)
+          logger.warn(`[Context Summary] Failed to generate title for chat ${chatId}: ${titleResult.error}`)
         }
       } catch (titleError) {
-        console.error(`[Context Summary] Error generating title for chat ${chatId}:`, titleError)
+        logger.error(`[Context Summary] Error generating title for chat ${chatId}:`, {}, titleError instanceof Error ? titleError : new Error(String(titleError)))
       }
     }
 
@@ -333,7 +334,7 @@ export async function clearContextSummary(chatId: string): Promise<boolean> {
     })
     return true
   } catch (error) {
-    console.error('Failed to clear context summary:', error)
+    logger.error('Failed to clear context summary:', {}, error instanceof Error ? error : new Error(String(error)))
     return false
   }
 }
@@ -347,13 +348,13 @@ export function generateContextSummaryAsync(options: GenerateSummaryOptions): vo
   generateContextSummary(options)
     .then(result => {
       if (result.success && result.wasGenerated) {
-        console.log(`[Context Summary] Generated summary for chat ${options.chatId}`)
+        logger.info(`[Context Summary] Generated summary for chat ${options.chatId}`)
       } else if (!result.success) {
-        console.warn(`[Context Summary] Failed for chat ${options.chatId}: ${result.error}`)
+        logger.warn(`[Context Summary] Failed for chat ${options.chatId}: ${result.error}`)
       }
     })
     .catch(error => {
-      console.error(`[Context Summary] Error for chat ${options.chatId}:`, error)
+      logger.error(`[Context Summary] Error for chat ${options.chatId}:`, {}, error instanceof Error ? error : new Error(String(error)))
     })
 }
 
@@ -374,7 +375,7 @@ async function considerTitleUpdateAsync(
     const chat = await repos.chats.findById(chatId)
 
     if (!chat) {
-      console.warn(`[Title Update] Chat ${chatId} not found`)
+      logger.warn(`[Title Update] Chat ${chatId} not found`)
       return
     }
 
@@ -390,7 +391,7 @@ async function considerTitleUpdateAsync(
       availableProfiles
     )
     if (!cheapLLM) {
-      console.warn(`[Title Update] No cheap LLM available for chat ${chatId}`)
+      logger.warn(`[Title Update] No cheap LLM available for chat ${chatId}`)
       return
     }
     
@@ -429,9 +430,9 @@ async function considerTitleUpdateAsync(
     
     if (considerationResult.success && considerationResult.result) {
       const { needsNewTitle, reason, suggestedTitle } = considerationResult.result
-      
-      console.log(`[Title Update] Chat ${chatId} - needsNewTitle: ${needsNewTitle}, reason: ${reason}`)
-      
+
+      logger.info(`[Title Update] Chat ${chatId} - needsNewTitle: ${needsNewTitle}, reason: ${reason}`)
+
       if (needsNewTitle && suggestedTitle) {
         // Update the chat title
         await repos.chats.update(chatId, {
@@ -439,7 +440,7 @@ async function considerTitleUpdateAsync(
           lastRenameCheckInterchange: currentInterchange,
           updatedAt: new Date().toISOString(),
         })
-        console.log(`[Title Update] Updated title for chat ${chatId} to: "${suggestedTitle}"`)
+        logger.info(`[Title Update] Updated title for chat ${chatId} to: "${suggestedTitle}"`)
       } else {
         // Still update the last check interchange even if no title change
         await repos.chats.update(chatId, {
@@ -448,10 +449,10 @@ async function considerTitleUpdateAsync(
         })
       }
     } else {
-      console.warn(`[Title Update] Failed for chat ${chatId}: ${considerationResult.error}`)
+      logger.warn(`[Title Update] Failed for chat ${chatId}: ${considerationResult.error}`)
     }
   } catch (error) {
-    console.error(`[Title Update] Error for chat ${chatId}:`, error)
+    logger.error(`[Title Update] Error for chat ${chatId}:`, {}, error instanceof Error ? error : new Error(String(error)))
   }
 }
 
@@ -483,7 +484,7 @@ export async function checkAndGenerateSummaryIfNeeded(
   // Check if we should consider updating the title
   const lastCheckedInterchange = chat.lastRenameCheckInterchange || 0
   if (shouldCheckTitleAtInterchange(currentInterchange, lastCheckedInterchange)) {
-    console.log(`[Title Update] Checking title at interchange ${currentInterchange} for chat ${chatId}`)
+    logger.info(`[Title Update] Checking title at interchange ${currentInterchange} for chat ${chatId}`)
 
     // Run title consideration in background (non-blocking)
     considerTitleUpdateAsync(
@@ -494,15 +495,15 @@ export async function checkAndGenerateSummaryIfNeeded(
       availableProfiles,
       currentInterchange
     ).catch(error => {
-      console.error(`[Title Update] Background error for chat ${chatId}:`, error)
+      logger.error(`[Title Update] Background error for chat ${chatId}:`, {}, error instanceof Error ? error : new Error(String(error)))
     })
   }
-  
+
   // Original summary check logic
   const needsCheck = await chatNeedsSummary(chatId, provider, modelName)
 
   if (needsCheck.needsSummary) {
-    console.log(`[Context Summary] Chat ${chatId} needs summary: ${needsCheck.reason}`)
+    logger.info(`[Context Summary] Chat ${chatId} needs summary: ${needsCheck.reason}`)
 
     // Generate in background to not block the response
     generateContextSummaryAsync({

@@ -13,6 +13,7 @@ import { getRepositories } from '@/lib/json-store/repositories'
 import { Memory } from '@/lib/json-store/schemas/types'
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
 import { findSimilarMemories } from './memory-service'
+import { logger } from '@/lib/logger'
 
 /**
  * Housekeeping options for memory cleanup
@@ -294,7 +295,7 @@ export async function runHousekeeping(
           }
         }
       } catch (error) {
-        console.warn(`[Housekeeping] Failed to check similarity for memory ${memory.id}:`, error)
+        logger.warn(`[Housekeeping] Failed to check similarity for memory ${memory.id}`, { characterId, memoryId: memory.id, error: String(error) })
       }
     }
   }
@@ -350,7 +351,7 @@ export async function runHousekeeping(
       }
       await vectorStore.save()
     } catch (error) {
-      console.warn(`[Housekeeping] Failed to clean up vector store:`, error)
+      logger.warn(`[Housekeeping] Failed to clean up vector store`, { characterId, error: String(error) })
     }
 
     result.deleted = deletedCount

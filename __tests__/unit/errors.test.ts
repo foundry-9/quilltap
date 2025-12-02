@@ -84,7 +84,6 @@ describe('handleError', () => {
       },
       { status: 400 }
     )
-    expect(consoleErrorSpy).toHaveBeenCalledWith('API Error:', error)
   })
 
 

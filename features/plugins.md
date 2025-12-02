@@ -1,63 +1,98 @@
 # Plugins
 
-There should be Node.js-based plugin architecture so that updates and add-ons can be managed outside the core functionality.
+**Status:** Implemented and Active
+
+The plugin system is now fully operational with all LLM providers migrated to plugins.
 
 ## Concept
 
 - All installations go under `plugins/`
-- Should be developed using TypeScript to a certain interface
-- All plugin activity must be sandboxed as much as possible for security reasons; only what is exposed can be altered
-- Should be able to affect all areas of UI with regard to templates, CSS, fonts, images
-- Should be able to implement new - not patch existing, I don't think - back-end APIs and database accesses
-- Could be a way to ship database replacements (!) or file back-end replacements
+- Developed using TypeScript to defined interfaces
+- Plugin activity is sandboxed as much as possible for security; only what is exposed can be altered
+- Plugins can provide new API endpoints, database extensions, and UI components
+- Plugins can ship complete replacements for providers, databases, or file backends
 
-## Functionality
+## Implemented Functionality
 
-- Themes
-- Back-end
-  - New API endpoints
-  - New database "tables"
-  - New functionality for backup and CRUD of database and files
-- Front-end
-  - New pages and routes
-  - New components
-  - New tabs and interface add-ons and buttons
+### Provider Plugins (Complete)
 
-## Update mechanism
+All LLM providers have been migrated to the plugin architecture:
 
-Using GitHub Pages to make pointers available for people, and a front-end for browse and installation
+| Plugin | Provider | Capabilities |
+|--------|----------|--------------|
+| `qtap-plugin-openai` | OpenAI | Chat, DALL-E images, embeddings, file attachments |
+| `qtap-plugin-anthropic` | Anthropic | Chat, image/PDF analysis, tool use |
+| `qtap-plugin-google` | Google Gemini | Chat, Imagen images, file attachments |
+| `qtap-plugin-grok` | Grok/xAI | Chat, image generation, file attachments |
+| `qtap-plugin-gab-ai` | Gab AI | Chat (text-only) |
+| `qtap-plugin-ollama` | Ollama | Chat (local models) |
+| `qtap-plugin-openrouter` | OpenRouter | Chat (100+ models), pricing sync |
+| `qtap-plugin-openai-compatible` | Generic | Chat (any OpenAI-format API) |
 
-## First Plugin (and model for others)
+### Upgrade Plugin (Complete)
 
-- [ ] Should be able to be read from the `plugins/` directory
-- [ ] Each plugin is a directory under that one
-- [ ] `plugins/` as a directory is ignored under Git but `plugins/qtap-plugin-template/` is an exception
-- [ ] Manifest file
-- [ ] Is an NPM package in its own right
-- [ ] Must be called `qtap-plugin-` followed by differentiator
-- [ ] Can be found in NPM or Github by a search
-- [ ] Template should include
-  - [ ] front-end components that can be included in pages or other components
-  - [ ] front-end theme changes; can override HTML, CSS
-  - [ ] Built-in functionality will include Javascript hooks that can be tied into and run
-  - [ ] back-end database table additions
-  - [ ] file access will be abstracted so that it can be hooked or replaced by plugins
-  - [ ] back-end API endpoints can be added or enhanced
-  - [ ] external API support can be added
-  - [ ] at least one provider of fake LLM responses should be built to show how to make a provider plugin
-  - [ ] there must be a component for configuration that is standardized across all plugins, so it can be called
-  - [ ] plugins can be enabled or disabled
-  - [ ] all plugins should gracefully degrade somehow
+The `qtap-plugin-upgrade` plugin provides database migration capabilities:
+
+- OpenRouter profile conversion (legacy format migration)
+- Provider plugin enablement migrations
+- Extensible migration runner system
+
+### Plugin Infrastructure (Complete)
+
+- [x] Plugin manifest schema with 19 capability types
+- [x] Plugin registry for managing loaded plugins
+- [x] Provider registry for LLM provider plugins
+- [x] Plugin validation and security checks
+- [x] TypeScript transpilation for plugin source
+- [x] Dynamic plugin loading at startup
+- [x] Plugin API routes support
+
+## Planned Functionality
+
+### Themes
+
+- [ ] Alternative UI themes as plugins
+- [ ] Theme switching without app restart
+- [ ] Support for Tailwind and other CSS frameworks
+
+### Additional Backends
+
+- [ ] New API endpoints via plugins
+- [ ] New database "tables" via plugins
+- [ ] Alternative file backends (S3, etc.)
+- [ ] Alternative database backends (MongoDB, etc.)
+
+### Frontend Extensions
+
+- [ ] New pages and routes
+- [ ] New components
+- [ ] New tabs and interface add-ons
+
+## Update Mechanism
+
+Future work: Using GitHub Pages to make pointers available for people, and a front-end for browse and installation.
+
+## Plugin Template
+
+The template plugin (`qtap-plugin-template`) demonstrates:
+
+- [x] Plugin manifest structure
+- [x] Package.json configuration
+- [x] TypeScript source with proper exports
+- [x] Icon component implementation
+- [x] README documentation
 
 ## Hooks
 
-- [ ] Everything meant to be enhanced or replaced by plugins should have hooks placed and documented
+- [x] Provider creation hooks (via provider registry)
+- [x] Tool formatting hooks (provider-specific tool format conversion)
+- [x] Tool parsing hooks (provider-specific response parsing)
+- [ ] UI component slots (pending)
+- [ ] Message processing hooks (pending)
 
-## First major thing to move completely to plugins: providers
+## Documentation
 
-- [ ] At first one, eventually all but one provider should be moved to plugins
-
-## Second major thing to move completely to plugins: themes
-
-- [ ] We should provide one or two alternative themes to the standard one
-- [ ] Themes can use Tailwind (and probably should), but we should allow other toolkits like Bootstrap
+- [Plugin Developer Guide](../plugins/README.md) - How to create plugins
+- [LLM Provider Guide](../plugins/LLM-PROVIDER-GUIDE.md) - Specific guide for provider plugins
+- [Plugin Manifest Reference](../docs/PLUGIN_MANIFEST.md) - Complete manifest schema
+- [Plugin Initialization](../docs/PLUGIN_INITIALIZATION.md) - Startup flow documentation

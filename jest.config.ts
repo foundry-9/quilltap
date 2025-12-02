@@ -40,6 +40,9 @@ const config: Config = {
     '/.next/',
     '/__tests__/integration/',
   ],
+  modulePathIgnorePatterns: [
+    '/.next/',
+  ],
   coverageThreshold: {
     global: {
       branches: 0,

@@ -45,6 +45,10 @@ const envSchema = z.object({
 
   // Logging (optional)
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).optional().default('info'),
+  LOG_OUTPUT: z.enum(['console', 'file', 'both']).optional().default('console'),
+  LOG_FILE_PATH: z.string().optional().default('./logs'),
+  LOG_FILE_MAX_SIZE: z.string().regex(/^\d+$/).optional(),
+  LOG_FILE_MAX_FILES: z.string().regex(/^\d+$/).optional(),
 
   // Production SSL (optional)
   DOMAIN: z.string().optional(),

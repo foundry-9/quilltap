@@ -10,11 +10,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
-import { Provider, ProviderEnum } from '@/lib/json-store/schemas/types'
 import { supportsImageGeneration } from '@/lib/llm/image-capable'
+import { logger } from '@/lib/logger'
+import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup'
+import { requiresBaseUrl } from '@/lib/plugins/provider-validation'
 
-// Get the list of valid providers from the Zod enum
-const VALID_PROVIDERS = ProviderEnum.options
+// Disable caching for this route
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 /**
  * GET /api/profiles
@@ -40,6 +43,9 @@ export async function GET(req: NextRequest) {
     const imageCapable = searchParams.get('imageCapable') === 'true'
 
     const repos = getRepositories()
+
+    // Clear cache before fetching to ensure fresh data
+    repos.connections['jsonStore'].clearCache()
 
     // Get all connection profiles for user
     let profiles = await repos.connections.findByUserId(session.user.id)
@@ -133,7 +139,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(enrichedProfiles)
   } catch (error) {
-    console.error('Failed to fetch connection profiles:', error)
+    logger.error('Failed to fetch connection profiles', { context: 'GET /api/profiles' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to fetch connection profiles' },
       { status: 500 }
@@ -180,6 +186,7 @@ export async function POST(req: NextRequest) {
       parameters = {},
       isDefault = false,
       isCheap = false,
+      allowWebSearch = false,
     } = body
 
     // Validation
@@ -190,9 +197,9 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    if (!provider || !VALID_PROVIDERS.includes(provider)) {
+    if (!provider || typeof provider !== 'string' || provider.trim().length === 0) {
       return NextResponse.json(
-        { error: 'Invalid provider' },
+        { error: 'Provider is required' },
         { status: 400 }
       )
     }
@@ -205,6 +212,40 @@ export async function POST(req: NextRequest) {
     }
 
     const repos = getRepositories()
+
+    // Ensure plugin system is initialized
+    const pluginSystemInitialized = isPluginSystemInitialized()
+
+    logger.debug('Checking plugin system initialization', {
+      provider,
+      pluginSystemInitialized,
+      context: 'POST /api/profiles',
+    })
+
+    // Initialize if not already initialized
+    if (!pluginSystemInitialized) {
+      logger.warn('Plugin system not initialized in profiles endpoint, initializing now', {
+        provider,
+        context: 'POST /api/profiles',
+      })
+      const initResult = await initializePlugins()
+      logger.info('Plugin system initialization result', {
+        success: initResult.success,
+        stats: initResult.stats,
+        context: 'POST /api/profiles',
+      })
+      if (!initResult.success) {
+        logger.error('Failed to initialize plugin system', {
+          stats: initResult.stats,
+          errors: initResult.errors,
+          context: 'POST /api/profiles',
+        })
+        return NextResponse.json(
+          { error: 'Plugin system initialization failed', details: initResult.errors },
+          { status: 500 }
+        )
+      }
+    }
 
     // Validate apiKeyId if provided
     if (apiKeyId) {
@@ -227,7 +268,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate baseUrl for providers that need it
-    if ((provider === 'OLLAMA' || provider === 'OPENAI_COMPATIBLE') && !baseUrl) {
+    if (requiresBaseUrl(provider) && !baseUrl) {
       return NextResponse.json(
         { error: `Base URL is required for ${provider}` },
         { status: 400 }
@@ -248,13 +289,14 @@ export async function POST(req: NextRequest) {
     const profile = await repos.connections.create({
       userId: session.user.id,
       name: name.trim(),
-      provider: provider as Provider,
+      provider: provider,
       apiKeyId: apiKeyId || null,
       baseUrl: baseUrl || null,
       modelName: modelName.trim(),
       parameters: parameters,
       isDefault,
       isCheap,
+      allowWebSearch,
       tags: [],
     })
 
@@ -274,7 +316,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ...profile, apiKey }, { status: 201 })
   } catch (error) {
-    console.error('Failed to create connection profile:', error)
+    logger.error('Failed to create connection profile', { context: 'POST /api/profiles' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to create connection profile' },
       { status: 500 }

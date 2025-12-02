@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getRepositories } from '@/lib/json-store/repositories';
+import { logger } from '@/lib/logger';
 import { z } from 'zod';
 
 interface RouteContext {
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json({ data: enrichedOverrides });
   } catch (error) {
-    console.error('Error fetching avatar overrides:', error);
+    logger.error('Error fetching avatar overrides', { endpoint: '/api/chats/[id]/avatars', method: 'GET' }, error instanceof Error ? error : undefined);
     return NextResponse.json(
       { error: 'Failed to fetch avatar overrides', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
@@ -139,7 +140,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json({ data: override });
   } catch (error) {
-    console.error('Error setting avatar override:', error);
+    logger.error('Error setting avatar override', { endpoint: '/api/chats/[id]/avatars', method: 'POST' }, error instanceof Error ? error : undefined);
 
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Validation error', details: error.errors }, { status: 400 });
@@ -192,7 +193,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json({ data: { success: true } });
   } catch (error) {
-    console.error('Error removing avatar override:', error);
+    logger.error('Error removing avatar override', { endpoint: '/api/chats/[id]/avatars', method: 'DELETE' }, error instanceof Error ? error : undefined);
     return NextResponse.json(
       { error: 'Failed to remove avatar override', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }

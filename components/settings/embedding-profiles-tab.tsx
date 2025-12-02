@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { clientLogger } from '@/lib/client-logger'
 
 interface ApiKey {
   id: string
@@ -92,7 +93,7 @@ export default function EmbeddingProfilesTab() {
       const data = await res.json()
       setApiKeys(data)
     } catch (err) {
-      console.error('Failed to fetch API keys:', err)
+      clientLogger.error('Failed to fetch API keys', { error: err instanceof Error ? err.message : String(err) })
     }
   }
 
@@ -103,7 +104,7 @@ export default function EmbeddingProfilesTab() {
       const data = await res.json()
       setEmbeddingModels(data)
     } catch (err) {
-      console.error('Failed to fetch embedding models:', err)
+      clientLogger.error('Failed to fetch embedding models', { error: err instanceof Error ? err.message : String(err) })
     }
   }
 

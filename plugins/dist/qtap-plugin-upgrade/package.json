@@ -1,0 +1,26 @@
+{
+  "name": "qtap-plugin-upgrade",
+  "version": "1.0.0",
+  "description": "Quilltap upgrade and migration manager plugin",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "quilltap",
+    "plugin",
+    "upgrade",
+    "migration"
+  ],
+  "author": {
+    "name": "Foundry-9",
+    "email": "charles@sebold.tech",
+    "url": "https://foundry-9.com"
+  },
+  "license": "MIT",
+  "peerDependencies": {
+    "zod": "^3.22.0"
+  }
+}

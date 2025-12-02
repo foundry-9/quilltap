@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { AvatarDisplayStyle } from '@/lib/avatar-styles'
+import { clientLogger } from '@/lib/client-logger'
 
 /**
  * Hook to get the current avatar display style setting from the user's preferences
@@ -21,7 +22,7 @@ export function useAvatarDisplay() {
         const data = await res.json()
         setStyle((data.avatarDisplayStyle || 'CIRCULAR') as AvatarDisplayStyle)
       } catch (err) {
-        console.error('Error fetching avatar display style:', err)
+        clientLogger.error('Error fetching avatar display style:', { error: err instanceof Error ? err.message : String(err) })
         setError(err instanceof Error ? err.message : 'Unknown error')
         // Default to circular on error
         setStyle('CIRCULAR')
@@ -49,7 +50,7 @@ export function useAvatarDisplay() {
       const data = await res.json()
       setStyle((data.avatarDisplayStyle || 'CIRCULAR') as AvatarDisplayStyle)
     } catch (err) {
-      console.error('Error updating avatar display style:', err)
+      clientLogger.error('Error updating avatar display style:', { error: err instanceof Error ? err.message : String(err) })
       setError(err instanceof Error ? err.message : 'Unknown error')
       // Revert to previous style on error
       setStyle(style === 'CIRCULAR' ? 'RECTANGULAR' : 'CIRCULAR')

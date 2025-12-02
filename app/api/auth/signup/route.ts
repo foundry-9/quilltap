@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { hashPassword, validatePasswordStrength } from '@/lib/auth/password'
 import { z } from 'zod'
+import { logger } from '@/lib/logger'
 
 const SignupSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    console.error('Signup error:', error)
+    logger.error('Signup error', { context: 'POST /api/auth/signup' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to create account' },
       { status: 500 }

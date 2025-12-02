@@ -15,6 +15,11 @@ jest.mock('next-auth/react', () => ({
 }))
 
 // Mock environment variables for tests
+// Note: NODE_ENV is read-only and set by Jest automatically
+process.env.NEXTAUTH_URL = process.env.NEXTAUTH_URL || 'http://localhost:3000'
+process.env.NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET || 'test-secret-for-unit-tests-32-chars-long!!'
+process.env.GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'test-google-client-id'
+process.env.GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || 'test-google-client-secret'
 process.env.ENCRYPTION_MASTER_PEPPER = process.env.ENCRYPTION_MASTER_PEPPER || 'test-pepper-for-unit-tests-32-chars-long!'
 
 // Set up globals required for Next.js
@@ -134,9 +139,13 @@ jest.mock('@/lib/encryption', () => ({
   testEncryption: jest.fn(),
 }))
 
-// Mock LLM factory
-jest.mock('@/lib/llm/factory', () => ({
+// Mock LLM plugin factory
+jest.mock('@/lib/llm/plugin-factory', () => ({
   createLLMProvider: jest.fn(),
+  createImageProvider: jest.fn(),
+  getAllAvailableProviders: jest.fn(() => []),
+  getAllAvailableImageProviders: jest.fn(() => []),
+  isProviderFromPlugin: jest.fn(() => true),
 }))
 
 // Mock JSON Store Repositories

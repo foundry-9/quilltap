@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
+import { logger } from '@/lib/logger'
 
 export async function GET(
   req: NextRequest,
@@ -66,7 +67,7 @@ export async function GET(
 
     return NextResponse.json(enrichedPersona)
   } catch (error) {
-    console.error('Error fetching persona:', error)
+    logger.error('Error fetching persona', { context: 'GET /api/personas/:id' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to fetch persona' },
       { status: 500 }
@@ -126,7 +127,7 @@ export async function PUT(
         : null,
     })
   } catch (error) {
-    console.error('Error updating persona:', error)
+    logger.error('Error updating persona', { context: 'PUT /api/personas/:id' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to update persona' },
       { status: 500 }
@@ -163,7 +164,7 @@ export async function DELETE(
         })
       } catch (err) {
         // Silently fail if image cleanup doesn't work - persona deletion is more important
-        console.error('Failed to clean up image reference:', err)
+        logger.error('Failed to clean up image reference', { context: 'DELETE /api/personas/:id' }, err instanceof Error ? err : undefined)
       }
     }
 
@@ -171,7 +172,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error deleting persona:', error)
+    logger.error('Error deleting persona', { context: 'DELETE /api/personas/:id' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to delete persona' },
       { status: 500 }

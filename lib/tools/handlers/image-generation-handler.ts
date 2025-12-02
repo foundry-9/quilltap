@@ -6,7 +6,7 @@
 import { createFile, getFileUrl } from '@/lib/file-manager';
 import { getRepositories } from '@/lib/json-store/repositories';
 import { decryptApiKey } from '@/lib/encryption';
-import { getImageGenProvider } from '@/lib/image-gen/factory';
+import { createImageProvider } from '@/lib/llm/plugin-factory';
 import {
   ImageGenerationToolInput,
   ImageGenerationToolOutput,
@@ -16,6 +16,7 @@ import {
 import { preparePromptExpansion } from '@/lib/image-gen/prompt-expansion';
 import { craftImagePrompt } from '@/lib/memory/cheap-llm-tasks';
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm';
+import { logger } from '@/lib/logger';
 
 /**
  * Execution context for image generation tool
@@ -201,7 +202,7 @@ async function generateImagesWithProvider(
   userId: string,
   chatId?: string
 ): Promise<GeneratedImageResult[]> {
-  const provider = getImageGenProvider(imageProfile.provider);
+  const provider = createImageProvider(imageProfile.provider);
 
   // Decrypt the API key
   let decryptedKey: string;
@@ -213,7 +214,7 @@ async function generateImagesWithProvider(
       imageProfile.userId
     );
   } catch (error) {
-    console.error('Failed to decrypt API key:', error);
+    logger.error('Failed to decrypt API key:', {}, error as Error);
     throw new ImageGenerationError(
       'ENCRYPTION_ERROR',
       'Failed to decrypt API key',
@@ -228,7 +229,7 @@ async function generateImagesWithProvider(
     imageProfile.modelName
   );
 
-  console.log('[Image Generation] Sending to Provider:', {
+  logger.info('[Image Generation] Sending to Provider:', {
     provider: imageProfile.provider,
     model: imageProfile.modelName,
     prompt: mergedParams.prompt,
@@ -246,7 +247,7 @@ async function generateImagesWithProvider(
     generationResponse = await provider.generateImage(mergedParams, decryptedKey);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error('Image generation failed:', errorMessage);
+    logger.error('Image generation failed:', { errorMessage }, error as Error);
     throw new ImageGenerationError(
       'PROVIDER_ERROR',
       `Image generation failed: ${errorMessage}`,
@@ -267,7 +268,7 @@ async function generateImagesWithProvider(
       )
     );
   } catch (error) {
-    console.error('Failed to save images:', error);
+    logger.error('Failed to save images:', {}, error as Error);
     if (error instanceof ImageGenerationError) {
       throw error;
     }
@@ -335,7 +336,7 @@ async function expandPromptWithDescriptions(
     );
 
     // Craft the image prompt using cheap LLM
-    console.log('[Image Generation] Cheap LLM Input:', {
+    logger.info('[Image Generation] Cheap LLM Input:', {
       originalPrompt: expansionContext.originalPrompt,
       placeholderCount: expansionContext.placeholders?.length,
       provider: expansionContext.provider,
@@ -352,7 +353,7 @@ async function expandPromptWithDescriptions(
       userId
     );
 
-    console.log('[Image Generation] Cheap LLM Output:', {
+    logger.info('[Image Generation] Cheap LLM Output:', {
       success: craftResult.success,
       expandedPrompt: craftResult.result,
     })
@@ -382,7 +383,7 @@ async function expandPromptWithDescriptions(
       wasExpanded: true,
     };
   } catch (error) {
-    console.error('Prompt expansion failed:', error);
+    logger.error('Prompt expansion failed:', {}, error as Error);
     // On error, return original prompt
     return {
       expandedPrompt: originalPrompt,
@@ -422,7 +423,7 @@ export async function executeImageGenerationTool(
 
     // 3. Validate provider
     try {
-      getImageGenProvider(imageProfile.provider);
+      createImageProvider(imageProfile.provider);
     } catch (e) {
       return {
         success: false,
@@ -446,7 +447,7 @@ export async function executeImageGenerationTool(
       expandedPrompt = expandResult.expandedPrompt;
     } catch (error) {
       // If expansion fails, just use the original prompt
-      console.warn('Prompt expansion failed, using original prompt:', error instanceof Error ? error.message : String(error));
+      logger.warn('Prompt expansion failed, using original prompt:', { errorMessage: error instanceof Error ? error.message : String(error) });
       expandedPrompt = toolInput.prompt;
     }
 
@@ -456,7 +457,7 @@ export async function executeImageGenerationTool(
       prompt: expandedPrompt,
     };
 
-    console.log('[Image Generation] Final Input to Provider:', {
+    logger.info('[Image Generation] Final Input to Provider:', {
       originalPrompt: toolInput.prompt,
       expandedPrompt: expandedPrompt,
       wasExpanded: expandedPrompt !== toolInput.prompt,
@@ -480,7 +481,7 @@ export async function executeImageGenerationTool(
       expandedPrompt: expandedPrompt,
     };
   } catch (error) {
-    console.error('Image generation tool error:', error);
+    logger.error('Image generation tool error:', {}, error as Error);
 
     // Include provider and model in error response if profile was loaded
     const errorResponse: ImageGenerationToolOutput = {
@@ -540,7 +541,7 @@ export async function validateImageProfile(
 
     // Verify provider exists
     try {
-      getImageGenProvider(profile.provider);
+      createImageProvider(profile.provider);
     } catch {
       return {
         valid: false,

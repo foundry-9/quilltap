@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { clientLogger } from '@/lib/client-logger'
 import { useTagStyles } from '@/components/providers/tag-style-provider'
 import { DEFAULT_TAG_STYLE, mergeWithDefaultTagStyle } from '@/lib/tags/styles'
 import type { TagVisualStyle } from '@/lib/json-store/schemas/types'
@@ -144,7 +145,7 @@ export default function ChatSettingsTab() {
         })))
       }
     } catch (err) {
-      console.error('Error loading tags', err)
+      clientLogger.error('Error loading tags', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [])
 
@@ -156,7 +157,7 @@ export default function ChatSettingsTab() {
       const data = await res.json()
       setConnectionProfiles(data)
     } catch (err) {
-      console.error('Error loading connection profiles:', err)
+      clientLogger.error('Error loading connection profiles', { error: err instanceof Error ? err.message : String(err) })
     } finally {
       setLoadingProfiles(false)
     }
@@ -169,7 +170,7 @@ export default function ChatSettingsTab() {
       const data = await res.json()
       setEmbeddingProfiles(data)
     } catch (err) {
-      console.error('Error loading embedding profiles:', err)
+      clientLogger.error('Error loading embedding profiles', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [])
 

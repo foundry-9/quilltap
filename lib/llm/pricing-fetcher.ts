@@ -10,6 +10,7 @@ import { OpenRouter } from '@openrouter/sdk'
 import { Provider, ConnectionProfile } from '@/lib/json-store/schemas/types'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { decryptApiKey } from '@/lib/encryption'
+import { logger } from '@/lib/logger'
 import {
   ModelPricing,
   PricingCache,
@@ -75,7 +76,7 @@ async function fetchOpenRouterPricing(apiKey: string): Promise<ModelPricing[]> {
 
     return sortByCost(models)
   } catch (error) {
-    console.error('Failed to fetch OpenRouter pricing:', error)
+    logger.error('Failed to fetch OpenRouter pricing', { context: 'fetchOpenRouterPricing' }, error instanceof Error ? error : undefined)
     return []
   }
 }
@@ -112,7 +113,7 @@ async function fetchOllamaModels(baseUrl: string): Promise<ModelPricing[]> {
 
     return models
   } catch (error) {
-    console.error('Failed to fetch Ollama models:', error)
+    logger.error('Failed to fetch Ollama models', { context: 'fetchOllamaModels' }, error instanceof Error ? error : undefined)
     return []
   }
 }
@@ -219,8 +220,9 @@ export async function refreshPricingCache(userId: string): Promise<PricingCache>
   // Update in-memory cache
   pricingCache = cache
 
-  console.log(
-    `[Pricing] Refreshed pricing cache for ${Object.keys(cache.providers).length} providers`
+  logger.info(
+    'Refreshed pricing cache',
+    { context: 'refreshPricingCache', providersCount: Object.keys(cache.providers).length }
   )
 
   return cache

@@ -6,6 +6,7 @@
  */
 
 import { NextResponse } from 'next/server'
+import { logger } from '@/lib/logger'
 
 /**
  * Standard error response format
@@ -49,7 +50,7 @@ export class AppError extends Error {
  * Error handler that returns formatted JSON response
  */
 export function handleError(error: unknown): NextResponse {
-  console.error('API Error:', error)
+  logger.error('API Error', { context: 'error-handling' }, error instanceof Error ? error : undefined)
 
   // Handle AppError instances
   if (error instanceof AppError) {

@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
+import { logger } from '@/lib/logger'
 import type { ChatEvent, MessageEvent, ChatMetadata } from '@/lib/json-store/schemas/types'
 
 export async function PUT(
@@ -80,7 +81,7 @@ export async function PUT(
 
     return NextResponse.json(updatedMessage)
   } catch (error) {
-    console.error('Error updating message:', error)
+    logger.error('Error updating message', { endpoint: '/api/messages/[id]', method: 'PUT' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to update message' },
       { status: 500 }
@@ -151,7 +152,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error deleting message:', error)
+    logger.error('Error deleting message', { endpoint: '/api/messages/[id]', method: 'DELETE' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to delete message' },
       { status: 500 }

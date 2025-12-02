@@ -8,6 +8,7 @@ import qrcode from 'qrcode'
 import { encryptData, decryptData } from '@/lib/encryption'
 import { UsersRepository } from '@/lib/json-store/repositories/users.repository'
 import { getJsonStore } from '@/lib/json-store/core/json-store'
+import { logger } from '@/lib/logger'
 import crypto from 'crypto'
 
 const usersRepo = new UsersRepository(getJsonStore())
@@ -74,7 +75,7 @@ export async function verifyTOTP(
         return true
       }
     } catch (error) {
-      console.error('TOTP verification error:', error)
+      logger.error('TOTP verification error', { context: 'verifyTOTP', userId }, error instanceof Error ? error : undefined)
     }
   }
 
@@ -104,7 +105,7 @@ export async function verifyTOTP(
         return true
       }
     } catch (error) {
-      console.error('Backup code verification error:', error)
+      logger.error('Backup code verification error', { context: 'verifyTOTP', userId }, error instanceof Error ? error : undefined)
     }
   }
 
@@ -178,7 +179,7 @@ export async function enableTOTP(
 
     return { success: true, backupCodes }
   } catch (error) {
-    console.error('Enable TOTP error:', error)
+    logger.error('Enable TOTP error', { context: 'enableTOTP', userId }, error instanceof Error ? error : undefined)
     return { success: false }
   }
 }
@@ -193,7 +194,7 @@ export async function disableTOTP(userId: string): Promise<boolean> {
     })
     return true
   } catch (error) {
-    console.error('Disable TOTP error:', error)
+    logger.error('Disable TOTP error', { context: 'disableTOTP', userId }, error instanceof Error ? error : undefined)
     return false
   }
 }

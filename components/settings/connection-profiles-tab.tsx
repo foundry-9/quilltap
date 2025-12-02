@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { clientLogger } from '@/lib/client-logger'
 import { TagEditor } from '@/components/tags/tag-editor'
 import { TagBadge } from '@/components/tags/tag-badge'
 import { ModelSelector } from './model-selector'
@@ -29,9 +30,22 @@ interface ConnectionProfile {
   parameters: Record<string, any>
   isDefault: boolean
   isCheap?: boolean
+  allowWebSearch?: boolean
   apiKey?: ApiKey | null
   tags?: Tag[]
   messageCount?: number
+}
+
+// Provider web search support mapping
+const PROVIDER_WEB_SEARCH_SUPPORT: Record<string, boolean> = {
+  'OPENAI': true,
+  'ANTHROPIC': true,
+  'GOOGLE': true,
+  'GROK': true,
+  'OLLAMA': false,
+  'OPENROUTER': false,
+  'OPENAI_COMPATIBLE': false,
+  'GAB_AI': false,
 }
 
 export default function ConnectionProfilesTab() {
@@ -55,6 +69,7 @@ export default function ConnectionProfilesTab() {
     topP: 1,
     isDefault: false,
     isCheap: false,
+    allowWebSearch: false,
   })
 
   // Connection testing states
@@ -131,14 +146,14 @@ export default function ConnectionProfilesTab() {
               })
             }
           } catch (err) {
-            console.error(`Error processing chat ${chat.id}:`, err)
+            clientLogger.error(`Error processing chat ${chat.id}`, { error: err instanceof Error ? err.message : String(err) })
           }
         })
       )
 
       return messageCounts
     } catch (err) {
-      console.error('Error counting messages per profile:', err)
+      clientLogger.error('Error counting messages per profile', { error: err instanceof Error ? err.message : String(err) })
       return {}
     }
   }, [])
@@ -148,7 +163,13 @@ export default function ConnectionProfilesTab() {
       setLoading(true)
       setError(null)
       // Add cache busting timestamp to force fresh data
-      const res = await fetch(`/api/profiles?t=${Date.now()}`)
+      const res = await fetch(`/api/profiles?t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
+      })
       if (!res.ok) throw new Error('Failed to fetch profiles')
       const data = await res.json()
 
@@ -162,7 +183,7 @@ export default function ConnectionProfilesTab() {
               return { ...profile, tags: tagsData.tags || [] }
             }
           } catch (err) {
-            console.error(`Error fetching tags for profile ${profile.id}:`, err)
+            clientLogger.error(`Error fetching tags for profile ${profile.id}`, { error: err instanceof Error ? err.message : String(err) })
           }
           return profile
         })
@@ -192,7 +213,7 @@ export default function ConnectionProfilesTab() {
       const data = await res.json()
       setApiKeys(data)
     } catch (err) {
-      console.error('Failed to fetch API keys:', err)
+      clientLogger.error('Failed to fetch API keys', { error: err instanceof Error ? err.message : String(err) })
     }
   }
 
@@ -208,7 +229,7 @@ export default function ConnectionProfilesTab() {
           setCheapDefaultProfileId(settings.cheapLLMSettings?.defaultCheapProfileId || null)
         }
       } catch (err) {
-        console.error('Error fetching chat settings:', err)
+        clientLogger.error('Error fetching chat settings', { error: err instanceof Error ? err.message : String(err) })
       }
     }
     fetchChatSettings()
@@ -226,6 +247,7 @@ export default function ConnectionProfilesTab() {
       topP: 1,
       isDefault: false,
       isCheap: false,
+      allowWebSearch: false,
     })
     setEditingId(null)
     // Reset connection states
@@ -248,6 +270,7 @@ export default function ConnectionProfilesTab() {
       topP: profile.parameters?.top_p ?? 1,
       isDefault: profile.isDefault,
       isCheap: profile.isCheap ?? false,
+      allowWebSearch: profile.allowWebSearch ?? false,
     })
     setEditingId(profile.id)
     setShowForm(true)
@@ -276,6 +299,7 @@ export default function ConnectionProfilesTab() {
         modelName: formData.modelName,
         isDefault: formData.isDefault,
         isCheap: formData.isCheap,
+        allowWebSearch: formData.allowWebSearch,
         parameters: {
           temperature: parseFloat(String(formData.temperature)),
           max_tokens: parseInt(String(formData.maxTokens)),
@@ -938,6 +962,31 @@ export default function ConnectionProfilesTab() {
                 <label htmlFor="isCheap" className="text-sm">
                   Mark as cheap LLM (suitable for cost-effective tasks like memory extraction)
                 </label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="allowWebSearch"
+                  name="allowWebSearch"
+                  checked={formData.allowWebSearch}
+                  onChange={handleChange}
+                  disabled={!PROVIDER_WEB_SEARCH_SUPPORT[formData.provider]}
+                  className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="allowWebSearch" className={`text-sm ${PROVIDER_WEB_SEARCH_SUPPORT[formData.provider] ? '' : 'text-gray-500 dark:text-gray-400'}`}>
+                    Allow Web Search
+                  </label>
+                  {PROVIDER_WEB_SEARCH_SUPPORT[formData.provider] ? (
+                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                      Enable the LLM to search the web for real-time information when responding to queries
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-500 dark:text-gray-500">
+                      This provider does not support web search
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
 

@@ -10,8 +10,12 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { decryptApiKey } from '@/lib/encryption'
-import { createLLMProvider } from '@/lib/llm/factory'
+import { createLLMProvider } from '@/lib/llm'
+import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup'
+import { providerRegistry } from '@/lib/plugins/provider-registry'
+import { validateProviderConfig } from '@/lib/plugins/provider-validation'
 import { ProviderEnum } from '@/lib/json-store/schemas/types'
+import { logger } from '@/lib/logger'
 import { z } from 'zod'
 
 // Validation schema
@@ -59,6 +63,48 @@ export async function POST(req: NextRequest) {
 
     const repos = getRepositories()
 
+    // Ensure plugin system is initialized
+    // Check both the plugin system AND the provider registry specifically
+    const pluginSystemInitialized = isPluginSystemInitialized()
+    const providerRegistryInitialized = providerRegistry.isInitialized()
+    const registryStats = providerRegistry.getStats()
+
+    logger.debug('Checking plugin system initialization', {
+      provider,
+      pluginSystemInitialized,
+      providerRegistryInitialized,
+      registryProviderCount: registryStats.total,
+      context: 'POST /api/profiles/test-message',
+    })
+
+    // Initialize if either the plugin system or provider registry is not initialized
+    if (!pluginSystemInitialized || !providerRegistryInitialized) {
+      logger.warn('Plugin system not fully initialized in test-message endpoint, initializing now', {
+        provider,
+        pluginSystemInitialized,
+        providerRegistryInitialized,
+        context: 'POST /api/profiles/test-message',
+      })
+      const initResult = await initializePlugins()
+      logger.info('Plugin system initialization result', {
+        success: initResult.success,
+        stats: initResult.stats,
+        providerRegistryStats: providerRegistry.getStats(),
+        context: 'POST /api/profiles/test-message',
+      })
+      if (!initResult.success) {
+        logger.error('Failed to initialize plugin system', {
+          stats: initResult.stats,
+          errors: initResult.errors,
+          context: 'POST /api/profiles/test-message',
+        })
+        return NextResponse.json(
+          { error: 'Plugin system initialization failed', details: initResult.errors },
+          { status: 500 }
+        )
+      }
+    }
+
     // Get API key if provided
     let decryptedKey = ''
     if (apiKeyId) {
@@ -79,31 +125,28 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Validate requirements
-    if ((provider === 'OLLAMA' || provider === 'OPENAI_COMPATIBLE') && !baseUrl) {
+    // Validate requirements using centralized provider config validation
+    const configValidation = validateProviderConfig(provider, {
+      apiKey: decryptedKey,
+      baseUrl,
+    })
+    if (!configValidation.valid) {
       return NextResponse.json(
-        { error: `Base URL is required for ${provider}` },
-        { status: 400 }
-      )
-    }
-
-    if (provider !== 'OLLAMA' && provider !== 'OPENAI_COMPATIBLE' && !decryptedKey) {
-      return NextResponse.json(
-        { error: `API key is required for ${provider}` },
+        { error: configValidation.errors[0] },
         { status: 400 }
       )
     }
 
     // Create provider instance
-    const llmProvider = createLLMProvider(provider, baseUrl)
+    const llmProvider = await createLLMProvider(provider, baseUrl)
 
     // Send test message
     const testPrompt = 'Hello! Please respond with a brief greeting to confirm the connection is working.'
 
-    console.log(`[TEST-MESSAGE] Starting test for provider: ${provider}, model: ${modelName}`)
+    logger.debug(`[TEST-MESSAGE] Starting test for provider: ${provider}, model: ${modelName}`, { context: 'POST /api/profiles/test-message' })
 
     try {
-      console.log('[TEST-MESSAGE] Calling sendMessage')
+      logger.debug('[TEST-MESSAGE] Calling sendMessage', { context: 'POST /api/profiles/test-message' })
       const response = await llmProvider.sendMessage(
         {
           model: modelName,
@@ -121,7 +164,7 @@ export async function POST(req: NextRequest) {
       )
 
       if (!response) {
-        console.log('[TEST-MESSAGE] Null response from provider')
+        logger.debug('[TEST-MESSAGE] Null response from provider', { context: 'POST /api/profiles/test-message' })
         return NextResponse.json(
           {
             success: false,
@@ -132,11 +175,11 @@ export async function POST(req: NextRequest) {
         )
       }
 
-      console.log('[TEST-MESSAGE] Received response:', { hasContent: response.content !== undefined && response.content !== null, contentLength: response.content?.length })
+      logger.debug('[TEST-MESSAGE] Received response:', { context: 'POST /api/profiles/test-message', hasContent: response.content !== undefined && response.content !== null, contentLength: response.content?.length })
 
       // Check if we got a response with content (even empty string is valid)
       if (response.content !== undefined && response.content !== null) {
-        console.log('[TEST-MESSAGE] Success - returning response')
+        logger.debug('[TEST-MESSAGE] Success - returning response', { context: 'POST /api/profiles/test-message' })
         const preview = response.content.substring(0, 100)
         const isTruncated = response.content.length > 100
         const suffix = isTruncated ? '...' : ''
@@ -152,7 +195,7 @@ export async function POST(req: NextRequest) {
         })
       }
 
-      console.log('[TEST-MESSAGE] No content in response (undefined or null)')
+      logger.debug('[TEST-MESSAGE] No content in response (undefined or null)', { context: 'POST /api/profiles/test-message' })
       return NextResponse.json(
         {
           success: false,
@@ -162,9 +205,9 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       )
     } catch (error) {
-      console.error('[TEST-MESSAGE] Error caught:', error)
+      logger.error('[TEST-MESSAGE] Error caught', { context: 'POST /api/profiles/test-message' }, error instanceof Error ? error : undefined)
       if (error instanceof Error) {
-        console.error('[TEST-MESSAGE] Error details:', { message: error.message, stack: error.stack })
+        logger.error('[TEST-MESSAGE] Error details', { context: 'POST /api/profiles/test-message', message: error.message, stack: error.stack }, error)
       }
       return NextResponse.json(
         {
@@ -183,7 +226,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    console.error('Failed to test message:', error)
+    logger.error('Failed to test message', { context: 'POST /api/profiles/test-message' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       {
         error: 'Failed to test message',

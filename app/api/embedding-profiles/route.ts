@@ -12,7 +12,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
-import { EmbeddingProfileProviderEnum, type EmbeddingProfileProvider } from '@/lib/json-store/schemas/types'
+import type { EmbeddingProfileProvider } from '@/lib/json-store/schemas/types'
+import { logger } from '@/lib/logger'
 
 /**
  * GET /api/embedding-profiles
@@ -76,7 +77,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(enrichedProfiles)
   } catch (error) {
-    console.error('Failed to fetch embedding profiles:', error)
+    logger.error('Failed to fetch embedding profiles', { endpoint: '/api/embedding-profiles', method: 'GET' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to fetch embedding profiles' },
       { status: 500 }
@@ -128,10 +129,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate provider
-    const validProviders = EmbeddingProfileProviderEnum.options
-    if (!provider || !validProviders.includes(provider)) {
+    if (!provider || typeof provider !== 'string' || provider.trim().length === 0) {
       return NextResponse.json(
-        { error: `Invalid provider. Must be one of: ${validProviders.join(', ')}` },
+        { error: 'Provider is required' },
         { status: 400 }
       )
     }
@@ -209,7 +209,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ...profile, apiKey }, { status: 201 })
   } catch (error) {
-    console.error('Failed to create embedding profile:', error)
+    logger.error('Failed to create embedding profile', { endpoint: '/api/embedding-profiles', method: 'POST' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to create embedding profile' },
       { status: 500 }

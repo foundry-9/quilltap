@@ -9,6 +9,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getRepositories } from '@/lib/json-store/repositories';
 import { z } from 'zod';
+import { logger } from '@/lib/logger';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       }
     });
   } catch (error) {
-    console.error('Error adding tag:', error);
+    logger.error('Error adding tag:', error as Error);
 
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Validation error', details: error.errors }, { status: 400 });
@@ -131,7 +132,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json({ data: { success: true } });
   } catch (error) {
-    console.error('Error removing tag:', error);
+    logger.error('Error removing tag:', error as Error);
     return NextResponse.json(
       { error: 'Failed to remove tag', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }

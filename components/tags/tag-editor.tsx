@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { showErrorToast } from '@/lib/toast';
+import { clientLogger } from '@/lib/client-logger';
 import { TagBadge } from '@/components/tags/tag-badge';
 
 export interface Tag {
@@ -59,7 +60,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
           onTagsChange?.(data.tags || []);
         }
       } catch (error) {
-        console.error('Error loading tags:', error);
+        clientLogger.error('Error loading tags:', { error: error instanceof Error ? error.message : String(error) });
       }
     };
 
@@ -78,7 +79,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
           setAllTags(data.tags || []);
         }
       } catch (error) {
-        console.error('Error loading all tags:', error);
+        clientLogger.error('Error loading all tags:', { error: error instanceof Error ? error.message : String(error) });
       }
     };
 
@@ -146,7 +147,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
       setShowSuggestions(false);
       setIsAddingTag(false);
     } catch (error) {
-      console.error('Error adding tag:', error);
+      clientLogger.error('Error adding tag:', { error: error instanceof Error ? error.message : String(error) });
       showErrorToast('Failed to add tag. Please try again.');
     } finally {
       setLoading(false);
@@ -171,7 +172,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
       setTags(newTags);
       onTagsChange?.(newTags);
     } catch (error) {
-      console.error('Error removing tag:', error);
+      clientLogger.error('Error removing tag:', { error: error instanceof Error ? error.message : String(error) });
       showErrorToast('Failed to remove tag. Please try again.');
     } finally {
       setLoading(false);

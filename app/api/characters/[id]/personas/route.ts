@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
+import { logger } from '@/lib/logger'
 
 export async function GET(
   req: NextRequest,
@@ -53,7 +54,7 @@ export async function GET(
 
     return NextResponse.json(validLinks)
   } catch (error) {
-    console.error('Error fetching character personas:', error)
+    logger.error('Error fetching character personas', { context: 'GET /api/characters/[id]/personas' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to fetch character personas' },
       { status: 500 }
@@ -127,7 +128,7 @@ export async function POST(
       { status: 201 }
     )
   } catch (error) {
-    console.error('Error linking persona to character:', error)
+    logger.error('Error linking persona to character', { context: 'POST /api/characters/[id]/personas' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to link persona to character' },
       { status: 500 }
@@ -174,7 +175,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error unlinking persona from character:', error)
+    logger.error('Error unlinking persona from character', { context: 'DELETE /api/characters/[id]/personas' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to unlink persona from character' },
       { status: 500 }

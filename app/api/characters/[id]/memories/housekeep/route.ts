@@ -11,6 +11,7 @@ import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { runHousekeeping, getHousekeepingPreview, HousekeepingOptions } from '@/lib/memory/housekeeping'
 import { z } from 'zod'
+import { logger } from '@/lib/logger'
 
 // Validation schema for housekeeping options
 const housekeepingOptionsSchema = z.object({
@@ -98,7 +99,7 @@ export async function POST(
       },
     })
   } catch (error) {
-    console.error('Error running housekeeping:', error)
+    logger.error('Error running housekeeping', {}, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to run housekeeping' },
       { status: 500 }
@@ -176,7 +177,7 @@ export async function GET(
       },
     })
   } catch (error) {
-    console.error('Error getting housekeeping preview:', error)
+    logger.error('Error getting housekeeping preview', {}, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to get housekeeping preview' },
       { status: 500 }

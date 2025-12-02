@@ -8,6 +8,7 @@
 
 import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
 import { getRepositories } from '@/lib/json-store/repositories'
+import { logger } from '@/lib/logger'
 import {
   MemorySearchToolInput,
   MemorySearchToolOutput,
@@ -95,7 +96,7 @@ export async function executeMemorySearchTool(
         await repos.memories.updateAccessTime(context.characterId, result.memory.id)
       } catch (err) {
         // Non-critical, just log
-        console.warn(`[MemorySearch] Failed to update access time for memory ${result.memory.id}:`, err)
+        logger.warn(`[MemorySearch] Failed to update access time for memory ${result.memory.id}`, { characterId: context.characterId, memoryId: result.memory.id, userId: context.userId, error: String(err) })
       }
     }
 
@@ -117,7 +118,7 @@ export async function executeMemorySearchTool(
       query,
     }
   } catch (error) {
-    console.error('[MemorySearch] Tool execution error:', error)
+    logger.error('[MemorySearch] Tool execution error', { characterId: context.characterId, userId: context.userId }, error instanceof Error ? error : undefined)
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error during memory search',

@@ -8,6 +8,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { exportSTChat } from '@/lib/sillytavern/chat'
+import { logger } from '@/lib/logger'
 
 export async function GET(
   _req: NextRequest,
@@ -90,7 +91,7 @@ export async function GET(
       },
     })
   } catch (error) {
-    console.error('Error exporting chat:', error)
+    logger.error('Error exporting chat', { operation: 'chatExport' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to export chat' },
       { status: 500 }

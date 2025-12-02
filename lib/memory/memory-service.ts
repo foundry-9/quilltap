@@ -10,6 +10,7 @@ import { getRepositories } from '@/lib/json-store/repositories'
 import { Memory } from '@/lib/json-store/schemas/types'
 import { generateEmbeddingForUser, EmbeddingError, cosineSimilarity } from '@/lib/embedding/embedding-service'
 import { getCharacterVectorStore, getVectorStoreManager } from '@/lib/embedding/vector-store'
+import { logger } from '@/lib/logger'
 
 /**
  * Options for memory creation
@@ -124,9 +125,9 @@ export async function createMemoryWithEmbedding(
   } catch (error) {
     // Log but don't fail - memory is still created, just without embedding
     if (error instanceof EmbeddingError) {
-      console.warn(`[Memory] Embedding generation failed for memory ${memory.id}: ${error.message}`)
+      logger.warn(`[Memory] Embedding generation failed for memory ${memory.id}: ${error.message}`, { characterId: data.characterId, userId: options.userId })
     } else {
-      console.warn(`[Memory] Unexpected error generating embedding for memory ${memory.id}:`, error)
+      logger.warn(`[Memory] Unexpected error generating embedding for memory ${memory.id}`, { characterId: data.characterId, userId: options.userId, error: String(error) })
     }
     return memory
   }
@@ -191,7 +192,7 @@ export async function updateMemoryWithEmbedding(
 
       return memoryWithEmbedding || updatedMemory
     } catch (error) {
-      console.warn(`[Memory] Failed to regenerate embedding for memory ${memoryId}:`, error)
+      logger.warn(`[Memory] Failed to regenerate embedding for memory ${memoryId}`, { characterId, memoryId, userId: options.userId, error: String(error) })
     }
   }
 
@@ -219,7 +220,7 @@ export async function deleteMemoryWithVector(
     await vectorStore.removeVector(memoryId)
     await vectorStore.save()
   } catch (error) {
-    console.warn(`[Memory] Failed to remove vector for memory ${memoryId}:`, error)
+    logger.warn(`[Memory] Failed to remove vector for memory ${memoryId}`, { characterId, memoryId, error: String(error) })
   }
 
   return true
@@ -285,7 +286,7 @@ export async function searchMemoriesSemantic(
       return results.slice(0, limit)
     }
   } catch (error) {
-    console.warn(`[Memory] Semantic search failed, falling back to text search:`, error)
+    logger.warn(`[Memory] Semantic search failed, falling back to text search`, { characterId, query: query.substring(0, 100), userId: options.userId, error: String(error) })
   }
 
   // Fallback to text-based search
@@ -388,7 +389,7 @@ export async function findSimilarMemories(
       }))
       .filter(r => r.memory)
   } catch (error) {
-    console.warn(`[Memory] Semantic similarity check failed:`, error)
+    logger.warn(`[Memory] Semantic similarity check failed`, { characterId, threshold: options.threshold, userId: options.userId, error: String(error) })
     return []
   }
 }
@@ -449,7 +450,7 @@ export async function generateMissingEmbeddings(
         await vectorStore.save()
       }
     } catch (error) {
-      console.warn(`[Memory] Failed to generate embedding for memory ${memory.id}:`, error)
+      logger.warn(`[Memory] Failed to generate embedding for memory ${memory.id}`, { characterId, memoryId: memory.id, userId: options.userId, error: String(error) })
       failed++
     }
   }
@@ -500,7 +501,7 @@ export async function rebuildVectorIndex(
       })
       indexed++
     } catch (error) {
-      console.warn(`[Memory] Failed to index memory ${memory.id}:`, error)
+      logger.warn(`[Memory] Failed to index memory ${memory.id}`, { characterId, memoryId: memory.id, error: String(error) })
       failed++
     }
   }

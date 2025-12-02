@@ -6,6 +6,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { randomUUID } from 'node:crypto'
+import { logger } from '@/lib/logger'
 import { z } from 'zod'
 
 const toolResultSchema = z.object({
@@ -67,7 +68,7 @@ export async function POST(
       message: toolResultMessage,
     })
   } catch (error) {
-    console.error('Error adding tool result:', error)
+    logger.error('Error adding tool result:', {}, error as Error)
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(

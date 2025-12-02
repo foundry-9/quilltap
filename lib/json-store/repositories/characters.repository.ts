@@ -8,6 +8,7 @@
 import { JsonStore } from '../core/json-store';
 import { BaseRepository } from './base.repository';
 import { Character, CharacterSchema, PhysicalDescription } from '../schemas/types';
+import { logger } from '@/lib/logger';
 
 export class CharactersRepository extends BaseRepository<Character> {
   constructor(jsonStore: JsonStore) {
@@ -44,7 +45,7 @@ export class CharactersRepository extends BaseRepository<Character> {
         }
       }
     } catch (error) {
-      console.error('Error listing characters:', error);
+      logger.error('Error listing characters:', {}, error instanceof Error ? error : new Error(String(error)));
     }
     return characters;
   }
@@ -120,7 +121,7 @@ export class CharactersRepository extends BaseRepository<Character> {
       await this.jsonStore.deleteFile(filePath);
       return true;
     } catch (error) {
-      console.error(`Failed to delete character ${id}:`, error);
+      logger.error(`Failed to delete character ${id}:`, {}, error instanceof Error ? error : new Error(String(error)));
       return false;
     }
   }

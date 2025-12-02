@@ -3,7 +3,7 @@
 AI-powered roleplay chat platform with multi-provider LLM support and full SillyTavern compatibility.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.7.5-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-1.7.24-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -342,6 +342,8 @@ Once logged in, you'll need to:
 - [Development Progress](DEVELOPMENT.md) - Feature completion status
 - [Roadmap](features/ROADMAP.md) - Technical architecture and implementation details
 - [Local User Authentication](features/LOCAL_USER_AUTH.md) - Original implementation plan for email/password + TOTP 2FA
+- [Plugin Developer Guide](plugins/README.md) - How to create plugins
+- [LLM Provider Guide](plugins/LLM-PROVIDER-GUIDE.md) - Creating new LLM provider plugins
 
 ## Troubleshooting
 
@@ -501,20 +503,37 @@ Copyright (c) 2025 Foundry-9
   - Cheap LLM + embedding controls let you mark profiles as "cheap," pick provider strategies or user-defined defaults, manage dedicated OpenAI/Ollama embedding profiles, and fall back to keyword heuristics when embeddings are unavailable while powering summaries/memories.
   - Characters and personas gain tabbed detail/edit pages plus a physical description editor with short/medium/long/complete tiers that feed galleries, chat context, and other tooling.
   - Image generation prompt expansion now understands `{{Character}}`/`{{me}}` placeholders, pulls those physical description tiers, and has the cheap LLM craft provider-sized prompts before handing them to Grok, Imagen, DALL·E, etc.
-- **1.7:** To Be Determined
+- **1.7:** Plugin support: basics, routes, LLM providers
   - Quick-hide for sensitive tags, hit one button and watch everything tagged that way disappear, toggle it back and it reappears
+  - Logging to stdout or file (see [ENV file](./.env.example) for configuration)
+  - Web search support (internal for providers that support it)
+  - Cascading deletion for characters (deletes memories and optionally images and chats associated with the character)
+  - Cleanup and better UI for chat cards
+  - Plugin support
+    - New routes
+    - Moved LLM providers to plugins
 
 ## Roadmap
 
 - [ ] Finish local email/password and TOTP/MFA login
+  - [ ] Convert Google OAuth to plugin
+  - [ ] Add Apple, Github OAuth
 - [ ] Add backends for files (S3 to start, for better hosting)
-- [ ] [Plugin system](features/plugins.md) to extend functionality and allow updates for volatile things like LLM support, image support, etc.
+- [ ] Complete database abstraction
+  - [ ] The abstraction should probably match a fairly ordinary NoSQL document storage API
+  - [ ] Convert JSON-Store (our local file-based database) to work behind the abstraction
+  - [ ] Add in MongoDB
+  - [ ] Create a utility that uses the abstraction to read one and convert it to another
+  - [ ] Add in DynamoDB
+  - [ ] Add in Postgres
+  - [ ] Add in MySQL
+- [X] [Plugin system](features/plugins.md) to extend functionality and allow updates for volatile things like LLM support, image support, etc.
 - [ ] Multiple themes and plugin downloadable themes
 - [ ] Enhanced roleplay options using more complex templates
 - [ ] "Visual Novel" options?
 - [ ] Worldbook/Lore
 - [ ] General SSE-based MCP support
-- [ ] Console logging in a window with all log entries at various log levels showing and persisting there
+- [ ] Console logging in a front-end window with all log entries at various log levels showing and persisting there
 - [ ] Python script support
 
 ## Acknowledgments

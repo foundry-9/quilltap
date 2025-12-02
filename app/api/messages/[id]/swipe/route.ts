@@ -8,8 +8,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
-import { createLLMProvider } from '@/lib/llm/factory'
+import { createLLMProvider } from '@/lib/llm'
 import { decryptApiKey } from '@/lib/encryption'
+import { logger } from '@/lib/logger'
 import type { ChatEvent, MessageEvent } from '@/lib/json-store/schemas/types'
 
 export async function POST(
@@ -111,7 +112,7 @@ export async function POST(
     }))
 
     // Get LLM provider and generate new response
-    const provider = createLLMProvider(profile.provider, profile.baseUrl || undefined)
+    const provider = await createLLMProvider(profile.provider, profile.baseUrl || undefined)
 
     let apiKey = ''
     if (profile.apiKeyId) {
@@ -161,7 +162,7 @@ export async function POST(
 
     return NextResponse.json(newSwipe, { status: 201 })
   } catch (error) {
-    console.error('Error creating swipe:', error)
+    logger.error('Error creating swipe', { context: 'POST /api/messages/:id/swipe' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to create alternative response' },
       { status: 500 }
@@ -239,7 +240,7 @@ export async function PUT(
     // Return the target swipe (UI will handle switching)
     return NextResponse.json(targetSwipe)
   } catch (error) {
-    console.error('Error switching swipe:', error)
+    logger.error('Error switching swipe', { context: 'PUT /api/messages/:id/swipe' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to switch swipe' },
       { status: 500 }

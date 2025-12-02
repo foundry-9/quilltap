@@ -4,6 +4,7 @@
  * API: POST /v1/images/generations (compatible with OpenAI SDK)
  */
 
+import { logger } from '@/lib/logger'
 import { ImageGenProvider, ImageGenParams, ImageGenResponse } from './base';
 
 export class GrokImageProvider extends ImageGenProvider {
@@ -49,9 +50,9 @@ export class GrokImageProvider extends ImageGenProvider {
       } catch {
         errorDetails = { message: errorText };
       }
-      
-      console.error('Grok API Error Details:', errorDetails);
-      
+
+      logger.error('Grok API Error Details', { context: { status: response.status, details: errorDetails } });
+
       throw new Error(
         errorDetails.message || errorDetails.error?.message || `Grok API error: ${response.status} - ${JSON.stringify(errorDetails)}`
       );
@@ -72,7 +73,7 @@ export class GrokImageProvider extends ImageGenProvider {
             b64Data = Buffer.from(arrayBuffer).toString('base64');
           }
         } catch (e) {
-          console.error('Failed to fetch image from URL:', e);
+          logger.error('Failed to fetch image from URL', { context: { url: img.url } }, e instanceof Error ? e : undefined);
         }
       }
 

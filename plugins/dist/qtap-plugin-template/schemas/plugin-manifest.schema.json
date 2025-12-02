@@ -1,0 +1,696 @@
+{
+  "$ref": "#/definitions/PluginManifest",
+  "definitions": {
+    "PluginManifest": {
+      "type": "object",
+      "properties": {
+        "$schema": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^qtap-plugin-[a-z0-9-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9.-]+)?(\\+[a-zA-Z0-9.-]+)?$"
+        },
+        "author": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "email": {
+                  "type": "string",
+                  "format": "email"
+                },
+                "url": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "license": {
+          "type": "string",
+          "default": "MIT"
+        },
+        "main": {
+          "type": "string",
+          "default": "index.js"
+        },
+        "homepage": {
+          "type": "string",
+          "format": "uri"
+        },
+        "repository": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uri"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "required": [
+                "type",
+                "url"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "bugs": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uri"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "email": {
+                  "type": "string",
+                  "format": "email"
+                }
+              },
+              "required": [
+                "url"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "compatibility": {
+          "type": "object",
+          "properties": {
+            "quilltapVersion": {
+              "type": "string",
+              "pattern": "^>=?\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9.-]+)?$"
+            },
+            "quilltapMaxVersion": {
+              "type": "string",
+              "pattern": "^<=?\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9.-]+)?$"
+            },
+            "nodeVersion": {
+              "type": "string",
+              "pattern": "^>=?\\d+\\.\\d+\\.\\d+$"
+            }
+          },
+          "required": [
+            "quilltapVersion"
+          ],
+          "additionalProperties": false
+        },
+        "requires": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "peerDependencies": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "CHAT_COMMANDS",
+              "MESSAGE_PROCESSORS",
+              "UI_COMPONENTS",
+              "DATA_STORAGE",
+              "API_ROUTES",
+              "AUTH_METHODS",
+              "WEBHOOKS",
+              "BACKGROUND_TASKS",
+              "CUSTOM_MODELS",
+              "FILE_HANDLERS",
+              "NOTIFICATIONS",
+              "BACKEND_INTEGRATIONS",
+              "LLM_PROVIDER",
+              "IMAGE_PROVIDER",
+              "EMBEDDING_PROVIDER",
+              "THEME",
+              "DATABASE_BACKEND",
+              "FILE_BACKEND",
+              "UPGRADE_MIGRATION"
+            ]
+          },
+          "default": []
+        },
+        "functionality": {
+          "type": "object",
+          "properties": {
+            "providesChatCommands": {
+              "type": "boolean",
+              "default": false
+            },
+            "providesMessageProcessors": {
+              "type": "boolean",
+              "default": false
+            },
+            "providesUIComponents": {
+              "type": "boolean",
+              "default": false
+            },
+            "providesDataStorage": {
+              "type": "boolean",
+              "default": false
+            },
+            "providesAPIRoutes": {
+              "type": "boolean",
+              "default": false
+            },
+            "providesAuthenticationMethods": {
+              "type": "boolean",
+              "default": false
+            },
+            "providesWebhooks": {
+              "type": "boolean",
+              "default": false
+            },
+            "providesBackgroundTasks": {
+              "type": "boolean",
+              "default": false
+            },
+            "providesCustomModels": {
+              "type": "boolean",
+              "default": false
+            },
+            "providesFileHandlers": {
+              "type": "boolean",
+              "default": false
+            },
+            "providesNotifications": {
+              "type": "boolean",
+              "default": false
+            },
+            "providesBackendIntegrations": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "frontend": {
+          "type": "string",
+          "enum": [
+            "REACT",
+            "PREACT",
+            "VUE",
+            "SVELTE",
+            "NONE"
+          ],
+          "default": "REACT"
+        },
+        "styling": {
+          "type": "string",
+          "enum": [
+            "TAILWIND",
+            "BOOTSTRAP",
+            "MATERIAL_UI",
+            "CSS_MODULES",
+            "STYLED_COMPONENTS",
+            "NONE"
+          ],
+          "default": "TAILWIND"
+        },
+        "typescript": {
+          "type": "boolean",
+          "default": true
+        },
+        "hooks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "handler": {
+                "type": "string"
+              },
+              "priority": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100,
+                "default": 50
+              },
+              "enabled": {
+                "type": "boolean",
+                "default": true
+              }
+            },
+            "required": [
+              "name",
+              "handler"
+            ],
+            "additionalProperties": false
+          },
+          "default": []
+        },
+        "apiRoutes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "pattern": "^\\/api\\/"
+              },
+              "methods": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "GET",
+                    "POST",
+                    "PUT",
+                    "PATCH",
+                    "DELETE"
+                  ]
+                },
+                "minItems": 1
+              },
+              "handler": {
+                "type": "string"
+              },
+              "requiresAuth": {
+                "type": "boolean",
+                "default": true
+              },
+              "description": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "methods",
+              "handler"
+            ],
+            "additionalProperties": false
+          },
+          "default": []
+        },
+        "components": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "path": {
+                "type": "string"
+              },
+              "slots": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "propsSchema": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "path"
+            ],
+            "additionalProperties": false
+          },
+          "default": []
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[A-Z][a-zA-Z0-9]*$"
+              },
+              "schemaPath": {
+                "type": "string"
+              },
+              "collectionName": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-_]*$"
+              },
+              "description": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "schemaPath",
+              "collectionName"
+            ],
+            "additionalProperties": false
+          },
+          "default": []
+        },
+        "configSchema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string",
+                "pattern": "^[a-z][a-zA-Z0-9]*$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "text",
+                  "number",
+                  "boolean",
+                  "select",
+                  "textarea",
+                  "password",
+                  "url",
+                  "email"
+                ]
+              },
+              "default": {},
+              "required": {
+                "type": "boolean",
+                "default": false
+              },
+              "description": {
+                "type": "string"
+              },
+              "options": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "label": {
+                      "type": "string"
+                    },
+                    "value": {}
+                  },
+                  "required": [
+                    "label"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "pattern": {
+                "type": "string"
+              },
+              "min": {
+                "type": "number"
+              },
+              "max": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "key",
+              "label",
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          "default": []
+        },
+        "defaultConfig": {
+          "type": "object",
+          "additionalProperties": {},
+          "default": {}
+        },
+        "providerConfig": {
+          "type": "object",
+          "properties": {
+            "providerName": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9_]*$"
+            },
+            "displayName": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "abbreviation": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 4,
+              "pattern": "^[A-Z0-9]+$"
+            },
+            "colors": {
+              "type": "object",
+              "properties": {
+                "bg": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "text": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "icon": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "bg",
+                "text",
+                "icon"
+              ],
+              "additionalProperties": false
+            },
+            "requiresApiKey": {
+              "type": "boolean",
+              "default": true
+            },
+            "requiresBaseUrl": {
+              "type": "boolean",
+              "default": false
+            },
+            "apiKeyLabel": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "baseUrlLabel": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "baseUrlDefault": {
+              "type": "string",
+              "format": "uri"
+            },
+            "capabilities": {
+              "type": "object",
+              "properties": {
+                "chat": {
+                  "type": "boolean",
+                  "default": true
+                },
+                "imageGeneration": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "embeddings": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "webSearch": {
+                  "type": "boolean",
+                  "default": false
+                }
+              },
+              "additionalProperties": false
+            },
+            "attachmentSupport": {
+              "type": "object",
+              "properties": {
+                "supported": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "mimeTypes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "default": []
+                },
+                "description": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "providerName",
+            "displayName",
+            "description",
+            "abbreviation",
+            "colors"
+          ],
+          "additionalProperties": false
+        },
+        "permissions": {
+          "type": "object",
+          "properties": {
+            "fileSystem": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            },
+            "network": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            },
+            "environment": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            },
+            "database": {
+              "type": "boolean",
+              "default": false
+            },
+            "userData": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          "additionalProperties": false,
+          "default": {}
+        },
+        "sandboxed": {
+          "type": "boolean",
+          "default": true
+        },
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "icon": {
+          "type": "string"
+        },
+        "screenshots": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "PROVIDER",
+            "THEME",
+            "INTEGRATION",
+            "UTILITY",
+            "ENHANCEMENT",
+            "DATABASE",
+            "STORAGE",
+            "AUTHENTICATION",
+            "OTHER"
+          ],
+          "default": "OTHER"
+        },
+        "enabledByDefault": {
+          "type": "boolean",
+          "default": false
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "STABLE",
+            "BETA",
+            "ALPHA",
+            "DEPRECATED"
+          ],
+          "default": "STABLE"
+        }
+      },
+      "required": [
+        "name",
+        "title",
+        "description",
+        "version",
+        "author",
+        "compatibility"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

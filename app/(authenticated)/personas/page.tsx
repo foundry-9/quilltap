@@ -10,6 +10,7 @@ import { getAvatarClasses } from '@/lib/avatar-styles'
 import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
 import { TagBadge } from '@/components/tags/tag-badge'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
+import { clientLogger } from '@/lib/client-logger'
 
 interface Persona {
   id: string
@@ -73,7 +74,7 @@ export default function PersonasPage() {
       setPersonas(data)
     } catch (err) {
       setError('Failed to load personas')
-      console.error(err)
+      clientLogger.error('Failed to fetch personas', { error: err instanceof Error ? err.message : String(err) })
     } finally {
       setLoading(false)
     }
@@ -93,7 +94,7 @@ export default function PersonasPage() {
       setPersonas(personas.filter((p) => p.id !== id))
     } catch (err) {
       showErrorToast('Failed to delete persona')
-      console.error(err)
+      clientLogger.error('Failed to delete persona', { error: err instanceof Error ? err.message : String(err) })
     }
   }
 
@@ -134,7 +135,7 @@ export default function PersonasPage() {
       }
     } catch (err) {
       showErrorToast('Failed to import persona. Make sure it\'s a valid SillyTavern persona JSON file.')
-      console.error(err)
+      clientLogger.error('Failed to import persona', { error: err instanceof Error ? err.message : String(err) })
     }
   }
 

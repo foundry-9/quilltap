@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 
 interface ConnectionProfile {
@@ -283,7 +284,7 @@ export default function ChatSettingsModal({
         setImageProfiles(data)
       }
     } catch (error) {
-      console.error('Failed to fetch profiles:', error)
+      clientLogger.error('Failed to fetch profiles', { error: error instanceof Error ? error.message : String(error) })
       showErrorToast('Failed to load profiles')
     } finally {
       setLoading(false)
@@ -312,7 +313,7 @@ export default function ChatSettingsModal({
       showSuccessToast('Participant settings updated')
       onSuccess?.()
     } catch (error) {
-      console.error('Failed to update participant:', error)
+      clientLogger.error('Failed to update participant', { error: error instanceof Error ? error.message : String(error) })
       showErrorToast(error instanceof Error ? error.message : 'Failed to update participant')
     } finally {
       setLoading(false)

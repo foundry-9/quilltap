@@ -12,6 +12,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { encryptApiKey, maskApiKey } from '@/lib/encryption'
+import { logger } from '@/lib/logger'
 
 /**
  * GET /api/keys/[id]
@@ -53,7 +54,7 @@ export async function GET(
       keyPreview: maskApiKey(apiKey.ciphertext.substring(0, 32)),
     })
   } catch (error) {
-    console.error('Failed to fetch API key:', error)
+    logger.error('Failed to fetch API key', { endpoint: '/api/keys/[id]', method: 'GET' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to fetch API key' },
       { status: 500 }
@@ -158,7 +159,7 @@ export async function PUT(
       updatedAt: updatedKey.updatedAt,
     })
   } catch (error) {
-    console.error('Failed to update API key:', error)
+    logger.error('Failed to update API key', { endpoint: '/api/keys/[id]', method: 'PUT' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to update API key' },
       { status: 500 }
@@ -211,7 +212,7 @@ export async function DELETE(
       { status: 200 }
     )
   } catch (error) {
-    console.error('Failed to delete API key:', error)
+    logger.error('Failed to delete API key', { endpoint: '/api/keys/[id]', method: 'DELETE' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to delete API key' },
       { status: 500 }

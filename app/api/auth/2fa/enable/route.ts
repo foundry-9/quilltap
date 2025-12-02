@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { enableTOTP } from '@/lib/auth/totp'
 import { z } from 'zod'
+import { logger } from '@/lib/logger'
 
 const EnableTOTPSchema = z.object({
   encryptedSecret: z.string(),
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    console.error('Enable 2FA error:', error)
+    logger.error('Enable 2FA error', { context: 'POST /api/auth/2fa/enable' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to enable 2FA' },
       { status: 500 }

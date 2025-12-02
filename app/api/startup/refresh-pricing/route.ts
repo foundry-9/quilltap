@@ -11,6 +11,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { refreshPricingCache, isCacheFresh } from '@/lib/llm/pricing-fetcher'
+import { logger } from '@/lib/logger'
 
 export async function POST(req: NextRequest) {
   try {
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
       updatedAt: cache.updatedAt,
     })
   } catch (error) {
-    console.error('Error refreshing pricing cache:', error)
+    logger.error('Error refreshing pricing cache', { context: 'POST /api/startup/refresh-pricing' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to refresh pricing cache' },
       { status: 500 }
@@ -76,7 +77,7 @@ export async function GET(req: NextRequest) {
       isFresh: isCacheFresh(),
     })
   } catch (error) {
-    console.error('Error checking pricing cache:', error)
+    logger.error('Error checking pricing cache', { context: 'GET /api/startup/refresh-pricing' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to check pricing cache' },
       { status: 500 }

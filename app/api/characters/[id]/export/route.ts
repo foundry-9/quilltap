@@ -9,6 +9,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { exportSTCharacter, createSTCharacterPNG } from '@/lib/sillytavern/character'
+import { logger } from '@/lib/logger'
 
 export async function GET(
   req: NextRequest,
@@ -69,7 +70,7 @@ export async function GET(
         //   },
         // })
       } catch (error) {
-        console.error('Error creating PNG export:', error)
+        logger.error('Error creating PNG export', { context: 'GET /api/characters/[id]/export (PNG)' }, error instanceof Error ? error : undefined)
         return NextResponse.json(
           { error: 'Failed to create PNG export' },
           { status: 500 }
@@ -85,7 +86,7 @@ export async function GET(
       })
     }
   } catch (error) {
-    console.error('Error exporting character:', error)
+    logger.error('Error exporting character', { context: 'GET /api/characters/[id]/export' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to export character' },
       { status: 500 }

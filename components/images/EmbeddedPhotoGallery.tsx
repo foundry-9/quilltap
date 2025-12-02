@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { clientLogger } from '@/lib/client-logger'
 import ImageDetailModal from './ImageDetailModal'
 import { ImageUploadDialog } from './image-upload-dialog'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
@@ -74,7 +75,7 @@ export function EmbeddedPhotoGallery({
       const json = await res.json()
       setAllImages(json.data || [])
     } catch (error) {
-      console.error('Error fetching images:', error)
+      clientLogger.error('Error fetching images:', { error: error instanceof Error ? error.message : String(error) })
       setAllImages([])
     } finally {
       setLoading(false)

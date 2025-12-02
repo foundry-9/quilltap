@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from 'react';
+import { clientLogger } from '@/lib/client-logger';
 import { useDebug, formatData, DebugEntry, LLMProviderType } from '@/components/providers/debug-provider';
 
 // Copy button component
@@ -13,7 +14,7 @@ function CopyButton({ content }: Readonly<{ content: string }>) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error('Failed to copy:', err);
+      clientLogger.error('Failed to copy:', { error: err instanceof Error ? err.message : String(err) });
     }
   };
 

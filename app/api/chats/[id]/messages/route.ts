@@ -5,12 +5,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
-import { createLLMProvider } from '@/lib/llm/factory'
+import { createLLMProvider } from '@/lib/llm'
 import { decryptApiKey } from '@/lib/encryption'
-import { loadChatFilesForLLM } from '@/lib/chat-files'
+import { loadChatFilesForLLM } from '@/lib/chat-files-v2'
 import { detectToolCalls, executeToolCallWithContext, type ToolExecutionContext } from '@/lib/chat/tool-executor'
-import { imageGenerationToolDefinition, anthropicImageGenerationToolDefinition } from '@/lib/tools/image-generation-tool'
-import { memorySearchToolDefinition, anthropicMemorySearchToolDefinition, getGoogleMemorySearchTool } from '@/lib/tools/memory-search-tool'
+import { buildToolsForProvider } from '@/lib/tools'
 import { processMessageForMemoryAsync } from '@/lib/memory'
 import { buildContext } from '@/lib/chat/context-manager'
 import { checkAndGenerateSummaryIfNeeded } from '@/lib/chat/context-summary'
@@ -19,6 +18,7 @@ import {
   formatFallbackAsMessagePrefix,
   type FallbackResult,
 } from '@/lib/chat/file-attachment-fallback'
+import { logger } from '@/lib/logger'
 import { z } from 'zod'
 
 // Validation schema
@@ -28,137 +28,25 @@ const sendMessageSchema = z.object({
   fileIds: z.array(z.string()).optional(),
 })
 
-// Helper function to get tools for a provider
-function getToolsForProvider(
-  provider: string,
-  options: {
-    imageProfileId?: string | null
-    imageProviderType?: string
-    enableMemorySearch?: boolean
-  }
-): unknown[] {
-  const tools: unknown[] = []
-  const { imageProfileId, imageProviderType, enableMemorySearch } = options
-
-  // Return provider-specific tool format
-  switch (provider) {
-    case 'ANTHROPIC': {
-      // Add image generation tool if configured
-      if (imageProfileId) {
-        if (imageProviderType === 'GROK') {
-          tools.push({
-            ...anthropicImageGenerationToolDefinition,
-            input_schema: {
-              ...anthropicImageGenerationToolDefinition.input_schema,
-              properties: {
-                ...anthropicImageGenerationToolDefinition.input_schema.properties,
-                prompt: {
-                  ...anthropicImageGenerationToolDefinition.input_schema.properties.prompt,
-                  description: anthropicImageGenerationToolDefinition.input_schema.properties.prompt.description + ' IMPORTANT: Grok has a strict limit of 1024 bytes for image generation prompts. Keep your prompt concise and under this limit.',
-                },
-              },
-            },
-          })
-        } else {
-          tools.push(anthropicImageGenerationToolDefinition)
-        }
-      }
-      // Add memory search tool
-      if (enableMemorySearch) {
-        tools.push(anthropicMemorySearchToolDefinition)
-      }
-      break
-    }
-    case 'GOOGLE': {
-      // Add image generation tool if configured
-      if (imageProfileId) {
-        const baseGoogleImageTool = {
-          name: anthropicImageGenerationToolDefinition.name,
-          description: anthropicImageGenerationToolDefinition.description,
-          parameters: anthropicImageGenerationToolDefinition.input_schema,
-        }
-        if (imageProviderType === 'GROK') {
-          tools.push({
-            ...baseGoogleImageTool,
-            parameters: {
-              ...baseGoogleImageTool.parameters,
-              properties: {
-                ...baseGoogleImageTool.parameters.properties,
-                prompt: {
-                  ...baseGoogleImageTool.parameters.properties.prompt,
-                  description: baseGoogleImageTool.parameters.properties.prompt.description + ' IMPORTANT: Grok has a strict limit of 1024 bytes for image generation prompts. Keep your prompt concise and under this limit.',
-                },
-              },
-            },
-          })
-        } else {
-          tools.push(baseGoogleImageTool)
-        }
-      }
-      // Add memory search tool
-      if (enableMemorySearch) {
-        tools.push(getGoogleMemorySearchTool())
-      }
-      break
-    }
-    case 'OPENAI':
-    case 'GROK':
-    case 'OPENROUTER':
-    case 'OLLAMA':
-    case 'OPENAI_COMPATIBLE':
-    case 'GAB_AI': {
-      // Add image generation tool if configured
-      if (imageProfileId) {
-        if (imageProviderType === 'GROK') {
-          tools.push({
-            ...imageGenerationToolDefinition,
-            function: {
-              ...imageGenerationToolDefinition.function,
-              parameters: {
-                ...imageGenerationToolDefinition.function.parameters,
-                properties: {
-                  ...imageGenerationToolDefinition.function.parameters.properties,
-                  prompt: {
-                    ...imageGenerationToolDefinition.function.parameters.properties.prompt,
-                    description: imageGenerationToolDefinition.function.parameters.properties.prompt.description + ' IMPORTANT: Grok has a strict limit of 1024 bytes for image generation prompts. Keep your prompt concise and under this limit.',
-                  },
-                },
-              },
-            },
-          })
-        } else {
-          tools.push(imageGenerationToolDefinition)
-        }
-      }
-      // Add memory search tool
-      if (enableMemorySearch) {
-        tools.push(memorySearchToolDefinition)
-      }
-      break
-    }
-    default:
-      break
-  }
-
-  return tools
-}
-
 // Helper function to load attached files
 async function loadAttachedFiles(repos: ReturnType<typeof getRepositories>, chatId: string, fileIds?: string[]) {
   if (!fileIds || fileIds.length === 0) {
     return []
   }
 
-  const allImages = await repos.images.findByChatId(chatId)
-  return allImages
-    .filter(img => fileIds.includes(img.id))
-    .map(img => ({
-      id: img.id,
-      filepath: img.relativePath,
-      filename: img.filename,
-      mimeType: img.mimeType,
-      size: img.size,
-    }))
+  // Use the new file manager system instead of repos.images
+  const { findFilesLinkedTo, getFileUrl } = await import('@/lib/file-manager')
+  const chatFiles = await findFilesLinkedTo(chatId)
+
+  const matched = chatFiles.filter(file => fileIds.includes(file.id))
+
+  return matched.map(file => ({
+    id: file.id,
+    filepath: getFileUrl(file.id, file.originalFilename).slice(1), // Remove leading slash for consistency
+    filename: file.originalFilename,
+    mimeType: file.mimeType,
+    size: file.size,
+  }))
 }
 
 // Helper function to process tool execution results
@@ -278,7 +166,7 @@ async function saveToolMessages(
           tags: [],
         })
       } else {
-        console.warn('Skipping chat_file creation for generated image due to missing SHA256:', imagePath.filename)
+        logger.warn('Skipping chat_file creation for generated image due to missing SHA256:', { filename: imagePath.filename })
       }
     }
   }
@@ -373,15 +261,17 @@ export async function POST(
     // Add user message to chat
     await repos.chats.addMessage(id, userMessage)
 
-    // Update file attachments with message ID
+    // Update file attachments with message ID using file manager
     if (attachedFiles.length > 0) {
+      const { addFileLink } = await import('@/lib/file-manager')
       for (const file of attachedFiles) {
-        await repos.images.update(file.id, { messageId: userMessageId })
+        // Link the file to the message ID
+        await addFileLink(file.id, userMessageId)
       }
     }
 
     // Load file data for LLM
-    const fileAttachments = await loadChatFilesForLLM(attachedFiles)
+    const fileAttachments = await loadChatFilesForLLM(attachedFiles.map(f => f.id))
 
     // Process file attachment fallbacks if provider doesn't support them
     const fallbackResults: FallbackResult[] = []
@@ -485,7 +375,7 @@ export async function POST(
 
     // Log context building results for debugging
     if (builtContext.warnings.length > 0) {
-      console.warn('[Context Manager] Warnings:', builtContext.warnings)
+      logger.warn('[Context Manager] Warnings:', builtContext.warnings)
     }
 
     // Prepare final messages for LLM (add attachments to the last user message)
@@ -526,7 +416,7 @@ export async function POST(
     )
 
     // Get LLM provider
-    const provider = createLLMProvider(
+    const provider = await createLLMProvider(
       connectionProfile.provider,
       connectionProfile.baseUrl || undefined
     )
@@ -553,11 +443,27 @@ export async function POST(
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          // Get tools for this chat (image generation if configured, memory search always enabled)
-          const tools = getToolsForProvider(connectionProfile.provider, {
-            imageProfileId,
+          // Get tools for this chat (image generation if configured, memory search always enabled, web search conditional)
+          // For providers that support native web search, we pass webSearchEnabled to the provider directly
+          // and skip adding the web search tool here
+          const useNativeWebSearch = connectionProfile.allowWebSearch && provider.supportsWebSearch
+          logger.debug('[Chat Messages] Building tools for provider', {
+            provider: connectionProfile.provider,
+            imageProfileId: !!imageProfileId,
             imageProviderType: imageProfile?.provider,
-            enableMemorySearch: true, // Always enable memory search for characters
+            memorySearchEnabled: true,
+            webSearchEnabled: connectionProfile.allowWebSearch && !useNativeWebSearch,
+            useNativeWebSearch,
+          })
+          const tools = buildToolsForProvider(connectionProfile.provider, {
+            imageGeneration: !!imageProfileId,
+            imageProviderType: imageProfile?.provider,
+            memorySearch: true, // Always enable memory search for characters
+            webSearch: connectionProfile.allowWebSearch && !useNativeWebSearch,
+          })
+          logger.debug('[Chat Messages] Tools built successfully', {
+            toolCount: tools.length,
+            tools: tools.map((t: any) => t.name || t.function?.name || 'unknown'),
           })
 
           // Send debug info about the actual LLM request (for debug panel)
@@ -617,6 +523,8 @@ export async function POST(
               maxTokens: modelParams.maxTokens as number | undefined,
               topP: modelParams.topP as number | undefined,
               tools: tools.length > 0 ? tools : undefined,
+              // Enable native web search if the profile has it enabled and provider supports it
+              webSearchEnabled: useNativeWebSearch,
             },
             decryptedKey
           )) {
@@ -713,7 +621,7 @@ export async function POST(
                     try {
                       await repos.chats.updateMessage(id, assistantMessageId, { debugMemoryLogs: result.debugLogs })
                     } catch (e) {
-                      console.error('Failed to store memory debug logs:', e)
+                      logger.error('Failed to store memory debug logs:', {}, e as Error)
                     }
                   }
                 })
@@ -730,7 +638,7 @@ export async function POST(
                 )
               }
             } catch (memoryError) {
-              console.error('Failed to trigger memory extraction:', memoryError)
+              logger.error('Failed to trigger memory extraction:', {}, memoryError as Error)
             }
           } else if (toolMessages.length > 0) {
             // Even if there's no text response, send done event if tools were executed
@@ -750,7 +658,7 @@ export async function POST(
             )
           } else {
             // No response content and no tool execution - still need to send done to close the stream
-            console.warn(`[Chat Messages] Empty response for chat ${id}`)
+            logger.warn(`[Chat Messages] Empty response for chat ${id}`)
             controller.enqueue(
               encoder.encode(
                 `data: ${JSON.stringify({
@@ -771,7 +679,7 @@ export async function POST(
             // Already closed, ignore
           }
         } catch (error) {
-          console.error('Streaming error:', error)
+          logger.error('Streaming error:', {}, error as Error)
           controller.enqueue(
             encoder.encode(
               `data: ${JSON.stringify({
@@ -800,7 +708,7 @@ export async function POST(
       )
     }
 
-    console.error('Error sending message:', error)
+    logger.error('Error sending message:', {}, error as Error)
     return NextResponse.json(
       { error: 'Failed to send message' },
       { status: 500 }

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { generateTOTPSecret } from '@/lib/auth/totp'
 import { getRepositories } from '@/lib/json-store/repositories'
+import { logger } from '@/lib/logger'
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
       encrypted // Store temporarily in client for verification
     })
   } catch (error) {
-    console.error('2FA setup error:', error)
+    logger.error('2FA setup error', { context: 'POST /api/auth/2fa/setup' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to generate 2FA secret' },
       { status: 500 }

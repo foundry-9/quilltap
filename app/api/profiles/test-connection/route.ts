@@ -10,7 +10,9 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { decryptApiKey } from '@/lib/encryption'
-import { ProviderEnum, Provider } from '@/lib/json-store/schemas/types'
+import { ProviderEnum } from '@/lib/json-store/schemas/types'
+import { testProviderConnection, validateProviderConfig } from '@/lib/plugins/provider-validation'
+import { logger } from '@/lib/logger'
 import { z } from 'zod'
 
 // Validation schema
@@ -19,290 +21,6 @@ const testConnectionSchema = z.object({
   apiKeyId: z.string().optional(),
   baseUrl: z.string().optional(),
 })
-
-/**
- * Test provider connection
- */
-async function testProviderConnection(
-  provider: Provider,
-  apiKey: string,
-  baseUrl?: string
-): Promise<{ valid: boolean; error?: string }> {
-  try {
-    switch (provider) {
-      case 'OPENAI':
-        return await testOpenAI(apiKey)
-
-      case 'ANTHROPIC':
-        return await testAnthropic(apiKey)
-
-      case 'GOOGLE':
-        return await testGoogle(apiKey)
-
-      case 'GROK':
-        return await testGrok(apiKey)
-
-      case 'GAB_AI':
-        return await testGabAI(apiKey)
-
-      case 'OLLAMA':
-        if (!baseUrl) {
-          return { valid: false, error: 'Base URL required for Ollama' }
-        }
-        return await testOllama(baseUrl)
-
-      case 'OPENROUTER':
-        return await testOpenRouter(apiKey)
-
-      case 'OPENAI_COMPATIBLE':
-        if (!baseUrl) {
-          return { valid: false, error: 'Base URL required for OpenAI-compatible' }
-        }
-        return await testOpenAICompatible(apiKey, baseUrl)
-
-      default:
-        return { valid: false, error: 'Unsupported provider' }
-    }
-  } catch (error) {
-    return {
-      valid: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    }
-  }
-}
-
-/**
- * Test OpenAI connection
- */
-async function testOpenAI(apiKey: string) {
-  try {
-    const response = await fetch('https://api.openai.com/v1/models', {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-      },
-    })
-
-    if (response.ok) {
-      return { valid: true }
-    }
-
-    const error = await response.json()
-    return {
-      valid: false,
-      error: error.error?.message || 'Invalid API key',
-    }
-  } catch (error) {
-    return {
-      valid: false,
-      error: 'Failed to connect to OpenAI',
-    }
-  }
-}
-
-/**
- * Test Anthropic connection
- */
-async function testAnthropic(apiKey: string) {
-  try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251015',
-        max_tokens: 1,
-        messages: [{ role: 'user', content: 'test' }],
-      }),
-    })
-
-    if (response.ok || response.status === 400) {
-      return { valid: true }
-    }
-
-    if (response.status === 401) {
-      return { valid: false, error: 'Invalid API key' }
-    }
-
-    return { valid: false, error: `HTTP ${response.status}` }
-  } catch (error) {
-    return {
-      valid: false,
-      error: 'Failed to connect to Anthropic',
-    }
-  }
-}
-
-/**
- * Test Google connection
- */
-async function testGoogle(apiKey: string) {
-  try {
-    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models?key=' + apiKey, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
-
-    if (response.ok) {
-      return { valid: true }
-    }
-
-    if (response.status === 401 || response.status === 403) {
-      return { valid: false, error: 'Invalid API key' }
-    }
-
-    return { valid: false, error: `HTTP ${response.status}` }
-  } catch (error) {
-    return {
-      valid: false,
-      error: 'Failed to connect to Google',
-    }
-  }
-}
-
-/**
- * Test Grok connection
- */
-async function testGrok(apiKey: string) {
-  try {
-    const response = await fetch('https://api.x.ai/v1/models', {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-      },
-    })
-
-    if (response.ok) {
-      return { valid: true }
-    }
-
-    const error = await response.json()
-    return {
-      valid: false,
-      error: error.error?.message || 'Invalid API key',
-    }
-  } catch (error) {
-    return {
-      valid: false,
-      error: 'Failed to connect to Grok',
-    }
-  }
-}
-
-/**
- * Test Gab AI connection
- */
-async function testGabAI(apiKey: string) {
-  try {
-    const response = await fetch('https://gab.ai/v1/models', {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-      },
-    })
-
-    if (response.ok) {
-      return { valid: true }
-    }
-
-    const error = await response.json()
-    return {
-      valid: false,
-      error: error.error?.message || 'Invalid API key',
-    }
-  } catch (error) {
-    return {
-      valid: false,
-      error: 'Failed to connect to Gab AI',
-    }
-  }
-}
-
-/**
- * Test Ollama connection
- */
-async function testOllama(baseUrl: string) {
-  try {
-    const response = await fetch(`${baseUrl}/api/tags`, {
-      method: 'GET',
-    })
-
-    if (response.ok) {
-      return { valid: true }
-    }
-
-    return {
-      valid: false,
-      error: 'Failed to connect to Ollama',
-    }
-  } catch (error) {
-    return {
-      valid: false,
-      error: 'Ollama server unreachable',
-    }
-  }
-}
-
-/**
- * Test OpenRouter connection
- */
-async function testOpenRouter(apiKey: string) {
-  try {
-    const response = await fetch('https://openrouter.ai/api/v1/models', {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-      },
-    })
-
-    if (response.ok) {
-      return { valid: true }
-    }
-
-    if (response.status === 401) {
-      return { valid: false, error: 'Invalid API key' }
-    }
-
-    return { valid: false, error: `HTTP ${response.status}` }
-  } catch (error) {
-    return {
-      valid: false,
-      error: 'Failed to connect to OpenRouter',
-    }
-  }
-}
-
-/**
- * Test OpenAI-compatible connection
- */
-async function testOpenAICompatible(apiKey: string, baseUrl: string) {
-  try {
-    const headers: Record<string, string> = {}
-
-    if (apiKey) {
-      headers['Authorization'] = `Bearer ${apiKey}`
-    }
-
-    const response = await fetch(`${baseUrl}/v1/models`, {
-      headers,
-    })
-
-    if (response.ok) {
-      return { valid: true }
-    }
-
-    return {
-      valid: false,
-      error: 'Failed to validate with OpenAI-compatible endpoint',
-    }
-  } catch (error) {
-    return {
-      valid: false,
-      error: 'Server unreachable',
-    }
-  }
-}
 
 /**
  * POST /api/profiles/test-connection
@@ -318,15 +36,29 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
+      logger.warn('Unauthorized access attempt to test-connection endpoint', {
+        context: 'POST /api/profiles/test-connection',
+      })
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       )
     }
 
+    logger.debug('Testing provider connection', {
+      context: 'POST /api/profiles/test-connection',
+    })
+
     // Validate request body
     const body = await req.json()
     const { provider, apiKeyId, baseUrl } = testConnectionSchema.parse(body)
+
+    logger.debug('Test connection request parsed', {
+      provider,
+      hasApiKeyId: !!apiKeyId,
+      hasBaseUrl: !!baseUrl,
+      context: 'POST /api/profiles/test-connection',
+    })
 
     const repos = getRepositories()
 
@@ -336,6 +68,10 @@ export async function POST(req: NextRequest) {
       const apiKey = await repos.connections.findApiKeyById(apiKeyId)
 
       if (!apiKey) {
+        logger.warn('API key not found for test connection', {
+          apiKeyId,
+          context: 'POST /api/profiles/test-connection',
+        })
         return NextResponse.json(
           { error: 'API key not found' },
           { status: 404 }
@@ -350,25 +86,41 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Validate requirements
-    if ((provider === 'OLLAMA' || provider === 'OPENAI_COMPATIBLE') && !baseUrl) {
+    // Validate configuration requirements using provider validation
+    const configValidation = validateProviderConfig(provider, {
+      apiKey: decryptedKey,
+      baseUrl,
+    })
+
+    if (!configValidation.valid) {
+      logger.warn('Provider configuration validation failed', {
+        provider,
+        errors: configValidation.errors,
+        context: 'POST /api/profiles/test-connection',
+      })
       return NextResponse.json(
-        { error: `Base URL is required for ${provider}` },
+        {
+          valid: false,
+          provider,
+          error: configValidation.errors[0] || 'Configuration validation failed',
+        },
         { status: 400 }
       )
     }
 
-    if (provider !== 'OLLAMA' && provider !== 'OPENAI_COMPATIBLE' && !decryptedKey) {
-      return NextResponse.json(
-        { error: `API key is required for ${provider}` },
-        { status: 400 }
-      )
-    }
+    logger.debug('Provider configuration validation passed', {
+      provider,
+      context: 'POST /api/profiles/test-connection',
+    })
 
-    // Test the connection
+    // Test the connection using provider validation
     const result = await testProviderConnection(provider, decryptedKey, baseUrl)
 
     if (result.valid) {
+      logger.info('Provider connection test successful', {
+        provider,
+        context: 'POST /api/profiles/test-connection',
+      })
       return NextResponse.json({
         valid: true,
         provider,
@@ -376,6 +128,11 @@ export async function POST(req: NextRequest) {
       })
     }
 
+    logger.warn('Provider connection test failed', {
+      provider,
+      error: result.error,
+      context: 'POST /api/profiles/test-connection',
+    })
     return NextResponse.json(
       {
         valid: false,
@@ -386,13 +143,21 @@ export async function POST(req: NextRequest) {
     )
   } catch (error) {
     if (error instanceof z.ZodError) {
+      logger.warn('Validation error in test-connection endpoint', {
+        errorCount: error.errors.length,
+        context: 'POST /api/profiles/test-connection',
+      })
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },
         { status: 400 }
       )
     }
 
-    console.error('Failed to test connection:', error)
+    logger.error(
+      'Failed to test connection',
+      { context: 'POST /api/profiles/test-connection' },
+      error instanceof Error ? error : undefined
+    )
     return NextResponse.json(
       {
         error: 'Failed to test connection',

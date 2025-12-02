@@ -66,6 +66,7 @@ export default async function Dashboard() {
     id: string
     title: string
     updatedAt: string
+    messageCount: number
     character: {
       name: string
       avatarUrl: string | null
@@ -116,6 +117,7 @@ export default async function Dashboard() {
               id: chat.id,
               title: chat.title,
               updatedAt: chat.updatedAt,
+              messageCount: chat.messageCount || 0,
               character: {
                 name: character.name,
                 avatarUrl: character.avatarUrl ?? null,

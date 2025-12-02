@@ -7,6 +7,7 @@
 
 import { JsonStore } from '../core/json-store';
 import { BaseRepository } from './base.repository';
+import { logger } from '@/lib/logger';
 import {
   User,
   UserSchema,
@@ -174,7 +175,7 @@ export class UsersRepository extends BaseRepository<User> {
    * Delete user (not supported in single-user system)
    */
   async delete(id: string): Promise<boolean> {
-    console.warn('User deletion not supported in single-user system');
+    logger.warn('User deletion not supported in single-user system', { context: 'UsersRepository.delete', userId: id });
     return false;
   }
 

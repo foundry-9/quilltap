@@ -7,7 +7,7 @@
  * These tasks don't require expensive models and should be cost-efficient.
  */
 
-import { createLLMProvider, ProviderName } from '@/lib/llm/factory'
+import { createLLMProvider } from '@/lib/llm'
 import { LLMMessage, LLMResponse } from '@/lib/llm/base'
 import { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { getRepositories } from '@/lib/json-store/repositories'
@@ -116,8 +116,8 @@ async function executeCheapLLMTask<T>(
       }
     }
 
-    const provider = createLLMProvider(
-      selection.provider as ProviderName,
+    const provider = await createLLMProvider(
+      selection.provider,
       selection.baseUrl
     )
 

@@ -8,6 +8,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { importSTChat } from '@/lib/sillytavern/chat'
+import { logger } from '@/lib/logger'
 import type { ChatParticipantBase } from '@/lib/json-store/schemas/types'
 
 export async function POST(req: NextRequest) {
@@ -214,7 +215,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(completeChat, { status: 201 })
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
-    console.error('Error importing chat:', errorMessage, error)
+    logger.error('Error importing chat', { context: 'POST /api/chats/import', errorMessage }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: errorMessage || 'Failed to import chat' },
       { status: 500 }

@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
+import { logger } from '@/lib/logger'
 
 export async function GET(req: NextRequest) {
   try {
@@ -102,7 +103,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(enrichedPersonas)
   } catch (error) {
-    console.error('Error fetching personas:', error)
+    logger.error('Error fetching personas:', error as Error)
     return NextResponse.json(
       { error: 'Failed to fetch personas' },
       { status: 500 }
@@ -148,7 +149,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(persona, { status: 201 })
   } catch (error) {
-    console.error('Error creating persona:', error)
+    logger.error('Error creating persona:', error as Error)
     return NextResponse.json(
       { error: 'Failed to create persona' },
       { status: 500 }

@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
+import { logger } from '@/lib/logger'
 import { importSTCharacter, parseSTCharacterPNG } from '@/lib/sillytavern/character'
 
 export async function POST(req: NextRequest) {
@@ -115,7 +116,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(response, { status: 201 })
   } catch (error) {
-    console.error('Error importing character:', error)
+    logger.error('Error importing character', { context: 'POST /api/characters/import' }, error instanceof Error ? error : undefined)
     return NextResponse.json(
       { error: 'Failed to import character' },
       { status: 500 }

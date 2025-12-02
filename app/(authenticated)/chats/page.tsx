@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { clientLogger } from '@/lib/client-logger'
 import { TagDisplay } from '@/components/tags/tag-display'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
@@ -137,7 +138,7 @@ export default function ChatsPage() {
         setCharacters(data.characters.map((c: any) => ({ id: c.id, name: c.name, title: c.title })))
       }
     } catch (err) {
-      console.error('Failed to fetch characters:', err)
+      clientLogger.error('Failed to fetch characters:', { error: err instanceof Error ? err.message : String(err) })
     }
   }
 
@@ -149,7 +150,7 @@ export default function ChatsPage() {
         setProfiles(data.map((p: any) => ({ id: p.id, name: p.name })))
       }
     } catch (err) {
-      console.error('Failed to fetch profiles:', err)
+      clientLogger.error('Failed to fetch profiles:', { error: err instanceof Error ? err.message : String(err) })
     }
   }
 
@@ -211,7 +212,7 @@ export default function ChatsPage() {
                 }
               } catch {
                 // Skip invalid JSON lines
-                console.warn('Skipped invalid JSON line:', line.substring(0, 50))
+                clientLogger.warn('Skipped invalid JSON line:', { line: line.substring(0, 50) })
               }
             }
 
@@ -258,7 +259,7 @@ export default function ChatsPage() {
           failCount++
           const errorMessage = err instanceof Error ? err.message : `Failed to import ${file.name}`
           errors.push(`${file.name}: ${errorMessage}`)
-          console.error(err)
+          clientLogger.error('Error importing chat:', { error: err instanceof Error ? err.message : String(err) })
         }
       }
 
@@ -285,7 +286,7 @@ export default function ChatsPage() {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to import chats'
       showErrorToast(errorMessage)
-      console.error(err)
+      clientLogger.error('Error importing chats:', { error: err instanceof Error ? err.message : String(err) })
     }
   }
 
@@ -368,8 +369,8 @@ export default function ChatsPage() {
                   <span className="text-6xl text-yellow-200 font-black" style={{ textShadow: '0 0 10px rgba(255, 255, 0, 0.8)' }}>←</span>
                 </div>
               )}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center flex-1 gap-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start flex-1 gap-4">
                   {(() => {
                     const character = getFirstCharacter(chat)
                     const persona = getFirstPersona(chat)
@@ -382,24 +383,28 @@ export default function ChatsPage() {
                           <Image
                             src={avatarSrc}
                             alt={characterName}
-                            width={48}
-                            height={48}
-                            className={getAvatarClasses(style, 'md').imageClass}
+                            width={64}
+                            height={64}
+                            className={getAvatarClasses(style, 'lg').imageClass}
                           />
                         ) : (
-                          <div className={getAvatarClasses(style, 'md').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>
-                            <span className={getAvatarClasses(style, 'md').fallbackClass}>
+                          <div className={getAvatarClasses(style, 'lg').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>
+                            <span className={getAvatarClasses(style, 'lg').fallbackClass}>
                               {characterName.charAt(0).toUpperCase()}
                             </span>
                           </div>
                         )}
                         <div className="flex-1">
-                          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{chat.title}</h2>
+                          <div className="flex items-center gap-2 mb-1">
+                            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{chat.title}</h2>
+                            <span className="inline-block bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100 text-sm font-semibold px-3 py-1 rounded-full">
+                              {chat._count.messages}
+                            </span>
+                          </div>
                           <p className="text-sm text-gray-600 dark:text-gray-400">
                             {characterName}
                             {persona && ` (${persona.name}${persona.title ? ` - ${persona.title}` : ''})`}
-                            {' •  '}{chat._count.messages} message
-                            {chat._count.messages !== 1 ? 's' : ''} • Last updated:{' '}
+                            {' \u2022 '}
                             {new Date(chat.updatedAt).toLocaleDateString()}
                           </p>
                           {chat.tags.length > 0 && (
@@ -413,18 +418,25 @@ export default function ChatsPage() {
                   })()}
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2">
                   <Link
                     href={`/chats/${chat.id}`}
-                    className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-800"
+                    className="w-10 h-10 flex items-center justify-center bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors"
+                    title="Open chat"
                   >
-                    Open
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5z" />
+                      <path d="M6 11l2 2 4-4" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
                   </Link>
                   <button
                     onClick={() => deleteChat(chat.id)}
-                    className="px-4 py-2 bg-red-600 dark:bg-red-700 text-white rounded hover:bg-red-700 dark:hover:bg-red-800"
+                    className="w-10 h-10 flex items-center justify-center bg-red-600 dark:bg-red-700 rounded hover:bg-red-700 dark:hover:bg-red-800 transition-colors"
+                    title="Delete chat"
                   >
-                    Delete
+                    <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
                   </button>
                 </div>
               </div>

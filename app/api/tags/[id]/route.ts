@@ -8,6 +8,7 @@ import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { z } from 'zod'
 import type { Tag } from '@/lib/json-store/schemas/types'
+import { logger } from '@/lib/logger'
 
 // Validation schema
 const updateTagSchema = z
@@ -92,7 +93,7 @@ export async function PUT(
       )
     }
 
-    console.error('Error updating tag:', error)
+    logger.error('Error updating tag:', error as Error)
     return NextResponse.json(
       { error: 'Failed to update tag' },
       { status: 500 }
@@ -137,7 +138,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error deleting tag:', error)
+    logger.error('Error deleting tag:', error as Error)
     return NextResponse.json(
       { error: 'Failed to delete tag' },
       { status: 500 }

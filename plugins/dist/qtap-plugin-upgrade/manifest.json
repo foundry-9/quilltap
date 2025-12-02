@@ -1,0 +1,34 @@
+{
+  "$schema": "../qtap-plugin-template/schemas/plugin-manifest.schema.json",
+  "name": "qtap-plugin-upgrade",
+  "title": "Quilltap Upgrade Manager",
+  "description": "Handles version upgrades and data migrations for Quilltap. Runs automatically at startup to ensure data compatibility.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Foundry-9",
+    "email": "charles@sebold.tech",
+    "url": "https://foundry-9.com"
+  },
+  "license": "MIT",
+  "compatibility": {
+    "quilltapVersion": ">=1.7.0",
+    "nodeVersion": ">=18.0.0"
+  },
+  "capabilities": ["UPGRADE_MIGRATION"],
+  "category": "UTILITY",
+  "main": "index.js",
+  "typescript": true,
+  "frontend": "NONE",
+  "styling": "NONE",
+  "enabledByDefault": true,
+  "status": "STABLE",
+  "keywords": ["upgrade", "migration", "data", "version", "compatibility"],
+  "permissions": {
+    "fileSystem": ["data/"],
+    "network": [],
+    "environment": [],
+    "database": true,
+    "userData": true
+  },
+  "sandboxed": false
+}
