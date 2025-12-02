@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
+import { findFileById, getFileUrl } from '@/lib/file-manager'
 import { buildChatContext, type ChatContext } from '@/lib/chat/initialize'
 import { decryptApiKey } from '@/lib/encryption'
 import { generateGreetingMessage } from '@/lib/chat/initial-greeting'
@@ -47,9 +48,9 @@ async function getCharacterSummary(characterId: string, repos: Repos) {
 
   let defaultImage = null
   if (character.defaultImageId) {
-    const img = await repos.images.findById(character.defaultImageId)
-    if (img) {
-      defaultImage = { id: img.id, filepath: img.relativePath, url: null }
+    const fileEntry = await findFileById(character.defaultImageId)
+    if (fileEntry) {
+      defaultImage = { id: fileEntry.id, filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename), url: null }
     }
   }
 
@@ -70,9 +71,9 @@ async function getPersonaSummary(personaId: string, repos: Repos) {
 
   let defaultImage = null
   if (persona.defaultImageId) {
-    const img = await repos.images.findById(persona.defaultImageId)
-    if (img) {
-      defaultImage = { id: img.id, filepath: img.relativePath, url: null }
+    const fileEntry = await findFileById(persona.defaultImageId)
+    if (fileEntry) {
+      defaultImage = { id: fileEntry.id, filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename), url: null }
     }
   }
 

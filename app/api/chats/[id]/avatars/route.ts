@@ -3,12 +3,16 @@
  * GET /api/chats/:id/avatars - Get avatar overrides for a chat
  * POST /api/chats/:id/avatars - Set avatar override for a character in this chat
  * DELETE /api/chats/:id/avatars - Remove avatar override
+ *
+ * Avatar overrides are stored on the Character entity in the avatarOverrides array,
+ * not in a separate images table.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getRepositories } from '@/lib/json-store/repositories';
+import { findFileById, getFileUrl } from '@/lib/file-manager';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 
@@ -42,25 +46,29 @@ export async function GET(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 });
     }
 
-    // Get avatar images for this chat (stored in binary index with type 'avatar')
-    const allImages = await repos.images.findByUserId(session.user.id);
-    const chatAvatars = allImages.filter(img => img.type === 'avatar' && img.chatId === id);
+    // Get all characters that have avatar overrides for this chat
+    const allCharacters = await repos.characters.findByUserId(session.user.id);
 
-    // Enrich with character and image data
+    // Collect avatar overrides from all characters for this chat
     const enrichedOverrides = await Promise.all(
-      chatAvatars.map(async (image) => {
-        // Parse character ID from image metadata if available
-        const characterId = image.characterId || null;
-        const character = characterId ? await repos.characters.findById(characterId) : null;
-
-        return {
-          chatId: id,
-          characterId: characterId,
-          imageId: image.id,
-          character: character ? { id: character.id, name: character.name } : null,
-          image: image || null,
-        };
-      })
+      allCharacters.flatMap(character =>
+        (character.avatarOverrides || [])
+          .filter(override => override.chatId === id)
+          .map(async (override) => {
+            const fileEntry = await findFileById(override.imageId);
+            return {
+              chatId: id,
+              characterId: character.id,
+              imageId: override.imageId,
+              character: { id: character.id, name: character.name },
+              image: fileEntry ? {
+                id: fileEntry.id,
+                filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename),
+                url: null,
+              } : null,
+            };
+          })
+      )
     );
 
     return NextResponse.json({ data: enrichedOverrides });
@@ -104,38 +112,39 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 });
     }
 
-    // Verify image exists and belongs to user
-    const image = await repos.images.findById(imageId);
+    // Verify image exists in file-manager and belongs to user
+    const fileEntry = await findFileById(imageId);
 
-    if (!image || image.userId !== session.user.id) {
+    if (!fileEntry || fileEntry.userId !== session.user.id) {
       return NextResponse.json({ error: 'Image not found' }, { status: 404 });
     }
 
-    // Store avatar override as an image with type 'avatar'
-    // First, remove any existing avatar for this character in this chat
-    const allImages = await repos.images.findByUserId(session.user.id);
-    const existingAvatar = allImages.find(
-      img => img.type === 'avatar' && img.chatId === id && img.characterId === characterId
-    );
+    // Update character's avatarOverrides array
+    const existingOverrides = character.avatarOverrides || [];
+    const overrideIndex = existingOverrides.findIndex(o => o.chatId === id);
 
-    if (existingAvatar) {
-      // Update existing avatar reference
-      await repos.images.update(existingAvatar.id, {
-        characterId,
-        chatId: id,
-      });
+    let updatedOverrides;
+    if (overrideIndex >= 0) {
+      // Update existing override
+      updatedOverrides = [...existingOverrides];
+      updatedOverrides[overrideIndex] = { chatId: id, imageId };
     } else {
-      // Create new avatar reference (this just stores metadata, not the actual image)
-      // The imageId references an existing image in the binary index
-      // We need to ensure this is properly stored
+      // Add new override
+      updatedOverrides = [...existingOverrides, { chatId: id, imageId }];
     }
+
+    await repos.characters.update(characterId, { avatarOverrides: updatedOverrides });
 
     const override = {
       chatId: id,
       characterId,
       imageId,
       character: { id: character.id, name: character.name },
-      image,
+      image: {
+        id: fileEntry.id,
+        filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename),
+        url: null,
+      },
     };
 
     return NextResponse.json({ data: override });
@@ -181,15 +190,18 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 });
     }
 
-    // Remove avatar override by deleting the avatar image for this character in this chat
-    const allImages = await repos.images.findByUserId(session.user.id);
-    const existingAvatar = allImages.find(
-      img => img.type === 'avatar' && img.chatId === id && img.characterId === characterId
-    );
+    // Verify character exists and belongs to user
+    const character = await repos.characters.findById(characterId);
 
-    if (existingAvatar) {
-      await repos.images.delete(existingAvatar.id);
+    if (!character || character.userId !== session.user.id) {
+      return NextResponse.json({ error: 'Character not found' }, { status: 404 });
     }
+
+    // Remove avatar override from character's avatarOverrides array
+    const existingOverrides = character.avatarOverrides || [];
+    const updatedOverrides = existingOverrides.filter(o => o.chatId !== id);
+
+    await repos.characters.update(characterId, { avatarOverrides: updatedOverrides });
 
     return NextResponse.json({ data: { success: true } });
   } catch (error) {

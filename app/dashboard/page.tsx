@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getRepositories } from "@/lib/json-store/repositories";
+import { findFileById, getFileUrl } from "@/lib/file-manager";
 import Link from "next/link";
 import { RecentChatsSection } from "@/components/dashboard/recent-chats";
 import { FavoriteCharactersSection } from "@/components/dashboard/favorite-characters";
@@ -37,10 +38,17 @@ export default async function Dashboard() {
           .filter((c) => c.isFavorite)
           .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
           .map(async (character) => {
-            // Get default image if exists
+            // Get default image from file-manager if exists
             let defaultImage = null;
             if (character.defaultImageId) {
-              defaultImage = await repos.images.findById(character.defaultImageId);
+              const fileEntry = await findFileById(character.defaultImageId);
+              if (fileEntry) {
+                defaultImage = {
+                  id: fileEntry.id,
+                  filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename),
+                  url: null,
+                };
+              }
             }
             return {
               id: character.id,
@@ -48,13 +56,7 @@ export default async function Dashboard() {
               title: character.title ?? null,
               avatarUrl: character.avatarUrl ?? null,
               defaultImageId: character.defaultImageId ?? null,
-              defaultImage: defaultImage
-                ? {
-                    id: defaultImage.id,
-                    filepath: defaultImage.relativePath,
-                    url: null,
-                  }
-                : null,
+              defaultImage,
               tags: character.tags ?? [],
             };
           })
@@ -93,7 +95,14 @@ export default async function Dashboard() {
 
             let characterDefaultImage = null;
             if (character.defaultImageId) {
-              characterDefaultImage = await repos.images.findById(character.defaultImageId);
+              const fileEntry = await findFileById(character.defaultImageId);
+              if (fileEntry) {
+                characterDefaultImage = {
+                  id: fileEntry.id,
+                  filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename),
+                  url: null,
+                };
+              }
             }
 
             // Get persona data from participants if present
@@ -122,13 +131,7 @@ export default async function Dashboard() {
                 name: character.name,
                 avatarUrl: character.avatarUrl ?? null,
                 defaultImageId: character.defaultImageId ?? null,
-                defaultImage: characterDefaultImage
-                  ? {
-                      id: characterDefaultImage.id,
-                      filepath: characterDefaultImage.relativePath,
-                      url: null,
-                    }
-                  : null,
+                defaultImage: characterDefaultImage,
               },
               persona: persona
                 ? {

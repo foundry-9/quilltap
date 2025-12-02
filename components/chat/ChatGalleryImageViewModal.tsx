@@ -152,37 +152,19 @@ export default function ChatGalleryImageViewModal({
           showSuccessToast(`Removed from ${characterName || 'character'}'s gallery`)
         }
       } else {
-        // Add tag using the appropriate endpoint based on file type
-        const isGeneratedImage = file.type === 'generatedImage'
-
-        if (isGeneratedImage) {
-          // For generated images, use /api/images/{id}/tags
-          const res = await fetch(`/api/images/${file.id}/tags`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              tagType: 'CHARACTER',
-              tagId: characterId,
-            }),
-          })
-          if (!res.ok) {
-            const data = await safeJsonParse<{ error?: string }>(res)
-            throw new Error(data.error || 'Failed to tag image')
-          }
-        } else {
-          // For chat files, use /api/chat-files/{id} to copy to gallery and tag
-          const res = await fetch(`/api/chat-files/${file.id}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              tagType: 'CHARACTER',
-              tagId: characterId,
-            }),
-          })
-          if (!res.ok) {
-            const data = await safeJsonParse<{ error?: string }>(res)
-            throw new Error(data.error || 'Failed to tag image')
-          }
+        // Add tag - both generated images and chat files use the same endpoint
+        // Both need to be copied to gallery first if not already there
+        const res = await fetch(`/api/chat-files/${file.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tagType: 'CHARACTER',
+            tagId: characterId,
+          }),
+        })
+        if (!res.ok) {
+          const data = await safeJsonParse<{ error?: string }>(res)
+          throw new Error(data.error || 'Failed to tag image')
         }
         setIsTaggedToCharacter(true)
         showSuccessToast(`Added to ${characterName || 'character'}'s gallery`)
@@ -224,37 +206,19 @@ export default function ChatGalleryImageViewModal({
           showSuccessToast(`Removed from ${personaName || 'persona'}'s gallery`)
         }
       } else {
-        // Add tag using the appropriate endpoint based on file type
-        const isGeneratedImage = file.type === 'generatedImage'
-
-        if (isGeneratedImage) {
-          // For generated images, use /api/images/{id}/tags
-          const res = await fetch(`/api/images/${file.id}/tags`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              tagType: 'PERSONA',
-              tagId: personaId,
-            }),
-          })
-          if (!res.ok) {
-            const data = await safeJsonParse<{ error?: string }>(res)
-            throw new Error(data.error || 'Failed to tag image')
-          }
-        } else {
-          // For chat files, use /api/chat-files/{id} to copy to gallery and tag
-          const res = await fetch(`/api/chat-files/${file.id}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              tagType: 'PERSONA',
-              tagId: personaId,
-            }),
-          })
-          if (!res.ok) {
-            const data = await safeJsonParse<{ error?: string }>(res)
-            throw new Error(data.error || 'Failed to tag image')
-          }
+        // Add tag - both generated images and chat files use the same endpoint
+        // Both need to be copied to gallery first if not already there
+        const res = await fetch(`/api/chat-files/${file.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tagType: 'PERSONA',
+            tagId: personaId,
+          }),
+        })
+        if (!res.ok) {
+          const data = await safeJsonParse<{ error?: string }>(res)
+          throw new Error(data.error || 'Failed to tag image')
         }
         setIsTaggedToPersona(true)
         showSuccessToast(`Added to ${personaName || 'persona'}'s gallery`)

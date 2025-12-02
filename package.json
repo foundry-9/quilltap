@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "1.7.26",
+  "version": "1.7.27",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -32,6 +32,8 @@
     "test:e2e:headed": "playwright test --headed",
     "migrate-files": "tsx scripts/migrate-files.ts",
     "migrate-files:dry-run": "tsx scripts/migrate-files.ts --dry-run",
+    "consolidate-images": "tsx scripts/consolidate-images.ts",
+    "consolidate-images:dry-run": "tsx scripts/consolidate-images.ts --dry-run",
     "cleanup-old-files": "tsx scripts/cleanup-old-files.ts",
     "generate:schemas": "tsx scripts/generate-plugin-manifest-schema.ts"
   },

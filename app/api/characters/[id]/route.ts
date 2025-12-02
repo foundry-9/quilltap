@@ -8,6 +8,7 @@ import { revalidatePath } from 'next/cache'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
+import { findFileById, getFileUrl } from '@/lib/file-manager'
 import { executeCascadeDelete } from '@/lib/cascade-delete'
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
@@ -51,10 +52,17 @@ export async function GET(
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
     }
 
-    // Get default image if present
+    // Get default image from file-manager if present
     let defaultImage = null
     if (character.defaultImageId) {
-      defaultImage = await repos.images.findById(character.defaultImageId)
+      const fileEntry = await findFileById(character.defaultImageId)
+      if (fileEntry) {
+        defaultImage = {
+          id: fileEntry.id,
+          filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename),
+          url: null,
+        }
+      }
     }
 
     // Get chat count
@@ -62,13 +70,7 @@ export async function GET(
 
     const enrichedCharacter = {
       ...character,
-      defaultImage: defaultImage
-        ? {
-            id: defaultImage.id,
-            filepath: defaultImage.relativePath,
-            url: null,
-          }
-        : null,
+      defaultImage,
       _count: {
         chats: chats.length,
       },

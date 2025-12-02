@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
+import { findFileById, getFileUrl, findFilesLinkedTo } from '@/lib/file-manager'
 import { z } from 'zod'
 import type { ChatParticipantBase, ChatMetadata } from '@/lib/json-store/schemas/types'
 import { logger } from '@/lib/logger'
@@ -55,9 +56,9 @@ async function getEnrichedCharacter(characterId: string, repos: Repos) {
 
   let defaultImage = null
   if (charData.defaultImageId) {
-    const img = await repos.images.findById(charData.defaultImageId)
-    if (img) {
-      defaultImage = { id: img.id, filepath: img.relativePath, url: null }
+    const fileEntry = await findFileById(charData.defaultImageId)
+    if (fileEntry) {
+      defaultImage = { id: fileEntry.id, filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename), url: null }
     }
   }
 
@@ -78,9 +79,9 @@ async function getEnrichedPersona(personaId: string, repos: Repos) {
 
   let defaultImage = null
   if (personaData.defaultImageId) {
-    const img = await repos.images.findById(personaData.defaultImageId)
-    if (img) {
-      defaultImage = { id: img.id, filepath: img.relativePath, url: null }
+    const fileEntry = await findFileById(personaData.defaultImageId)
+    if (fileEntry) {
+      defaultImage = { id: fileEntry.id, filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename), url: null }
     }
   }
 
@@ -329,12 +330,13 @@ export async function GET(
         .map(async event => {
           if (event.type !== 'message') return null
 
-          const imageAttachments = await repos.images.findByMessageId(event.id)
-          const attachments = imageAttachments.map(img => ({
-            id: img.id,
-            filename: img.filename,
-            filepath: img.relativePath,
-            mimeType: img.mimeType,
+          // Get attachments from file-manager using linkedTo
+          const linkedFiles = await findFilesLinkedTo(event.id)
+          const attachments = linkedFiles.map(file => ({
+            id: file.id,
+            filename: file.originalFilename,
+            filepath: getFileUrl(file.id, file.originalFilename),
+            mimeType: file.mimeType,
           }))
 
           return {

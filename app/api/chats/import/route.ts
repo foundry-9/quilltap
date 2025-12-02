@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRepositories } from '@/lib/json-store/repositories'
+import { findFileById, getFileUrl } from '@/lib/file-manager'
 import { importSTChat } from '@/lib/sillytavern/chat'
 import { logger } from '@/lib/logger'
 import type { ChatParticipantBase } from '@/lib/json-store/schemas/types'
@@ -161,10 +162,17 @@ export async function POST(req: NextRequest) {
     const messages = await repos.chats.getMessages(chat.id)
     const messageEvents = messages.filter(m => m.type === 'message')
 
-    // Get character's default image
+    // Get character's default image from file-manager
     let defaultImage = null
     if (character.defaultImageId) {
-      defaultImage = await repos.images.findById(character.defaultImageId)
+      const fileEntry = await findFileById(character.defaultImageId)
+      if (fileEntry) {
+        defaultImage = {
+          id: fileEntry.id,
+          filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename),
+          url: null,
+        }
+      }
     }
 
     // Get tags data
