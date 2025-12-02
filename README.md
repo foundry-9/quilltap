@@ -3,7 +3,7 @@
 AI-powered roleplay chat platform with multi-provider LLM support and full SillyTavern compatibility.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.7.30-green.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-1.7.31-green.svg)](package.json)
 
 ## What is Quilltap?
 
