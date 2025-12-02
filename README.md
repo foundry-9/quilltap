@@ -3,7 +3,7 @@
 AI-powered roleplay chat platform with multi-provider LLM support and full SillyTavern compatibility.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.7.28-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-1.7.29-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -512,6 +512,7 @@ Copyright (c) 2025 Foundry-9
   - Plugin support
     - New routes
     - Moved LLM providers to plugins
+  - Moved images to the file handling system so that they are no longer a separately maintained thing
 
 ## Roadmap
 
