@@ -3,7 +3,7 @@
 AI-powered roleplay chat platform with multi-provider LLM support and full SillyTavern compatibility.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.8.3-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-1.8.4-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -515,6 +515,12 @@ Copyright (c) 2025 Foundry-9
     - Moved LLM providers to plugins
   - Moved images to the file handling system so that they are no longer a separately maintained thing
 - **1.8:** Pluggable Authentication, no-auth
+  - Fix quick-hide persistence and update issue
+  - Convert Google OAuth to plugin (`qtap-plugin-auth-google`)
+  - Create auth provider plugin interface and registry
+  - Implement lazy initialization pattern for NextAuth
+  - Centralize session handling in `lib/auth/session.ts`
+  - Make a default no-auth option (`AUTH_DISABLED=true` env var)
 
 ## Roadmap
 
@@ -531,7 +537,6 @@ Copyright (c) 2025 Foundry-9
   - [ ] Add Apple, GitHub OAuth plugins
 - [ ] Add backends for files (S3 to start, for better hosting)
 - [ ] Convert to MongoDB, which is external or internal based on environment variables
-- [X] [Plugin system](features/plugins.md) to extend functionality and allow updates for volatile things like LLM support, image support, etc.
 - [ ] Multiple themes and plugin downloadable themes
 - [ ] Enhanced roleplay options using more complex templates
 - [ ] "Visual Novel" options?
