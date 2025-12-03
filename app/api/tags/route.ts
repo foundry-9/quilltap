@@ -31,8 +31,8 @@ export async function GET(req: NextRequest) {
     const searchParams = req.nextUrl.searchParams
     const search = searchParams.get('search')
 
-    // Get all tags
-    let tags = await repos.tags.findAll()
+    // Get all tags for the user
+    let tags = await repos.tags.findByUserId(user.id)
 
     // Filter by search if provided
     if (search) {

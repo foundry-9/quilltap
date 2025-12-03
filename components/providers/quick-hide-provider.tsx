@@ -29,9 +29,9 @@ async function fetchQuickHideTags(): Promise<QuickHideTag[]> {
   }
 
   const data = await res.json()
-  return (data.tags || [])
-    .filter((tag: any) => Boolean(tag.quickHide))
-    .map((tag: any) => ({ id: tag.id as string, name: tag.name as string }))
+  const allTags = data.tags || []
+  const filtered = allTags.filter((tag: any) => Boolean(tag.quickHide))
+  return filtered.map((tag: any) => ({ id: tag.id as string, name: tag.name as string }))
 }
 
 export function QuickHideProvider({ children }: { children: React.ReactNode }) {

@@ -107,6 +107,7 @@ export class TagsRepository extends BaseRepository<Tag> {
     const tagsFile = await this.readTagsFile();
     tagsFile.tags.push(validated);
     await this.writeTagsFile(tagsFile);
+    this.jsonStore.clearCache();
 
     return validated;
   }
@@ -136,6 +137,7 @@ export class TagsRepository extends BaseRepository<Tag> {
     const validated = this.validate(updated);
     tagsFile.tags[index] = validated;
     await this.writeTagsFile(tagsFile);
+    this.jsonStore.clearCache();
 
     return validated;
   }
@@ -154,6 +156,7 @@ export class TagsRepository extends BaseRepository<Tag> {
     }
 
     await this.writeTagsFile(tagsFile);
+    this.jsonStore.clearCache();
     return true;
   }
 }

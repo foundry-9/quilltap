@@ -361,14 +361,14 @@ export default function ChatSettingsTab() {
           )
         )
         await refreshQuickHideTags()
-        await fetchTags()
       } catch (err) {
+        clientLogger.error('Error toggling quick-hide', { error: err instanceof Error ? err.message : String(err) })
         setError(err instanceof Error ? err.message : 'Failed to update quick-hide')
       } finally {
         setQuickHideSavingId(current => (current === tagId ? null : current))
       }
     },
-    [fetchTags, refreshQuickHideTags]
+    [refreshQuickHideTags]
   )
 
   const tagLabelLookup = useMemo(() => {
