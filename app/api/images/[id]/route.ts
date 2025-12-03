@@ -7,8 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getServerSession } from '@/lib/auth/session';
 import { getRepositories } from '@/lib/json-store/repositories';
 import { findFileById, deleteFile, getFileUrl } from '@/lib/file-manager';
 import { logger } from '@/lib/logger';
@@ -23,7 +22,7 @@ interface RouteContext {
  */
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession();
     if (!session?.user?.id) {
       logger.debug('GET /api/images/[id] - Unauthorized: no session');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -118,7 +117,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
  */
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession();
     if (!session?.user?.id) {
       logger.debug('DELETE /api/images/[id] - Unauthorized: no session');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

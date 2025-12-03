@@ -2,8 +2,7 @@
 // POST /api/characters/[id]/memories/search - Semantic/keyword search
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { getServerSession } from '@/lib/auth/session'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
 import { z } from 'zod'
@@ -25,7 +24,7 @@ export async function POST(
 ) {
   try {
     const { id: characterId } = await params
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }

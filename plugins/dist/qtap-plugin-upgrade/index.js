@@ -4443,7 +4443,7 @@ var import_node_path = __toESM(require("node:path"));
 // package.json
 var package_default = {
   name: "quilltap",
-  version: "1.7.23",
+  version: "1.8.1",
   private: true,
   author: {
     name: "Charles Sebold",
@@ -4475,6 +4475,8 @@ var package_default = {
     "test:e2e:headed": "playwright test --headed",
     "migrate-files": "tsx scripts/migrate-files.ts",
     "migrate-files:dry-run": "tsx scripts/migrate-files.ts --dry-run",
+    "consolidate-images": "tsx scripts/consolidate-images.ts",
+    "consolidate-images:dry-run": "tsx scripts/consolidate-images.ts --dry-run",
     "cleanup-old-files": "tsx scripts/cleanup-old-files.ts",
     "generate:schemas": "tsx scripts/generate-plugin-manifest-schema.ts"
   },
@@ -4514,6 +4516,7 @@ var package_default = {
     "@types/react-syntax-highlighter": "^15.5.13",
     "@types/speakeasy": "^2.0.10",
     autoprefixer: "^10.4.22",
+    dotenv: "^17.2.3",
     eslint: "^9.39.1",
     "eslint-config-next": "^16.0.5",
     jest: "^30.2.0",

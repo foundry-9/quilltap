@@ -7,8 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { getServerSession } from '@/lib/auth/session'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { supportsImageGeneration } from '@/lib/llm/image-capable'
 import { logger } from '@/lib/logger'
@@ -29,7 +28,7 @@ export const revalidate = 0
  */
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -168,7 +167,7 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },

@@ -3,7 +3,7 @@
 AI-powered roleplay chat platform with multi-provider LLM support and full SillyTavern compatibility.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.8.1-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-1.8.2-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -344,6 +344,7 @@ Once logged in, you'll need to:
 - [Local User Authentication](features/LOCAL_USER_AUTH.md) - Original implementation plan for email/password + TOTP 2FA
 - [Plugin Developer Guide](plugins/README.md) - How to create plugins
 - [LLM Provider Guide](plugins/LLM-PROVIDER-GUIDE.md) - Creating new LLM provider plugins
+- [Auth Provider Guide](plugins/AUTH-PROVIDER-GUIDE.md) - Creating new OAuth provider plugins
 
 ## Troubleshooting
 
@@ -513,21 +514,23 @@ Copyright (c) 2025 Foundry-9
     - New routes
     - Moved LLM providers to plugins
   - Moved images to the file handling system so that they are no longer a separately maintained thing
+- **1.8:** Pluggable Authentication, no-auth
 
 ## Roadmap
 
-- [ ] Finish local email/password and TOTP/MFA login
-  - [ ] Convert Google OAuth to plugin
-  - [ ] Add Apple, Github OAuth
+- [ ] Finish authentication changes
+  - [X] Convert Google OAuth to plugin (`qtap-plugin-auth-google`)
+  - [X] Create auth provider plugin interface and registry
+  - [X] Implement lazy initialization pattern for NextAuth
+  - [X] Centralize session handling in `lib/auth/session.ts`
+  - [X] Make a default no-auth option (`AUTH_DISABLED=true` env var)
+  - [ ] Move authenticated data to `data/users/[login-uuid]/` (infrastructure ready, not yet active)
+  - [ ] Retain site-installed plugins in `plugins/`, controlled by environment variables
+  - [ ] Move user-installed plugins to `plugins/users/[login-uuid]/`
+  - [ ] Finish local email/password and TOTP/MFA login
+  - [ ] Add Apple, GitHub OAuth plugins
 - [ ] Add backends for files (S3 to start, for better hosting)
-- [ ] Complete database abstraction
-  - [ ] The abstraction should probably match a fairly ordinary NoSQL document storage API
-  - [ ] Convert JSON-Store (our local file-based database) to work behind the abstraction
-  - [ ] Add in MongoDB
-  - [ ] Create a utility that uses the abstraction to read one and convert it to another
-  - [ ] Add in DynamoDB
-  - [ ] Add in Postgres
-  - [ ] Add in MySQL
+- [ ] Convert to MongoDB, which is external or internal based on environment variables
 - [X] [Plugin system](features/plugins.md) to extend functionality and allow updates for volatile things like LLM support, image support, etc.
 - [ ] Multiple themes and plugin downloadable themes
 - [ ] Enhanced roleplay options using more complex templates

@@ -594,6 +594,48 @@
           ],
           "additionalProperties": false
         },
+        "authProviderConfig": {
+          "type": "object",
+          "properties": {
+            "providerId": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]*$"
+            },
+            "displayName": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "requiredEnvVars": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            },
+            "optionalEnvVars": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "buttonColor": {
+              "type": "string"
+            },
+            "buttonTextColor": {
+              "type": "string"
+            },
+            "icon": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "providerId",
+            "displayName",
+            "requiredEnvVars"
+          ],
+          "additionalProperties": false
+        },
         "permissions": {
           "type": "object",
           "properties": {

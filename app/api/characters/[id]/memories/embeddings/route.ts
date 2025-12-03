@@ -3,8 +3,7 @@
 // POST /api/characters/[id]/memories/embeddings/rebuild - Rebuild vector index
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { getServerSession } from '@/lib/auth/session'
 import { getRepositories } from '@/lib/json-store/repositories'
 import {
   generateMissingEmbeddings,
@@ -32,7 +31,7 @@ export async function POST(
 ) {
   try {
     const { id: characterId } = await params
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -116,7 +115,7 @@ export async function PUT(
 ) {
   try {
     const { id: characterId } = await params
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -172,7 +171,7 @@ export async function GET(
 ) {
   try {
     const { id: characterId } = await params
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }

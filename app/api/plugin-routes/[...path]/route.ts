@@ -7,8 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getServerSession } from '@/lib/auth/session';
 import { logger } from '@/lib/logger';
 import { findPluginRoute, type PluginRouteInfo } from '@/lib/plugins/route-loader';
 
@@ -70,7 +69,7 @@ async function checkAuthentication(
   }
 
   // Check session
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession();
 
   if (!session?.user?.id) {
     logger.warn('Unauthorized access attempt to authenticated plugin route', {

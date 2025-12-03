@@ -3,8 +3,7 @@
 // POST /api/characters - Create a new character
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { getServerSession } from '@/lib/auth/session'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { findFileById, getFileUrl } from '@/lib/file-manager'
 import { z } from 'zod'
@@ -27,7 +26,7 @@ const createCharacterSchema = z.object({
 // GET /api/characters - List all characters
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -95,7 +94,7 @@ export async function GET(req: NextRequest) {
 // POST /api/characters - Create a new character
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }

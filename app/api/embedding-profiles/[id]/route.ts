@@ -7,8 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { getServerSession } from '@/lib/auth/session'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { logger } from '@/lib/logger'
 
@@ -22,7 +21,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -96,7 +95,7 @@ export async function PUT(
 ) {
   try {
     const { id } = await params
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -271,7 +270,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },

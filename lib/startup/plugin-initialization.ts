@@ -11,6 +11,8 @@ import { pluginRegistry } from '@/lib/plugins/registry';
 import { registerPluginRoutes, getPluginRouteRegistry, pluginRouteRegistry } from '@/lib/plugins/route-loader';
 import { initializeProviderRegistry } from '@/lib/plugins/provider-registry';
 import { transpileAllPlugins } from '@/lib/plugins/plugin-transpiler';
+import { registerAuthProvider, clearAuthProviders } from '@/lib/plugins/auth-provider-registry';
+import type { AuthProviderPluginExport } from '@/lib/plugins/interfaces/auth-provider-plugin';
 import packageJson from '@/package.json';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
@@ -361,6 +363,61 @@ async function performInitialization(): Promise<PluginInitializationResult> {
       if (providers.length > 0) {
         await initializeProviderRegistry(providers);
       }
+    }
+
+    // Initialize auth provider registry from enabled plugins with AUTH_METHODS capability
+    logger.debug('Initializing auth provider registry');
+    clearAuthProviders(); // Clear any previous registrations
+    const authPlugins = pluginRegistry.getEnabledByCapability('AUTH_METHODS');
+    if (authPlugins.length > 0) {
+      for (const loadedPlugin of authPlugins) {
+        try {
+          const mainFile = loadedPlugin.manifest.main || 'index.js';
+          const modulePath = resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
+
+          logger.debug('Loading auth provider plugin module', {
+            plugin: loadedPlugin.manifest.name,
+            path: modulePath,
+          });
+
+          // Use require() to load the compiled JavaScript module
+          const pluginModule = dynamicRequire(modulePath);
+
+          // Auth plugins export config, isConfigured, getConfigStatus directly
+          const authPlugin = (pluginModule?.default || pluginModule) as AuthProviderPluginExport | undefined;
+
+          if (
+            authPlugin &&
+            typeof authPlugin.config === 'object' &&
+            typeof authPlugin.isConfigured === 'function' &&
+            typeof authPlugin.getConfigStatus === 'function'
+          ) {
+            registerAuthProvider(authPlugin);
+            logger.debug('Auth provider plugin registered', {
+              plugin: loadedPlugin.manifest.name,
+              providerId: authPlugin.config.providerId,
+              isConfigured: authPlugin.isConfigured(),
+            });
+          } else {
+            logger.warn('Auth provider plugin missing required exports', {
+              plugin: loadedPlugin.manifest.name,
+              hasConfig: typeof authPlugin?.config === 'object',
+              hasIsConfigured: typeof authPlugin?.isConfigured === 'function',
+              hasGetConfigStatus: typeof authPlugin?.getConfigStatus === 'function',
+            });
+          }
+        } catch (error) {
+          logger.error('Failed to load auth provider plugin module', {
+            plugin: loadedPlugin.manifest.name,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      const loadedAuthPlugins = authPlugins.length;
+      logger.info('Auth provider plugins initialized', {
+        total: loadedAuthPlugins,
+      });
     }
 
     return result;

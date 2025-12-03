@@ -1,5 +1,5 @@
 /**
- * Next.js Proxy for rate limiting, security headers, and CORS
+ * Next.js Proxy for rate limiting, security headers, CORS, and auth mode
  * Runs on Edge Runtime before requests reach API routes
  */
 
@@ -11,6 +11,14 @@ import {
   RATE_LIMITS,
   createRateLimitResponse,
 } from './lib/rate-limit';
+
+/**
+ * Check if authentication is disabled via environment variable
+ * Note: This runs in Edge runtime, so we check env var directly
+ */
+function isAuthDisabledInProxy(): boolean {
+  return process.env.AUTH_DISABLED === 'true';
+}
 
 /**
  * Security headers to add to all responses
@@ -49,6 +57,9 @@ const RATE_LIMITED_PATHS = {
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // If auth is disabled, set a header to indicate this to downstream handlers
+  const authDisabled = isAuthDisabledInProxy();
 
   // Apply rate limiting based on path
   const clientId = getClientIdentifier(request);
@@ -93,6 +104,11 @@ export function proxy(request: NextRequest) {
   Object.entries(securityHeaders).forEach(([key, value]) => {
     response.headers.set(key, value);
   });
+
+  // If auth is disabled, set a header for downstream handlers to detect
+  if (authDisabled) {
+    response.headers.set('x-auth-disabled', 'true');
+  }
 
   // CORS headers for API routes
   if (pathname.startsWith('/api/')) {

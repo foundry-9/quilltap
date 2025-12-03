@@ -8,8 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { getServerSession } from '@/lib/auth/session'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
@@ -30,7 +29,7 @@ const tagSchema = z.object({
  */
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
     if (!session?.user?.id) {
       logger.debug('POST /api/chat-files/[id] - Unauthorized: no session')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -191,7 +190,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
  */
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
     if (!session?.user?.id) {
       logger.debug('DELETE /api/chat-files/[id] - Unauthorized: no session')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

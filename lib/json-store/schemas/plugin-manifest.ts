@@ -313,6 +313,38 @@ export const ProviderConfigSchema = z.object({
 
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
 
+/**
+ * Auth provider configuration schema
+ *
+ * Defines the configuration for authentication provider plugins.
+ * This schema is used by auth plugins (e.g., Google OAuth, GitHub OAuth) to declare
+ * their provider identity, visual branding, and required environment variables.
+ */
+export const AuthProviderConfigSchema = z.object({
+  /** Internal identifier for the provider (e.g., 'google', 'github') */
+  providerId: z.string().regex(/^[a-z][a-z0-9-]*$/),
+
+  /** Human-readable display name (e.g., 'Google', 'GitHub') */
+  displayName: z.string().min(1).max(100),
+
+  /** Environment variables required for this provider */
+  requiredEnvVars: z.array(z.string()).min(1),
+
+  /** Optional environment variables */
+  optionalEnvVars: z.array(z.string()).optional(),
+
+  /** Button background color (Tailwind classes) */
+  buttonColor: z.string().optional(),
+
+  /** Button text color (Tailwind classes) */
+  buttonTextColor: z.string().optional(),
+
+  /** Icon name or identifier */
+  icon: z.string().optional(),
+});
+
+export type AuthProviderConfig = z.infer<typeof AuthProviderConfigSchema>;
+
 // ============================================================================
 // MAIN MANIFEST SCHEMA
 // ============================================================================
@@ -417,6 +449,9 @@ export const PluginManifestSchema = z.object({
 
   /** Provider configuration (for LLM/service provider plugins) */
   providerConfig: ProviderConfigSchema.optional(),
+
+  /** Auth provider configuration (for authentication provider plugins) */
+  authProviderConfig: AuthProviderConfigSchema.optional(),
 
   // ===== SECURITY & PERMISSIONS =====
   /** Permissions required by the plugin */

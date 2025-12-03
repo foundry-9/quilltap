@@ -7,8 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getServerSession } from '@/lib/auth/session';
 import { getRepositories } from '@/lib/json-store/repositories';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
@@ -33,7 +32,7 @@ const avatarSchema = z.object({
  */
 export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession();
     if (!session?.user?.id) {
       logger.debug('Unauthorized persona avatar update - no session', { context: 'personas-avatar-PATCH' });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

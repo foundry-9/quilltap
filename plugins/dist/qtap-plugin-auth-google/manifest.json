@@ -1,0 +1,38 @@
+{
+  "$schema": "../qtap-plugin-template/schemas/plugin-manifest.schema.json",
+  "name": "qtap-plugin-auth-google",
+  "title": "Google OAuth",
+  "description": "Google OAuth authentication provider for Quilltap",
+  "version": "1.0.0",
+  "author": {
+    "name": "Foundry-9",
+    "email": "charles@sebold.tech",
+    "url": "https://foundry-9.com"
+  },
+  "license": "MIT",
+  "compatibility": {
+    "quilltapVersion": ">=1.8.0",
+    "nodeVersion": ">=18.0.0"
+  },
+  "capabilities": ["AUTH_METHODS"],
+  "category": "AUTHENTICATION",
+  "main": "index.js",
+  "typescript": true,
+  "frontend": "REACT",
+  "styling": "TAILWIND",
+  "enabledByDefault": true,
+  "status": "STABLE",
+  "keywords": ["google", "oauth", "authentication", "login", "sign-in"],
+  "authProviderConfig": {
+    "providerId": "google",
+    "displayName": "Google",
+    "requiredEnvVars": ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
+    "buttonColor": "bg-white hover:bg-gray-50",
+    "buttonTextColor": "text-gray-700"
+  },
+  "permissions": {
+    "network": ["accounts.google.com", "oauth2.googleapis.com"],
+    "userData": false,
+    "database": false
+  }
+}

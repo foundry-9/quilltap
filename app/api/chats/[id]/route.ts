@@ -4,8 +4,7 @@
 // DELETE /api/chats/:id - Delete chat
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { getServerSession } from '@/lib/auth/session'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { findFileById, getFileUrl, findFilesLinkedTo } from '@/lib/file-manager'
 import { z } from 'zod'
@@ -301,7 +300,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -420,7 +419,7 @@ export async function PUT(
 ) {
   try {
     const { id } = await params
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -474,7 +473,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }

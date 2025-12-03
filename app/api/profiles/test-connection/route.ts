@@ -6,8 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { getServerSession } from '@/lib/auth/session'
 import { getRepositories } from '@/lib/json-store/repositories'
 import { decryptApiKey } from '@/lib/encryption'
 import { ProviderEnum } from '@/lib/json-store/schemas/types'
@@ -34,7 +33,7 @@ const testConnectionSchema = z.object({
  */
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
     if (!session?.user?.id) {
       logger.warn('Unauthorized access attempt to test-connection endpoint', {
         context: 'POST /api/profiles/test-connection',

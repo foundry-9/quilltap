@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getServerSession } from "@/lib/auth/session";
 import { getRepositories } from "@/lib/json-store/repositories";
 import { findFileById, getFileUrl } from "@/lib/file-manager";
 import Link from "next/link";
@@ -10,7 +9,7 @@ import { FavoriteCharactersSection } from "@/components/dashboard/favorite-chara
 export const revalidate = 0;
 
 export default async function Dashboard() {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession();
   const repos = getRepositories();
 
   // Get the user from the repository

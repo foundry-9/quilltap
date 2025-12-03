@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import type { TagStyleMap, TagVisualStyle } from '@/lib/json-store/schemas/types';
 import { DEFAULT_TAG_STYLE, mergeWithDefaultTagStyle } from '@/lib/tags/styles';
 import { clientLogger } from '@/lib/client-logger';
@@ -16,10 +17,18 @@ interface TagStyleContextValue {
 const TagStyleContext = createContext<TagStyleContextValue | null>(null);
 
 export function TagStyleProvider({ children }: { children: React.ReactNode }) {
+  const { status } = useSession();
   const [styles, setStyles] = useState<TagStyleMap>({});
   const [loading, setLoading] = useState(true);
 
   const fetchStyles = useCallback(async () => {
+    // Don't fetch if not authenticated
+    if (status !== 'authenticated') {
+      setStyles({});
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch('/api/chat-settings', { cache: 'no-store' });
       if (res.status === 401) {
@@ -36,11 +45,14 @@ export function TagStyleProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [status]);
 
   useEffect(() => {
-    fetchStyles();
-  }, [fetchStyles]);
+    // Only fetch when session status is determined (not 'loading')
+    if (status !== 'loading') {
+      fetchStyles();
+    }
+  }, [fetchStyles, status]);
 
   const updateStyles = useCallback((next: TagStyleMap) => {
     setStyles(next ?? {});
