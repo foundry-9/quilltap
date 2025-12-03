@@ -390,7 +390,8 @@ async function performInitialization(): Promise<PluginInitializationResult> {
             authPlugin &&
             typeof authPlugin.config === 'object' &&
             typeof authPlugin.isConfigured === 'function' &&
-            typeof authPlugin.getConfigStatus === 'function'
+            typeof authPlugin.getConfigStatus === 'function' &&
+            typeof authPlugin.createProvider === 'function'
           ) {
             registerAuthProvider(authPlugin);
             logger.debug('Auth provider plugin registered', {
@@ -404,6 +405,7 @@ async function performInitialization(): Promise<PluginInitializationResult> {
               hasConfig: typeof authPlugin?.config === 'object',
               hasIsConfigured: typeof authPlugin?.isConfigured === 'function',
               hasGetConfigStatus: typeof authPlugin?.getConfigStatus === 'function',
+              hasCreateProvider: typeof authPlugin?.createProvider === 'function',
             });
           }
         } catch (error) {

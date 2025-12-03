@@ -80,6 +80,9 @@ cd plugins/dist/qtap-plugin-auth-myprovider
  * MyProvider OAuth Authentication Provider Plugin
  */
 
+import MyProviderProvider from 'next-auth/providers/myprovider';
+// Or for custom OAuth, you can create your own provider configuration
+
 // ============================================================================
 // TYPES (duplicated to avoid import issues in standalone plugin)
 // ============================================================================
@@ -145,6 +148,21 @@ function getConfigStatus(): ProviderConfigStatus {
   return checkEnvVars(REQUIRED_ENV_VARS);
 }
 
+/**
+ * Create the NextAuth provider instance
+ * Returns null if not properly configured
+ */
+function createProvider() {
+  if (!isConfigured()) {
+    return null;
+  }
+
+  return MyProviderProvider({
+    clientId: process.env.MYPROVIDER_CLIENT_ID!,
+    clientSecret: process.env.MYPROVIDER_CLIENT_SECRET!,
+  });
+}
+
 // ============================================================================
 // PLUGIN EXPORT
 // ============================================================================
@@ -153,8 +171,7 @@ module.exports = {
   config,
   isConfigured,
   getConfigStatus,
-  // Note: createProvider is handled by lib/auth.ts using next-auth providers
-  // to avoid dependency issues. The plugin provides configuration only.
+  createProvider,
 };
 ```
 
@@ -167,41 +184,14 @@ module.exports = {
   "description": "MyProvider OAuth plugin for Quilltap",
   "main": "index.js",
   "types": "index.ts",
-  "license": "MIT"
-}
-```
-
-### 5. Add Provider Support to lib/auth.ts
-
-For your OAuth provider to work, you need to add support in `lib/auth.ts`. The auth module maps plugin configurations to actual NextAuth providers:
-
-```typescript
-// In lib/auth.ts, add to createOAuthProvider function:
-
-import MyProviderProvider from 'next-auth/providers/myprovider';
-// Or for custom OAuth:
-// import { OAuthConfig } from 'next-auth/providers/oauth';
-
-function createOAuthProvider(providerId: string): OAuthProvider | null {
-  switch (providerId) {
-    case 'google':
-      // existing...
-
-    case 'myprovider':
-      if (process.env.MYPROVIDER_CLIENT_ID && process.env.MYPROVIDER_CLIENT_SECRET) {
-        return MyProviderProvider({
-          clientId: process.env.MYPROVIDER_CLIENT_ID,
-          clientSecret: process.env.MYPROVIDER_CLIENT_SECRET,
-        });
-      }
-      return null;
-
-    default:
-      logger.warn('Unknown OAuth provider ID', { context: 'createOAuthProvider', providerId });
-      return null;
+  "license": "MIT",
+  "dependencies": {
+    "next-auth": "^4.24.0"
   }
 }
 ```
+
+**Note:** The plugin directly imports and uses the NextAuth provider. No changes to `lib/auth.ts` are required - the auth system automatically calls your plugin's `createProvider()` function.
 
 ## Plugin Interface
 
@@ -211,6 +201,9 @@ Auth provider plugins must export the following:
 interface AuthProviderPluginExport {
   /** Provider configuration metadata */
   config: AuthProviderConfig;
+
+  /** Factory function to create the NextAuth provider */
+  createProvider: () => OAuthConfig<unknown> | null;
 
   /** Check if the provider is properly configured */
   isConfigured: () => boolean;
@@ -304,45 +297,43 @@ Reference implementation for OAuth providers:
 
 ## Adding Custom OAuth Providers
 
-For providers not built into NextAuth, create a custom OAuth configuration:
+For providers not built into NextAuth, create a custom OAuth configuration in your plugin's `createProvider()` function:
 
 ```typescript
-// In lib/auth.ts
+// In your plugin's index.ts
 
 import type { OAuthConfig } from 'next-auth/providers/oauth';
 
-function createOAuthProvider(providerId: string): OAuthConfig<unknown> | null {
-  switch (providerId) {
-    case 'custom':
-      if (process.env.CUSTOM_CLIENT_ID && process.env.CUSTOM_CLIENT_SECRET) {
-        return {
-          id: 'custom',
-          name: 'Custom Provider',
-          type: 'oauth',
-          authorization: {
-            url: 'https://auth.custom.com/oauth/authorize',
-            params: { scope: 'openid email profile' },
-          },
-          token: 'https://auth.custom.com/oauth/token',
-          userinfo: 'https://api.custom.com/userinfo',
-          clientId: process.env.CUSTOM_CLIENT_ID,
-          clientSecret: process.env.CUSTOM_CLIENT_SECRET,
-          profile(profile) {
-            return {
-              id: profile.sub,
-              name: profile.name,
-              email: profile.email,
-              image: profile.picture,
-            };
-          },
-        };
-      }
-      return null;
-
-    // ...
+function createProvider(): OAuthConfig<unknown> | null {
+  if (!isConfigured()) {
+    return null;
   }
+
+  return {
+    id: 'custom',
+    name: 'Custom Provider',
+    type: 'oauth',
+    authorization: {
+      url: 'https://auth.custom.com/oauth/authorize',
+      params: { scope: 'openid email profile' },
+    },
+    token: 'https://auth.custom.com/oauth/token',
+    userinfo: 'https://api.custom.com/userinfo',
+    clientId: process.env.CUSTOM_CLIENT_ID!,
+    clientSecret: process.env.CUSTOM_CLIENT_SECRET!,
+    profile(profile) {
+      return {
+        id: profile.sub,
+        name: profile.name,
+        email: profile.email,
+        image: profile.picture,
+      };
+    },
+  };
 }
 ```
+
+This approach keeps all provider logic self-contained within the plugin.
 
 ## Best Practices
 
@@ -445,8 +436,9 @@ Before releasing your plugin:
 - [ ] `manifest.json` has valid `authProviderConfig`
 - [ ] `capabilities` includes `AUTH_METHODS`
 - [ ] `category` is set to `AUTHENTICATION`
-- [ ] Plugin exports `config`, `isConfigured`, `getConfigStatus`
-- [ ] Provider mapping added to `lib/auth.ts`
+- [ ] Plugin exports `config`, `isConfigured`, `getConfigStatus`, `createProvider`
+- [ ] `createProvider()` returns a valid NextAuth provider or null
+- [ ] `package.json` includes `next-auth` as a dependency
 - [ ] Required env vars are documented
 - [ ] OAuth redirect URIs are documented
 - [ ] Button styling looks appropriate

@@ -18,11 +18,9 @@ const envSchema = z.object({
     .string()
     .min(32, 'NEXTAUTH_SECRET must be at least 32 characters'),
 
-  // OAuth Providers
-  GOOGLE_CLIENT_ID: z.string().min(1, 'GOOGLE_CLIENT_ID is required'),
-  GOOGLE_CLIENT_SECRET: z.string().min(1, 'GOOGLE_CLIENT_SECRET is required'),
-
-  // Optional OAuth providers (Phase 2.0+)
+  // OAuth Providers (all optional - configured via auth plugins)
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
   APPLE_ID: z.string().optional(),
   APPLE_SECRET: z.string().optional(),
   GITHUB_ID: z.string().optional(),

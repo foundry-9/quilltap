@@ -5,6 +5,9 @@
 
 import { logger } from '@/lib/logger';
 
+// Cache the auth disabled state after first check
+let cachedAuthDisabled: boolean | null = null;
+
 /**
  * Determine if authentication is disabled
  * When disabled, anonymous access is allowed
@@ -12,15 +15,24 @@ import { logger } from '@/lib/logger';
  * @returns {boolean} True if AUTH_DISABLED env var is set to 'true', false otherwise
  */
 export function isAuthDisabled(): boolean {
-  const disabled = process.env.AUTH_DISABLED === 'true';
+  // Return cached value to avoid repeated env checks and logging
+  if (cachedAuthDisabled !== null) {
+    return cachedAuthDisabled;
+  }
 
-  logger.debug('Auth disabled check', {
+  cachedAuthDisabled = process.env.AUTH_DISABLED === 'true';
+
+  // Only log once when the value is first determined
+  logger.debug('Auth disabled state determined', {
     context: 'isAuthDisabled',
-    authDisabled: disabled,
+    authDisabled: cachedAuthDisabled,
   });
 
-  return disabled;
+  return cachedAuthDisabled;
 }
+
+// Cache for anonymous user config
+let cachedAnonymousUserName: string | null = null;
 
 /**
  * Get the anonymous user display name
@@ -29,14 +41,12 @@ export function isAuthDisabled(): boolean {
  * @returns {string} The anonymous user name from AUTH_ANONYMOUS_USER_NAME env var, or default "Anonymous User"
  */
 export function getAnonymousUserName(): string {
-  const userName = process.env.AUTH_ANONYMOUS_USER_NAME || 'Anonymous User';
+  if (cachedAnonymousUserName !== null) {
+    return cachedAnonymousUserName;
+  }
 
-  logger.debug('Anonymous user name retrieved', {
-    context: 'getAnonymousUserName',
-    userName,
-  });
-
-  return userName;
+  cachedAnonymousUserName = process.env.AUTH_ANONYMOUS_USER_NAME || 'Anonymous User';
+  return cachedAnonymousUserName;
 }
 
 /**
@@ -46,12 +56,5 @@ export function getAnonymousUserName(): string {
  * @returns {string} A consistent anonymous email address
  */
 export function getAnonymousUserEmail(): string {
-  const anonymousEmail = 'anonymous@local';
-
-  logger.debug('Anonymous user email retrieved', {
-    context: 'getAnonymousUserEmail',
-    email: anonymousEmail,
-  });
-
-  return anonymousEmail;
+  return 'anonymous@local';
 }

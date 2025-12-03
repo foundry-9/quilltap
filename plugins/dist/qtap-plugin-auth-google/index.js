@@ -1,6 +1,8 @@
 "use strict";
 
 // plugins/dist/qtap-plugin-auth-google/index.ts
+var GoogleProvider = require("next-auth/providers/google").default;
+
 var REQUIRED_ENV_VARS = ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"];
 var config = {
   providerId: "google",
@@ -24,10 +26,18 @@ function isConfigured() {
 function getConfigStatus() {
   return checkEnvVars(REQUIRED_ENV_VARS);
 }
+function createProvider() {
+  if (!isConfigured()) {
+    return null;
+  }
+  return GoogleProvider({
+    clientId: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET
+  });
+}
 module.exports = {
   config,
   isConfigured,
-  getConfigStatus
-  // Note: createProvider is handled by the main app using next-auth's GoogleProvider
-  // to avoid dependency issues. The plugin just provides configuration.
+  getConfigStatus,
+  createProvider
 };

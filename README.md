@@ -3,7 +3,7 @@
 AI-powered roleplay chat platform with multi-provider LLM support and full SillyTavern compatibility.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.8.4-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-1.8.5-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -98,7 +98,7 @@ Quilltap is built on a modern stack:
 
 - **Frontend & Backend**: Next.js 14+ with TypeScript
 - **Data Store**: JSON-based file storage with atomic writes and JSONL append-only support
-- **Authentication**: NextAuth.js with Google OAuth plus local email/password + optional TOTP 2FA
+- **Authentication**: NextAuth.js with pluggable OAuth providers (Google, etc.) plus local email/password + optional TOTP 2FA
 - **Styling**: Tailwind CSS
 - **Deployment**: Docker + Docker Compose (single container, no database service needed)
 - **Production**: Nginx reverse proxy with Let's Encrypt SSL
@@ -113,7 +113,7 @@ Your API keys are encrypted with AES-256-GCM using a user-specific key derived f
 
 - **Docker and Docker Compose** (recommended)
 - **Node.js 20+** (for local development)
-- **Google OAuth credentials** ([Get them here](https://console.cloud.google.com/))
+- **Google OAuth credentials** (optional, for OAuth login - [Get them here](https://console.cloud.google.com/))
 
 ### Quick Start with Docker
 
@@ -139,13 +139,16 @@ Edit `.env.local` and set your values:
 NEXTAUTH_URL="http://localhost:3000"
 NEXTAUTH_SECRET="your-nextauth-secret-here"
 
-# Google OAuth (get from https://console.cloud.google.com/)
+# Google OAuth (optional - get from https://console.cloud.google.com/)
+# If not configured, only email/password login will be available
 GOOGLE_CLIENT_ID="your-google-client-id"
 GOOGLE_CLIENT_SECRET="your-google-client-secret"
 
 # Encryption
 ENCRYPTION_MASTER_PEPPER="your-encryption-pepper-here"
 ```
+
+**Note:** OAuth providers are now optional. If you don't configure Google OAuth credentials, the sign-in page will show a warning and only email/password authentication will be available. You can still create accounts and log in using email and password.
 
 #### 3. Generate secrets
 
@@ -159,7 +162,9 @@ openssl rand -base64 32
 
 Add these values to your `.env.local` file.
 
-#### 4. Set up Google OAuth
+#### 4. Set up Google OAuth (Optional)
+
+If you want to enable "Sign in with Google":
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Create a new project or select an existing one
@@ -167,6 +172,8 @@ Add these values to your `.env.local` file.
 4. Create OAuth 2.0 credentials
 5. Add authorized redirect URI: `http://localhost:3000/api/auth/callback/google`
 6. Copy the Client ID and Client Secret to your `.env.local`
+
+**Skip this step** if you only want to use email/password authentication.
 
 #### 5. Start the application
 

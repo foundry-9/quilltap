@@ -16,7 +16,7 @@
   ],
   "author": "Foundry-9",
   "license": "MIT",
-  "peerDependencies": {
+  "dependencies": {
     "next-auth": "^4.24.0"
   }
 }

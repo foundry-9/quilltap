@@ -5,6 +5,8 @@
  * This plugin is loaded by the auth provider registry.
  */
 
+import GoogleProvider from 'next-auth/providers/google';
+
 // ============================================================================
 // TYPES (duplicated to avoid import issues in standalone plugin)
 // ============================================================================
@@ -70,6 +72,21 @@ function getConfigStatus(): ProviderConfigStatus {
   return checkEnvVars(REQUIRED_ENV_VARS);
 }
 
+/**
+ * Create the NextAuth Google OAuth provider
+ * Returns null if not properly configured
+ */
+function createProvider() {
+  if (!isConfigured()) {
+    return null;
+  }
+
+  return GoogleProvider({
+    clientId: process.env.GOOGLE_CLIENT_ID!,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+  });
+}
+
 // ============================================================================
 // PLUGIN EXPORT
 // ============================================================================
@@ -78,6 +95,5 @@ module.exports = {
   config,
   isConfigured,
   getConfigStatus,
-  // Note: createProvider is handled by the main app using next-auth's GoogleProvider
-  // to avoid dependency issues. The plugin just provides configuration.
+  createProvider,
 };

@@ -7,7 +7,6 @@
  */
 
 import { NextAuthOptions } from "next-auth";
-import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { verifyPassword } from "@/lib/auth/password";
 import { JsonStoreAdapter } from "@/lib/json-store/auth-adapter";
@@ -15,7 +14,7 @@ import { getJsonStore } from "@/lib/json-store/core/json-store";
 import { UsersRepository } from "@/lib/json-store/repositories/users.repository";
 import { isAuthDisabled } from "@/lib/auth/config";
 import { logger } from "@/lib/logger";
-import { getConfiguredAuthProviders } from "@/lib/plugins/auth-provider-registry";
+import { buildNextAuthProviders, getConfiguredAuthProviders } from "@/lib/plugins/auth-provider-registry";
 import { initializePlugins, isPluginSystemInitialized } from "@/lib/startup/plugin-initialization";
 
 // ============================================================================
@@ -33,37 +32,6 @@ function getUsersRepository(): UsersRepository {
 function getAdapter(): ReturnType<typeof JsonStoreAdapter> {
   adapter ??= JsonStoreAdapter(getJsonStore());
   return adapter;
-}
-
-// ============================================================================
-// PROVIDER CREATION
-// ============================================================================
-
-/**
- * Create an OAuth provider based on provider ID
- * Maps plugin configurations to actual NextAuth providers
- */
-function createOAuthProvider(providerId: string): ReturnType<typeof GoogleProvider> | null {
-  switch (providerId) {
-    case 'google':
-      if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-        return GoogleProvider({
-          clientId: process.env.GOOGLE_CLIENT_ID,
-          clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        });
-      }
-      return null;
-
-    // Future OAuth providers can be added here:
-    // case 'github':
-    //   return GitHubProvider({ ... });
-    // case 'apple':
-    //   return AppleProvider({ ... });
-
-    default:
-      logger.warn('Unknown OAuth provider ID', { context: 'createOAuthProvider', providerId });
-      return null;
-  }
 }
 
 /**
@@ -131,17 +99,25 @@ function buildCredentialsProvider() {
 
 // Cache built providers after plugins are initialized
 let cachedProviders: NextAuthOptions['providers'] | null = null;
+// Track if we've logged the auth disabled message
+let authDisabledLogged = false;
+// Track if we've logged the no auth plugins warning
+let noAuthPluginsWarningLogged = false;
 
 /**
  * Build the list of authentication providers based on configuration
  * When auth is disabled, no providers are configured
+ * OAuth providers are loaded from plugins via the auth provider registry
  */
 function buildProviders(): NextAuthOptions['providers'] {
   // Check if auth is disabled
   if (isAuthDisabled()) {
-    logger.info('Authentication is disabled - no providers configured', {
-      context: 'buildProviders',
-    });
+    if (!authDisabledLogged) {
+      logger.info('Authentication is disabled - no providers configured', {
+        context: 'buildProviders',
+      });
+      authDisabledLogged = true;
+    }
     return [];
   }
 
@@ -149,71 +125,35 @@ function buildProviders(): NextAuthOptions['providers'] {
 
   // Return cached providers if available and plugins are initialized
   if (cachedProviders !== null && pluginsInitialized) {
-    logger.debug('Returning cached auth providers', {
-      context: 'buildProviders',
-      totalProviders: cachedProviders.length,
-    });
     return cachedProviders;
   }
 
   const providers: NextAuthOptions['providers'] = [];
 
-  // Load OAuth providers from plugin registry
-  const registeredAuthProviders = getConfiguredAuthProviders();
+  // Load OAuth providers from plugin registry (plugins must be initialized)
+  if (pluginsInitialized) {
+    const oauthProviders = buildNextAuthProviders();
 
-  logger.debug('Building authentication providers', {
-    context: 'buildProviders',
-    registeredProviders: registeredAuthProviders.length,
-    pluginsInitialized,
-  });
-
-  // Create providers from registered auth plugins
-  for (const entry of registeredAuthProviders) {
-    const provider = createOAuthProvider(entry.config.providerId);
-    if (provider) {
-      providers.push(provider);
-      logger.debug('OAuth provider added from plugin', {
-        context: 'buildProviders',
-        providerId: entry.config.providerId,
-        displayName: entry.config.displayName,
-      });
-    }
-  }
-
-  // Fallback: If no plugins registered but Google env vars exist, add Google directly
-  if (registeredAuthProviders.length === 0) {
-    if (pluginsInitialized) {
-      logger.warn('No auth provider plugins registered after plugin initialization', {
-        context: 'buildProviders',
-        hasGoogleEnvVars: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
-      });
-    } else {
-      logger.debug('Plugin system not yet initialized, using fallback providers', {
-        context: 'buildProviders',
-      });
+    // Filter out any null providers and add valid ones
+    for (const provider of oauthProviders) {
+      if (provider) {
+        providers.push(provider);
+      }
     }
 
-    if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-      providers.push(
-        GoogleProvider({
-          clientId: process.env.GOOGLE_CLIENT_ID,
-          clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        })
-      );
-      logger.info('Google OAuth provider added via fallback', {
+    const configuredCount = getConfiguredAuthProviders().length;
+
+    if (configuredCount === 0 && !noAuthPluginsWarningLogged) {
+      logger.warn('No authentication plugins are configured. Users will only be able to use credentials-based login.', {
         context: 'buildProviders',
+        hint: 'Enable an auth plugin (e.g., qtap-plugin-auth-google) and configure its environment variables.',
       });
+      noAuthPluginsWarningLogged = true;
     }
   }
 
   // Always add credentials provider for email/password login
   providers.push(buildCredentialsProvider());
-
-  logger.debug('Auth providers built', {
-    context: 'buildProviders',
-    totalProviders: providers.length,
-    fromPlugins: registeredAuthProviders.length > 0,
-  });
 
   // Cache providers if plugins are initialized
   if (pluginsInitialized) {
@@ -240,7 +180,6 @@ let cachedAuthOptions: NextAuthOptions | null = null;
 export async function buildAuthOptionsAsync(): Promise<NextAuthOptions> {
   // Fast path: return cached options if available
   if (cachedAuthOptions !== null && isPluginSystemInitialized()) {
-    logger.debug('Returning cached auth options', { context: 'buildAuthOptionsAsync' });
     return cachedAuthOptions;
   }
 
@@ -347,7 +286,9 @@ export const authOptions: NextAuthOptions = new Proxy({} as NextAuthOptions, {
 export function clearAuthOptionsCache(): void {
   cachedAuthOptions = null;
   cachedProviders = null;
-  logger.debug('Auth options cache cleared', { context: 'clearAuthOptionsCache' });
+  // Reset logging flags so messages can appear again after refresh
+  authDisabledLogged = false;
+  noAuthPluginsWarningLogged = false;
 }
 
 /**

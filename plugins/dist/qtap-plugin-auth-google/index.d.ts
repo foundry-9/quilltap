@@ -28,3 +28,8 @@ declare function isConfigured(): boolean;
  * Get detailed configuration status
  */
 declare function getConfigStatus(): ProviderConfigStatus;
+/**
+ * Create the NextAuth Google OAuth provider
+ * Returns null if not properly configured
+ */
+declare function createProvider(): import('next-auth/providers/google').GoogleProfile | null;

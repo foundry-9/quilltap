@@ -45,6 +45,16 @@ describe('Environment Validation', () => {
     expect(() => validateEnv()).not.toThrow();
   });
 
+  it('should succeed without Google OAuth credentials (plugin-based auth)', async () => {
+    delete process.env.GOOGLE_CLIENT_ID;
+    delete process.env.GOOGLE_CLIENT_SECRET;
+
+    jest.resetModules();
+
+    const { validateEnv } = await import('@/lib/env');
+    expect(() => validateEnv()).not.toThrow();
+  });
+
   it('should fail with short NEXTAUTH_SECRET', async () => {
     process.env.NEXTAUTH_SECRET = 'short';
 
