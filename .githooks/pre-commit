@@ -68,13 +68,37 @@ CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 # by finding when package.json version line was changed to current base
 COMMIT_COUNT=$(git rev-list --count HEAD -- . 2>/dev/null || echo "0")
 
-# Try to find when the base version was first introduced
-# Look for commits where the version changed TO this base version (with any suffix)
-# We search for the +  "version": "x.y.z pattern in diffs
-BASE_VERSION_COMMIT=$(git log --oneline --all -p -- package.json 2>/dev/null | grep -B 50 "^+.*\"version\": \"$BASE_VERSION" | grep -m1 "^[a-f0-9]" | cut -d' ' -f1 || echo "")
-if [ -n "$BASE_VERSION_COMMIT" ]; then
+# Try to find when the base version was FIRST introduced (when the x.y.z part changed)
+# We need to look for when the version was changed TO this base version from a DIFFERENT base
+# This means finding commits where the previous version had a different x.y.z base
+#
+# Strategy: Walk through git log for package.json and find the commit where
+# the base version first appears (parent commit has different base)
+BASE_VERSION_FIRST_COMMIT=""
+
+# Look through git log for the commit that first introduced this base version
+while IFS= read -r commit_hash; do
+  # Get the version from this commit
+  VERSION_AT_COMMIT=$(git show "$commit_hash:package.json" 2>/dev/null | grep -m1 '"version"' | sed 's/.*"\([^"]*\)".*/\1/' || echo "")
+  COMMIT_BASE=$(echo "$VERSION_AT_COMMIT" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+
+  if [ "$COMMIT_BASE" = "$BASE_VERSION" ]; then
+    # This commit has our base version, check if the parent has a different base
+    PARENT_COMMIT="${commit_hash}^"
+    PARENT_VERSION=$(git show "$PARENT_COMMIT:package.json" 2>/dev/null | grep -m1 '"version"' | sed 's/.*"\([^"]*\)".*/\1/' || echo "")
+    PARENT_BASE=$(echo "$PARENT_VERSION" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+
+    if [ "$PARENT_BASE" != "$BASE_VERSION" ]; then
+      # Found the commit where base version was first introduced!
+      BASE_VERSION_FIRST_COMMIT="$commit_hash"
+      break
+    fi
+  fi
+done < <(git log --format="%h" -- package.json 2>/dev/null)
+
+if [ -n "$BASE_VERSION_FIRST_COMMIT" ]; then
   # Count commits from that point to HEAD (not including the base commit itself)
-  COMMIT_COUNT=$(git rev-list --count "$BASE_VERSION_COMMIT"..HEAD 2>/dev/null || echo "0")
+  COMMIT_COUNT=$(git rev-list --count "$BASE_VERSION_FIRST_COMMIT"..HEAD 2>/dev/null || echo "0")
 fi
 
 # Determine the new version based on branch
