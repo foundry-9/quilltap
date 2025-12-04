@@ -43,6 +43,8 @@ export interface ToolExecutionContext {
   imageProfileId?: string;
   characterId?: string;
   embeddingProfileId?: string;
+  /** Participant ID of who is calling the tool (for {{me}} resolution in image prompts) */
+  callingParticipantId?: string;
 }
 
 /**
@@ -120,10 +122,12 @@ export async function executeToolCallWithContext(
       }
 
       // Execute image generation tool
+      // Pass callingParticipantId so {{me}} resolves to the character (who's calling the tool)
       const imageContext: ImageToolExecutionContext = {
         userId,
         profileId: imageProfileId,
         chatId,
+        callingParticipantId: context.callingParticipantId,
       };
 
       const result = await executeImageGenerationTool(toolCall.arguments, imageContext);

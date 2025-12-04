@@ -18,6 +18,7 @@ import {
   type FallbackResult,
 } from '@/lib/chat/file-attachment-fallback'
 import { logger } from '@/lib/logger'
+import { requiresApiKey } from '@/lib/plugins/provider-validation'
 import { z } from 'zod'
 
 // Validation schema
@@ -56,10 +57,15 @@ async function processToolResults(
   encoder: TextEncoder
 ) {
   const toolMessages: Array<{ toolName: string; success: boolean; content: string; arguments?: Record<string, unknown>; metadata?: { provider?: string; model?: string } }> = []
-  const generatedImagePaths: Array<{ filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number; sha256?: string }> = []
+  const generatedImagePaths: Array<{ id: string; filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number; sha256?: string }> = []
 
+  // Send tool detection info with tool names for proper UI handling
   controller.enqueue(
-    encoder.encode(`data: ${JSON.stringify({ toolsDetected: toolCalls.length })}\n\n`)
+    encoder.encode(`data: ${JSON.stringify({
+      toolsDetected: toolCalls.length,
+      toolNames: toolCalls.map(tc => tc.name),
+      toolArguments: toolCalls.map(tc => tc.arguments),
+    })}\n\n`)
   )
 
   for (const toolCall of toolCalls) {
@@ -67,8 +73,9 @@ async function processToolResults(
 
     if (toolResult.success && Array.isArray(toolResult.result)) {
       for (const img of toolResult.result) {
-        if (img.filepath) {
+        if (img.filepath && img.id) {
           generatedImagePaths.push({
+            id: img.id,
             filename: img.filename,
             filepath: img.filepath,
             mimeType: img.mimeType || 'image/png',
@@ -114,18 +121,27 @@ async function processToolResults(
   return { toolMessages, generatedImagePaths }
 }
 
-// Helper function to save tool messages and generated images
+// Helper function to save tool messages and link generated images
 async function saveToolMessages(
   repos: ReturnType<typeof getRepositories>,
   chatId: string,
-  userId: string,
+  _userId: string,
   toolMessages: Array<{ toolName: string; success: boolean; content: string; arguments?: Record<string, unknown>; metadata?: { provider?: string; model?: string } }>,
-  generatedImagePaths: Array<{ filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number; sha256?: string }>
+  generatedImagePaths: Array<{ id: string; filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number; sha256?: string }>,
+  characterId?: string
 ) {
+  const { addFileLink, addFileTag } = await import('@/lib/file-manager')
+
   let firstToolMessageId: string | null = null
+  const generatedImageIds: string[] = generatedImagePaths.map(img => img.id)
 
   for (const toolMsg of toolMessages) {
     const toolMessageId = crypto.randomUUID()
+    // Include image IDs as attachments on the tool message
+    const toolAttachments = toolMsg.toolName === 'generate_image'
+      ? generatedImageIds
+      : []
+
     const toolMessage = {
       id: toolMessageId,
       type: 'message' as const,
@@ -139,38 +155,32 @@ async function saveToolMessages(
         model: toolMsg.metadata?.model,
       }),
       createdAt: new Date().toISOString(),
-      attachments: [] as string[],
+      attachments: toolAttachments,
     }
     await repos.chats.addMessage(chatId, toolMessage)
 
     if (!firstToolMessageId) {
       firstToolMessageId = toolMessageId
     }
+  }
 
-    for (const imagePath of generatedImagePaths) {
-      if (imagePath.sha256) {
-        await repos.images.create({
-          userId,
-          type: 'chat_file',
-          chatId,
-          messageId: toolMessageId,
-          filename: imagePath.filename,
-          relativePath: imagePath.filepath,
-          mimeType: imagePath.mimeType,
-          size: imagePath.size,
-          source: 'generated',
-          sha256: imagePath.sha256,
-          width: imagePath.width,
-          height: imagePath.height,
-          tags: [],
-        })
-      } else {
-        logger.warn('Skipping chat_file creation for generated image due to missing SHA256:', { filename: imagePath.filename })
+  // Link generated images to the tool message and add character tag
+  for (const imageId of generatedImageIds) {
+    try {
+      // Link to the tool message
+      if (firstToolMessageId) {
+        await addFileLink(imageId, firstToolMessageId)
       }
+      // Add character tag so it shows up in character's gallery
+      if (characterId) {
+        await addFileTag(imageId, characterId)
+      }
+    } catch (error) {
+      logger.warn('Failed to link/tag generated image:', { imageId, error: error instanceof Error ? error.message : String(error) })
     }
   }
 
-  return firstToolMessageId
+  return { firstToolMessageId, generatedImageIds }
 }
 
 export async function POST(
@@ -399,20 +409,23 @@ export async function POST(
       }
     })
 
-    // Get API key
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: 'No API key configured for this connection profile' },
-        { status: 400 }
+    // Get API key (only required for providers that need it)
+    let decryptedKey = ''
+    if (requiresApiKey(connectionProfile.provider)) {
+      if (!apiKey) {
+        return NextResponse.json(
+          { error: 'No API key configured for this connection profile' },
+          { status: 400 }
+        )
+      }
+      decryptedKey = decryptApiKey(
+        apiKey.ciphertext,
+        apiKey.iv,
+        apiKey.authTag,
+        user.id
       )
     }
-
-    const decryptedKey = decryptApiKey(
-      apiKey.ciphertext,
-      apiKey.iv,
-      apiKey.authTag,
-      user.id
-    )
+    // For providers that don't require API keys (like Ollama), pass empty string
 
     // Get LLM provider
     const provider = await createLLMProvider(
@@ -431,12 +444,14 @@ export async function POST(
     let rawResponse: unknown = null
 
     // Prepare tool execution context
+    // Pass the character's participant ID so {{me}} in image prompts resolves to the character
     const toolContext: ToolExecutionContext = {
       chatId: id,
       userId: user.id,
       imageProfileId: imageProfileId || undefined,
       characterId: character.id,
       embeddingProfileId: chatSettings?.cheapLLMSettings?.embeddingProfileId || undefined,
+      callingParticipantId: characterParticipant.id,
     }
 
     const stream = new ReadableStream({
@@ -547,23 +562,120 @@ export async function POST(
             }
           }
 
-          // Detect and execute tool calls
+          // Detect and execute tool calls, then continue conversation if needed
           let toolMessages: Array<{ toolName: string; success: boolean; content: string; arguments?: Record<string, unknown>; metadata?: { provider?: string; model?: string } }> = []
-          let generatedImagePaths: Array<{ filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number; sha256?: string }> = []
+          let generatedImagePaths: Array<{ id: string; filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number; sha256?: string }> = []
 
-          if (rawResponse) {
-            const toolCalls = detectToolCalls(rawResponse, connectionProfile.provider)
-            if (toolCalls.length > 0) {
-              const results = await processToolResults(toolCalls, toolContext, controller, encoder)
-              toolMessages = results.toolMessages
-              generatedImagePaths = results.generatedImagePaths
+          // Track conversation messages for tool call continuation
+          let currentMessages = [...messages]
+          let currentResponse = fullResponse
+          let currentRawResponse = rawResponse
+          const MAX_TOOL_ITERATIONS = 5 // Prevent infinite loops
+          let toolIterations = 0
+
+          // Tool call loop - continue until LLM gives a text response or max iterations
+          while (currentRawResponse && toolIterations < MAX_TOOL_ITERATIONS) {
+            const toolCalls = detectToolCalls(currentRawResponse, connectionProfile.provider)
+
+            if (toolCalls.length === 0) {
+              // No tool calls, we're done
+              break
             }
+
+            toolIterations++
+            logger.debug('[Chat Messages] Processing tool calls, iteration', {
+              iteration: toolIterations,
+              toolCallCount: toolCalls.length,
+              tools: toolCalls.map(tc => tc.name),
+            })
+
+            const results = await processToolResults(toolCalls, toolContext, controller, encoder)
+            toolMessages = [...toolMessages, ...results.toolMessages]
+            generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
+
+            // Add assistant message with tool call to conversation (if there was any content)
+            if (currentResponse && currentResponse.trim().length > 0) {
+              currentMessages = [
+                ...currentMessages,
+                { role: 'assistant' as const, content: currentResponse }
+              ]
+            } else {
+              // Even without content, add a placeholder to maintain conversation flow
+              currentMessages = [
+                ...currentMessages,
+                { role: 'assistant' as const, content: '[Tool call made]' }
+              ]
+            }
+
+            // Add tool results as user messages (how LLMs expect to receive tool results)
+            for (const toolMsg of results.toolMessages) {
+              currentMessages = [
+                ...currentMessages,
+                { role: 'user' as const, content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}` }
+              ]
+            }
+
+            // Continue the conversation with the tool results
+            logger.debug('[Chat Messages] Continuing conversation after tool execution', {
+              messageCount: currentMessages.length,
+              iteration: toolIterations,
+            })
+
+            // Reset for next iteration
+            currentResponse = ''
+            currentRawResponse = null
+
+            // Stream the continuation from the LLM
+            for await (const chunk of provider.streamMessage(
+              {
+                messages: currentMessages,
+                model: connectionProfile.modelName,
+                temperature: modelParams.temperature as number | undefined,
+                maxTokens: modelParams.maxTokens as number | undefined,
+                topP: modelParams.topP as number | undefined,
+                tools: tools.length > 0 ? tools : undefined,
+                webSearchEnabled: useNativeWebSearch,
+              },
+              decryptedKey
+            )) {
+              if (chunk.content) {
+                currentResponse += chunk.content
+                fullResponse += chunk.content
+                controller.enqueue(
+                  encoder.encode(`data: ${JSON.stringify({ content: chunk.content })}\n\n`)
+                )
+              }
+
+              if (chunk.done) {
+                if (chunk.usage) {
+                  usage = chunk.usage
+                }
+                if (chunk.attachmentResults) {
+                  attachmentResults = chunk.attachmentResults
+                }
+                if (chunk.rawResponse) {
+                  currentRawResponse = chunk.rawResponse
+                  rawResponse = chunk.rawResponse
+                }
+              }
+            }
+          }
+
+          if (toolIterations >= MAX_TOOL_ITERATIONS) {
+            logger.warn('[Chat Messages] Max tool iterations reached', {
+              iterations: toolIterations,
+              chatId: id,
+            })
           }
 
           // Save assistant message only if there's actual content (not just a tool call)
           let assistantMessageId: string | null = null
           if (fullResponse && fullResponse.trim().length > 0) {
             assistantMessageId = crypto.randomUUID()
+
+            // Get image IDs from generated images to attach to assistant message
+            const assistantAttachments = generatedImagePaths.map(img => img.id)
+
             const assistantMessage = {
               id: assistantMessageId,
               type: 'message' as const,
@@ -572,14 +684,27 @@ export async function POST(
               createdAt: new Date().toISOString(),
               tokenCount: usage?.totalTokens || null,
               rawResponse: (rawResponse as Record<string, unknown>) || null,
-              attachments: [] as string[],
+              attachments: assistantAttachments,
             }
             await repos.chats.addMessage(id, assistantMessage)
 
-            // Save tool messages if tools were executed
-            const firstToolMessageId = toolMessages.length > 0
-              ? await saveToolMessages(repos, id, user.id, toolMessages, generatedImagePaths)
+            // Save tool messages if tools were executed (this also links images to character)
+            const toolSaveResult = toolMessages.length > 0
+              ? await saveToolMessages(repos, id, user.id, toolMessages, generatedImagePaths, character.id)
               : null
+            const firstToolMessageId = toolSaveResult?.firstToolMessageId ?? null
+
+            // Link images to assistant message as well
+            if (assistantAttachments.length > 0) {
+              const { addFileLink } = await import('@/lib/file-manager')
+              for (const imageId of assistantAttachments) {
+                try {
+                  await addFileLink(imageId, assistantMessageId)
+                } catch (error) {
+                  logger.warn('Failed to link image to assistant message:', { imageId, error: error instanceof Error ? error.message : String(error) })
+                }
+              }
+            }
 
             // Update chat timestamp
             await repos.chats.update(id, { updatedAt: new Date().toISOString() })
@@ -641,7 +766,8 @@ export async function POST(
             }
           } else if (toolMessages.length > 0) {
             // Even if there's no text response, send done event if tools were executed
-            const firstToolMessageId = await saveToolMessages(repos, id, user.id, toolMessages, generatedImagePaths)
+            const toolSaveResult = await saveToolMessages(repos, id, user.id, toolMessages, generatedImagePaths, character.id)
+            const firstToolMessageId = toolSaveResult.firstToolMessageId
             await repos.chats.update(id, { updatedAt: new Date().toISOString() })
 
             controller.enqueue(

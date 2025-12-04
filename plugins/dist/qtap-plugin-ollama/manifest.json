@@ -20,7 +20,7 @@
   "typescript": true,
   "frontend": "REACT",
   "styling": "TAILWIND",
-  "enabledByDefault": false,
+  "enabledByDefault": true,
   "status": "STABLE",
   "keywords": ["ollama", "local", "offline", "llm", "llava", "neural-chat", "mistral", "ai", "chat"],
   "providerConfig": {

@@ -20,6 +20,21 @@ interface Tag {
   createdAt?: string
 }
 
+interface ProviderConfig {
+  name: string
+  displayName: string
+  configRequirements: {
+    requiresApiKey: boolean
+    requiresBaseUrl: boolean
+  }
+  capabilities: {
+    chat: boolean
+    imageGeneration: boolean
+    embeddings: boolean
+    webSearch: boolean
+  }
+}
+
 interface ConnectionProfile {
   id: string
   name: string
@@ -36,21 +51,10 @@ interface ConnectionProfile {
   messageCount?: number
 }
 
-// Provider web search support mapping
-const PROVIDER_WEB_SEARCH_SUPPORT: Record<string, boolean> = {
-  'OPENAI': true,
-  'ANTHROPIC': true,
-  'GOOGLE': true,
-  'GROK': true,
-  'OLLAMA': false,
-  'OPENROUTER': false,
-  'OPENAI_COMPATIBLE': false,
-  'GAB_AI': false,
-}
-
 export default function ConnectionProfilesTab() {
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([])
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
+  const [providers, setProviders] = useState<ProviderConfig[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -217,9 +221,36 @@ export default function ConnectionProfilesTab() {
     }
   }
 
+  const fetchProviders = async () => {
+    try {
+      clientLogger.debug('Fetching providers configuration')
+      const res = await fetch('/api/providers')
+      if (!res.ok) throw new Error('Failed to fetch providers')
+      const data = await res.json()
+      clientLogger.debug('Providers loaded', {
+        count: data.providers?.length ?? 0,
+        providers: data.providers?.map((p: ProviderConfig) => p.name)
+      })
+      setProviders(data.providers || [])
+    } catch (err) {
+      clientLogger.error('Failed to fetch providers', { error: err instanceof Error ? err.message : String(err) })
+    }
+  }
+
+  // Get provider config requirements - returns defaults if provider not found
+  const getProviderRequirements = (providerName: string) => {
+    const provider = providers.find(p => p.name === providerName)
+    return {
+      requiresApiKey: provider?.configRequirements?.requiresApiKey ?? true,
+      requiresBaseUrl: provider?.configRequirements?.requiresBaseUrl ?? false,
+      supportsWebSearch: provider?.capabilities?.webSearch ?? false,
+    }
+  }
+
   useEffect(() => {
     fetchProfiles()
     fetchApiKeys()
+    fetchProviders()
     // Fetch chat settings to get the cheap default profile
     const fetchChatSettings = async () => {
       try {
@@ -385,11 +416,13 @@ export default function ConnectionProfilesTab() {
         throw new Error('Provider is required')
       }
 
-      if (formData.provider === 'OLLAMA' || formData.provider === 'OPENAI_COMPATIBLE') {
-        if (!formData.baseUrl) {
-          throw new Error('Base URL is required for this provider')
-        }
-      } else if (!formData.apiKeyId) {
+      const requirements = getProviderRequirements(formData.provider)
+
+      if (requirements.requiresBaseUrl && !formData.baseUrl) {
+        throw new Error('Base URL is required for this provider')
+      }
+
+      if (requirements.requiresApiKey && !formData.apiKeyId) {
         throw new Error('API Key is required for this provider')
       }
 
@@ -428,7 +461,8 @@ export default function ConnectionProfilesTab() {
 
     try {
       // Validate required fields based on provider
-      if ((formData.provider === 'OLLAMA' || formData.provider === 'OPENAI_COMPATIBLE') && !formData.baseUrl) {
+      const requirements = getProviderRequirements(formData.provider)
+      if (requirements.requiresBaseUrl && !formData.baseUrl) {
         throw new Error('Base URL is required for this provider')
       }
 
@@ -723,14 +757,26 @@ export default function ConnectionProfilesTab() {
                   onChange={handleChange}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
                 >
-                  <option value="OPENAI">OpenAI</option>
-                  <option value="ANTHROPIC">Anthropic</option>
-                  <option value="GOOGLE">Google</option>
-                  <option value="GROK">Grok</option>
-                  <option value="GAB_AI">Gab AI</option>
-                  <option value="OLLAMA">Ollama</option>
-                  <option value="OPENROUTER">OpenRouter</option>
-                  <option value="OPENAI_COMPATIBLE">OpenAI Compatible</option>
+                  {providers.length > 0 ? (
+                    providers
+                      .filter(p => p.capabilities.chat)
+                      .map(p => (
+                        <option key={p.name} value={p.name}>
+                          {p.displayName}
+                        </option>
+                      ))
+                  ) : (
+                    <>
+                      <option value="OPENAI">OpenAI</option>
+                      <option value="ANTHROPIC">Anthropic</option>
+                      <option value="GOOGLE">Google</option>
+                      <option value="GROK">Grok</option>
+                      <option value="GAB_AI">Gab AI</option>
+                      <option value="OLLAMA">Ollama</option>
+                      <option value="OPENROUTER">OpenRouter</option>
+                      <option value="OPENAI_COMPATIBLE">OpenAI Compatible</option>
+                    </>
+                  )}
                 </select>
                 <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                   File attachments: {getAttachmentSupportDescription(formData.provider as any, formData.baseUrl || undefined)}
@@ -738,48 +784,59 @@ export default function ConnectionProfilesTab() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="apiKeyId" className="block text-sm font-medium mb-2">
-                  API Key
-                </label>
-                <select
-                  id="apiKeyId"
-                  name="apiKeyId"
-                  value={formData.apiKeyId}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-                >
-                  <option value="">Select an API Key</option>
-                  {apiKeys
-                    .filter(key => key.provider === formData.provider)
-                    .map(key => (
-                      <option key={key.id} value={key.id}>
-                        {key.label}
-                      </option>
-                    ))}
-                </select>
-                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">Optional if using Ollama or already authenticated</p>
-              </div>
+            {(() => {
+              const reqs = getProviderRequirements(formData.provider)
+              const showApiKey = reqs.requiresApiKey
+              const showBaseUrl = reqs.requiresBaseUrl
+              const showBoth = showApiKey && showBaseUrl
 
-              {(formData.provider === 'OLLAMA' || formData.provider === 'OPENAI_COMPATIBLE') && (
-                <div>
-                  <label htmlFor="baseUrl" className="block text-sm font-medium mb-2">
-                    Base URL
-                  </label>
-                  <input
-                    type="url"
-                    id="baseUrl"
-                    name="baseUrl"
-                    value={formData.baseUrl}
-                    onChange={handleChange}
-                    placeholder="http://localhost:11434"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-                  />
-                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">Required for Ollama and compatible services</p>
+              return (
+                <div className={showBoth ? "grid grid-cols-2 gap-4" : ""}>
+                  {showApiKey && (
+                    <div>
+                      <label htmlFor="apiKeyId" className="block text-sm font-medium mb-2">
+                        API Key *
+                      </label>
+                      <select
+                        id="apiKeyId"
+                        name="apiKeyId"
+                        value={formData.apiKeyId}
+                        onChange={handleChange}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                      >
+                        <option value="">Select an API Key</option>
+                        {apiKeys
+                          .filter(key => key.provider === formData.provider)
+                          .map(key => (
+                            <option key={key.id} value={key.id}>
+                              {key.label}
+                            </option>
+                          ))}
+                      </select>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">Required for this provider</p>
+                    </div>
+                  )}
+
+                  {showBaseUrl && (
+                    <div>
+                      <label htmlFor="baseUrl" className="block text-sm font-medium mb-2">
+                        Base URL *
+                      </label>
+                      <input
+                        type="url"
+                        id="baseUrl"
+                        name="baseUrl"
+                        value={formData.baseUrl}
+                        onChange={handleChange}
+                        placeholder="http://localhost:11434"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                      />
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">Required for this provider</p>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              )
+            })()}
 
             {/* Connection Testing Section */}
             <div className="border border-gray-200 dark:border-slate-700 rounded-lg p-4 bg-gray-50 dark:bg-slate-800">
@@ -798,13 +855,15 @@ export default function ConnectionProfilesTab() {
                 <button
                   type="button"
                   onClick={handleFetchModels}
-                  disabled={
-                    isFetchingModels ||
+                  disabled={(() => {
+                    const reqs = getProviderRequirements(formData.provider)
+                    if (isFetchingModels) return true
                     // For providers that need baseUrl, require it
-                    ((formData.provider === 'OLLAMA' || formData.provider === 'OPENAI_COMPATIBLE') && !formData.baseUrl) ||
-                    // For other providers (except ANTHROPIC which doesn't need connection), require connection
-                    (formData.provider !== 'ANTHROPIC' && formData.provider !== 'OLLAMA' && formData.provider !== 'OPENAI_COMPATIBLE' && !isConnected)
-                  }
+                    if (reqs.requiresBaseUrl && !formData.baseUrl) return true
+                    // For providers that need API key and aren't connected yet, require connection
+                    if (reqs.requiresApiKey && !isConnected) return true
+                    return false
+                  })()}
                   className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
                 >
                   {isFetchingModels ? 'Fetching...' : 'Fetch Models'}
@@ -963,31 +1022,36 @@ export default function ConnectionProfilesTab() {
                   Mark as cheap LLM (suitable for cost-effective tasks like memory extraction)
                 </label>
               </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="allowWebSearch"
-                  name="allowWebSearch"
-                  checked={formData.allowWebSearch}
-                  onChange={handleChange}
-                  disabled={!PROVIDER_WEB_SEARCH_SUPPORT[formData.provider]}
-                  className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                />
-                <div className="flex flex-col gap-1">
-                  <label htmlFor="allowWebSearch" className={`text-sm ${PROVIDER_WEB_SEARCH_SUPPORT[formData.provider] ? '' : 'text-gray-500 dark:text-gray-400'}`}>
-                    Allow Web Search
-                  </label>
-                  {PROVIDER_WEB_SEARCH_SUPPORT[formData.provider] ? (
-                    <p className="text-xs text-gray-600 dark:text-gray-400">
-                      Enable the LLM to search the web for real-time information when responding to queries
-                    </p>
-                  ) : (
-                    <p className="text-xs text-gray-500 dark:text-gray-500">
-                      This provider does not support web search
-                    </p>
-                  )}
-                </div>
-              </div>
+              {(() => {
+                const supportsWebSearch = getProviderRequirements(formData.provider).supportsWebSearch
+                return (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="allowWebSearch"
+                      name="allowWebSearch"
+                      checked={formData.allowWebSearch}
+                      onChange={handleChange}
+                      disabled={!supportsWebSearch}
+                      className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                    <div className="flex flex-col gap-1">
+                      <label htmlFor="allowWebSearch" className={`text-sm ${supportsWebSearch ? '' : 'text-gray-500 dark:text-gray-400'}`}>
+                        Allow Web Search
+                      </label>
+                      {supportsWebSearch ? (
+                        <p className="text-xs text-gray-600 dark:text-gray-400">
+                          Enable the LLM to search the web for real-time information when responding to queries
+                        </p>
+                      ) : (
+                        <p className="text-xs text-gray-500 dark:text-gray-500">
+                          This provider does not support web search
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
 
             {/* Tag Editor (only show when editing existing profile) */}

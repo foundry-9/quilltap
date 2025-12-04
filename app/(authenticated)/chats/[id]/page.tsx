@@ -145,6 +145,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [chatSettingsModalOpen, setChatSettingsModalOpen] = useState(false)
   const [generateImageDialogOpen, setGenerateImageDialogOpen] = useState(false)
   const [toolExecutionStatus, setToolExecutionStatus] = useState<{ tool: string; status: 'pending' | 'success' | 'error'; message: string } | null>(null)
+  const [pendingToolCalls, setPendingToolCalls] = useState<Array<{ name: string; status: 'pending' | 'success' | 'error'; result?: unknown; arguments?: Record<string, unknown> }>>([])
   const [showPreview, setShowPreview] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -473,33 +474,50 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 setStreamingContent(fullContent)
               }
 
-              // Handle tool detection
-              if (data.toolsDetected) {
-                setToolExecutionStatus({
-                  tool: 'generate_image',
-                  status: 'pending',
-                  message: `Generating ${data.toolsDetected} image${data.toolsDetected > 1 ? 's' : ''}...`,
-                })
+              // Handle tool detection - create pending entries for each tool
+              if (data.toolsDetected && data.toolNames) {
+                const toolNames = data.toolNames as string[]
+                const toolArgs = (data.toolArguments || []) as Record<string, unknown>[]
+                setPendingToolCalls(toolNames.map((name, idx) => ({
+                  name,
+                  status: 'pending' as const,
+                  arguments: toolArgs[idx],
+                })))
+                // Only show image generation status for generate_image tool
+                if (toolNames.includes('generate_image')) {
+                  setToolExecutionStatus({
+                    tool: 'generate_image',
+                    status: 'pending',
+                    message: `Generating image...`,
+                  })
+                }
               }
 
               // Handle tool results
               if (data.toolResult) {
                 const { name, success, result } = data.toolResult
-                if (success) {
-                  const imageCount = result?.images?.length || 1
-                  setToolExecutionStatus({
-                    tool: name,
-                    status: 'success',
-                    message: `Successfully generated ${imageCount} image${imageCount > 1 ? 's' : ''}!`,
-                  })
-                  showSuccessToast(`Image generation complete! ${imageCount} image${imageCount > 1 ? 's' : ''} generated.`)
-                } else {
-                  setToolExecutionStatus({
-                    tool: name,
-                    status: 'error',
-                    message: result?.error || 'Failed to generate image',
-                  })
-                  showErrorToast(`Image generation failed: ${result?.error || 'Unknown error'}`)
+                // Update pending tool call status
+                setPendingToolCalls(prev => prev.map(tc =>
+                  tc.name === name ? { ...tc, status: success ? 'success' : 'error', result } : tc
+                ))
+                // Only show toast/status for image generation
+                if (name === 'generate_image') {
+                  if (success) {
+                    const imageCount = result?.images?.length || 1
+                    setToolExecutionStatus({
+                      tool: name,
+                      status: 'success',
+                      message: `Successfully generated ${imageCount} image${imageCount > 1 ? 's' : ''}!`,
+                    })
+                    showSuccessToast(`Image generation complete! ${imageCount} image${imageCount > 1 ? 's' : ''} generated.`)
+                  } else {
+                    setToolExecutionStatus({
+                      tool: name,
+                      status: 'error',
+                      message: result?.error || 'Failed to generate image',
+                    })
+                    showErrorToast(`Image generation failed: ${result?.error || 'Unknown error'}`)
+                  }
                 }
               }
 
@@ -552,7 +570,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   }, 1000)
                 }
                 // Clear tool status after a short delay
-                setTimeout(() => setToolExecutionStatus(null), 3000)
+                setTimeout(() => {
+                  setToolExecutionStatus(null)
+                  setPendingToolCalls([])
+                }, 3000)
               }
 
               if (data.error) {
@@ -1051,6 +1072,66 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             )}
             <div className="text-gray-500 dark:text-gray-400">
               <QuillAnimation size="lg" />
+            </div>
+          </div>
+        )}
+
+        {/* Pending tool calls - shown collapsed before streaming response */}
+        {pendingToolCalls.length > 0 && (
+          <div className="flex gap-4 w-[90%] justify-start">
+            <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 text-lg">
+              {(() => {
+                if (pendingToolCalls.some(tc => tc.name === 'generate_image')) return '🎨'
+                if (pendingToolCalls.some(tc => tc.name === 'search_memories')) return '🧠'
+                if (pendingToolCalls.some(tc => tc.name === 'search_web')) return '🔍'
+                return '⚙️'
+              })()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <details className="group" open={pendingToolCalls.some(tc => tc.status === 'pending')}>
+                <summary className="px-4 py-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 cursor-pointer list-none flex items-center gap-2">
+                  <svg className="w-4 h-4 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {pendingToolCalls.map(tc => {
+                      const displayNames: Record<string, string> = {
+                        'generate_image': 'Image Generation',
+                        'search_memories': 'Memory Search',
+                        'search_web': 'Web Search',
+                      }
+                      return displayNames[tc.name] || tc.name
+                    }).join(', ')}
+                  </span>
+                  {pendingToolCalls.some(tc => tc.status === 'pending') && (
+                    <QuillAnimation size="sm" className="ml-auto text-gray-400" />
+                  )}
+                  {pendingToolCalls.every(tc => tc.status === 'success') && (
+                    <span className="ml-auto text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded">
+                      Complete
+                    </span>
+                  )}
+                  {pendingToolCalls.some(tc => tc.status === 'error') && (
+                    <span className="ml-auto text-xs px-2 py-0.5 bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 rounded">
+                      Error
+                    </span>
+                  )}
+                </summary>
+                <div className="mt-2 px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                  {pendingToolCalls.map((tc) => (
+                    <div key={tc.name} className="text-xs text-gray-600 dark:text-gray-400">
+                      <span className="font-medium">{tc.name}</span>
+                      {tc.arguments && Object.keys(tc.arguments).length > 0 && (
+                        <span className="ml-2 text-gray-500">
+                          ({Object.entries(tc.arguments).map(([k, v]) => `${k}: ${typeof v === 'string' ? v.slice(0, 50) : JSON.stringify(v)}`).join(', ')})
+                        </span>
+                      )}
+                      {tc.status === 'success' && <span className="ml-2 text-green-600 dark:text-green-400">✓</span>}
+                      {tc.status === 'error' && <span className="ml-2 text-red-600 dark:text-red-400">✗</span>}
+                    </div>
+                  ))}
+                </div>
+              </details>
             </div>
           </div>
         )}

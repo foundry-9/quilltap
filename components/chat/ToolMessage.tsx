@@ -82,6 +82,16 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
       icon: '🎨',
       bgColor: 'bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800',
     },
+    search_memories: {
+      displayName: 'Memory Search',
+      icon: '🧠',
+      bgColor: 'bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800',
+    },
+    search_web: {
+      displayName: 'Web Search',
+      icon: '🔍',
+      bgColor: 'bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800',
+    },
   }
 
   const info = toolInfo[toolData.toolName!] || {
