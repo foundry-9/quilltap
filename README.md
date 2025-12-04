@@ -3,7 +3,7 @@
 AI-powered roleplay chat platform with multi-provider LLM support and full SillyTavern compatibility.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.8.5--dev.5-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-1.8.5--dev.6-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -528,6 +528,16 @@ Copyright (c) 2025 Foundry-9
   - Implement lazy initialization pattern for NextAuth
   - Centralize session handling in `lib/auth/session.ts`
   - Make a default no-auth option (`AUTH_DISABLED=true` env var)
+  - Show tool calls collapsed in chat UI before character response
+  - Only show "generating image" alert for generate_image tool (not all tools)
+  - Fix {{me}} placeholder to resolve to character (not persona) when character calls image generation tool
+  - Attach generated images to LLM response and tag for chat/character
+  - Use file-manager (addFileLink/addFileTag) instead of deprecated repos.images
+  - Enable Ollama plugin by default
+  - Add tool call capture and normalization in Ollama provider
+  - Add /api/providers endpoint for dynamic provider configurations
+  - Update connection profiles UI to fetch provider requirements dynamically
+  - versioning change (dev commits no longer bump release versions)
 
 ## Roadmap
 
