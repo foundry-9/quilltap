@@ -24,10 +24,22 @@ import { execSync } from 'node:child_process';
 
 // External packages that should NOT be bundled (they're available at runtime)
 const EXTERNAL_PACKAGES = [
+  // LLM provider SDKs (available in main app)
   '@anthropic-ai/sdk',
   'openai',
   '@google/generative-ai',
+  '@openrouter/sdk',
   'ollama',
+  // React and related packages (available in main app)
+  'react',
+  'react-dom',
+  'react/jsx-runtime',
+  'react/jsx-dev-runtime',
+  // Next.js packages (available in main app)
+  'next',
+  'next-auth',
+  // Other main app dependencies
+  'zod',
   // Core Node.js modules
   'fs',
   'path',
