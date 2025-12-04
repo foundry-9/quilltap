@@ -1,6 +1,9 @@
 #!/bin/bash
 
-# Pre-commit hook to run lint, tests, and automatically bump the patch version in package.json
+# Pre-commit hook to run lint, tests, and set version based on branch:
+# - release branch: x.y.z
+# - main branch: x.y.z-dev.[n] where n = commits since base version
+# - other branches: x.y.z-[branch-name].[n]
 
 set -e  # Exit on any error
 
@@ -41,18 +44,8 @@ fi
 echo "✅ Tests passed!"
 echo ""
 
-# Step 3: Bump version
-echo "📦 Bumping version..."
-
-# Get the current version from package.json
-CURRENT_VERSION=$(grep -m1 '"version"' package.json | sed 's/.*"\([^"]*\)".*/\1/')
-
-# Split the version into major, minor, and patch
-IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
-
-# Increment the patch version
-NEW_PATCH=$((PATCH + 1))
-NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+# Step 3: Calculate version based on branch
+echo "📦 Calculating version..."
 
 # Detect OS for sed compatibility
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -63,21 +56,48 @@ else
   SED_INPLACE=(-i)
 fi
 
+# Get the current version from package.json (strip any suffix to get base x.y.z)
+CURRENT_VERSION=$(grep -m1 '"version"' package.json | sed 's/.*"\([^"]*\)".*/\1/')
+BASE_VERSION=$(echo "$CURRENT_VERSION" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+
+# Get the current branch
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+# Count commits since the base version was set
+# We look for the most recent commit that changed the base version (x.y.z part)
+# by finding when package.json version line was changed to current base
+COMMIT_COUNT=$(git rev-list --count HEAD -- . 2>/dev/null || echo "0")
+
+# Try to find when the base version was last changed
+BASE_VERSION_COMMIT=$(git log --oneline -p package.json 2>/dev/null | grep -B 50 "\"version\": \"$BASE_VERSION" | grep -m1 "^[a-f0-9]" | cut -d' ' -f1 || echo "")
+if [ -n "$BASE_VERSION_COMMIT" ]; then
+  COMMIT_COUNT=$(git rev-list --count "$BASE_VERSION_COMMIT"..HEAD 2>/dev/null || echo "0")
+fi
+
+# Determine the new version based on branch
+if [[ "$CURRENT_BRANCH" == "release" || "$CURRENT_BRANCH" == release/* ]]; then
+  # Release branch: just x.y.z
+  NEW_VERSION="$BASE_VERSION"
+  BADGE_COLOR="green"
+elif [[ "$CURRENT_BRANCH" == "main" ]]; then
+  # Main branch: x.y.z-dev.[n]
+  NEW_VERSION="$BASE_VERSION-dev.$COMMIT_COUNT"
+  BADGE_COLOR="yellow"
+else
+  # Feature/other branches: x.y.z-[branch-name].[n]
+  # Sanitize branch name (replace / with -)
+  SANITIZED_BRANCH=$(echo "$CURRENT_BRANCH" | sed 's/\//-/g')
+  NEW_VERSION="$BASE_VERSION-$SANITIZED_BRANCH.$COMMIT_COUNT"
+  BADGE_COLOR="yellow"
+fi
+
 # Update package.json with the new version
-sed "${SED_INPLACE[@]}" "s/\"version\": \"$CURRENT_VERSION\"/\"version\": \"$NEW_VERSION\"/" package.json
+sed "${SED_INPLACE[@]}" -E "s/\"version\": \"[^\"]+\"/\"version\": \"$NEW_VERSION\"/" package.json
 
 # Update README.md with the new version in the badge
 if [ -f README.md ]; then
-  # Determine badge color based on branch
-  CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-  if [[ "$CURRENT_BRANCH" == "release"* ]]; then
-    BADGE_COLOR="green"
-  else
-    BADGE_COLOR="yellow"
-  fi
-
   # Replace any version number in the badge with the new version and color
-  sed "${SED_INPLACE[@]}" -E "s/version-[0-9]+\.[0-9]+\.[0-9]+-(green|yellow)/version-$NEW_VERSION-$BADGE_COLOR/" README.md
+  sed "${SED_INPLACE[@]}" -E "s/version-[^-]+-[^-]+-(green|yellow)/version-$NEW_VERSION-$BADGE_COLOR/" README.md
 fi
 
 # Check if package-lock.json exists and update it as well
@@ -102,7 +122,7 @@ if [ -f README.md ]; then
   git add README.md
 fi
 
-echo "✅ Version bumped: $CURRENT_VERSION → $NEW_VERSION"
+echo "✅ Version set: $NEW_VERSION (base: $BASE_VERSION, branch: $CURRENT_BRANCH)"
 echo ""
 echo "✨ All pre-commit checks passed!"
 
