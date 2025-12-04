@@ -16,9 +16,10 @@ const config: Config = {
     '^@/(.*)$': '<rootDir>/$1',
     '^openid-client$': '<rootDir>/__mocks__/openid-client.ts',
     '^@openrouter/sdk$': '<rootDir>/__mocks__/@openrouter/sdk.ts',
+    '^mongodb$': '<rootDir>/__mocks__/mongodb.ts',
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(@openrouter/sdk)/)',
+    'node_modules/(?!(@openrouter/sdk|mongodb|bson)/)',
   ],
   collectCoverageFrom: [
     'app/**/*.{js,jsx,ts,tsx}',

@@ -51,6 +51,28 @@ const envSchema = z.object({
   // Production SSL (optional)
   DOMAIN: z.string().optional(),
   SSL_EMAIL: z.string().email().optional(),
+
+  // Data Backend Configuration
+  DATA_BACKEND: z.enum(['json', 'mongodb', 'dual']).optional().default('json'),
+
+  // MongoDB Configuration (optional - only required when DATA_BACKEND is 'mongodb' or 'dual')
+  MONGODB_URI: z.string().optional().default('mongodb://localhost:27017'),
+  MONGODB_DATABASE: z.string().optional().default('quilltap'),
+  MONGODB_MODE: z.enum(['external', 'embedded']).optional().default('external'),
+  MONGODB_DATA_DIR: z.string().optional().default('/data/mongodb'),
+  MONGODB_CONNECTION_TIMEOUT_MS: z.string().regex(/^\d+$/).optional(),
+  MONGODB_MAX_POOL_SIZE: z.string().regex(/^\d+$/).optional(),
+
+  // S3 Configuration (optional - file storage backend)
+  S3_MODE: z.enum(['embedded', 'external', 'disabled']).optional().default('disabled'),
+  S3_ENDPOINT: z.string().url().optional(),
+  S3_REGION: z.string().optional().default('us-east-1'),
+  S3_ACCESS_KEY: z.string().optional(),
+  S3_SECRET_KEY: z.string().optional(),
+  S3_BUCKET: z.string().optional().default('quilltap-files'),
+  S3_PATH_PREFIX: z.string().optional(),
+  S3_PUBLIC_URL: z.string().url().optional(),
+  S3_FORCE_PATH_STYLE: z.enum(['true', 'false']).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
