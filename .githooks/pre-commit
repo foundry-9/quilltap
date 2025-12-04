@@ -123,8 +123,12 @@ sed "${SED_INPLACE[@]}" -E "s/\"version\": \"[^\"]+\"/\"version\": \"$NEW_VERSIO
 
 # Update README.md with the new version in the badge
 if [ -f README.md ]; then
-  # Replace any version number in the badge with the new version and color
-  sed "${SED_INPLACE[@]}" -E "s/version-[^-]+-[^-]+-(green|yellow)/version-$NEW_VERSION-$BADGE_COLOR/" README.md
+  # shields.io requires hyphens to be escaped as -- in badge labels
+  # e.g., 1.8.5-dev.5 becomes 1.8.5--dev.5
+  BADGE_VERSION=$(echo "$NEW_VERSION" | sed 's/-/--/g')
+  # Match the badge pattern: badge/version-ANYTHING.svg
+  # [^]]+ matches everything up to the ] that closes the markdown image syntax
+  sed "${SED_INPLACE[@]}" -E "s|badge/version-[^]]+\.svg|badge/version-$BADGE_VERSION-$BADGE_COLOR.svg|" README.md
 fi
 
 # Check if package-lock.json exists and update it as well
