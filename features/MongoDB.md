@@ -609,11 +609,32 @@ export async function testS3Connection(): Promise<{
 4. **Schema Updates** ✅
    - `FileEntry` type updated with `s3Key` and `s3Bucket` optional fields
 
-### Phase 4: Docker Configurations
+### Phase 4: Docker Configurations ✅ COMPLETE
 
-1. Development compose with separate containers
-2. All-in-one Dockerfile with embedded MongoDB + MinIO
-3. Production compose for external services
+**Completed:** December 4, 2025
+
+1. **Development Compose** (`docker-compose.dev-mongo.yml`) ✅
+   - MongoDB and MinIO in separate containers
+   - Healthchecks with proper conditions
+   - Volume mounts for data persistence
+   - Auto bucket creation via minio/mc
+   - Optional mongo-express admin UI
+
+2. **All-in-One Dockerfile** (`Dockerfile.allinone`) ✅
+   - Embedded MongoDB and MinIO in single container
+   - tini init process for proper signal handling
+   - Startup script for orchestration
+
+3. **Startup Script** (`docker/start-allinone.sh`) ✅
+   - MongoDB startup with readiness check
+   - MinIO startup with health verification
+   - Automatic bucket creation
+   - Proper signal forwarding via exec
+
+4. **Production Compose** (`docker-compose.prod-cloud.yml`) ✅
+   - External MongoDB Atlas + AWS S3 configuration
+   - Environment variable substitution
+   - Health check endpoint monitoring
 
 ### Phase 5: Integration
 

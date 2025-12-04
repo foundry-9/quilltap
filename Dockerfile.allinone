@@ -1,0 +1,67 @@
+# All-in-one Dockerfile for Quilltap with embedded MongoDB and MinIO
+# This image contains the complete Quilltap application with MongoDB and MinIO
+# running in a single container, suitable for development and testing.
+
+FROM node:20-alpine
+
+# Install system dependencies including MongoDB, curl, and other utilities
+RUN apk add --no-cache \
+    mongodb \
+    mongodb-tools \
+    curl \
+    bash \
+    tini
+
+# Download and install MinIO binary
+# MinIO is the S3-compatible object storage server
+RUN curl -L https://dl.min.io/server/minio/release/linux-amd64/minio -o /usr/local/bin/minio && \
+    chmod +x /usr/local/bin/minio
+
+# Download and install MinIO client (mc)
+# The mc client is used for managing MinIO instances
+RUN curl -L https://dl.min.io/client/mc/release/linux-amd64/mc -o /usr/local/bin/mc && \
+    chmod +x /usr/local/bin/mc
+
+# Create required data directories
+RUN mkdir -p /data/mongodb /data/minio /data/quilltap && \
+    chown -R 0:0 /data
+
+# Set environment variables for MongoDB and MinIO configuration
+ENV DATA_BACKEND=mongodb \
+    MONGODB_MODE=embedded \
+    MONGODB_URI=mongodb://127.0.0.1:27017/quilltap \
+    S3_MODE=embedded \
+    S3_ENDPOINT=http://127.0.0.1:9000 \
+    S3_ACCESS_KEY=quilltap \
+    S3_SECRET_KEY=quilltap-secret-key \
+    S3_BUCKET=quilltap-files \
+    NODE_ENV=production
+
+# Set working directory for application
+WORKDIR /app
+
+# Copy package files and install production dependencies only
+COPY package*.json ./
+RUN npm ci --only=production
+
+# Copy the entire application source code
+COPY . .
+
+# Build the application (Next.js compilation)
+RUN npm run build
+
+# Copy the startup script that will manage MongoDB, MinIO, and the application
+COPY docker/start-allinone.sh /start.sh
+RUN chmod +x /start.sh
+
+# Expose the application port
+EXPOSE 3000
+
+# Define volume mount point for persistent data
+VOLUME ["/data"]
+
+# Use tini as the init process to handle signals properly
+ENTRYPOINT ["/sbin/tini", "--"]
+
+# Start the application via the startup script
+CMD ["/start.sh"]
