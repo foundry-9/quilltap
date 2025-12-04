@@ -13,6 +13,8 @@ const eslintConfig = defineConfig([
       'dist/**',
       '.git/**',
       'coverage/**',
+      // Bundled plugin JavaScript files (source is in TypeScript)
+      'plugins/dist/**/*.js',
     ],
   },
 ])
