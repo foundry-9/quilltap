@@ -1,7 +1,6 @@
 'use client'
 
 import { useMemo } from 'react'
-import Image from 'next/image'
 import Link from 'next/link'
 import { TagDisplay } from '@/components/tags/tag-display'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
@@ -80,7 +79,7 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-4 flex-grow">
                   {getAvatarSrc(chat) ? (
-                    <Image
+                    <img
                       src={getAvatarSrc(chat)!}
                       alt={chat.character.name}
                       width={64}

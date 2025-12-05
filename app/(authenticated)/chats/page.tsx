@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { clientLogger } from '@/lib/client-logger'
@@ -382,7 +381,7 @@ export default function ChatsPage() {
                     return (
                       <>
                         {avatarSrc ? (
-                          <Image
+                          <img
                             src={avatarSrc}
                             alt={characterName}
                             width={64}

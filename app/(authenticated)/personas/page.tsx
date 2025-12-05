@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
@@ -218,13 +217,12 @@ export default function PersonasPage() {
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center flex-grow gap-4">
                   {getAvatarSrc(persona) ? (
-                    <Image
+                    <img
                       src={getAvatarSrc(persona)!}
                       alt={persona.name}
                       width={48}
                       height={60}
                       className={getAvatarClasses(style, 'md').imageClass}
-                      priority={false}
                     />
                   ) : (
                     <div className={getAvatarClasses(style, 'md').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>

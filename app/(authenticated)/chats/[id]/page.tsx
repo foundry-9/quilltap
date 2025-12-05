@@ -1,7 +1,6 @@
 'use client'
 
 import { use, useEffect, useState, useRef, useCallback } from 'react'
-import Image from 'next/image'
 import ImageModal from '@/components/chat/ImageModal'
 import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
 import ToolPalette from '@/components/chat/ToolPalette'
@@ -788,7 +787,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           }}
         >
           {avatarSrc ? (
-            <Image
+            <img
               src={avatarSrc}
               alt={avatar.name}
               width={avatarWidth}
@@ -943,7 +942,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                               })}
                               className="relative group/thumb overflow-hidden rounded border border-gray-300 dark:border-slate-600 hover:border-blue-500 dark:hover:border-blue-400 transition-colors"
                             >
-                              <Image
+                              <img
                                 src={`/${attachment.filepath.startsWith('/') ? attachment.filepath.slice(1) : attachment.filepath}`}
                                 alt={attachment.filename}
                                 width={80}

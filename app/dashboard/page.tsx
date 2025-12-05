@@ -1,9 +1,22 @@
 import { getServerSession } from "@/lib/auth/session";
 import { getRepositories } from "@/lib/repositories/factory";
-import { findFileById, getFileUrl } from "@/lib/file-manager";
 import Link from "next/link";
 import { RecentChatsSection } from "@/components/dashboard/recent-chats";
 import { FavoriteCharactersSection } from "@/components/dashboard/favorite-characters";
+import type { FileEntry } from "@/lib/json-store/schemas/types";
+
+/**
+ * Get the filepath for a file based on storage type
+ */
+function getFilePath(file: FileEntry): string {
+  if (file.s3Key) {
+    return `/api/files/${file.id}`;
+  }
+  const ext = file.originalFilename.includes('.')
+    ? file.originalFilename.substring(file.originalFilename.lastIndexOf('.'))
+    : '';
+  return `data/files/storage/${file.id}${ext}`;
+}
 
 // Revalidate dashboard on every request to show latest character data
 export const revalidate = 0;
@@ -37,14 +50,14 @@ export default async function Dashboard() {
           .filter((c) => c.isFavorite)
           .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
           .map(async (character) => {
-            // Get default image from file-manager if exists
+            // Get default image from repository if exists
             let defaultImage = null;
             if (character.defaultImageId) {
-              const fileEntry = await findFileById(character.defaultImageId);
+              const fileEntry = await repos.files.findById(character.defaultImageId);
               if (fileEntry) {
                 defaultImage = {
                   id: fileEntry.id,
-                  filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename),
+                  filepath: getFilePath(fileEntry),
                   url: null,
                 };
               }
@@ -94,11 +107,11 @@ export default async function Dashboard() {
 
             let characterDefaultImage = null;
             if (character.defaultImageId) {
-              const fileEntry = await findFileById(character.defaultImageId);
+              const fileEntry = await repos.files.findById(character.defaultImageId);
               if (fileEntry) {
                 characterDefaultImage = {
                   id: fileEntry.id,
-                  filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename),
+                  filepath: getFilePath(fileEntry),
                   url: null,
                 };
               }

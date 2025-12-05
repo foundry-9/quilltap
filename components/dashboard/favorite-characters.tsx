@@ -1,7 +1,6 @@
 'use client'
 
 import { useMemo } from 'react'
-import Image from 'next/image'
 import Link from 'next/link'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
@@ -59,7 +58,7 @@ export function FavoriteCharactersSection({ characters }: FavoriteCharactersProp
             className="flex flex-col items-center gap-4 p-4 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-md transition-all"
           >
             {getAvatarSrc(character) ? (
-              <Image
+              <img
                 src={getAvatarSrc(character)!}
                 alt={character.name}
                 width={80}
