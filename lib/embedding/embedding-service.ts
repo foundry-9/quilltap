@@ -7,7 +7,7 @@
  */
 
 import { logger } from '@/lib/logger'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getRepositories } from '@/lib/repositories/factory'
 import { EmbeddingProfile, EmbeddingProfileProvider } from '@/lib/json-store/schemas/types'
 
 /**

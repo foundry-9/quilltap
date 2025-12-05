@@ -47,7 +47,7 @@ describe('Cheap LLM Provider Selection', () => {
   describe('getCheapestModel', () => {
     it('should return the cheapest model for Anthropic', () => {
       const model = getCheapestModel('ANTHROPIC')
-      expect(model).toBe('claude-haiku-4-5-20251015')
+      expect(model).toBe('claude-haiku-4-5-20251001')
     })
 
     it('should return the cheapest model for OpenAI', () => {
@@ -147,7 +147,7 @@ describe('Cheap LLM Provider Selection', () => {
         )
 
         expect(selection.provider).toBe('ANTHROPIC')
-        expect(selection.modelName).toBe('claude-haiku-4-5-20251015')
+        expect(selection.modelName).toBe('claude-haiku-4-5-20251001')
       })
     })
 
@@ -156,7 +156,7 @@ describe('Cheap LLM Provider Selection', () => {
         const selection = getCheapLLMProvider(anthropicProfile)
 
         expect(selection.provider).toBe('ANTHROPIC')
-        expect(selection.modelName).toBe('claude-haiku-4-5-20251015')
+        expect(selection.modelName).toBe('claude-haiku-4-5-20251001')
         expect(selection.connectionProfileId).toBe('anthropic-profile')
         expect(selection.isLocal).toBe(false)
       })
@@ -203,7 +203,7 @@ describe('Cheap LLM Provider Selection', () => {
         )
 
         expect(selection.provider).toBe('ANTHROPIC')
-        expect(selection.modelName).toBe('claude-haiku-4-5-20251015')
+        expect(selection.modelName).toBe('claude-haiku-4-5-20251001')
       })
     })
 
@@ -314,7 +314,7 @@ describe('Cheap LLM Provider Selection', () => {
         )
 
         expect(selection.provider).toBe('ANTHROPIC')
-        expect(selection.modelName).toBe('claude-haiku-4-5-20251015')
+        expect(selection.modelName).toBe('claude-haiku-4-5-20251001')
       })
     })
 
@@ -401,7 +401,7 @@ describe('Cheap LLM Provider Selection', () => {
 
   describe('isCheapModel', () => {
     it('should recognize recommended cheap models', () => {
-      expect(isCheapModel('ANTHROPIC', 'claude-haiku-4-5-20251015')).toBe(true)
+      expect(isCheapModel('ANTHROPIC', 'claude-haiku-4-5-20251001')).toBe(true)
       expect(isCheapModel('OPENAI', 'gpt-4o-mini')).toBe(true)
       expect(isCheapModel('GOOGLE', 'gemini-2.0-flash')).toBe(true)
     })
@@ -429,7 +429,7 @@ describe('Cheap LLM Provider Selection', () => {
 
     it('should rate mini/flash models as cheap (2)', () => {
       expect(estimateModelCost('OPENAI', 'gpt-4o-mini')).toBe(2)
-      expect(estimateModelCost('ANTHROPIC', 'claude-haiku-4-5-20251015')).toBe(2)
+      expect(estimateModelCost('ANTHROPIC', 'claude-haiku-4-5-20251001')).toBe(2)
       expect(estimateModelCost('GOOGLE', 'gemini-2.0-flash')).toBe(2)
     })
 

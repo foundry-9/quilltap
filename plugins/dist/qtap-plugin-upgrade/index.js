@@ -453,1839 +453,103 @@ var init_logger = __esm({
   }
 });
 
-// lib/json-store/core/json-store.ts
-function getJsonStore(config) {
-  if (!instance) {
-    instance = new JsonStore(config);
-  }
-  return instance;
-}
-var fs3, path2, import_util, crypto2, mkdir2, readFile2, writeFile2, appendFile2, rename2, unlink2, readdir2, stat2, JsonStore, instance;
-var init_json_store = __esm({
-  "lib/json-store/core/json-store.ts"() {
-    "use strict";
-    init_logger();
-    fs3 = __toESM(require("fs"));
-    path2 = __toESM(require("path"));
-    import_util = require("util");
-    crypto2 = __toESM(require("crypto"));
-    mkdir2 = (0, import_util.promisify)(fs3.mkdir);
-    readFile2 = (0, import_util.promisify)(fs3.readFile);
-    writeFile2 = (0, import_util.promisify)(fs3.writeFile);
-    appendFile2 = (0, import_util.promisify)(fs3.appendFile);
-    rename2 = (0, import_util.promisify)(fs3.rename);
-    unlink2 = (0, import_util.promisify)(fs3.unlink);
-    readdir2 = (0, import_util.promisify)(fs3.readdir);
-    stat2 = (0, import_util.promisify)(fs3.stat);
-    JsonStore = class {
-      constructor(config = {}) {
-        this.locks = /* @__PURE__ */ new Map();
-        this.cache = /* @__PURE__ */ new Map();
-        this.dataDir = config.dataDir || process.env.DATA_DIR || "./data";
-        this.enableCache = config.enableCache ?? true;
-        this.lockTimeout = config.lockTimeout ?? 5e3;
-        this.fsyncInterval = config.fsyncInterval ?? 10;
-        if (!fs3.existsSync(this.dataDir)) {
-          fs3.mkdirSync(this.dataDir, { recursive: true });
-        }
-      }
-      /**
-       * Get the configured data directory path
-       */
-      getDataDir() {
-        return this.dataDir;
-      }
-      /**
-       * Resolve a relative path within data directory
-       */
-      resolvePath(...segments) {
-        return path2.join(this.dataDir, ...segments);
-      }
-      /**
-       * Ensure a directory exists
-       */
-      async ensureDir(dirPath) {
-        await mkdir2(dirPath, { recursive: true });
-      }
-      /**
-       * Acquire a lock for a file path
-       */
-      async acquireLock(filePath) {
-        const lockPath = `${filePath}.lock`;
-        const lockDir = path2.dirname(lockPath);
-        const startTime = Date.now();
-        await this.ensureDir(lockDir);
-        while (true) {
-          try {
-            const fd = fs3.openSync(lockPath, fs3.constants.O_CREAT | fs3.constants.O_EXCL | fs3.constants.O_WRONLY);
-            fs3.closeSync(fd);
-            return;
-          } catch (error2) {
-            if (error2.code !== "EEXIST") {
-              throw error2;
-            }
-            try {
-              const stats = await stat2(lockPath);
-              if (Date.now() - stats.mtimeMs > 3e4) {
-                await unlink2(lockPath);
-                continue;
-              }
-            } catch {
-              continue;
-            }
-            if (Date.now() - startTime > this.lockTimeout) {
-              throw new Error(`Failed to acquire lock for ${filePath} within ${this.lockTimeout}ms`);
-            }
-            await new Promise((resolve) => setTimeout(resolve, 10));
-          }
-        }
-      }
-      /**
-       * Release a lock for a file path
-       */
-      async releaseLock(filePath) {
-        const lockPath = `${filePath}.lock`;
-        try {
-          await unlink2(lockPath);
-        } catch (error2) {
-          if (error2.code !== "ENOENT") {
-            logger.error(`Failed to release lock for ${filePath}`, { context: { filePath } }, error2 instanceof Error ? error2 : void 0);
-          }
-        }
-      }
-      /**
-       * Read JSON file with caching
-       */
-      async readJson(filePath) {
-        const fullPath = this.resolvePath(filePath);
-        const cacheKey = fullPath;
-        if (this.enableCache && this.cache.has(cacheKey)) {
-          return this.cache.get(cacheKey);
-        }
-        try {
-          const content = await readFile2(fullPath, "utf-8");
-          const data2 = JSON.parse(content);
-          if (this.enableCache) {
-            this.cache.set(cacheKey, data2);
-          }
-          return data2;
-        } catch (error2) {
-          if (error2.code === "ENOENT") {
-            throw new Error(`File not found: ${filePath}`);
-          }
-          throw new Error(`Failed to read JSON from ${filePath}: ${error2.message}`);
-        }
-      }
-      /**
-       * Write JSON file atomically with locking
-       */
-      async writeJson(filePath, data2) {
-        const fullPath = this.resolvePath(filePath);
-        const dir = path2.dirname(fullPath);
-        await this.ensureDir(dir);
-        await this.acquireLock(fullPath);
-        try {
-          const tempPath = `${fullPath}.tmp.${crypto2.randomBytes(4).toString("hex")}`;
-          const content = JSON.stringify(data2, null, 2);
-          await writeFile2(tempPath, content, "utf-8");
-          await rename2(tempPath, fullPath);
-          if (this.enableCache) {
-            this.cache.delete(fullPath);
-          }
-        } finally {
-          await this.releaseLock(fullPath);
-        }
-      }
-      /**
-       * Read JSONL file line by line
-       */
-      async readJsonl(filePath) {
-        const fullPath = this.resolvePath(filePath);
-        try {
-          const content = await readFile2(fullPath, "utf-8");
-          const lines = content.trim().split("\n").filter((line) => line.length > 0);
-          return lines.map((line) => JSON.parse(line));
-        } catch (error2) {
-          if (error2.code === "ENOENT") {
-            return [];
-          }
-          throw new Error(`Failed to read JSONL from ${filePath}: ${error2.message}`);
-        }
-      }
-      /**
-       * Write raw content to file atomically with locking (for pre-formatted JSONL)
-       */
-      async writeRaw(filePath, content) {
-        const fullPath = this.resolvePath(filePath);
-        const dir = path2.dirname(fullPath);
-        await this.ensureDir(dir);
-        await this.acquireLock(fullPath);
-        try {
-          const tempPath = `${fullPath}.tmp.${crypto2.randomBytes(4).toString("hex")}`;
-          await writeFile2(tempPath, content, "utf-8");
-          await rename2(tempPath, fullPath);
-          if (this.enableCache) {
-            this.cache.delete(fullPath);
-          }
-        } finally {
-          await this.releaseLock(fullPath);
-        }
-      }
-      /**
-       * Write JSONL file atomically (full rewrite for updates/deletes)
-       */
-      async writeJsonl(filePath, items) {
-        const content = items.length > 0 ? items.map((item) => JSON.stringify(item)).join("\n") + "\n" : "";
-        await this.writeRaw(filePath, content);
-      }
-      /**
-       * Append to JSONL file (line-delimited JSON)
-       */
-      async appendJsonl(filePath, items) {
-        const fullPath = this.resolvePath(filePath);
-        const dir = path2.dirname(fullPath);
-        await this.ensureDir(dir);
-        await this.acquireLock(fullPath);
-        try {
-          const lines = items.map((item) => JSON.stringify(item)).join("\n") + "\n";
-          if (fs3.existsSync(fullPath)) {
-            await appendFile2(fullPath, lines, "utf-8");
-          } else {
-            await writeFile2(fullPath, lines, "utf-8");
-          }
-          if (this.enableCache) {
-            this.cache.delete(fullPath);
-          }
-        } finally {
-          await this.releaseLock(fullPath);
-        }
-      }
-      /**
-       * Get file size in bytes
-       */
-      async getFileSize(filePath) {
-        const fullPath = this.resolvePath(filePath);
-        try {
-          const stats = await stat2(fullPath);
-          return stats.size;
-        } catch (error2) {
-          if (error2.code === "ENOENT") {
-            return 0;
-          }
-          throw error2;
-        }
-      }
-      /**
-       * Check if file exists
-       */
-      exists(filePath) {
-        const fullPath = this.resolvePath(filePath);
-        return fs3.existsSync(fullPath);
-      }
-      /**
-       * List files in a directory
-       */
-      async listDir(dirPath) {
-        const fullPath = this.resolvePath(dirPath);
-        try {
-          return await readdir2(fullPath);
-        } catch (error2) {
-          if (error2.code === "ENOENT") {
-            return [];
-          }
-          throw error2;
-        }
-      }
-      /**
-       * Delete a file
-       */
-      async deleteFile(filePath) {
-        const fullPath = this.resolvePath(filePath);
-        try {
-          await unlink2(fullPath);
-          if (this.enableCache) {
-            this.cache.delete(fullPath);
-          }
-        } catch (error2) {
-          if (error2.code !== "ENOENT") {
-            throw error2;
-          }
-        }
-      }
-      /**
-       * Clear in-memory cache
-       */
-      clearCache() {
-        this.cache.clear();
-      }
-      /**
-       * Get cache stats
-       */
-      getCacheStats() {
-        return {
-          size: this.cache.size,
-          enabled: this.enableCache
-        };
-      }
-    };
-    instance = null;
-  }
-});
-
-// lib/json-store/repositories/base.repository.ts
-var BaseRepository;
-var init_base_repository = __esm({
-  "lib/json-store/repositories/base.repository.ts"() {
-    "use strict";
-    BaseRepository = class {
-      constructor(jsonStore, schema) {
-        this.jsonStore = jsonStore;
-        this.schema = schema;
-      }
-      /**
-       * Validate data against schema
-       */
-      validate(data2) {
-        return this.schema.parse(data2);
-      }
-      /**
-       * Safely validate without throwing
-       */
-      validateSafe(data2) {
-        try {
-          const validated = this.validate(data2);
-          return { success: true, data: validated };
-        } catch (error2) {
-          return { success: false, error: error2.message };
-        }
-      }
-      /**
-       * Generate UUID v4
-       */
-      generateId() {
-        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c4) {
-          const r4 = Math.random() * 16 | 0;
-          const v4 = c4 === "x" ? r4 : r4 & 3 | 8;
-          return v4.toString(16);
-        });
-      }
-      /**
-       * Get current ISO timestamp
-       */
-      getCurrentTimestamp() {
-        return (/* @__PURE__ */ new Date()).toISOString();
-      }
-    };
-  }
-});
-
-// lib/json-store/schemas/plugin-manifest.ts
-var import_zod2, PluginCapabilityEnum, FrontendFrameworkEnum, CSSFrameworkEnum, PluginAuthorSchema, CompatibilitySchema, FunctionalitySchema, HookConfigSchema, APIRouteSchema, UIComponentSchema, DatabaseModelSchema, PermissionsSchema, ConfigSchemaSchema, ProviderConfigSchema, AuthProviderConfigSchema, PluginManifestSchema;
-var init_plugin_manifest = __esm({
-  "lib/json-store/schemas/plugin-manifest.ts"() {
-    "use strict";
-    import_zod2 = require("zod");
-    PluginCapabilityEnum = import_zod2.z.enum([
-      "CHAT_COMMANDS",
-      // Provides custom chat commands
-      "MESSAGE_PROCESSORS",
-      // Processes/transforms messages
-      "UI_COMPONENTS",
-      // Provides React components
-      "DATA_STORAGE",
-      // Adds database tables/storage
-      "API_ROUTES",
-      // Adds new API endpoints
-      "AUTH_METHODS",
-      // Provides authentication methods
-      "WEBHOOKS",
-      // Handles webhooks
-      "BACKGROUND_TASKS",
-      // Runs background jobs
-      "CUSTOM_MODELS",
-      // Adds new data models
-      "FILE_HANDLERS",
-      // Handles file operations
-      "NOTIFICATIONS",
-      // Provides notification system
-      "BACKEND_INTEGRATIONS",
-      // Integrates with external services
-      "LLM_PROVIDER",
-      // Provides LLM integration
-      "IMAGE_PROVIDER",
-      // Provides image generation
-      "EMBEDDING_PROVIDER",
-      // Provides embedding generation
-      "THEME",
-      // Provides UI theme
-      "DATABASE_BACKEND",
-      // Replaces/augments database
-      "FILE_BACKEND",
-      // Replaces/augments file storage
-      "UPGRADE_MIGRATION"
-      // Provides version upgrade migrations (runs early in startup)
-    ]);
-    FrontendFrameworkEnum = import_zod2.z.enum([
-      "REACT",
-      "PREACT",
-      "VUE",
-      "SVELTE",
-      "NONE"
-    ]);
-    CSSFrameworkEnum = import_zod2.z.enum([
-      "TAILWIND",
-      "BOOTSTRAP",
-      "MATERIAL_UI",
-      "CSS_MODULES",
-      "STYLED_COMPONENTS",
-      "NONE"
-    ]);
-    PluginAuthorSchema = import_zod2.z.object({
-      name: import_zod2.z.string().min(1).max(100),
-      email: import_zod2.z.string().email().optional(),
-      url: import_zod2.z.string().url().optional()
-    });
-    CompatibilitySchema = import_zod2.z.object({
-      /** Minimum Quilltap version (semver) */
-      quilltapVersion: import_zod2.z.string().regex(/^>=?\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?$/),
-      /** Maximum Quilltap version (optional) */
-      quilltapMaxVersion: import_zod2.z.string().regex(/^<=?\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?$/).optional(),
-      /** Minimum Node.js version */
-      nodeVersion: import_zod2.z.string().regex(/^>=?\d+\.\d+\.\d+$/).optional()
-    });
-    FunctionalitySchema = import_zod2.z.object({
-      /** @deprecated Use capabilities array instead */
-      providesChatCommands: import_zod2.z.boolean().default(false).optional(),
-      /** @deprecated Use capabilities array instead */
-      providesMessageProcessors: import_zod2.z.boolean().default(false).optional(),
-      /** @deprecated Use capabilities array instead */
-      providesUIComponents: import_zod2.z.boolean().default(false).optional(),
-      /** @deprecated Use capabilities array instead */
-      providesDataStorage: import_zod2.z.boolean().default(false).optional(),
-      /** @deprecated Use capabilities array instead */
-      providesAPIRoutes: import_zod2.z.boolean().default(false).optional(),
-      /** @deprecated Use capabilities array instead */
-      providesAuthenticationMethods: import_zod2.z.boolean().default(false).optional(),
-      /** @deprecated Use capabilities array instead */
-      providesWebhooks: import_zod2.z.boolean().default(false).optional(),
-      /** @deprecated Use capabilities array instead */
-      providesBackgroundTasks: import_zod2.z.boolean().default(false).optional(),
-      /** @deprecated Use capabilities array instead */
-      providesCustomModels: import_zod2.z.boolean().default(false).optional(),
-      /** @deprecated Use capabilities array instead */
-      providesFileHandlers: import_zod2.z.boolean().default(false).optional(),
-      /** @deprecated Use capabilities array instead */
-      providesNotifications: import_zod2.z.boolean().default(false).optional(),
-      /** @deprecated Use capabilities array instead */
-      providesBackendIntegrations: import_zod2.z.boolean().default(false).optional()
-    });
-    HookConfigSchema = import_zod2.z.object({
-      /** Hook identifier */
-      name: import_zod2.z.string().min(1).max(100),
-      /** Hook handler file path (relative to plugin root) */
-      handler: import_zod2.z.string(),
-      /** Priority (lower = runs first) */
-      priority: import_zod2.z.number().int().min(0).max(100).default(50),
-      /** Whether the hook is enabled */
-      enabled: import_zod2.z.boolean().default(true)
-    });
-    APIRouteSchema = import_zod2.z.object({
-      /** Route path (e.g., "/api/plugin/my-route") */
-      path: import_zod2.z.string().regex(/^\/api\//),
-      /** HTTP methods supported */
-      methods: import_zod2.z.array(import_zod2.z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"])).min(1),
-      /** Handler file path (relative to plugin root) */
-      handler: import_zod2.z.string(),
-      /** Whether authentication is required */
-      requiresAuth: import_zod2.z.boolean().default(true),
-      /** Description of what the route does */
-      description: import_zod2.z.string().optional()
-    });
-    UIComponentSchema = import_zod2.z.object({
-      /** Component identifier (used for registration) */
-      id: import_zod2.z.string().regex(/^[a-z][a-z0-9-]*$/),
-      /** Human-readable name */
-      name: import_zod2.z.string().min(1).max(100),
-      /** Component file path (relative to plugin root) */
-      path: import_zod2.z.string(),
-      /** Where the component can be used */
-      slots: import_zod2.z.array(import_zod2.z.string()).optional(),
-      /** Props schema (JSON Schema) */
-      propsSchema: import_zod2.z.record(import_zod2.z.unknown()).optional()
-    });
-    DatabaseModelSchema = import_zod2.z.object({
-      /** Model name */
-      name: import_zod2.z.string().regex(/^[A-Z][a-zA-Z0-9]*$/),
-      /** Schema file path (Zod schema, relative to plugin root) */
-      schemaPath: import_zod2.z.string(),
-      /** Collection/table name */
-      collectionName: import_zod2.z.string().regex(/^[a-z][a-z0-9-_]*$/),
-      /** Description */
-      description: import_zod2.z.string().optional()
-    });
-    PermissionsSchema = import_zod2.z.object({
-      /** File system access paths (relative to data directory) */
-      fileSystem: import_zod2.z.array(import_zod2.z.string()).default([]),
-      /** Network access (domains/URLs the plugin needs to access) */
-      network: import_zod2.z.array(import_zod2.z.string()).default([]),
-      /** Environment variables the plugin needs */
-      environment: import_zod2.z.array(import_zod2.z.string()).default([]),
-      /** Whether the plugin needs database access */
-      database: import_zod2.z.boolean().default(false),
-      /** Whether the plugin needs user data access */
-      userData: import_zod2.z.boolean().default(false)
-    });
-    ConfigSchemaSchema = import_zod2.z.object({
-      /** Configuration key */
-      key: import_zod2.z.string().regex(/^[a-z][a-zA-Z0-9]*$/),
-      /** Display label */
-      label: import_zod2.z.string().min(1).max(100),
-      /** Input type */
-      type: import_zod2.z.enum(["text", "number", "boolean", "select", "textarea", "password", "url", "email"]),
-      /** Default value */
-      default: import_zod2.z.unknown().optional(),
-      /** Whether the field is required */
-      required: import_zod2.z.boolean().default(false),
-      /** Help text */
-      description: import_zod2.z.string().optional(),
-      /** Options for select type */
-      options: import_zod2.z.array(import_zod2.z.object({
-        label: import_zod2.z.string(),
-        value: import_zod2.z.unknown()
-      })).optional(),
-      /** Validation pattern (regex) */
-      pattern: import_zod2.z.string().optional(),
-      /** Minimum value (for number type) */
-      min: import_zod2.z.number().optional(),
-      /** Maximum value (for number type) */
-      max: import_zod2.z.number().optional()
-    });
-    ProviderConfigSchema = import_zod2.z.object({
-      /** Internal identifier for the provider (e.g., 'OPENAI', 'ANTHROPIC') */
-      providerName: import_zod2.z.string().regex(/^[A-Z][A-Z0-9_]*$/),
-      /** Human-readable display name (e.g., 'OpenAI', 'Anthropic') */
-      displayName: import_zod2.z.string().min(1).max(100),
-      /** Short description of the provider */
-      description: import_zod2.z.string().min(1).max(500),
-      /** 2-4 character abbreviation for use in icons/badges (e.g., 'OAI', 'ANT') */
-      abbreviation: import_zod2.z.string().min(2).max(4).regex(/^[A-Z0-9]+$/),
-      /** Color configuration using Tailwind CSS classes */
-      colors: import_zod2.z.object({
-        /** Background color class (e.g., 'bg-blue-500') */
-        bg: import_zod2.z.string().min(1),
-        /** Text color class (e.g., 'text-white') */
-        text: import_zod2.z.string().min(1),
-        /** Icon color class (e.g., 'text-blue-600') */
-        icon: import_zod2.z.string().min(1)
-      }),
-      /** Whether the provider requires an API key */
-      requiresApiKey: import_zod2.z.boolean().default(true),
-      /** Whether the provider requires a custom base URL */
-      requiresBaseUrl: import_zod2.z.boolean().default(false),
-      /** Custom label for the API key field (defaults to 'API Key') */
-      apiKeyLabel: import_zod2.z.string().min(1).max(100).optional(),
-      /** Custom label for the base URL field (defaults to 'Base URL') */
-      baseUrlLabel: import_zod2.z.string().min(1).max(100).optional(),
-      /** Default base URL for the provider (if customizable) */
-      baseUrlDefault: import_zod2.z.string().url().optional(),
-      /** Capabilities supported by this provider */
-      capabilities: import_zod2.z.object({
-        /** Supports chat/completion endpoints */
-        chat: import_zod2.z.boolean().default(true).optional(),
-        /** Supports image generation */
-        imageGeneration: import_zod2.z.boolean().default(false).optional(),
-        /** Supports embeddings */
-        embeddings: import_zod2.z.boolean().default(false).optional(),
-        /** Supports web search */
-        webSearch: import_zod2.z.boolean().default(false).optional()
-      }).optional(),
-      /** File attachment support configuration */
-      attachmentSupport: import_zod2.z.object({
-        /** Whether attachments are supported */
-        supported: import_zod2.z.boolean().default(false),
-        /** List of supported MIME types (e.g., ['image/jpeg', 'application/pdf']) */
-        mimeTypes: import_zod2.z.array(import_zod2.z.string()).default([]),
-        /** Description of attachment support */
-        description: import_zod2.z.string().optional()
-      }).optional()
-    });
-    AuthProviderConfigSchema = import_zod2.z.object({
-      /** Internal identifier for the provider (e.g., 'google', 'github') */
-      providerId: import_zod2.z.string().regex(/^[a-z][a-z0-9-]*$/),
-      /** Human-readable display name (e.g., 'Google', 'GitHub') */
-      displayName: import_zod2.z.string().min(1).max(100),
-      /** Environment variables required for this provider */
-      requiredEnvVars: import_zod2.z.array(import_zod2.z.string()).min(1),
-      /** Optional environment variables */
-      optionalEnvVars: import_zod2.z.array(import_zod2.z.string()).optional(),
-      /** Button background color (Tailwind classes) */
-      buttonColor: import_zod2.z.string().optional(),
-      /** Button text color (Tailwind classes) */
-      buttonTextColor: import_zod2.z.string().optional(),
-      /** Icon name or identifier */
-      icon: import_zod2.z.string().optional()
-    });
-    PluginManifestSchema = import_zod2.z.object({
-      // ===== JSON SCHEMA REFERENCE =====
-      /** JSON Schema reference (for IDE support) */
-      $schema: import_zod2.z.string().optional(),
-      // ===== BASIC METADATA =====
-      /** Plugin package name (must start with 'qtap-plugin-') */
-      name: import_zod2.z.string().regex(/^qtap-plugin-[a-z0-9-]+$/),
-      /** Display title */
-      title: import_zod2.z.string().min(1).max(100),
-      /** Plugin description */
-      description: import_zod2.z.string().min(1).max(500),
-      /** Semantic version */
-      version: import_zod2.z.string().regex(/^\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?(\+[a-zA-Z0-9.-]+)?$/),
-      /** Author information */
-      author: import_zod2.z.union([import_zod2.z.string(), PluginAuthorSchema]),
-      /** License (SPDX identifier) */
-      license: import_zod2.z.string().default("MIT"),
-      /** Main entry point (JavaScript/TypeScript file) */
-      main: import_zod2.z.string().default("index.js"),
-      /** Homepage URL */
-      homepage: import_zod2.z.string().url().optional(),
-      /** Repository URL */
-      repository: import_zod2.z.union([
-        import_zod2.z.string().url(),
-        import_zod2.z.object({
-          type: import_zod2.z.string(),
-          url: import_zod2.z.string().url()
-        })
-      ]).optional(),
-      /** Bug tracker URL */
-      bugs: import_zod2.z.union([
-        import_zod2.z.string().url(),
-        import_zod2.z.object({
-          url: import_zod2.z.string().url(),
-          email: import_zod2.z.string().email().optional()
-        })
-      ]).optional(),
-      // ===== COMPATIBILITY =====
-      /** Version compatibility requirements */
-      compatibility: CompatibilitySchema,
-      /** Dependencies (other plugins required) */
-      requires: import_zod2.z.record(import_zod2.z.string()).optional(),
-      /** Peer dependencies */
-      peerDependencies: import_zod2.z.record(import_zod2.z.string()).optional(),
-      // ===== CAPABILITIES =====
-      /** Modern capability flags (preferred over functionality object) */
-      capabilities: import_zod2.z.array(PluginCapabilityEnum).default([]),
-      /** @deprecated Legacy functionality flags */
-      functionality: FunctionalitySchema.optional(),
-      // ===== TECHNICAL DETAILS =====
-      /** Frontend framework used */
-      frontend: FrontendFrameworkEnum.default("REACT").optional(),
-      /** CSS framework used */
-      styling: CSSFrameworkEnum.default("TAILWIND").optional(),
-      /** TypeScript support */
-      typescript: import_zod2.z.boolean().default(true).optional(),
-      // ===== HOOKS & EXTENSIONS =====
-      /** Hook registrations */
-      hooks: import_zod2.z.array(HookConfigSchema).default([]).optional(),
-      /** API routes provided */
-      apiRoutes: import_zod2.z.array(APIRouteSchema).default([]).optional(),
-      /** UI components provided */
-      components: import_zod2.z.array(UIComponentSchema).default([]).optional(),
-      /** Database models/tables */
-      models: import_zod2.z.array(DatabaseModelSchema).default([]).optional(),
-      // ===== CONFIGURATION =====
-      /** Configuration schema for the plugin */
-      configSchema: import_zod2.z.array(ConfigSchemaSchema).default([]).optional(),
-      /** Default configuration values */
-      defaultConfig: import_zod2.z.record(import_zod2.z.unknown()).default({}).optional(),
-      /** Provider configuration (for LLM/service provider plugins) */
-      providerConfig: ProviderConfigSchema.optional(),
-      /** Auth provider configuration (for authentication provider plugins) */
-      authProviderConfig: AuthProviderConfigSchema.optional(),
-      // ===== SECURITY & PERMISSIONS =====
-      /** Permissions required by the plugin */
-      permissions: PermissionsSchema.default({}).optional(),
-      /** Whether the plugin is sandboxed */
-      sandboxed: import_zod2.z.boolean().default(true).optional(),
-      // ===== METADATA =====
-      /** Keywords for search/discovery */
-      keywords: import_zod2.z.array(import_zod2.z.string()).default([]),
-      /** Icon file path (relative to plugin root) */
-      icon: import_zod2.z.string().optional(),
-      /** Screenshots (URLs or file paths) */
-      screenshots: import_zod2.z.array(import_zod2.z.string()).default([]).optional(),
-      /** Plugin category */
-      category: import_zod2.z.enum([
-        "PROVIDER",
-        "THEME",
-        "INTEGRATION",
-        "UTILITY",
-        "ENHANCEMENT",
-        "DATABASE",
-        "STORAGE",
-        "AUTHENTICATION",
-        "OTHER"
-      ]).default("OTHER").optional(),
-      /** Whether the plugin is enabled by default */
-      enabledByDefault: import_zod2.z.boolean().default(false).optional(),
-      /** Plugin status */
-      status: import_zod2.z.enum(["STABLE", "BETA", "ALPHA", "DEPRECATED"]).default("STABLE").optional()
-    }).strict();
-  }
-});
-
-// lib/json-store/schemas/types.ts
-var import_zod3, ProviderEnum, ImageProviderEnum, EmbeddingProfileProviderEnum, RoleEnum, ImageTagTypeEnum, AvatarDisplayModeEnum, UUIDSchema, TimestampSchema, JsonSchema, EncryptedFieldSchema, TOTPSecretSchema, BackupCodesSchema, UserSchema, HexColorSchema, TagVisualStyleSchema, TagStyleMapSchema, CheapLLMStrategyEnum, EmbeddingProviderEnum, CheapLLMSettingsSchema, ChatSettingsSchema, AccountSchema, SessionSchema, VerificationTokenSchema, ApiKeySchema, ConnectionProfileSchema, PhysicalDescriptionSchema, CharacterSchema, PersonaSchema, MessageEventSchema, ContextSummaryEventSchema, ChatEventSchema, ParticipantTypeEnum, ChatParticipantSchema, ChatParticipantBaseSchema, ChatMetadataSchema, ChatMetadataBaseSchema, ChatMetadataLegacySchema, BinaryIndexEntrySchema, FileSourceEnum, FileCategoryEnum, FileEntrySchema, TagSchema, ImageProfileSchema, GeneralSettingsSchema, ConnectionProfilesFileSchema, AuthAccountsSchema, TagsFileSchema, ImageProfilesFileSchema, EmbeddingProfileSchema, EmbeddingProfilesFileSchema, MemorySourceEnum, MemorySchema, MemoriesFileSchema;
-var init_types = __esm({
-  "lib/json-store/schemas/types.ts"() {
-    "use strict";
-    import_zod3 = require("zod");
-    init_plugin_manifest();
-    ProviderEnum = import_zod3.z.string().min(1, "Provider is required");
-    ImageProviderEnum = import_zod3.z.string().min(1, "Image provider is required");
-    EmbeddingProfileProviderEnum = import_zod3.z.enum(["OPENAI", "OLLAMA"]);
-    RoleEnum = import_zod3.z.enum(["SYSTEM", "USER", "ASSISTANT", "TOOL"]);
-    ImageTagTypeEnum = import_zod3.z.enum(["CHARACTER", "PERSONA", "CHAT", "THEME"]);
-    AvatarDisplayModeEnum = import_zod3.z.enum(["ALWAYS", "GROUP_ONLY", "NEVER"]);
-    UUIDSchema = import_zod3.z.string().uuid();
-    TimestampSchema = import_zod3.z.string().datetime().or(import_zod3.z.date()).transform((d4) => {
-      if (d4 instanceof Date) return d4.toISOString();
-      return d4;
-    });
-    JsonSchema = import_zod3.z.record(import_zod3.z.unknown());
-    EncryptedFieldSchema = import_zod3.z.object({
-      ciphertext: import_zod3.z.string(),
-      iv: import_zod3.z.string(),
-      authTag: import_zod3.z.string()
-    });
-    TOTPSecretSchema = EncryptedFieldSchema.extend({
-      enabled: import_zod3.z.boolean().default(false),
-      verifiedAt: TimestampSchema.nullable().optional()
-    });
-    BackupCodesSchema = import_zod3.z.object({
-      ciphertext: import_zod3.z.string(),
-      iv: import_zod3.z.string(),
-      authTag: import_zod3.z.string(),
-      createdAt: TimestampSchema
-    });
-    UserSchema = import_zod3.z.object({
-      id: UUIDSchema,
-      email: import_zod3.z.string().email(),
-      name: import_zod3.z.string().nullable().optional(),
-      image: import_zod3.z.string().nullable().optional(),
-      emailVerified: TimestampSchema.nullable().optional(),
-      // Password authentication
-      passwordHash: import_zod3.z.string().nullable().optional(),
-      // TOTP 2FA
-      totp: TOTPSecretSchema.optional(),
-      backupCodes: BackupCodesSchema.optional(),
-      // Timestamps
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    HexColorSchema = import_zod3.z.string().regex(/^#(?:[0-9a-fA-F]{3}){1,2}$/);
-    TagVisualStyleSchema = import_zod3.z.object({
-      emoji: import_zod3.z.string().max(8).optional().nullable(),
-      foregroundColor: HexColorSchema.default("#1f2937"),
-      backgroundColor: HexColorSchema.default("#e5e7eb"),
-      emojiOnly: import_zod3.z.boolean().default(false),
-      bold: import_zod3.z.boolean().default(false),
-      italic: import_zod3.z.boolean().default(false),
-      strikethrough: import_zod3.z.boolean().default(false)
-    });
-    TagStyleMapSchema = import_zod3.z.record(TagVisualStyleSchema).default({});
-    CheapLLMStrategyEnum = import_zod3.z.enum(["USER_DEFINED", "PROVIDER_CHEAPEST", "LOCAL_FIRST"]);
-    EmbeddingProviderEnum = import_zod3.z.enum(["SAME_PROVIDER", "OPENAI", "LOCAL"]);
-    CheapLLMSettingsSchema = import_zod3.z.object({
-      /** Strategy for selecting the cheap LLM provider */
-      strategy: CheapLLMStrategyEnum.default("PROVIDER_CHEAPEST"),
-      /** If USER_DEFINED, which connection profile to use */
-      userDefinedProfileId: UUIDSchema.nullable().optional(),
-      /** Global default cheap LLM profile - always use this if set */
-      defaultCheapProfileId: UUIDSchema.nullable().optional(),
-      /** Whether to fall back to local models if available */
-      fallbackToLocal: import_zod3.z.boolean().default(true),
-      /** Provider for generating embeddings */
-      embeddingProvider: EmbeddingProviderEnum.default("OPENAI"),
-      /** Embedding profile ID to use for text embeddings */
-      embeddingProfileId: UUIDSchema.nullable().optional()
-    });
-    ChatSettingsSchema = import_zod3.z.object({
-      id: UUIDSchema,
-      userId: UUIDSchema,
-      avatarDisplayMode: AvatarDisplayModeEnum.default("ALWAYS"),
-      avatarDisplayStyle: import_zod3.z.string().default("CIRCULAR"),
-      tagStyles: TagStyleMapSchema,
-      /** Cheap LLM settings for memory extraction and summarization */
-      cheapLLMSettings: CheapLLMSettingsSchema.default({
-        strategy: "PROVIDER_CHEAPEST",
-        fallbackToLocal: true,
-        embeddingProvider: "OPENAI"
-      }),
-      /** Profile ID to use for image description fallback (when provider doesn't support images) */
-      imageDescriptionProfileId: UUIDSchema.nullable().optional(),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    AccountSchema = import_zod3.z.object({
-      id: UUIDSchema,
-      userId: UUIDSchema,
-      type: import_zod3.z.string(),
-      provider: import_zod3.z.string(),
-      providerAccountId: import_zod3.z.string(),
-      refresh_token: import_zod3.z.string().nullable().optional(),
-      access_token: import_zod3.z.string().nullable().optional(),
-      expires_at: import_zod3.z.number().nullable().optional(),
-      token_type: import_zod3.z.string().nullable().optional(),
-      scope: import_zod3.z.string().nullable().optional(),
-      id_token: import_zod3.z.string().nullable().optional(),
-      session_state: import_zod3.z.string().nullable().optional()
-    });
-    SessionSchema = import_zod3.z.object({
-      id: UUIDSchema,
-      sessionToken: import_zod3.z.string(),
-      userId: UUIDSchema,
-      expires: TimestampSchema
-    });
-    VerificationTokenSchema = import_zod3.z.object({
-      identifier: import_zod3.z.string(),
-      token: import_zod3.z.string(),
-      expires: TimestampSchema
-    });
-    ApiKeySchema = import_zod3.z.object({
-      id: UUIDSchema,
-      label: import_zod3.z.string(),
-      provider: ProviderEnum,
-      ciphertext: import_zod3.z.string(),
-      iv: import_zod3.z.string(),
-      authTag: import_zod3.z.string(),
-      isActive: import_zod3.z.boolean().default(true),
-      lastUsed: TimestampSchema.nullable().optional(),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    ConnectionProfileSchema = import_zod3.z.object({
-      id: UUIDSchema,
-      userId: UUIDSchema,
-      name: import_zod3.z.string(),
-      provider: ProviderEnum,
-      apiKeyId: UUIDSchema.nullable().optional(),
-      baseUrl: import_zod3.z.string().nullable().optional(),
-      modelName: import_zod3.z.string(),
-      parameters: JsonSchema.default({}),
-      isDefault: import_zod3.z.boolean().default(false),
-      /** Whether this profile is suitable for use as a "cheap" LLM (low-cost tasks) */
-      isCheap: import_zod3.z.boolean().default(false),
-      /** Whether web search is allowed for this profile (only if provider supports it) */
-      allowWebSearch: import_zod3.z.boolean().default(false),
-      tags: import_zod3.z.array(UUIDSchema).default([]),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    PhysicalDescriptionSchema = import_zod3.z.object({
-      id: UUIDSchema,
-      name: import_zod3.z.string().min(1),
-      shortPrompt: import_zod3.z.string().max(350).nullable().optional(),
-      mediumPrompt: import_zod3.z.string().max(500).nullable().optional(),
-      longPrompt: import_zod3.z.string().max(750).nullable().optional(),
-      completePrompt: import_zod3.z.string().max(1e3).nullable().optional(),
-      fullDescription: import_zod3.z.string().nullable().optional(),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    CharacterSchema = import_zod3.z.object({
-      id: UUIDSchema,
-      userId: UUIDSchema,
-      name: import_zod3.z.string(),
-      title: import_zod3.z.string().nullable().optional(),
-      description: import_zod3.z.string().nullable().optional(),
-      personality: import_zod3.z.string().nullable().optional(),
-      scenario: import_zod3.z.string().nullable().optional(),
-      firstMessage: import_zod3.z.string().nullable().optional(),
-      exampleDialogues: import_zod3.z.string().nullable().optional(),
-      systemPrompt: import_zod3.z.string().nullable().optional(),
-      avatarUrl: import_zod3.z.string().nullable().optional(),
-      defaultImageId: UUIDSchema.nullable().optional(),
-      defaultConnectionProfileId: UUIDSchema.nullable().optional(),
-      sillyTavernData: JsonSchema.nullable().optional(),
-      isFavorite: import_zod3.z.boolean().default(false),
-      // Relationships
-      personaLinks: import_zod3.z.array(import_zod3.z.object({
-        personaId: UUIDSchema,
-        isDefault: import_zod3.z.boolean()
-      })).default([]),
-      tags: import_zod3.z.array(UUIDSchema).default([]),
-      avatarOverrides: import_zod3.z.array(import_zod3.z.object({
-        chatId: UUIDSchema,
-        imageId: UUIDSchema
-      })).default([]),
-      physicalDescriptions: import_zod3.z.array(PhysicalDescriptionSchema).default([]),
-      // Timestamps
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    PersonaSchema = import_zod3.z.object({
-      id: UUIDSchema,
-      userId: UUIDSchema,
-      name: import_zod3.z.string(),
-      title: import_zod3.z.string().nullable().optional(),
-      description: import_zod3.z.string(),
-      personalityTraits: import_zod3.z.string().nullable().optional(),
-      avatarUrl: import_zod3.z.string().nullable().optional(),
-      defaultImageId: UUIDSchema.nullable().optional(),
-      sillyTavernData: JsonSchema.nullable().optional(),
-      // Relationships
-      characterLinks: import_zod3.z.array(UUIDSchema).default([]),
-      tags: import_zod3.z.array(UUIDSchema).default([]),
-      physicalDescriptions: import_zod3.z.array(PhysicalDescriptionSchema).default([]),
-      // Timestamps
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    MessageEventSchema = import_zod3.z.object({
-      type: import_zod3.z.literal("message"),
-      id: UUIDSchema,
-      role: RoleEnum,
-      content: import_zod3.z.string(),
-      rawResponse: JsonSchema.nullable().optional(),
-      tokenCount: import_zod3.z.number().nullable().optional(),
-      swipeGroupId: import_zod3.z.string().nullable().optional(),
-      swipeIndex: import_zod3.z.number().nullable().optional(),
-      attachments: import_zod3.z.array(UUIDSchema).default([]),
-      createdAt: TimestampSchema,
-      // Debug: Memory extraction logs (Sprint 6)
-      debugMemoryLogs: import_zod3.z.array(import_zod3.z.string()).optional()
-    });
-    ContextSummaryEventSchema = import_zod3.z.object({
-      type: import_zod3.z.literal("context-summary"),
-      id: UUIDSchema,
-      context: import_zod3.z.string(),
-      createdAt: TimestampSchema
-    });
-    ChatEventSchema = import_zod3.z.union([
-      MessageEventSchema,
-      ContextSummaryEventSchema
-    ]);
-    ParticipantTypeEnum = import_zod3.z.enum(["CHARACTER", "PERSONA"]);
-    ChatParticipantSchema = import_zod3.z.object({
-      id: UUIDSchema,
-      // Participant type and identity
-      type: ParticipantTypeEnum,
-      characterId: UUIDSchema.nullable().optional(),
-      // Set when type is CHARACTER
-      personaId: UUIDSchema.nullable().optional(),
-      // Set when type is PERSONA
-      // LLM configuration (for AI characters only)
-      connectionProfileId: UUIDSchema.nullable().optional(),
-      // Required for CHARACTER, null for PERSONA
-      imageProfileId: UUIDSchema.nullable().optional(),
-      // Image generation profile
-      // Per-chat customization
-      systemPromptOverride: import_zod3.z.string().nullable().optional(),
-      // Custom scenario/context for this chat
-      // Display and state
-      displayOrder: import_zod3.z.number().default(0),
-      // For ordering in UI
-      isActive: import_zod3.z.boolean().default(true),
-      // Temporarily disable without removing
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    }).refine(
-      (data2) => {
-        if (data2.type === "CHARACTER") {
-          return data2.characterId != null;
-        }
-        if (data2.type === "PERSONA") {
-          return data2.personaId != null;
-        }
-        return false;
+// package.json
+var require_package = __commonJS({
+  "package.json"(exports2, module2) {
+    module2.exports = {
+      name: "quilltap",
+      version: "1.8.5-dev.13",
+      private: true,
+      author: {
+        name: "Charles Sebold",
+        email: "charles@sebold.tech",
+        url: "https://foundry-9.com"
       },
-      { message: "CHARACTER participants must have characterId, PERSONA participants must have personaId" }
-    ).refine(
-      (data2) => {
-        if (data2.type === "CHARACTER") {
-          return data2.connectionProfileId != null;
-        }
-        return true;
+      description: "A chat client application for hosted AI models designed for role play",
+      license: "MIT",
+      repository: {
+        type: "git",
+        url: "https://github.com/foundry-9/quilltap.git"
       },
-      { message: "CHARACTER participants must have a connectionProfileId" }
-    );
-    ChatParticipantBaseSchema = import_zod3.z.object({
-      id: UUIDSchema,
-      type: ParticipantTypeEnum,
-      characterId: UUIDSchema.nullable().optional(),
-      personaId: UUIDSchema.nullable().optional(),
-      connectionProfileId: UUIDSchema.nullable().optional(),
-      imageProfileId: UUIDSchema.nullable().optional(),
-      systemPromptOverride: import_zod3.z.string().nullable().optional(),
-      displayOrder: import_zod3.z.number().default(0),
-      isActive: import_zod3.z.boolean().default(true),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    ChatMetadataSchema = import_zod3.z.object({
-      id: UUIDSchema,
-      userId: UUIDSchema,
-      // Participants array (replaces characterId, personaId, connectionProfileId, imageProfileId)
-      participants: import_zod3.z.array(ChatParticipantBaseSchema).default([]),
-      title: import_zod3.z.string(),
-      contextSummary: import_zod3.z.string().nullable().optional(),
-      sillyTavernMetadata: JsonSchema.nullable().optional(),
-      tags: import_zod3.z.array(UUIDSchema).default([]),
-      messageCount: import_zod3.z.number().default(0),
-      lastMessageAt: TimestampSchema.nullable().optional(),
-      lastRenameCheckInterchange: import_zod3.z.number().default(0),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    }).refine(
-      (data2) => data2.participants.length > 0,
-      { message: "Chat must have at least one participant" }
-    );
-    ChatMetadataBaseSchema = import_zod3.z.object({
-      id: UUIDSchema,
-      userId: UUIDSchema,
-      participants: import_zod3.z.array(ChatParticipantBaseSchema).default([]),
-      title: import_zod3.z.string(),
-      contextSummary: import_zod3.z.string().nullable().optional(),
-      sillyTavernMetadata: JsonSchema.nullable().optional(),
-      tags: import_zod3.z.array(UUIDSchema).default([]),
-      messageCount: import_zod3.z.number().default(0),
-      lastMessageAt: TimestampSchema.nullable().optional(),
-      lastRenameCheckInterchange: import_zod3.z.number().default(0),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    ChatMetadataLegacySchema = import_zod3.z.object({
-      id: UUIDSchema,
-      userId: UUIDSchema,
-      characterId: UUIDSchema,
-      personaId: UUIDSchema.nullable().optional(),
-      connectionProfileId: UUIDSchema,
-      imageProfileId: UUIDSchema.nullable().optional(),
-      title: import_zod3.z.string(),
-      contextSummary: import_zod3.z.string().nullable().optional(),
-      sillyTavernMetadata: JsonSchema.nullable().optional(),
-      tags: import_zod3.z.array(UUIDSchema).default([]),
-      messageCount: import_zod3.z.number().default(0),
-      lastMessageAt: TimestampSchema.nullable().optional(),
-      lastRenameCheckInterchange: import_zod3.z.number().default(0),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    BinaryIndexEntrySchema = import_zod3.z.object({
-      id: UUIDSchema,
-      sha256: import_zod3.z.string().length(64),
-      type: import_zod3.z.enum(["image", "chat_file", "avatar"]),
-      userId: UUIDSchema,
-      filename: import_zod3.z.string(),
-      relativePath: import_zod3.z.string(),
-      mimeType: import_zod3.z.string(),
-      size: import_zod3.z.number(),
-      width: import_zod3.z.number().nullable().optional(),
-      height: import_zod3.z.number().nullable().optional(),
-      source: import_zod3.z.enum(["upload", "import", "generated"]).default("upload"),
-      generationPrompt: import_zod3.z.string().nullable().optional(),
-      generationModel: import_zod3.z.string().nullable().optional(),
-      chatId: UUIDSchema.nullable().optional(),
-      characterId: UUIDSchema.nullable().optional(),
-      // For avatar overrides
-      messageId: UUIDSchema.nullable().optional(),
-      tags: import_zod3.z.array(UUIDSchema).default([]),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    FileSourceEnum = import_zod3.z.enum(["UPLOADED", "GENERATED", "IMPORTED", "SYSTEM"]);
-    FileCategoryEnum = import_zod3.z.enum(["IMAGE", "DOCUMENT", "AVATAR", "ATTACHMENT", "EXPORT"]);
-    FileEntrySchema = import_zod3.z.object({
-      // Identity & Storage
-      id: UUIDSchema,
-      // File UUID (also the base filename in storage)
-      userId: UUIDSchema,
-      // Owner of the file
-      sha256: import_zod3.z.string().length(64),
-      // Content hash for deduplication
-      originalFilename: import_zod3.z.string(),
-      // Original filename from upload/generation
-      mimeType: import_zod3.z.string(),
-      // Specific MIME type
-      size: import_zod3.z.number(),
-      // File size in bytes
-      // Image metadata (if applicable)
-      width: import_zod3.z.number().nullable().optional(),
-      height: import_zod3.z.number().nullable().optional(),
-      // Linking - array of IDs this file is associated with
-      linkedTo: import_zod3.z.array(UUIDSchema).default([]),
-      // messageId, chatId, characterId, personaId, etc.
-      // Classification
-      source: FileSourceEnum,
-      // Where the file came from
-      category: FileCategoryEnum,
-      // What type of file it is
-      // Generation metadata (for AI-generated files)
-      generationPrompt: import_zod3.z.string().nullable().optional(),
-      generationModel: import_zod3.z.string().nullable().optional(),
-      generationRevisedPrompt: import_zod3.z.string().nullable().optional(),
-      description: import_zod3.z.string().nullable().optional(),
-      // AI description or user-provided description
-      // Tags
-      tags: import_zod3.z.array(UUIDSchema).default([]),
-      // S3 storage reference (Phase 3: MongoDB + S3 migration)
-      s3Key: import_zod3.z.string().nullable().optional(),
-      // Full S3 object key
-      s3Bucket: import_zod3.z.string().nullable().optional(),
-      // S3 bucket name
-      // Timestamps
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    TagSchema = import_zod3.z.object({
-      id: UUIDSchema,
-      userId: UUIDSchema,
-      name: import_zod3.z.string(),
-      nameLower: import_zod3.z.string(),
-      quickHide: import_zod3.z.boolean().default(false),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    ImageProfileSchema = import_zod3.z.object({
-      id: UUIDSchema,
-      userId: UUIDSchema,
-      name: import_zod3.z.string(),
-      provider: ImageProviderEnum,
-      apiKeyId: UUIDSchema.nullable().optional(),
-      baseUrl: import_zod3.z.string().nullable().optional(),
-      modelName: import_zod3.z.string(),
-      parameters: JsonSchema.default({}),
-      isDefault: import_zod3.z.boolean().default(false),
-      tags: import_zod3.z.array(UUIDSchema).default([]),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    GeneralSettingsSchema = import_zod3.z.object({
-      version: import_zod3.z.number().default(1),
-      user: UserSchema,
-      chatSettings: ChatSettingsSchema,
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    ConnectionProfilesFileSchema = import_zod3.z.object({
-      version: import_zod3.z.number().default(1),
-      apiKeys: import_zod3.z.array(ApiKeySchema).default([]),
-      llmProfiles: import_zod3.z.array(ConnectionProfileSchema).default([]),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    AuthAccountsSchema = import_zod3.z.object({
-      version: import_zod3.z.number().default(1),
-      accounts: import_zod3.z.array(AccountSchema).default([]),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    TagsFileSchema = import_zod3.z.object({
-      version: import_zod3.z.number().default(1),
-      tags: import_zod3.z.array(TagSchema).default([]),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    ImageProfilesFileSchema = import_zod3.z.object({
-      version: import_zod3.z.number().default(1),
-      profiles: import_zod3.z.array(ImageProfileSchema).default([]),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    EmbeddingProfileSchema = import_zod3.z.object({
-      id: UUIDSchema,
-      userId: UUIDSchema,
-      name: import_zod3.z.string(),
-      provider: EmbeddingProfileProviderEnum,
-      apiKeyId: UUIDSchema.nullable().optional(),
-      baseUrl: import_zod3.z.string().nullable().optional(),
-      modelName: import_zod3.z.string(),
-      /** Embedding dimension size (provider-specific) */
-      dimensions: import_zod3.z.number().nullable().optional(),
-      isDefault: import_zod3.z.boolean().default(false),
-      tags: import_zod3.z.array(UUIDSchema).default([]),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    EmbeddingProfilesFileSchema = import_zod3.z.object({
-      version: import_zod3.z.number().default(1),
-      profiles: import_zod3.z.array(EmbeddingProfileSchema).default([]),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    MemorySourceEnum = import_zod3.z.enum(["AUTO", "MANUAL"]);
-    MemorySchema = import_zod3.z.object({
-      id: UUIDSchema,
-      characterId: UUIDSchema,
-      personaId: UUIDSchema.nullable().optional(),
-      // Optional: specific persona interaction
-      chatId: UUIDSchema.nullable().optional(),
-      // Optional: source chat reference
-      content: import_zod3.z.string(),
-      // The actual memory content
-      summary: import_zod3.z.string(),
-      // Distilled version for context injection
-      keywords: import_zod3.z.array(import_zod3.z.string()).default([]),
-      // For text-based search
-      tags: import_zod3.z.array(UUIDSchema).default([]),
-      // Derived from character/persona/chat tags
-      importance: import_zod3.z.number().min(0).max(1).default(0.5),
-      // 0-1 scale for prioritization
-      embedding: import_zod3.z.array(import_zod3.z.number()).nullable().optional(),
-      // Vector embedding for semantic search
-      source: MemorySourceEnum.default("MANUAL"),
-      // How it was created
-      sourceMessageId: UUIDSchema.nullable().optional(),
-      // If auto-created, which message triggered it
-      lastAccessedAt: TimestampSchema.nullable().optional(),
-      // For housekeeping decisions
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    MemoriesFileSchema = import_zod3.z.object({
-      version: import_zod3.z.number().default(1),
-      memories: import_zod3.z.array(MemorySchema).default([]),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-  }
-});
-
-// lib/json-store/repositories/connection-profiles.repository.ts
-var ConnectionProfilesRepository;
-var init_connection_profiles_repository = __esm({
-  "lib/json-store/repositories/connection-profiles.repository.ts"() {
-    "use strict";
-    init_base_repository();
-    init_types();
-    ConnectionProfilesRepository = class extends BaseRepository {
-      constructor(jsonStore) {
-        super(jsonStore, ConnectionProfileSchema);
-      }
-      /**
-       * Get the connection profiles file path
-       */
-      getFilePath() {
-        return "settings/connection-profiles.json";
-      }
-      /**
-       * Read connection profiles file with default structure
-       */
-      async readProfilesFile() {
-        try {
-          const filePath = this.getFilePath();
-          const data2 = await this.jsonStore.readJson(filePath);
-          return ConnectionProfilesFileSchema.parse(data2);
-        } catch (error2) {
-          return {
-            version: 1,
-            apiKeys: [],
-            llmProfiles: [],
-            createdAt: this.getCurrentTimestamp(),
-            updatedAt: this.getCurrentTimestamp()
-          };
-        }
-      }
-      /**
-       * Write connection profiles file with validation
-       */
-      async writeProfilesFile(data2) {
-        const validated = ConnectionProfilesFileSchema.parse({
-          ...data2,
-          updatedAt: this.getCurrentTimestamp()
-        });
-        await this.jsonStore.writeJson(this.getFilePath(), validated);
-      }
-      /**
-       * Find a connection profile by ID
-       */
-      async findById(id) {
-        const file = await this.readProfilesFile();
-        return file.llmProfiles.find((profile) => profile.id === id) || null;
-      }
-      /**
-       * Find all connection profiles
-       */
-      async findAll() {
-        const file = await this.readProfilesFile();
-        return file.llmProfiles;
-      }
-      /**
-       * Find connection profiles by user ID
-       */
-      async findByUserId(userId) {
-        const file = await this.readProfilesFile();
-        return file.llmProfiles.filter((profile) => profile.userId === userId);
-      }
-      /**
-       * Find connection profiles with a specific tag
-       */
-      async findByTag(tagId) {
-        const file = await this.readProfilesFile();
-        return file.llmProfiles.filter((profile) => profile.tags.includes(tagId));
-      }
-      /**
-       * Find default connection profile for user
-       */
-      async findDefault(userId) {
-        const file = await this.readProfilesFile();
-        return file.llmProfiles.find(
-          (profile) => profile.userId === userId && profile.isDefault
-        ) || null;
-      }
-      /**
-       * Create a new connection profile
-       */
-      async create(data2) {
-        const id = this.generateId();
-        const now = this.getCurrentTimestamp();
-        const profile = {
-          ...data2,
-          id,
-          createdAt: now,
-          updatedAt: now
-        };
-        const validated = this.validate(profile);
-        const file = await this.readProfilesFile();
-        file.llmProfiles.push(validated);
-        await this.writeProfilesFile(file);
-        this.jsonStore.clearCache();
-        return validated;
-      }
-      /**
-       * Update a connection profile
-       */
-      async update(id, data2) {
-        const file = await this.readProfilesFile();
-        const index = file.llmProfiles.findIndex((profile) => profile.id === id);
-        if (index === -1) {
-          return null;
-        }
-        const existing = file.llmProfiles[index];
-        const now = this.getCurrentTimestamp();
-        const updated = {
-          ...existing,
-          ...data2,
-          id: existing.id,
-          // Preserve ID
-          createdAt: existing.createdAt,
-          // Preserve creation timestamp
-          updatedAt: now
-        };
-        const validated = this.validate(updated);
-        file.llmProfiles[index] = validated;
-        await this.writeProfilesFile(file);
-        this.jsonStore.clearCache();
-        return validated;
-      }
-      /**
-       * Delete a connection profile
-       */
-      async delete(id) {
-        const file = await this.readProfilesFile();
-        const initialLength = file.llmProfiles.length;
-        file.llmProfiles = file.llmProfiles.filter((profile) => profile.id !== id);
-        if (file.llmProfiles.length === initialLength) {
-          return false;
-        }
-        await this.writeProfilesFile(file);
-        this.jsonStore.clearCache();
-        return true;
-      }
-      /**
-       * Add a tag to a connection profile
-       */
-      async addTag(profileId, tagId) {
-        const profile = await this.findById(profileId);
-        if (!profile) {
-          return null;
-        }
-        if (!profile.tags.includes(tagId)) {
-          profile.tags.push(tagId);
-          return await this.update(profileId, { tags: profile.tags });
-        }
-        return profile;
-      }
-      /**
-       * Remove a tag from a connection profile
-       */
-      async removeTag(profileId, tagId) {
-        const profile = await this.findById(profileId);
-        if (!profile) {
-          return null;
-        }
-        profile.tags = profile.tags.filter((id) => id !== tagId);
-        return await this.update(profileId, { tags: profile.tags });
-      }
-      // ============================================================================
-      // API KEY OPERATIONS
-      // ============================================================================
-      /**
-       * Get all API keys
-       */
-      async getAllApiKeys() {
-        const file = await this.readProfilesFile();
-        return file.apiKeys;
-      }
-      /**
-       * Find API key by ID
-       */
-      async findApiKeyById(id) {
-        const file = await this.readProfilesFile();
-        return file.apiKeys.find((key) => key.id === id) || null;
-      }
-      /**
-       * Create a new API key
-       */
-      async createApiKey(data2) {
-        const id = this.generateId();
-        const now = this.getCurrentTimestamp();
-        const apiKey = {
-          ...data2,
-          id,
-          createdAt: now,
-          updatedAt: now
-        };
-        const validated = ApiKeySchema.parse(apiKey);
-        const file = await this.readProfilesFile();
-        file.apiKeys.push(validated);
-        await this.writeProfilesFile(file);
-        this.jsonStore.clearCache();
-        return validated;
-      }
-      /**
-       * Update an API key
-       */
-      async updateApiKey(id, data2) {
-        const file = await this.readProfilesFile();
-        const index = file.apiKeys.findIndex((key) => key.id === id);
-        if (index === -1) {
-          return null;
-        }
-        const existing = file.apiKeys[index];
-        const now = this.getCurrentTimestamp();
-        const updated = {
-          ...existing,
-          ...data2,
-          id: existing.id,
-          // Preserve ID
-          createdAt: existing.createdAt,
-          // Preserve creation timestamp
-          updatedAt: now
-        };
-        const validated = ApiKeySchema.parse(updated);
-        file.apiKeys[index] = validated;
-        await this.writeProfilesFile(file);
-        this.jsonStore.clearCache();
-        return validated;
-      }
-      /**
-       * Delete an API key
-       */
-      async deleteApiKey(id) {
-        const file = await this.readProfilesFile();
-        const initialLength = file.apiKeys.length;
-        file.apiKeys = file.apiKeys.filter((key) => key.id !== id);
-        if (file.apiKeys.length === initialLength) {
-          return false;
-        }
-        await this.writeProfilesFile(file);
-        this.jsonStore.clearCache();
-        return true;
-      }
-      /**
-       * Update API key last used timestamp
-       */
-      async recordApiKeyUsage(id) {
-        return await this.updateApiKey(id, { lastUsed: this.getCurrentTimestamp() });
-      }
-    };
-  }
-});
-
-// lib/json-store/repositories/image-profiles.repository.ts
-var ImageProfilesRepository;
-var init_image_profiles_repository = __esm({
-  "lib/json-store/repositories/image-profiles.repository.ts"() {
-    "use strict";
-    init_base_repository();
-    init_types();
-    ImageProfilesRepository = class extends BaseRepository {
-      constructor(jsonStore) {
-        super(jsonStore, ImageProfileSchema);
-      }
-      /**
-       * Get the image profiles file path
-       */
-      getFilePath() {
-        return "settings/image-profiles.json";
-      }
-      /**
-       * Read image profiles file with default structure
-       */
-      async readProfilesFile() {
-        try {
-          const filePath = this.getFilePath();
-          const data2 = await this.jsonStore.readJson(filePath);
-          return ImageProfilesFileSchema.parse(data2);
-        } catch (error2) {
-          return {
-            version: 1,
-            profiles: [],
-            createdAt: this.getCurrentTimestamp(),
-            updatedAt: this.getCurrentTimestamp()
-          };
-        }
-      }
-      /**
-       * Write image profiles file with validation
-       */
-      async writeProfilesFile(data2) {
-        const validated = ImageProfilesFileSchema.parse({
-          ...data2,
-          updatedAt: this.getCurrentTimestamp()
-        });
-        await this.jsonStore.writeJson(this.getFilePath(), validated);
-      }
-      /**
-       * Find an image profile by ID
-       */
-      async findById(id) {
-        const file = await this.readProfilesFile();
-        return file.profiles.find((profile) => profile.id === id) || null;
-      }
-      /**
-       * Find all image profiles
-       */
-      async findAll() {
-        const file = await this.readProfilesFile();
-        return file.profiles;
-      }
-      /**
-       * Find image profiles by user ID
-       */
-      async findByUserId(userId) {
-        const file = await this.readProfilesFile();
-        return file.profiles.filter((profile) => profile.userId === userId);
-      }
-      /**
-       * Find image profiles with a specific tag
-       */
-      async findByTag(tagId) {
-        const file = await this.readProfilesFile();
-        return file.profiles.filter((profile) => profile.tags.includes(tagId));
-      }
-      /**
-       * Find default image profile for user
-       */
-      async findDefault(userId) {
-        const file = await this.readProfilesFile();
-        return file.profiles.find(
-          (profile) => profile.userId === userId && profile.isDefault
-        ) || null;
-      }
-      /**
-       * Find image profile by name for user
-       */
-      async findByName(userId, name) {
-        const file = await this.readProfilesFile();
-        return file.profiles.find(
-          (profile) => profile.userId === userId && profile.name === name
-        ) || null;
-      }
-      /**
-       * Create a new image profile
-       */
-      async create(data2) {
-        const id = this.generateId();
-        const now = this.getCurrentTimestamp();
-        const profile = {
-          ...data2,
-          id,
-          createdAt: now,
-          updatedAt: now
-        };
-        const validated = this.validate(profile);
-        const file = await this.readProfilesFile();
-        file.profiles.push(validated);
-        await this.writeProfilesFile(file);
-        return validated;
-      }
-      /**
-       * Update an image profile
-       */
-      async update(id, data2) {
-        const file = await this.readProfilesFile();
-        const index = file.profiles.findIndex((profile) => profile.id === id);
-        if (index === -1) {
-          return null;
-        }
-        const existing = file.profiles[index];
-        const now = this.getCurrentTimestamp();
-        const updated = {
-          ...existing,
-          ...data2,
-          id: existing.id,
-          // Preserve ID
-          createdAt: existing.createdAt,
-          // Preserve creation timestamp
-          updatedAt: now
-        };
-        const validated = this.validate(updated);
-        file.profiles[index] = validated;
-        await this.writeProfilesFile(file);
-        return validated;
-      }
-      /**
-       * Delete an image profile
-       */
-      async delete(id) {
-        const file = await this.readProfilesFile();
-        const initialLength = file.profiles.length;
-        file.profiles = file.profiles.filter((profile) => profile.id !== id);
-        if (file.profiles.length === initialLength) {
-          return false;
-        }
-        await this.writeProfilesFile(file);
-        return true;
-      }
-      /**
-       * Add a tag to an image profile
-       */
-      async addTag(profileId, tagId) {
-        const profile = await this.findById(profileId);
-        if (!profile) {
-          return null;
-        }
-        if (!profile.tags.includes(tagId)) {
-          profile.tags.push(tagId);
-          return await this.update(profileId, { tags: profile.tags });
-        }
-        return profile;
-      }
-      /**
-       * Remove a tag from an image profile
-       */
-      async removeTag(profileId, tagId) {
-        const profile = await this.findById(profileId);
-        if (!profile) {
-          return null;
-        }
-        profile.tags = profile.tags.filter((id) => id !== tagId);
-        return await this.update(profileId, { tags: profile.tags });
-      }
-      /**
-       * Unset default flag on all profiles for a user
-       */
-      async unsetAllDefaults(userId) {
-        const file = await this.readProfilesFile();
-        let changed = false;
-        for (let i4 = 0; i4 < file.profiles.length; i4++) {
-          if (file.profiles[i4].userId === userId && file.profiles[i4].isDefault) {
-            file.profiles[i4] = {
-              ...file.profiles[i4],
-              isDefault: false,
-              updatedAt: this.getCurrentTimestamp()
-            };
-            changed = true;
-          }
-        }
-        if (changed) {
-          await this.writeProfilesFile(file);
-        }
-      }
-    };
-  }
-});
-
-// lib/json-store/repositories/embedding-profiles.repository.ts
-var EmbeddingProfilesRepository;
-var init_embedding_profiles_repository = __esm({
-  "lib/json-store/repositories/embedding-profiles.repository.ts"() {
-    "use strict";
-    init_base_repository();
-    init_types();
-    EmbeddingProfilesRepository = class extends BaseRepository {
-      constructor(jsonStore) {
-        super(jsonStore, EmbeddingProfileSchema);
-      }
-      /**
-       * Get the embedding profiles file path
-       */
-      getFilePath() {
-        return "settings/embedding-profiles.json";
-      }
-      /**
-       * Read embedding profiles file with default structure
-       */
-      async readProfilesFile() {
-        try {
-          const filePath = this.getFilePath();
-          const data2 = await this.jsonStore.readJson(filePath);
-          return EmbeddingProfilesFileSchema.parse(data2);
-        } catch (error2) {
-          return {
-            version: 1,
-            profiles: [],
-            createdAt: this.getCurrentTimestamp(),
-            updatedAt: this.getCurrentTimestamp()
-          };
-        }
-      }
-      /**
-       * Write embedding profiles file with validation
-       */
-      async writeProfilesFile(data2) {
-        const validated = EmbeddingProfilesFileSchema.parse({
-          ...data2,
-          updatedAt: this.getCurrentTimestamp()
-        });
-        await this.jsonStore.writeJson(this.getFilePath(), validated);
-      }
-      /**
-       * Find an embedding profile by ID
-       */
-      async findById(id) {
-        const file = await this.readProfilesFile();
-        return file.profiles.find((profile) => profile.id === id) || null;
-      }
-      /**
-       * Find all embedding profiles
-       */
-      async findAll() {
-        const file = await this.readProfilesFile();
-        return file.profiles;
-      }
-      /**
-       * Find embedding profiles by user ID
-       */
-      async findByUserId(userId) {
-        const file = await this.readProfilesFile();
-        return file.profiles.filter((profile) => profile.userId === userId);
-      }
-      /**
-       * Find embedding profiles with a specific tag
-       */
-      async findByTag(tagId) {
-        const file = await this.readProfilesFile();
-        return file.profiles.filter((profile) => profile.tags.includes(tagId));
-      }
-      /**
-       * Find default embedding profile for user
-       */
-      async findDefault(userId) {
-        const file = await this.readProfilesFile();
-        return file.profiles.find(
-          (profile) => profile.userId === userId && profile.isDefault
-        ) || null;
-      }
-      /**
-       * Find embedding profile by name for user
-       */
-      async findByName(userId, name) {
-        const file = await this.readProfilesFile();
-        return file.profiles.find(
-          (profile) => profile.userId === userId && profile.name === name
-        ) || null;
-      }
-      /**
-       * Create a new embedding profile
-       */
-      async create(data2) {
-        const id = this.generateId();
-        const now = this.getCurrentTimestamp();
-        const profile = {
-          ...data2,
-          id,
-          createdAt: now,
-          updatedAt: now
-        };
-        const validated = this.validate(profile);
-        const file = await this.readProfilesFile();
-        file.profiles.push(validated);
-        await this.writeProfilesFile(file);
-        return validated;
-      }
-      /**
-       * Update an embedding profile
-       */
-      async update(id, data2) {
-        const file = await this.readProfilesFile();
-        const index = file.profiles.findIndex((profile) => profile.id === id);
-        if (index === -1) {
-          return null;
-        }
-        const existing = file.profiles[index];
-        const now = this.getCurrentTimestamp();
-        const updated = {
-          ...existing,
-          ...data2,
-          id: existing.id,
-          // Preserve ID
-          createdAt: existing.createdAt,
-          // Preserve creation timestamp
-          updatedAt: now
-        };
-        const validated = this.validate(updated);
-        file.profiles[index] = validated;
-        await this.writeProfilesFile(file);
-        return validated;
-      }
-      /**
-       * Delete an embedding profile
-       */
-      async delete(id) {
-        const file = await this.readProfilesFile();
-        const initialLength = file.profiles.length;
-        file.profiles = file.profiles.filter((profile) => profile.id !== id);
-        if (file.profiles.length === initialLength) {
-          return false;
-        }
-        await this.writeProfilesFile(file);
-        return true;
-      }
-      /**
-       * Add a tag to an embedding profile
-       */
-      async addTag(profileId, tagId) {
-        const profile = await this.findById(profileId);
-        if (!profile) {
-          return null;
-        }
-        if (!profile.tags.includes(tagId)) {
-          profile.tags.push(tagId);
-          return await this.update(profileId, { tags: profile.tags });
-        }
-        return profile;
-      }
-      /**
-       * Remove a tag from an embedding profile
-       */
-      async removeTag(profileId, tagId) {
-        const profile = await this.findById(profileId);
-        if (!profile) {
-          return null;
-        }
-        profile.tags = profile.tags.filter((id) => id !== tagId);
-        return await this.update(profileId, { tags: profile.tags });
-      }
-      /**
-       * Unset default flag on all profiles for a user
-       */
-      async unsetAllDefaults(userId) {
-        const file = await this.readProfilesFile();
-        let changed = false;
-        for (let i4 = 0; i4 < file.profiles.length; i4++) {
-          if (file.profiles[i4].userId === userId && file.profiles[i4].isDefault) {
-            file.profiles[i4] = {
-              ...file.profiles[i4],
-              isDefault: false,
-              updatedAt: this.getCurrentTimestamp()
-            };
-            changed = true;
-          }
-        }
-        if (changed) {
-          await this.writeProfilesFile(file);
-        }
+      scripts: {
+        dev: "next dev",
+        devssl: "next dev --experimental-https --experimental-https-key ./certs/localhost-key.pem --experimental-https-cert ./certs/localhost.pem",
+        build: "npm run lint && next build",
+        "build:plugins": "tsx scripts/build-plugins.ts",
+        start: "next start",
+        lint: "eslint .",
+        "lint:fix": "eslint . --fix",
+        test: "LOG_LEVEL=error npm run test:all",
+        "test:unit": "LOG_LEVEL=error jest",
+        "test:integration": "LOG_LEVEL=error jest --config jest.integration.config.ts",
+        "test:all": "LOG_LEVEL=error jest && LOG_LEVEL=error jest --config jest.integration.config.ts",
+        "test:watch": "jest --watch",
+        "test:coverage": "jest --coverage",
+        "test:e2e": "playwright test",
+        "test:e2e:ui": "playwright test --ui",
+        "test:e2e:headed": "playwright test --headed",
+        "migrate-files": "tsx scripts/migrate-files.ts",
+        "migrate-files:dry-run": "tsx scripts/migrate-files.ts --dry-run",
+        "consolidate-images": "tsx scripts/consolidate-images.ts",
+        "consolidate-images:dry-run": "tsx scripts/consolidate-images.ts --dry-run",
+        "cleanup-old-files": "tsx scripts/cleanup-old-files.ts",
+        "generate:schemas": "tsx scripts/generate-plugin-manifest-schema.ts"
+      },
+      dependencies: {
+        "@anthropic-ai/sdk": "^0.71.0",
+        "@aws-sdk/client-s3": "^3.943.0",
+        "@aws-sdk/s3-request-presigner": "^3.943.0",
+        "@google/generative-ai": "^0.24.1",
+        "@openrouter/sdk": "^0.1.27",
+        bcrypt: "^5.1.1",
+        glob: "^12.0.0",
+        "jest-fetch-mock": "^3.0.3",
+        mongodb: "^6.21.0",
+        next: "^16.0.5",
+        "next-auth": "^4.24.7",
+        "node-fetch": "^3.3.2",
+        openai: "^6.9.0",
+        qrcode: "^1.5.4",
+        react: "^19.2.0",
+        "react-dom": "^19.2.0",
+        "react-markdown": "^10.1.0",
+        "react-syntax-highlighter": "^16.1.0",
+        "remark-gfm": "^4.0.1",
+        speakeasy: "^2.0.0",
+        zod: "^3.23.0"
+      },
+      devDependencies: {
+        "@eslint/eslintrc": "^3.3.1",
+        "@jest/globals": "^30.2.0",
+        "@playwright/test": "^1.49.0",
+        "@tailwindcss/postcss": "^4.1.17",
+        "@testing-library/jest-dom": "^6.9.1",
+        "@testing-library/react": "^16.3.0",
+        "@types/bcrypt": "^5.0.2",
+        "@types/jest": "^30.0.0",
+        "@types/node": "^22.0.0",
+        "@types/qrcode": "^1.5.6",
+        "@types/react": "^19.2.5",
+        "@types/react-dom": "^19.2.3",
+        "@types/react-syntax-highlighter": "^15.5.13",
+        "@types/speakeasy": "^2.0.10",
+        autoprefixer: "^10.4.22",
+        dotenv: "^17.2.3",
+        eslint: "^9.39.1",
+        "eslint-config-next": "^16.0.5",
+        jest: "^30.2.0",
+        "jest-environment-jsdom": "^30.2.0",
+        postcss: "^8.4.0",
+        tailwindcss: "^4.1.17",
+        "ts-jest": "^29.4.5",
+        "ts-node": "^10.9.2",
+        tsx: "^4.7.0",
+        typescript: "^5.6.0",
+        "zod-to-json-schema": "^3.25.0"
+      },
+      overrides: {
+        glob: "^12.0.0",
+        cookie: "^0.7.0"
       }
     };
   }
@@ -13354,7 +11618,7 @@ var require_mongo_credentials = __commonJS({
 });
 
 // node_modules/mongodb/package.json
-var require_package = __commonJS({
+var require_package2 = __commonJS({
   "node_modules/mongodb/package.json"(exports2, module2) {
     module2.exports = {
       name: "mongodb",
@@ -13552,7 +11816,7 @@ var require_client_metadata = __commonJS({
     var bson_1 = require_bson2();
     var error_1 = require_error();
     var utils_1 = require_utils();
-    var NODE_DRIVER_VERSION = require_package().version;
+    var NODE_DRIVER_VERSION = require_package2().version;
     function isDriverInfoEqual(info1, info2) {
       const nonEmptyCmp = (s1, s22) => {
         s1 ||= void 0;
@@ -34288,7 +32552,7 @@ function validateMongoDBConfig() {
       errors
     };
   } catch (error2) {
-    if (error2 instanceof import_zod4.z.ZodError) {
+    if (error2 instanceof import_zod2.z.ZodError) {
       const validationErrors = error2.errors.map((err) => {
         const path4 = err.path.join(".");
         return `${path4}: ${err.message}`;
@@ -34388,21 +32652,2193 @@ async function testMongoDBConnection() {
     }
   }
 }
-var import_zod4, import_mongodb, mongoDBConfigSchema;
+var import_zod2, import_mongodb, mongoDBConfigSchema;
 var init_config = __esm({
   "lib/mongodb/config.ts"() {
     "use strict";
-    import_zod4 = require("zod");
+    import_zod2 = require("zod");
     import_mongodb = __toESM(require_lib3());
     init_logger();
-    mongoDBConfigSchema = import_zod4.z.object({
-      uri: import_zod4.z.string().min(1, "MongoDB URI is required"),
-      database: import_zod4.z.string().min(1, "Database name is required"),
-      mode: import_zod4.z.enum(["external", "embedded"]).default("external"),
-      dataDir: import_zod4.z.string().optional(),
-      connectionTimeoutMs: import_zod4.z.number().int().positive().default(1e4),
-      maxPoolSize: import_zod4.z.number().int().positive().default(10)
+    mongoDBConfigSchema = import_zod2.z.object({
+      uri: import_zod2.z.string().min(1, "MongoDB URI is required"),
+      database: import_zod2.z.string().min(1, "Database name is required"),
+      mode: import_zod2.z.enum(["external", "embedded"]).default("external"),
+      dataDir: import_zod2.z.string().optional(),
+      connectionTimeoutMs: import_zod2.z.number().int().positive().default(1e4),
+      maxPoolSize: import_zod2.z.number().int().positive().default(10)
     });
+  }
+});
+
+// lib/mongodb/client.ts
+var client_exports = {};
+__export(client_exports, {
+  closeMongoConnection: () => closeMongoConnection,
+  getMongoClient: () => getMongoClient,
+  getMongoDatabase: () => getMongoDatabase,
+  isMongoConnected: () => isMongoConnected,
+  setupMongoDBShutdownHandlers: () => setupMongoDBShutdownHandlers
+});
+async function isClientConnected(client) {
+  if (!client) return false;
+  try {
+    await client.db("admin").command({ ping: 1 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+async function getMongoClient() {
+  if (await isClientConnected(mongoClient)) {
+    logger.debug("Returning existing MongoDB client connection");
+    return mongoClient;
+  }
+  mongoClient = null;
+  if (isConnecting) {
+    logger.debug("Connection attempt already in progress, waiting...");
+    let attempts = 0;
+    while (isConnecting && attempts < 50) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      attempts++;
+    }
+    if (await isClientConnected(mongoClient)) {
+      return mongoClient;
+    }
+  }
+  isConnecting = true;
+  try {
+    const config = validateMongoDBConfig();
+    logger.debug("Attempting MongoDB connection", {
+      host: config.uri.replace(/mongodb\+srv:\/\/.*@/, "mongodb+srv://***@"),
+      database: config.database,
+      maxPoolSize: config.maxPoolSize
+    });
+    const clientOptions = {
+      maxPoolSize: config.maxPoolSize,
+      minPoolSize: 1,
+      maxIdleTimeMS: 6e4,
+      retryWrites: true,
+      retryReads: true,
+      socketTimeoutMS: 45e3,
+      serverSelectionTimeoutMS: 5e3,
+      connectTimeoutMS: 1e4
+    };
+    mongoClient = new import_mongodb2.MongoClient(config.uri, clientOptions);
+    await mongoClient.connect();
+    logger.info("Successfully connected to MongoDB", {
+      uri: config.uri.replace(/mongodb\+srv:\/\/.*@/, "mongodb+srv://***@"),
+      database: config.database
+    });
+    await mongoClient.db("admin").command({ ping: 1 });
+    logger.debug("MongoDB ping successful");
+    mongoClient.on("connectionClosed", () => {
+      logger.info("MongoDB connection closed");
+    });
+    mongoClient.on("error", (error2) => {
+      logger.error("MongoDB client error", { error: error2.message });
+    });
+    mongoClient.on("connectionPoolClosed", () => {
+      logger.debug("MongoDB connection pool closed");
+    });
+    return mongoClient;
+  } catch (error2) {
+    logger.error("Failed to connect to MongoDB", {
+      error: error2 instanceof Error ? error2.message : String(error2)
+    });
+    mongoClient = null;
+    throw error2;
+  } finally {
+    isConnecting = false;
+  }
+}
+async function getMongoDatabase() {
+  if (mongoDatabase && await isClientConnected(mongoClient)) {
+    logger.debug("Returning existing MongoDB database instance");
+    return mongoDatabase;
+  }
+  mongoClient = null;
+  mongoDatabase = null;
+  try {
+    const client = await getMongoClient();
+    const config = validateMongoDBConfig();
+    mongoDatabase = client.db(config.database);
+    logger.debug("Retrieved MongoDB database instance", {
+      database: config.database
+    });
+    return mongoDatabase;
+  } catch (error2) {
+    logger.error("Failed to get MongoDB database", {
+      error: error2 instanceof Error ? error2.message : String(error2)
+    });
+    throw error2;
+  }
+}
+async function isMongoConnected() {
+  if (!mongoClient) {
+    logger.debug("MongoDB connection status check", { connected: false });
+    return false;
+  }
+  try {
+    await mongoClient.db("admin").command({ ping: 1 });
+    logger.debug("MongoDB connection status check", { connected: true });
+    return true;
+  } catch {
+    logger.debug("MongoDB connection status check", { connected: false });
+    mongoClient = null;
+    return false;
+  }
+}
+async function closeMongoConnection() {
+  try {
+    if (mongoClient) {
+      logger.debug("Closing MongoDB connection");
+      await mongoClient.close();
+      logger.info("MongoDB connection closed successfully");
+    }
+    mongoClient = null;
+    mongoDatabase = null;
+    isConnecting = false;
+  } catch (error2) {
+    logger.error("Error closing MongoDB connection", {
+      error: error2 instanceof Error ? error2.message : String(error2)
+    });
+    throw error2;
+  }
+}
+function setupMongoDBShutdownHandlers() {
+  const handleShutdown = async () => {
+    logger.info("Process shutdown signal received, closing MongoDB connection");
+    await closeMongoConnection();
+  };
+  process.on("SIGTERM", handleShutdown);
+  process.on("SIGINT", handleShutdown);
+  process.on("uncaughtException", async (error2) => {
+    logger.error("Uncaught exception, closing MongoDB connection", {
+      error: error2 instanceof Error ? error2.message : String(error2)
+    });
+    await closeMongoConnection();
+    process.exit(1);
+  });
+  logger.debug("MongoDB shutdown handlers registered");
+}
+var import_mongodb2, mongoClient, mongoDatabase, isConnecting;
+var init_client = __esm({
+  "lib/mongodb/client.ts"() {
+    "use strict";
+    import_mongodb2 = __toESM(require_lib3());
+    init_logger();
+    init_config();
+    mongoClient = null;
+    mongoDatabase = null;
+    isConnecting = false;
+  }
+});
+
+// lib/mongodb/repositories/migrations.repository.ts
+var migrations_repository_exports = {};
+__export(migrations_repository_exports, {
+  MongoMigrationsRepository: () => MongoMigrationsRepository,
+  getMongoMigrationsRepository: () => getMongoMigrationsRepository
+});
+function getMongoMigrationsRepository() {
+  if (!instance) {
+    instance = new MongoMigrationsRepository();
+  }
+  return instance;
+}
+var import_zod3, MigrationRecordSchema, MigrationStateSchema, MongoMigrationsRepository, instance;
+var init_migrations_repository = __esm({
+  "lib/mongodb/repositories/migrations.repository.ts"() {
+    "use strict";
+    import_zod3 = require("zod");
+    init_client();
+    init_logger();
+    MigrationRecordSchema = import_zod3.z.object({
+      id: import_zod3.z.string(),
+      completedAt: import_zod3.z.string(),
+      quilltapVersion: import_zod3.z.string(),
+      itemsAffected: import_zod3.z.number(),
+      message: import_zod3.z.string()
+    });
+    MigrationStateSchema = import_zod3.z.object({
+      _id: import_zod3.z.literal("migration_state").optional(),
+      completedMigrations: import_zod3.z.array(MigrationRecordSchema),
+      lastChecked: import_zod3.z.string(),
+      quilltapVersion: import_zod3.z.string()
+    });
+    MongoMigrationsRepository = class {
+      constructor() {
+        this.collectionName = "migrations_state";
+        this.documentId = "migration_state";
+      }
+      /**
+       * Get the MongoDB collection
+       */
+      async getCollection() {
+        const db = await getMongoDatabase();
+        logger.debug("Retrieved MongoDB migrations_state collection", {
+          context: "MongoMigrationsRepository"
+        });
+        return db.collection(this.collectionName);
+      }
+      /**
+       * Load the current migration state
+       */
+      async loadState() {
+        try {
+          logger.debug("Loading migration state from MongoDB", {
+            context: "MongoMigrationsRepository.loadState"
+          });
+          const collection = await this.getCollection();
+          const doc = await collection.findOne({ _id: this.documentId });
+          if (!doc) {
+            logger.debug("No migration state found in MongoDB, returning empty state", {
+              context: "MongoMigrationsRepository.loadState"
+            });
+            const packageJson2 = await Promise.resolve().then(() => __toESM(require_package()));
+            return {
+              completedMigrations: [],
+              lastChecked: (/* @__PURE__ */ new Date()).toISOString(),
+              quilltapVersion: packageJson2.version
+            };
+          }
+          const { _id, ...state2 } = doc;
+          const validated = MigrationStateSchema.omit({ _id: true }).parse(state2);
+          logger.debug("Migration state loaded from MongoDB", {
+            context: "MongoMigrationsRepository.loadState",
+            completedCount: validated.completedMigrations.length
+          });
+          return validated;
+        } catch (error2) {
+          logger.error("Error loading migration state from MongoDB", {
+            context: "MongoMigrationsRepository.loadState",
+            error: error2 instanceof Error ? error2.message : String(error2)
+          });
+          const packageJson2 = await Promise.resolve().then(() => __toESM(require_package()));
+          return {
+            completedMigrations: [],
+            lastChecked: (/* @__PURE__ */ new Date()).toISOString(),
+            quilltapVersion: packageJson2.version
+          };
+        }
+      }
+      /**
+       * Save migration state to MongoDB
+       */
+      async saveState(state2) {
+        try {
+          logger.debug("Saving migration state to MongoDB", {
+            context: "MongoMigrationsRepository.saveState",
+            completedCount: state2.completedMigrations.length
+          });
+          const collection = await this.getCollection();
+          await collection.updateOne(
+            { _id: this.documentId },
+            {
+              $set: {
+                completedMigrations: state2.completedMigrations,
+                lastChecked: state2.lastChecked,
+                quilltapVersion: state2.quilltapVersion
+              }
+            },
+            { upsert: true }
+          );
+          logger.debug("Migration state saved to MongoDB", {
+            context: "MongoMigrationsRepository.saveState"
+          });
+        } catch (error2) {
+          logger.error("Error saving migration state to MongoDB", {
+            context: "MongoMigrationsRepository.saveState",
+            error: error2 instanceof Error ? error2.message : String(error2)
+          });
+          throw error2;
+        }
+      }
+      /**
+       * Check if a migration has been completed
+       */
+      async isMigrationCompleted(migrationId) {
+        const state2 = await this.loadState();
+        return state2.completedMigrations.some((m4) => m4.id === migrationId);
+      }
+      /**
+       * Record a completed migration
+       */
+      async recordCompletedMigration(record) {
+        const state2 = await this.loadState();
+        if (state2.completedMigrations.some((m4) => m4.id === record.id)) {
+          logger.warn("Migration already recorded, skipping", {
+            context: "MongoMigrationsRepository.recordCompletedMigration",
+            migrationId: record.id
+          });
+          return state2;
+        }
+        const packageJson2 = await Promise.resolve().then(() => __toESM(require_package()));
+        const updatedState = {
+          ...state2,
+          completedMigrations: [...state2.completedMigrations, record],
+          lastChecked: (/* @__PURE__ */ new Date()).toISOString(),
+          quilltapVersion: packageJson2.version
+        };
+        await this.saveState(updatedState);
+        return updatedState;
+      }
+      /**
+       * Get list of completed migration IDs
+       */
+      async getCompletedMigrationIds() {
+        const state2 = await this.loadState();
+        return state2.completedMigrations.map((m4) => m4.id);
+      }
+    };
+    instance = null;
+  }
+});
+
+// lib/json-store/core/json-store.ts
+var json_store_exports = {};
+__export(json_store_exports, {
+  JsonStore: () => JsonStore,
+  getJsonStore: () => getJsonStore,
+  resetJsonStore: () => resetJsonStore
+});
+function getJsonStore(config) {
+  if (!instance2) {
+    instance2 = new JsonStore(config);
+  }
+  return instance2;
+}
+function resetJsonStore() {
+  instance2 = null;
+}
+var fs3, path2, import_util, crypto2, mkdir2, readFile2, writeFile2, appendFile2, rename2, unlink2, readdir2, stat2, JsonStore, instance2;
+var init_json_store = __esm({
+  "lib/json-store/core/json-store.ts"() {
+    "use strict";
+    init_logger();
+    fs3 = __toESM(require("fs"));
+    path2 = __toESM(require("path"));
+    import_util = require("util");
+    crypto2 = __toESM(require("crypto"));
+    mkdir2 = (0, import_util.promisify)(fs3.mkdir);
+    readFile2 = (0, import_util.promisify)(fs3.readFile);
+    writeFile2 = (0, import_util.promisify)(fs3.writeFile);
+    appendFile2 = (0, import_util.promisify)(fs3.appendFile);
+    rename2 = (0, import_util.promisify)(fs3.rename);
+    unlink2 = (0, import_util.promisify)(fs3.unlink);
+    readdir2 = (0, import_util.promisify)(fs3.readdir);
+    stat2 = (0, import_util.promisify)(fs3.stat);
+    JsonStore = class {
+      constructor(config = {}) {
+        this.locks = /* @__PURE__ */ new Map();
+        this.cache = /* @__PURE__ */ new Map();
+        this.dataDir = config.dataDir || process.env.DATA_DIR || "./data";
+        this.enableCache = config.enableCache ?? true;
+        this.lockTimeout = config.lockTimeout ?? 5e3;
+        this.fsyncInterval = config.fsyncInterval ?? 10;
+        if (!fs3.existsSync(this.dataDir)) {
+          fs3.mkdirSync(this.dataDir, { recursive: true });
+        }
+      }
+      /**
+       * Get the configured data directory path
+       */
+      getDataDir() {
+        return this.dataDir;
+      }
+      /**
+       * Resolve a relative path within data directory
+       */
+      resolvePath(...segments) {
+        return path2.join(this.dataDir, ...segments);
+      }
+      /**
+       * Ensure a directory exists
+       */
+      async ensureDir(dirPath) {
+        await mkdir2(dirPath, { recursive: true });
+      }
+      /**
+       * Acquire a lock for a file path
+       */
+      async acquireLock(filePath) {
+        const lockPath = `${filePath}.lock`;
+        const lockDir = path2.dirname(lockPath);
+        const startTime = Date.now();
+        await this.ensureDir(lockDir);
+        while (true) {
+          try {
+            const fd = fs3.openSync(lockPath, fs3.constants.O_CREAT | fs3.constants.O_EXCL | fs3.constants.O_WRONLY);
+            fs3.closeSync(fd);
+            return;
+          } catch (error2) {
+            if (error2.code !== "EEXIST") {
+              throw error2;
+            }
+            try {
+              const stats = await stat2(lockPath);
+              if (Date.now() - stats.mtimeMs > 3e4) {
+                await unlink2(lockPath);
+                continue;
+              }
+            } catch {
+              continue;
+            }
+            if (Date.now() - startTime > this.lockTimeout) {
+              throw new Error(`Failed to acquire lock for ${filePath} within ${this.lockTimeout}ms`);
+            }
+            await new Promise((resolve) => setTimeout(resolve, 10));
+          }
+        }
+      }
+      /**
+       * Release a lock for a file path
+       */
+      async releaseLock(filePath) {
+        const lockPath = `${filePath}.lock`;
+        try {
+          await unlink2(lockPath);
+        } catch (error2) {
+          if (error2.code !== "ENOENT") {
+            logger.error(`Failed to release lock for ${filePath}`, { context: { filePath } }, error2 instanceof Error ? error2 : void 0);
+          }
+        }
+      }
+      /**
+       * Read JSON file with caching
+       */
+      async readJson(filePath) {
+        const fullPath = this.resolvePath(filePath);
+        const cacheKey = fullPath;
+        if (this.enableCache && this.cache.has(cacheKey)) {
+          return this.cache.get(cacheKey);
+        }
+        try {
+          const content = await readFile2(fullPath, "utf-8");
+          const data2 = JSON.parse(content);
+          if (this.enableCache) {
+            this.cache.set(cacheKey, data2);
+          }
+          return data2;
+        } catch (error2) {
+          if (error2.code === "ENOENT") {
+            throw new Error(`File not found: ${filePath}`);
+          }
+          throw new Error(`Failed to read JSON from ${filePath}: ${error2.message}`);
+        }
+      }
+      /**
+       * Write JSON file atomically with locking
+       */
+      async writeJson(filePath, data2) {
+        const fullPath = this.resolvePath(filePath);
+        const dir = path2.dirname(fullPath);
+        await this.ensureDir(dir);
+        await this.acquireLock(fullPath);
+        try {
+          const tempPath = `${fullPath}.tmp.${crypto2.randomBytes(4).toString("hex")}`;
+          const content = JSON.stringify(data2, null, 2);
+          await writeFile2(tempPath, content, "utf-8");
+          await rename2(tempPath, fullPath);
+          if (this.enableCache) {
+            this.cache.delete(fullPath);
+          }
+        } finally {
+          await this.releaseLock(fullPath);
+        }
+      }
+      /**
+       * Read JSONL file line by line
+       */
+      async readJsonl(filePath) {
+        const fullPath = this.resolvePath(filePath);
+        try {
+          const content = await readFile2(fullPath, "utf-8");
+          const lines = content.trim().split("\n").filter((line) => line.length > 0);
+          return lines.map((line) => JSON.parse(line));
+        } catch (error2) {
+          if (error2.code === "ENOENT") {
+            return [];
+          }
+          throw new Error(`Failed to read JSONL from ${filePath}: ${error2.message}`);
+        }
+      }
+      /**
+       * Write raw content to file atomically with locking (for pre-formatted JSONL)
+       */
+      async writeRaw(filePath, content) {
+        const fullPath = this.resolvePath(filePath);
+        const dir = path2.dirname(fullPath);
+        await this.ensureDir(dir);
+        await this.acquireLock(fullPath);
+        try {
+          const tempPath = `${fullPath}.tmp.${crypto2.randomBytes(4).toString("hex")}`;
+          await writeFile2(tempPath, content, "utf-8");
+          await rename2(tempPath, fullPath);
+          if (this.enableCache) {
+            this.cache.delete(fullPath);
+          }
+        } finally {
+          await this.releaseLock(fullPath);
+        }
+      }
+      /**
+       * Write JSONL file atomically (full rewrite for updates/deletes)
+       */
+      async writeJsonl(filePath, items) {
+        const content = items.length > 0 ? items.map((item) => JSON.stringify(item)).join("\n") + "\n" : "";
+        await this.writeRaw(filePath, content);
+      }
+      /**
+       * Append to JSONL file (line-delimited JSON)
+       */
+      async appendJsonl(filePath, items) {
+        const fullPath = this.resolvePath(filePath);
+        const dir = path2.dirname(fullPath);
+        await this.ensureDir(dir);
+        await this.acquireLock(fullPath);
+        try {
+          const lines = items.map((item) => JSON.stringify(item)).join("\n") + "\n";
+          if (fs3.existsSync(fullPath)) {
+            await appendFile2(fullPath, lines, "utf-8");
+          } else {
+            await writeFile2(fullPath, lines, "utf-8");
+          }
+          if (this.enableCache) {
+            this.cache.delete(fullPath);
+          }
+        } finally {
+          await this.releaseLock(fullPath);
+        }
+      }
+      /**
+       * Get file size in bytes
+       */
+      async getFileSize(filePath) {
+        const fullPath = this.resolvePath(filePath);
+        try {
+          const stats = await stat2(fullPath);
+          return stats.size;
+        } catch (error2) {
+          if (error2.code === "ENOENT") {
+            return 0;
+          }
+          throw error2;
+        }
+      }
+      /**
+       * Check if file exists
+       */
+      exists(filePath) {
+        const fullPath = this.resolvePath(filePath);
+        return fs3.existsSync(fullPath);
+      }
+      /**
+       * List files in a directory
+       */
+      async listDir(dirPath) {
+        const fullPath = this.resolvePath(dirPath);
+        try {
+          return await readdir2(fullPath);
+        } catch (error2) {
+          if (error2.code === "ENOENT") {
+            return [];
+          }
+          throw error2;
+        }
+      }
+      /**
+       * Delete a file
+       */
+      async deleteFile(filePath) {
+        const fullPath = this.resolvePath(filePath);
+        try {
+          await unlink2(fullPath);
+          if (this.enableCache) {
+            this.cache.delete(fullPath);
+          }
+        } catch (error2) {
+          if (error2.code !== "ENOENT") {
+            throw error2;
+          }
+        }
+      }
+      /**
+       * Clear in-memory cache
+       */
+      clearCache() {
+        this.cache.clear();
+      }
+      /**
+       * Get cache stats
+       */
+      getCacheStats() {
+        return {
+          size: this.cache.size,
+          enabled: this.enableCache
+        };
+      }
+    };
+    instance2 = null;
+  }
+});
+
+// lib/json-store/repositories/base.repository.ts
+var BaseRepository;
+var init_base_repository = __esm({
+  "lib/json-store/repositories/base.repository.ts"() {
+    "use strict";
+    BaseRepository = class {
+      constructor(jsonStore, schema) {
+        this.jsonStore = jsonStore;
+        this.schema = schema;
+      }
+      /**
+       * Validate data against schema
+       */
+      validate(data2) {
+        return this.schema.parse(data2);
+      }
+      /**
+       * Safely validate without throwing
+       */
+      validateSafe(data2) {
+        try {
+          const validated = this.validate(data2);
+          return { success: true, data: validated };
+        } catch (error2) {
+          return { success: false, error: error2.message };
+        }
+      }
+      /**
+       * Generate UUID v4
+       */
+      generateId() {
+        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c4) {
+          const r4 = Math.random() * 16 | 0;
+          const v4 = c4 === "x" ? r4 : r4 & 3 | 8;
+          return v4.toString(16);
+        });
+      }
+      /**
+       * Get current ISO timestamp
+       */
+      getCurrentTimestamp() {
+        return (/* @__PURE__ */ new Date()).toISOString();
+      }
+    };
+  }
+});
+
+// lib/json-store/schemas/plugin-manifest.ts
+var import_zod4, PluginCapabilityEnum, FrontendFrameworkEnum, CSSFrameworkEnum, PluginAuthorSchema, CompatibilitySchema, FunctionalitySchema, HookConfigSchema, APIRouteSchema, UIComponentSchema, DatabaseModelSchema, PermissionsSchema, ConfigSchemaSchema, ProviderConfigSchema, AuthProviderConfigSchema, PluginManifestSchema;
+var init_plugin_manifest = __esm({
+  "lib/json-store/schemas/plugin-manifest.ts"() {
+    "use strict";
+    import_zod4 = require("zod");
+    PluginCapabilityEnum = import_zod4.z.enum([
+      "CHAT_COMMANDS",
+      // Provides custom chat commands
+      "MESSAGE_PROCESSORS",
+      // Processes/transforms messages
+      "UI_COMPONENTS",
+      // Provides React components
+      "DATA_STORAGE",
+      // Adds database tables/storage
+      "API_ROUTES",
+      // Adds new API endpoints
+      "AUTH_METHODS",
+      // Provides authentication methods
+      "WEBHOOKS",
+      // Handles webhooks
+      "BACKGROUND_TASKS",
+      // Runs background jobs
+      "CUSTOM_MODELS",
+      // Adds new data models
+      "FILE_HANDLERS",
+      // Handles file operations
+      "NOTIFICATIONS",
+      // Provides notification system
+      "BACKEND_INTEGRATIONS",
+      // Integrates with external services
+      "LLM_PROVIDER",
+      // Provides LLM integration
+      "IMAGE_PROVIDER",
+      // Provides image generation
+      "EMBEDDING_PROVIDER",
+      // Provides embedding generation
+      "THEME",
+      // Provides UI theme
+      "DATABASE_BACKEND",
+      // Replaces/augments database
+      "FILE_BACKEND",
+      // Replaces/augments file storage
+      "UPGRADE_MIGRATION"
+      // Provides version upgrade migrations (runs early in startup)
+    ]);
+    FrontendFrameworkEnum = import_zod4.z.enum([
+      "REACT",
+      "PREACT",
+      "VUE",
+      "SVELTE",
+      "NONE"
+    ]);
+    CSSFrameworkEnum = import_zod4.z.enum([
+      "TAILWIND",
+      "BOOTSTRAP",
+      "MATERIAL_UI",
+      "CSS_MODULES",
+      "STYLED_COMPONENTS",
+      "NONE"
+    ]);
+    PluginAuthorSchema = import_zod4.z.object({
+      name: import_zod4.z.string().min(1).max(100),
+      email: import_zod4.z.string().email().optional(),
+      url: import_zod4.z.string().url().optional()
+    });
+    CompatibilitySchema = import_zod4.z.object({
+      /** Minimum Quilltap version (semver) */
+      quilltapVersion: import_zod4.z.string().regex(/^>=?\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?$/),
+      /** Maximum Quilltap version (optional) */
+      quilltapMaxVersion: import_zod4.z.string().regex(/^<=?\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?$/).optional(),
+      /** Minimum Node.js version */
+      nodeVersion: import_zod4.z.string().regex(/^>=?\d+\.\d+\.\d+$/).optional()
+    });
+    FunctionalitySchema = import_zod4.z.object({
+      /** @deprecated Use capabilities array instead */
+      providesChatCommands: import_zod4.z.boolean().default(false).optional(),
+      /** @deprecated Use capabilities array instead */
+      providesMessageProcessors: import_zod4.z.boolean().default(false).optional(),
+      /** @deprecated Use capabilities array instead */
+      providesUIComponents: import_zod4.z.boolean().default(false).optional(),
+      /** @deprecated Use capabilities array instead */
+      providesDataStorage: import_zod4.z.boolean().default(false).optional(),
+      /** @deprecated Use capabilities array instead */
+      providesAPIRoutes: import_zod4.z.boolean().default(false).optional(),
+      /** @deprecated Use capabilities array instead */
+      providesAuthenticationMethods: import_zod4.z.boolean().default(false).optional(),
+      /** @deprecated Use capabilities array instead */
+      providesWebhooks: import_zod4.z.boolean().default(false).optional(),
+      /** @deprecated Use capabilities array instead */
+      providesBackgroundTasks: import_zod4.z.boolean().default(false).optional(),
+      /** @deprecated Use capabilities array instead */
+      providesCustomModels: import_zod4.z.boolean().default(false).optional(),
+      /** @deprecated Use capabilities array instead */
+      providesFileHandlers: import_zod4.z.boolean().default(false).optional(),
+      /** @deprecated Use capabilities array instead */
+      providesNotifications: import_zod4.z.boolean().default(false).optional(),
+      /** @deprecated Use capabilities array instead */
+      providesBackendIntegrations: import_zod4.z.boolean().default(false).optional()
+    });
+    HookConfigSchema = import_zod4.z.object({
+      /** Hook identifier */
+      name: import_zod4.z.string().min(1).max(100),
+      /** Hook handler file path (relative to plugin root) */
+      handler: import_zod4.z.string(),
+      /** Priority (lower = runs first) */
+      priority: import_zod4.z.number().int().min(0).max(100).default(50),
+      /** Whether the hook is enabled */
+      enabled: import_zod4.z.boolean().default(true)
+    });
+    APIRouteSchema = import_zod4.z.object({
+      /** Route path (e.g., "/api/plugin/my-route") */
+      path: import_zod4.z.string().regex(/^\/api\//),
+      /** HTTP methods supported */
+      methods: import_zod4.z.array(import_zod4.z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"])).min(1),
+      /** Handler file path (relative to plugin root) */
+      handler: import_zod4.z.string(),
+      /** Whether authentication is required */
+      requiresAuth: import_zod4.z.boolean().default(true),
+      /** Description of what the route does */
+      description: import_zod4.z.string().optional()
+    });
+    UIComponentSchema = import_zod4.z.object({
+      /** Component identifier (used for registration) */
+      id: import_zod4.z.string().regex(/^[a-z][a-z0-9-]*$/),
+      /** Human-readable name */
+      name: import_zod4.z.string().min(1).max(100),
+      /** Component file path (relative to plugin root) */
+      path: import_zod4.z.string(),
+      /** Where the component can be used */
+      slots: import_zod4.z.array(import_zod4.z.string()).optional(),
+      /** Props schema (JSON Schema) */
+      propsSchema: import_zod4.z.record(import_zod4.z.unknown()).optional()
+    });
+    DatabaseModelSchema = import_zod4.z.object({
+      /** Model name */
+      name: import_zod4.z.string().regex(/^[A-Z][a-zA-Z0-9]*$/),
+      /** Schema file path (Zod schema, relative to plugin root) */
+      schemaPath: import_zod4.z.string(),
+      /** Collection/table name */
+      collectionName: import_zod4.z.string().regex(/^[a-z][a-z0-9-_]*$/),
+      /** Description */
+      description: import_zod4.z.string().optional()
+    });
+    PermissionsSchema = import_zod4.z.object({
+      /** File system access paths (relative to data directory) */
+      fileSystem: import_zod4.z.array(import_zod4.z.string()).default([]),
+      /** Network access (domains/URLs the plugin needs to access) */
+      network: import_zod4.z.array(import_zod4.z.string()).default([]),
+      /** Environment variables the plugin needs */
+      environment: import_zod4.z.array(import_zod4.z.string()).default([]),
+      /** Whether the plugin needs database access */
+      database: import_zod4.z.boolean().default(false),
+      /** Whether the plugin needs user data access */
+      userData: import_zod4.z.boolean().default(false)
+    });
+    ConfigSchemaSchema = import_zod4.z.object({
+      /** Configuration key */
+      key: import_zod4.z.string().regex(/^[a-z][a-zA-Z0-9]*$/),
+      /** Display label */
+      label: import_zod4.z.string().min(1).max(100),
+      /** Input type */
+      type: import_zod4.z.enum(["text", "number", "boolean", "select", "textarea", "password", "url", "email"]),
+      /** Default value */
+      default: import_zod4.z.unknown().optional(),
+      /** Whether the field is required */
+      required: import_zod4.z.boolean().default(false),
+      /** Help text */
+      description: import_zod4.z.string().optional(),
+      /** Options for select type */
+      options: import_zod4.z.array(import_zod4.z.object({
+        label: import_zod4.z.string(),
+        value: import_zod4.z.unknown()
+      })).optional(),
+      /** Validation pattern (regex) */
+      pattern: import_zod4.z.string().optional(),
+      /** Minimum value (for number type) */
+      min: import_zod4.z.number().optional(),
+      /** Maximum value (for number type) */
+      max: import_zod4.z.number().optional()
+    });
+    ProviderConfigSchema = import_zod4.z.object({
+      /** Internal identifier for the provider (e.g., 'OPENAI', 'ANTHROPIC') */
+      providerName: import_zod4.z.string().regex(/^[A-Z][A-Z0-9_]*$/),
+      /** Human-readable display name (e.g., 'OpenAI', 'Anthropic') */
+      displayName: import_zod4.z.string().min(1).max(100),
+      /** Short description of the provider */
+      description: import_zod4.z.string().min(1).max(500),
+      /** 2-4 character abbreviation for use in icons/badges (e.g., 'OAI', 'ANT') */
+      abbreviation: import_zod4.z.string().min(2).max(4).regex(/^[A-Z0-9]+$/),
+      /** Color configuration using Tailwind CSS classes */
+      colors: import_zod4.z.object({
+        /** Background color class (e.g., 'bg-blue-500') */
+        bg: import_zod4.z.string().min(1),
+        /** Text color class (e.g., 'text-white') */
+        text: import_zod4.z.string().min(1),
+        /** Icon color class (e.g., 'text-blue-600') */
+        icon: import_zod4.z.string().min(1)
+      }),
+      /** Whether the provider requires an API key */
+      requiresApiKey: import_zod4.z.boolean().default(true),
+      /** Whether the provider requires a custom base URL */
+      requiresBaseUrl: import_zod4.z.boolean().default(false),
+      /** Custom label for the API key field (defaults to 'API Key') */
+      apiKeyLabel: import_zod4.z.string().min(1).max(100).optional(),
+      /** Custom label for the base URL field (defaults to 'Base URL') */
+      baseUrlLabel: import_zod4.z.string().min(1).max(100).optional(),
+      /** Default base URL for the provider (if customizable) */
+      baseUrlDefault: import_zod4.z.string().url().optional(),
+      /** Capabilities supported by this provider */
+      capabilities: import_zod4.z.object({
+        /** Supports chat/completion endpoints */
+        chat: import_zod4.z.boolean().default(true).optional(),
+        /** Supports image generation */
+        imageGeneration: import_zod4.z.boolean().default(false).optional(),
+        /** Supports embeddings */
+        embeddings: import_zod4.z.boolean().default(false).optional(),
+        /** Supports web search */
+        webSearch: import_zod4.z.boolean().default(false).optional()
+      }).optional(),
+      /** File attachment support configuration */
+      attachmentSupport: import_zod4.z.object({
+        /** Whether attachments are supported */
+        supported: import_zod4.z.boolean().default(false),
+        /** List of supported MIME types (e.g., ['image/jpeg', 'application/pdf']) */
+        mimeTypes: import_zod4.z.array(import_zod4.z.string()).default([]),
+        /** Description of attachment support */
+        description: import_zod4.z.string().optional()
+      }).optional()
+    });
+    AuthProviderConfigSchema = import_zod4.z.object({
+      /** Internal identifier for the provider (e.g., 'google', 'github') */
+      providerId: import_zod4.z.string().regex(/^[a-z][a-z0-9-]*$/),
+      /** Human-readable display name (e.g., 'Google', 'GitHub') */
+      displayName: import_zod4.z.string().min(1).max(100),
+      /** Environment variables required for this provider */
+      requiredEnvVars: import_zod4.z.array(import_zod4.z.string()).min(1),
+      /** Optional environment variables */
+      optionalEnvVars: import_zod4.z.array(import_zod4.z.string()).optional(),
+      /** Button background color (Tailwind classes) */
+      buttonColor: import_zod4.z.string().optional(),
+      /** Button text color (Tailwind classes) */
+      buttonTextColor: import_zod4.z.string().optional(),
+      /** Icon name or identifier */
+      icon: import_zod4.z.string().optional()
+    });
+    PluginManifestSchema = import_zod4.z.object({
+      // ===== JSON SCHEMA REFERENCE =====
+      /** JSON Schema reference (for IDE support) */
+      $schema: import_zod4.z.string().optional(),
+      // ===== BASIC METADATA =====
+      /** Plugin package name (must start with 'qtap-plugin-') */
+      name: import_zod4.z.string().regex(/^qtap-plugin-[a-z0-9-]+$/),
+      /** Display title */
+      title: import_zod4.z.string().min(1).max(100),
+      /** Plugin description */
+      description: import_zod4.z.string().min(1).max(500),
+      /** Semantic version */
+      version: import_zod4.z.string().regex(/^\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?(\+[a-zA-Z0-9.-]+)?$/),
+      /** Author information */
+      author: import_zod4.z.union([import_zod4.z.string(), PluginAuthorSchema]),
+      /** License (SPDX identifier) */
+      license: import_zod4.z.string().default("MIT"),
+      /** Main entry point (JavaScript/TypeScript file) */
+      main: import_zod4.z.string().default("index.js"),
+      /** Homepage URL */
+      homepage: import_zod4.z.string().url().optional(),
+      /** Repository URL */
+      repository: import_zod4.z.union([
+        import_zod4.z.string().url(),
+        import_zod4.z.object({
+          type: import_zod4.z.string(),
+          url: import_zod4.z.string().url()
+        })
+      ]).optional(),
+      /** Bug tracker URL */
+      bugs: import_zod4.z.union([
+        import_zod4.z.string().url(),
+        import_zod4.z.object({
+          url: import_zod4.z.string().url(),
+          email: import_zod4.z.string().email().optional()
+        })
+      ]).optional(),
+      // ===== COMPATIBILITY =====
+      /** Version compatibility requirements */
+      compatibility: CompatibilitySchema,
+      /** Dependencies (other plugins required) */
+      requires: import_zod4.z.record(import_zod4.z.string()).optional(),
+      /** Peer dependencies */
+      peerDependencies: import_zod4.z.record(import_zod4.z.string()).optional(),
+      // ===== CAPABILITIES =====
+      /** Modern capability flags (preferred over functionality object) */
+      capabilities: import_zod4.z.array(PluginCapabilityEnum).default([]),
+      /** @deprecated Legacy functionality flags */
+      functionality: FunctionalitySchema.optional(),
+      // ===== TECHNICAL DETAILS =====
+      /** Frontend framework used */
+      frontend: FrontendFrameworkEnum.default("REACT").optional(),
+      /** CSS framework used */
+      styling: CSSFrameworkEnum.default("TAILWIND").optional(),
+      /** TypeScript support */
+      typescript: import_zod4.z.boolean().default(true).optional(),
+      // ===== HOOKS & EXTENSIONS =====
+      /** Hook registrations */
+      hooks: import_zod4.z.array(HookConfigSchema).default([]).optional(),
+      /** API routes provided */
+      apiRoutes: import_zod4.z.array(APIRouteSchema).default([]).optional(),
+      /** UI components provided */
+      components: import_zod4.z.array(UIComponentSchema).default([]).optional(),
+      /** Database models/tables */
+      models: import_zod4.z.array(DatabaseModelSchema).default([]).optional(),
+      // ===== CONFIGURATION =====
+      /** Configuration schema for the plugin */
+      configSchema: import_zod4.z.array(ConfigSchemaSchema).default([]).optional(),
+      /** Default configuration values */
+      defaultConfig: import_zod4.z.record(import_zod4.z.unknown()).default({}).optional(),
+      /** Provider configuration (for LLM/service provider plugins) */
+      providerConfig: ProviderConfigSchema.optional(),
+      /** Auth provider configuration (for authentication provider plugins) */
+      authProviderConfig: AuthProviderConfigSchema.optional(),
+      // ===== SECURITY & PERMISSIONS =====
+      /** Permissions required by the plugin */
+      permissions: PermissionsSchema.default({}).optional(),
+      /** Whether the plugin is sandboxed */
+      sandboxed: import_zod4.z.boolean().default(true).optional(),
+      // ===== METADATA =====
+      /** Keywords for search/discovery */
+      keywords: import_zod4.z.array(import_zod4.z.string()).default([]),
+      /** Icon file path (relative to plugin root) */
+      icon: import_zod4.z.string().optional(),
+      /** Screenshots (URLs or file paths) */
+      screenshots: import_zod4.z.array(import_zod4.z.string()).default([]).optional(),
+      /** Plugin category */
+      category: import_zod4.z.enum([
+        "PROVIDER",
+        "THEME",
+        "INTEGRATION",
+        "UTILITY",
+        "ENHANCEMENT",
+        "DATABASE",
+        "STORAGE",
+        "AUTHENTICATION",
+        "OTHER"
+      ]).default("OTHER").optional(),
+      /** Whether the plugin is enabled by default */
+      enabledByDefault: import_zod4.z.boolean().default(false).optional(),
+      /** Plugin status */
+      status: import_zod4.z.enum(["STABLE", "BETA", "ALPHA", "DEPRECATED"]).default("STABLE").optional()
+    }).strict();
+  }
+});
+
+// lib/json-store/schemas/types.ts
+var import_zod5, ProviderEnum, ImageProviderEnum, EmbeddingProfileProviderEnum, RoleEnum, ImageTagTypeEnum, AvatarDisplayModeEnum, UUIDSchema, TimestampSchema, JsonSchema, EncryptedFieldSchema, TOTPSecretSchema, BackupCodesSchema, UserSchema, HexColorSchema, TagVisualStyleSchema, TagStyleMapSchema, CheapLLMStrategyEnum, EmbeddingProviderEnum, CheapLLMSettingsSchema, ChatSettingsSchema, AccountSchema, SessionSchema, VerificationTokenSchema, ApiKeySchema, ConnectionProfileSchema, PhysicalDescriptionSchema, CharacterSchema, PersonaSchema, MessageEventSchema, ContextSummaryEventSchema, ChatEventSchema, ParticipantTypeEnum, ChatParticipantSchema, ChatParticipantBaseSchema, ChatMetadataSchema, ChatMetadataBaseSchema, ChatMetadataLegacySchema, BinaryIndexEntrySchema, FileSourceEnum, FileCategoryEnum, FileEntrySchema, TagSchema, ImageProfileSchema, GeneralSettingsSchema, ConnectionProfilesFileSchema, AuthAccountsSchema, TagsFileSchema, ImageProfilesFileSchema, EmbeddingProfileSchema, EmbeddingProfilesFileSchema, MemorySourceEnum, MemorySchema, MemoriesFileSchema;
+var init_types = __esm({
+  "lib/json-store/schemas/types.ts"() {
+    "use strict";
+    import_zod5 = require("zod");
+    init_plugin_manifest();
+    ProviderEnum = import_zod5.z.string().min(1, "Provider is required");
+    ImageProviderEnum = import_zod5.z.string().min(1, "Image provider is required");
+    EmbeddingProfileProviderEnum = import_zod5.z.enum(["OPENAI", "OLLAMA"]);
+    RoleEnum = import_zod5.z.enum(["SYSTEM", "USER", "ASSISTANT", "TOOL"]);
+    ImageTagTypeEnum = import_zod5.z.enum(["CHARACTER", "PERSONA", "CHAT", "THEME"]);
+    AvatarDisplayModeEnum = import_zod5.z.enum(["ALWAYS", "GROUP_ONLY", "NEVER"]);
+    UUIDSchema = import_zod5.z.string().uuid();
+    TimestampSchema = import_zod5.z.string().datetime().or(import_zod5.z.date()).transform((d4) => {
+      if (d4 instanceof Date) return d4.toISOString();
+      return d4;
+    });
+    JsonSchema = import_zod5.z.record(import_zod5.z.unknown());
+    EncryptedFieldSchema = import_zod5.z.object({
+      ciphertext: import_zod5.z.string(),
+      iv: import_zod5.z.string(),
+      authTag: import_zod5.z.string()
+    });
+    TOTPSecretSchema = EncryptedFieldSchema.extend({
+      enabled: import_zod5.z.boolean().default(false),
+      verifiedAt: TimestampSchema.nullable().optional()
+    });
+    BackupCodesSchema = import_zod5.z.object({
+      ciphertext: import_zod5.z.string(),
+      iv: import_zod5.z.string(),
+      authTag: import_zod5.z.string(),
+      createdAt: TimestampSchema
+    });
+    UserSchema = import_zod5.z.object({
+      id: UUIDSchema,
+      email: import_zod5.z.string().email(),
+      name: import_zod5.z.string().nullable().optional(),
+      image: import_zod5.z.string().nullable().optional(),
+      emailVerified: TimestampSchema.nullable().optional(),
+      // Password authentication
+      passwordHash: import_zod5.z.string().nullable().optional(),
+      // TOTP 2FA
+      totp: TOTPSecretSchema.optional(),
+      backupCodes: BackupCodesSchema.optional(),
+      // Timestamps
+      createdAt: TimestampSchema,
+      updatedAt: TimestampSchema
+    });
+    HexColorSchema = import_zod5.z.string().regex(/^#(?:[0-9a-fA-F]{3}){1,2}$/);
+    TagVisualStyleSchema = import_zod5.z.object({
+      emoji: import_zod5.z.string().max(8).optional().nullable(),
+      foregroundColor: HexColorSchema.default("#1f2937"),
+      backgroundColor: HexColorSchema.default("#e5e7eb"),
+      emojiOnly: import_zod5.z.boolean().default(false),
+      bold: import_zod5.z.boolean().default(false),
+      italic: import_zod5.z.boolean().default(false),
+      strikethrough: import_zod5.z.boolean().default(false)
+    });
+    TagStyleMapSchema = import_zod5.z.record(TagVisualStyleSchema).default({});
+    CheapLLMStrategyEnum = import_zod5.z.enum(["USER_DEFINED", "PROVIDER_CHEAPEST", "LOCAL_FIRST"]);
+    EmbeddingProviderEnum = import_zod5.z.enum(["SAME_PROVIDER", "OPENAI", "LOCAL"]);
+    CheapLLMSettingsSchema = import_zod5.z.object({
+      /** Strategy for selecting the cheap LLM provider */
+      strategy: CheapLLMStrategyEnum.default("PROVIDER_CHEAPEST"),
+      /** If USER_DEFINED, which connection profile to use */
+      userDefinedProfileId: UUIDSchema.nullable().optional(),
+      /** Global default cheap LLM profile - always use this if set */
+      defaultCheapProfileId: UUIDSchema.nullable().optional(),
+      /** Whether to fall back to local models if available */
+      fallbackToLocal: import_zod5.z.boolean().default(true),
+      /** Provider for generating embeddings */
+      embeddingProvider: EmbeddingProviderEnum.default("OPENAI"),
+      /** Embedding profile ID to use for text embeddings */
+      embeddingProfileId: UUIDSchema.nullable().optional()
+    });
+    ChatSettingsSchema = import_zod5.z.object({
+      id: UUIDSchema,
+      userId: UUIDSchema,
+      avatarDisplayMode: AvatarDisplayModeEnum.default("ALWAYS"),
+      avatarDisplayStyle: import_zod5.z.string().default("CIRCULAR"),
+      tagStyles: TagStyleMapSchema,
+      /** Cheap LLM settings for memory extraction and summarization */
+      cheapLLMSettings: CheapLLMSettingsSchema.default({
+        strategy: "PROVIDER_CHEAPEST",
+        fallbackToLocal: true,
+        embeddingProvider: "OPENAI"
+      }),
+      /** Profile ID to use for image description fallback (when provider doesn't support images) */
+      imageDescriptionProfileId: UUIDSchema.nullable().optional(),
+      createdAt: TimestampSchema,
+      updatedAt: TimestampSchema
+    });
+    AccountSchema = import_zod5.z.object({
+      id: UUIDSchema,
+      userId: UUIDSchema,
+      type: import_zod5.z.string(),
+      provider: import_zod5.z.string(),
+      providerAccountId: import_zod5.z.string(),
+      refresh_token: import_zod5.z.string().nullable().optional(),
+      access_token: import_zod5.z.string().nullable().optional(),
+      expires_at: import_zod5.z.number().nullable().optional(),
+      token_type: import_zod5.z.string().nullable().optional(),
+      scope: import_zod5.z.string().nullable().optional(),
+      id_token: import_zod5.z.string().nullable().optional(),
+      session_state: import_zod5.z.string().nullable().optional()
+    });
+    SessionSchema = import_zod5.z.object({
+      id: UUIDSchema,
+      sessionToken: import_zod5.z.string(),
+      userId: UUIDSchema,
+      expires: TimestampSchema
+    });
+    VerificationTokenSchema = import_zod5.z.object({
+      identifier: import_zod5.z.string(),
+      token: import_zod5.z.string(),
+      expires: TimestampSchema
+    });
+    ApiKeySchema = import_zod5.z.object({
+      id: UUIDSchema,
+      label: import_zod5.z.string(),
+      provider: ProviderEnum,
+      ciphertext: import_zod5.z.string(),
+      iv: import_zod5.z.string(),
+      authTag: import_zod5.z.string(),
+      isActive: import_zod5.z.boolean().default(true),
+      lastUsed: TimestampSchema.nullable().optional(),
+      createdAt: TimestampSchema,
+      updatedAt: TimestampSchema
+    });
+    ConnectionProfileSchema = import_zod5.z.object({
+      id: UUIDSchema,
+      userId: UUIDSchema,
+      name: import_zod5.z.string(),
+      provider: ProviderEnum,
+      apiKeyId: UUIDSchema.nullable().optional(),
+      baseUrl: import_zod5.z.string().nullable().optional(),
+      modelName: import_zod5.z.string(),
+      parameters: JsonSchema.default({}),
+      isDefault: import_zod5.z.boolean().default(false),
+      /** Whether this profile is suitable for use as a "cheap" LLM (low-cost tasks) */
+      isCheap: import_zod5.z.boolean().default(false),
+      /** Whether web search is allowed for this profile (only if provider supports it) */
+      allowWebSearch: import_zod5.z.boolean().default(false),
+      tags: import_zod5.z.array(UUIDSchema).default([]),
+      createdAt: TimestampSchema,
+      updatedAt: TimestampSchema
+    });
+    PhysicalDescriptionSchema = import_zod5.z.object({
+      id: UUIDSchema,
+      name: import_zod5.z.string().min(1),
+      shortPrompt: import_zod5.z.string().max(350).nullable().optional(),
+      mediumPrompt: import_zod5.z.string().max(500).nullable().optional(),
+      longPrompt: import_zod5.z.string().max(750).nullable().optional(),
+      completePrompt: import_zod5.z.string().max(1e3).nullable().optional(),
+      fullDescription: import_zod5.z.string().nullable().optional(),
+      createdAt: TimestampSchema,
+      updatedAt: TimestampSchema
+    });
+    CharacterSchema = import_zod5.z.object({
+      id: UUIDSchema,
+      userId: UUIDSchema,
+      name: import_zod5.z.string(),
+      title: import_zod5.z.string().nullable().optional(),
+      description: import_zod5.z.string().nullable().optional(),
+      personality: import_zod5.z.string().nullable().optional(),
+      scenario: import_zod5.z.string().nullable().optional(),
+      firstMessage: import_zod5.z.string().nullable().optional(),
+      exampleDialogues: import_zod5.z.string().nullable().optional(),
+      systemPrompt: import_zod5.z.string().nullable().optional(),
+      avatarUrl: import_zod5.z.string().nullable().optional(),
+      defaultImageId: UUIDSchema.nullable().optional(),
+      defaultConnectionProfileId: UUIDSchema.nullable().optional(),
+      sillyTavernData: JsonSchema.nullable().optional(),
+      isFavorite: import_zod5.z.boolean().default(false),
+      // Relationships
+      personaLinks: import_zod5.z.array(import_zod5.z.object({
+        personaId: UUIDSchema,
+        isDefault: import_zod5.z.boolean()
+      })).default([]),
+      tags: import_zod5.z.array(UUIDSchema).default([]),
+      avatarOverrides: import_zod5.z.array(import_zod5.z.object({
+        chatId: UUIDSchema,
+        imageId: UUIDSchema
+      })).default([]),
+      physicalDescriptions: import_zod5.z.array(PhysicalDescriptionSchema).default([]),
+      // Timestamps
+      createdAt: TimestampSchema,
+      updatedAt: TimestampSchema
+    });
+    PersonaSchema = import_zod5.z.object({
+      id: UUIDSchema,
+      userId: UUIDSchema,
+      name: import_zod5.z.string(),
+      title: import_zod5.z.string().nullable().optional(),
+      description: import_zod5.z.string(),
+      personalityTraits: import_zod5.z.string().nullable().optional(),
+      avatarUrl: import_zod5.z.string().nullable().optional(),
+      defaultImageId: UUIDSchema.nullable().optional(),
+      sillyTavernData: JsonSchema.nullable().optional(),
+      // Relationships
+      characterLinks: import_zod5.z.array(UUIDSchema).default([]),
+      tags: import_zod5.z.array(UUIDSchema).default([]),
+      physicalDescriptions: import_zod5.z.array(PhysicalDescriptionSchema).default([]),
+      // Timestamps
+      createdAt: TimestampSchema,
+      updatedAt: TimestampSchema
+    });
+    MessageEventSchema = import_zod5.z.object({
+      type: import_zod5.z.literal("message"),
+      id: UUIDSchema,
+      role: RoleEnum,
+      content: import_zod5.z.string(),
+      rawResponse: JsonSchema.nullable().optional(),
+      tokenCount: import_zod5.z.number().nullable().optional(),
+      swipeGroupId: import_zod5.z.string().nullable().optional(),
+      swipeIndex: import_zod5.z.number().nullable().optional(),
+      attachments: import_zod5.z.array(UUIDSchema).default([]),
+      createdAt: TimestampSchema,
+      // Debug: Memory extraction logs (Sprint 6)
+      debugMemoryLogs: import_zod5.z.array(import_zod5.z.string()).optional()
+    });
+    ContextSummaryEventSchema = import_zod5.z.object({
+      type: import_zod5.z.literal("context-summary"),
+      id: UUIDSchema,
+      context: import_zod5.z.string(),
+      createdAt: TimestampSchema
+    });
+    ChatEventSchema = import_zod5.z.union([
+      MessageEventSchema,
+      ContextSummaryEventSchema
+    ]);
+    ParticipantTypeEnum = import_zod5.z.enum(["CHARACTER", "PERSONA"]);
+    ChatParticipantSchema = import_zod5.z.object({
+      id: UUIDSchema,
+      // Participant type and identity
+      type: ParticipantTypeEnum,
+      characterId: UUIDSchema.nullable().optional(),
+      // Set when type is CHARACTER
+      personaId: UUIDSchema.nullable().optional(),
+      // Set when type is PERSONA
+      // LLM configuration (for AI characters only)
+      connectionProfileId: UUIDSchema.nullable().optional(),
+      // Required for CHARACTER, null for PERSONA
+      imageProfileId: UUIDSchema.nullable().optional(),
+      // Image generation profile
+      // Per-chat customization
+      systemPromptOverride: import_zod5.z.string().nullable().optional(),
+      // Custom scenario/context for this chat
+      // Display and state
+      displayOrder: import_zod5.z.number().default(0),
+      // For ordering in UI
+      isActive: import_zod5.z.boolean().default(true),
+      // Temporarily disable without removing
+      createdAt: TimestampSchema,
+      updatedAt: TimestampSchema
+    }).refine(
+      (data2) => {
+        if (data2.type === "CHARACTER") {
+          return data2.characterId != null;
+        }
+        if (data2.type === "PERSONA") {
+          return data2.personaId != null;
+        }
+        return false;
+      },
+      { message: "CHARACTER participants must have characterId, PERSONA participants must have personaId" }
+    ).refine(
+      (data2) => {
+        if (data2.type === "CHARACTER") {
+          return data2.connectionProfileId != null;
+        }
+        return true;
+      },
+      { message: "CHARACTER participants must have a connectionProfileId" }
+    );
+    ChatParticipantBaseSchema = import_zod5.z.object({
+      id: UUIDSchema,
+      type: ParticipantTypeEnum,
+      characterId: UUIDSchema.nullable().optional(),
+      personaId: UUIDSchema.nullable().optional(),
+      connectionProfileId: UUIDSchema.nullable().optional(),
+      imageProfileId: UUIDSchema.nullable().optional(),
+      systemPromptOverride: import_zod5.z.string().nullable().optional(),
+      displayOrder: import_zod5.z.number().default(0),
+      isActive: import_zod5.z.boolean().default(true),
+      createdAt: TimestampSchema,
+      updatedAt: TimestampSchema
+    });
+    ChatMetadataSchema = import_zod5.z.object({
+      id: UUIDSchema,
+      userId: UUIDSchema,
+      // Participants array (replaces characterId, personaId, connectionProfileId, imageProfileId)
+      participants: import_zod5.z.array(ChatParticipantBaseSchema).default([]),
+      title: import_zod5.z.string(),
+      contextSummary: import_zod5.z.string().nullable().optional(),
+      sillyTavernMetadata: JsonSchema.nullable().optional(),
+      tags: import_zod5.z.array(UUIDSchema).default([]),
+      messageCount: import_zod5.z.number().default(0),
+      lastMessageAt: TimestampSchema.nullable().optional(),
+      lastRenameCheckInterchange: import_zod5.z.number().default(0),
+      createdAt: TimestampSchema,
+      updatedAt: TimestampSchema
+    }).refine(
+      (data2) => data2.participants.length > 0,
+      { message: "Chat must have at least one participant" }
+    );
+    ChatMetadataBaseSchema = import_zod5.z.object({
+      id: UUIDSchema,
+      userId: UUIDSchema,
+      participants: import_zod5.z.array(ChatParticipantBaseSchema).default([]),
+      title: import_zod5.z.string(),
+      contextSummary: import_zod5.z.string().nullable().optional(),
+      sillyTavernMetadata: JsonSchema.nullable().optional(),
+      tags: import_zod5.z.array(UUIDSchema).default([]),
+      messageCount: import_zod5.z.number().default(0),
+      lastMessageAt: TimestampSchema.nullable().optional(),
+      lastRenameCheckInterchange: import_zod5.z.number().default(0),
+      createdAt: TimestampSchema,
+      updatedAt: TimestampSchema
+    });
+    ChatMetadataLegacySchema = import_zod5.z.object({
+      id: UUIDSchema,
+      userId: UUIDSchema,
+      characterId: UUIDSchema,
+      personaId: UUIDSchema.nullable().optional(),
+      connectionProfileId: UUIDSchema,
+      imageProfileId: UUIDSchema.nullable().optional(),
+      title: import_zod5.z.string(),
+      contextSummary: import_zod5.z.string().nullable().optional(),
+      sillyTavernMetadata: JsonSchema.nullable().optional(),
+      tags: import_zod5.z.array(UUIDSchema).default([]),
+      messageCount: import_zod5.z.number().default(0),
+      lastMessageAt: TimestampSchema.nullable().optional(),
+      lastRenameCheckInterchange: import_zod5.z.number().default(0),
+      createdAt: TimestampSchema,
+      updatedAt: TimestampSchema
+    });
+    BinaryIndexEntrySchema = import_zod5.z.object({
+      id: UUIDSchema,
+      sha256: import_zod5.z.string().length(64),
+      type: import_zod5.z.enum(["image", "chat_file", "avatar"]),
+      userId: UUIDSchema,
+      filename: import_zod5.z.string(),
+      relativePath: import_zod5.z.string(),
+      mimeType: import_zod5.z.string(),
+      size: import_zod5.z.number(),
+      width: import_zod5.z.number().nullable().optional(),
+      height: import_zod5.z.number().nullable().optional(),
+      source: import_zod5.z.enum(["upload", "import", "generated"]).default("upload"),
+      generationPrompt: import_zod5.z.string().nullable().optional(),
+      generationModel: import_zod5.z.string().nullable().optional(),
+      chatId: UUIDSchema.nullable().optional(),
+      characterId: UUIDSchema.nullable().optional(),
+      // For avatar overrides
+      messageId: UUIDSchema.nullable().optional(),
+      tags: import_zod5.z.array(UUIDSchema).default([]),
+      createdAt: TimestampSchema,
+      updatedAt: TimestampSchema
+    });
+    FileSourceEnum = import_zod5.z.enum(["UPLOADED", "GENERATED", "IMPORTED", "SYSTEM"]);
+    FileCategoryEnum = import_zod5.z.enum(["IMAGE", "DOCUMENT", "AVATAR", "ATTACHMENT", "EXPORT"]);
+    FileEntrySchema = import_zod5.z.object({
+      // Identity & Storage
+      id: UUIDSchema,
+      // File UUID (also the base filename in storage)
+      userId: UUIDSchema,
+      // Owner of the file
+      sha256: import_zod5.z.string().length(64),
+      // Content hash for deduplication
+      originalFilename: import_zod5.z.string(),
+      // Original filename from upload/generation
+      mimeType: import_zod5.z.string(),
+      // Specific MIME type
+      size: import_zod5.z.number(),
+      // File size in bytes
+      // Image metadata (if applicable)
+      width: import_zod5.z.number().nullable().optional(),
+      height: import_zod5.z.number().nullable().optional(),
+      // Linking - array of IDs this file is associated with
+      linkedTo: import_zod5.z.array(UUIDSchema).default([]),
+      // messageId, chatId, characterId, personaId, etc.
+      // Classification
+      source: FileSourceEnum,
+      // Where the file came from
+      category: FileCategoryEnum,
+      // What type of file it is
+      // Generation metadata (for AI-generated files)
+      generationPrompt: import_zod5.z.string().nullable().optional(),
+      generationModel: import_zod5.z.string().nullable().optional(),
+      generationRevisedPrompt: import_zod5.z.string().nullable().optional(),
+      description: import_zod5.z.string().nullable().optional(),
+      // AI description or user-provided description
+      // Tags
+      tags: import_zod5.z.array(UUIDSchema).default([]),
+      // S3 storage reference (Phase 3: MongoDB + S3 migration)
+      s3Key: import_zod5.z.string().nullable().optional(),
+      // Full S3 object key
+      s3Bucket: import_zod5.z.string().nullable().optional(),
+      // S3 bucket name
+      // Timestamps
+      createdAt: TimestampSchema,
+      updatedAt: TimestampSchema
+    });
+    TagSchema = import_zod5.z.object({
+      id: UUIDSchema,
+      userId: UUIDSchema,
+      name: import_zod5.z.string(),
+      nameLower: import_zod5.z.string(),
+      quickHide: import_zod5.z.boolean().default(false),
+      createdAt: TimestampSchema,
+      updatedAt: TimestampSchema
+    });
+    ImageProfileSchema = import_zod5.z.object({
+      id: UUIDSchema,
+      userId: UUIDSchema,
+      name: import_zod5.z.string(),
+      provider: ImageProviderEnum,
+      apiKeyId: UUIDSchema.nullable().optional(),
+      baseUrl: import_zod5.z.string().nullable().optional(),
+      modelName: import_zod5.z.string(),
+      parameters: JsonSchema.default({}),
+      isDefault: import_zod5.z.boolean().default(false),
+      tags: import_zod5.z.array(UUIDSchema).default([]),
+      createdAt: TimestampSchema,
+      updatedAt: TimestampSchema
+    });
+    GeneralSettingsSchema = import_zod5.z.object({
+      version: import_zod5.z.number().default(1),
+      user: UserSchema,
+      chatSettings: ChatSettingsSchema,
+      createdAt: TimestampSchema,
+      updatedAt: TimestampSchema
+    });
+    ConnectionProfilesFileSchema = import_zod5.z.object({
+      version: import_zod5.z.number().default(1),
+      apiKeys: import_zod5.z.array(ApiKeySchema).default([]),
+      llmProfiles: import_zod5.z.array(ConnectionProfileSchema).default([]),
+      createdAt: TimestampSchema,
+      updatedAt: TimestampSchema
+    });
+    AuthAccountsSchema = import_zod5.z.object({
+      version: import_zod5.z.number().default(1),
+      accounts: import_zod5.z.array(AccountSchema).default([]),
+      createdAt: TimestampSchema,
+      updatedAt: TimestampSchema
+    });
+    TagsFileSchema = import_zod5.z.object({
+      version: import_zod5.z.number().default(1),
+      tags: import_zod5.z.array(TagSchema).default([]),
+      createdAt: TimestampSchema,
+      updatedAt: TimestampSchema
+    });
+    ImageProfilesFileSchema = import_zod5.z.object({
+      version: import_zod5.z.number().default(1),
+      profiles: import_zod5.z.array(ImageProfileSchema).default([]),
+      createdAt: TimestampSchema,
+      updatedAt: TimestampSchema
+    });
+    EmbeddingProfileSchema = import_zod5.z.object({
+      id: UUIDSchema,
+      userId: UUIDSchema,
+      name: import_zod5.z.string(),
+      provider: EmbeddingProfileProviderEnum,
+      apiKeyId: UUIDSchema.nullable().optional(),
+      baseUrl: import_zod5.z.string().nullable().optional(),
+      modelName: import_zod5.z.string(),
+      /** Embedding dimension size (provider-specific) */
+      dimensions: import_zod5.z.number().nullable().optional(),
+      isDefault: import_zod5.z.boolean().default(false),
+      tags: import_zod5.z.array(UUIDSchema).default([]),
+      createdAt: TimestampSchema,
+      updatedAt: TimestampSchema
+    });
+    EmbeddingProfilesFileSchema = import_zod5.z.object({
+      version: import_zod5.z.number().default(1),
+      profiles: import_zod5.z.array(EmbeddingProfileSchema).default([]),
+      createdAt: TimestampSchema,
+      updatedAt: TimestampSchema
+    });
+    MemorySourceEnum = import_zod5.z.enum(["AUTO", "MANUAL"]);
+    MemorySchema = import_zod5.z.object({
+      id: UUIDSchema,
+      characterId: UUIDSchema,
+      personaId: UUIDSchema.nullable().optional(),
+      // Optional: specific persona interaction
+      chatId: UUIDSchema.nullable().optional(),
+      // Optional: source chat reference
+      content: import_zod5.z.string(),
+      // The actual memory content
+      summary: import_zod5.z.string(),
+      // Distilled version for context injection
+      keywords: import_zod5.z.array(import_zod5.z.string()).default([]),
+      // For text-based search
+      tags: import_zod5.z.array(UUIDSchema).default([]),
+      // Derived from character/persona/chat tags
+      importance: import_zod5.z.number().min(0).max(1).default(0.5),
+      // 0-1 scale for prioritization
+      embedding: import_zod5.z.array(import_zod5.z.number()).nullable().optional(),
+      // Vector embedding for semantic search
+      source: MemorySourceEnum.default("MANUAL"),
+      // How it was created
+      sourceMessageId: UUIDSchema.nullable().optional(),
+      // If auto-created, which message triggered it
+      lastAccessedAt: TimestampSchema.nullable().optional(),
+      // For housekeeping decisions
+      createdAt: TimestampSchema,
+      updatedAt: TimestampSchema
+    });
+    MemoriesFileSchema = import_zod5.z.object({
+      version: import_zod5.z.number().default(1),
+      memories: import_zod5.z.array(MemorySchema).default([]),
+      createdAt: TimestampSchema,
+      updatedAt: TimestampSchema
+    });
+  }
+});
+
+// lib/json-store/repositories/connection-profiles.repository.ts
+var ConnectionProfilesRepository;
+var init_connection_profiles_repository = __esm({
+  "lib/json-store/repositories/connection-profiles.repository.ts"() {
+    "use strict";
+    init_base_repository();
+    init_types();
+    ConnectionProfilesRepository = class extends BaseRepository {
+      constructor(jsonStore) {
+        super(jsonStore, ConnectionProfileSchema);
+      }
+      /**
+       * Get the connection profiles file path
+       */
+      getFilePath() {
+        return "settings/connection-profiles.json";
+      }
+      /**
+       * Read connection profiles file with default structure
+       */
+      async readProfilesFile() {
+        try {
+          const filePath = this.getFilePath();
+          const data2 = await this.jsonStore.readJson(filePath);
+          return ConnectionProfilesFileSchema.parse(data2);
+        } catch (error2) {
+          return {
+            version: 1,
+            apiKeys: [],
+            llmProfiles: [],
+            createdAt: this.getCurrentTimestamp(),
+            updatedAt: this.getCurrentTimestamp()
+          };
+        }
+      }
+      /**
+       * Write connection profiles file with validation
+       */
+      async writeProfilesFile(data2) {
+        const validated = ConnectionProfilesFileSchema.parse({
+          ...data2,
+          updatedAt: this.getCurrentTimestamp()
+        });
+        await this.jsonStore.writeJson(this.getFilePath(), validated);
+      }
+      /**
+       * Find a connection profile by ID
+       */
+      async findById(id) {
+        const file = await this.readProfilesFile();
+        return file.llmProfiles.find((profile) => profile.id === id) || null;
+      }
+      /**
+       * Find all connection profiles
+       */
+      async findAll() {
+        const file = await this.readProfilesFile();
+        return file.llmProfiles;
+      }
+      /**
+       * Find connection profiles by user ID
+       */
+      async findByUserId(userId) {
+        const file = await this.readProfilesFile();
+        return file.llmProfiles.filter((profile) => profile.userId === userId);
+      }
+      /**
+       * Find connection profiles with a specific tag
+       */
+      async findByTag(tagId) {
+        const file = await this.readProfilesFile();
+        return file.llmProfiles.filter((profile) => profile.tags.includes(tagId));
+      }
+      /**
+       * Find default connection profile for user
+       */
+      async findDefault(userId) {
+        const file = await this.readProfilesFile();
+        return file.llmProfiles.find(
+          (profile) => profile.userId === userId && profile.isDefault
+        ) || null;
+      }
+      /**
+       * Create a new connection profile
+       */
+      async create(data2) {
+        const id = this.generateId();
+        const now = this.getCurrentTimestamp();
+        const profile = {
+          ...data2,
+          id,
+          createdAt: now,
+          updatedAt: now
+        };
+        const validated = this.validate(profile);
+        const file = await this.readProfilesFile();
+        file.llmProfiles.push(validated);
+        await this.writeProfilesFile(file);
+        this.jsonStore.clearCache();
+        return validated;
+      }
+      /**
+       * Update a connection profile
+       */
+      async update(id, data2) {
+        const file = await this.readProfilesFile();
+        const index = file.llmProfiles.findIndex((profile) => profile.id === id);
+        if (index === -1) {
+          return null;
+        }
+        const existing = file.llmProfiles[index];
+        const now = this.getCurrentTimestamp();
+        const updated = {
+          ...existing,
+          ...data2,
+          id: existing.id,
+          // Preserve ID
+          createdAt: existing.createdAt,
+          // Preserve creation timestamp
+          updatedAt: now
+        };
+        const validated = this.validate(updated);
+        file.llmProfiles[index] = validated;
+        await this.writeProfilesFile(file);
+        this.jsonStore.clearCache();
+        return validated;
+      }
+      /**
+       * Delete a connection profile
+       */
+      async delete(id) {
+        const file = await this.readProfilesFile();
+        const initialLength = file.llmProfiles.length;
+        file.llmProfiles = file.llmProfiles.filter((profile) => profile.id !== id);
+        if (file.llmProfiles.length === initialLength) {
+          return false;
+        }
+        await this.writeProfilesFile(file);
+        this.jsonStore.clearCache();
+        return true;
+      }
+      /**
+       * Add a tag to a connection profile
+       */
+      async addTag(profileId, tagId) {
+        const profile = await this.findById(profileId);
+        if (!profile) {
+          return null;
+        }
+        if (!profile.tags.includes(tagId)) {
+          profile.tags.push(tagId);
+          return await this.update(profileId, { tags: profile.tags });
+        }
+        return profile;
+      }
+      /**
+       * Remove a tag from a connection profile
+       */
+      async removeTag(profileId, tagId) {
+        const profile = await this.findById(profileId);
+        if (!profile) {
+          return null;
+        }
+        profile.tags = profile.tags.filter((id) => id !== tagId);
+        return await this.update(profileId, { tags: profile.tags });
+      }
+      // ============================================================================
+      // API KEY OPERATIONS
+      // ============================================================================
+      /**
+       * Get all API keys
+       */
+      async getAllApiKeys() {
+        const file = await this.readProfilesFile();
+        return file.apiKeys;
+      }
+      /**
+       * Find API key by ID
+       */
+      async findApiKeyById(id) {
+        const file = await this.readProfilesFile();
+        return file.apiKeys.find((key) => key.id === id) || null;
+      }
+      /**
+       * Create a new API key
+       */
+      async createApiKey(data2) {
+        const id = this.generateId();
+        const now = this.getCurrentTimestamp();
+        const apiKey = {
+          ...data2,
+          id,
+          createdAt: now,
+          updatedAt: now
+        };
+        const validated = ApiKeySchema.parse(apiKey);
+        const file = await this.readProfilesFile();
+        file.apiKeys.push(validated);
+        await this.writeProfilesFile(file);
+        this.jsonStore.clearCache();
+        return validated;
+      }
+      /**
+       * Update an API key
+       */
+      async updateApiKey(id, data2) {
+        const file = await this.readProfilesFile();
+        const index = file.apiKeys.findIndex((key) => key.id === id);
+        if (index === -1) {
+          return null;
+        }
+        const existing = file.apiKeys[index];
+        const now = this.getCurrentTimestamp();
+        const updated = {
+          ...existing,
+          ...data2,
+          id: existing.id,
+          // Preserve ID
+          createdAt: existing.createdAt,
+          // Preserve creation timestamp
+          updatedAt: now
+        };
+        const validated = ApiKeySchema.parse(updated);
+        file.apiKeys[index] = validated;
+        await this.writeProfilesFile(file);
+        this.jsonStore.clearCache();
+        return validated;
+      }
+      /**
+       * Delete an API key
+       */
+      async deleteApiKey(id) {
+        const file = await this.readProfilesFile();
+        const initialLength = file.apiKeys.length;
+        file.apiKeys = file.apiKeys.filter((key) => key.id !== id);
+        if (file.apiKeys.length === initialLength) {
+          return false;
+        }
+        await this.writeProfilesFile(file);
+        this.jsonStore.clearCache();
+        return true;
+      }
+      /**
+       * Update API key last used timestamp
+       */
+      async recordApiKeyUsage(id) {
+        return await this.updateApiKey(id, { lastUsed: this.getCurrentTimestamp() });
+      }
+    };
+  }
+});
+
+// lib/json-store/repositories/image-profiles.repository.ts
+var ImageProfilesRepository;
+var init_image_profiles_repository = __esm({
+  "lib/json-store/repositories/image-profiles.repository.ts"() {
+    "use strict";
+    init_base_repository();
+    init_types();
+    ImageProfilesRepository = class extends BaseRepository {
+      constructor(jsonStore) {
+        super(jsonStore, ImageProfileSchema);
+      }
+      /**
+       * Get the image profiles file path
+       */
+      getFilePath() {
+        return "settings/image-profiles.json";
+      }
+      /**
+       * Read image profiles file with default structure
+       */
+      async readProfilesFile() {
+        try {
+          const filePath = this.getFilePath();
+          const data2 = await this.jsonStore.readJson(filePath);
+          return ImageProfilesFileSchema.parse(data2);
+        } catch (error2) {
+          return {
+            version: 1,
+            profiles: [],
+            createdAt: this.getCurrentTimestamp(),
+            updatedAt: this.getCurrentTimestamp()
+          };
+        }
+      }
+      /**
+       * Write image profiles file with validation
+       */
+      async writeProfilesFile(data2) {
+        const validated = ImageProfilesFileSchema.parse({
+          ...data2,
+          updatedAt: this.getCurrentTimestamp()
+        });
+        await this.jsonStore.writeJson(this.getFilePath(), validated);
+      }
+      /**
+       * Find an image profile by ID
+       */
+      async findById(id) {
+        const file = await this.readProfilesFile();
+        return file.profiles.find((profile) => profile.id === id) || null;
+      }
+      /**
+       * Find all image profiles
+       */
+      async findAll() {
+        const file = await this.readProfilesFile();
+        return file.profiles;
+      }
+      /**
+       * Find image profiles by user ID
+       */
+      async findByUserId(userId) {
+        const file = await this.readProfilesFile();
+        return file.profiles.filter((profile) => profile.userId === userId);
+      }
+      /**
+       * Find image profiles with a specific tag
+       */
+      async findByTag(tagId) {
+        const file = await this.readProfilesFile();
+        return file.profiles.filter((profile) => profile.tags.includes(tagId));
+      }
+      /**
+       * Find default image profile for user
+       */
+      async findDefault(userId) {
+        const file = await this.readProfilesFile();
+        return file.profiles.find(
+          (profile) => profile.userId === userId && profile.isDefault
+        ) || null;
+      }
+      /**
+       * Find image profile by name for user
+       */
+      async findByName(userId, name) {
+        const file = await this.readProfilesFile();
+        return file.profiles.find(
+          (profile) => profile.userId === userId && profile.name === name
+        ) || null;
+      }
+      /**
+       * Create a new image profile
+       */
+      async create(data2) {
+        const id = this.generateId();
+        const now = this.getCurrentTimestamp();
+        const profile = {
+          ...data2,
+          id,
+          createdAt: now,
+          updatedAt: now
+        };
+        const validated = this.validate(profile);
+        const file = await this.readProfilesFile();
+        file.profiles.push(validated);
+        await this.writeProfilesFile(file);
+        return validated;
+      }
+      /**
+       * Update an image profile
+       */
+      async update(id, data2) {
+        const file = await this.readProfilesFile();
+        const index = file.profiles.findIndex((profile) => profile.id === id);
+        if (index === -1) {
+          return null;
+        }
+        const existing = file.profiles[index];
+        const now = this.getCurrentTimestamp();
+        const updated = {
+          ...existing,
+          ...data2,
+          id: existing.id,
+          // Preserve ID
+          createdAt: existing.createdAt,
+          // Preserve creation timestamp
+          updatedAt: now
+        };
+        const validated = this.validate(updated);
+        file.profiles[index] = validated;
+        await this.writeProfilesFile(file);
+        return validated;
+      }
+      /**
+       * Delete an image profile
+       */
+      async delete(id) {
+        const file = await this.readProfilesFile();
+        const initialLength = file.profiles.length;
+        file.profiles = file.profiles.filter((profile) => profile.id !== id);
+        if (file.profiles.length === initialLength) {
+          return false;
+        }
+        await this.writeProfilesFile(file);
+        return true;
+      }
+      /**
+       * Add a tag to an image profile
+       */
+      async addTag(profileId, tagId) {
+        const profile = await this.findById(profileId);
+        if (!profile) {
+          return null;
+        }
+        if (!profile.tags.includes(tagId)) {
+          profile.tags.push(tagId);
+          return await this.update(profileId, { tags: profile.tags });
+        }
+        return profile;
+      }
+      /**
+       * Remove a tag from an image profile
+       */
+      async removeTag(profileId, tagId) {
+        const profile = await this.findById(profileId);
+        if (!profile) {
+          return null;
+        }
+        profile.tags = profile.tags.filter((id) => id !== tagId);
+        return await this.update(profileId, { tags: profile.tags });
+      }
+      /**
+       * Unset default flag on all profiles for a user
+       */
+      async unsetAllDefaults(userId) {
+        const file = await this.readProfilesFile();
+        let changed = false;
+        for (let i4 = 0; i4 < file.profiles.length; i4++) {
+          if (file.profiles[i4].userId === userId && file.profiles[i4].isDefault) {
+            file.profiles[i4] = {
+              ...file.profiles[i4],
+              isDefault: false,
+              updatedAt: this.getCurrentTimestamp()
+            };
+            changed = true;
+          }
+        }
+        if (changed) {
+          await this.writeProfilesFile(file);
+        }
+      }
+    };
+  }
+});
+
+// lib/json-store/repositories/embedding-profiles.repository.ts
+var EmbeddingProfilesRepository;
+var init_embedding_profiles_repository = __esm({
+  "lib/json-store/repositories/embedding-profiles.repository.ts"() {
+    "use strict";
+    init_base_repository();
+    init_types();
+    EmbeddingProfilesRepository = class extends BaseRepository {
+      constructor(jsonStore) {
+        super(jsonStore, EmbeddingProfileSchema);
+      }
+      /**
+       * Get the embedding profiles file path
+       */
+      getFilePath() {
+        return "settings/embedding-profiles.json";
+      }
+      /**
+       * Read embedding profiles file with default structure
+       */
+      async readProfilesFile() {
+        try {
+          const filePath = this.getFilePath();
+          const data2 = await this.jsonStore.readJson(filePath);
+          return EmbeddingProfilesFileSchema.parse(data2);
+        } catch (error2) {
+          return {
+            version: 1,
+            profiles: [],
+            createdAt: this.getCurrentTimestamp(),
+            updatedAt: this.getCurrentTimestamp()
+          };
+        }
+      }
+      /**
+       * Write embedding profiles file with validation
+       */
+      async writeProfilesFile(data2) {
+        const validated = EmbeddingProfilesFileSchema.parse({
+          ...data2,
+          updatedAt: this.getCurrentTimestamp()
+        });
+        await this.jsonStore.writeJson(this.getFilePath(), validated);
+      }
+      /**
+       * Find an embedding profile by ID
+       */
+      async findById(id) {
+        const file = await this.readProfilesFile();
+        return file.profiles.find((profile) => profile.id === id) || null;
+      }
+      /**
+       * Find all embedding profiles
+       */
+      async findAll() {
+        const file = await this.readProfilesFile();
+        return file.profiles;
+      }
+      /**
+       * Find embedding profiles by user ID
+       */
+      async findByUserId(userId) {
+        const file = await this.readProfilesFile();
+        return file.profiles.filter((profile) => profile.userId === userId);
+      }
+      /**
+       * Find embedding profiles with a specific tag
+       */
+      async findByTag(tagId) {
+        const file = await this.readProfilesFile();
+        return file.profiles.filter((profile) => profile.tags.includes(tagId));
+      }
+      /**
+       * Find default embedding profile for user
+       */
+      async findDefault(userId) {
+        const file = await this.readProfilesFile();
+        return file.profiles.find(
+          (profile) => profile.userId === userId && profile.isDefault
+        ) || null;
+      }
+      /**
+       * Find embedding profile by name for user
+       */
+      async findByName(userId, name) {
+        const file = await this.readProfilesFile();
+        return file.profiles.find(
+          (profile) => profile.userId === userId && profile.name === name
+        ) || null;
+      }
+      /**
+       * Create a new embedding profile
+       */
+      async create(data2) {
+        const id = this.generateId();
+        const now = this.getCurrentTimestamp();
+        const profile = {
+          ...data2,
+          id,
+          createdAt: now,
+          updatedAt: now
+        };
+        const validated = this.validate(profile);
+        const file = await this.readProfilesFile();
+        file.profiles.push(validated);
+        await this.writeProfilesFile(file);
+        return validated;
+      }
+      /**
+       * Update an embedding profile
+       */
+      async update(id, data2) {
+        const file = await this.readProfilesFile();
+        const index = file.profiles.findIndex((profile) => profile.id === id);
+        if (index === -1) {
+          return null;
+        }
+        const existing = file.profiles[index];
+        const now = this.getCurrentTimestamp();
+        const updated = {
+          ...existing,
+          ...data2,
+          id: existing.id,
+          // Preserve ID
+          createdAt: existing.createdAt,
+          // Preserve creation timestamp
+          updatedAt: now
+        };
+        const validated = this.validate(updated);
+        file.profiles[index] = validated;
+        await this.writeProfilesFile(file);
+        return validated;
+      }
+      /**
+       * Delete an embedding profile
+       */
+      async delete(id) {
+        const file = await this.readProfilesFile();
+        const initialLength = file.profiles.length;
+        file.profiles = file.profiles.filter((profile) => profile.id !== id);
+        if (file.profiles.length === initialLength) {
+          return false;
+        }
+        await this.writeProfilesFile(file);
+        return true;
+      }
+      /**
+       * Add a tag to an embedding profile
+       */
+      async addTag(profileId, tagId) {
+        const profile = await this.findById(profileId);
+        if (!profile) {
+          return null;
+        }
+        if (!profile.tags.includes(tagId)) {
+          profile.tags.push(tagId);
+          return await this.update(profileId, { tags: profile.tags });
+        }
+        return profile;
+      }
+      /**
+       * Remove a tag from an embedding profile
+       */
+      async removeTag(profileId, tagId) {
+        const profile = await this.findById(profileId);
+        if (!profile) {
+          return null;
+        }
+        profile.tags = profile.tags.filter((id) => id !== tagId);
+        return await this.update(profileId, { tags: profile.tags });
+      }
+      /**
+       * Unset default flag on all profiles for a user
+       */
+      async unsetAllDefaults(userId) {
+        const file = await this.readProfilesFile();
+        let changed = false;
+        for (let i4 = 0; i4 < file.profiles.length; i4++) {
+          if (file.profiles[i4].userId === userId && file.profiles[i4].isDefault) {
+            file.profiles[i4] = {
+              ...file.profiles[i4],
+              isDefault: false,
+              updatedAt: this.getCurrentTimestamp()
+            };
+            changed = true;
+          }
+        }
+        if (changed) {
+          await this.writeProfilesFile(file);
+        }
+      }
+    };
   }
 });
 
@@ -34762,15 +35198,15 @@ var init_setTokenFeature = __esm({
 });
 
 // node_modules/@aws-sdk/core/dist-es/submodules/client/index.js
-var client_exports = {};
-__export(client_exports, {
+var client_exports2 = {};
+__export(client_exports2, {
   emitWarningIfUnsupportedVersion: () => emitWarningIfUnsupportedVersion,
   setCredentialFeature: () => setCredentialFeature,
   setFeature: () => setFeature,
   setTokenFeature: () => setTokenFeature,
   state: () => state
 });
-var init_client = __esm({
+var init_client2 = __esm({
   "node_modules/@aws-sdk/core/dist-es/submodules/client/index.js"() {
     init_emitWarningIfUnsupportedVersion();
     init_setCredentialFeature();
@@ -37428,8 +37864,8 @@ var init_Schema = __esm({
       name;
       namespace;
       traits;
-      static assign(instance2, values) {
-        const schema = Object.assign(instance2, values);
+      static assign(instance3, values) {
+        const schema = Object.assign(instance3, values);
         return schema;
       }
       static [Symbol.hasInstance](lhs) {
@@ -39175,12 +39611,12 @@ var splitHeader;
 var init_split_header = __esm({
   "node_modules/@smithy/core/dist-es/submodules/serde/split-header.js"() {
     splitHeader = (value) => {
-      const z7 = value.length;
+      const z8 = value.length;
       const values = [];
       let withinQuotes = false;
       let prevChar = void 0;
       let anchor = 0;
-      for (let i4 = 0; i4 < z7; ++i4) {
+      for (let i4 = 0; i4 < z8; ++i4) {
         const char = value[i4];
         switch (char) {
           case `"`:
@@ -39201,12 +39637,12 @@ var init_split_header = __esm({
       values.push(value.slice(anchor));
       return values.map((v4) => {
         v4 = v4.trim();
-        const z8 = v4.length;
-        if (z8 < 2) {
+        const z9 = v4.length;
+        if (z9 < 2) {
           return v4;
         }
-        if (v4[0] === `"` && v4[z8 - 1] === `"`) {
-          v4 = v4.slice(1, z8 - 1);
+        if (v4[0] === `"` && v4[z9 - 1] === `"`) {
+          v4 = v4.slice(1, z9 - 1);
         }
         return v4.replace(/\\"/g, '"');
       });
@@ -41377,7 +41813,7 @@ function bindCallerConfig(config, credentialsProvider) {
 var import_signature_v4, resolveAwsSdkSigV4Config, resolveAWSSDKSigV4Config;
 var init_resolveAwsSdkSigV4Config = __esm({
   "node_modules/@aws-sdk/core/dist-es/submodules/httpAuthSchemes/aws_sdk/resolveAwsSdkSigV4Config.js"() {
-    init_client();
+    init_client2();
     init_dist_es();
     import_signature_v4 = __toESM(require_dist_cjs18());
     resolveAwsSdkSigV4Config = (config) => {
@@ -43007,18 +43443,18 @@ var require_dist_cjs20 = __commonJS({
         const candidate = value;
         return _ServiceException.prototype.isPrototypeOf(candidate) || Boolean(candidate.$fault) && Boolean(candidate.$metadata) && (candidate.$fault === "client" || candidate.$fault === "server");
       }
-      static [Symbol.hasInstance](instance2) {
-        if (!instance2)
+      static [Symbol.hasInstance](instance3) {
+        if (!instance3)
           return false;
-        const candidate = instance2;
+        const candidate = instance3;
         if (this === _ServiceException) {
-          return _ServiceException.isInstance(instance2);
+          return _ServiceException.isInstance(instance3);
         }
-        if (_ServiceException.isInstance(instance2)) {
+        if (_ServiceException.isInstance(instance3)) {
           if (candidate.name && this.name) {
-            return this.prototype.isPrototypeOf(instance2) || candidate.name === this.name;
+            return this.prototype.isPrototypeOf(instance3) || candidate.name === this.name;
           }
-          return this.prototype.isPrototypeOf(instance2);
+          return this.prototype.isPrototypeOf(instance3);
         }
         return false;
       }
@@ -44690,7 +45126,7 @@ var require_fxp = __commonJS({
           let l5 = 0;
           a5 && -1 !== this.options.unpairedTags.indexOf(a5) ? (l5 = s5.lastIndexOf(".", s5.lastIndexOf(".") - 1), this.tagsNodeStack.pop()) : l5 = s5.lastIndexOf("."), s5 = s5.substring(0, l5), n5 = this.tagsNodeStack.pop(), i5 = "", r5 = e6;
         } else if ("?" === t5[r5 + 1]) {
-          let e6 = z7(t5, r5, false, "?>");
+          let e6 = z8(t5, r5, false, "?>");
           if (!e6) throw new Error("Pi Tag is not closed.");
           if (i5 = this.saveTextToParentTag(i5, n5, s5), this.options.ignoreDeclaration && "?xml" === e6.tagName || this.options.ignorePiTags) ;
           else {
@@ -44714,7 +45150,7 @@ var require_fxp = __commonJS({
           let a5 = this.parseTextData(o5, n5.tagname, s5, true, false, true, true);
           null == a5 && (a5 = ""), this.options.cdataPropName ? n5.add(this.options.cdataPropName, [{ [this.options.textNodeName]: o5 }]) : n5.add(this.options.textNodeName, a5), r5 = e6 + 2;
         } else {
-          let o5 = z7(t5, r5, this.options.removeNSPrefix), a5 = o5.tagName;
+          let o5 = z8(t5, r5, this.options.removeNSPrefix), a5 = o5.tagName;
           const l5 = o5.rawTagName;
           let u5 = o5.tagExp, h5 = o5.attrExpPresent, d5 = o5.closeIndex;
           this.options.transformTagName && (a5 = this.options.transformTagName(a5)), n5 && i5 && "!xml" !== n5.tagname && (i5 = this.saveTextToParentTag(i5, n5, s5, false));
@@ -44786,7 +45222,7 @@ var require_fxp = __commonJS({
         if (-1 === s5) throw new Error(i5);
         return s5 + e5.length - 1;
       }
-      function z7(t5, e5, n5, i5 = ">") {
+      function z8(t5, e5, n5, i5 = ">") {
         const s5 = (function(t6, e6, n6 = ">") {
           let i6, s6 = "";
           for (let r6 = e6; r6 < t6.length; r6++) {
@@ -44823,7 +45259,7 @@ var require_fxp = __commonJS({
         else if ("!--" === t5.substr(n5 + 1, 3)) n5 = W(t5, "-->", n5 + 3, "StopNode is not closed.");
         else if ("![" === t5.substr(n5 + 1, 2)) n5 = W(t5, "]]>", n5, "StopNode is not closed.") - 2;
         else {
-          const i6 = z7(t5, n5, ">");
+          const i6 = z8(t5, n5, ">");
           i6 && ((i6 && i6.tagName) === e5 && "/" !== i6.tagExp[i6.tagExp.length - 1] && s5++, n5 = i6.closeIndex);
         }
       }
@@ -46229,7 +46665,7 @@ __export(dist_es_exports2, {
 });
 var init_dist_es2 = __esm({
   "node_modules/@aws-sdk/core/dist-es/index.js"() {
-    init_client();
+    init_client2();
     init_httpAuthSchemes2();
     init_protocols2();
   }
@@ -47742,10 +48178,10 @@ var init_invoke_store = __esm({
     InvokeStoreMulti = class _InvokeStoreMulti extends InvokeStoreBase {
       als;
       static async create() {
-        const instance2 = new _InvokeStoreMulti();
+        const instance3 = new _InvokeStoreMulti();
         const asyncHooks = await import("node:async_hooks");
-        instance2.als = new asyncHooks.AsyncLocalStorage();
-        return instance2;
+        instance3.als = new asyncHooks.AsyncLocalStorage();
+        return instance3;
       }
       getContext() {
         return this.als.getStore();
@@ -47771,10 +48207,10 @@ var init_invoke_store = __esm({
       }
     };
     (function(InvokeStore2) {
-      let instance2 = null;
+      let instance3 = null;
       async function getInstanceAsync() {
-        if (!instance2) {
-          instance2 = (async () => {
+        if (!instance3) {
+          instance3 = (async () => {
             const isMulti = "AWS_LAMBDA_MAX_CONCURRENCY" in process.env;
             const newInstance = isMulti ? await InvokeStoreMulti.create() : new InvokeStoreSingle();
             if (!NO_GLOBAL_AWS_LAMBDA && globalThis.awslambda?.InvokeStore) {
@@ -47787,12 +48223,12 @@ var init_invoke_store = __esm({
             }
           })();
         }
-        return instance2;
+        return instance3;
       }
       InvokeStore2.getInstanceAsync = getInstanceAsync;
       InvokeStore2._testing = process.env.AWS_LAMBDA_BENCHMARK_MODE === "1" ? {
         reset: () => {
-          instance2 = null;
+          instance3 = null;
           if (globalThis.awslambda?.InvokeStore) {
             delete globalThis.awslambda.InvokeStore;
           }
@@ -51262,7 +51698,7 @@ var require_ruleset = __commonJS({
     var w4 = "bucketAliasSuffix";
     var x4 = "outpostId";
     var y2 = "isValidHostLabel";
-    var z7 = "sigv4a";
+    var z8 = "sigv4a";
     var A2 = "s3-outposts";
     var B2 = "s3";
     var C2 = "{url#scheme}://{url#authority}{url#normalizedPath}{Bucket}";
@@ -51312,7 +51748,7 @@ var require_ruleset = __commonJS({
     var au = { [cw]: r4, [cx]: [ac] };
     var av = { [cy]: u4 };
     var aw = { [cv]: [aq], [f4]: "Expected a endpoint to be specified but no endpoint was found", [ct]: f4 };
-    var ax = { [cD]: [{ [cE]: true, [j4]: z7, [cF]: A2, [cI]: ["*"] }, { [cE]: true, [j4]: "sigv4", [cF]: A2, [cG]: "{Region}" }] };
+    var ax = { [cD]: [{ [cE]: true, [j4]: z8, [cF]: A2, [cI]: ["*"] }, { [cE]: true, [j4]: "sigv4", [cF]: A2, [cG]: "{Region}" }] };
     var ay = { [cw]: e4, [cx]: [{ [cy]: "ForcePathStyle" }, false] };
     var az = { [cy]: "ForcePathStyle" };
     var aA = { [cw]: e4, [cx]: [{ [cy]: "Accelerate" }, false] };
@@ -51351,7 +51787,7 @@ var require_ruleset = __commonJS({
     var bh = { [f4]: "Invalid ARN: The ARN may only contain a single resource component after `accesspoint`.", [ct]: f4 };
     var bi = { [f4]: "Invalid ARN: Expected a resource of the format `accesspoint:<accesspoint name>` but no name was provided", [ct]: f4 };
     var bj = { [cD]: [{ [cE]: true, [j4]: "sigv4", [cF]: B2, [cG]: "{bucketArn#region}" }] };
-    var bk = { [cD]: [{ [cE]: true, [j4]: z7, [cF]: A2, [cI]: ["*"] }, { [cE]: true, [j4]: "sigv4", [cF]: A2, [cG]: "{bucketArn#region}" }] };
+    var bk = { [cD]: [{ [cE]: true, [j4]: z8, [cF]: A2, [cI]: ["*"] }, { [cE]: true, [j4]: "sigv4", [cF]: A2, [cG]: "{bucketArn#region}" }] };
     var bl = { [cw]: F2, [cx]: [ad] };
     var bm = { [cA]: "https://s3-fips.dualstack.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: aG, [cH]: {} };
     var bn = { [cA]: "https://s3-fips.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: aG, [cH]: {} };
@@ -51411,7 +51847,7 @@ var require_ruleset = __commonJS({
     var cp = [{ [cw]: y2, [cx]: [aV, false] }];
     var cq = [X];
     var cr = [{ [cw]: y2, [cx]: [{ [cy]: "Region" }, true] }];
-    var _data4 = { version: "1.0", parameters: { Bucket: T, Region: T, UseFIPS: U, UseDualStack: U, Endpoint: T, ForcePathStyle: U, Accelerate: U, UseGlobalEndpoint: U, UseObjectLambdaEndpoint: V, Key: T, Prefix: T, CopySource: T, DisableAccessPoints: V, DisableMultiRegionAccessPoints: U, UseArnRegion: V, UseS3ExpressControlEndpoint: V, DisableS3ExpressSessionAuth: V }, [cu]: [{ [cv]: [{ [cw]: d4, [cx]: by }], [cu]: [{ [cv]: [W, X], error: "Accelerate cannot be used with FIPS", [ct]: f4 }, { [cv]: [Y, Z], error: "Cannot set dual-stack in combination with a custom endpoint.", [ct]: f4 }, { [cv]: [Z, X], error: "A custom endpoint cannot be combined with FIPS", [ct]: f4 }, { [cv]: [Z, W], error: "A custom endpoint cannot be combined with S3 Accelerate", [ct]: f4 }, { [cv]: [X, aa, ab], error: "Partition does not support FIPS", [ct]: f4 }, { [cv]: [ac, { [cw]: k4, [cx]: [ad, 0, a4, c4], [cz]: l4 }, { [cw]: h4, [cx]: [{ [cy]: l4 }, "--x-s3"] }], [cu]: [ae, af, { [cv]: [ao, ap], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: [aj, aq], [cu]: [{ [cv]: bH, endpoint: { [cA]: "https://s3express-control-fips.dualstack.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bI, endpoint: { [cA]: "https://s3express-control-fips.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bJ, endpoint: { [cA]: "https://s3express-control.dualstack.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bK, endpoint: { [cA]: "https://s3express-control.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: ak, [cH]: al }, [ct]: n4 }], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { [cv]: bF, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: bD, [cu]: [{ [cv]: bL, [cu]: bM, [ct]: o4 }, { [cv]: bN, [cu]: bM, [ct]: o4 }, { [cv]: bO, [cu]: bM, [ct]: o4 }, { [cv]: bP, [cu]: bM, [ct]: o4 }, { [cv]: bQ, [cu]: bM, [ct]: o4 }, at], [ct]: o4 }, { [cv]: bL, [cu]: bR, [ct]: o4 }, { [cv]: bN, [cu]: bR, [ct]: o4 }, { [cv]: bO, [cu]: bR, [ct]: o4 }, { [cv]: bP, [cu]: bR, [ct]: o4 }, { [cv]: bQ, [cu]: bR, [ct]: o4 }, at], [ct]: o4 }], [ct]: o4 }, an], [ct]: o4 }, { [cv]: [ac, { [cw]: k4, [cx]: bS, [cz]: s4 }, { [cw]: h4, [cx]: [{ [cy]: s4 }, "--xa-s3"] }], [cu]: [ae, af, { [cv]: bF, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: bD, [cu]: [{ [cv]: bT, [cu]: bM, [ct]: o4 }, { [cv]: bU, [cu]: bM, [ct]: o4 }, { [cv]: bV, [cu]: bM, [ct]: o4 }, { [cv]: bW, [cu]: bM, [ct]: o4 }, { [cv]: bX, [cu]: bM, [ct]: o4 }, at], [ct]: o4 }, { [cv]: bT, [cu]: bR, [ct]: o4 }, { [cv]: bU, [cu]: bR, [ct]: o4 }, { [cv]: bV, [cu]: bR, [ct]: o4 }, { [cv]: bW, [cu]: bR, [ct]: o4 }, { [cv]: bX, [cu]: bR, [ct]: o4 }, at], [ct]: o4 }], [ct]: o4 }, an], [ct]: o4 }, { [cv]: [au, ao, ap], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: bC, endpoint: { [cA]: t4, [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bH, endpoint: { [cA]: "https://s3express-control-fips.dualstack.{Region}.{partitionResult#dnsSuffix}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bI, endpoint: { [cA]: "https://s3express-control-fips.{Region}.{partitionResult#dnsSuffix}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bJ, endpoint: { [cA]: "https://s3express-control.dualstack.{Region}.{partitionResult#dnsSuffix}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bK, endpoint: { [cA]: "https://s3express-control.{Region}.{partitionResult#dnsSuffix}", [cB]: ak, [cH]: al }, [ct]: n4 }], [ct]: o4 }], [ct]: o4 }, { [cv]: [ac, { [cw]: k4, [cx]: [ad, 49, 50, c4], [cz]: u4 }, { [cw]: k4, [cx]: [ad, 8, 12, c4], [cz]: v4 }, { [cw]: k4, [cx]: bS, [cz]: w4 }, { [cw]: k4, [cx]: [ad, 32, 49, c4], [cz]: x4 }, { [cw]: g4, [cx]: by, [cz]: "regionPartition" }, { [cw]: h4, [cx]: [{ [cy]: w4 }, "--op-s3"] }], [cu]: [{ [cv]: bZ, [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [av, "e"] }], [cu]: [{ [cv]: ca, [cu]: [aw, { [cv]: bC, endpoint: { [cA]: "https://{Bucket}.ec2.{url#authority}", [cB]: ax, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { endpoint: { [cA]: "https://{Bucket}.ec2.s3-outposts.{Region}.{regionPartition#dnsSuffix}", [cB]: ax, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { [cv]: [{ [cw]: h4, [cx]: [av, "o"] }], [cu]: [{ [cv]: ca, [cu]: [aw, { [cv]: bC, endpoint: { [cA]: "https://{Bucket}.op-{outpostId}.{url#authority}", [cB]: ax, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { endpoint: { [cA]: "https://{Bucket}.op-{outpostId}.s3-outposts.{Region}.{regionPartition#dnsSuffix}", [cB]: ax, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { error: 'Unrecognized hardware type: "Expected hardware type o or e but got {hardwareType}"', [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: The outpost Id must only contain a-z, A-Z, 0-9 and `-`.", [ct]: f4 }], [ct]: o4 }, { [cv]: bY, [cu]: [{ [cv]: [Z, { [cw]: r4, [cx]: [{ [cw]: d4, [cx]: [{ [cw]: m4, [cx]: bz }] }] }], error: "Custom endpoint `{Endpoint}` was not a valid URI", [ct]: f4 }, { [cv]: [ay, am], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cc, [cu]: [{ [cv]: [W, ab], error: "S3 Accelerate cannot be used in this region", [ct]: f4 }, { [cv]: [Y, X, aA, aq, aB], endpoint: { [cA]: "https://{Bucket}.s3-fips.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, X, aA, aq, aD, aE], [cu]: [{ endpoint: aF, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, X, aA, aq, aD, aH], endpoint: aF, [ct]: n4 }, { [cv]: [ar, X, aA, aq, aB], endpoint: { [cA]: "https://{Bucket}.s3-fips.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, X, aA, aq, aD, aE], [cu]: [{ endpoint: aI, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, X, aA, aq, aD, aH], endpoint: aI, [ct]: n4 }, { [cv]: [Y, as, W, aq, aB], endpoint: { [cA]: "https://{Bucket}.s3-accelerate.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, as, W, aq, aD, aE], [cu]: [{ endpoint: aJ, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, as, W, aq, aD, aH], endpoint: aJ, [ct]: n4 }, { [cv]: [Y, as, aA, aq, aB], endpoint: { [cA]: "https://{Bucket}.s3.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, as, aA, aq, aD, aE], [cu]: [{ endpoint: aK, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, as, aA, aq, aD, aH], endpoint: aK, [ct]: n4 }, { [cv]: [ar, as, aA, Z, ag, ah, aB], endpoint: { [cA]: C2, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, as, aA, Z, ag, aL, aB], endpoint: { [cA]: q4, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, as, aA, Z, ag, ah, aD, aE], [cu]: [{ [cv]: cd, endpoint: aM, [ct]: n4 }, { endpoint: aM, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, as, aA, Z, ag, aL, aD, aE], [cu]: [{ [cv]: cd, endpoint: aN, [ct]: n4 }, aO], [ct]: o4 }, { [cv]: [ar, as, aA, Z, ag, ah, aD, aH], endpoint: aM, [ct]: n4 }, { [cv]: [ar, as, aA, Z, ag, aL, aD, aH], endpoint: aN, [ct]: n4 }, { [cv]: [ar, as, W, aq, aB], endpoint: { [cA]: D2, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, as, W, aq, aD, aE], [cu]: [{ [cv]: cd, endpoint: aP, [ct]: n4 }, { endpoint: aP, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, as, W, aq, aD, aH], endpoint: aP, [ct]: n4 }, { [cv]: [ar, as, aA, aq, aB], endpoint: { [cA]: E2, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, as, aA, aq, aD, aE], [cu]: [{ [cv]: cd, endpoint: { [cA]: E2, [cB]: aG, [cH]: al }, [ct]: n4 }, { endpoint: aQ, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, as, aA, aq, aD, aH], endpoint: aQ, [ct]: n4 }], [ct]: o4 }, aR], [ct]: o4 }], [ct]: o4 }, { [cv]: [Z, ag, { [cw]: h4, [cx]: [{ [cw]: i4, [cx]: [ai, "scheme"] }, "http"] }, { [cw]: p4, [cx]: [ad, c4] }, ay, as, ar, aA], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cc, [cu]: [aO], [ct]: o4 }, aR], [ct]: o4 }], [ct]: o4 }, { [cv]: [ay, { [cw]: F2, [cx]: bA, [cz]: G2 }], [cu]: [{ [cv]: [{ [cw]: i4, [cx]: [aS, "resourceId[0]"], [cz]: H2 }, { [cw]: r4, [cx]: [{ [cw]: h4, [cx]: [aT, I2] }] }], [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [aU, J2] }], [cu]: [{ [cv]: ce, [cu]: [{ [cv]: cf, [cu]: [aW, aX, { [cv]: ci, [cu]: [aY, { [cv]: cj, [cu]: [aZ, { [cv]: cl, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cm, [cu]: [{ [cv]: cn, [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [bb, I2] }], error: "Invalid ARN: Missing account id", [ct]: f4 }, { [cv]: co, [cu]: [{ [cv]: cp, [cu]: [{ [cv]: bC, endpoint: { [cA]: M, [cB]: bc, [cH]: al }, [ct]: n4 }, { [cv]: cq, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-object-lambda-fips.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bc, [cH]: al }, [ct]: n4 }, { endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-object-lambda.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bc, [cH]: al }, [ct]: n4 }], [ct]: o4 }, bd], [ct]: o4 }, be], [ct]: o4 }, bf], [ct]: o4 }, bg], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, bh], [ct]: o4 }, { error: "Invalid ARN: bucket ARN is missing a region", [ct]: f4 }], [ct]: o4 }, bi], [ct]: o4 }, { error: "Invalid ARN: Object Lambda ARNs only support `accesspoint` arn types, but found: `{arnType}`", [ct]: f4 }], [ct]: o4 }, { [cv]: ce, [cu]: [{ [cv]: cf, [cu]: [{ [cv]: ci, [cu]: [{ [cv]: ce, [cu]: [{ [cv]: ci, [cu]: [aY, { [cv]: cj, [cu]: [aZ, { [cv]: cl, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [ba, "{partitionResult#name}"] }], [cu]: [{ [cv]: cn, [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [aU, B2] }], [cu]: [{ [cv]: co, [cu]: [{ [cv]: cp, [cu]: [{ [cv]: bB, error: "Access Points do not support S3 Accelerate", [ct]: f4 }, { [cv]: bH, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-accesspoint-fips.dualstack.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bj, [cH]: al }, [ct]: n4 }, { [cv]: bI, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-accesspoint-fips.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bj, [cH]: al }, [ct]: n4 }, { [cv]: bJ, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-accesspoint.dualstack.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bj, [cH]: al }, [ct]: n4 }, { [cv]: [as, ar, Z, ag], endpoint: { [cA]: M, [cB]: bj, [cH]: al }, [ct]: n4 }, { [cv]: bK, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-accesspoint.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bj, [cH]: al }, [ct]: n4 }], [ct]: o4 }, bd], [ct]: o4 }, be], [ct]: o4 }, { error: "Invalid ARN: The ARN was not for the S3 service, found: {bucketArn#service}", [ct]: f4 }], [ct]: o4 }, bf], [ct]: o4 }, bg], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, bh], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { [cv]: [{ [cw]: y2, [cx]: [aV, c4] }], [cu]: [{ [cv]: ch, error: "S3 MRAP does not support dual-stack", [ct]: f4 }, { [cv]: cq, error: "S3 MRAP does not support FIPS", [ct]: f4 }, { [cv]: bB, error: "S3 MRAP does not support S3 Accelerate", [ct]: f4 }, { [cv]: [{ [cw]: e4, [cx]: [{ [cy]: "DisableMultiRegionAccessPoints" }, c4] }], error: "Invalid configuration: Multi-Region Access Point ARNs are disabled.", [ct]: f4 }, { [cv]: [{ [cw]: g4, [cx]: by, [cz]: N }], [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [{ [cw]: i4, [cx]: [{ [cy]: N }, j4] }, { [cw]: i4, [cx]: [aS, "partition"] }] }], [cu]: [{ endpoint: { [cA]: "https://{accessPointName}.accesspoint.s3-global.{mrapPartition#dnsSuffix}", [cB]: { [cD]: [{ [cE]: c4, name: z7, [cF]: B2, [cI]: cb }] }, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { error: "Client was configured for partition `{mrapPartition#name}` but bucket referred to partition `{bucketArn#partition}`", [ct]: f4 }], [ct]: o4 }], [ct]: o4 }, { error: "Invalid Access Point Name", [ct]: f4 }], [ct]: o4 }, bi], [ct]: o4 }, { [cv]: [{ [cw]: h4, [cx]: [aU, A2] }], [cu]: [{ [cv]: ch, error: "S3 Outposts does not support Dual-stack", [ct]: f4 }, { [cv]: cq, error: "S3 Outposts does not support FIPS", [ct]: f4 }, { [cv]: bB, error: "S3 Outposts does not support S3 Accelerate", [ct]: f4 }, { [cv]: [{ [cw]: d4, [cx]: [{ [cw]: i4, [cx]: [aS, "resourceId[4]"] }] }], error: "Invalid Arn: Outpost Access Point ARN contains sub resources", [ct]: f4 }, { [cv]: [{ [cw]: i4, [cx]: cg, [cz]: x4 }], [cu]: [{ [cv]: bZ, [cu]: [aZ, { [cv]: cl, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cm, [cu]: [{ [cv]: cn, [cu]: [{ [cv]: co, [cu]: [{ [cv]: [{ [cw]: i4, [cx]: ck, [cz]: O }], [cu]: [{ [cv]: [{ [cw]: i4, [cx]: [aS, "resourceId[3]"], [cz]: L }], [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [{ [cy]: O }, K] }], [cu]: [{ [cv]: bC, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.{outpostId}.{url#authority}", [cB]: bk, [cH]: al }, [ct]: n4 }, { endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.{outpostId}.s3-outposts.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bk, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { error: "Expected an outpost type `accesspoint`, found {outpostType}", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: expected an access point name", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: Expected a 4-component resource", [ct]: f4 }], [ct]: o4 }, be], [ct]: o4 }, bf], [ct]: o4 }, bg], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { error: "Invalid ARN: The outpost Id may only contain a-z, A-Z, 0-9 and `-`. Found: `{outpostId}`", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: The Outpost Id was not set", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: Unrecognized format: {Bucket} (type: {arnType})", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: No ARN type specified", [ct]: f4 }], [ct]: o4 }, { [cv]: [{ [cw]: k4, [cx]: [ad, 0, 4, b4], [cz]: P }, { [cw]: h4, [cx]: [{ [cy]: P }, "arn:"] }, { [cw]: r4, [cx]: [{ [cw]: d4, [cx]: [bl] }] }], error: "Invalid ARN: `{Bucket}` was not a valid ARN", [ct]: f4 }, { [cv]: [{ [cw]: e4, [cx]: [az, c4] }, bl], error: "Path-style addressing cannot be used with ARN buckets", [ct]: f4 }, { [cv]: bE, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: [aA], [cu]: [{ [cv]: [Y, aq, X, aB], endpoint: { [cA]: "https://s3-fips.dualstack.us-east-1.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, aq, X, aD, aE], [cu]: [{ endpoint: bm, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, aq, X, aD, aH], endpoint: bm, [ct]: n4 }, { [cv]: [ar, aq, X, aB], endpoint: { [cA]: "https://s3-fips.us-east-1.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, aq, X, aD, aE], [cu]: [{ endpoint: bn, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, aq, X, aD, aH], endpoint: bn, [ct]: n4 }, { [cv]: [Y, aq, as, aB], endpoint: { [cA]: "https://s3.dualstack.us-east-1.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, aq, as, aD, aE], [cu]: [{ endpoint: bo, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, aq, as, aD, aH], endpoint: bo, [ct]: n4 }, { [cv]: [ar, Z, ag, as, aB], endpoint: { [cA]: Q, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, Z, ag, as, aD, aE], [cu]: [{ [cv]: cd, endpoint: bp, [ct]: n4 }, { endpoint: bp, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, Z, ag, as, aD, aH], endpoint: bp, [ct]: n4 }, { [cv]: [ar, aq, as, aB], endpoint: { [cA]: R, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, aq, as, aD, aE], [cu]: [{ [cv]: cd, endpoint: { [cA]: R, [cB]: aG, [cH]: al }, [ct]: n4 }, { endpoint: bq, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, aq, as, aD, aH], endpoint: bq, [ct]: n4 }], [ct]: o4 }, { error: "Path-style addressing cannot be used with S3 Accelerate", [ct]: f4 }], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { [cv]: [{ [cw]: d4, [cx]: [br] }, { [cw]: e4, [cx]: [br, c4] }], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cr, [cu]: [aW, aX, { [cv]: bC, endpoint: { [cA]: t4, [cB]: bs, [cH]: al }, [ct]: n4 }, { [cv]: cq, endpoint: { [cA]: "https://s3-object-lambda-fips.{Region}.{partitionResult#dnsSuffix}", [cB]: bs, [cH]: al }, [ct]: n4 }, { endpoint: { [cA]: "https://s3-object-lambda.{Region}.{partitionResult#dnsSuffix}", [cB]: bs, [cH]: al }, [ct]: n4 }], [ct]: o4 }, aR], [ct]: o4 }], [ct]: o4 }, { [cv]: [au], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cr, [cu]: [{ [cv]: [X, Y, aq, aB], endpoint: { [cA]: "https://s3-fips.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [X, Y, aq, aD, aE], [cu]: [{ endpoint: bt, [ct]: n4 }], [ct]: o4 }, { [cv]: [X, Y, aq, aD, aH], endpoint: bt, [ct]: n4 }, { [cv]: [X, ar, aq, aB], endpoint: { [cA]: "https://s3-fips.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [X, ar, aq, aD, aE], [cu]: [{ endpoint: bu, [ct]: n4 }], [ct]: o4 }, { [cv]: [X, ar, aq, aD, aH], endpoint: bu, [ct]: n4 }, { [cv]: [as, Y, aq, aB], endpoint: { [cA]: "https://s3.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [as, Y, aq, aD, aE], [cu]: [{ endpoint: bv, [ct]: n4 }], [ct]: o4 }, { [cv]: [as, Y, aq, aD, aH], endpoint: bv, [ct]: n4 }, { [cv]: [as, ar, Z, ag, aB], endpoint: { [cA]: t4, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [as, ar, Z, ag, aD, aE], [cu]: [{ [cv]: cd, endpoint: bw, [ct]: n4 }, { endpoint: bw, [ct]: n4 }], [ct]: o4 }, { [cv]: [as, ar, Z, ag, aD, aH], endpoint: bw, [ct]: n4 }, { [cv]: [as, ar, aq, aB], endpoint: { [cA]: S, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [as, ar, aq, aD, aE], [cu]: [{ [cv]: cd, endpoint: { [cA]: S, [cB]: aG, [cH]: al }, [ct]: n4 }, { endpoint: bx, [ct]: n4 }], [ct]: o4 }, { [cv]: [as, ar, aq, aD, aH], endpoint: bx, [ct]: n4 }], [ct]: o4 }, aR], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { error: "A region must be set when sending requests to S3.", [ct]: f4 }] };
+    var _data4 = { version: "1.0", parameters: { Bucket: T, Region: T, UseFIPS: U, UseDualStack: U, Endpoint: T, ForcePathStyle: U, Accelerate: U, UseGlobalEndpoint: U, UseObjectLambdaEndpoint: V, Key: T, Prefix: T, CopySource: T, DisableAccessPoints: V, DisableMultiRegionAccessPoints: U, UseArnRegion: V, UseS3ExpressControlEndpoint: V, DisableS3ExpressSessionAuth: V }, [cu]: [{ [cv]: [{ [cw]: d4, [cx]: by }], [cu]: [{ [cv]: [W, X], error: "Accelerate cannot be used with FIPS", [ct]: f4 }, { [cv]: [Y, Z], error: "Cannot set dual-stack in combination with a custom endpoint.", [ct]: f4 }, { [cv]: [Z, X], error: "A custom endpoint cannot be combined with FIPS", [ct]: f4 }, { [cv]: [Z, W], error: "A custom endpoint cannot be combined with S3 Accelerate", [ct]: f4 }, { [cv]: [X, aa, ab], error: "Partition does not support FIPS", [ct]: f4 }, { [cv]: [ac, { [cw]: k4, [cx]: [ad, 0, a4, c4], [cz]: l4 }, { [cw]: h4, [cx]: [{ [cy]: l4 }, "--x-s3"] }], [cu]: [ae, af, { [cv]: [ao, ap], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: [aj, aq], [cu]: [{ [cv]: bH, endpoint: { [cA]: "https://s3express-control-fips.dualstack.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bI, endpoint: { [cA]: "https://s3express-control-fips.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bJ, endpoint: { [cA]: "https://s3express-control.dualstack.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bK, endpoint: { [cA]: "https://s3express-control.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: ak, [cH]: al }, [ct]: n4 }], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { [cv]: bF, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: bD, [cu]: [{ [cv]: bL, [cu]: bM, [ct]: o4 }, { [cv]: bN, [cu]: bM, [ct]: o4 }, { [cv]: bO, [cu]: bM, [ct]: o4 }, { [cv]: bP, [cu]: bM, [ct]: o4 }, { [cv]: bQ, [cu]: bM, [ct]: o4 }, at], [ct]: o4 }, { [cv]: bL, [cu]: bR, [ct]: o4 }, { [cv]: bN, [cu]: bR, [ct]: o4 }, { [cv]: bO, [cu]: bR, [ct]: o4 }, { [cv]: bP, [cu]: bR, [ct]: o4 }, { [cv]: bQ, [cu]: bR, [ct]: o4 }, at], [ct]: o4 }], [ct]: o4 }, an], [ct]: o4 }, { [cv]: [ac, { [cw]: k4, [cx]: bS, [cz]: s4 }, { [cw]: h4, [cx]: [{ [cy]: s4 }, "--xa-s3"] }], [cu]: [ae, af, { [cv]: bF, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: bD, [cu]: [{ [cv]: bT, [cu]: bM, [ct]: o4 }, { [cv]: bU, [cu]: bM, [ct]: o4 }, { [cv]: bV, [cu]: bM, [ct]: o4 }, { [cv]: bW, [cu]: bM, [ct]: o4 }, { [cv]: bX, [cu]: bM, [ct]: o4 }, at], [ct]: o4 }, { [cv]: bT, [cu]: bR, [ct]: o4 }, { [cv]: bU, [cu]: bR, [ct]: o4 }, { [cv]: bV, [cu]: bR, [ct]: o4 }, { [cv]: bW, [cu]: bR, [ct]: o4 }, { [cv]: bX, [cu]: bR, [ct]: o4 }, at], [ct]: o4 }], [ct]: o4 }, an], [ct]: o4 }, { [cv]: [au, ao, ap], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: bC, endpoint: { [cA]: t4, [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bH, endpoint: { [cA]: "https://s3express-control-fips.dualstack.{Region}.{partitionResult#dnsSuffix}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bI, endpoint: { [cA]: "https://s3express-control-fips.{Region}.{partitionResult#dnsSuffix}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bJ, endpoint: { [cA]: "https://s3express-control.dualstack.{Region}.{partitionResult#dnsSuffix}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bK, endpoint: { [cA]: "https://s3express-control.{Region}.{partitionResult#dnsSuffix}", [cB]: ak, [cH]: al }, [ct]: n4 }], [ct]: o4 }], [ct]: o4 }, { [cv]: [ac, { [cw]: k4, [cx]: [ad, 49, 50, c4], [cz]: u4 }, { [cw]: k4, [cx]: [ad, 8, 12, c4], [cz]: v4 }, { [cw]: k4, [cx]: bS, [cz]: w4 }, { [cw]: k4, [cx]: [ad, 32, 49, c4], [cz]: x4 }, { [cw]: g4, [cx]: by, [cz]: "regionPartition" }, { [cw]: h4, [cx]: [{ [cy]: w4 }, "--op-s3"] }], [cu]: [{ [cv]: bZ, [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [av, "e"] }], [cu]: [{ [cv]: ca, [cu]: [aw, { [cv]: bC, endpoint: { [cA]: "https://{Bucket}.ec2.{url#authority}", [cB]: ax, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { endpoint: { [cA]: "https://{Bucket}.ec2.s3-outposts.{Region}.{regionPartition#dnsSuffix}", [cB]: ax, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { [cv]: [{ [cw]: h4, [cx]: [av, "o"] }], [cu]: [{ [cv]: ca, [cu]: [aw, { [cv]: bC, endpoint: { [cA]: "https://{Bucket}.op-{outpostId}.{url#authority}", [cB]: ax, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { endpoint: { [cA]: "https://{Bucket}.op-{outpostId}.s3-outposts.{Region}.{regionPartition#dnsSuffix}", [cB]: ax, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { error: 'Unrecognized hardware type: "Expected hardware type o or e but got {hardwareType}"', [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: The outpost Id must only contain a-z, A-Z, 0-9 and `-`.", [ct]: f4 }], [ct]: o4 }, { [cv]: bY, [cu]: [{ [cv]: [Z, { [cw]: r4, [cx]: [{ [cw]: d4, [cx]: [{ [cw]: m4, [cx]: bz }] }] }], error: "Custom endpoint `{Endpoint}` was not a valid URI", [ct]: f4 }, { [cv]: [ay, am], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cc, [cu]: [{ [cv]: [W, ab], error: "S3 Accelerate cannot be used in this region", [ct]: f4 }, { [cv]: [Y, X, aA, aq, aB], endpoint: { [cA]: "https://{Bucket}.s3-fips.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, X, aA, aq, aD, aE], [cu]: [{ endpoint: aF, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, X, aA, aq, aD, aH], endpoint: aF, [ct]: n4 }, { [cv]: [ar, X, aA, aq, aB], endpoint: { [cA]: "https://{Bucket}.s3-fips.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, X, aA, aq, aD, aE], [cu]: [{ endpoint: aI, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, X, aA, aq, aD, aH], endpoint: aI, [ct]: n4 }, { [cv]: [Y, as, W, aq, aB], endpoint: { [cA]: "https://{Bucket}.s3-accelerate.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, as, W, aq, aD, aE], [cu]: [{ endpoint: aJ, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, as, W, aq, aD, aH], endpoint: aJ, [ct]: n4 }, { [cv]: [Y, as, aA, aq, aB], endpoint: { [cA]: "https://{Bucket}.s3.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, as, aA, aq, aD, aE], [cu]: [{ endpoint: aK, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, as, aA, aq, aD, aH], endpoint: aK, [ct]: n4 }, { [cv]: [ar, as, aA, Z, ag, ah, aB], endpoint: { [cA]: C2, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, as, aA, Z, ag, aL, aB], endpoint: { [cA]: q4, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, as, aA, Z, ag, ah, aD, aE], [cu]: [{ [cv]: cd, endpoint: aM, [ct]: n4 }, { endpoint: aM, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, as, aA, Z, ag, aL, aD, aE], [cu]: [{ [cv]: cd, endpoint: aN, [ct]: n4 }, aO], [ct]: o4 }, { [cv]: [ar, as, aA, Z, ag, ah, aD, aH], endpoint: aM, [ct]: n4 }, { [cv]: [ar, as, aA, Z, ag, aL, aD, aH], endpoint: aN, [ct]: n4 }, { [cv]: [ar, as, W, aq, aB], endpoint: { [cA]: D2, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, as, W, aq, aD, aE], [cu]: [{ [cv]: cd, endpoint: aP, [ct]: n4 }, { endpoint: aP, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, as, W, aq, aD, aH], endpoint: aP, [ct]: n4 }, { [cv]: [ar, as, aA, aq, aB], endpoint: { [cA]: E2, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, as, aA, aq, aD, aE], [cu]: [{ [cv]: cd, endpoint: { [cA]: E2, [cB]: aG, [cH]: al }, [ct]: n4 }, { endpoint: aQ, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, as, aA, aq, aD, aH], endpoint: aQ, [ct]: n4 }], [ct]: o4 }, aR], [ct]: o4 }], [ct]: o4 }, { [cv]: [Z, ag, { [cw]: h4, [cx]: [{ [cw]: i4, [cx]: [ai, "scheme"] }, "http"] }, { [cw]: p4, [cx]: [ad, c4] }, ay, as, ar, aA], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cc, [cu]: [aO], [ct]: o4 }, aR], [ct]: o4 }], [ct]: o4 }, { [cv]: [ay, { [cw]: F2, [cx]: bA, [cz]: G2 }], [cu]: [{ [cv]: [{ [cw]: i4, [cx]: [aS, "resourceId[0]"], [cz]: H2 }, { [cw]: r4, [cx]: [{ [cw]: h4, [cx]: [aT, I2] }] }], [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [aU, J2] }], [cu]: [{ [cv]: ce, [cu]: [{ [cv]: cf, [cu]: [aW, aX, { [cv]: ci, [cu]: [aY, { [cv]: cj, [cu]: [aZ, { [cv]: cl, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cm, [cu]: [{ [cv]: cn, [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [bb, I2] }], error: "Invalid ARN: Missing account id", [ct]: f4 }, { [cv]: co, [cu]: [{ [cv]: cp, [cu]: [{ [cv]: bC, endpoint: { [cA]: M, [cB]: bc, [cH]: al }, [ct]: n4 }, { [cv]: cq, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-object-lambda-fips.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bc, [cH]: al }, [ct]: n4 }, { endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-object-lambda.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bc, [cH]: al }, [ct]: n4 }], [ct]: o4 }, bd], [ct]: o4 }, be], [ct]: o4 }, bf], [ct]: o4 }, bg], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, bh], [ct]: o4 }, { error: "Invalid ARN: bucket ARN is missing a region", [ct]: f4 }], [ct]: o4 }, bi], [ct]: o4 }, { error: "Invalid ARN: Object Lambda ARNs only support `accesspoint` arn types, but found: `{arnType}`", [ct]: f4 }], [ct]: o4 }, { [cv]: ce, [cu]: [{ [cv]: cf, [cu]: [{ [cv]: ci, [cu]: [{ [cv]: ce, [cu]: [{ [cv]: ci, [cu]: [aY, { [cv]: cj, [cu]: [aZ, { [cv]: cl, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [ba, "{partitionResult#name}"] }], [cu]: [{ [cv]: cn, [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [aU, B2] }], [cu]: [{ [cv]: co, [cu]: [{ [cv]: cp, [cu]: [{ [cv]: bB, error: "Access Points do not support S3 Accelerate", [ct]: f4 }, { [cv]: bH, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-accesspoint-fips.dualstack.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bj, [cH]: al }, [ct]: n4 }, { [cv]: bI, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-accesspoint-fips.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bj, [cH]: al }, [ct]: n4 }, { [cv]: bJ, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-accesspoint.dualstack.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bj, [cH]: al }, [ct]: n4 }, { [cv]: [as, ar, Z, ag], endpoint: { [cA]: M, [cB]: bj, [cH]: al }, [ct]: n4 }, { [cv]: bK, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-accesspoint.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bj, [cH]: al }, [ct]: n4 }], [ct]: o4 }, bd], [ct]: o4 }, be], [ct]: o4 }, { error: "Invalid ARN: The ARN was not for the S3 service, found: {bucketArn#service}", [ct]: f4 }], [ct]: o4 }, bf], [ct]: o4 }, bg], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, bh], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { [cv]: [{ [cw]: y2, [cx]: [aV, c4] }], [cu]: [{ [cv]: ch, error: "S3 MRAP does not support dual-stack", [ct]: f4 }, { [cv]: cq, error: "S3 MRAP does not support FIPS", [ct]: f4 }, { [cv]: bB, error: "S3 MRAP does not support S3 Accelerate", [ct]: f4 }, { [cv]: [{ [cw]: e4, [cx]: [{ [cy]: "DisableMultiRegionAccessPoints" }, c4] }], error: "Invalid configuration: Multi-Region Access Point ARNs are disabled.", [ct]: f4 }, { [cv]: [{ [cw]: g4, [cx]: by, [cz]: N }], [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [{ [cw]: i4, [cx]: [{ [cy]: N }, j4] }, { [cw]: i4, [cx]: [aS, "partition"] }] }], [cu]: [{ endpoint: { [cA]: "https://{accessPointName}.accesspoint.s3-global.{mrapPartition#dnsSuffix}", [cB]: { [cD]: [{ [cE]: c4, name: z8, [cF]: B2, [cI]: cb }] }, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { error: "Client was configured for partition `{mrapPartition#name}` but bucket referred to partition `{bucketArn#partition}`", [ct]: f4 }], [ct]: o4 }], [ct]: o4 }, { error: "Invalid Access Point Name", [ct]: f4 }], [ct]: o4 }, bi], [ct]: o4 }, { [cv]: [{ [cw]: h4, [cx]: [aU, A2] }], [cu]: [{ [cv]: ch, error: "S3 Outposts does not support Dual-stack", [ct]: f4 }, { [cv]: cq, error: "S3 Outposts does not support FIPS", [ct]: f4 }, { [cv]: bB, error: "S3 Outposts does not support S3 Accelerate", [ct]: f4 }, { [cv]: [{ [cw]: d4, [cx]: [{ [cw]: i4, [cx]: [aS, "resourceId[4]"] }] }], error: "Invalid Arn: Outpost Access Point ARN contains sub resources", [ct]: f4 }, { [cv]: [{ [cw]: i4, [cx]: cg, [cz]: x4 }], [cu]: [{ [cv]: bZ, [cu]: [aZ, { [cv]: cl, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cm, [cu]: [{ [cv]: cn, [cu]: [{ [cv]: co, [cu]: [{ [cv]: [{ [cw]: i4, [cx]: ck, [cz]: O }], [cu]: [{ [cv]: [{ [cw]: i4, [cx]: [aS, "resourceId[3]"], [cz]: L }], [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [{ [cy]: O }, K] }], [cu]: [{ [cv]: bC, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.{outpostId}.{url#authority}", [cB]: bk, [cH]: al }, [ct]: n4 }, { endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.{outpostId}.s3-outposts.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bk, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { error: "Expected an outpost type `accesspoint`, found {outpostType}", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: expected an access point name", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: Expected a 4-component resource", [ct]: f4 }], [ct]: o4 }, be], [ct]: o4 }, bf], [ct]: o4 }, bg], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { error: "Invalid ARN: The outpost Id may only contain a-z, A-Z, 0-9 and `-`. Found: `{outpostId}`", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: The Outpost Id was not set", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: Unrecognized format: {Bucket} (type: {arnType})", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: No ARN type specified", [ct]: f4 }], [ct]: o4 }, { [cv]: [{ [cw]: k4, [cx]: [ad, 0, 4, b4], [cz]: P }, { [cw]: h4, [cx]: [{ [cy]: P }, "arn:"] }, { [cw]: r4, [cx]: [{ [cw]: d4, [cx]: [bl] }] }], error: "Invalid ARN: `{Bucket}` was not a valid ARN", [ct]: f4 }, { [cv]: [{ [cw]: e4, [cx]: [az, c4] }, bl], error: "Path-style addressing cannot be used with ARN buckets", [ct]: f4 }, { [cv]: bE, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: [aA], [cu]: [{ [cv]: [Y, aq, X, aB], endpoint: { [cA]: "https://s3-fips.dualstack.us-east-1.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, aq, X, aD, aE], [cu]: [{ endpoint: bm, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, aq, X, aD, aH], endpoint: bm, [ct]: n4 }, { [cv]: [ar, aq, X, aB], endpoint: { [cA]: "https://s3-fips.us-east-1.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, aq, X, aD, aE], [cu]: [{ endpoint: bn, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, aq, X, aD, aH], endpoint: bn, [ct]: n4 }, { [cv]: [Y, aq, as, aB], endpoint: { [cA]: "https://s3.dualstack.us-east-1.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, aq, as, aD, aE], [cu]: [{ endpoint: bo, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, aq, as, aD, aH], endpoint: bo, [ct]: n4 }, { [cv]: [ar, Z, ag, as, aB], endpoint: { [cA]: Q, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, Z, ag, as, aD, aE], [cu]: [{ [cv]: cd, endpoint: bp, [ct]: n4 }, { endpoint: bp, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, Z, ag, as, aD, aH], endpoint: bp, [ct]: n4 }, { [cv]: [ar, aq, as, aB], endpoint: { [cA]: R, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, aq, as, aD, aE], [cu]: [{ [cv]: cd, endpoint: { [cA]: R, [cB]: aG, [cH]: al }, [ct]: n4 }, { endpoint: bq, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, aq, as, aD, aH], endpoint: bq, [ct]: n4 }], [ct]: o4 }, { error: "Path-style addressing cannot be used with S3 Accelerate", [ct]: f4 }], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { [cv]: [{ [cw]: d4, [cx]: [br] }, { [cw]: e4, [cx]: [br, c4] }], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cr, [cu]: [aW, aX, { [cv]: bC, endpoint: { [cA]: t4, [cB]: bs, [cH]: al }, [ct]: n4 }, { [cv]: cq, endpoint: { [cA]: "https://s3-object-lambda-fips.{Region}.{partitionResult#dnsSuffix}", [cB]: bs, [cH]: al }, [ct]: n4 }, { endpoint: { [cA]: "https://s3-object-lambda.{Region}.{partitionResult#dnsSuffix}", [cB]: bs, [cH]: al }, [ct]: n4 }], [ct]: o4 }, aR], [ct]: o4 }], [ct]: o4 }, { [cv]: [au], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cr, [cu]: [{ [cv]: [X, Y, aq, aB], endpoint: { [cA]: "https://s3-fips.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [X, Y, aq, aD, aE], [cu]: [{ endpoint: bt, [ct]: n4 }], [ct]: o4 }, { [cv]: [X, Y, aq, aD, aH], endpoint: bt, [ct]: n4 }, { [cv]: [X, ar, aq, aB], endpoint: { [cA]: "https://s3-fips.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [X, ar, aq, aD, aE], [cu]: [{ endpoint: bu, [ct]: n4 }], [ct]: o4 }, { [cv]: [X, ar, aq, aD, aH], endpoint: bu, [ct]: n4 }, { [cv]: [as, Y, aq, aB], endpoint: { [cA]: "https://s3.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [as, Y, aq, aD, aE], [cu]: [{ endpoint: bv, [ct]: n4 }], [ct]: o4 }, { [cv]: [as, Y, aq, aD, aH], endpoint: bv, [ct]: n4 }, { [cv]: [as, ar, Z, ag, aB], endpoint: { [cA]: t4, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [as, ar, Z, ag, aD, aE], [cu]: [{ [cv]: cd, endpoint: bw, [ct]: n4 }, { endpoint: bw, [ct]: n4 }], [ct]: o4 }, { [cv]: [as, ar, Z, ag, aD, aH], endpoint: bw, [ct]: n4 }, { [cv]: [as, ar, aq, aB], endpoint: { [cA]: S, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [as, ar, aq, aD, aE], [cu]: [{ [cv]: cd, endpoint: { [cA]: S, [cB]: aG, [cH]: al }, [ct]: n4 }, { endpoint: bx, [ct]: n4 }], [ct]: o4 }, { [cv]: [as, ar, aq, aD, aH], endpoint: bx, [ct]: n4 }], [ct]: o4 }, aR], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { error: "A region must be set when sending requests to S3.", [ct]: f4 }] };
     exports2.ruleSet = _data4;
   }
 });
@@ -51585,7 +52021,7 @@ var require_httpAuthSchemeProvider = __commonJS({
 });
 
 // node_modules/@aws-sdk/client-s3/package.json
-var require_package2 = __commonJS({
+var require_package3 = __commonJS({
   "node_modules/@aws-sdk/client-s3/package.json"(exports2, module2) {
     module2.exports = {
       name: "@aws-sdk/client-s3",
@@ -51718,7 +52154,7 @@ var require_package2 = __commonJS({
 var require_dist_cjs47 = __commonJS({
   "node_modules/@aws-sdk/credential-provider-env/dist-cjs/index.js"(exports2) {
     "use strict";
-    var client = (init_client(), __toCommonJS(client_exports));
+    var client = (init_client2(), __toCommonJS(client_exports2));
     var propertyProvider = require_dist_cjs17();
     var ENV_KEY = "AWS_ACCESS_KEY_ID";
     var ENV_SECRET = "AWS_SECRET_ACCESS_KEY";
@@ -52231,7 +52667,7 @@ var require_fromHttp = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.fromHttp = void 0;
     var tslib_1 = (init_tslib_es6(), __toCommonJS(tslib_es6_exports));
-    var client_1 = (init_client(), __toCommonJS(client_exports));
+    var client_1 = (init_client2(), __toCommonJS(client_exports2));
     var node_http_handler_1 = require_dist_cjs12();
     var property_provider_1 = require_dist_cjs17();
     var promises_1 = tslib_1.__importDefault(require("fs/promises"));
@@ -52382,10 +52818,10 @@ var init_EndpointParameters = __esm({
 });
 
 // node_modules/@aws-sdk/nested-clients/package.json
-var package_default2;
+var package_default;
 var init_package = __esm({
   "node_modules/@aws-sdk/nested-clients/package.json"() {
-    package_default2 = {
+    package_default = {
       name: "@aws-sdk/nested-clients",
       version: "3.943.0",
       description: "Nested clients for AWS SDK packages.",
@@ -52853,7 +53289,7 @@ var init_runtimeConfig = __esm({
         defaultsMode,
         authSchemePreference: config?.authSchemePreference ?? (0, import_node_config_provider.loadConfig)(NODE_AUTH_SCHEME_PREFERENCE_OPTIONS, loaderConfig),
         bodyLengthChecker: config?.bodyLengthChecker ?? import_util_body_length_node.calculateBodyLength,
-        defaultUserAgentProvider: config?.defaultUserAgentProvider ?? (0, import_util_user_agent_node.createDefaultUserAgentProvider)({ serviceId: clientSharedValues.serviceId, clientVersion: package_default2.version }),
+        defaultUserAgentProvider: config?.defaultUserAgentProvider ?? (0, import_util_user_agent_node.createDefaultUserAgentProvider)({ serviceId: clientSharedValues.serviceId, clientVersion: package_default.version }),
         maxAttempts: config?.maxAttempts ?? (0, import_node_config_provider.loadConfig)(import_middleware_retry.NODE_MAX_ATTEMPT_CONFIG_OPTIONS, config),
         region: config?.region ?? (0, import_node_config_provider.loadConfig)(import_config_resolver.NODE_REGION_CONFIG_OPTIONS, { ...import_config_resolver.NODE_REGION_CONFIG_FILE_OPTIONS, ...loaderConfig }),
         requestHandler: import_node_http_handler.NodeHttpHandler.create(config?.requestHandler ?? defaultConfigProvider),
@@ -53588,7 +54024,7 @@ var init_sso_oidc = __esm({
 var require_dist_cjs55 = __commonJS({
   "node_modules/@aws-sdk/token-providers/dist-cjs/index.js"(exports2) {
     "use strict";
-    var client = (init_client(), __toCommonJS(client_exports));
+    var client = (init_client2(), __toCommonJS(client_exports2));
     var httpAuthSchemes = (init_httpAuthSchemes2(), __toCommonJS(httpAuthSchemes_exports));
     var propertyProvider = require_dist_cjs17();
     var sharedIniFileLoader = require_dist_cjs40();
@@ -53812,7 +54248,7 @@ var require_httpAuthSchemeProvider2 = __commonJS({
 });
 
 // node_modules/@aws-sdk/client-sso/package.json
-var require_package3 = __commonJS({
+var require_package4 = __commonJS({
   "node_modules/@aws-sdk/client-sso/package.json"(exports2, module2) {
     module2.exports = {
       name: "@aws-sdk/client-sso",
@@ -54029,7 +54465,7 @@ var require_runtimeConfig = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.getRuntimeConfig = void 0;
     var tslib_1 = (init_tslib_es6(), __toCommonJS(tslib_es6_exports));
-    var package_json_1 = tslib_1.__importDefault(require_package3());
+    var package_json_1 = tslib_1.__importDefault(require_package4());
     var core_1 = (init_dist_es2(), __toCommonJS(dist_es_exports2));
     var util_user_agent_node_1 = require_dist_cjs50();
     var config_resolver_1 = require_dist_cjs37();
@@ -54584,7 +55020,7 @@ var require_dist_cjs57 = __commonJS({
     "use strict";
     var propertyProvider = require_dist_cjs17();
     var sharedIniFileLoader = require_dist_cjs40();
-    var client = (init_client(), __toCommonJS(client_exports));
+    var client = (init_client2(), __toCommonJS(client_exports2));
     var tokenProviders = require_dist_cjs55();
     var isSsoProfile = (arg) => arg && (typeof arg.sso_start_url === "string" || typeof arg.sso_account_id === "string" || typeof arg.sso_session === "string" || typeof arg.sso_region === "string" || typeof arg.sso_role_name === "string");
     var SHOULD_FAIL_CREDENTIAL_CHAIN = false;
@@ -54966,7 +55402,7 @@ var init_runtimeConfig2 = __esm({
         defaultsMode,
         authSchemePreference: config?.authSchemePreference ?? (0, import_node_config_provider2.loadConfig)(NODE_AUTH_SCHEME_PREFERENCE_OPTIONS, loaderConfig),
         bodyLengthChecker: config?.bodyLengthChecker ?? import_util_body_length_node2.calculateBodyLength,
-        defaultUserAgentProvider: config?.defaultUserAgentProvider ?? (0, import_util_user_agent_node2.createDefaultUserAgentProvider)({ serviceId: clientSharedValues.serviceId, clientVersion: package_default2.version }),
+        defaultUserAgentProvider: config?.defaultUserAgentProvider ?? (0, import_util_user_agent_node2.createDefaultUserAgentProvider)({ serviceId: clientSharedValues.serviceId, clientVersion: package_default.version }),
         maxAttempts: config?.maxAttempts ?? (0, import_node_config_provider2.loadConfig)(import_middleware_retry3.NODE_MAX_ATTEMPT_CONFIG_OPTIONS, config),
         region: config?.region ?? (0, import_node_config_provider2.loadConfig)(import_config_resolver3.NODE_REGION_CONFIG_OPTIONS, { ...import_config_resolver3.NODE_REGION_CONFIG_FILE_OPTIONS, ...loaderConfig }),
         requestHandler: import_node_http_handler2.NodeHttpHandler.create(config?.requestHandler ?? defaultConfigProvider),
@@ -55488,7 +55924,7 @@ var init_signin = __esm({
 var require_dist_cjs58 = __commonJS({
   "node_modules/@aws-sdk/credential-provider-login/dist-cjs/index.js"(exports2) {
     "use strict";
-    var client = (init_client(), __toCommonJS(client_exports));
+    var client = (init_client2(), __toCommonJS(client_exports2));
     var propertyProvider = require_dist_cjs17();
     var sharedIniFileLoader = require_dist_cjs40();
     var protocolHttp = require_dist_cjs2();
@@ -55847,7 +56283,7 @@ var init_EndpointParameters3 = __esm({
 });
 
 // node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/endpoint/ruleset.js
-var F, G, H, I, J, a3, b3, c3, d3, e3, f3, g3, h3, i3, j3, k3, l3, m3, n3, o3, p3, q3, r3, s3, t3, u3, v3, w3, x3, y, z5, A, B, C, D, E, _data3, ruleSet3;
+var F, G, H, I, J, a3, b3, c3, d3, e3, f3, g3, h3, i3, j3, k3, l3, m3, n3, o3, p3, q3, r3, s3, t3, u3, v3, w3, x3, y, z6, A, B, C, D, E, _data3, ruleSet3;
 var init_ruleset3 = __esm({
   "node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/endpoint/ruleset.js"() {
     F = "required";
@@ -55880,13 +56316,13 @@ var init_ruleset3 = __esm({
     w3 = { "conditions": [{ [H]: d3, [I]: [q3, "aws-global"] }], [h3]: u3, [G]: h3 };
     x3 = { [H]: c3, [I]: [s3, true] };
     y = { [H]: c3, [I]: [t3, true] };
-    z5 = { [H]: l3, [I]: [{ [J]: "PartitionResult" }, "supportsFIPS"] };
+    z6 = { [H]: l3, [I]: [{ [J]: "PartitionResult" }, "supportsFIPS"] };
     A = { [J]: "PartitionResult" };
     B = { [H]: c3, [I]: [true, { [H]: l3, [I]: [A, "supportsDualStack"] }] };
     C = [{ [H]: "isSet", [I]: [o3] }];
     D = [x3];
     E = [y];
-    _data3 = { version: "1.0", parameters: { Region: m3, UseDualStack: n3, UseFIPS: n3, Endpoint: m3, UseGlobalEndpoint: n3 }, rules: [{ conditions: [{ [H]: c3, [I]: [{ [J]: "UseGlobalEndpoint" }, b3] }, { [H]: "not", [I]: C }, p3, r3, { [H]: c3, [I]: [s3, a3] }, { [H]: c3, [I]: [t3, a3] }], rules: [{ conditions: [{ [H]: d3, [I]: [q3, "ap-northeast-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "ap-south-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "ap-southeast-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "ap-southeast-2"] }], endpoint: u3, [G]: h3 }, w3, { conditions: [{ [H]: d3, [I]: [q3, "ca-central-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "eu-central-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "eu-north-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "eu-west-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "eu-west-2"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "eu-west-3"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "sa-east-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, g3] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "us-east-2"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "us-west-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "us-west-2"] }], endpoint: u3, [G]: h3 }, { endpoint: { url: i3, properties: { authSchemes: [{ name: e3, signingName: f3, signingRegion: "{Region}" }] }, headers: v3 }, [G]: h3 }], [G]: j3 }, { conditions: C, rules: [{ conditions: D, error: "Invalid Configuration: FIPS and custom endpoint are not supported", [G]: k3 }, { conditions: E, error: "Invalid Configuration: Dualstack and custom endpoint are not supported", [G]: k3 }, { endpoint: { url: o3, properties: v3, headers: v3 }, [G]: h3 }], [G]: j3 }, { conditions: [p3], rules: [{ conditions: [r3], rules: [{ conditions: [x3, y], rules: [{ conditions: [{ [H]: c3, [I]: [b3, z5] }, B], rules: [{ endpoint: { url: "https://sts-fips.{Region}.{PartitionResult#dualStackDnsSuffix}", properties: v3, headers: v3 }, [G]: h3 }], [G]: j3 }, { error: "FIPS and DualStack are enabled, but this partition does not support one or both", [G]: k3 }], [G]: j3 }, { conditions: D, rules: [{ conditions: [{ [H]: c3, [I]: [z5, b3] }], rules: [{ conditions: [{ [H]: d3, [I]: [{ [H]: l3, [I]: [A, "name"] }, "aws-us-gov"] }], endpoint: { url: "https://sts.{Region}.amazonaws.com", properties: v3, headers: v3 }, [G]: h3 }, { endpoint: { url: "https://sts-fips.{Region}.{PartitionResult#dnsSuffix}", properties: v3, headers: v3 }, [G]: h3 }], [G]: j3 }, { error: "FIPS is enabled but this partition does not support FIPS", [G]: k3 }], [G]: j3 }, { conditions: E, rules: [{ conditions: [B], rules: [{ endpoint: { url: "https://sts.{Region}.{PartitionResult#dualStackDnsSuffix}", properties: v3, headers: v3 }, [G]: h3 }], [G]: j3 }, { error: "DualStack is enabled but this partition does not support DualStack", [G]: k3 }], [G]: j3 }, w3, { endpoint: { url: i3, properties: v3, headers: v3 }, [G]: h3 }], [G]: j3 }], [G]: j3 }, { error: "Invalid Configuration: Missing Region", [G]: k3 }] };
+    _data3 = { version: "1.0", parameters: { Region: m3, UseDualStack: n3, UseFIPS: n3, Endpoint: m3, UseGlobalEndpoint: n3 }, rules: [{ conditions: [{ [H]: c3, [I]: [{ [J]: "UseGlobalEndpoint" }, b3] }, { [H]: "not", [I]: C }, p3, r3, { [H]: c3, [I]: [s3, a3] }, { [H]: c3, [I]: [t3, a3] }], rules: [{ conditions: [{ [H]: d3, [I]: [q3, "ap-northeast-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "ap-south-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "ap-southeast-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "ap-southeast-2"] }], endpoint: u3, [G]: h3 }, w3, { conditions: [{ [H]: d3, [I]: [q3, "ca-central-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "eu-central-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "eu-north-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "eu-west-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "eu-west-2"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "eu-west-3"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "sa-east-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, g3] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "us-east-2"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "us-west-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "us-west-2"] }], endpoint: u3, [G]: h3 }, { endpoint: { url: i3, properties: { authSchemes: [{ name: e3, signingName: f3, signingRegion: "{Region}" }] }, headers: v3 }, [G]: h3 }], [G]: j3 }, { conditions: C, rules: [{ conditions: D, error: "Invalid Configuration: FIPS and custom endpoint are not supported", [G]: k3 }, { conditions: E, error: "Invalid Configuration: Dualstack and custom endpoint are not supported", [G]: k3 }, { endpoint: { url: o3, properties: v3, headers: v3 }, [G]: h3 }], [G]: j3 }, { conditions: [p3], rules: [{ conditions: [r3], rules: [{ conditions: [x3, y], rules: [{ conditions: [{ [H]: c3, [I]: [b3, z6] }, B], rules: [{ endpoint: { url: "https://sts-fips.{Region}.{PartitionResult#dualStackDnsSuffix}", properties: v3, headers: v3 }, [G]: h3 }], [G]: j3 }, { error: "FIPS and DualStack are enabled, but this partition does not support one or both", [G]: k3 }], [G]: j3 }, { conditions: D, rules: [{ conditions: [{ [H]: c3, [I]: [z6, b3] }], rules: [{ conditions: [{ [H]: d3, [I]: [{ [H]: l3, [I]: [A, "name"] }, "aws-us-gov"] }], endpoint: { url: "https://sts.{Region}.amazonaws.com", properties: v3, headers: v3 }, [G]: h3 }, { endpoint: { url: "https://sts-fips.{Region}.{PartitionResult#dnsSuffix}", properties: v3, headers: v3 }, [G]: h3 }], [G]: j3 }, { error: "FIPS is enabled but this partition does not support FIPS", [G]: k3 }], [G]: j3 }, { conditions: E, rules: [{ conditions: [B], rules: [{ endpoint: { url: "https://sts.{Region}.{PartitionResult#dualStackDnsSuffix}", properties: v3, headers: v3 }, [G]: h3 }], [G]: j3 }, { error: "DualStack is enabled but this partition does not support DualStack", [G]: k3 }], [G]: j3 }, w3, { endpoint: { url: i3, properties: v3, headers: v3 }, [G]: h3 }], [G]: j3 }], [G]: j3 }, { error: "Invalid Configuration: Missing Region", [G]: k3 }] };
     ruleSet3 = _data3;
   }
 });
@@ -55997,7 +56433,7 @@ var init_runtimeConfig3 = __esm({
         defaultsMode,
         authSchemePreference: config?.authSchemePreference ?? (0, import_node_config_provider3.loadConfig)(NODE_AUTH_SCHEME_PREFERENCE_OPTIONS, loaderConfig),
         bodyLengthChecker: config?.bodyLengthChecker ?? import_util_body_length_node3.calculateBodyLength,
-        defaultUserAgentProvider: config?.defaultUserAgentProvider ?? (0, import_util_user_agent_node3.createDefaultUserAgentProvider)({ serviceId: clientSharedValues.serviceId, clientVersion: package_default2.version }),
+        defaultUserAgentProvider: config?.defaultUserAgentProvider ?? (0, import_util_user_agent_node3.createDefaultUserAgentProvider)({ serviceId: clientSharedValues.serviceId, clientVersion: package_default.version }),
         httpAuthSchemes: config?.httpAuthSchemes ?? [
           {
             schemeId: "aws.auth#sigv4",
@@ -56530,7 +56966,7 @@ var init_commands3 = __esm({
 var import_region_config_resolver4, getAccountIdFromAssumedRoleUser, resolveRegion, getDefaultRoleAssumer, getDefaultRoleAssumerWithWebIdentity, isH2;
 var init_defaultStsRoleAssumers = __esm({
   "node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/defaultStsRoleAssumers.js"() {
-    init_client();
+    init_client2();
     import_region_config_resolver4 = __toESM(require_dist_cjs54());
     init_AssumeRoleCommand();
     init_AssumeRoleWithWebIdentityCommand();
@@ -56702,7 +57138,7 @@ var require_dist_cjs59 = __commonJS({
     var propertyProvider = require_dist_cjs17();
     var child_process = require("child_process");
     var util = require("util");
-    var client = (init_client(), __toCommonJS(client_exports));
+    var client = (init_client2(), __toCommonJS(client_exports2));
     var getValidatedProcessCredentials = (profileName, data2, profiles) => {
       if (data2.Version !== 1) {
         throw Error(`Profile ${profileName} credential_process did not return Version 1.`);
@@ -56848,7 +57284,7 @@ var require_fromTokenFile = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.fromTokenFile = void 0;
-    var client_1 = (init_client(), __toCommonJS(client_exports));
+    var client_1 = (init_client2(), __toCommonJS(client_exports2));
     var property_provider_1 = require_dist_cjs17();
     var shared_ini_file_loader_1 = require_dist_cjs40();
     var fs_1 = require("fs");
@@ -56912,7 +57348,7 @@ var require_dist_cjs61 = __commonJS({
     "use strict";
     var sharedIniFileLoader = require_dist_cjs40();
     var propertyProvider = require_dist_cjs17();
-    var client = (init_client(), __toCommonJS(client_exports));
+    var client = (init_client2(), __toCommonJS(client_exports2));
     var credentialProviderLogin = require_dist_cjs58();
     var resolveCredentialSource = (credentialSource, profileName, logger3) => {
       const sourceProvidersMap = {
@@ -58273,7 +58709,7 @@ var require_runtimeConfig2 = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.getRuntimeConfig = void 0;
     var tslib_1 = (init_tslib_es6(), __toCommonJS(tslib_es6_exports));
-    var package_json_1 = tslib_1.__importDefault(require_package2());
+    var package_json_1 = tslib_1.__importDefault(require_package3());
     var core_1 = (init_dist_es2(), __toCommonJS(dist_es_exports2));
     var credential_provider_node_1 = require_dist_cjs62();
     var middleware_bucket_endpoint_1 = require_dist_cjs63();
@@ -63834,7 +64270,7 @@ var require_dist_cjs71 = __commonJS({
       _ITF,
       0,
       [_P2, _Ta2, _An],
-      [0, () => Tag4, [() => IntelligentTieringAndOperator, 0]]
+      [0, () => Tag3, [() => IntelligentTieringAndOperator, 0]]
     ];
     var InvalidObjectState = [
       -3,
@@ -64057,7 +64493,7 @@ var require_dist_cjs71 = __commonJS({
       _LRF,
       0,
       [_P2, _Ta2, _OSGT, _OSLT, _An],
-      [0, () => Tag4, 1, 1, [() => LifecycleRuleAndOperator, 0]]
+      [0, () => Tag3, 1, 1, [() => LifecycleRuleAndOperator, 0]]
     ];
     var ListBucketAnalyticsConfigurationsOutput = [
       3,
@@ -66845,7 +67281,7 @@ var require_dist_cjs71 = __commonJS({
       _RRF,
       0,
       [_P2, _Ta2, _An],
-      [0, () => Tag4, [() => ReplicationRuleAndOperator, 0]]
+      [0, () => Tag3, [() => ReplicationRuleAndOperator, 0]]
     ];
     var ReplicationTime = [3, n04, _RT3, 0, [_S, _Tim], [0, () => ReplicationTimeValue]];
     var ReplicationTimeValue = [3, n04, _RTV, 0, [_Mi], [1]];
@@ -67144,7 +67580,7 @@ var require_dist_cjs71 = __commonJS({
       [_OSV, _Des],
       [0, () => AnalyticsExportDestination]
     ];
-    var Tag4 = [3, n04, _Ta2, 0, [_K2, _V2], [0, 0]];
+    var Tag3 = [3, n04, _Ta2, 0, [_K2, _V2], [0, 0]];
     var Tagging = [3, n04, _Tag, 0, [_TS], [[() => TagSet, 0]]];
     var TargetGrant = [
       3,
@@ -68100,7 +68536,7 @@ var require_dist_cjs71 = __commonJS({
       _TS,
       0,
       [
-        () => Tag4,
+        () => Tag3,
         {
           [_xN]: _Ta2
         }
@@ -68139,7 +68575,7 @@ var require_dist_cjs71 = __commonJS({
       _AF,
       0,
       [_P2, _Ta2, _An],
-      [0, () => Tag4, [() => AnalyticsAndOperator, 0]]
+      [0, () => Tag3, [() => AnalyticsAndOperator, 0]]
     ];
     var MetricsFilter = [
       3,
@@ -68147,7 +68583,7 @@ var require_dist_cjs71 = __commonJS({
       _MF,
       0,
       [_P2, _Ta2, _APAc, _An],
-      [0, () => Tag4, 0, [() => MetricsAndOperator, 0]]
+      [0, () => Tag3, 0, [() => MetricsAndOperator, 0]]
     ];
     var SelectObjectContentEventStream = [
       3,
@@ -72453,25 +72889,25 @@ var init_users_repository = __esm({
   }
 });
 
-// lib/json-store/repositories/images.repository.ts
-var ImagesRepository;
-var init_images_repository = __esm({
-  "lib/json-store/repositories/images.repository.ts"() {
+// lib/json-store/repositories/files.repository.ts
+var FilesRepository;
+var init_files_repository = __esm({
+  "lib/json-store/repositories/files.repository.ts"() {
     "use strict";
     init_base_repository();
     init_types();
-    ImagesRepository = class extends BaseRepository {
+    FilesRepository = class extends BaseRepository {
       constructor(jsonStore) {
-        super(jsonStore, BinaryIndexEntrySchema);
+        super(jsonStore, FileEntrySchema);
       }
       /**
-       * Get the binaries index file path
+       * Get the files index file path
        */
       getIndexPath() {
-        return "binaries/index.jsonl";
+        return "files/files.jsonl";
       }
       /**
-       * Read all binary entries from JSONL index
+       * Read all file entries from JSONL index
        */
       async readAllEntries() {
         try {
@@ -72482,45 +72918,46 @@ var init_images_repository = __esm({
         }
       }
       /**
-       * Find a binary entry by ID
+       * Find a file entry by ID
        */
       async findById(id) {
         const entries = await this.readAllEntries();
         return entries.find((entry) => entry.id === id) || null;
       }
       /**
-       * Find all binary entries
+       * Find all file entries
        */
       async findAll() {
         return await this.readAllEntries();
       }
       /**
-       * Find entries by user ID
+       * Find entries by SHA256 hash
+       * Returns array for consistency with MongoDB (allows handling of hash collisions)
        */
-      async findByUserId(userId) {
+      async findBySha256(sha256) {
         const entries = await this.readAllEntries();
-        return entries.filter((entry) => entry.userId === userId);
+        return entries.filter((entry) => entry.sha256 === sha256);
       }
       /**
-       * Find entries by type
+       * Find entries by category
        */
-      async findByType(type) {
+      async findByCategory(category) {
         const entries = await this.readAllEntries();
-        return entries.filter((entry) => entry.type === type);
+        return entries.filter((entry) => entry.category === category);
       }
       /**
-       * Find entries by chat ID
+       * Find entries by source
        */
-      async findByChatId(chatId) {
+      async findBySource(source) {
         const entries = await this.readAllEntries();
-        return entries.filter((entry) => entry.chatId === chatId);
+        return entries.filter((entry) => entry.source === source);
       }
       /**
-       * Find entries by message ID
+       * Find entries linked to a specific entity
        */
-      async findByMessageId(messageId) {
+      async findByLinkedTo(entityId) {
         const entries = await this.readAllEntries();
-        return entries.filter((entry) => entry.messageId === messageId);
+        return entries.filter((entry) => entry.linkedTo.includes(entityId));
       }
       /**
        * Find entries with a specific tag
@@ -72530,14 +72967,7 @@ var init_images_repository = __esm({
         return entries.filter((entry) => entry.tags.includes(tagId));
       }
       /**
-       * Find entries by SHA256 hash
-       */
-      async findBySha256(sha256) {
-        const entries = await this.readAllEntries();
-        return entries.find((entry) => entry.sha256 === sha256) || null;
-      }
-      /**
-       * Create a new binary entry
+       * Create a new file entry
        */
       async create(data2) {
         const id = this.generateId();
@@ -72553,7 +72983,7 @@ var init_images_repository = __esm({
         return validated;
       }
       /**
-       * Update a binary entry (requires reading and rewriting the entire file)
+       * Update a file entry (requires reading and rewriting the entire file)
        */
       async update(id, data2) {
         const entries = await this.readAllEntries();
@@ -72568,6 +72998,8 @@ var init_images_repository = __esm({
           ...data2,
           id: existing.id,
           // Preserve ID
+          sha256: existing.sha256,
+          // Preserve hash
           createdAt: existing.createdAt,
           // Preserve creation timestamp
           updatedAt: now
@@ -72578,7 +73010,7 @@ var init_images_repository = __esm({
         return validated;
       }
       /**
-       * Delete a binary entry (by ID)
+       * Delete a file entry (by ID)
        */
       async delete(id) {
         const entries = await this.readAllEntries();
@@ -72591,42 +73023,54 @@ var init_images_repository = __esm({
         return true;
       }
       /**
-       * Delete a binary entry by SHA256 hash
+       * Add a link to a file entry
        */
-      async deleteBySha256(sha256) {
-        const entries = await this.readAllEntries();
-        const initialLength = entries.length;
-        const filtered = entries.filter((entry) => entry.sha256 !== sha256);
-        if (filtered.length === initialLength) {
-          return false;
-        }
-        await this.jsonStore.writeJsonl(this.getIndexPath(), filtered);
-        return true;
-      }
-      /**
-       * Add a tag to a binary entry
-       */
-      async addTag(entryId, tagId) {
-        const entry = await this.findById(entryId);
+      async addLink(fileId, entityId) {
+        const entry = await this.findById(fileId);
         if (!entry) {
           return null;
         }
-        if (!entry.tags.includes(tagId)) {
-          entry.tags.push(tagId);
-          return await this.update(entryId, { tags: entry.tags });
+        if (!entry.linkedTo.includes(entityId)) {
+          const updatedLinkedTo = [...entry.linkedTo, entityId];
+          return await this.update(fileId, { linkedTo: updatedLinkedTo });
         }
         return entry;
       }
       /**
-       * Remove a tag from a binary entry
+       * Remove a link from a file entry
        */
-      async removeTag(entryId, tagId) {
-        const entry = await this.findById(entryId);
+      async removeLink(fileId, entityId) {
+        const entry = await this.findById(fileId);
         if (!entry) {
           return null;
         }
-        entry.tags = entry.tags.filter((id) => id !== tagId);
-        return await this.update(entryId, { tags: entry.tags });
+        const updatedLinkedTo = entry.linkedTo.filter((id) => id !== entityId);
+        return await this.update(fileId, { linkedTo: updatedLinkedTo });
+      }
+      /**
+       * Add a tag to a file entry
+       */
+      async addTag(fileId, tagId) {
+        const entry = await this.findById(fileId);
+        if (!entry) {
+          return null;
+        }
+        if (!entry.tags.includes(tagId)) {
+          const updatedTags = [...entry.tags, tagId];
+          return await this.update(fileId, { tags: updatedTags });
+        }
+        return entry;
+      }
+      /**
+       * Remove a tag from a file entry
+       */
+      async removeTag(fileId, tagId) {
+        const entry = await this.findById(fileId);
+        if (!entry) {
+          return null;
+        }
+        const updatedTags = entry.tags.filter((id) => id !== tagId);
+        return await this.update(fileId, { tags: updatedTags });
       }
     };
   }
@@ -72894,6 +73338,185 @@ var init_memories_repository = __esm({
   }
 });
 
+// lib/json-store/repositories/images.repository.ts
+var ImagesRepository;
+var init_images_repository = __esm({
+  "lib/json-store/repositories/images.repository.ts"() {
+    "use strict";
+    init_base_repository();
+    init_types();
+    ImagesRepository = class extends BaseRepository {
+      constructor(jsonStore) {
+        super(jsonStore, BinaryIndexEntrySchema);
+      }
+      /**
+       * Get the binaries index file path
+       */
+      getIndexPath() {
+        return "binaries/index.jsonl";
+      }
+      /**
+       * Read all binary entries from JSONL index
+       */
+      async readAllEntries() {
+        try {
+          const entries = await this.jsonStore.readJsonl(this.getIndexPath());
+          return entries.map((entry) => this.validate(entry));
+        } catch (error2) {
+          return [];
+        }
+      }
+      /**
+       * Find a binary entry by ID
+       */
+      async findById(id) {
+        const entries = await this.readAllEntries();
+        return entries.find((entry) => entry.id === id) || null;
+      }
+      /**
+       * Find all binary entries
+       */
+      async findAll() {
+        return await this.readAllEntries();
+      }
+      /**
+       * Find entries by user ID
+       */
+      async findByUserId(userId) {
+        const entries = await this.readAllEntries();
+        return entries.filter((entry) => entry.userId === userId);
+      }
+      /**
+       * Find entries by type
+       */
+      async findByType(type) {
+        const entries = await this.readAllEntries();
+        return entries.filter((entry) => entry.type === type);
+      }
+      /**
+       * Find entries by chat ID
+       */
+      async findByChatId(chatId) {
+        const entries = await this.readAllEntries();
+        return entries.filter((entry) => entry.chatId === chatId);
+      }
+      /**
+       * Find entries by message ID
+       */
+      async findByMessageId(messageId) {
+        const entries = await this.readAllEntries();
+        return entries.filter((entry) => entry.messageId === messageId);
+      }
+      /**
+       * Find entries with a specific tag
+       */
+      async findByTag(tagId) {
+        const entries = await this.readAllEntries();
+        return entries.filter((entry) => entry.tags.includes(tagId));
+      }
+      /**
+       * Find entries by SHA256 hash
+       */
+      async findBySha256(sha256) {
+        const entries = await this.readAllEntries();
+        return entries.find((entry) => entry.sha256 === sha256) || null;
+      }
+      /**
+       * Create a new binary entry
+       */
+      async create(data2) {
+        const id = this.generateId();
+        const now = this.getCurrentTimestamp();
+        const entry = {
+          ...data2,
+          id,
+          createdAt: now,
+          updatedAt: now
+        };
+        const validated = this.validate(entry);
+        await this.jsonStore.appendJsonl(this.getIndexPath(), [validated]);
+        return validated;
+      }
+      /**
+       * Update a binary entry (requires reading and rewriting the entire file)
+       */
+      async update(id, data2) {
+        const entries = await this.readAllEntries();
+        const index = entries.findIndex((entry) => entry.id === id);
+        if (index === -1) {
+          return null;
+        }
+        const existing = entries[index];
+        const now = this.getCurrentTimestamp();
+        const updated = {
+          ...existing,
+          ...data2,
+          id: existing.id,
+          // Preserve ID
+          createdAt: existing.createdAt,
+          // Preserve creation timestamp
+          updatedAt: now
+        };
+        const validated = this.validate(updated);
+        entries[index] = validated;
+        await this.jsonStore.writeJsonl(this.getIndexPath(), entries);
+        return validated;
+      }
+      /**
+       * Delete a binary entry (by ID)
+       */
+      async delete(id) {
+        const entries = await this.readAllEntries();
+        const initialLength = entries.length;
+        const filtered = entries.filter((entry) => entry.id !== id);
+        if (filtered.length === initialLength) {
+          return false;
+        }
+        await this.jsonStore.writeJsonl(this.getIndexPath(), filtered);
+        return true;
+      }
+      /**
+       * Delete a binary entry by SHA256 hash
+       */
+      async deleteBySha256(sha256) {
+        const entries = await this.readAllEntries();
+        const initialLength = entries.length;
+        const filtered = entries.filter((entry) => entry.sha256 !== sha256);
+        if (filtered.length === initialLength) {
+          return false;
+        }
+        await this.jsonStore.writeJsonl(this.getIndexPath(), filtered);
+        return true;
+      }
+      /**
+       * Add a tag to a binary entry
+       */
+      async addTag(entryId, tagId) {
+        const entry = await this.findById(entryId);
+        if (!entry) {
+          return null;
+        }
+        if (!entry.tags.includes(tagId)) {
+          entry.tags.push(tagId);
+          return await this.update(entryId, { tags: entry.tags });
+        }
+        return entry;
+      }
+      /**
+       * Remove a tag from a binary entry
+       */
+      async removeTag(entryId, tagId) {
+        const entry = await this.findById(entryId);
+        if (!entry) {
+          return null;
+        }
+        entry.tags = entry.tags.filter((id) => id !== tagId);
+        return await this.update(entryId, { tags: entry.tags });
+      }
+    };
+  }
+});
+
 // lib/json-store/repositories/index.ts
 var repositories_exports = {};
 __export(repositories_exports, {
@@ -72902,6 +73525,7 @@ __export(repositories_exports, {
   ChatsRepository: () => ChatsRepository,
   ConnectionProfilesRepository: () => ConnectionProfilesRepository,
   EmbeddingProfilesRepository: () => EmbeddingProfilesRepository,
+  FilesRepository: () => FilesRepository,
   ImageProfilesRepository: () => ImageProfilesRepository,
   ImagesRepository: () => ImagesRepository,
   MemoriesRepository: () => MemoriesRepository,
@@ -72913,6 +73537,7 @@ __export(repositories_exports, {
   resetRepositories: () => resetRepositories
 });
 function createRepositories(jsonStore) {
+  const filesRepo = new FilesRepository(jsonStore);
   return {
     characters: new CharactersRepository(jsonStore),
     personas: new PersonasRepository(jsonStore),
@@ -72920,7 +73545,8 @@ function createRepositories(jsonStore) {
     tags: new TagsRepository(jsonStore),
     users: new UsersRepository(jsonStore),
     connections: new ConnectionProfilesRepository(jsonStore),
-    images: new ImagesRepository(jsonStore),
+    images: filesRepo,
+    files: filesRepo,
     imageProfiles: new ImageProfilesRepository(jsonStore),
     embeddingProfiles: new EmbeddingProfilesRepository(jsonStore),
     memories: new MemoriesRepository(jsonStore)
@@ -72947,7 +73573,7 @@ var init_repositories = __esm({
     init_tags_repository();
     init_users_repository();
     init_connection_profiles_repository();
-    init_images_repository();
+    init_files_repository();
     init_image_profiles_repository();
     init_embedding_profiles_repository();
     init_memories_repository();
@@ -72959,5317 +73585,11 @@ var init_repositories = __esm({
     init_users_repository();
     init_connection_profiles_repository();
     init_images_repository();
+    init_files_repository();
     init_image_profiles_repository();
     init_embedding_profiles_repository();
     init_memories_repository();
     repositoryContainer = null;
-  }
-});
-
-// lib/mongodb/client.ts
-var client_exports2 = {};
-__export(client_exports2, {
-  closeMongoConnection: () => closeMongoConnection,
-  getMongoClient: () => getMongoClient,
-  getMongoDatabase: () => getMongoDatabase,
-  isMongoConnected: () => isMongoConnected,
-  setupMongoDBShutdownHandlers: () => setupMongoDBShutdownHandlers
-});
-async function isClientConnected(client) {
-  if (!client) return false;
-  try {
-    await client.db("admin").command({ ping: 1 });
-    return true;
-  } catch {
-    return false;
-  }
-}
-async function getMongoClient() {
-  if (await isClientConnected(mongoClient)) {
-    logger.debug("Returning existing MongoDB client connection");
-    return mongoClient;
-  }
-  mongoClient = null;
-  if (isConnecting) {
-    logger.debug("Connection attempt already in progress, waiting...");
-    let attempts = 0;
-    while (isConnecting && attempts < 50) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      attempts++;
-    }
-    if (await isClientConnected(mongoClient)) {
-      return mongoClient;
-    }
-  }
-  isConnecting = true;
-  try {
-    const config = validateMongoDBConfig();
-    logger.debug("Attempting MongoDB connection", {
-      host: config.uri.replace(/mongodb\+srv:\/\/.*@/, "mongodb+srv://***@"),
-      database: config.database,
-      maxPoolSize: config.maxPoolSize
-    });
-    const clientOptions = {
-      maxPoolSize: config.maxPoolSize,
-      minPoolSize: 1,
-      maxIdleTimeMS: 6e4,
-      retryWrites: true,
-      retryReads: true,
-      socketTimeoutMS: 45e3,
-      serverSelectionTimeoutMS: 5e3,
-      connectTimeoutMS: 1e4
-    };
-    mongoClient = new import_mongodb2.MongoClient(config.uri, clientOptions);
-    await mongoClient.connect();
-    logger.info("Successfully connected to MongoDB", {
-      uri: config.uri.replace(/mongodb\+srv:\/\/.*@/, "mongodb+srv://***@"),
-      database: config.database
-    });
-    await mongoClient.db("admin").command({ ping: 1 });
-    logger.debug("MongoDB ping successful");
-    mongoClient.on("connectionClosed", () => {
-      logger.info("MongoDB connection closed");
-    });
-    mongoClient.on("error", (error2) => {
-      logger.error("MongoDB client error", { error: error2.message });
-    });
-    mongoClient.on("connectionPoolClosed", () => {
-      logger.debug("MongoDB connection pool closed");
-    });
-    return mongoClient;
-  } catch (error2) {
-    logger.error("Failed to connect to MongoDB", {
-      error: error2 instanceof Error ? error2.message : String(error2)
-    });
-    mongoClient = null;
-    throw error2;
-  } finally {
-    isConnecting = false;
-  }
-}
-async function getMongoDatabase() {
-  if (mongoDatabase && await isClientConnected(mongoClient)) {
-    logger.debug("Returning existing MongoDB database instance");
-    return mongoDatabase;
-  }
-  mongoClient = null;
-  mongoDatabase = null;
-  try {
-    const client = await getMongoClient();
-    const config = validateMongoDBConfig();
-    mongoDatabase = client.db(config.database);
-    logger.debug("Retrieved MongoDB database instance", {
-      database: config.database
-    });
-    return mongoDatabase;
-  } catch (error2) {
-    logger.error("Failed to get MongoDB database", {
-      error: error2 instanceof Error ? error2.message : String(error2)
-    });
-    throw error2;
-  }
-}
-async function isMongoConnected() {
-  if (!mongoClient) {
-    logger.debug("MongoDB connection status check", { connected: false });
-    return false;
-  }
-  try {
-    await mongoClient.db("admin").command({ ping: 1 });
-    logger.debug("MongoDB connection status check", { connected: true });
-    return true;
-  } catch {
-    logger.debug("MongoDB connection status check", { connected: false });
-    mongoClient = null;
-    return false;
-  }
-}
-async function closeMongoConnection() {
-  try {
-    if (mongoClient) {
-      logger.debug("Closing MongoDB connection");
-      await mongoClient.close();
-      logger.info("MongoDB connection closed successfully");
-    }
-    mongoClient = null;
-    mongoDatabase = null;
-    isConnecting = false;
-  } catch (error2) {
-    logger.error("Error closing MongoDB connection", {
-      error: error2 instanceof Error ? error2.message : String(error2)
-    });
-    throw error2;
-  }
-}
-function setupMongoDBShutdownHandlers() {
-  const handleShutdown = async () => {
-    logger.info("Process shutdown signal received, closing MongoDB connection");
-    await closeMongoConnection();
-  };
-  process.on("SIGTERM", handleShutdown);
-  process.on("SIGINT", handleShutdown);
-  process.on("uncaughtException", async (error2) => {
-    logger.error("Uncaught exception, closing MongoDB connection", {
-      error: error2 instanceof Error ? error2.message : String(error2)
-    });
-    await closeMongoConnection();
-    process.exit(1);
-  });
-  logger.debug("MongoDB shutdown handlers registered");
-}
-var import_mongodb2, mongoClient, mongoDatabase, isConnecting;
-var init_client2 = __esm({
-  "lib/mongodb/client.ts"() {
-    "use strict";
-    import_mongodb2 = __toESM(require_lib3());
-    init_logger();
-    init_config();
-    mongoClient = null;
-    mongoDatabase = null;
-    isConnecting = false;
-  }
-});
-
-// lib/mongodb/repositories/base.repository.ts
-var MongoBaseRepository;
-var init_base_repository2 = __esm({
-  "lib/mongodb/repositories/base.repository.ts"() {
-    "use strict";
-    init_client2();
-    init_logger();
-    MongoBaseRepository = class {
-      constructor(collectionName, schema) {
-        this.collectionName = collectionName;
-        this.schema = schema;
-      }
-      /**
-       * Get MongoDB collection instance
-       */
-      async getCollection() {
-        try {
-          const db = await getMongoDatabase();
-          logger.debug("Retrieved MongoDB collection", { collection: this.collectionName });
-          return db.collection(this.collectionName);
-        } catch (error2) {
-          logger.error("Failed to get MongoDB collection", {
-            collection: this.collectionName,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Validate data against schema
-       */
-      validate(data2) {
-        try {
-          const validated = this.schema.parse(data2);
-          logger.debug("Data validation successful", { collection: this.collectionName });
-          return validated;
-        } catch (error2) {
-          logger.error("Data validation failed", {
-            collection: this.collectionName,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Safely validate without throwing
-       */
-      validateSafe(data2) {
-        try {
-          const validated = this.validate(data2);
-          return { success: true, data: validated };
-        } catch (error2) {
-          logger.warn("Safe validation failed", {
-            collection: this.collectionName,
-            error: error2.message
-          });
-          return { success: false, error: error2.message };
-        }
-      }
-      /**
-       * Generate UUID v4
-       */
-      generateId() {
-        logger.debug("Generating UUID v4", { collection: this.collectionName });
-        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c4) {
-          const r4 = Math.random() * 16 | 0;
-          const v4 = c4 === "x" ? r4 : r4 & 3 | 8;
-          return v4.toString(16);
-        });
-      }
-      /**
-       * Get current ISO-8601 timestamp
-       */
-      getCurrentTimestamp() {
-        const timestamp = (/* @__PURE__ */ new Date()).toISOString();
-        logger.debug("Generated timestamp", { collection: this.collectionName, timestamp });
-        return timestamp;
-      }
-    };
-  }
-});
-
-// lib/mongodb/repositories/characters.repository.ts
-var CharactersRepository2;
-var init_characters_repository2 = __esm({
-  "lib/mongodb/repositories/characters.repository.ts"() {
-    "use strict";
-    init_types();
-    init_base_repository2();
-    init_logger();
-    CharactersRepository2 = class extends MongoBaseRepository {
-      constructor() {
-        super("characters", CharacterSchema);
-        logger.debug("CharactersRepository initialized");
-      }
-      /**
-       * Find a character by ID
-       * @param id The character ID
-       * @returns Promise<Character | null> The character if found, null otherwise
-       */
-      async findById(id) {
-        logger.debug("Finding character by ID", { characterId: id });
-        try {
-          const collection = await this.getCollection();
-          const result = await collection.findOne({ id });
-          if (!result) {
-            logger.debug("Character not found", { characterId: id });
-            return null;
-          }
-          const validated = this.validate(result);
-          logger.debug("Character found and validated", { characterId: id });
-          return validated;
-        } catch (error2) {
-          logger.error("Error finding character by ID", {
-            characterId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return null;
-        }
-      }
-      /**
-       * Find all characters
-       * @returns Promise<Character[]> Array of all characters
-       */
-      async findAll() {
-        logger.debug("Finding all characters");
-        try {
-          const collection = await this.getCollection();
-          const results = await collection.find({}).toArray();
-          const characters = results.map((doc) => {
-            const validation = this.validateSafe(doc);
-            if (validation.success && validation.data) {
-              return validation.data;
-            }
-            return null;
-          }).filter((char) => char !== null);
-          logger.debug("Retrieved all characters", { count: characters.length });
-          return characters;
-        } catch (error2) {
-          logger.error("Error finding all characters", {
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return [];
-        }
-      }
-      /**
-       * Find characters by user ID
-       * @param userId The user ID
-       * @returns Promise<Character[]> Array of characters belonging to the user
-       */
-      async findByUserId(userId) {
-        logger.debug("Finding characters by user ID", { userId });
-        try {
-          const collection = await this.getCollection();
-          const results = await collection.find({ userId }).toArray();
-          const characters = results.map((doc) => {
-            const validation = this.validateSafe(doc);
-            if (validation.success && validation.data) {
-              return validation.data;
-            }
-            return null;
-          }).filter((char) => char !== null);
-          logger.debug("Found characters for user", { userId, count: characters.length });
-          return characters;
-        } catch (error2) {
-          logger.error("Error finding characters by user ID", {
-            userId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return [];
-        }
-      }
-      /**
-       * Find characters with a specific tag
-       * @param tagId The tag ID
-       * @returns Promise<Character[]> Array of characters with the tag
-       */
-      async findByTag(tagId) {
-        logger.debug("Finding characters by tag", { tagId });
-        try {
-          const collection = await this.getCollection();
-          const results = await collection.find({ tags: { $in: [tagId] } }).toArray();
-          const characters = results.map((doc) => {
-            const validation = this.validateSafe(doc);
-            if (validation.success && validation.data) {
-              return validation.data;
-            }
-            return null;
-          }).filter((char) => char !== null);
-          logger.debug("Found characters with tag", { tagId, count: characters.length });
-          return characters;
-        } catch (error2) {
-          logger.error("Error finding characters by tag", {
-            tagId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return [];
-        }
-      }
-      /**
-       * Create a new character
-       * @param data The character data (without id, createdAt, updatedAt)
-       * @returns Promise<Character> The created character with generated id and timestamps
-       */
-      async create(data2) {
-        logger.debug("Creating new character", { userId: data2.userId, name: data2.name });
-        try {
-          const id = this.generateId();
-          const now = this.getCurrentTimestamp();
-          const character = {
-            ...data2,
-            id,
-            createdAt: now,
-            updatedAt: now
-          };
-          const validated = this.validate(character);
-          const collection = await this.getCollection();
-          await collection.insertOne(validated);
-          logger.debug("Character created successfully", { characterId: id, userId: data2.userId });
-          return validated;
-        } catch (error2) {
-          logger.error("Error creating character", {
-            userId: data2.userId,
-            name: data2.name,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Update a character
-       * @param id The character ID
-       * @param data Partial character data to update
-       * @returns Promise<Character | null> The updated character if found, null otherwise
-       */
-      async update(id, data2) {
-        logger.debug("Updating character", { characterId: id });
-        try {
-          const existing = await this.findById(id);
-          if (!existing) {
-            logger.warn("Character not found for update", { characterId: id });
-            return null;
-          }
-          const now = this.getCurrentTimestamp();
-          const updated = {
-            ...existing,
-            ...data2,
-            id: existing.id,
-            // Preserve ID
-            createdAt: existing.createdAt,
-            // Preserve creation timestamp
-            updatedAt: now
-          };
-          const validated = this.validate(updated);
-          const collection = await this.getCollection();
-          await collection.updateOne({ id }, { $set: validated });
-          logger.debug("Character updated successfully", { characterId: id });
-          return validated;
-        } catch (error2) {
-          logger.error("Error updating character", {
-            characterId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Delete a character
-       * @param id The character ID
-       * @returns Promise<boolean> True if character was deleted, false if not found
-       */
-      async delete(id) {
-        logger.debug("Deleting character", { characterId: id });
-        try {
-          const collection = await this.getCollection();
-          const result = await collection.deleteOne({ id });
-          if (result.deletedCount === 0) {
-            logger.warn("Character not found for deletion", { characterId: id });
-            return false;
-          }
-          logger.debug("Character deleted successfully", { characterId: id });
-          return true;
-        } catch (error2) {
-          logger.error("Error deleting character", {
-            characterId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      // ============================================================================
-      // TAG OPERATIONS
-      // ============================================================================
-      /**
-       * Add a tag to a character
-       * @param characterId The character ID
-       * @param tagId The tag ID
-       * @returns Promise<Character | null> The updated character if found, null otherwise
-       */
-      async addTag(characterId, tagId) {
-        logger.debug("Adding tag to character", { characterId, tagId });
-        try {
-          const character = await this.findById(characterId);
-          if (!character) {
-            logger.warn("Character not found for tag addition", { characterId });
-            return null;
-          }
-          if (!character.tags.includes(tagId)) {
-            character.tags.push(tagId);
-            logger.debug("Tag added to character tags array", { characterId, tagId });
-            return await this.update(characterId, { tags: character.tags });
-          }
-          logger.debug("Tag already exists on character", { characterId, tagId });
-          return character;
-        } catch (error2) {
-          logger.error("Error adding tag to character", {
-            characterId,
-            tagId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Remove a tag from a character
-       * @param characterId The character ID
-       * @param tagId The tag ID
-       * @returns Promise<Character | null> The updated character if found, null otherwise
-       */
-      async removeTag(characterId, tagId) {
-        logger.debug("Removing tag from character", { characterId, tagId });
-        try {
-          const character = await this.findById(characterId);
-          if (!character) {
-            logger.warn("Character not found for tag removal", { characterId });
-            return null;
-          }
-          const beforeCount = character.tags.length;
-          character.tags = character.tags.filter((id) => id !== tagId);
-          const afterCount = character.tags.length;
-          if (beforeCount !== afterCount) {
-            logger.debug("Tag removed from character", { characterId, tagId });
-            return await this.update(characterId, { tags: character.tags });
-          }
-          logger.debug("Tag not found on character", { characterId, tagId });
-          return character;
-        } catch (error2) {
-          logger.error("Error removing tag from character", {
-            characterId,
-            tagId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      // ============================================================================
-      // PERSONA LINK OPERATIONS
-      // ============================================================================
-      /**
-       * Add a persona link to a character
-       * @param characterId The character ID
-       * @param personaId The persona ID
-       * @param isDefault Whether this persona should be the default
-       * @returns Promise<Character | null> The updated character if found, null otherwise
-       */
-      async addPersona(characterId, personaId, isDefault = false) {
-        logger.debug("Adding persona link to character", { characterId, personaId, isDefault });
-        try {
-          const character = await this.findById(characterId);
-          if (!character) {
-            logger.warn("Character not found for persona link addition", { characterId });
-            return null;
-          }
-          const existing = character.personaLinks.find((link) => link.personaId === personaId);
-          if (!existing) {
-            character.personaLinks.push({ personaId, isDefault });
-            logger.debug("Persona link added to character", { characterId, personaId, isDefault });
-            return await this.update(characterId, { personaLinks: character.personaLinks });
-          }
-          logger.debug("Persona link already exists on character", { characterId, personaId });
-          return character;
-        } catch (error2) {
-          logger.error("Error adding persona link to character", {
-            characterId,
-            personaId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Remove a persona link from a character
-       * @param characterId The character ID
-       * @param personaId The persona ID
-       * @returns Promise<Character | null> The updated character if found, null otherwise
-       */
-      async removePersona(characterId, personaId) {
-        logger.debug("Removing persona link from character", { characterId, personaId });
-        try {
-          const character = await this.findById(characterId);
-          if (!character) {
-            logger.warn("Character not found for persona link removal", { characterId });
-            return null;
-          }
-          const beforeCount = character.personaLinks.length;
-          character.personaLinks = character.personaLinks.filter((link) => link.personaId !== personaId);
-          const afterCount = character.personaLinks.length;
-          if (beforeCount !== afterCount) {
-            logger.debug("Persona link removed from character", { characterId, personaId });
-            return await this.update(characterId, { personaLinks: character.personaLinks });
-          }
-          logger.debug("Persona link not found on character", { characterId, personaId });
-          return character;
-        } catch (error2) {
-          logger.error("Error removing persona link from character", {
-            characterId,
-            personaId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      // ============================================================================
-      // FAVORITE OPERATIONS
-      // ============================================================================
-      /**
-       * Set favorite status for a character
-       * @param characterId The character ID
-       * @param isFavorite Whether the character is marked as favorite
-       * @returns Promise<Character | null> The updated character if found, null otherwise
-       */
-      async setFavorite(characterId, isFavorite) {
-        logger.debug("Setting favorite status for character", { characterId, isFavorite });
-        try {
-          const result = await this.update(characterId, { isFavorite });
-          if (result) {
-            logger.debug("Favorite status updated", { characterId, isFavorite });
-          }
-          return result;
-        } catch (error2) {
-          logger.error("Error setting favorite status", {
-            characterId,
-            isFavorite,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      // ============================================================================
-      // PHYSICAL DESCRIPTION OPERATIONS
-      // ============================================================================
-      /**
-       * Add a physical description to a character
-       * @param characterId The character ID
-       * @param data The physical description data (without id, createdAt, updatedAt)
-       * @returns Promise<PhysicalDescription | null> The added description if successful, null if character not found
-       */
-      async addDescription(characterId, data2) {
-        logger.debug("Adding physical description to character", { characterId, descriptionName: data2.name });
-        try {
-          const character = await this.findById(characterId);
-          if (!character) {
-            logger.warn("Character not found for description addition", { characterId });
-            return null;
-          }
-          const now = this.getCurrentTimestamp();
-          const description = {
-            ...data2,
-            id: this.generateId(),
-            createdAt: now,
-            updatedAt: now
-          };
-          character.physicalDescriptions = character.physicalDescriptions || [];
-          character.physicalDescriptions.push(description);
-          await this.update(characterId, { physicalDescriptions: character.physicalDescriptions });
-          logger.debug("Physical description added successfully", {
-            characterId,
-            descriptionId: description.id
-          });
-          return description;
-        } catch (error2) {
-          logger.error("Error adding physical description", {
-            characterId,
-            descriptionName: data2.name,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Update a physical description
-       * @param characterId The character ID
-       * @param descriptionId The description ID
-       * @param data Partial description data to update
-       * @returns Promise<PhysicalDescription | null> The updated description if found, null otherwise
-       */
-      async updateDescription(characterId, descriptionId, data2) {
-        logger.debug("Updating physical description", { characterId, descriptionId });
-        try {
-          const character = await this.findById(characterId);
-          if (!character) {
-            logger.warn("Character not found for description update", { characterId });
-            return null;
-          }
-          const descriptions = character.physicalDescriptions || [];
-          const index = descriptions.findIndex((d4) => d4.id === descriptionId);
-          if (index === -1) {
-            logger.warn("Physical description not found", { characterId, descriptionId });
-            return null;
-          }
-          const now = this.getCurrentTimestamp();
-          const updated = {
-            ...descriptions[index],
-            ...data2,
-            id: descriptions[index].id,
-            createdAt: descriptions[index].createdAt,
-            updatedAt: now
-          };
-          descriptions[index] = updated;
-          await this.update(characterId, { physicalDescriptions: descriptions });
-          logger.debug("Physical description updated successfully", { characterId, descriptionId });
-          return updated;
-        } catch (error2) {
-          logger.error("Error updating physical description", {
-            characterId,
-            descriptionId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Remove a physical description from a character
-       * @param characterId The character ID
-       * @param descriptionId The description ID
-       * @returns Promise<boolean> True if description was deleted, false if not found
-       */
-      async removeDescription(characterId, descriptionId) {
-        logger.debug("Removing physical description from character", { characterId, descriptionId });
-        try {
-          const character = await this.findById(characterId);
-          if (!character) {
-            logger.warn("Character not found for description removal", { characterId });
-            return false;
-          }
-          const descriptions = character.physicalDescriptions || [];
-          const filtered = descriptions.filter((d4) => d4.id !== descriptionId);
-          if (filtered.length === descriptions.length) {
-            logger.warn("Physical description not found for removal", { characterId, descriptionId });
-            return false;
-          }
-          await this.update(characterId, { physicalDescriptions: filtered });
-          logger.debug("Physical description removed successfully", { characterId, descriptionId });
-          return true;
-        } catch (error2) {
-          logger.error("Error removing physical description", {
-            characterId,
-            descriptionId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Get a single physical description by ID
-       * @param characterId The character ID
-       * @param descriptionId The description ID
-       * @returns Promise<PhysicalDescription | null> The description if found, null otherwise
-       */
-      async getDescription(characterId, descriptionId) {
-        logger.debug("Getting physical description", { characterId, descriptionId });
-        try {
-          const character = await this.findById(characterId);
-          if (!character) {
-            logger.warn("Character not found for description retrieval", { characterId });
-            return null;
-          }
-          const descriptions = character.physicalDescriptions || [];
-          const description = descriptions.find((d4) => d4.id === descriptionId) || null;
-          logger.debug("Physical description retrieval completed", {
-            characterId,
-            descriptionId,
-            found: description !== null
-          });
-          return description;
-        } catch (error2) {
-          logger.error("Error getting physical description", {
-            characterId,
-            descriptionId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Get all physical descriptions for a character
-       * @param characterId The character ID
-       * @returns Promise<PhysicalDescription[]> Array of all descriptions for the character
-       */
-      async getDescriptions(characterId) {
-        logger.debug("Getting all physical descriptions for character", { characterId });
-        try {
-          const character = await this.findById(characterId);
-          if (!character) {
-            logger.warn("Character not found for descriptions retrieval", { characterId });
-            return [];
-          }
-          const descriptions = character.physicalDescriptions || [];
-          logger.debug("Retrieved physical descriptions", { characterId, count: descriptions.length });
-          return descriptions;
-        } catch (error2) {
-          logger.error("Error getting physical descriptions", {
-            characterId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return [];
-        }
-      }
-    };
-  }
-});
-
-// lib/mongodb/repositories/personas.repository.ts
-var PersonasRepository2;
-var init_personas_repository2 = __esm({
-  "lib/mongodb/repositories/personas.repository.ts"() {
-    "use strict";
-    init_types();
-    init_logger();
-    init_base_repository2();
-    PersonasRepository2 = class extends MongoBaseRepository {
-      constructor() {
-        super("personas", PersonaSchema);
-      }
-      /**
-       * Find a persona by ID
-       */
-      async findById(id) {
-        try {
-          logger.debug("Finding persona by ID", { personaId: id, collection: this.collectionName });
-          const collection = await this.getCollection();
-          const doc = await collection.findOne({ id });
-          if (!doc) {
-            logger.debug("Persona not found", { personaId: id });
-            return null;
-          }
-          const validated = this.validate(doc);
-          logger.debug("Persona found and validated", { personaId: id });
-          return validated;
-        } catch (error2) {
-          logger.error("Error finding persona by ID", {
-            personaId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return null;
-        }
-      }
-      /**
-       * Find all personas
-       */
-      async findAll() {
-        try {
-          logger.debug("Finding all personas", { collection: this.collectionName });
-          const collection = await this.getCollection();
-          const docs = await collection.find({}).toArray();
-          logger.debug("Retrieved personas from database", { count: docs.length });
-          const validated = docs.map((doc) => this.validateSafe(doc)).filter((result) => result.success).map((result) => result.data);
-          logger.debug("All personas validated", { total: docs.length, validated: validated.length });
-          return validated;
-        } catch (error2) {
-          logger.error("Error finding all personas", {
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return [];
-        }
-      }
-      /**
-       * Find personas by user ID
-       */
-      async findByUserId(userId) {
-        try {
-          logger.debug("Finding personas by user ID", { userId, collection: this.collectionName });
-          const collection = await this.getCollection();
-          const docs = await collection.find({ userId }).toArray();
-          logger.debug("Retrieved personas for user", { userId, count: docs.length });
-          const validated = docs.map((doc) => this.validateSafe(doc)).filter((result) => result.success).map((result) => result.data);
-          logger.debug("User personas validated", { userId, total: docs.length, validated: validated.length });
-          return validated;
-        } catch (error2) {
-          logger.error("Error finding personas by user ID", {
-            userId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return [];
-        }
-      }
-      /**
-       * Find personas with a specific tag
-       */
-      async findByTag(tagId) {
-        try {
-          logger.debug("Finding personas by tag", { tagId, collection: this.collectionName });
-          const collection = await this.getCollection();
-          const docs = await collection.find({ tags: tagId }).toArray();
-          logger.debug("Retrieved personas with tag", { tagId, count: docs.length });
-          const validated = docs.map((doc) => this.validateSafe(doc)).filter((result) => result.success).map((result) => result.data);
-          logger.debug("Tag personas validated", { tagId, total: docs.length, validated: validated.length });
-          return validated;
-        } catch (error2) {
-          logger.error("Error finding personas by tag", {
-            tagId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return [];
-        }
-      }
-      /**
-       * Create a new persona
-       */
-      async create(data2) {
-        try {
-          logger.debug("Creating new persona", {
-            userId: data2.userId,
-            name: data2.name,
-            collection: this.collectionName
-          });
-          const id = this.generateId();
-          const now = this.getCurrentTimestamp();
-          const persona = {
-            ...data2,
-            id,
-            createdAt: now,
-            updatedAt: now
-          };
-          const validated = this.validate(persona);
-          const collection = await this.getCollection();
-          const result = await collection.insertOne(validated);
-          logger.info("Persona created successfully", {
-            personaId: id,
-            userId: data2.userId,
-            insertedId: result.insertedId.toString()
-          });
-          return validated;
-        } catch (error2) {
-          logger.error("Error creating persona", {
-            userId: data2.userId,
-            name: data2.name,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Update a persona
-       */
-      async update(id, data2) {
-        try {
-          logger.debug("Updating persona", { personaId: id, collection: this.collectionName });
-          const existing = await this.findById(id);
-          if (!existing) {
-            logger.warn("Persona not found for update", { personaId: id });
-            return null;
-          }
-          const now = this.getCurrentTimestamp();
-          const updated = {
-            ...existing,
-            ...data2,
-            id: existing.id,
-            // Preserve ID
-            createdAt: existing.createdAt,
-            // Preserve creation timestamp
-            updatedAt: now
-          };
-          const validated = this.validate(updated);
-          const collection = await this.getCollection();
-          const result = await collection.updateOne(
-            { id },
-            { $set: validated }
-          );
-          logger.info("Persona updated successfully", {
-            personaId: id,
-            matchedCount: result.matchedCount,
-            modifiedCount: result.modifiedCount
-          });
-          return validated;
-        } catch (error2) {
-          logger.error("Error updating persona", {
-            personaId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Delete a persona
-       */
-      async delete(id) {
-        try {
-          logger.debug("Deleting persona", { personaId: id, collection: this.collectionName });
-          const collection = await this.getCollection();
-          const result = await collection.deleteOne({ id });
-          if (result.deletedCount === 0) {
-            logger.warn("Persona not found for deletion", { personaId: id });
-            return false;
-          }
-          logger.info("Persona deleted successfully", {
-            personaId: id,
-            deletedCount: result.deletedCount
-          });
-          return true;
-        } catch (error2) {
-          logger.error("Error deleting persona", {
-            personaId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Add a tag to a persona
-       */
-      async addTag(personaId, tagId) {
-        try {
-          logger.debug("Adding tag to persona", { personaId, tagId, collection: this.collectionName });
-          const persona = await this.findById(personaId);
-          if (!persona) {
-            logger.warn("Persona not found for tag addition", { personaId });
-            return null;
-          }
-          if (!persona.tags.includes(tagId)) {
-            persona.tags.push(tagId);
-            logger.debug("Tag added to persona tags array", { personaId, tagId, totalTags: persona.tags.length });
-            return await this.update(personaId, { tags: persona.tags });
-          }
-          logger.debug("Tag already exists for persona", { personaId, tagId });
-          return persona;
-        } catch (error2) {
-          logger.error("Error adding tag to persona", {
-            personaId,
-            tagId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Remove a tag from a persona
-       */
-      async removeTag(personaId, tagId) {
-        try {
-          logger.debug("Removing tag from persona", { personaId, tagId, collection: this.collectionName });
-          const persona = await this.findById(personaId);
-          if (!persona) {
-            logger.warn("Persona not found for tag removal", { personaId });
-            return null;
-          }
-          const initialLength = persona.tags.length;
-          persona.tags = persona.tags.filter((id) => id !== tagId);
-          if (persona.tags.length < initialLength) {
-            logger.debug("Tag removed from persona tags array", {
-              personaId,
-              tagId,
-              totalTags: persona.tags.length
-            });
-            return await this.update(personaId, { tags: persona.tags });
-          }
-          logger.debug("Tag not found in persona tags", { personaId, tagId });
-          return persona;
-        } catch (error2) {
-          logger.error("Error removing tag from persona", {
-            personaId,
-            tagId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Add a character link to a persona
-       */
-      async addCharacterLink(personaId, characterId) {
-        try {
-          logger.debug("Adding character link to persona", {
-            personaId,
-            characterId,
-            collection: this.collectionName
-          });
-          const persona = await this.findById(personaId);
-          if (!persona) {
-            logger.warn("Persona not found for character link addition", { personaId });
-            return null;
-          }
-          if (!persona.characterLinks.includes(characterId)) {
-            persona.characterLinks.push(characterId);
-            logger.debug("Character link added to persona", {
-              personaId,
-              characterId,
-              totalLinks: persona.characterLinks.length
-            });
-            return await this.update(personaId, { characterLinks: persona.characterLinks });
-          }
-          logger.debug("Character link already exists for persona", { personaId, characterId });
-          return persona;
-        } catch (error2) {
-          logger.error("Error adding character link to persona", {
-            personaId,
-            characterId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Remove a character link from a persona
-       */
-      async removeCharacterLink(personaId, characterId) {
-        try {
-          logger.debug("Removing character link from persona", {
-            personaId,
-            characterId,
-            collection: this.collectionName
-          });
-          const persona = await this.findById(personaId);
-          if (!persona) {
-            logger.warn("Persona not found for character link removal", { personaId });
-            return null;
-          }
-          const initialLength = persona.characterLinks.length;
-          persona.characterLinks = persona.characterLinks.filter((id) => id !== characterId);
-          if (persona.characterLinks.length < initialLength) {
-            logger.debug("Character link removed from persona", {
-              personaId,
-              characterId,
-              totalLinks: persona.characterLinks.length
-            });
-            return await this.update(personaId, { characterLinks: persona.characterLinks });
-          }
-          logger.debug("Character link not found in persona", { personaId, characterId });
-          return persona;
-        } catch (error2) {
-          logger.error("Error removing character link from persona", {
-            personaId,
-            characterId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      // ============================================================================
-      // PHYSICAL DESCRIPTIONS
-      // ============================================================================
-      /**
-       * Add a physical description to a persona
-       */
-      async addDescription(personaId, data2) {
-        try {
-          logger.debug("Adding physical description to persona", {
-            personaId,
-            descriptionName: data2.name,
-            collection: this.collectionName
-          });
-          const persona = await this.findById(personaId);
-          if (!persona) {
-            logger.warn("Persona not found for description addition", { personaId });
-            return null;
-          }
-          const now = this.getCurrentTimestamp();
-          const description = {
-            ...data2,
-            id: this.generateId(),
-            createdAt: now,
-            updatedAt: now
-          };
-          persona.physicalDescriptions = persona.physicalDescriptions || [];
-          persona.physicalDescriptions.push(description);
-          logger.debug("Physical description added to persona", {
-            personaId,
-            descriptionId: description.id,
-            totalDescriptions: persona.physicalDescriptions.length
-          });
-          await this.update(personaId, { physicalDescriptions: persona.physicalDescriptions });
-          return description;
-        } catch (error2) {
-          logger.error("Error adding physical description to persona", {
-            personaId,
-            descriptionName: data2.name,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Update a physical description
-       */
-      async updateDescription(personaId, descriptionId, data2) {
-        try {
-          logger.debug("Updating physical description", {
-            personaId,
-            descriptionId,
-            collection: this.collectionName
-          });
-          const persona = await this.findById(personaId);
-          if (!persona) {
-            logger.warn("Persona not found for description update", { personaId });
-            return null;
-          }
-          const descriptions = persona.physicalDescriptions || [];
-          const index = descriptions.findIndex((d4) => d4.id === descriptionId);
-          if (index === -1) {
-            logger.warn("Physical description not found for update", {
-              personaId,
-              descriptionId
-            });
-            return null;
-          }
-          const now = this.getCurrentTimestamp();
-          const updated = {
-            ...descriptions[index],
-            ...data2,
-            id: descriptions[index].id,
-            createdAt: descriptions[index].createdAt,
-            updatedAt: now
-          };
-          descriptions[index] = updated;
-          logger.debug("Physical description updated", {
-            personaId,
-            descriptionId,
-            totalDescriptions: descriptions.length
-          });
-          await this.update(personaId, { physicalDescriptions: descriptions });
-          return updated;
-        } catch (error2) {
-          logger.error("Error updating physical description", {
-            personaId,
-            descriptionId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Remove a physical description from a persona
-       */
-      async removeDescription(personaId, descriptionId) {
-        try {
-          logger.debug("Removing physical description from persona", {
-            personaId,
-            descriptionId,
-            collection: this.collectionName
-          });
-          const persona = await this.findById(personaId);
-          if (!persona) {
-            logger.warn("Persona not found for description removal", { personaId });
-            return false;
-          }
-          const descriptions = persona.physicalDescriptions || [];
-          const filtered = descriptions.filter((d4) => d4.id !== descriptionId);
-          if (filtered.length === descriptions.length) {
-            logger.warn("Physical description not found for removal", {
-              personaId,
-              descriptionId
-            });
-            return false;
-          }
-          logger.debug("Physical description removed from persona", {
-            personaId,
-            descriptionId,
-            totalDescriptions: filtered.length
-          });
-          await this.update(personaId, { physicalDescriptions: filtered });
-          return true;
-        } catch (error2) {
-          logger.error("Error removing physical description from persona", {
-            personaId,
-            descriptionId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Get a single physical description by ID
-       */
-      async getDescription(personaId, descriptionId) {
-        try {
-          logger.debug("Getting physical description", {
-            personaId,
-            descriptionId,
-            collection: this.collectionName
-          });
-          const persona = await this.findById(personaId);
-          if (!persona) {
-            logger.warn("Persona not found for description retrieval", { personaId });
-            return null;
-          }
-          const descriptions = persona.physicalDescriptions || [];
-          const description = descriptions.find((d4) => d4.id === descriptionId) || null;
-          if (description) {
-            logger.debug("Physical description retrieved", { personaId, descriptionId });
-          } else {
-            logger.debug("Physical description not found", { personaId, descriptionId });
-          }
-          return description;
-        } catch (error2) {
-          logger.error("Error getting physical description", {
-            personaId,
-            descriptionId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Get all physical descriptions for a persona
-       */
-      async getDescriptions(personaId) {
-        try {
-          logger.debug("Getting all physical descriptions for persona", {
-            personaId,
-            collection: this.collectionName
-          });
-          const persona = await this.findById(personaId);
-          if (!persona) {
-            logger.warn("Persona not found for descriptions retrieval", { personaId });
-            return [];
-          }
-          const descriptions = persona.physicalDescriptions || [];
-          logger.debug("Physical descriptions retrieved", {
-            personaId,
-            count: descriptions.length
-          });
-          return descriptions;
-        } catch (error2) {
-          logger.error("Error getting physical descriptions", {
-            personaId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-    };
-  }
-});
-
-// lib/mongodb/repositories/chats.repository.ts
-var MongoChatsRepository, mongoChatsRepository;
-var init_chats_repository2 = __esm({
-  "lib/mongodb/repositories/chats.repository.ts"() {
-    "use strict";
-    init_base_repository2();
-    init_types();
-    init_logger();
-    MongoChatsRepository = class extends MongoBaseRepository {
-      constructor() {
-        super("chats", ChatMetadataBaseSchema);
-        this.messagesCollectionName = "chat_messages";
-        logger.debug("Initialized MongoChatsRepository");
-      }
-      /**
-       * Get the messages collection
-       */
-      async getMessagesCollection() {
-        try {
-          const db = await this.getCollection();
-          const dbInstance = (await this.getCollection()).db;
-          logger.debug("Retrieved chat messages collection", {
-            collection: this.messagesCollectionName
-          });
-          return dbInstance.collection(this.messagesCollectionName);
-        } catch (error2) {
-          logger.error("Failed to get chat messages collection", {
-            collection: this.messagesCollectionName,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Find a chat by ID (metadata only)
-       */
-      async findById(id) {
-        try {
-          logger.debug("Finding chat by ID", { chatId: id });
-          const collection = await this.getCollection();
-          const chat = await collection.findOne({ id });
-          if (!chat) {
-            logger.debug("Chat not found", { chatId: id });
-            return null;
-          }
-          const validated = this.validate(chat);
-          logger.debug("Chat found and validated", { chatId: id });
-          return validated;
-        } catch (error2) {
-          logger.error("Failed to find chat by ID", {
-            chatId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Find all chats
-       */
-      async findAll() {
-        try {
-          logger.debug("Finding all chats");
-          const collection = await this.getCollection();
-          const chats = await collection.find({}).toArray();
-          const validated = chats.map((chat) => this.validate(chat));
-          logger.debug("Found all chats", { count: validated.length });
-          return validated;
-        } catch (error2) {
-          logger.error("Failed to find all chats", {
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Find chats by user ID
-       */
-      async findByUserId(userId) {
-        try {
-          logger.debug("Finding chats by user ID", { userId });
-          const collection = await this.getCollection();
-          const chats = await collection.find({ userId }).toArray();
-          const validated = chats.map((chat) => this.validate(chat));
-          logger.debug("Found chats for user", { userId, count: validated.length });
-          return validated;
-        } catch (error2) {
-          logger.error("Failed to find chats by user ID", {
-            userId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Find chats that include a specific character as a participant
-       */
-      async findByCharacterId(characterId) {
-        try {
-          logger.debug("Finding chats by character ID", { characterId });
-          const collection = await this.getCollection();
-          const chats = await collection.find({
-            "participants.type": "CHARACTER",
-            "participants.characterId": characterId
-          }).toArray();
-          const validated = chats.map((chat) => this.validate(chat));
-          logger.debug("Found chats with character", { characterId, count: validated.length });
-          return validated;
-        } catch (error2) {
-          logger.error("Failed to find chats by character ID", {
-            characterId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Find chats that include a specific persona as a participant
-       */
-      async findByPersonaId(personaId) {
-        try {
-          logger.debug("Finding chats by persona ID", { personaId });
-          const collection = await this.getCollection();
-          const chats = await collection.find({
-            "participants.type": "PERSONA",
-            "participants.personaId": personaId
-          }).toArray();
-          const validated = chats.map((chat) => this.validate(chat));
-          logger.debug("Found chats with persona", { personaId, count: validated.length });
-          return validated;
-        } catch (error2) {
-          logger.error("Failed to find chats by persona ID", {
-            personaId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Find chats with a specific tag
-       */
-      async findByTag(tagId) {
-        try {
-          logger.debug("Finding chats by tag", { tagId });
-          const collection = await this.getCollection();
-          const chats = await collection.find({ tags: tagId }).toArray();
-          const validated = chats.map((chat) => this.validate(chat));
-          logger.debug("Found chats with tag", { tagId, count: validated.length });
-          return validated;
-        } catch (error2) {
-          logger.error("Failed to find chats by tag", {
-            tagId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Create a new chat
-       */
-      async create(data2) {
-        try {
-          logger.debug("Creating new chat", { userId: data2.userId, title: data2.title });
-          const id = this.generateId();
-          const now = this.getCurrentTimestamp();
-          const chat = {
-            ...data2,
-            id,
-            createdAt: now,
-            updatedAt: now
-          };
-          const validated = this.validate(chat);
-          const collection = await this.getCollection();
-          await collection.insertOne(validated);
-          const messagesDoc = {
-            chatId: id,
-            messages: [],
-            createdAt: now,
-            updatedAt: now
-          };
-          const messagesCollection = await this.getCollection();
-          const msgDb = messagesCollection.db;
-          await msgDb.collection(this.messagesCollectionName).insertOne(messagesDoc);
-          logger.info("Chat created successfully", {
-            chatId: id,
-            userId: data2.userId,
-            title: data2.title
-          });
-          return validated;
-        } catch (error2) {
-          logger.error("Failed to create chat", {
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Update chat metadata
-       */
-      async update(id, data2) {
-        try {
-          logger.debug("Updating chat", { chatId: id });
-          const now = this.getCurrentTimestamp();
-          const collection = await this.getCollection();
-          const { id: _id, createdAt: _createdAt, ...updateFields } = data2;
-          const updateData = {
-            $set: {
-              ...updateFields,
-              updatedAt: now
-            }
-          };
-          const result = await collection.findOneAndUpdate(
-            { id },
-            updateData,
-            { returnDocument: "after" }
-          );
-          if (!result) {
-            logger.debug("Chat not found for update", { chatId: id });
-            return null;
-          }
-          const validated = this.validate(result);
-          logger.debug("Chat updated successfully", { chatId: id });
-          return validated;
-        } catch (error2) {
-          logger.error("Failed to update chat", {
-            chatId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Delete a chat (removes both metadata and messages)
-       */
-      async delete(id) {
-        try {
-          logger.debug("Deleting chat", { chatId: id });
-          const collection = await this.getCollection();
-          const result = await collection.deleteOne({ id });
-          if (result.deletedCount === 0) {
-            logger.debug("Chat not found for deletion", { chatId: id });
-            return false;
-          }
-          try {
-            const messagesCollection = await this.getCollection();
-            const msgDb = messagesCollection.db;
-            await msgDb.collection(this.messagesCollectionName).deleteOne({ chatId: id });
-            logger.debug("Chat messages deleted", { chatId: id });
-          } catch (error2) {
-            logger.warn("Failed to delete chat messages", {
-              chatId: id,
-              error: error2 instanceof Error ? error2.message : String(error2)
-            });
-          }
-          logger.info("Chat deleted successfully", { chatId: id });
-          return true;
-        } catch (error2) {
-          logger.error("Failed to delete chat", {
-            chatId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      // ============================================================================
-      // TAG OPERATIONS
-      // ============================================================================
-      /**
-       * Add a tag to a chat
-       */
-      async addTag(chatId, tagId) {
-        try {
-          logger.debug("Adding tag to chat", { chatId, tagId });
-          const chat = await this.findById(chatId);
-          if (!chat) {
-            logger.debug("Chat not found for tag operation", { chatId });
-            return null;
-          }
-          if (!chat.tags.includes(tagId)) {
-            const updatedTags = [...chat.tags, tagId];
-            return await this.update(chatId, { tags: updatedTags });
-          }
-          return chat;
-        } catch (error2) {
-          logger.error("Failed to add tag to chat", {
-            chatId,
-            tagId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Remove a tag from a chat
-       */
-      async removeTag(chatId, tagId) {
-        try {
-          logger.debug("Removing tag from chat", { chatId, tagId });
-          const chat = await this.findById(chatId);
-          if (!chat) {
-            logger.debug("Chat not found for tag operation", { chatId });
-            return null;
-          }
-          const updatedTags = chat.tags.filter((tid) => tid !== tagId);
-          return await this.update(chatId, { tags: updatedTags });
-        } catch (error2) {
-          logger.error("Failed to remove tag from chat", {
-            chatId,
-            tagId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      // ============================================================================
-      // PARTICIPANT OPERATIONS
-      // ============================================================================
-      /**
-       * Add a participant to a chat
-       */
-      async addParticipant(chatId, participant) {
-        try {
-          logger.debug("Adding participant to chat", {
-            chatId,
-            type: participant.type,
-            characterId: participant.characterId,
-            personaId: participant.personaId
-          });
-          const chat = await this.findById(chatId);
-          if (!chat) {
-            logger.debug("Chat not found for participant operation", { chatId });
-            return null;
-          }
-          const now = this.getCurrentTimestamp();
-          const newParticipant = {
-            ...participant,
-            id: this.generateId(),
-            createdAt: now,
-            updatedAt: now
-          };
-          ChatParticipantBaseSchema.parse(newParticipant);
-          const participants = [...chat.participants, newParticipant];
-          return await this.update(chatId, { participants });
-        } catch (error2) {
-          logger.error("Failed to add participant to chat", {
-            chatId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Update a participant in a chat
-       */
-      async updateParticipant(chatId, participantId, data2) {
-        try {
-          logger.debug("Updating participant in chat", { chatId, participantId });
-          const chat = await this.findById(chatId);
-          if (!chat) {
-            logger.debug("Chat not found for participant operation", { chatId });
-            return null;
-          }
-          const participantIndex = chat.participants.findIndex((p4) => p4.id === participantId);
-          if (participantIndex === -1) {
-            logger.debug("Participant not found", { chatId, participantId });
-            return null;
-          }
-          const now = this.getCurrentTimestamp();
-          const existingParticipant = chat.participants[participantIndex];
-          const updatedParticipant = {
-            ...existingParticipant,
-            ...data2,
-            id: existingParticipant.id,
-            createdAt: existingParticipant.createdAt,
-            updatedAt: now
-          };
-          ChatParticipantBaseSchema.parse(updatedParticipant);
-          const participants = [...chat.participants];
-          participants[participantIndex] = updatedParticipant;
-          return await this.update(chatId, { participants });
-        } catch (error2) {
-          logger.error("Failed to update participant in chat", {
-            chatId,
-            participantId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Remove a participant from a chat
-       */
-      async removeParticipant(chatId, participantId) {
-        try {
-          logger.debug("Removing participant from chat", { chatId, participantId });
-          const chat = await this.findById(chatId);
-          if (!chat) {
-            logger.debug("Chat not found for participant operation", { chatId });
-            return null;
-          }
-          const participants = chat.participants.filter((p4) => p4.id !== participantId);
-          if (participants.length === 0) {
-            const error2 = new Error("Cannot remove the last participant from a chat");
-            logger.error("Cannot remove last participant", { chatId, participantId });
-            throw error2;
-          }
-          return await this.update(chatId, { participants });
-        } catch (error2) {
-          logger.error("Failed to remove participant from chat", {
-            chatId,
-            participantId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Get all character participants from a chat
-       */
-      getCharacterParticipants(chat) {
-        logger.debug("Getting character participants", {
-          chatId: chat.id,
-          count: chat.participants.filter((p4) => p4.type === "CHARACTER").length
-        });
-        return chat.participants.filter((p4) => p4.type === "CHARACTER");
-      }
-      /**
-       * Get all persona participants from a chat
-       */
-      getPersonaParticipants(chat) {
-        logger.debug("Getting persona participants", {
-          chatId: chat.id,
-          count: chat.participants.filter((p4) => p4.type === "PERSONA").length
-        });
-        return chat.participants.filter((p4) => p4.type === "PERSONA");
-      }
-      /**
-       * Get active participants only
-       */
-      getActiveParticipants(chat) {
-        logger.debug("Getting active participants", {
-          chatId: chat.id,
-          count: chat.participants.filter((p4) => p4.isActive).length
-        });
-        return chat.participants.filter((p4) => p4.isActive);
-      }
-      // ============================================================================
-      // MESSAGE OPERATIONS
-      // ============================================================================
-      /**
-       * Get all messages for a chat
-       */
-      async getMessages(chatId) {
-        try {
-          logger.debug("Getting messages for chat", { chatId });
-          const collection = await this.getCollection();
-          const msgDb = collection.db;
-          const messagesCollection = msgDb.collection(this.messagesCollectionName);
-          const messagesDoc = await messagesCollection.findOne({ chatId });
-          if (!messagesDoc) {
-            logger.debug("No messages document found", { chatId });
-            return [];
-          }
-          const messages = messagesDoc.messages || [];
-          const validated = messages.map((msg) => ChatEventSchema.parse(msg));
-          logger.debug("Retrieved messages for chat", { chatId, count: validated.length });
-          return validated;
-        } catch (error2) {
-          logger.error("Failed to get messages for chat", {
-            chatId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return [];
-        }
-      }
-      /**
-       * Add a message to a chat
-       */
-      async addMessage(chatId, message) {
-        try {
-          logger.debug("Adding message to chat", {
-            chatId,
-            messageId: message.id,
-            type: message.type
-          });
-          const validated = ChatEventSchema.parse(message);
-          const collection = await this.getCollection();
-          const msgDb = collection.db;
-          const messagesCollection = msgDb.collection(this.messagesCollectionName);
-          const now = this.getCurrentTimestamp();
-          await messagesCollection.updateOne(
-            { chatId },
-            {
-              $push: { messages: validated },
-              $set: { updatedAt: now }
-            },
-            { upsert: true }
-          );
-          const chat = await this.findById(chatId);
-          if (chat) {
-            const messages = await this.getMessages(chatId);
-            await this.update(chatId, {
-              messageCount: messages.length,
-              lastMessageAt: now
-            });
-          }
-          logger.debug("Message added to chat", { chatId, messageId: message.id });
-          return validated;
-        } catch (error2) {
-          logger.error("Failed to add message to chat", {
-            chatId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Add multiple messages to a chat
-       */
-      async addMessages(chatId, messages) {
-        try {
-          logger.debug("Adding messages to chat", {
-            chatId,
-            count: messages.length
-          });
-          const validated = messages.map((msg) => ChatEventSchema.parse(msg));
-          const collection = await this.getCollection();
-          const msgDb = collection.db;
-          const messagesCollection = msgDb.collection(this.messagesCollectionName);
-          const now = this.getCurrentTimestamp();
-          await messagesCollection.updateOne(
-            { chatId },
-            {
-              $push: { messages: { $each: validated } },
-              $set: { updatedAt: now }
-            },
-            { upsert: true }
-          );
-          const chat = await this.findById(chatId);
-          if (chat) {
-            const allMessages = await this.getMessages(chatId);
-            await this.update(chatId, {
-              messageCount: allMessages.length,
-              lastMessageAt: now
-            });
-          }
-          logger.debug("Messages added to chat", { chatId, count: validated.length });
-          return validated;
-        } catch (error2) {
-          logger.error("Failed to add messages to chat", {
-            chatId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Update a specific message in a chat
-       */
-      async updateMessage(chatId, messageId, updates) {
-        try {
-          logger.debug("Updating message in chat", { chatId, messageId });
-          const messages = await this.getMessages(chatId);
-          const messageIndex = messages.findIndex((m4) => m4.id === messageId);
-          if (messageIndex === -1) {
-            logger.debug("Message not found", { chatId, messageId });
-            return null;
-          }
-          const updatedMessage = { ...messages[messageIndex], ...updates };
-          const validated = ChatEventSchema.parse(updatedMessage);
-          messages[messageIndex] = validated;
-          const collection = await this.getCollection();
-          const msgDb = collection.db;
-          const messagesCollection = msgDb.collection(this.messagesCollectionName);
-          const now = this.getCurrentTimestamp();
-          await messagesCollection.updateOne(
-            { chatId },
-            {
-              $set: {
-                messages,
-                updatedAt: now
-              }
-            }
-          );
-          logger.debug("Message updated in chat", { chatId, messageId });
-          return validated;
-        } catch (error2) {
-          logger.error("Failed to update message in chat", {
-            chatId,
-            messageId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return null;
-        }
-      }
-      /**
-       * Get message count for a chat
-       */
-      async getMessageCount(chatId) {
-        try {
-          logger.debug("Getting message count for chat", { chatId });
-          const messages = await this.getMessages(chatId);
-          logger.debug("Retrieved message count", { chatId, count: messages.length });
-          return messages.length;
-        } catch (error2) {
-          logger.error("Failed to get message count for chat", {
-            chatId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return 0;
-        }
-      }
-      /**
-       * Clear all messages from a chat
-       */
-      async clearMessages(chatId) {
-        try {
-          logger.debug("Clearing messages for chat", { chatId });
-          const collection = await this.getCollection();
-          const msgDb = collection.db;
-          const messagesCollection = msgDb.collection(this.messagesCollectionName);
-          const now = this.getCurrentTimestamp();
-          await messagesCollection.updateOne(
-            { chatId },
-            {
-              $set: {
-                messages: [],
-                updatedAt: now
-              }
-            },
-            { upsert: true }
-          );
-          const chat = await this.findById(chatId);
-          if (chat) {
-            await this.update(chatId, {
-              messageCount: 0,
-              lastMessageAt: null
-            });
-          }
-          logger.info("Messages cleared for chat", { chatId });
-          return true;
-        } catch (error2) {
-          logger.error("Failed to clear messages for chat", {
-            chatId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return false;
-        }
-      }
-    };
-    mongoChatsRepository = new MongoChatsRepository();
-  }
-});
-
-// lib/mongodb/repositories/tags.repository.ts
-var MongoTagsRepository;
-var init_tags_repository2 = __esm({
-  "lib/mongodb/repositories/tags.repository.ts"() {
-    "use strict";
-    init_logger();
-    init_types();
-    init_client2();
-    MongoTagsRepository = class {
-      constructor() {
-        this.collectionName = "tags";
-        this.schema = TagSchema;
-      }
-      /**
-       * Get the MongoDB collection
-       */
-      async getCollection() {
-        const db = await getMongoDatabase();
-        const collection = db.collection(this.collectionName);
-        logger.debug("Retrieved MongoDB tags collection", {
-          collectionName: this.collectionName
-        });
-        return collection;
-      }
-      /**
-       * Validate data against schema
-       */
-      validate(data2) {
-        return this.schema.parse(data2);
-      }
-      /**
-       * Safely validate without throwing
-       */
-      validateSafe(data2) {
-        try {
-          const validated = this.validate(data2);
-          return { success: true, data: validated };
-        } catch (error2) {
-          return { success: false, error: error2.message };
-        }
-      }
-      /**
-       * Generate UUID v4
-       */
-      generateId() {
-        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c4) {
-          const r4 = Math.random() * 16 | 0;
-          const v4 = c4 === "x" ? r4 : r4 & 3 | 8;
-          return v4.toString(16);
-        });
-      }
-      /**
-       * Get current ISO timestamp
-       */
-      getCurrentTimestamp() {
-        return (/* @__PURE__ */ new Date()).toISOString();
-      }
-      /**
-       * Find a tag by ID
-       */
-      async findById(id) {
-        const collection = await this.getCollection();
-        logger.debug("Finding tag by ID", {
-          tagId: id
-        });
-        try {
-          const tag2 = await collection.findOne({ id });
-          if (!tag2) {
-            logger.debug("Tag not found", {
-              tagId: id
-            });
-            return null;
-          }
-          const { _id, ...tagData } = tag2;
-          const validationResult = this.validateSafe(tagData);
-          if (!validationResult.success) {
-            logger.warn("Tag validation failed", {
-              tagId: id,
-              error: validationResult.error
-            });
-            return null;
-          }
-          logger.debug("Tag found by ID", {
-            tagId: id
-          });
-          return validationResult.data || null;
-        } catch (error2) {
-          logger.error("Error finding tag by ID", {
-            tagId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Find all tags
-       */
-      async findAll() {
-        const collection = await this.getCollection();
-        logger.debug("Finding all tags");
-        try {
-          const tags = await collection.find({}).toArray();
-          logger.debug("Retrieved all tags", {
-            count: tags.length
-          });
-          const validatedTags = [];
-          for (const tag2 of tags) {
-            const { _id, ...tagData } = tag2;
-            const validationResult = this.validateSafe(tagData);
-            if (validationResult.success && validationResult.data) {
-              validatedTags.push(validationResult.data);
-            } else {
-              logger.warn("Skipping invalid tag during findAll", {
-                error: validationResult.error
-              });
-            }
-          }
-          return validatedTags;
-        } catch (error2) {
-          logger.error("Error finding all tags", {
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Find tags by user ID
-       */
-      async findByUserId(userId) {
-        const collection = await this.getCollection();
-        logger.debug("Finding tags by user ID", {
-          userId
-        });
-        try {
-          const tags = await collection.find({ userId }).toArray();
-          logger.debug("Retrieved tags by user ID", {
-            userId,
-            count: tags.length
-          });
-          const validatedTags = [];
-          for (const tag2 of tags) {
-            const { _id, ...tagData } = tag2;
-            const validationResult = this.validateSafe(tagData);
-            if (validationResult.success && validationResult.data) {
-              validatedTags.push(validationResult.data);
-            } else {
-              logger.warn("Skipping invalid tag during findByUserId", {
-                userId,
-                error: validationResult.error
-              });
-            }
-          }
-          return validatedTags;
-        } catch (error2) {
-          logger.error("Error finding tags by user ID", {
-            userId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Find tag by name (case-insensitive)
-       */
-      async findByName(userId, name) {
-        const collection = await this.getCollection();
-        const nameLower = name.toLowerCase();
-        logger.debug("Finding tag by name", {
-          userId,
-          name,
-          nameLower
-        });
-        try {
-          const tag2 = await collection.findOne({
-            userId,
-            nameLower
-          });
-          if (!tag2) {
-            logger.debug("Tag not found by name", {
-              userId,
-              name,
-              nameLower
-            });
-            return null;
-          }
-          const { _id, ...tagData } = tag2;
-          const validationResult = this.validateSafe(tagData);
-          if (!validationResult.success) {
-            logger.warn("Tag validation failed during findByName", {
-              userId,
-              name,
-              error: validationResult.error
-            });
-            return null;
-          }
-          logger.debug("Tag found by name", {
-            userId,
-            name
-          });
-          return validationResult.data || null;
-        } catch (error2) {
-          logger.error("Error finding tag by name", {
-            userId,
-            name,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Create a new tag
-       */
-      async create(data2) {
-        const collection = await this.getCollection();
-        const id = this.generateId();
-        const now = this.getCurrentTimestamp();
-        logger.debug("Creating new tag", {
-          userId: data2.userId,
-          name: data2.name
-        });
-        try {
-          const nameLower = (data2.nameLower || data2.name).toLowerCase();
-          const tag2 = {
-            ...data2,
-            id,
-            nameLower,
-            quickHide: typeof data2.quickHide === "boolean" ? data2.quickHide : false,
-            createdAt: now,
-            updatedAt: now
-          };
-          const validated = this.validate(tag2);
-          const result = await collection.insertOne(validated);
-          logger.info("Tag created successfully", {
-            tagId: id,
-            userId: data2.userId,
-            name: data2.name,
-            insertedId: result.insertedId.toString()
-          });
-          return validated;
-        } catch (error2) {
-          logger.error("Error creating tag", {
-            userId: data2.userId,
-            name: data2.name,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Update a tag
-       */
-      async update(id, data2) {
-        const collection = await this.getCollection();
-        const now = this.getCurrentTimestamp();
-        logger.debug("Updating tag", {
-          tagId: id
-        });
-        try {
-          const updateData = {
-            ...data2,
-            updatedAt: now
-          };
-          if (data2.name) {
-            updateData.nameLower = data2.name.toLowerCase();
-            logger.debug("Tag name being updated, recalculating nameLower", {
-              tagId: id,
-              newName: data2.name,
-              newNameLower: updateData.nameLower
-            });
-          }
-          delete updateData.id;
-          delete updateData.createdAt;
-          const result = await collection.findOneAndUpdate(
-            { id },
-            { $set: updateData },
-            { returnDocument: "after" }
-          );
-          if (!result) {
-            logger.warn("Tag not found during update", {
-              tagId: id
-            });
-            return null;
-          }
-          const { _id, ...tagData } = result;
-          const validationResult = this.validateSafe(tagData);
-          if (!validationResult.success) {
-            logger.warn("Updated tag validation failed", {
-              tagId: id,
-              error: validationResult.error
-            });
-            return null;
-          }
-          logger.info("Tag updated successfully", {
-            tagId: id
-          });
-          return validationResult.data || null;
-        } catch (error2) {
-          logger.error("Error updating tag", {
-            tagId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Delete a tag
-       */
-      async delete(id) {
-        const collection = await this.getCollection();
-        logger.debug("Deleting tag", {
-          tagId: id
-        });
-        try {
-          const result = await collection.deleteOne({ id });
-          if (result.deletedCount === 0) {
-            logger.warn("Tag not found during delete", {
-              tagId: id
-            });
-            return false;
-          }
-          logger.info("Tag deleted successfully", {
-            tagId: id,
-            deletedCount: result.deletedCount
-          });
-          return true;
-        } catch (error2) {
-          logger.error("Error deleting tag", {
-            tagId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-    };
-  }
-});
-
-// lib/mongodb/repositories/users.repository.ts
-var UsersRepository2;
-var init_users_repository2 = __esm({
-  "lib/mongodb/repositories/users.repository.ts"() {
-    "use strict";
-    init_types();
-    init_logger();
-    init_client2();
-    UsersRepository2 = class {
-      constructor() {
-        this.usersCollectionName = "users";
-        this.chatSettingsCollectionName = "chat_settings";
-        this.userSchema = UserSchema;
-        this.chatSettingsSchema = ChatSettingsSchema;
-        this.generalSettingsSchema = GeneralSettingsSchema;
-      }
-      /**
-       * Get the users MongoDB collection
-       */
-      async getUsersCollection() {
-        const db = await getMongoDatabase();
-        const collection = db.collection(this.usersCollectionName);
-        logger.debug("Retrieved MongoDB users collection", {
-          collectionName: this.usersCollectionName
-        });
-        return collection;
-      }
-      /**
-       * Get the chat_settings MongoDB collection
-       */
-      async getChatSettingsCollection() {
-        const db = await getMongoDatabase();
-        const collection = db.collection(this.chatSettingsCollectionName);
-        logger.debug("Retrieved MongoDB chat_settings collection", {
-          collectionName: this.chatSettingsCollectionName
-        });
-        return collection;
-      }
-      /**
-       * Validate user data against schema
-       */
-      validateUser(data2) {
-        return this.userSchema.parse(data2);
-      }
-      /**
-       * Validate chat settings data against schema
-       */
-      validateChatSettings(data2) {
-        return this.chatSettingsSchema.parse(data2);
-      }
-      /**
-       * Validate general settings data against schema
-       */
-      validateGeneralSettings(data2) {
-        return this.generalSettingsSchema.parse(data2);
-      }
-      /**
-       * Safely validate user data without throwing
-       */
-      validateUserSafe(data2) {
-        try {
-          const validated = this.validateUser(data2);
-          return { success: true, data: validated };
-        } catch (error2) {
-          logger.warn("User validation failed", {
-            error: error2.message
-          });
-          return { success: false, error: error2.message };
-        }
-      }
-      /**
-       * Safely validate chat settings data without throwing
-       */
-      validateChatSettingsSafe(data2) {
-        try {
-          const validated = this.validateChatSettings(data2);
-          return { success: true, data: validated };
-        } catch (error2) {
-          logger.warn("ChatSettings validation failed", {
-            error: error2.message
-          });
-          return { success: false, error: error2.message };
-        }
-      }
-      /**
-       * Safely validate general settings data without throwing
-       */
-      validateGeneralSettingsSafe(data2) {
-        try {
-          const validated = this.validateGeneralSettings(data2);
-          return { success: true, data: validated };
-        } catch (error2) {
-          logger.warn("GeneralSettings validation failed", {
-            error: error2.message
-          });
-          return { success: false, error: error2.message };
-        }
-      }
-      /**
-       * Generate UUID v4
-       */
-      generateId() {
-        logger.debug("Generating UUID v4");
-        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c4) {
-          const r4 = Math.random() * 16 | 0;
-          const v4 = c4 === "x" ? r4 : r4 & 3 | 8;
-          return v4.toString(16);
-        });
-      }
-      /**
-       * Get current ISO-8601 timestamp
-       */
-      getCurrentTimestamp() {
-        const timestamp = (/* @__PURE__ */ new Date()).toISOString();
-        logger.debug("Generated timestamp", { timestamp });
-        return timestamp;
-      }
-      // ============================================================================
-      // USER OPERATIONS
-      // ============================================================================
-      /**
-       * Find a user by ID
-       */
-      async findById(id) {
-        const collection = await this.getUsersCollection();
-        logger.debug("Finding user by ID", {
-          userId: id
-        });
-        try {
-          const user = await collection.findOne({ id });
-          if (!user) {
-            logger.debug("User not found", {
-              userId: id
-            });
-            return null;
-          }
-          const { _id, ...userData } = user;
-          const validationResult = this.validateUserSafe(userData);
-          if (!validationResult.success) {
-            logger.warn("User validation failed", {
-              userId: id,
-              error: validationResult.error
-            });
-            return null;
-          }
-          logger.debug("User found by ID", {
-            userId: id
-          });
-          return validationResult.data || null;
-        } catch (error2) {
-          logger.error("Error finding user by ID", {
-            userId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Find a user by email
-       */
-      async findByEmail(email) {
-        const collection = await this.getUsersCollection();
-        logger.debug("Finding user by email", {
-          email
-        });
-        try {
-          const user = await collection.findOne({ email });
-          if (!user) {
-            logger.debug("User not found by email", {
-              email
-            });
-            return null;
-          }
-          const { _id, ...userData } = user;
-          const validationResult = this.validateUserSafe(userData);
-          if (!validationResult.success) {
-            logger.warn("User validation failed", {
-              email,
-              error: validationResult.error
-            });
-            return null;
-          }
-          logger.debug("User found by email", {
-            email
-          });
-          return validationResult.data || null;
-        } catch (error2) {
-          logger.error("Error finding user by email", {
-            email,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Find all users
-       */
-      async findAll() {
-        const collection = await this.getUsersCollection();
-        logger.debug("Finding all users");
-        try {
-          const users = await collection.find({}).toArray();
-          logger.debug("Retrieved all users", {
-            count: users.length
-          });
-          const validatedUsers = [];
-          for (const user of users) {
-            const { _id, ...userData } = user;
-            const validationResult = this.validateUserSafe(userData);
-            if (validationResult.success && validationResult.data) {
-              validatedUsers.push(validationResult.data);
-            } else {
-              logger.warn("Skipping invalid user during findAll", {
-                error: validationResult.error
-              });
-            }
-          }
-          return validatedUsers;
-        } catch (error2) {
-          logger.error("Error finding all users", {
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Create a new user
-       */
-      async create(data2) {
-        const collection = await this.getUsersCollection();
-        const id = this.generateId();
-        const now = this.getCurrentTimestamp();
-        logger.debug("Creating new user", {
-          email: data2.email
-        });
-        try {
-          const user = {
-            ...data2,
-            id,
-            createdAt: now,
-            updatedAt: now
-          };
-          const validated = this.validateUser(user);
-          const result = await collection.insertOne(validated);
-          logger.info("User created successfully", {
-            userId: id,
-            email: data2.email,
-            insertedId: result.insertedId.toString()
-          });
-          return validated;
-        } catch (error2) {
-          logger.error("Error creating user", {
-            email: data2.email,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Update a user
-       */
-      async update(id, data2) {
-        const collection = await this.getUsersCollection();
-        const now = this.getCurrentTimestamp();
-        logger.debug("Updating user", {
-          userId: id
-        });
-        try {
-          const updateData = {
-            ...data2,
-            updatedAt: now
-          };
-          delete updateData.id;
-          delete updateData.createdAt;
-          const result = await collection.findOneAndUpdate(
-            { id },
-            { $set: updateData },
-            { returnDocument: "after" }
-          );
-          if (!result) {
-            logger.warn("User not found during update", {
-              userId: id
-            });
-            return null;
-          }
-          const { _id, ...userData } = result;
-          const validationResult = this.validateUserSafe(userData);
-          if (!validationResult.success) {
-            logger.warn("Updated user validation failed", {
-              userId: id,
-              error: validationResult.error
-            });
-            return null;
-          }
-          logger.info("User updated successfully", {
-            userId: id
-          });
-          return validationResult.data || null;
-        } catch (error2) {
-          logger.error("Error updating user", {
-            userId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Delete a user
-       */
-      async delete(id) {
-        const collection = await this.getUsersCollection();
-        logger.debug("Deleting user", {
-          userId: id
-        });
-        try {
-          const result = await collection.deleteOne({ id });
-          if (result.deletedCount === 0) {
-            logger.warn("User not found during delete", {
-              userId: id
-            });
-            return false;
-          }
-          logger.info("User deleted successfully", {
-            userId: id,
-            deletedCount: result.deletedCount
-          });
-          return true;
-        } catch (error2) {
-          logger.error("Error deleting user", {
-            userId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      // ============================================================================
-      // CHAT SETTINGS OPERATIONS
-      // ============================================================================
-      /**
-       * Get chat settings for a user
-       */
-      async getChatSettings(userId) {
-        const collection = await this.getChatSettingsCollection();
-        logger.debug("Getting chat settings for user", {
-          userId
-        });
-        try {
-          const chatSettings = await collection.findOne({ userId });
-          if (!chatSettings) {
-            logger.debug("Chat settings not found for user", {
-              userId
-            });
-            return null;
-          }
-          const { _id, ...settingsData } = chatSettings;
-          const validationResult = this.validateChatSettingsSafe(settingsData);
-          if (!validationResult.success) {
-            logger.warn("ChatSettings validation failed", {
-              userId,
-              error: validationResult.error
-            });
-            return null;
-          }
-          logger.debug("Chat settings retrieved for user", {
-            userId
-          });
-          return validationResult.data || null;
-        } catch (error2) {
-          logger.error("Error getting chat settings", {
-            userId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Create chat settings for a user
-       */
-      async createChatSettings(userId, data2) {
-        const collection = await this.getChatSettingsCollection();
-        const id = this.generateId();
-        const now = this.getCurrentTimestamp();
-        logger.debug("Creating chat settings for user", {
-          userId
-        });
-        try {
-          const chatSettings = {
-            ...data2,
-            id,
-            userId,
-            createdAt: now,
-            updatedAt: now
-          };
-          const validated = this.validateChatSettings(chatSettings);
-          const result = await collection.insertOne(validated);
-          logger.info("Chat settings created successfully", {
-            chatSettingsId: id,
-            userId,
-            insertedId: result.insertedId.toString()
-          });
-          return validated;
-        } catch (error2) {
-          logger.error("Error creating chat settings", {
-            userId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Update chat settings for a user
-       */
-      async updateChatSettings(userId, data2) {
-        const collection = await this.getChatSettingsCollection();
-        const now = this.getCurrentTimestamp();
-        logger.debug("Updating chat settings for user", {
-          userId
-        });
-        try {
-          const updateData = {
-            ...data2,
-            updatedAt: now
-          };
-          delete updateData.id;
-          delete updateData.userId;
-          delete updateData.createdAt;
-          const result = await collection.findOneAndUpdate(
-            { userId },
-            { $set: updateData },
-            { returnDocument: "after" }
-          );
-          if (!result) {
-            logger.warn("Chat settings not found during update", {
-              userId
-            });
-            return null;
-          }
-          const { _id, ...settingsData } = result;
-          const validationResult = this.validateChatSettingsSafe(settingsData);
-          if (!validationResult.success) {
-            logger.warn("Updated chat settings validation failed", {
-              userId,
-              error: validationResult.error
-            });
-            return null;
-          }
-          logger.info("Chat settings updated successfully", {
-            userId
-          });
-          return validationResult.data || null;
-        } catch (error2) {
-          logger.error("Error updating chat settings", {
-            userId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      // ============================================================================
-      // GENERAL SETTINGS COMPOUND OPERATIONS
-      // ============================================================================
-      /**
-       * Get general settings (user + chat settings combined)
-       * Returns a compound object with version, user, chatSettings, and timestamps
-       */
-      async getGeneralSettings(userId) {
-        logger.debug("Getting general settings for user", {
-          userId
-        });
-        try {
-          const [user, chatSettings] = await Promise.all([
-            this.findById(userId),
-            this.getChatSettings(userId)
-          ]);
-          if (!user) {
-            logger.warn("User not found when retrieving general settings", {
-              userId
-            });
-            return null;
-          }
-          if (!chatSettings) {
-            logger.warn("Chat settings not found when retrieving general settings", {
-              userId
-            });
-            return null;
-          }
-          const now = (/* @__PURE__ */ new Date()).toISOString();
-          const generalSettings = {
-            version: 1,
-            user,
-            chatSettings,
-            createdAt: now,
-            updatedAt: now
-          };
-          const validationResult = this.validateGeneralSettingsSafe(generalSettings);
-          if (!validationResult.success) {
-            logger.warn("GeneralSettings validation failed", {
-              userId,
-              error: validationResult.error
-            });
-            return null;
-          }
-          logger.debug("General settings retrieved for user", {
-            userId
-          });
-          return validationResult.data || null;
-        } catch (error2) {
-          logger.error("Error getting general settings", {
-            userId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Update general settings (user + chat settings)
-       * Updates both collections atomically
-       */
-      async updateGeneralSettings(userId, data2) {
-        logger.debug("Updating general settings for user", {
-          userId
-        });
-        try {
-          if (data2.user) {
-            logger.debug("Updating user from general settings", {
-              userId
-            });
-            const updatedUser = await this.update(userId, data2.user);
-            if (!updatedUser) {
-              logger.error("Failed to update user during general settings update", {
-                userId
-              });
-              return null;
-            }
-          }
-          if (data2.chatSettings) {
-            logger.debug("Updating chat settings from general settings", {
-              userId
-            });
-            const updatedChatSettings = await this.updateChatSettings(userId, data2.chatSettings);
-            if (!updatedChatSettings) {
-              logger.error("Failed to update chat settings during general settings update", {
-                userId
-              });
-              return null;
-            }
-          }
-          const generalSettings = await this.getGeneralSettings(userId);
-          if (!generalSettings) {
-            logger.error("Failed to retrieve updated general settings", {
-              userId
-            });
-            return null;
-          }
-          logger.info("General settings updated successfully", {
-            userId
-          });
-          return generalSettings;
-        } catch (error2) {
-          logger.error("Error updating general settings", {
-            userId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-    };
-  }
-});
-
-// lib/mongodb/repositories/connection-profiles.repository.ts
-var ConnectionProfilesRepository2;
-var init_connection_profiles_repository2 = __esm({
-  "lib/mongodb/repositories/connection-profiles.repository.ts"() {
-    "use strict";
-    init_types();
-    init_logger();
-    init_base_repository2();
-    ConnectionProfilesRepository2 = class extends MongoBaseRepository {
-      constructor() {
-        super("connection_profiles", ConnectionProfileSchema);
-      }
-      // ============================================================================
-      // CONNECTION PROFILE OPERATIONS
-      // ============================================================================
-      /**
-       * Find a connection profile by ID
-       */
-      async findById(id) {
-        try {
-          logger.debug("Finding connection profile by ID", {
-            profileId: id,
-            collection: this.collectionName
-          });
-          const collection = await this.getCollection();
-          const doc = await collection.findOne({ id });
-          if (!doc) {
-            logger.debug("Connection profile not found", { profileId: id });
-            return null;
-          }
-          const validated = this.validate(doc);
-          logger.debug("Connection profile found and validated", { profileId: id });
-          return validated;
-        } catch (error2) {
-          logger.error("Error finding connection profile by ID", {
-            profileId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return null;
-        }
-      }
-      /**
-       * Find all connection profiles
-       */
-      async findAll() {
-        try {
-          logger.debug("Finding all connection profiles", { collection: this.collectionName });
-          const collection = await this.getCollection();
-          const docs = await collection.find({}).toArray();
-          logger.debug("Retrieved connection profiles from database", { count: docs.length });
-          const validated = docs.map((doc) => this.validateSafe(doc)).filter((result) => result.success).map((result) => result.data);
-          logger.debug("All connection profiles validated", {
-            total: docs.length,
-            validated: validated.length
-          });
-          return validated;
-        } catch (error2) {
-          logger.error("Error finding all connection profiles", {
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return [];
-        }
-      }
-      /**
-       * Find connection profiles by user ID
-       */
-      async findByUserId(userId) {
-        try {
-          logger.debug("Finding connection profiles by user ID", {
-            userId,
-            collection: this.collectionName
-          });
-          const collection = await this.getCollection();
-          const docs = await collection.find({ userId }).toArray();
-          logger.debug("Retrieved connection profiles for user", {
-            userId,
-            count: docs.length
-          });
-          const validated = docs.map((doc) => this.validateSafe(doc)).filter((result) => result.success).map((result) => result.data);
-          logger.debug("User connection profiles validated", {
-            userId,
-            total: docs.length,
-            validated: validated.length
-          });
-          return validated;
-        } catch (error2) {
-          logger.error("Error finding connection profiles by user ID", {
-            userId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return [];
-        }
-      }
-      /**
-       * Find connection profiles with a specific tag
-       */
-      async findByTag(tagId) {
-        try {
-          logger.debug("Finding connection profiles by tag", {
-            tagId,
-            collection: this.collectionName
-          });
-          const collection = await this.getCollection();
-          const docs = await collection.find({ tags: tagId }).toArray();
-          logger.debug("Retrieved connection profiles with tag", {
-            tagId,
-            count: docs.length
-          });
-          const validated = docs.map((doc) => this.validateSafe(doc)).filter((result) => result.success).map((result) => result.data);
-          logger.debug("Tag connection profiles validated", {
-            tagId,
-            total: docs.length,
-            validated: validated.length
-          });
-          return validated;
-        } catch (error2) {
-          logger.error("Error finding connection profiles by tag", {
-            tagId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return [];
-        }
-      }
-      /**
-       * Find default connection profile for user
-       */
-      async findDefault(userId) {
-        try {
-          logger.debug("Finding default connection profile for user", {
-            userId,
-            collection: this.collectionName
-          });
-          const collection = await this.getCollection();
-          const doc = await collection.findOne({ userId, isDefault: true });
-          if (!doc) {
-            logger.debug("No default connection profile found for user", { userId });
-            return null;
-          }
-          const validated = this.validate(doc);
-          logger.debug("Default connection profile found for user", { userId });
-          return validated;
-        } catch (error2) {
-          logger.error("Error finding default connection profile", {
-            userId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return null;
-        }
-      }
-      /**
-       * Create a new connection profile
-       */
-      async create(data2) {
-        try {
-          logger.debug("Creating new connection profile", {
-            userId: data2.userId,
-            name: data2.name,
-            provider: data2.provider,
-            collection: this.collectionName
-          });
-          const id = this.generateId();
-          const now = this.getCurrentTimestamp();
-          const profile = {
-            ...data2,
-            id,
-            createdAt: now,
-            updatedAt: now
-          };
-          const validated = this.validate(profile);
-          const collection = await this.getCollection();
-          const result = await collection.insertOne(validated);
-          logger.info("Connection profile created successfully", {
-            profileId: id,
-            userId: data2.userId,
-            provider: data2.provider,
-            insertedId: result.insertedId.toString()
-          });
-          return validated;
-        } catch (error2) {
-          logger.error("Error creating connection profile", {
-            userId: data2.userId,
-            name: data2.name,
-            provider: data2.provider,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Update a connection profile
-       */
-      async update(id, data2) {
-        try {
-          logger.debug("Updating connection profile", {
-            profileId: id,
-            collection: this.collectionName
-          });
-          const existing = await this.findById(id);
-          if (!existing) {
-            logger.warn("Connection profile not found for update", { profileId: id });
-            return null;
-          }
-          const now = this.getCurrentTimestamp();
-          const updated = {
-            ...existing,
-            ...data2,
-            id: existing.id,
-            // Preserve ID
-            createdAt: existing.createdAt,
-            // Preserve creation timestamp
-            updatedAt: now
-          };
-          const validated = this.validate(updated);
-          const collection = await this.getCollection();
-          const result = await collection.updateOne(
-            { id },
-            { $set: validated }
-          );
-          logger.info("Connection profile updated successfully", {
-            profileId: id,
-            matchedCount: result.matchedCount,
-            modifiedCount: result.modifiedCount
-          });
-          return validated;
-        } catch (error2) {
-          logger.error("Error updating connection profile", {
-            profileId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Delete a connection profile
-       */
-      async delete(id) {
-        try {
-          logger.debug("Deleting connection profile", {
-            profileId: id,
-            collection: this.collectionName
-          });
-          const collection = await this.getCollection();
-          const result = await collection.deleteOne({ id });
-          if (result.deletedCount === 0) {
-            logger.warn("Connection profile not found for deletion", { profileId: id });
-            return false;
-          }
-          logger.info("Connection profile deleted successfully", {
-            profileId: id,
-            deletedCount: result.deletedCount
-          });
-          return true;
-        } catch (error2) {
-          logger.error("Error deleting connection profile", {
-            profileId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Add a tag to a connection profile
-       */
-      async addTag(profileId, tagId) {
-        try {
-          logger.debug("Adding tag to connection profile", {
-            profileId,
-            tagId,
-            collection: this.collectionName
-          });
-          const profile = await this.findById(profileId);
-          if (!profile) {
-            logger.warn("Connection profile not found for tag addition", { profileId });
-            return null;
-          }
-          if (!profile.tags.includes(tagId)) {
-            profile.tags.push(tagId);
-            logger.debug("Tag added to connection profile tags array", {
-              profileId,
-              tagId,
-              totalTags: profile.tags.length
-            });
-            return await this.update(profileId, { tags: profile.tags });
-          }
-          logger.debug("Tag already exists for connection profile", { profileId, tagId });
-          return profile;
-        } catch (error2) {
-          logger.error("Error adding tag to connection profile", {
-            profileId,
-            tagId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Remove a tag from a connection profile
-       */
-      async removeTag(profileId, tagId) {
-        try {
-          logger.debug("Removing tag from connection profile", {
-            profileId,
-            tagId,
-            collection: this.collectionName
-          });
-          const profile = await this.findById(profileId);
-          if (!profile) {
-            logger.warn("Connection profile not found for tag removal", { profileId });
-            return null;
-          }
-          const initialLength = profile.tags.length;
-          profile.tags = profile.tags.filter((id) => id !== tagId);
-          if (profile.tags.length < initialLength) {
-            logger.debug("Tag removed from connection profile tags array", {
-              profileId,
-              tagId,
-              totalTags: profile.tags.length
-            });
-            return await this.update(profileId, { tags: profile.tags });
-          }
-          logger.debug("Tag not found in connection profile tags", { profileId, tagId });
-          return profile;
-        } catch (error2) {
-          logger.error("Error removing tag from connection profile", {
-            profileId,
-            tagId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      // ============================================================================
-      // API KEY OPERATIONS
-      // ============================================================================
-      /**
-       * Get the API keys collection
-       */
-      async getApiKeysCollection() {
-        try {
-          const db = await this.getCollection();
-          const mongoDb = db.db;
-          logger.debug("Retrieved MongoDB API keys collection", { collection: "api_keys" });
-          return mongoDb.collection("api_keys");
-        } catch (error2) {
-          logger.error("Failed to get MongoDB API keys collection", {
-            collection: "api_keys",
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Get all API keys
-       */
-      async getAllApiKeys() {
-        try {
-          logger.debug("Finding all API keys", { collection: "api_keys" });
-          const collection = await this.getApiKeysCollection();
-          const docs = await collection.find({}).toArray();
-          logger.debug("Retrieved API keys from database", { count: docs.length });
-          const validated = docs.map((doc) => {
-            const result = ApiKeySchema.safeParse(doc);
-            if (!result.success) {
-              logger.warn("API key validation failed", {
-                keyId: doc.id,
-                error: result.error.message
-              });
-              return null;
-            }
-            return result.data;
-          }).filter((key) => key !== null);
-          logger.debug("All API keys validated", {
-            total: docs.length,
-            validated: validated.length
-          });
-          return validated;
-        } catch (error2) {
-          logger.error("Error finding all API keys", {
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return [];
-        }
-      }
-      /**
-       * Find API key by ID
-       */
-      async findApiKeyById(id) {
-        try {
-          logger.debug("Finding API key by ID", {
-            keyId: id,
-            collection: "api_keys"
-          });
-          const collection = await this.getApiKeysCollection();
-          const doc = await collection.findOne({ id });
-          if (!doc) {
-            logger.debug("API key not found", { keyId: id });
-            return null;
-          }
-          const validated = ApiKeySchema.parse(doc);
-          logger.debug("API key found and validated", { keyId: id });
-          return validated;
-        } catch (error2) {
-          logger.error("Error finding API key by ID", {
-            keyId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return null;
-        }
-      }
-      /**
-       * Create a new API key
-       */
-      async createApiKey(data2) {
-        try {
-          logger.debug("Creating new API key", {
-            label: data2.label,
-            provider: data2.provider,
-            collection: "api_keys"
-          });
-          const id = this.generateId();
-          const now = this.getCurrentTimestamp();
-          const apiKey = {
-            ...data2,
-            id,
-            createdAt: now,
-            updatedAt: now
-          };
-          const validated = ApiKeySchema.parse(apiKey);
-          const collection = await this.getApiKeysCollection();
-          const result = await collection.insertOne(validated);
-          logger.info("API key created successfully", {
-            keyId: id,
-            label: data2.label,
-            provider: data2.provider,
-            insertedId: result.insertedId.toString()
-          });
-          return validated;
-        } catch (error2) {
-          logger.error("Error creating API key", {
-            label: data2.label,
-            provider: data2.provider,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Update an API key
-       */
-      async updateApiKey(id, data2) {
-        try {
-          logger.debug("Updating API key", {
-            keyId: id,
-            collection: "api_keys"
-          });
-          const existing = await this.findApiKeyById(id);
-          if (!existing) {
-            logger.warn("API key not found for update", { keyId: id });
-            return null;
-          }
-          const now = this.getCurrentTimestamp();
-          const updated = {
-            ...existing,
-            ...data2,
-            id: existing.id,
-            // Preserve ID
-            createdAt: existing.createdAt,
-            // Preserve creation timestamp
-            updatedAt: now
-          };
-          const validated = ApiKeySchema.parse(updated);
-          const collection = await this.getApiKeysCollection();
-          const result = await collection.updateOne(
-            { id },
-            { $set: validated }
-          );
-          logger.info("API key updated successfully", {
-            keyId: id,
-            matchedCount: result.matchedCount,
-            modifiedCount: result.modifiedCount
-          });
-          return validated;
-        } catch (error2) {
-          logger.error("Error updating API key", {
-            keyId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Delete an API key
-       */
-      async deleteApiKey(id) {
-        try {
-          logger.debug("Deleting API key", {
-            keyId: id,
-            collection: "api_keys"
-          });
-          const collection = await this.getApiKeysCollection();
-          const result = await collection.deleteOne({ id });
-          if (result.deletedCount === 0) {
-            logger.warn("API key not found for deletion", { keyId: id });
-            return false;
-          }
-          logger.info("API key deleted successfully", {
-            keyId: id,
-            deletedCount: result.deletedCount
-          });
-          return true;
-        } catch (error2) {
-          logger.error("Error deleting API key", {
-            keyId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Update API key last used timestamp
-       */
-      async recordApiKeyUsage(id) {
-        try {
-          logger.debug("Recording API key usage", {
-            keyId: id,
-            collection: "api_keys"
-          });
-          const result = await this.updateApiKey(id, { lastUsed: this.getCurrentTimestamp() });
-          if (result) {
-            logger.debug("API key usage recorded", { keyId: id });
-          }
-          return result;
-        } catch (error2) {
-          logger.error("Error recording API key usage", {
-            keyId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-    };
-  }
-});
-
-// lib/mongodb/repositories/image-profiles.repository.ts
-var MongoImageProfilesRepository;
-var init_image_profiles_repository2 = __esm({
-  "lib/mongodb/repositories/image-profiles.repository.ts"() {
-    "use strict";
-    init_logger();
-    init_types();
-    init_client2();
-    MongoImageProfilesRepository = class {
-      constructor() {
-        this.collectionName = "image_profiles";
-        this.schema = ImageProfileSchema;
-      }
-      /**
-       * Get the MongoDB collection
-       */
-      async getCollection() {
-        const db = await getMongoDatabase();
-        const collection = db.collection(this.collectionName);
-        logger.debug("Retrieved MongoDB image profiles collection", {
-          collectionName: this.collectionName
-        });
-        return collection;
-      }
-      /**
-       * Validate data against schema
-       */
-      validate(data2) {
-        return this.schema.parse(data2);
-      }
-      /**
-       * Safely validate without throwing
-       */
-      validateSafe(data2) {
-        try {
-          const validated = this.validate(data2);
-          return { success: true, data: validated };
-        } catch (error2) {
-          return { success: false, error: error2.message };
-        }
-      }
-      /**
-       * Generate UUID v4
-       */
-      generateId() {
-        logger.debug("Generating UUID v4 for image profile");
-        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c4) {
-          const r4 = Math.random() * 16 | 0;
-          const v4 = c4 === "x" ? r4 : r4 & 3 | 8;
-          return v4.toString(16);
-        });
-      }
-      /**
-       * Get current ISO timestamp
-       */
-      getCurrentTimestamp() {
-        const timestamp = (/* @__PURE__ */ new Date()).toISOString();
-        logger.debug("Generated timestamp for image profile", { timestamp });
-        return timestamp;
-      }
-      /**
-       * Find an image profile by ID
-       */
-      async findById(id) {
-        const collection = await this.getCollection();
-        logger.debug("Finding image profile by ID", {
-          profileId: id
-        });
-        try {
-          const profile = await collection.findOne({ id });
-          if (!profile) {
-            logger.debug("Image profile not found", {
-              profileId: id
-            });
-            return null;
-          }
-          const { _id, ...profileData } = profile;
-          const validationResult = this.validateSafe(profileData);
-          if (!validationResult.success) {
-            logger.warn("Image profile validation failed", {
-              profileId: id,
-              error: validationResult.error
-            });
-            return null;
-          }
-          logger.debug("Image profile found by ID", {
-            profileId: id
-          });
-          return validationResult.data || null;
-        } catch (error2) {
-          logger.error("Error finding image profile by ID", {
-            profileId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Find all image profiles
-       */
-      async findAll() {
-        const collection = await this.getCollection();
-        logger.debug("Finding all image profiles");
-        try {
-          const profiles = await collection.find({}).toArray();
-          logger.debug("Retrieved all image profiles", {
-            count: profiles.length
-          });
-          const validatedProfiles = [];
-          for (const profile of profiles) {
-            const { _id, ...profileData } = profile;
-            const validationResult = this.validateSafe(profileData);
-            if (validationResult.success && validationResult.data) {
-              validatedProfiles.push(validationResult.data);
-            } else {
-              logger.warn("Skipping invalid image profile during findAll", {
-                error: validationResult.error
-              });
-            }
-          }
-          return validatedProfiles;
-        } catch (error2) {
-          logger.error("Error finding all image profiles", {
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Find image profiles by user ID
-       */
-      async findByUserId(userId) {
-        const collection = await this.getCollection();
-        logger.debug("Finding image profiles by user ID", {
-          userId
-        });
-        try {
-          const profiles = await collection.find({ userId }).toArray();
-          logger.debug("Retrieved image profiles by user ID", {
-            userId,
-            count: profiles.length
-          });
-          const validatedProfiles = [];
-          for (const profile of profiles) {
-            const { _id, ...profileData } = profile;
-            const validationResult = this.validateSafe(profileData);
-            if (validationResult.success && validationResult.data) {
-              validatedProfiles.push(validationResult.data);
-            } else {
-              logger.warn("Skipping invalid image profile during findByUserId", {
-                userId,
-                error: validationResult.error
-              });
-            }
-          }
-          return validatedProfiles;
-        } catch (error2) {
-          logger.error("Error finding image profiles by user ID", {
-            userId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Find image profiles with a specific tag
-       */
-      async findByTag(tagId) {
-        const collection = await this.getCollection();
-        logger.debug("Finding image profiles by tag", {
-          tagId
-        });
-        try {
-          const profiles = await collection.find({ tags: tagId }).toArray();
-          logger.debug("Retrieved image profiles by tag", {
-            tagId,
-            count: profiles.length
-          });
-          const validatedProfiles = [];
-          for (const profile of profiles) {
-            const { _id, ...profileData } = profile;
-            const validationResult = this.validateSafe(profileData);
-            if (validationResult.success && validationResult.data) {
-              validatedProfiles.push(validationResult.data);
-            } else {
-              logger.warn("Skipping invalid image profile during findByTag", {
-                tagId,
-                error: validationResult.error
-              });
-            }
-          }
-          return validatedProfiles;
-        } catch (error2) {
-          logger.error("Error finding image profiles by tag", {
-            tagId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Find the default image profile for a user
-       */
-      async findDefault(userId) {
-        const collection = await this.getCollection();
-        logger.debug("Finding default image profile for user", {
-          userId
-        });
-        try {
-          const profile = await collection.findOne({
-            userId,
-            isDefault: true
-          });
-          if (!profile) {
-            logger.debug("Default image profile not found for user", {
-              userId
-            });
-            return null;
-          }
-          const { _id, ...profileData } = profile;
-          const validationResult = this.validateSafe(profileData);
-          if (!validationResult.success) {
-            logger.warn("Default image profile validation failed", {
-              userId,
-              error: validationResult.error
-            });
-            return null;
-          }
-          logger.debug("Default image profile found", {
-            userId,
-            profileId: profileData.id
-          });
-          return validationResult.data || null;
-        } catch (error2) {
-          logger.error("Error finding default image profile", {
-            userId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Find an image profile by name for a user
-       */
-      async findByName(userId, name) {
-        const collection = await this.getCollection();
-        logger.debug("Finding image profile by name", {
-          userId,
-          name
-        });
-        try {
-          const profile = await collection.findOne({
-            userId,
-            name
-          });
-          if (!profile) {
-            logger.debug("Image profile not found by name", {
-              userId,
-              name
-            });
-            return null;
-          }
-          const { _id, ...profileData } = profile;
-          const validationResult = this.validateSafe(profileData);
-          if (!validationResult.success) {
-            logger.warn("Image profile validation failed during findByName", {
-              userId,
-              name,
-              error: validationResult.error
-            });
-            return null;
-          }
-          logger.debug("Image profile found by name", {
-            userId,
-            name,
-            profileId: profileData.id
-          });
-          return validationResult.data || null;
-        } catch (error2) {
-          logger.error("Error finding image profile by name", {
-            userId,
-            name,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Create a new image profile
-       */
-      async create(data2) {
-        const collection = await this.getCollection();
-        const id = this.generateId();
-        const now = this.getCurrentTimestamp();
-        logger.debug("Creating new image profile", {
-          userId: data2.userId,
-          name: data2.name,
-          provider: data2.provider
-        });
-        try {
-          const profile = {
-            ...data2,
-            id,
-            createdAt: now,
-            updatedAt: now
-          };
-          const validated = this.validate(profile);
-          const result = await collection.insertOne(validated);
-          logger.info("Image profile created successfully", {
-            profileId: id,
-            userId: data2.userId,
-            name: data2.name,
-            provider: data2.provider,
-            insertedId: result.insertedId.toString()
-          });
-          return validated;
-        } catch (error2) {
-          logger.error("Error creating image profile", {
-            userId: data2.userId,
-            name: data2.name,
-            provider: data2.provider,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Update an image profile
-       */
-      async update(id, data2) {
-        const collection = await this.getCollection();
-        const now = this.getCurrentTimestamp();
-        logger.debug("Updating image profile", {
-          profileId: id
-        });
-        try {
-          const updateData = {
-            ...data2,
-            updatedAt: now
-          };
-          delete updateData.id;
-          delete updateData.createdAt;
-          const result = await collection.findOneAndUpdate(
-            { id },
-            { $set: updateData },
-            { returnDocument: "after" }
-          );
-          if (!result) {
-            logger.warn("Image profile not found during update", {
-              profileId: id
-            });
-            return null;
-          }
-          const { _id, ...profileData } = result;
-          const validationResult = this.validateSafe(profileData);
-          if (!validationResult.success) {
-            logger.warn("Updated image profile validation failed", {
-              profileId: id,
-              error: validationResult.error
-            });
-            return null;
-          }
-          logger.info("Image profile updated successfully", {
-            profileId: id
-          });
-          return validationResult.data || null;
-        } catch (error2) {
-          logger.error("Error updating image profile", {
-            profileId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Delete an image profile
-       */
-      async delete(id) {
-        const collection = await this.getCollection();
-        logger.debug("Deleting image profile", {
-          profileId: id
-        });
-        try {
-          const result = await collection.deleteOne({ id });
-          if (result.deletedCount === 0) {
-            logger.warn("Image profile not found during delete", {
-              profileId: id
-            });
-            return false;
-          }
-          logger.info("Image profile deleted successfully", {
-            profileId: id,
-            deletedCount: result.deletedCount
-          });
-          return true;
-        } catch (error2) {
-          logger.error("Error deleting image profile", {
-            profileId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Add a tag to an image profile
-       */
-      async addTag(profileId, tagId) {
-        const collection = await this.getCollection();
-        const now = this.getCurrentTimestamp();
-        logger.debug("Adding tag to image profile", {
-          profileId,
-          tagId
-        });
-        try {
-          const result = await collection.findOneAndUpdate(
-            { id: profileId },
-            {
-              $addToSet: { tags: tagId },
-              $set: { updatedAt: now }
-            },
-            { returnDocument: "after" }
-          );
-          if (!result) {
-            logger.warn("Image profile not found during tag addition", {
-              profileId,
-              tagId
-            });
-            return null;
-          }
-          const { _id, ...profileData } = result;
-          const validationResult = this.validateSafe(profileData);
-          if (!validationResult.success) {
-            logger.warn("Image profile validation failed after adding tag", {
-              profileId,
-              tagId,
-              error: validationResult.error
-            });
-            return null;
-          }
-          logger.info("Tag added to image profile successfully", {
-            profileId,
-            tagId
-          });
-          return validationResult.data || null;
-        } catch (error2) {
-          logger.error("Error adding tag to image profile", {
-            profileId,
-            tagId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Remove a tag from an image profile
-       */
-      async removeTag(profileId, tagId) {
-        const collection = await this.getCollection();
-        const now = this.getCurrentTimestamp();
-        logger.debug("Removing tag from image profile", {
-          profileId,
-          tagId
-        });
-        try {
-          const result = await collection.findOneAndUpdate(
-            { id: profileId },
-            {
-              $pull: { tags: tagId },
-              $set: { updatedAt: now }
-            },
-            { returnDocument: "after" }
-          );
-          if (!result) {
-            logger.warn("Image profile not found during tag removal", {
-              profileId,
-              tagId
-            });
-            return null;
-          }
-          const { _id, ...profileData } = result;
-          const validationResult = this.validateSafe(profileData);
-          if (!validationResult.success) {
-            logger.warn("Image profile validation failed after removing tag", {
-              profileId,
-              tagId,
-              error: validationResult.error
-            });
-            return null;
-          }
-          logger.info("Tag removed from image profile successfully", {
-            profileId,
-            tagId
-          });
-          return validationResult.data || null;
-        } catch (error2) {
-          logger.error("Error removing tag from image profile", {
-            profileId,
-            tagId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Set all profiles for a user to isDefault=false
-       * Used to ensure only one default profile per user
-       */
-      async unsetAllDefaults(userId) {
-        const collection = await this.getCollection();
-        const now = this.getCurrentTimestamp();
-        logger.debug("Unsetting all default image profiles for user", {
-          userId
-        });
-        try {
-          const result = await collection.updateMany(
-            { userId, isDefault: true },
-            {
-              $set: {
-                isDefault: false,
-                updatedAt: now
-              }
-            }
-          );
-          logger.info("All default image profiles unset for user", {
-            userId,
-            modifiedCount: result.modifiedCount
-          });
-          return result.modifiedCount;
-        } catch (error2) {
-          logger.error("Error unsetting all default image profiles", {
-            userId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-    };
-  }
-});
-
-// lib/mongodb/repositories/embedding-profiles.repository.ts
-var EmbeddingProfilesRepository2;
-var init_embedding_profiles_repository2 = __esm({
-  "lib/mongodb/repositories/embedding-profiles.repository.ts"() {
-    "use strict";
-    init_types();
-    init_logger();
-    init_base_repository2();
-    EmbeddingProfilesRepository2 = class extends MongoBaseRepository {
-      constructor() {
-        super("embedding_profiles", EmbeddingProfileSchema);
-      }
-      // ============================================================================
-      // EMBEDDING PROFILE OPERATIONS
-      // ============================================================================
-      /**
-       * Find an embedding profile by ID
-       */
-      async findById(id) {
-        try {
-          logger.debug("Finding embedding profile by ID", {
-            profileId: id,
-            collection: this.collectionName
-          });
-          const collection = await this.getCollection();
-          const doc = await collection.findOne({ id });
-          if (!doc) {
-            logger.debug("Embedding profile not found", { profileId: id });
-            return null;
-          }
-          const validated = this.validate(doc);
-          logger.debug("Embedding profile found and validated", { profileId: id });
-          return validated;
-        } catch (error2) {
-          logger.error("Error finding embedding profile by ID", {
-            profileId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return null;
-        }
-      }
-      /**
-       * Find all embedding profiles
-       */
-      async findAll() {
-        try {
-          logger.debug("Finding all embedding profiles", { collection: this.collectionName });
-          const collection = await this.getCollection();
-          const docs = await collection.find({}).toArray();
-          logger.debug("Retrieved embedding profiles from database", { count: docs.length });
-          const validated = docs.map((doc) => this.validateSafe(doc)).filter((result) => result.success).map((result) => result.data);
-          logger.debug("All embedding profiles validated", {
-            total: docs.length,
-            validated: validated.length
-          });
-          return validated;
-        } catch (error2) {
-          logger.error("Error finding all embedding profiles", {
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return [];
-        }
-      }
-      /**
-       * Find embedding profiles by user ID
-       */
-      async findByUserId(userId) {
-        try {
-          logger.debug("Finding embedding profiles by user ID", {
-            userId,
-            collection: this.collectionName
-          });
-          const collection = await this.getCollection();
-          const docs = await collection.find({ userId }).toArray();
-          logger.debug("Retrieved embedding profiles for user", {
-            userId,
-            count: docs.length
-          });
-          const validated = docs.map((doc) => this.validateSafe(doc)).filter((result) => result.success).map((result) => result.data);
-          logger.debug("User embedding profiles validated", {
-            userId,
-            total: docs.length,
-            validated: validated.length
-          });
-          return validated;
-        } catch (error2) {
-          logger.error("Error finding embedding profiles by user ID", {
-            userId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return [];
-        }
-      }
-      /**
-       * Find embedding profiles with a specific tag
-       */
-      async findByTag(tagId) {
-        try {
-          logger.debug("Finding embedding profiles by tag", {
-            tagId,
-            collection: this.collectionName
-          });
-          const collection = await this.getCollection();
-          const docs = await collection.find({ tags: tagId }).toArray();
-          logger.debug("Retrieved embedding profiles with tag", {
-            tagId,
-            count: docs.length
-          });
-          const validated = docs.map((doc) => this.validateSafe(doc)).filter((result) => result.success).map((result) => result.data);
-          logger.debug("Tag embedding profiles validated", {
-            tagId,
-            total: docs.length,
-            validated: validated.length
-          });
-          return validated;
-        } catch (error2) {
-          logger.error("Error finding embedding profiles by tag", {
-            tagId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return [];
-        }
-      }
-      /**
-       * Find default embedding profile for user
-       */
-      async findDefault(userId) {
-        try {
-          logger.debug("Finding default embedding profile for user", {
-            userId,
-            collection: this.collectionName
-          });
-          const collection = await this.getCollection();
-          const doc = await collection.findOne({ userId, isDefault: true });
-          if (!doc) {
-            logger.debug("No default embedding profile found for user", { userId });
-            return null;
-          }
-          const validated = this.validate(doc);
-          logger.debug("Default embedding profile found for user", { userId });
-          return validated;
-        } catch (error2) {
-          logger.error("Error finding default embedding profile", {
-            userId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return null;
-        }
-      }
-      /**
-       * Find embedding profile by name for a specific user
-       */
-      async findByName(userId, name) {
-        try {
-          logger.debug("Finding embedding profile by name for user", {
-            userId,
-            name,
-            collection: this.collectionName
-          });
-          const collection = await this.getCollection();
-          const doc = await collection.findOne({ userId, name });
-          if (!doc) {
-            logger.debug("Embedding profile not found by name for user", {
-              userId,
-              name
-            });
-            return null;
-          }
-          const validated = this.validate(doc);
-          logger.debug("Embedding profile found by name for user", {
-            userId,
-            name
-          });
-          return validated;
-        } catch (error2) {
-          logger.error("Error finding embedding profile by name", {
-            userId,
-            name,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return null;
-        }
-      }
-      /**
-       * Create a new embedding profile
-       */
-      async create(data2) {
-        try {
-          logger.debug("Creating new embedding profile", {
-            userId: data2.userId,
-            name: data2.name,
-            provider: data2.provider,
-            collection: this.collectionName
-          });
-          const id = this.generateId();
-          const now = this.getCurrentTimestamp();
-          const profile = {
-            ...data2,
-            id,
-            createdAt: now,
-            updatedAt: now
-          };
-          const validated = this.validate(profile);
-          const collection = await this.getCollection();
-          const result = await collection.insertOne(validated);
-          logger.info("Embedding profile created successfully", {
-            profileId: id,
-            userId: data2.userId,
-            name: data2.name,
-            provider: data2.provider,
-            insertedId: result.insertedId.toString()
-          });
-          return validated;
-        } catch (error2) {
-          logger.error("Error creating embedding profile", {
-            userId: data2.userId,
-            name: data2.name,
-            provider: data2.provider,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Update an embedding profile
-       */
-      async update(id, data2) {
-        try {
-          logger.debug("Updating embedding profile", {
-            profileId: id,
-            collection: this.collectionName
-          });
-          const existing = await this.findById(id);
-          if (!existing) {
-            logger.warn("Embedding profile not found for update", { profileId: id });
-            return null;
-          }
-          const now = this.getCurrentTimestamp();
-          const updated = {
-            ...existing,
-            ...data2,
-            id: existing.id,
-            // Preserve ID
-            createdAt: existing.createdAt,
-            // Preserve creation timestamp
-            updatedAt: now
-          };
-          const validated = this.validate(updated);
-          const collection = await this.getCollection();
-          const result = await collection.updateOne(
-            { id },
-            { $set: validated }
-          );
-          logger.info("Embedding profile updated successfully", {
-            profileId: id,
-            matchedCount: result.matchedCount,
-            modifiedCount: result.modifiedCount
-          });
-          return validated;
-        } catch (error2) {
-          logger.error("Error updating embedding profile", {
-            profileId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Delete an embedding profile
-       */
-      async delete(id) {
-        try {
-          logger.debug("Deleting embedding profile", {
-            profileId: id,
-            collection: this.collectionName
-          });
-          const collection = await this.getCollection();
-          const result = await collection.deleteOne({ id });
-          if (result.deletedCount === 0) {
-            logger.warn("Embedding profile not found for deletion", { profileId: id });
-            return false;
-          }
-          logger.info("Embedding profile deleted successfully", {
-            profileId: id,
-            deletedCount: result.deletedCount
-          });
-          return true;
-        } catch (error2) {
-          logger.error("Error deleting embedding profile", {
-            profileId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Add a tag to an embedding profile
-       */
-      async addTag(profileId, tagId) {
-        try {
-          logger.debug("Adding tag to embedding profile", {
-            profileId,
-            tagId,
-            collection: this.collectionName
-          });
-          const profile = await this.findById(profileId);
-          if (!profile) {
-            logger.warn("Embedding profile not found for tag addition", { profileId });
-            return null;
-          }
-          if (!profile.tags.includes(tagId)) {
-            profile.tags.push(tagId);
-            logger.debug("Tag added to embedding profile tags array", {
-              profileId,
-              tagId,
-              totalTags: profile.tags.length
-            });
-            return await this.update(profileId, { tags: profile.tags });
-          }
-          logger.debug("Tag already exists for embedding profile", { profileId, tagId });
-          return profile;
-        } catch (error2) {
-          logger.error("Error adding tag to embedding profile", {
-            profileId,
-            tagId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Remove a tag from an embedding profile
-       */
-      async removeTag(profileId, tagId) {
-        try {
-          logger.debug("Removing tag from embedding profile", {
-            profileId,
-            tagId,
-            collection: this.collectionName
-          });
-          const profile = await this.findById(profileId);
-          if (!profile) {
-            logger.warn("Embedding profile not found for tag removal", { profileId });
-            return null;
-          }
-          const initialLength = profile.tags.length;
-          profile.tags = profile.tags.filter((id) => id !== tagId);
-          if (profile.tags.length < initialLength) {
-            logger.debug("Tag removed from embedding profile tags array", {
-              profileId,
-              tagId,
-              totalTags: profile.tags.length
-            });
-            return await this.update(profileId, { tags: profile.tags });
-          }
-          logger.debug("Tag not found in embedding profile tags", { profileId, tagId });
-          return profile;
-        } catch (error2) {
-          logger.error("Error removing tag from embedding profile", {
-            profileId,
-            tagId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Unset all embedding profiles for a user as default
-       * Used when setting a new default profile
-       */
-      async unsetAllDefaults(userId) {
-        try {
-          logger.debug("Unsetting all default embedding profiles for user", {
-            userId,
-            collection: this.collectionName
-          });
-          const collection = await this.getCollection();
-          const result = await collection.updateMany(
-            { userId, isDefault: true },
-            { $set: { isDefault: false, updatedAt: this.getCurrentTimestamp() } }
-          );
-          logger.info("All default embedding profiles unset for user", {
-            userId,
-            matchedCount: result.matchedCount,
-            modifiedCount: result.modifiedCount
-          });
-          return result.modifiedCount > 0 || result.matchedCount === 0;
-        } catch (error2) {
-          logger.error("Error unsetting all default embedding profiles", {
-            userId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-    };
-  }
-});
-
-// lib/mongodb/repositories/memories.repository.ts
-var MemoriesRepository2;
-var init_memories_repository2 = __esm({
-  "lib/mongodb/repositories/memories.repository.ts"() {
-    "use strict";
-    init_types();
-    init_base_repository2();
-    init_logger();
-    MemoriesRepository2 = class extends MongoBaseRepository {
-      constructor() {
-        super("memories", MemorySchema);
-        logger.debug("MemoriesRepository initialized");
-      }
-      /**
-       * Find a memory by ID
-       * @param id The memory ID
-       * @returns Promise<Memory | null> The memory if found, null otherwise
-       */
-      async findById(id) {
-        logger.debug("Finding memory by ID", { memoryId: id });
-        try {
-          const collection = await this.getCollection();
-          const result = await collection.findOne({ id });
-          if (!result) {
-            logger.debug("Memory not found", { memoryId: id });
-            return null;
-          }
-          const validated = this.validate(result);
-          logger.debug("Memory found and validated", { memoryId: id });
-          return validated;
-        } catch (error2) {
-          logger.error("Error finding memory by ID", {
-            memoryId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return null;
-        }
-      }
-      /**
-       * Find all memories
-       * @returns Promise<Memory[]> Array of all memories
-       */
-      async findAll() {
-        logger.debug("Finding all memories");
-        try {
-          const collection = await this.getCollection();
-          const results = await collection.find({}).toArray();
-          const memories = results.map((doc) => {
-            const validation = this.validateSafe(doc);
-            if (validation.success && validation.data) {
-              return validation.data;
-            }
-            return null;
-          }).filter((memory) => memory !== null);
-          logger.debug("Retrieved all memories", { count: memories.length });
-          return memories;
-        } catch (error2) {
-          logger.error("Error finding all memories", {
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return [];
-        }
-      }
-      /**
-       * Find all memories for a specific character
-       * @param characterId The character ID
-       * @returns Promise<Memory[]> Array of memories for the character
-       */
-      async findByCharacterId(characterId) {
-        logger.debug("Finding memories by character ID", { characterId });
-        try {
-          const collection = await this.getCollection();
-          const results = await collection.find({ characterId }).toArray();
-          const memories = results.map((doc) => {
-            const validation = this.validateSafe(doc);
-            if (validation.success && validation.data) {
-              return validation.data;
-            }
-            return null;
-          }).filter((memory) => memory !== null);
-          logger.debug("Found memories for character", { characterId, count: memories.length });
-          return memories;
-        } catch (error2) {
-          logger.error("Error finding memories by character ID", {
-            characterId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return [];
-        }
-      }
-      /**
-       * Find memories containing any of the specified keywords
-       * @param characterId The character ID
-       * @param keywords Array of keywords to search for
-       * @returns Promise<Memory[]> Array of memories containing any keyword
-       */
-      async findByKeywords(characterId, keywords) {
-        logger.debug("Finding memories by keywords", { characterId, keywordCount: keywords.length });
-        try {
-          if (keywords.length === 0) {
-            logger.debug("Empty keywords array provided", { characterId });
-            return [];
-          }
-          const collection = await this.getCollection();
-          const results = await collection.find({
-            characterId,
-            keywords: { $in: keywords }
-          }).toArray();
-          const memories = results.map((doc) => {
-            const validation = this.validateSafe(doc);
-            if (validation.success && validation.data) {
-              return validation.data;
-            }
-            return null;
-          }).filter((memory) => memory !== null);
-          logger.debug("Found memories by keywords", { characterId, count: memories.length });
-          return memories;
-        } catch (error2) {
-          logger.error("Error finding memories by keywords", {
-            characterId,
-            keywordCount: keywords.length,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return [];
-        }
-      }
-      /**
-       * Text search in memory content and summary
-       * @param characterId The character ID
-       * @param query Search query string
-       * @returns Promise<Memory[]> Array of memories matching the search query
-       */
-      async searchByContent(characterId, query) {
-        logger.debug("Searching memories by content", { characterId, queryLength: query.length });
-        try {
-          const collection = await this.getCollection();
-          const regex = new RegExp(query, "i");
-          const results = await collection.find({
-            characterId,
-            $or: [
-              { content: { $regex: regex } },
-              { summary: { $regex: regex } }
-            ]
-          }).toArray();
-          const memories = results.map((doc) => {
-            const validation = this.validateSafe(doc);
-            if (validation.success && validation.data) {
-              return validation.data;
-            }
-            return null;
-          }).filter((memory) => memory !== null);
-          logger.debug("Found memories by content search", { characterId, count: memories.length });
-          return memories;
-        } catch (error2) {
-          logger.error("Error searching memories by content", {
-            characterId,
-            queryLength: query.length,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return [];
-        }
-      }
-      /**
-       * Find memories with importance >= minImportance threshold
-       * @param characterId The character ID
-       * @param minImportance Minimum importance value (0-1)
-       * @returns Promise<Memory[]> Array of memories meeting importance threshold
-       */
-      async findByImportance(characterId, minImportance) {
-        logger.debug("Finding memories by importance", { characterId, minImportance });
-        try {
-          if (minImportance < 0 || minImportance > 1) {
-            logger.warn("Invalid importance threshold", { minImportance });
-            return [];
-          }
-          const collection = await this.getCollection();
-          const results = await collection.find({
-            characterId,
-            importance: { $gte: minImportance }
-          }).toArray();
-          const memories = results.map((doc) => {
-            const validation = this.validateSafe(doc);
-            if (validation.success && validation.data) {
-              return validation.data;
-            }
-            return null;
-          }).filter((memory) => memory !== null);
-          logger.debug("Found memories by importance", { characterId, count: memories.length });
-          return memories;
-        } catch (error2) {
-          logger.error("Error finding memories by importance", {
-            characterId,
-            minImportance,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return [];
-        }
-      }
-      /**
-       * Find memories by source type
-       * @param characterId The character ID
-       * @param source Source type ('AUTO' or 'MANUAL')
-       * @returns Promise<Memory[]> Array of memories with the specified source
-       */
-      async findBySource(characterId, source) {
-        logger.debug("Finding memories by source", { characterId, source });
-        try {
-          const collection = await this.getCollection();
-          const results = await collection.find({
-            characterId,
-            source
-          }).toArray();
-          const memories = results.map((doc) => {
-            const validation = this.validateSafe(doc);
-            if (validation.success && validation.data) {
-              return validation.data;
-            }
-            return null;
-          }).filter((memory) => memory !== null);
-          logger.debug("Found memories by source", { characterId, source, count: memories.length });
-          return memories;
-        } catch (error2) {
-          logger.error("Error finding memories by source", {
-            characterId,
-            source,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return [];
-        }
-      }
-      /**
-       * Find the most recent memories for a character
-       * @param characterId The character ID
-       * @param limit Maximum number of memories to return (default: 10)
-       * @returns Promise<Memory[]> Array of recent memories, sorted by creation date (newest first)
-       */
-      async findRecent(characterId, limit = 10) {
-        logger.debug("Finding recent memories", { characterId, limit });
-        try {
-          const collection = await this.getCollection();
-          const results = await collection.find({ characterId }).sort({ createdAt: -1 }).limit(limit).toArray();
-          const memories = results.map((doc) => {
-            const validation = this.validateSafe(doc);
-            if (validation.success && validation.data) {
-              return validation.data;
-            }
-            return null;
-          }).filter((memory) => memory !== null);
-          logger.debug("Found recent memories", { characterId, count: memories.length, limit });
-          return memories;
-        } catch (error2) {
-          logger.error("Error finding recent memories", {
-            characterId,
-            limit,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return [];
-        }
-      }
-      /**
-       * Find the most important memories for a character
-       * @param characterId The character ID
-       * @param limit Maximum number of memories to return (default: 10)
-       * @returns Promise<Memory[]> Array of important memories, sorted by importance (highest first)
-       */
-      async findMostImportant(characterId, limit = 10) {
-        logger.debug("Finding most important memories", { characterId, limit });
-        try {
-          const collection = await this.getCollection();
-          const results = await collection.find({ characterId }).sort({ importance: -1 }).limit(limit).toArray();
-          const memories = results.map((doc) => {
-            const validation = this.validateSafe(doc);
-            if (validation.success && validation.data) {
-              return validation.data;
-            }
-            return null;
-          }).filter((memory) => memory !== null);
-          logger.debug("Found most important memories", { characterId, count: memories.length, limit });
-          return memories;
-        } catch (error2) {
-          logger.error("Error finding most important memories", {
-            characterId,
-            limit,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return [];
-        }
-      }
-      /**
-       * Create a new memory
-       * @param data The memory data (without id, createdAt, updatedAt)
-       * @returns Promise<Memory> The created memory with generated id and timestamps
-       */
-      async create(data2) {
-        logger.debug("Creating new memory", { characterId: data2.characterId });
-        try {
-          const id = this.generateId();
-          const now = this.getCurrentTimestamp();
-          const memory = {
-            ...data2,
-            id,
-            createdAt: now,
-            updatedAt: now
-          };
-          const validated = this.validate(memory);
-          const collection = await this.getCollection();
-          await collection.insertOne(validated);
-          logger.debug("Memory created successfully", { memoryId: id, characterId: data2.characterId });
-          return validated;
-        } catch (error2) {
-          logger.error("Error creating memory", {
-            characterId: data2.characterId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Update a memory
-       * @param id The memory ID
-       * @param data Partial memory data to update
-       * @returns Promise<Memory | null> The updated memory if found, null otherwise
-       */
-      async update(id, data2) {
-        logger.debug("Updating memory", { memoryId: id });
-        try {
-          const existing = await this.findById(id);
-          if (!existing) {
-            logger.warn("Memory not found for update", { memoryId: id });
-            return null;
-          }
-          const now = this.getCurrentTimestamp();
-          const updated = {
-            ...existing,
-            ...data2,
-            id: existing.id,
-            // Preserve ID
-            createdAt: existing.createdAt,
-            // Preserve creation timestamp
-            updatedAt: now
-          };
-          const validated = this.validate(updated);
-          const collection = await this.getCollection();
-          await collection.updateOne({ id }, { $set: validated });
-          logger.debug("Memory updated successfully", { memoryId: id });
-          return validated;
-        } catch (error2) {
-          logger.error("Error updating memory", {
-            memoryId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Update a specific character's memory
-       * @param characterId The character ID
-       * @param memoryId The memory ID
-       * @param data Partial memory data to update
-       * @returns Promise<Memory | null> The updated memory if found, null otherwise
-       */
-      async updateForCharacter(characterId, memoryId, data2) {
-        logger.debug("Updating memory for character", { characterId, memoryId });
-        try {
-          const memory = await this.findById(memoryId);
-          if (!memory) {
-            logger.warn("Memory not found for update", { memoryId, characterId });
-            return null;
-          }
-          if (memory.characterId !== characterId) {
-            logger.warn("Memory does not belong to character", { characterId, memoryId });
-            return null;
-          }
-          return await this.update(memoryId, data2);
-        } catch (error2) {
-          logger.error("Error updating memory for character", {
-            characterId,
-            memoryId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Delete a memory
-       * @param id The memory ID
-       * @returns Promise<boolean> True if memory was deleted, false if not found
-       */
-      async delete(id) {
-        logger.debug("Deleting memory", { memoryId: id });
-        try {
-          const collection = await this.getCollection();
-          const result = await collection.deleteOne({ id });
-          if (result.deletedCount === 0) {
-            logger.warn("Memory not found for deletion", { memoryId: id });
-            return false;
-          }
-          logger.debug("Memory deleted successfully", { memoryId: id });
-          return true;
-        } catch (error2) {
-          logger.error("Error deleting memory", {
-            memoryId: id,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Delete a specific character's memory
-       * @param characterId The character ID
-       * @param memoryId The memory ID
-       * @returns Promise<boolean> True if memory was deleted, false if not found or doesn't belong to character
-       */
-      async deleteForCharacter(characterId, memoryId) {
-        logger.debug("Deleting memory for character", { characterId, memoryId });
-        try {
-          const memory = await this.findById(memoryId);
-          if (!memory) {
-            logger.warn("Memory not found for deletion", { memoryId, characterId });
-            return false;
-          }
-          if (memory.characterId !== characterId) {
-            logger.warn("Memory does not belong to character", { characterId, memoryId });
-            return false;
-          }
-          return await this.delete(memoryId);
-        } catch (error2) {
-          logger.error("Error deleting memory for character", {
-            characterId,
-            memoryId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Delete multiple memories for a character
-       * @param characterId The character ID
-       * @param memoryIds Array of memory IDs to delete
-       * @returns Promise<number> Number of memories successfully deleted
-       */
-      async bulkDelete(characterId, memoryIds) {
-        logger.debug("Bulk deleting memories for character", { characterId, count: memoryIds.length });
-        try {
-          if (memoryIds.length === 0) {
-            logger.debug("Empty memory IDs array provided", { characterId });
-            return 0;
-          }
-          const collection = await this.getCollection();
-          const result = await collection.deleteMany({
-            characterId,
-            id: { $in: memoryIds }
-          });
-          logger.debug("Bulk deletion completed", { characterId, deletedCount: result.deletedCount });
-          return result.deletedCount || 0;
-        } catch (error2) {
-          logger.error("Error bulk deleting memories for character", {
-            characterId,
-            count: memoryIds.length,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Update the lastAccessedAt timestamp for a memory
-       * @param characterId The character ID
-       * @param memoryId The memory ID
-       * @returns Promise<Memory | null> The updated memory if found, null otherwise
-       */
-      async updateAccessTime(characterId, memoryId) {
-        logger.debug("Updating memory access time", { characterId, memoryId });
-        try {
-          const memory = await this.findById(memoryId);
-          if (!memory) {
-            logger.warn("Memory not found for access time update", { memoryId, characterId });
-            return null;
-          }
-          if (memory.characterId !== characterId) {
-            logger.warn("Memory does not belong to character", { characterId, memoryId });
-            return null;
-          }
-          const now = this.getCurrentTimestamp();
-          return await this.update(memoryId, { lastAccessedAt: now });
-        } catch (error2) {
-          logger.error("Error updating memory access time", {
-            characterId,
-            memoryId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Count the number of memories for a character
-       * @param characterId The character ID
-       * @returns Promise<number> Number of memories for the character
-       */
-      async countByCharacterId(characterId) {
-        logger.debug("Counting memories for character", { characterId });
-        try {
-          const collection = await this.getCollection();
-          const count = await collection.countDocuments({ characterId });
-          logger.debug("Memory count retrieved", { characterId, count });
-          return count;
-        } catch (error2) {
-          logger.error("Error counting memories for character", {
-            characterId,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          return 0;
-        }
-      }
-    };
-  }
-});
-
-// lib/mongodb/repositories/files.repository.ts
-var FilesRepository, filesRepository;
-var init_files_repository = __esm({
-  "lib/mongodb/repositories/files.repository.ts"() {
-    "use strict";
-    init_logger();
-    init_base_repository2();
-    init_types();
-    FilesRepository = class extends MongoBaseRepository {
-      constructor() {
-        super("files", FileEntrySchema);
-        logger.debug("FilesRepository initialized", { collection: this.collectionName });
-      }
-      /**
-       * Find file by ID
-       */
-      async findById(id) {
-        try {
-          logger.debug("Finding file by ID", { fileId: id });
-          const collection = await this.getCollection();
-          const file = await collection.findOne({ id });
-          if (file) {
-            logger.debug("File found", { fileId: id });
-            return this.validate(file);
-          }
-          logger.debug("File not found", { fileId: id });
-          return null;
-        } catch (error2) {
-          logger.error("Error finding file by ID", { fileId: id, error: error2 instanceof Error ? error2.message : String(error2) });
-          throw error2;
-        }
-      }
-      /**
-       * Find all files
-       */
-      async findAll() {
-        try {
-          logger.debug("Finding all files");
-          const collection = await this.getCollection();
-          const files = await collection.find({}).toArray();
-          logger.debug("Files retrieved", { count: files.length });
-          return files.map((file) => this.validate(file));
-        } catch (error2) {
-          logger.error("Error finding all files", { error: error2 instanceof Error ? error2.message : String(error2) });
-          throw error2;
-        }
-      }
-      /**
-       * Find files by SHA256 content hash (for deduplication)
-       */
-      async findBySha256(sha256) {
-        try {
-          logger.debug("Finding files by SHA256", { sha256 });
-          const collection = await this.getCollection();
-          const files = await collection.find({ sha256 }).toArray();
-          logger.debug("Files found by SHA256", { sha256, count: files.length });
-          return files.map((file) => this.validate(file));
-        } catch (error2) {
-          logger.error("Error finding files by SHA256", { sha256, error: error2 instanceof Error ? error2.message : String(error2) });
-          throw error2;
-        }
-      }
-      /**
-       * Find files by category
-       */
-      async findByCategory(category) {
-        try {
-          logger.debug("Finding files by category", { category });
-          const collection = await this.getCollection();
-          const files = await collection.find({ category }).toArray();
-          logger.debug("Files found by category", { category, count: files.length });
-          return files.map((file) => this.validate(file));
-        } catch (error2) {
-          logger.error("Error finding files by category", { category, error: error2 instanceof Error ? error2.message : String(error2) });
-          throw error2;
-        }
-      }
-      /**
-       * Find files by source
-       */
-      async findBySource(source) {
-        try {
-          logger.debug("Finding files by source", { source });
-          const collection = await this.getCollection();
-          const files = await collection.find({ source }).toArray();
-          logger.debug("Files found by source", { source, count: files.length });
-          return files.map((file) => this.validate(file));
-        } catch (error2) {
-          logger.error("Error finding files by source", { source, error: error2 instanceof Error ? error2.message : String(error2) });
-          throw error2;
-        }
-      }
-      /**
-       * Find files linked to a specific entity
-       */
-      async findByLinkedTo(entityId) {
-        try {
-          logger.debug("Finding files linked to entity", { entityId });
-          const collection = await this.getCollection();
-          const files = await collection.find({ linkedTo: entityId }).toArray();
-          logger.debug("Files found linked to entity", { entityId, count: files.length });
-          return files.map((file) => this.validate(file));
-        } catch (error2) {
-          logger.error("Error finding files linked to entity", { entityId, error: error2 instanceof Error ? error2.message : String(error2) });
-          throw error2;
-        }
-      }
-      /**
-       * Find files with a specific tag
-       */
-      async findByTag(tagId) {
-        try {
-          logger.debug("Finding files by tag", { tagId });
-          const collection = await this.getCollection();
-          const files = await collection.find({ tags: tagId }).toArray();
-          logger.debug("Files found by tag", { tagId, count: files.length });
-          return files.map((file) => this.validate(file));
-        } catch (error2) {
-          logger.error("Error finding files by tag", { tagId, error: error2 instanceof Error ? error2.message : String(error2) });
-          throw error2;
-        }
-      }
-      /**
-       * Find files for a user
-       */
-      async findByUserId(userId) {
-        try {
-          logger.debug("Finding files by user ID", { userId });
-          const collection = await this.getCollection();
-          const files = await collection.find({ userId }).toArray();
-          logger.debug("Files found for user", { userId, count: files.length });
-          return files.map((file) => this.validate(file));
-        } catch (error2) {
-          logger.error("Error finding files by user ID", { userId, error: error2 instanceof Error ? error2.message : String(error2) });
-          throw error2;
-        }
-      }
-      /**
-       * Create new file entry
-       */
-      async create(data2) {
-        try {
-          logger.debug("Creating new file", { userId: data2.userId, filename: data2.originalFilename });
-          const id = this.generateId();
-          const now = this.getCurrentTimestamp();
-          const newFile = {
-            ...data2,
-            id,
-            createdAt: now,
-            updatedAt: now
-          };
-          const validated = this.validate(newFile);
-          const collection = await this.getCollection();
-          await collection.insertOne(validated);
-          logger.info("File created", { fileId: id, userId: data2.userId, filename: data2.originalFilename });
-          return validated;
-        } catch (error2) {
-          logger.error("Error creating file", {
-            userId: data2.userId,
-            filename: data2.originalFilename,
-            error: error2 instanceof Error ? error2.message : String(error2)
-          });
-          throw error2;
-        }
-      }
-      /**
-       * Update file entry
-       */
-      async update(id, data2) {
-        try {
-          logger.debug("Updating file", { fileId: id });
-          const now = this.getCurrentTimestamp();
-          const updateData = {
-            $set: {
-              ...data2,
-              updatedAt: now
-            }
-          };
-          const collection = await this.getCollection();
-          const result = await collection.findOneAndUpdate(
-            { id },
-            updateData,
-            { returnDocument: "after" }
-          );
-          if (result) {
-            logger.info("File updated", { fileId: id });
-            return this.validate(result);
-          }
-          logger.warn("File not found for update", { fileId: id });
-          return null;
-        } catch (error2) {
-          logger.error("Error updating file", { fileId: id, error: error2 instanceof Error ? error2.message : String(error2) });
-          throw error2;
-        }
-      }
-      /**
-       * Delete file entry
-       */
-      async delete(id) {
-        try {
-          logger.debug("Deleting file", { fileId: id });
-          const collection = await this.getCollection();
-          const result = await collection.deleteOne({ id });
-          if (result.deletedCount > 0) {
-            logger.info("File deleted", { fileId: id });
-            return true;
-          }
-          logger.warn("File not found for deletion", { fileId: id });
-          return false;
-        } catch (error2) {
-          logger.error("Error deleting file", { fileId: id, error: error2 instanceof Error ? error2.message : String(error2) });
-          throw error2;
-        }
-      }
-      /**
-       * Add entity to linkedTo array
-       */
-      async addLink(fileId, entityId) {
-        try {
-          logger.debug("Adding link to file", { fileId, entityId });
-          const collection = await this.getCollection();
-          const result = await collection.findOneAndUpdate(
-            { id: fileId },
-            {
-              $addToSet: { linkedTo: entityId },
-              $set: { updatedAt: this.getCurrentTimestamp() }
-            },
-            { returnDocument: "after" }
-          );
-          if (result) {
-            logger.info("Link added to file", { fileId, entityId });
-            return this.validate(result);
-          }
-          logger.warn("File not found for adding link", { fileId });
-          return null;
-        } catch (error2) {
-          logger.error("Error adding link to file", { fileId, entityId, error: error2 instanceof Error ? error2.message : String(error2) });
-          throw error2;
-        }
-      }
-      /**
-       * Remove entity from linkedTo array
-       */
-      async removeLink(fileId, entityId) {
-        try {
-          logger.debug("Removing link from file", { fileId, entityId });
-          const collection = await this.getCollection();
-          const result = await collection.findOneAndUpdate(
-            { id: fileId },
-            {
-              $pull: { linkedTo: entityId },
-              $set: { updatedAt: this.getCurrentTimestamp() }
-            },
-            { returnDocument: "after" }
-          );
-          if (result) {
-            logger.info("Link removed from file", { fileId, entityId });
-            return this.validate(result);
-          }
-          logger.warn("File not found for removing link", { fileId });
-          return null;
-        } catch (error2) {
-          logger.error("Error removing link from file", { fileId, entityId, error: error2 instanceof Error ? error2.message : String(error2) });
-          throw error2;
-        }
-      }
-      /**
-       * Add tag to file
-       */
-      async addTag(fileId, tagId) {
-        try {
-          logger.debug("Adding tag to file", { fileId, tagId });
-          const collection = await this.getCollection();
-          const result = await collection.findOneAndUpdate(
-            { id: fileId },
-            {
-              $addToSet: { tags: tagId },
-              $set: { updatedAt: this.getCurrentTimestamp() }
-            },
-            { returnDocument: "after" }
-          );
-          if (result) {
-            logger.info("Tag added to file", { fileId, tagId });
-            return this.validate(result);
-          }
-          logger.warn("File not found for adding tag", { fileId });
-          return null;
-        } catch (error2) {
-          logger.error("Error adding tag to file", { fileId, tagId, error: error2 instanceof Error ? error2.message : String(error2) });
-          throw error2;
-        }
-      }
-      /**
-       * Remove tag from file
-       */
-      async removeTag(fileId, tagId) {
-        try {
-          logger.debug("Removing tag from file", { fileId, tagId });
-          const collection = await this.getCollection();
-          const result = await collection.findOneAndUpdate(
-            { id: fileId },
-            {
-              $pull: { tags: tagId },
-              $set: { updatedAt: this.getCurrentTimestamp() }
-            },
-            { returnDocument: "after" }
-          );
-          if (result) {
-            logger.info("Tag removed from file", { fileId, tagId });
-            return this.validate(result);
-          }
-          logger.warn("File not found for removing tag", { fileId });
-          return null;
-        } catch (error2) {
-          logger.error("Error removing tag from file", { fileId, tagId, error: error2 instanceof Error ? error2.message : String(error2) });
-          throw error2;
-        }
-      }
-      /**
-       * Update S3 storage reference
-       */
-      async updateS3Reference(fileId, s3Key, s3Bucket) {
-        try {
-          logger.debug("Updating S3 reference for file", { fileId, s3Key, s3Bucket });
-          const collection = await this.getCollection();
-          const result = await collection.findOneAndUpdate(
-            { id: fileId },
-            {
-              $set: {
-                s3Key,
-                s3Bucket,
-                updatedAt: this.getCurrentTimestamp()
-              }
-            },
-            { returnDocument: "after" }
-          );
-          if (result) {
-            logger.info("S3 reference updated for file", { fileId, s3Key, s3Bucket });
-            return this.validate(result);
-          }
-          logger.warn("File not found for updating S3 reference", { fileId });
-          return null;
-        } catch (error2) {
-          logger.error("Error updating S3 reference for file", { fileId, s3Key, s3Bucket, error: error2 instanceof Error ? error2.message : String(error2) });
-          throw error2;
-        }
-      }
-    };
-    filesRepository = new FilesRepository();
-  }
-});
-
-// lib/mongodb/repositories/index.ts
-var repositories_exports2 = {};
-__export(repositories_exports2, {
-  CharactersRepository: () => CharactersRepository2,
-  ConnectionProfilesRepository: () => ConnectionProfilesRepository2,
-  EmbeddingProfilesRepository: () => EmbeddingProfilesRepository2,
-  FilesRepository: () => FilesRepository,
-  MemoriesRepository: () => MemoriesRepository2,
-  MongoBaseRepository: () => MongoBaseRepository,
-  MongoChatsRepository: () => MongoChatsRepository,
-  MongoImageProfilesRepository: () => MongoImageProfilesRepository,
-  MongoTagsRepository: () => MongoTagsRepository,
-  PersonasRepository: () => PersonasRepository2,
-  UsersRepository: () => UsersRepository2,
-  createRepositories: () => createRepositories2,
-  getRepositories: () => getRepositories2,
-  resetRepositories: () => resetRepositories2
-});
-function createRepositories2() {
-  logger.debug("Creating new repository container");
-  try {
-    const repositories = {
-      characters: new CharactersRepository2(),
-      personas: new PersonasRepository2(),
-      chats: new MongoChatsRepository(),
-      tags: new MongoTagsRepository(),
-      users: new UsersRepository2(),
-      connections: new ConnectionProfilesRepository2(),
-      images: new FilesRepository(),
-      imageProfiles: new MongoImageProfilesRepository(),
-      embeddingProfiles: new EmbeddingProfilesRepository2(),
-      memories: new MemoriesRepository2(),
-      files: new FilesRepository()
-    };
-    logger.debug("Repository container created successfully", {
-      repositories: Object.keys(repositories)
-    });
-    return repositories;
-  } catch (error2) {
-    logger.error("Failed to create repository container", {
-      error: error2 instanceof Error ? error2.message : String(error2)
-    });
-    throw error2;
-  }
-}
-function getRepositories2() {
-  if (!repositoryInstance) {
-    logger.debug("Initializing singleton repository instance");
-    repositoryInstance = createRepositories2();
-  }
-  logger.debug("Returning repository instance");
-  return repositoryInstance;
-}
-function resetRepositories2() {
-  logger.debug("Resetting repository instance");
-  repositoryInstance = null;
-}
-var repositoryInstance;
-var init_repositories2 = __esm({
-  "lib/mongodb/repositories/index.ts"() {
-    "use strict";
-    init_logger();
-    init_base_repository2();
-    init_characters_repository2();
-    init_personas_repository2();
-    init_chats_repository2();
-    init_tags_repository2();
-    init_users_repository2();
-    init_connection_profiles_repository2();
-    init_image_profiles_repository2();
-    init_embedding_profiles_repository2();
-    init_memories_repository2();
-    init_files_repository();
-    init_characters_repository2();
-    init_personas_repository2();
-    init_chats_repository2();
-    init_tags_repository2();
-    init_users_repository2();
-    init_connection_profiles_repository2();
-    init_image_profiles_repository2();
-    init_embedding_profiles_repository2();
-    init_memories_repository2();
-    init_files_repository();
-    repositoryInstance = null;
   }
 });
 
@@ -78290,108 +73610,28 @@ init_logger();
 var import_promises = __toESM(require("node:fs/promises"));
 var import_node_path = __toESM(require("node:path"));
 init_logger();
-
-// package.json
-var package_default = {
-  name: "quilltap",
-  version: "1.8.5-dev.12",
-  private: true,
-  author: {
-    name: "Charles Sebold",
-    email: "charles@sebold.tech",
-    url: "https://foundry-9.com"
-  },
-  description: "A chat client application for hosted AI models designed for role play",
-  license: "MIT",
-  repository: {
-    type: "git",
-    url: "https://github.com/foundry-9/quilltap.git"
-  },
-  scripts: {
-    dev: "next dev",
-    devssl: "next dev --experimental-https --experimental-https-key ./certs/localhost-key.pem --experimental-https-cert ./certs/localhost.pem",
-    build: "npm run lint && next build",
-    "build:plugins": "tsx scripts/build-plugins.ts",
-    start: "next start",
-    lint: "eslint .",
-    "lint:fix": "eslint . --fix",
-    test: "LOG_LEVEL=error npm run test:all",
-    "test:unit": "LOG_LEVEL=error jest",
-    "test:integration": "LOG_LEVEL=error jest --config jest.integration.config.ts",
-    "test:all": "LOG_LEVEL=error jest && LOG_LEVEL=error jest --config jest.integration.config.ts",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui",
-    "test:e2e:headed": "playwright test --headed",
-    "migrate-files": "tsx scripts/migrate-files.ts",
-    "migrate-files:dry-run": "tsx scripts/migrate-files.ts --dry-run",
-    "consolidate-images": "tsx scripts/consolidate-images.ts",
-    "consolidate-images:dry-run": "tsx scripts/consolidate-images.ts --dry-run",
-    "cleanup-old-files": "tsx scripts/cleanup-old-files.ts",
-    "generate:schemas": "tsx scripts/generate-plugin-manifest-schema.ts"
-  },
-  dependencies: {
-    "@anthropic-ai/sdk": "^0.71.0",
-    "@aws-sdk/client-s3": "^3.943.0",
-    "@aws-sdk/s3-request-presigner": "^3.943.0",
-    "@google/generative-ai": "^0.24.1",
-    "@openrouter/sdk": "^0.1.27",
-    bcrypt: "^5.1.1",
-    glob: "^12.0.0",
-    "jest-fetch-mock": "^3.0.3",
-    mongodb: "^6.21.0",
-    next: "^16.0.5",
-    "next-auth": "^4.24.7",
-    "node-fetch": "^3.3.2",
-    openai: "^6.9.0",
-    qrcode: "^1.5.4",
-    react: "^19.2.0",
-    "react-dom": "^19.2.0",
-    "react-markdown": "^10.1.0",
-    "react-syntax-highlighter": "^16.1.0",
-    "remark-gfm": "^4.0.1",
-    speakeasy: "^2.0.0",
-    zod: "^3.23.0"
-  },
-  devDependencies: {
-    "@eslint/eslintrc": "^3.3.1",
-    "@jest/globals": "^30.2.0",
-    "@playwright/test": "^1.49.0",
-    "@tailwindcss/postcss": "^4.1.17",
-    "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.0",
-    "@types/bcrypt": "^5.0.2",
-    "@types/jest": "^30.0.0",
-    "@types/node": "^22.0.0",
-    "@types/qrcode": "^1.5.6",
-    "@types/react": "^19.2.5",
-    "@types/react-dom": "^19.2.3",
-    "@types/react-syntax-highlighter": "^15.5.13",
-    "@types/speakeasy": "^2.0.10",
-    autoprefixer: "^10.4.22",
-    dotenv: "^17.2.3",
-    eslint: "^9.39.1",
-    "eslint-config-next": "^16.0.5",
-    jest: "^30.2.0",
-    "jest-environment-jsdom": "^30.2.0",
-    postcss: "^8.4.0",
-    tailwindcss: "^4.1.17",
-    "ts-jest": "^29.4.5",
-    "ts-node": "^10.9.2",
-    tsx: "^4.7.0",
-    typescript: "^5.6.0",
-    "zod-to-json-schema": "^3.25.0"
-  },
-  overrides: {
-    glob: "^12.0.0",
-    cookie: "^0.7.0"
-  }
-};
-
-// plugins/dist/qtap-plugin-upgrade/migration-runner.ts
+var import_package = __toESM(require_package());
 var MIGRATIONS_STATE_FILE = import_node_path.default.join(process.cwd(), "data", "settings", "migrations.json");
+function isMongoDBBackend() {
+  const backend = process.env.DATA_BACKEND || "";
+  return backend === "mongodb" || backend === "dual";
+}
+async function getMongoMigrationsRepo() {
+  const { getMongoMigrationsRepository: getMongoMigrationsRepository2 } = await Promise.resolve().then(() => (init_migrations_repository(), migrations_repository_exports));
+  return getMongoMigrationsRepository2();
+}
 async function loadMigrationState() {
+  if (isMongoDBBackend()) {
+    try {
+      const repo = await getMongoMigrationsRepo();
+      return await repo.loadState();
+    } catch (error2) {
+      logger.warn("Failed to load migration state from MongoDB, falling back to file", {
+        context: "migration-runner.loadMigrationState",
+        error: error2 instanceof Error ? error2.message : String(error2)
+      });
+    }
+  }
   try {
     const content = await import_promises.default.readFile(MIGRATIONS_STATE_FILE, "utf-8");
     return JSON.parse(content);
@@ -78399,11 +73639,26 @@ async function loadMigrationState() {
     return {
       completedMigrations: [],
       lastChecked: (/* @__PURE__ */ new Date()).toISOString(),
-      quilltapVersion: package_default.version
+      quilltapVersion: import_package.default.version
     };
   }
 }
 async function saveMigrationState(state2) {
+  if (isMongoDBBackend()) {
+    try {
+      const repo = await getMongoMigrationsRepo();
+      await repo.saveState(state2);
+      logger.debug("Migration state saved to MongoDB", {
+        context: "migration-runner.saveMigrationState"
+      });
+      return;
+    } catch (error2) {
+      logger.warn("Failed to save migration state to MongoDB, falling back to file", {
+        context: "migration-runner.saveMigrationState",
+        error: error2 instanceof Error ? error2.message : String(error2)
+      });
+    }
+  }
   const dir = import_node_path.default.dirname(MIGRATIONS_STATE_FILE);
   await import_promises.default.mkdir(dir, { recursive: true });
   await import_promises.default.writeFile(
@@ -78419,7 +73674,7 @@ async function recordCompletedMigration(state2, result) {
   const record = {
     id: result.id,
     completedAt: result.timestamp,
-    quilltapVersion: package_default.version,
+    quilltapVersion: import_package.default.version,
     itemsAffected: result.itemsAffected,
     message: result.message
   };
@@ -78427,7 +73682,7 @@ async function recordCompletedMigration(state2, result) {
     ...state2,
     completedMigrations: [...state2.completedMigrations, record],
     lastChecked: (/* @__PURE__ */ new Date()).toISOString(),
-    quilltapVersion: package_default.version
+    quilltapVersion: import_package.default.version
   };
   await saveMigrationState(updatedState);
   return updatedState;
@@ -79132,19 +74387,19 @@ var validateMongoDBConfigMigration = {
 };
 
 // lib/s3/config.ts
-var import_zod5 = require("zod");
+var import_zod6 = require("zod");
 var import_client_s3 = __toESM(require_dist_cjs71());
 init_logger();
-var s3ConfigSchema = import_zod5.z.object({
-  mode: import_zod5.z.enum(["embedded", "external", "disabled"]),
-  endpoint: import_zod5.z.string().url().optional(),
-  region: import_zod5.z.string().min(1, "S3 region is required"),
-  accessKey: import_zod5.z.string().optional(),
-  secretKey: import_zod5.z.string().optional(),
-  bucket: import_zod5.z.string().min(1, "S3 bucket name is required"),
-  pathPrefix: import_zod5.z.string().optional(),
-  publicUrl: import_zod5.z.string().url().optional(),
-  forcePathStyle: import_zod5.z.boolean()
+var s3ConfigSchema = import_zod6.z.object({
+  mode: import_zod6.z.enum(["embedded", "external", "disabled"]),
+  endpoint: import_zod6.z.string().url().optional(),
+  region: import_zod6.z.string().min(1, "S3 region is required"),
+  accessKey: import_zod6.z.string().optional(),
+  secretKey: import_zod6.z.string().optional(),
+  bucket: import_zod6.z.string().min(1, "S3 bucket name is required"),
+  pathPrefix: import_zod6.z.string().optional(),
+  publicUrl: import_zod6.z.string().url().optional(),
+  forcePathStyle: import_zod6.z.boolean()
 });
 function sanitizeCredentials(accessKey, secretKey) {
   const maskSecret = () => "****";
@@ -79270,7 +74525,7 @@ function validateS3Config() {
       errors: []
     };
   } catch (error2) {
-    if (error2 instanceof import_zod5.z.ZodError) {
+    if (error2 instanceof import_zod6.z.ZodError) {
       const validationErrors = error2.errors.map((err) => {
         const path4 = err.path.join(".");
         return `${path4}: ${err.message}`;
@@ -79546,21 +74801,12 @@ async function getJsonRepos() {
     throw error2;
   }
 }
-async function getMongoRepos() {
-  try {
-    const { getRepositories: getMongoRepos2 } = await Promise.resolve().then(() => (init_repositories2(), repositories_exports2));
-    return getMongoRepos2();
-  } catch (error2) {
-    logger.error("Failed to import MongoDB repositories", {
-      context: "migration.migrate-json-to-mongodb",
-      error: error2 instanceof Error ? error2.message : String(error2)
-    });
-    throw error2;
-  }
+async function getMongoDatabase2() {
+  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
+  return getDb();
 }
 async function isMongoDBAccessible() {
   try {
-    const { getMongoDatabase: getMongoDatabase2 } = await Promise.resolve().then(() => (init_client2(), client_exports2));
     const db = await getMongoDatabase2();
     await db.admin().ping();
     return true;
@@ -79572,10 +74818,27 @@ async function isMongoDBAccessible() {
     return false;
   }
 }
+async function getNextAuthUserId() {
+  try {
+    const { getJsonStore: getJsonStore2 } = await Promise.resolve().then(() => (init_json_store(), json_store_exports));
+    const jsonStore = getJsonStore2();
+    const accounts = await jsonStore.readJson("auth/accounts.json");
+    if (accounts && accounts.length > 0) {
+      return accounts[0].userId || null;
+    }
+    return null;
+  } catch (error2) {
+    logger.warn("Could not read NextAuth accounts", {
+      context: "migration.migrate-json-to-mongodb",
+      error: error2 instanceof Error ? error2.message : String(error2)
+    });
+    return null;
+  }
+}
 async function hasDataToMigrate() {
   try {
     const jsonRepos = await getJsonRepos();
-    const mongoRepos = await getMongoRepos();
+    const db = await getMongoDatabase2();
     const hasJsonData = (await jsonRepos.tags.findAll()).length > 0 || (await jsonRepos.users.findAll()).length > 0 || (await jsonRepos.connections.findAll()).length > 0 || (await jsonRepos.imageProfiles.findAll()).length > 0 || (await jsonRepos.embeddingProfiles.findAll()).length > 0 || (await jsonRepos.personas.findAll()).length > 0 || (await jsonRepos.characters.findAll()).length > 0 || (await jsonRepos.memories.findAll()).length > 0 || (await jsonRepos.chats.findAll()).length > 0;
     if (!hasJsonData) {
       logger.debug("No data found in JSON store to migrate", {
@@ -79583,27 +74846,17 @@ async function hasDataToMigrate() {
       });
       return false;
     }
-    const mongoTags = (await mongoRepos.tags.findAll()).length;
-    const mongoUsers = (await mongoRepos.users.findAll()).length;
-    const mongoConnections = (await mongoRepos.connections.findAll()).length;
-    const mongoImageProfiles = (await mongoRepos.imageProfiles.findAll()).length;
-    const mongoEmbeddingProfiles = (await mongoRepos.embeddingProfiles.findAll()).length;
-    const mongoPersonas = (await mongoRepos.personas.findAll()).length;
-    const mongoCharacters = (await mongoRepos.characters.findAll()).length;
-    const mongoMemories = (await mongoRepos.memories.findAll()).length;
-    const mongoChats = (await mongoRepos.chats.findAll()).length;
-    const mongoHasData = mongoTags > 0 || mongoUsers > 0 || mongoConnections > 0 || mongoImageProfiles > 0 || mongoEmbeddingProfiles > 0 || mongoPersonas > 0 || mongoCharacters > 0 || mongoMemories > 0 || mongoChats > 0;
+    const mongoTags = await db.collection("tags").countDocuments();
+    const mongoUsers = await db.collection("users").countDocuments();
+    const mongoConnections = await db.collection("connection_profiles").countDocuments();
+    const mongoChats = await db.collection("chats").countDocuments();
+    const mongoHasData = mongoTags > 0 || mongoUsers > 0 || mongoConnections > 0 || mongoChats > 0;
     if (mongoHasData) {
       logger.warn("MongoDB already contains data, skipping migration", {
         context: "migration.migrate-json-to-mongodb",
         mongoTags,
         mongoUsers,
         mongoConnections,
-        mongoImageProfiles,
-        mongoEmbeddingProfiles,
-        mongoPersonas,
-        mongoCharacters,
-        mongoMemories,
         mongoChats
       });
       return false;
@@ -79617,88 +74870,13 @@ async function hasDataToMigrate() {
     return false;
   }
 }
-async function migrateEntities(entityType, jsonRepo, mongoRepo) {
-  const itemsMigrated = [];
-  const errors = [];
-  try {
-    const entities = await jsonRepo.findAll();
-    logger.debug(`Migrating ${entityType} entities`, {
-      context: "migration.migrate-json-to-mongodb",
-      entityType,
-      count: entities.length
-    });
-    for (const entity of entities) {
-      try {
-        const { id, createdAt, updatedAt, ...createData } = entity;
-        try {
-          const entityWithMetadata = {
-            ...createData,
-            id,
-            createdAt: createdAt || (/* @__PURE__ */ new Date()).toISOString(),
-            updatedAt: updatedAt || (/* @__PURE__ */ new Date()).toISOString()
-          };
-          if (mongoRepo.create) {
-            const created = await mongoRepo.create(createData);
-            itemsMigrated.push(1);
-          } else if (mongoRepo.upsert) {
-            await mongoRepo.upsert(entity);
-            itemsMigrated.push(1);
-          } else if (mongoRepo.update) {
-            const existing = await mongoRepo.findById(id);
-            if (existing) {
-              logger.debug(`${entityType} entity already exists in MongoDB, skipping`, {
-                context: "migration.migrate-json-to-mongodb",
-                entityType,
-                entityId: id
-              });
-            } else {
-              await mongoRepo.update(id, entityWithMetadata);
-              itemsMigrated.push(1);
-            }
-          }
-        } catch (createError) {
-          if (createError.code === 11e3 || createError.message?.includes("duplicate")) {
-            logger.debug(`${entityType} entity already exists in MongoDB, skipping`, {
-              context: "migration.migrate-json-to-mongodb",
-              entityType,
-              entityId: entity.id
-            });
-            itemsMigrated.push(1);
-          } else {
-            throw createError;
-          }
-        }
-      } catch (error2) {
-        const errorMessage = error2 instanceof Error ? error2.message : String(error2);
-        errors.push({
-          id: entity.id,
-          error: errorMessage
-        });
-        logger.error(`Failed to migrate ${entityType} entity`, {
-          context: "migration.migrate-json-to-mongodb",
-          entityType,
-          entityId: entity.id,
-          error: errorMessage
-        });
-      }
-    }
-    logger.info(`Completed ${entityType} migration`, {
-      context: "migration.migrate-json-to-mongodb",
-      entityType,
-      itemsMigrated: itemsMigrated.length,
-      errors: errors.length
-    });
-  } catch (error2) {
-    logger.error(`Error during ${entityType} migration`, {
-      context: "migration.migrate-json-to-mongodb",
-      entityType,
-      error: error2 instanceof Error ? error2.message : String(error2)
-    });
+function mapUserId(entity, jsonUserId, nextAuthUserId) {
+  if (!entity || !jsonUserId || !nextAuthUserId) return entity;
+  const mapped = { ...entity };
+  if (mapped.userId === jsonUserId) {
+    mapped.userId = nextAuthUserId;
   }
-  return {
-    itemsMigrated: itemsMigrated.length,
-    errors
-  };
+  return mapped;
 }
 var migrateJsonToMongoDBMigration = {
   id: "migrate-json-to-mongodb-v1",
@@ -79734,95 +74912,297 @@ var migrateJsonToMongoDBMigration = {
     });
     try {
       const jsonRepos = await getJsonRepos();
-      const mongoRepos = await getMongoRepos();
-      const entities = [
-        { name: "tags", jsonRepo: jsonRepos.tags, mongoRepo: mongoRepos.tags },
-        { name: "users", jsonRepo: jsonRepos.users, mongoRepo: mongoRepos.users },
-        {
-          name: "connections",
-          jsonRepo: jsonRepos.connections,
-          mongoRepo: mongoRepos.connections
-        },
-        {
-          name: "imageProfiles",
-          jsonRepo: jsonRepos.imageProfiles,
-          mongoRepo: mongoRepos.imageProfiles
-        },
-        {
-          name: "embeddingProfiles",
-          jsonRepo: jsonRepos.embeddingProfiles,
-          mongoRepo: mongoRepos.embeddingProfiles
-        },
-        { name: "personas", jsonRepo: jsonRepos.personas, mongoRepo: mongoRepos.personas },
-        {
-          name: "characters",
-          jsonRepo: jsonRepos.characters,
-          mongoRepo: mongoRepos.characters
-        },
-        { name: "memories", jsonRepo: jsonRepos.memories, mongoRepo: mongoRepos.memories },
-        { name: "chats", jsonRepo: jsonRepos.chats, mongoRepo: mongoRepos.chats },
-        // Note: Files/images use the file-manager module, not JSON repositories
-        // File metadata migration is handled by the migrate-files-to-s3-v1 migration
-        { name: "images", jsonRepo: jsonRepos.images, mongoRepo: mongoRepos.images }
-      ];
-      for (const entity of entities) {
-        logger.debug(`Starting migration of ${entity.name}`, {
-          context: "migration.migrate-json-to-mongodb",
-          entityName: entity.name
+      const db = await getMongoDatabase2();
+      const nextAuthUserId = await getNextAuthUserId();
+      const jsonUsers = await jsonRepos.users.findAll();
+      const jsonUserId = jsonUsers.length > 0 ? jsonUsers[0].id : null;
+      logger.info("User ID mapping", {
+        context: "migration.migrate-json-to-mongodb",
+        jsonUserId,
+        nextAuthUserId,
+        willMap: !!(jsonUserId && nextAuthUserId && jsonUserId !== nextAuthUserId)
+      });
+      const shouldMapUserId = jsonUserId && nextAuthUserId && jsonUserId !== nextAuthUserId;
+      logger.info("Migrating tags...", { context: "migration.migrate-json-to-mongodb" });
+      const tags = await jsonRepos.tags.findAll();
+      if (tags.length > 0) {
+        const tagsToInsert = tags.map((tag2) => {
+          const mapped = shouldMapUserId ? mapUserId(tag2, jsonUserId, nextAuthUserId) : tag2;
+          return { ...mapped };
         });
-        const result = await migrateEntities(entity.name, entity.jsonRepo, entity.mongoRepo);
-        totalItemsMigrated += result.itemsMigrated;
-        for (const error2 of result.errors) {
-          allErrors.push({
-            entity: entity.name,
-            id: error2.id,
-            error: error2.error
-          });
+        await db.collection("tags").insertMany(tagsToInsert);
+        totalItemsMigrated += tags.length;
+        logger.info(`Migrated ${tags.length} tags`, { context: "migration.migrate-json-to-mongodb" });
+      }
+      logger.info("Migrating users...", { context: "migration.migrate-json-to-mongodb" });
+      if (jsonUsers.length > 0) {
+        for (const user of jsonUsers) {
+          const mappedUser = {
+            ...user,
+            // Map the user ID to match NextAuth
+            id: shouldMapUserId ? nextAuthUserId : user.id
+          };
+          await db.collection("users").insertOne(mappedUser);
+          totalItemsMigrated++;
         }
-        logger.info(`Completed ${entity.name} migration`, {
+        logger.info(`Migrated ${jsonUsers.length} users`, { context: "migration.migrate-json-to-mongodb" });
+      }
+      logger.info("Migrating chat settings...", { context: "migration.migrate-json-to-mongodb" });
+      try {
+        if (jsonUsers.length > 0) {
+          const chatSettings = await jsonRepos.users.getChatSettings(jsonUsers[0].id);
+          if (chatSettings) {
+            const mappedSettings = shouldMapUserId ? mapUserId(chatSettings, jsonUserId, nextAuthUserId) : chatSettings;
+            await db.collection("chat_settings").insertOne(mappedSettings);
+            totalItemsMigrated++;
+            logger.info("Migrated chat settings", { context: "migration.migrate-json-to-mongodb" });
+          }
+        }
+      } catch (error2) {
+        logger.warn("Could not migrate chat settings", {
           context: "migration.migrate-json-to-mongodb",
-          entityName: entity.name,
-          itemsMigrated: result.itemsMigrated,
-          errorsCount: result.errors.length
+          error: error2 instanceof Error ? error2.message : String(error2)
         });
       }
+      logger.info("Migrating API keys...", { context: "migration.migrate-json-to-mongodb" });
+      const apiKeys = await jsonRepos.connections.getAllApiKeys();
+      if (apiKeys.length > 0) {
+        const apiKeysToInsert = apiKeys.map((apiKey) => ({
+          ...apiKey,
+          // API keys in JSON don't have userId, add it
+          userId: shouldMapUserId ? nextAuthUserId : jsonUserId
+        }));
+        await db.collection("api_keys").insertMany(apiKeysToInsert);
+        totalItemsMigrated += apiKeys.length;
+        logger.info(`Migrated ${apiKeys.length} API keys`, { context: "migration.migrate-json-to-mongodb" });
+      }
+      logger.info("Migrating connection profiles...", { context: "migration.migrate-json-to-mongodb" });
+      const connections = await jsonRepos.connections.findAll();
+      if (connections.length > 0) {
+        const connectionsToInsert = connections.map((conn) => {
+          const mapped = shouldMapUserId ? mapUserId(conn, jsonUserId, nextAuthUserId) : conn;
+          return { ...mapped };
+        });
+        await db.collection("connection_profiles").insertMany(connectionsToInsert);
+        totalItemsMigrated += connections.length;
+        logger.info(`Migrated ${connections.length} connection profiles`, { context: "migration.migrate-json-to-mongodb" });
+      }
+      logger.info("Migrating image profiles...", { context: "migration.migrate-json-to-mongodb" });
+      const imageProfiles = await jsonRepos.imageProfiles.findAll();
+      if (imageProfiles.length > 0) {
+        const imageProfilesToInsert = imageProfiles.map((profile) => {
+          const mapped = shouldMapUserId ? mapUserId(profile, jsonUserId, nextAuthUserId) : profile;
+          return { ...mapped };
+        });
+        await db.collection("image_profiles").insertMany(imageProfilesToInsert);
+        totalItemsMigrated += imageProfiles.length;
+        logger.info(`Migrated ${imageProfiles.length} image profiles`, { context: "migration.migrate-json-to-mongodb" });
+      }
+      logger.info("Migrating embedding profiles...", { context: "migration.migrate-json-to-mongodb" });
+      const embeddingProfiles = await jsonRepos.embeddingProfiles.findAll();
+      if (embeddingProfiles.length > 0) {
+        const embeddingProfilesToInsert = embeddingProfiles.map((profile) => {
+          const mapped = shouldMapUserId ? mapUserId(profile, jsonUserId, nextAuthUserId) : profile;
+          return { ...mapped };
+        });
+        await db.collection("embedding_profiles").insertMany(embeddingProfilesToInsert);
+        totalItemsMigrated += embeddingProfiles.length;
+        logger.info(`Migrated ${embeddingProfiles.length} embedding profiles`, { context: "migration.migrate-json-to-mongodb" });
+      }
+      logger.info("Migrating personas...", { context: "migration.migrate-json-to-mongodb" });
+      const personas = await jsonRepos.personas.findAll();
+      if (personas.length > 0) {
+        const personasToInsert = personas.map((persona) => {
+          const mapped = shouldMapUserId ? mapUserId(persona, jsonUserId, nextAuthUserId) : persona;
+          return { ...mapped };
+        });
+        await db.collection("personas").insertMany(personasToInsert);
+        totalItemsMigrated += personas.length;
+        logger.info(`Migrated ${personas.length} personas`, { context: "migration.migrate-json-to-mongodb" });
+      }
+      logger.info("Migrating characters...", { context: "migration.migrate-json-to-mongodb" });
+      const characters = await jsonRepos.characters.findAll();
+      if (characters.length > 0) {
+        const charactersToInsert = characters.map((character) => {
+          const mapped = shouldMapUserId ? mapUserId(character, jsonUserId, nextAuthUserId) : character;
+          return { ...mapped };
+        });
+        await db.collection("characters").insertMany(charactersToInsert);
+        totalItemsMigrated += characters.length;
+        logger.info(`Migrated ${characters.length} characters`, { context: "migration.migrate-json-to-mongodb" });
+      }
+      logger.info("Migrating memories...", { context: "migration.migrate-json-to-mongodb" });
+      const memories = await jsonRepos.memories.findAll();
+      if (memories.length > 0) {
+        await db.collection("memories").insertMany(memories);
+        totalItemsMigrated += memories.length;
+        logger.info(`Migrated ${memories.length} memories`, { context: "migration.migrate-json-to-mongodb" });
+      }
+      logger.info("Migrating chats...", { context: "migration.migrate-json-to-mongodb" });
+      const chats = await jsonRepos.chats.findAll();
+      if (chats.length > 0) {
+        const chatsToInsert = chats.map((chat) => {
+          const mapped = shouldMapUserId ? mapUserId(chat, jsonUserId, nextAuthUserId) : chat;
+          return { ...mapped };
+        });
+        await db.collection("chats").insertMany(chatsToInsert);
+        totalItemsMigrated += chats.length;
+        let messagesMigrated = 0;
+        for (const chat of chats) {
+          try {
+            const messages = await jsonRepos.chats.getMessages(chat.id);
+            if (messages.length > 0) {
+              await db.collection("chat_messages").insertOne({
+                chatId: chat.id,
+                messages
+              });
+              messagesMigrated += messages.length;
+            }
+          } catch (error2) {
+            logger.warn(`Could not migrate messages for chat ${chat.id}`, {
+              context: "migration.migrate-json-to-mongodb",
+              error: error2 instanceof Error ? error2.message : String(error2)
+            });
+            allErrors.push({
+              entity: "chat_messages",
+              id: chat.id,
+              error: error2 instanceof Error ? error2.message : String(error2)
+            });
+          }
+        }
+        logger.info(`Migrated ${chats.length} chats with ${messagesMigrated} messages`, {
+          context: "migration.migrate-json-to-mongodb"
+        });
+      }
+      logger.info("Migrating files/images...", { context: "migration.migrate-json-to-mongodb" });
+      try {
+        const files = await jsonRepos.files.findAll();
+        if (files.length > 0) {
+          const filesToInsert = files.map((file) => {
+            const mapped = shouldMapUserId ? mapUserId(file, jsonUserId, nextAuthUserId) : file;
+            return { ...mapped };
+          });
+          await db.collection("files").insertMany(filesToInsert);
+          totalItemsMigrated += files.length;
+          logger.info(`Migrated ${files.length} files`, { context: "migration.migrate-json-to-mongodb" });
+        }
+      } catch (error2) {
+        logger.warn("Could not migrate files", {
+          context: "migration.migrate-json-to-mongodb",
+          error: error2 instanceof Error ? error2.message : String(error2)
+        });
+      }
+      logger.info("Migrating vector indices...", { context: "migration.migrate-json-to-mongodb" });
+      try {
+        const fs6 = await import("fs/promises");
+        const path4 = await import("path");
+        const vectorIndicesPath = path4.join(process.cwd(), "data", "vector-indices");
+        try {
+          const files = await fs6.readdir(vectorIndicesPath);
+          const jsonFiles = files.filter((f4) => f4.endsWith(".json"));
+          if (jsonFiles.length > 0) {
+            for (const file of jsonFiles) {
+              try {
+                const content = await fs6.readFile(path4.join(vectorIndicesPath, file), "utf-8");
+                const vectorIndex = JSON.parse(content);
+                if (!vectorIndex.id) {
+                  vectorIndex.id = vectorIndex.characterId;
+                }
+                await db.collection("vector_indices").updateOne(
+                  { characterId: vectorIndex.characterId },
+                  { $set: vectorIndex },
+                  { upsert: true }
+                );
+                totalItemsMigrated += 1;
+              } catch (fileError) {
+                logger.warn(`Could not migrate vector index ${file}`, {
+                  context: "migration.migrate-json-to-mongodb",
+                  error: fileError instanceof Error ? fileError.message : String(fileError)
+                });
+              }
+            }
+            logger.info(`Migrated ${jsonFiles.length} vector indices`, { context: "migration.migrate-json-to-mongodb" });
+          }
+        } catch (dirError) {
+          if (dirError.code !== "ENOENT") {
+            throw dirError;
+          }
+          logger.debug("No vector-indices directory found, skipping", { context: "migration.migrate-json-to-mongodb" });
+        }
+      } catch (error2) {
+        logger.warn("Could not migrate vector indices", {
+          context: "migration.migrate-json-to-mongodb",
+          error: error2 instanceof Error ? error2.message : String(error2)
+        });
+      }
+      logger.info("Migrating migration state...", { context: "migration.migrate-json-to-mongodb" });
+      try {
+        const fs6 = await import("fs/promises");
+        const path4 = await import("path");
+        const migrationsFilePath = path4.join(process.cwd(), "data", "settings", "migrations.json");
+        try {
+          const content = await fs6.readFile(migrationsFilePath, "utf-8");
+          const migrationState = JSON.parse(content);
+          await db.collection("migrations_state").updateOne(
+            { _id: "migration_state" },
+            {
+              $set: {
+                completedMigrations: migrationState.completedMigrations || [],
+                lastChecked: migrationState.lastChecked || (/* @__PURE__ */ new Date()).toISOString(),
+                quilltapVersion: migrationState.quilltapVersion || "1.0.0"
+              }
+            },
+            { upsert: true }
+          );
+          totalItemsMigrated += 1;
+          logger.info("Migrated migration state to MongoDB", { context: "migration.migrate-json-to-mongodb" });
+        } catch (fileError) {
+          if (fileError.code !== "ENOENT") {
+            throw fileError;
+          }
+          logger.debug("No migrations.json file found, skipping", { context: "migration.migrate-json-to-mongodb" });
+        }
+      } catch (error2) {
+        logger.warn("Could not migrate migration state", {
+          context: "migration.migrate-json-to-mongodb",
+          error: error2 instanceof Error ? error2.message : String(error2)
+        });
+      }
+      const durationMs = Date.now() - startTime;
+      const success = allErrors.length === 0;
+      logger.info("Completed JSON to MongoDB migration", {
+        context: "migration.migrate-json-to-mongodb",
+        success,
+        itemsMigrated: totalItemsMigrated,
+        errorsCount: allErrors.length,
+        durationMs
+      });
+      const errorSummary = allErrors.length > 0 ? allErrors.slice(0, 5).map((e4) => `${e4.entity}/${e4.id}: ${e4.error}`).join("; ") : void 0;
+      return {
+        id: "migrate-json-to-mongodb-v1",
+        success,
+        itemsAffected: totalItemsMigrated,
+        message: success ? `Successfully migrated ${totalItemsMigrated} items from JSON to MongoDB` : `Migrated ${totalItemsMigrated} items with ${allErrors.length} errors`,
+        error: errorSummary,
+        durationMs,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      };
     } catch (error2) {
       logger.error("Fatal error during migration", {
         context: "migration.migrate-json-to-mongodb",
         error: error2 instanceof Error ? error2.message : String(error2)
       });
-      const durationMs2 = Date.now() - startTime;
+      const durationMs = Date.now() - startTime;
       return {
         id: "migrate-json-to-mongodb-v1",
         success: false,
         itemsAffected: totalItemsMigrated,
         message: "Migration failed with fatal error",
         error: error2 instanceof Error ? error2.message : String(error2),
-        durationMs: durationMs2,
+        durationMs,
         timestamp: (/* @__PURE__ */ new Date()).toISOString()
       };
     }
-    const durationMs = Date.now() - startTime;
-    const success = allErrors.length === 0;
-    const errorSummary = allErrors.length > 0 ? allErrors.slice(0, 5).map(
-      (e4) => `${e4.entity}/${e4.id}: ${e4.error}`
-    ).join("; ") : void 0;
-    logger.info("Completed JSON to MongoDB migration", {
-      context: "migration.migrate-json-to-mongodb",
-      success,
-      itemsMigrated: totalItemsMigrated,
-      errorsCount: allErrors.length,
-      durationMs
-    });
-    return {
-      id: "migrate-json-to-mongodb-v1",
-      success,
-      itemsAffected: totalItemsMigrated,
-      message: success ? `Successfully migrated ${totalItemsMigrated} items from JSON to MongoDB` : `Migrated ${totalItemsMigrated} items with ${allErrors.length} errors`,
-      error: errorSummary,
-      durationMs,
-      timestamp: (/* @__PURE__ */ new Date()).toISOString()
-    };
   }
 };
 

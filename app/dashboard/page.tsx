@@ -1,5 +1,5 @@
 import { getServerSession } from "@/lib/auth/session";
-import { getRepositories } from "@/lib/json-store/repositories";
+import { getRepositories } from "@/lib/repositories/factory";
 import { findFileById, getFileUrl } from "@/lib/file-manager";
 import Link from "next/link";
 import { RecentChatsSection } from "@/components/dashboard/recent-chats";

@@ -8,7 +8,7 @@
 
 import { OpenRouter } from '@openrouter/sdk'
 import { Provider, ConnectionProfile } from '@/lib/json-store/schemas/types'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getRepositories } from '@/lib/repositories/factory'
 import { decryptApiKey } from '@/lib/encryption'
 import { logger } from '@/lib/logger'
 import {

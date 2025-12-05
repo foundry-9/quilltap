@@ -4,24 +4,24 @@
  * Migrates all structured data from JSON file storage to MongoDB.
  * This is a comprehensive migration that handles:
  * - Tags
- * - Users
+ * - Users (with NextAuth ID mapping)
+ * - Chat settings
+ * - API keys (with userId added)
  * - Connection profiles
  * - Image profiles
  * - Embedding profiles
  * - Personas
- * - Characters
+ * - Characters (with all embedded data preserved)
  * - Memories
- * - Chats (with messages)
- * - Images (metadata from ImagesRepository)
+ * - Chats (with messages and participants)
+ * - Files/Images
+ * - Vector Indices (embedding cache for semantic search)
  *
- * Note: Binary file storage and file metadata from the file-manager module
- * are handled separately by the migrate-files-to-s3-v1 migration.
+ * IMPORTANT: This migration uses direct MongoDB inserts to preserve original IDs
+ * and maintain all relationships between entities.
  *
- * The migration runs only when:
- * - DATA_BACKEND environment is set to 'mongodb' or 'dual'
- * - MongoDB is configured and accessible
- * - There is data in JSON store
- * - MongoDB collections are empty or smaller than their JSON counterparts
+ * It also maps the JSON userId to the NextAuth userId from accounts.json to
+ * ensure data is accessible after OAuth login.
  */
 
 import { logger } from '@/lib/logger';
@@ -40,7 +40,6 @@ function isMongoDBBackendEnabled(): boolean {
  */
 async function getJsonRepos() {
   try {
-    // Import JSON repositories
     const { getRepositories: getJsonRepos } = await import('@/lib/json-store/repositories');
     return getJsonRepos();
   } catch (error) {
@@ -53,20 +52,11 @@ async function getJsonRepos() {
 }
 
 /**
- * Get MongoDB repositories
+ * Get MongoDB database instance for direct inserts
  */
-async function getMongoRepos() {
-  try {
-    // Import MongoDB repositories
-    const { getRepositories: getMongoRepos } = await import('@/lib/mongodb/repositories');
-    return getMongoRepos();
-  } catch (error) {
-    logger.error('Failed to import MongoDB repositories', {
-      context: 'migration.migrate-json-to-mongodb',
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  }
+async function getMongoDatabase() {
+  const { getMongoDatabase: getDb } = await import('@/lib/mongodb/client');
+  return getDb();
 }
 
 /**
@@ -74,7 +64,6 @@ async function getMongoRepos() {
  */
 async function isMongoDBAccessible(): Promise<boolean> {
   try {
-    const { getMongoDatabase } = await import('@/lib/mongodb/client');
     const db = await getMongoDatabase();
     await db.admin().ping();
     return true;
@@ -88,12 +77,35 @@ async function isMongoDBAccessible(): Promise<boolean> {
 }
 
 /**
+ * Get the NextAuth userId from the accounts.json file
+ */
+async function getNextAuthUserId(): Promise<string | null> {
+  try {
+    const { getJsonStore } = await import('@/lib/json-store/core/json-store');
+    const jsonStore = getJsonStore();
+    const accounts = await jsonStore.readJson<any[]>('auth/accounts.json');
+
+    if (accounts && accounts.length > 0) {
+      // Return the userId from the first account (typically the primary OAuth account)
+      return accounts[0].userId || null;
+    }
+    return null;
+  } catch (error) {
+    logger.warn('Could not read NextAuth accounts', {
+      context: 'migration.migrate-json-to-mongodb',
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
+
+/**
  * Check if there is data to migrate
  */
 async function hasDataToMigrate(): Promise<boolean> {
   try {
     const jsonRepos = await getJsonRepos();
-    const mongoRepos = await getMongoRepos();
+    const db = await getMongoDatabase();
 
     // Check if any JSON entities exist
     const hasJsonData =
@@ -114,27 +126,13 @@ async function hasDataToMigrate(): Promise<boolean> {
       return false;
     }
 
-    // Check if MongoDB collections are empty or smaller than JSON
-    const mongoTags = (await mongoRepos.tags.findAll()).length;
-    const mongoUsers = (await mongoRepos.users.findAll()).length;
-    const mongoConnections = (await mongoRepos.connections.findAll()).length;
-    const mongoImageProfiles = (await mongoRepos.imageProfiles.findAll()).length;
-    const mongoEmbeddingProfiles = (await mongoRepos.embeddingProfiles.findAll()).length;
-    const mongoPersonas = (await mongoRepos.personas.findAll()).length;
-    const mongoCharacters = (await mongoRepos.characters.findAll()).length;
-    const mongoMemories = (await mongoRepos.memories.findAll()).length;
-    const mongoChats = (await mongoRepos.chats.findAll()).length;
+    // Check if MongoDB collections are empty
+    const mongoTags = await db.collection('tags').countDocuments();
+    const mongoUsers = await db.collection('users').countDocuments();
+    const mongoConnections = await db.collection('connection_profiles').countDocuments();
+    const mongoChats = await db.collection('chats').countDocuments();
 
-    const mongoHasData =
-      mongoTags > 0 ||
-      mongoUsers > 0 ||
-      mongoConnections > 0 ||
-      mongoImageProfiles > 0 ||
-      mongoEmbeddingProfiles > 0 ||
-      mongoPersonas > 0 ||
-      mongoCharacters > 0 ||
-      mongoMemories > 0 ||
-      mongoChats > 0;
+    const mongoHasData = mongoTags > 0 || mongoUsers > 0 || mongoConnections > 0 || mongoChats > 0;
 
     if (mongoHasData) {
       logger.warn('MongoDB already contains data, skipping migration', {
@@ -142,11 +140,6 @@ async function hasDataToMigrate(): Promise<boolean> {
         mongoTags,
         mongoUsers,
         mongoConnections,
-        mongoImageProfiles,
-        mongoEmbeddingProfiles,
-        mongoPersonas,
-        mongoCharacters,
-        mongoMemories,
         mongoChats,
       });
       return false;
@@ -163,113 +156,18 @@ async function hasDataToMigrate(): Promise<boolean> {
 }
 
 /**
- * Migrate entities from JSON to MongoDB
+ * Map userId from JSON to NextAuth userId in an entity
  */
-async function migrateEntities(
-  entityType: string,
-  jsonRepo: any,
-  mongoRepo: any,
-): Promise<{ itemsMigrated: number; errors: Array<{ id: string; error: string }> }> {
-  const itemsMigrated: number[] = [];
-  const errors: Array<{ id: string; error: string }> = [];
+function mapUserId(entity: any, jsonUserId: string, nextAuthUserId: string): any {
+  if (!entity || !jsonUserId || !nextAuthUserId) return entity;
 
-  try {
-    const entities = await jsonRepo.findAll();
+  const mapped = { ...entity };
 
-    logger.debug(`Migrating ${entityType} entities`, {
-      context: 'migration.migrate-json-to-mongodb',
-      entityType,
-      count: entities.length,
-    });
-
-    for (const entity of entities) {
-      try {
-        // Extract the fields needed for creation (exclude id, createdAt, updatedAt for create method)
-        const { id, createdAt, updatedAt, ...createData } = entity;
-
-        // Try to create the entity
-        try {
-          // Add id, createdAt, updatedAt back for upsert-like behavior
-          const entityWithMetadata = {
-            ...createData,
-            id,
-            createdAt: createdAt || new Date().toISOString(),
-            updatedAt: updatedAt || new Date().toISOString(),
-          };
-
-          // Attempt to create - some repos may handle this differently
-          if (mongoRepo.create) {
-            // For repos with create method
-            const created = await mongoRepo.create(createData);
-            itemsMigrated.push(1);
-          } else if (mongoRepo.upsert) {
-            // For repos with upsert method
-            await mongoRepo.upsert(entity);
-            itemsMigrated.push(1);
-          } else if (mongoRepo.update) {
-            // For repos with update method, first check if exists
-            const existing = await mongoRepo.findById(id);
-            if (existing) {
-              // Skip if already exists
-              logger.debug(`${entityType} entity already exists in MongoDB, skipping`, {
-                context: 'migration.migrate-json-to-mongodb',
-                entityType,
-                entityId: id,
-              });
-            } else {
-              await mongoRepo.update(id, entityWithMetadata);
-              itemsMigrated.push(1);
-            }
-          }
-        } catch (createError: any) {
-          // Check if error is due to duplicate key
-          if (
-            createError.code === 11000 ||
-            createError.message?.includes('duplicate')
-          ) {
-            logger.debug(`${entityType} entity already exists in MongoDB, skipping`, {
-              context: 'migration.migrate-json-to-mongodb',
-              entityType,
-              entityId: entity.id,
-            });
-            itemsMigrated.push(1);
-          } else {
-            throw createError;
-          }
-        }
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        errors.push({
-          id: entity.id,
-          error: errorMessage,
-        });
-        logger.error(`Failed to migrate ${entityType} entity`, {
-          context: 'migration.migrate-json-to-mongodb',
-          entityType,
-          entityId: entity.id,
-          error: errorMessage,
-        });
-      }
-    }
-
-    logger.info(`Completed ${entityType} migration`, {
-      context: 'migration.migrate-json-to-mongodb',
-      entityType,
-      itemsMigrated: itemsMigrated.length,
-      errors: errors.length,
-    });
-  } catch (error) {
-    logger.error(`Error during ${entityType} migration`, {
-      context: 'migration.migrate-json-to-mongodb',
-      entityType,
-      error: error instanceof Error ? error.message : String(error),
-    });
+  if (mapped.userId === jsonUserId) {
+    mapped.userId = nextAuthUserId;
   }
 
-  return {
-    itemsMigrated: itemsMigrated.length,
-    errors,
-  };
+  return mapped;
 }
 
 /**
@@ -286,7 +184,6 @@ export const migrateJsonToMongoDBMigration: Migration = {
       context: 'migration.migrate-json-to-mongodb',
     });
 
-    // Check if MongoDB backend is enabled
     if (!isMongoDBBackendEnabled()) {
       logger.debug('MongoDB backend not enabled, skipping migration', {
         context: 'migration.migrate-json-to-mongodb',
@@ -295,7 +192,6 @@ export const migrateJsonToMongoDBMigration: Migration = {
       return false;
     }
 
-    // Check if MongoDB is accessible
     const mongoAccessible = await isMongoDBAccessible();
     if (!mongoAccessible) {
       logger.warn('MongoDB is not accessible, deferring migration', {
@@ -304,7 +200,6 @@ export const migrateJsonToMongoDBMigration: Migration = {
       return false;
     }
 
-    // Check if there is data to migrate
     return await hasDataToMigrate();
   },
 
@@ -319,64 +214,375 @@ export const migrateJsonToMongoDBMigration: Migration = {
 
     try {
       const jsonRepos = await getJsonRepos();
-      const mongoRepos = await getMongoRepos();
+      const db = await getMongoDatabase();
 
-      // Migration order as specified
-      const entities = [
-        { name: 'tags', jsonRepo: jsonRepos.tags, mongoRepo: mongoRepos.tags },
-        { name: 'users', jsonRepo: jsonRepos.users, mongoRepo: mongoRepos.users },
-        {
-          name: 'connections',
-          jsonRepo: jsonRepos.connections,
-          mongoRepo: mongoRepos.connections,
-        },
-        {
-          name: 'imageProfiles',
-          jsonRepo: jsonRepos.imageProfiles,
-          mongoRepo: mongoRepos.imageProfiles,
-        },
-        {
-          name: 'embeddingProfiles',
-          jsonRepo: jsonRepos.embeddingProfiles,
-          mongoRepo: mongoRepos.embeddingProfiles,
-        },
-        { name: 'personas', jsonRepo: jsonRepos.personas, mongoRepo: mongoRepos.personas },
-        {
-          name: 'characters',
-          jsonRepo: jsonRepos.characters,
-          mongoRepo: mongoRepos.characters,
-        },
-        { name: 'memories', jsonRepo: jsonRepos.memories, mongoRepo: mongoRepos.memories },
-        { name: 'chats', jsonRepo: jsonRepos.chats, mongoRepo: mongoRepos.chats },
-        // Note: Files/images use the file-manager module, not JSON repositories
-        // File metadata migration is handled by the migrate-files-to-s3-v1 migration
-        { name: 'images', jsonRepo: jsonRepos.images, mongoRepo: mongoRepos.images },
-      ];
+      // Get the NextAuth userId for mapping
+      const nextAuthUserId = await getNextAuthUserId();
 
-      for (const entity of entities) {
-        logger.debug(`Starting migration of ${entity.name}`, {
-          context: 'migration.migrate-json-to-mongodb',
-          entityName: entity.name,
+      // Get the JSON userId from the first user
+      const jsonUsers = await jsonRepos.users.findAll();
+      const jsonUserId = jsonUsers.length > 0 ? jsonUsers[0].id : null;
+
+      logger.info('User ID mapping', {
+        context: 'migration.migrate-json-to-mongodb',
+        jsonUserId,
+        nextAuthUserId,
+        willMap: !!(jsonUserId && nextAuthUserId && jsonUserId !== nextAuthUserId),
+      });
+
+      const shouldMapUserId = jsonUserId && nextAuthUserId && jsonUserId !== nextAuthUserId;
+
+      // ========================================================================
+      // 1. Migrate Tags (preserve IDs, map userId)
+      // ========================================================================
+      logger.info('Migrating tags...', { context: 'migration.migrate-json-to-mongodb' });
+      const tags = await jsonRepos.tags.findAll();
+      if (tags.length > 0) {
+        const tagsToInsert = tags.map(tag => {
+          const mapped = shouldMapUserId ? mapUserId(tag, jsonUserId!, nextAuthUserId!) : tag;
+          return { ...mapped };
         });
+        await db.collection('tags').insertMany(tagsToInsert);
+        totalItemsMigrated += tags.length;
+        logger.info(`Migrated ${tags.length} tags`, { context: 'migration.migrate-json-to-mongodb' });
+      }
 
-        const result = await migrateEntities(entity.name, entity.jsonRepo, entity.mongoRepo);
-
-        totalItemsMigrated += result.itemsMigrated;
-        for (const error of result.errors) {
-          allErrors.push({
-            entity: entity.name,
-            id: error.id,
-            error: error.error,
-          });
+      // ========================================================================
+      // 2. Migrate User (map ID to NextAuth ID)
+      // ========================================================================
+      logger.info('Migrating users...', { context: 'migration.migrate-json-to-mongodb' });
+      if (jsonUsers.length > 0) {
+        for (const user of jsonUsers) {
+          const mappedUser = {
+            ...user,
+            // Map the user ID to match NextAuth
+            id: shouldMapUserId ? nextAuthUserId : user.id,
+          };
+          await db.collection('users').insertOne(mappedUser);
+          totalItemsMigrated++;
         }
+        logger.info(`Migrated ${jsonUsers.length} users`, { context: 'migration.migrate-json-to-mongodb' });
+      }
 
-        logger.info(`Completed ${entity.name} migration`, {
+      // ========================================================================
+      // 3. Migrate Chat Settings
+      // ========================================================================
+      logger.info('Migrating chat settings...', { context: 'migration.migrate-json-to-mongodb' });
+      try {
+        if (jsonUsers.length > 0) {
+          const chatSettings = await jsonRepos.users.getChatSettings(jsonUsers[0].id);
+          if (chatSettings) {
+            const mappedSettings = shouldMapUserId
+              ? mapUserId(chatSettings, jsonUserId!, nextAuthUserId!)
+              : chatSettings;
+            await db.collection('chat_settings').insertOne(mappedSettings);
+            totalItemsMigrated++;
+            logger.info('Migrated chat settings', { context: 'migration.migrate-json-to-mongodb' });
+          }
+        }
+      } catch (error) {
+        logger.warn('Could not migrate chat settings', {
           context: 'migration.migrate-json-to-mongodb',
-          entityName: entity.name,
-          itemsMigrated: result.itemsMigrated,
-          errorsCount: result.errors.length,
+          error: error instanceof Error ? error.message : String(error),
         });
       }
+
+      // ========================================================================
+      // 4. Migrate API Keys (preserve IDs, add userId)
+      // ========================================================================
+      logger.info('Migrating API keys...', { context: 'migration.migrate-json-to-mongodb' });
+      const apiKeys = await jsonRepos.connections.getAllApiKeys();
+      if (apiKeys.length > 0) {
+        const apiKeysToInsert = apiKeys.map(apiKey => ({
+          ...apiKey,
+          // API keys in JSON don't have userId, add it
+          userId: shouldMapUserId ? nextAuthUserId : jsonUserId,
+        }));
+        await db.collection('api_keys').insertMany(apiKeysToInsert);
+        totalItemsMigrated += apiKeys.length;
+        logger.info(`Migrated ${apiKeys.length} API keys`, { context: 'migration.migrate-json-to-mongodb' });
+      }
+
+      // ========================================================================
+      // 5. Migrate Connection Profiles (preserve IDs)
+      // ========================================================================
+      logger.info('Migrating connection profiles...', { context: 'migration.migrate-json-to-mongodb' });
+      const connections = await jsonRepos.connections.findAll();
+      if (connections.length > 0) {
+        const connectionsToInsert = connections.map(conn => {
+          const mapped = shouldMapUserId ? mapUserId(conn, jsonUserId!, nextAuthUserId!) : conn;
+          return { ...mapped };
+        });
+        await db.collection('connection_profiles').insertMany(connectionsToInsert);
+        totalItemsMigrated += connections.length;
+        logger.info(`Migrated ${connections.length} connection profiles`, { context: 'migration.migrate-json-to-mongodb' });
+      }
+
+      // ========================================================================
+      // 6. Migrate Image Profiles (preserve IDs)
+      // ========================================================================
+      logger.info('Migrating image profiles...', { context: 'migration.migrate-json-to-mongodb' });
+      const imageProfiles = await jsonRepos.imageProfiles.findAll();
+      if (imageProfiles.length > 0) {
+        const imageProfilesToInsert = imageProfiles.map(profile => {
+          const mapped = shouldMapUserId ? mapUserId(profile, jsonUserId!, nextAuthUserId!) : profile;
+          return { ...mapped };
+        });
+        await db.collection('image_profiles').insertMany(imageProfilesToInsert);
+        totalItemsMigrated += imageProfiles.length;
+        logger.info(`Migrated ${imageProfiles.length} image profiles`, { context: 'migration.migrate-json-to-mongodb' });
+      }
+
+      // ========================================================================
+      // 7. Migrate Embedding Profiles (preserve IDs)
+      // ========================================================================
+      logger.info('Migrating embedding profiles...', { context: 'migration.migrate-json-to-mongodb' });
+      const embeddingProfiles = await jsonRepos.embeddingProfiles.findAll();
+      if (embeddingProfiles.length > 0) {
+        const embeddingProfilesToInsert = embeddingProfiles.map(profile => {
+          const mapped = shouldMapUserId ? mapUserId(profile, jsonUserId!, nextAuthUserId!) : profile;
+          return { ...mapped };
+        });
+        await db.collection('embedding_profiles').insertMany(embeddingProfilesToInsert);
+        totalItemsMigrated += embeddingProfiles.length;
+        logger.info(`Migrated ${embeddingProfiles.length} embedding profiles`, { context: 'migration.migrate-json-to-mongodb' });
+      }
+
+      // ========================================================================
+      // 8. Migrate Personas (preserve IDs)
+      // ========================================================================
+      logger.info('Migrating personas...', { context: 'migration.migrate-json-to-mongodb' });
+      const personas = await jsonRepos.personas.findAll();
+      if (personas.length > 0) {
+        const personasToInsert = personas.map(persona => {
+          const mapped = shouldMapUserId ? mapUserId(persona, jsonUserId!, nextAuthUserId!) : persona;
+          return { ...mapped };
+        });
+        await db.collection('personas').insertMany(personasToInsert);
+        totalItemsMigrated += personas.length;
+        logger.info(`Migrated ${personas.length} personas`, { context: 'migration.migrate-json-to-mongodb' });
+      }
+
+      // ========================================================================
+      // 9. Migrate Characters (preserve IDs and all embedded data)
+      // ========================================================================
+      logger.info('Migrating characters...', { context: 'migration.migrate-json-to-mongodb' });
+      const characters = await jsonRepos.characters.findAll();
+      if (characters.length > 0) {
+        const charactersToInsert = characters.map(character => {
+          const mapped = shouldMapUserId ? mapUserId(character, jsonUserId!, nextAuthUserId!) : character;
+          // All embedded data is preserved: physicalDescriptions, personaLinks, tags,
+          // defaultImageId, defaultConnectionProfileId, avatarOverrides, etc.
+          return { ...mapped };
+        });
+        await db.collection('characters').insertMany(charactersToInsert);
+        totalItemsMigrated += characters.length;
+        logger.info(`Migrated ${characters.length} characters`, { context: 'migration.migrate-json-to-mongodb' });
+      }
+
+      // ========================================================================
+      // 10. Migrate Memories (preserve IDs - linked via characterId)
+      // ========================================================================
+      logger.info('Migrating memories...', { context: 'migration.migrate-json-to-mongodb' });
+      const memories = await jsonRepos.memories.findAll();
+      if (memories.length > 0) {
+        // Memories don't have userId directly, they're linked via characterId
+        await db.collection('memories').insertMany(memories);
+        totalItemsMigrated += memories.length;
+        logger.info(`Migrated ${memories.length} memories`, { context: 'migration.migrate-json-to-mongodb' });
+      }
+
+      // ========================================================================
+      // 11. Migrate Chats (preserve IDs, participants, and messages)
+      // ========================================================================
+      logger.info('Migrating chats...', { context: 'migration.migrate-json-to-mongodb' });
+      const chats = await jsonRepos.chats.findAll();
+      if (chats.length > 0) {
+        // Migrate chat metadata (preserve participants with their characterId/personaId refs)
+        const chatsToInsert = chats.map(chat => {
+          const mapped = shouldMapUserId ? mapUserId(chat, jsonUserId!, nextAuthUserId!) : chat;
+          return { ...mapped };
+        });
+        await db.collection('chats').insertMany(chatsToInsert);
+        totalItemsMigrated += chats.length;
+
+        // Migrate chat messages
+        let messagesMigrated = 0;
+        for (const chat of chats) {
+          try {
+            const messages = await jsonRepos.chats.getMessages(chat.id);
+            if (messages.length > 0) {
+              // Store messages in chat_messages collection (same format as MongoDB repo expects)
+              await db.collection('chat_messages').insertOne({
+                chatId: chat.id,
+                messages: messages,
+              });
+              messagesMigrated += messages.length;
+            }
+          } catch (error) {
+            logger.warn(`Could not migrate messages for chat ${chat.id}`, {
+              context: 'migration.migrate-json-to-mongodb',
+              error: error instanceof Error ? error.message : String(error),
+            });
+            allErrors.push({
+              entity: 'chat_messages',
+              id: chat.id,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+        logger.info(`Migrated ${chats.length} chats with ${messagesMigrated} messages`, {
+          context: 'migration.migrate-json-to-mongodb'
+        });
+      }
+
+      // ========================================================================
+      // 12. Migrate Files/Images (preserve IDs)
+      // ========================================================================
+      logger.info('Migrating files/images...', { context: 'migration.migrate-json-to-mongodb' });
+      try {
+        const files = await jsonRepos.files.findAll();
+        if (files.length > 0) {
+          const filesToInsert = files.map(file => {
+            const mapped = shouldMapUserId ? mapUserId(file, jsonUserId!, nextAuthUserId!) : file;
+            return { ...mapped };
+          });
+          await db.collection('files').insertMany(filesToInsert);
+          totalItemsMigrated += files.length;
+          logger.info(`Migrated ${files.length} files`, { context: 'migration.migrate-json-to-mongodb' });
+        }
+      } catch (error) {
+        logger.warn('Could not migrate files', {
+          context: 'migration.migrate-json-to-mongodb',
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      // ========================================================================
+      // 13. Migrate Vector Indices (embedding cache for semantic search)
+      // ========================================================================
+      logger.info('Migrating vector indices...', { context: 'migration.migrate-json-to-mongodb' });
+      try {
+        const fs = await import('fs/promises');
+        const path = await import('path');
+        const vectorIndicesPath = path.join(process.cwd(), 'data', 'vector-indices');
+
+        try {
+          const files = await fs.readdir(vectorIndicesPath);
+          const jsonFiles = files.filter(f => f.endsWith('.json'));
+
+          if (jsonFiles.length > 0) {
+            for (const file of jsonFiles) {
+              try {
+                const content = await fs.readFile(path.join(vectorIndicesPath, file), 'utf-8');
+                const vectorIndex = JSON.parse(content);
+
+                // Add the id field if not present (characterId is the id)
+                if (!vectorIndex.id) {
+                  vectorIndex.id = vectorIndex.characterId;
+                }
+
+                await db.collection('vector_indices').updateOne(
+                  { characterId: vectorIndex.characterId },
+                  { $set: vectorIndex },
+                  { upsert: true }
+                );
+                totalItemsMigrated += 1;
+              } catch (fileError) {
+                logger.warn(`Could not migrate vector index ${file}`, {
+                  context: 'migration.migrate-json-to-mongodb',
+                  error: fileError instanceof Error ? fileError.message : String(fileError),
+                });
+              }
+            }
+            logger.info(`Migrated ${jsonFiles.length} vector indices`, { context: 'migration.migrate-json-to-mongodb' });
+          }
+        } catch (dirError) {
+          // Directory doesn't exist - that's fine, no vector indices to migrate
+          if ((dirError as NodeJS.ErrnoException).code !== 'ENOENT') {
+            throw dirError;
+          }
+          logger.debug('No vector-indices directory found, skipping', { context: 'migration.migrate-json-to-mongodb' });
+        }
+      } catch (error) {
+        logger.warn('Could not migrate vector indices', {
+          context: 'migration.migrate-json-to-mongodb',
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      // ========================================================================
+      // 14. Migrate Migration State (so future migrations use MongoDB)
+      // ========================================================================
+      logger.info('Migrating migration state...', { context: 'migration.migrate-json-to-mongodb' });
+      try {
+        const fs = await import('fs/promises');
+        const path = await import('path');
+        const migrationsFilePath = path.join(process.cwd(), 'data', 'settings', 'migrations.json');
+
+        try {
+          const content = await fs.readFile(migrationsFilePath, 'utf-8');
+          const migrationState = JSON.parse(content);
+
+          // Save to MongoDB migrations_state collection
+          // Use type assertion for string _id (singleton document pattern)
+          await db.collection<{ _id: string }>('migrations_state').updateOne(
+            { _id: 'migration_state' },
+            {
+              $set: {
+                completedMigrations: migrationState.completedMigrations || [],
+                lastChecked: migrationState.lastChecked || new Date().toISOString(),
+                quilltapVersion: migrationState.quilltapVersion || '1.0.0',
+              },
+            },
+            { upsert: true }
+          );
+          totalItemsMigrated += 1;
+          logger.info('Migrated migration state to MongoDB', { context: 'migration.migrate-json-to-mongodb' });
+        } catch (fileError) {
+          // File doesn't exist - that's fine, no state to migrate
+          if ((fileError as NodeJS.ErrnoException).code !== 'ENOENT') {
+            throw fileError;
+          }
+          logger.debug('No migrations.json file found, skipping', { context: 'migration.migrate-json-to-mongodb' });
+        }
+      } catch (error) {
+        logger.warn('Could not migrate migration state', {
+          context: 'migration.migrate-json-to-mongodb',
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      const durationMs = Date.now() - startTime;
+      const success = allErrors.length === 0;
+
+      logger.info('Completed JSON to MongoDB migration', {
+        context: 'migration.migrate-json-to-mongodb',
+        success,
+        itemsMigrated: totalItemsMigrated,
+        errorsCount: allErrors.length,
+        durationMs,
+      });
+
+      const errorSummary =
+        allErrors.length > 0
+          ? allErrors
+              .slice(0, 5)
+              .map(e => `${e.entity}/${e.id}: ${e.error}`)
+              .join('; ')
+          : undefined;
+
+      return {
+        id: 'migrate-json-to-mongodb-v1',
+        success,
+        itemsAffected: totalItemsMigrated,
+        message: success
+          ? `Successfully migrated ${totalItemsMigrated} items from JSON to MongoDB`
+          : `Migrated ${totalItemsMigrated} items with ${allErrors.length} errors`,
+        error: errorSummary,
+        durationMs,
+        timestamp: new Date().toISOString(),
+      };
     } catch (error) {
       logger.error('Fatal error during migration', {
         context: 'migration.migrate-json-to-mongodb',
@@ -394,40 +600,5 @@ export const migrateJsonToMongoDBMigration: Migration = {
         timestamp: new Date().toISOString(),
       };
     }
-
-    const durationMs = Date.now() - startTime;
-    const success = allErrors.length === 0;
-
-    // Format error summary (first 5 errors)
-    const errorSummary =
-      allErrors.length > 0
-        ? allErrors
-            .slice(0, 5)
-            .map(
-              (e) =>
-                `${e.entity}/${e.id}: ${e.error}`,
-            )
-            .join('; ')
-        : undefined;
-
-    logger.info('Completed JSON to MongoDB migration', {
-      context: 'migration.migrate-json-to-mongodb',
-      success,
-      itemsMigrated: totalItemsMigrated,
-      errorsCount: allErrors.length,
-      durationMs,
-    });
-
-    return {
-      id: 'migrate-json-to-mongodb-v1',
-      success,
-      itemsAffected: totalItemsMigrated,
-      message: success
-        ? `Successfully migrated ${totalItemsMigrated} items from JSON to MongoDB`
-        : `Migrated ${totalItemsMigrated} items with ${allErrors.length} errors`,
-      error: errorSummary,
-      durationMs,
-      timestamp: new Date().toISOString(),
-    };
   },
 };

@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getRepositories } from '@/lib/repositories/factory'
 import { supportsImageGeneration } from '@/lib/llm/image-capable'
 import { logger } from '@/lib/logger'
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup'
@@ -43,8 +43,10 @@ export async function GET(req: NextRequest) {
 
     const repos = getRepositories()
 
-    // Clear cache before fetching to ensure fresh data
-    repos.connections['jsonStore'].clearCache()
+    // Clear cache before fetching to ensure fresh data (only for JSON backend)
+    if ('jsonStore' in repos.connections && typeof repos.connections['jsonStore']?.clearCache === 'function') {
+      repos.connections['jsonStore'].clearCache()
+    }
 
     // Get all connection profiles for user
     let profiles = await repos.connections.findByUserId(session.user.id)

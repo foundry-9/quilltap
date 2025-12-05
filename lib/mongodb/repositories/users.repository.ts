@@ -149,6 +149,30 @@ export class UsersRepository {
   // ============================================================================
 
   /**
+   * Get current user (single-user system compatibility)
+   * Returns the first user found, or null if no users exist
+   */
+  async getCurrentUser(): Promise<User | null> {
+    logger.debug('Getting current user');
+
+    try {
+      const users = await this.findAll();
+      if (users.length === 0) {
+        logger.debug('No users found');
+        return null;
+      }
+
+      logger.debug('Current user retrieved', { userId: users[0].id });
+      return users[0];
+    } catch (error) {
+      logger.error('Error getting current user', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
+  }
+
+  /**
    * Find a user by ID
    */
   async findById(id: string): Promise<User | null> {
@@ -508,7 +532,7 @@ export class UsersRepository {
   }
 
   /**
-   * Update chat settings for a user
+   * Update chat settings for a user (creates if not exists)
    */
   async updateChatSettings(userId: string, data: Partial<ChatSettings>): Promise<ChatSettings | null> {
     const collection = await this.getChatSettingsCollection();
@@ -519,6 +543,26 @@ export class UsersRepository {
     });
 
     try {
+      // Check if settings exist
+      const existing = await this.getChatSettings(userId);
+
+      if (!existing) {
+        // Create new settings with defaults
+        logger.debug('Chat settings not found, creating new settings for user', { userId });
+        const defaultSettings: Omit<ChatSettings, 'id' | 'userId' | 'createdAt' | 'updatedAt'> = {
+          avatarDisplayMode: 'ALWAYS',
+          avatarDisplayStyle: 'CIRCULAR',
+          tagStyles: {},
+          cheapLLMSettings: {
+            strategy: 'PROVIDER_CHEAPEST',
+            fallbackToLocal: true,
+            embeddingProvider: 'OPENAI',
+          },
+          ...data,
+        };
+        return await this.createChatSettings(userId, defaultSettings);
+      }
+
       // Prepare update data
       const updateData: any = {
         ...data,

@@ -17,6 +17,7 @@ import {
   getRepositories as getJsonRepos,
   RepositoryContainer as JsonRepositoryContainer,
 } from '@/lib/json-store/repositories';
+import { getRepositories as getMongoRepos } from '@/lib/mongodb/repositories';
 
 /**
  * Type alias for repository container
@@ -28,6 +29,7 @@ export type RepositoryContainer = JsonRepositoryContainer;
  * Lazy-loaded repository cache
  */
 let cachedRepositories: RepositoryContainer | null = null;
+let cachedBackend: 'json' | 'mongodb' | null = null;
 
 /**
  * Get the configured data backend from environment
@@ -63,8 +65,6 @@ export function getJsonRepositories(): RepositoryContainer {
 
 /**
  * Get the repository container based on configured backend
- * Currently only supports JSON backend. MongoDB backend will be added
- * once the MongoDB repositories implement the same interface.
  *
  * @returns RepositoryContainer for the active backend
  */
@@ -73,26 +73,34 @@ export function getRepositories(): RepositoryContainer {
 
   logger.debug('Getting repositories for backend', { backend });
 
-  // Return cached repositories if already initialized
-  if (cachedRepositories) {
-    logger.debug('Returning cached repositories');
+  // Return cached repositories if already initialized for the same backend
+  if (cachedRepositories && cachedBackend === backend) {
+    logger.debug('Returning cached repositories', { backend: cachedBackend });
     return cachedRepositories;
   }
 
-  // For now, always use JSON repositories
-  // MongoDB repositories are available but have a different interface
-  // They will be used directly by migration scripts and can be switched
-  // once the interface is unified
+  // Clear cache if backend changed
+  if (cachedBackend !== backend) {
+    cachedRepositories = null;
+    cachedBackend = null;
+  }
+
   if (backend === 'mongodb') {
-    logger.warn(
-      'MongoDB backend requested but interface not yet unified. ' +
-      'Using JSON backend. MongoDB repositories are available at @/lib/mongodb/repositories ' +
-      'for direct use in migrations and new code.'
-    );
+    logger.info('Initializing MongoDB backend repositories');
+    const mongoRepos = getMongoRepos();
+
+    // Cast MongoDB repos to match the JSON interface
+    // The interfaces are compatible after our fixes
+    cachedRepositories = mongoRepos as unknown as RepositoryContainer;
+    cachedBackend = 'mongodb';
+
+    logger.debug('Repositories initialized successfully', { backend: 'mongodb' });
+    return cachedRepositories;
   }
 
   logger.info('Initializing JSON backend repositories');
   cachedRepositories = getJsonRepos();
+  cachedBackend = 'json';
 
   logger.debug('Repositories initialized successfully', { backend: 'json' });
   return cachedRepositories;
@@ -105,5 +113,6 @@ export function getRepositories(): RepositoryContainer {
 export function resetRepositories(): void {
   logger.debug('Resetting repository caches');
   cachedRepositories = null;
+  cachedBackend = null;
   logger.info('Repository caches cleared');
 }

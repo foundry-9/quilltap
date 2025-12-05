@@ -10,10 +10,23 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth/session';
-import { getRepositories } from '@/lib/json-store/repositories';
-import { findFileById, getFileUrl } from '@/lib/file-manager';
+import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
+import type { FileEntry } from '@/lib/json-store/schemas/types';
+
+/**
+ * Get the filepath for a file based on storage type
+ */
+function getFilePath(file: FileEntry): string {
+  if (file.s3Key) {
+    return `/api/files/${file.id}`;
+  }
+  const ext = file.originalFilename.includes('.')
+    ? file.originalFilename.substring(file.originalFilename.lastIndexOf('.'))
+    : '';
+  return `data/files/storage/${file.id}${ext}`;
+}
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -54,7 +67,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
         (character.avatarOverrides || [])
           .filter(override => override.chatId === id)
           .map(async (override) => {
-            const fileEntry = await findFileById(override.imageId);
+            const fileEntry = await repos.files.findById(override.imageId);
             return {
               chatId: id,
               characterId: character.id,
@@ -62,7 +75,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
               character: { id: character.id, name: character.name },
               image: fileEntry ? {
                 id: fileEntry.id,
-                filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename),
+                filepath: getFilePath(fileEntry),
                 url: null,
               } : null,
             };
@@ -111,8 +124,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 });
     }
 
-    // Verify image exists in file-manager and belongs to user
-    const fileEntry = await findFileById(imageId);
+    // Verify image exists in repository and belongs to user
+    const fileEntry = await repos.files.findById(imageId);
 
     if (!fileEntry || fileEntry.userId !== session.user.id) {
       return NextResponse.json({ error: 'Image not found' }, { status: 404 });
@@ -141,7 +154,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       character: { id: character.id, name: character.name },
       image: {
         id: fileEntry.id,
-        filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename),
+        filepath: getFilePath(fileEntry),
         url: null,
       },
     };

@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getRepositories } from '@/lib/repositories/factory'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
 

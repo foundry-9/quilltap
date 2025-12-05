@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getRepositories } from '@/lib/repositories/factory'
 import { encryptApiKey, maskApiKey } from '@/lib/encryption'
 import { Provider } from '@/lib/json-store/schemas/types'
 import { getAllAvailableProviders } from '@/lib/llm'

@@ -3,15 +3,14 @@
  * POST /api/images/:id/tags - Add tag to image
  * DELETE /api/images/:id/tags - Remove tag from image
  *
- * Uses only the file-manager system. Images must be stored as files with category 'IMAGE'.
+ * Uses the repository pattern for metadata management.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth/session';
-import { getRepositories } from '@/lib/json-store/repositories';
+import { getRepositories } from '@/lib/repositories/factory';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { findFileById, addFileTag, removeFileTag } from '@/lib/file-manager';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -56,7 +55,7 @@ async function verifyTaggedEntity(
 
 /**
  * POST /api/images/:id/tags
- * Add a tag to an image using the file-manager system
+ * Add a tag to an image using the repository pattern
  */
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
@@ -69,6 +68,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const { id } = await context.params;
     const body = await request.json();
     const { tagType, tagId } = tagSchema.parse(body);
+    const repos = getRepositories();
 
     logger.debug('POST /api/images/:id/tags - Starting', {
       fileId: id,
@@ -77,11 +77,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
       userId: session.user.id
     });
 
-    // Find the file in file-manager
-    const fileEntry = await findFileById(id);
+    // Find the file in repository
+    const fileEntry = await repos.files.findById(id);
 
     if (!fileEntry) {
-      logger.debug('File not found in file-manager', { fileId: id });
+      logger.debug('File not found in repository', { fileId: id });
       return NextResponse.json({ error: 'Image not found' }, { status: 404 });
     }
 
@@ -129,9 +129,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
       });
     }
 
-    // Add tag to file
+    // Add tag to file using repository
     try {
-      await addFileTag(id, tagId);
+      await repos.files.addTag(id, tagId);
       logger.debug('Tag added to file', {
         fileId: id,
         tagId,
@@ -169,7 +169,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
 /**
  * DELETE /api/images/:id/tags
- * Remove a tag from an image using the file-manager system
+ * Remove a tag from an image using the repository pattern
  */
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
@@ -183,6 +183,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     const searchParams = request.nextUrl.searchParams;
     const tagType = searchParams.get('tagType') as 'CHARACTER' | 'PERSONA' | 'CHAT' | 'THEME' | null;
     const tagId = searchParams.get('tagId');
+    const repos = getRepositories();
 
     if (!tagType || !tagId) {
       logger.debug('DELETE /api/images/:id/tags - Missing tagType or tagId');
@@ -196,11 +197,11 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       userId: session.user.id
     });
 
-    // Find the file in file-manager
-    const fileEntry = await findFileById(id);
+    // Find the file in repository
+    const fileEntry = await repos.files.findById(id);
 
     if (!fileEntry) {
-      logger.debug('File not found in file-manager', { fileId: id });
+      logger.debug('File not found in repository', { fileId: id });
       return NextResponse.json({ error: 'Image not found' }, { status: 404 });
     }
 
@@ -214,9 +215,9 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Remove the tag
+    // Remove the tag using repository
     try {
-      await removeFileTag(id, tagId);
+      await repos.files.removeTag(id, tagId);
       logger.debug('Tag removed from file', {
         fileId: id,
         tagId,

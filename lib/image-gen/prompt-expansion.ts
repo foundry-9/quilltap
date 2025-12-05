@@ -5,7 +5,7 @@
  * and retrieves appropriate physical descriptions from the database.
  */
 
-import { getRepositories } from '@/lib/json-store/repositories';
+import { getRepositories } from '@/lib/repositories/factory';
 import { PhysicalDescription, ImageProvider } from '@/lib/json-store/schemas/types';
 
 /**

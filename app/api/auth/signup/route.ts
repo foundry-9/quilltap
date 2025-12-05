@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getRepositories } from '@/lib/repositories/factory'
 import { hashPassword, validatePasswordStrength } from '@/lib/auth/password'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'

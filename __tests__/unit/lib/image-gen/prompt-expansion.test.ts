@@ -3,7 +3,7 @@
  * Validates placeholder parsing, repository lookups, context sizing, and final payload shaping.
  */
 
-jest.mock('@/lib/json-store/repositories', () => ({
+jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
 }))
 
@@ -15,7 +15,7 @@ import {
   buildExpansionContext,
   preparePromptExpansion,
 } from '@/lib/image-gen/prompt-expansion'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getRepositories } from '@/lib/repositories/factory'
 
 const mockGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>
 

@@ -6,7 +6,7 @@
 
 import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-import { getRepositories } from '@/lib/json-store/repositories';
+import { getRepositories } from '@/lib/repositories/factory';
 import { validateMongoDBConfig, testMongoDBConnection } from '@/lib/mongodb/config';
 import { validateS3Config, testS3Connection } from '@/lib/s3/config';
 

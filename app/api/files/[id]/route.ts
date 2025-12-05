@@ -8,10 +8,23 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth/session';
-import { findFileById, readFile, deleteFile, removeFileLink } from '@/lib/file-manager';
+import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import { isS3Enabled } from '@/lib/s3/config';
 import { downloadFile as downloadS3File, getPresignedUrl, deleteFile as deleteS3File } from '@/lib/s3/operations';
+import { promises as fs } from 'node:fs';
+import { join, extname } from 'node:path';
+
+const LOCAL_STORAGE_DIR = 'public/data/files/storage';
+
+/**
+ * Read a file from local storage
+ */
+async function readLocalFile(fileId: string, originalFilename: string): Promise<Buffer> {
+  const ext = extname(originalFilename) || '';
+  const localPath = join(LOCAL_STORAGE_DIR, `${fileId}${ext}`);
+  return await fs.readFile(localPath);
+}
 
 /**
  * GET /api/files/:id
@@ -30,8 +43,9 @@ export async function GET(
 
     const { id: fileId } = await params;
 
-    // Get file metadata
-    const fileEntry = await findFileById(fileId);
+    // Get file metadata from repository (supports MongoDB and JSON backends)
+    const repos = getRepositories();
+    const fileEntry = await repos.files.findById(fileId);
     if (!fileEntry) {
       logger.debug('File not found', { context: 'GET /api/files/[id]', fileId });
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
@@ -112,7 +126,7 @@ export async function GET(
       s3Enabled,
     });
 
-    const buffer = await readFile(fileId);
+    const buffer = await readLocalFile(fileId, fileEntry.originalFilename);
 
     logger.debug('File read from local storage', {
       context: 'GET /api/files/[id]',
@@ -155,8 +169,9 @@ export async function DELETE(
 
     const { id: fileId } = await params;
 
-    // Get file metadata
-    const fileEntry = await findFileById(fileId);
+    // Get file metadata from repository (supports MongoDB and JSON backends)
+    const repos = getRepositories();
+    const fileEntry = await repos.files.findById(fileId);
     if (!fileEntry) {
       logger.debug('File not found', { context: 'DELETE /api/files/[id]', fileId });
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
@@ -205,17 +220,17 @@ export async function DELETE(
           error: s3Error instanceof Error ? s3Error.message : 'Unknown error',
         });
 
-        // Continue with local deletion even if S3 deletion fails
+        // Continue with metadata deletion even if S3 deletion fails
       }
     }
 
-    // Delete the file from local storage and metadata
-    logger.debug('Deleting file from local storage and metadata', {
+    // Delete the file metadata from repository
+    logger.debug('Deleting file metadata from repository', {
       context: 'DELETE /api/files/[id]',
       fileId,
     });
 
-    const deleted = await deleteFile(fileId);
+    const deleted = await repos.files.delete(fileId);
 
     if (!deleted) {
       logger.warn('File metadata not found when attempting deletion', {
@@ -266,14 +281,18 @@ export async function PATCH(
       );
     }
 
-    // Get file metadata
-    const fileEntry = await findFileById(fileId);
+    // Get file metadata from repository (supports MongoDB and JSON backends)
+    const repos = getRepositories();
+    const fileEntry = await repos.files.findById(fileId);
     if (!fileEntry) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 
-    // Remove the link
-    const updated = await removeFileLink(fileId, entityId);
+    // Remove the link using repository
+    const updated = await repos.files.removeLink(fileId, entityId);
+    if (!updated) {
+      return NextResponse.json({ error: 'Failed to update file' }, { status: 500 });
+    }
 
     // If no more links, consider auto-deleting the file
     if (updated.linkedTo.length === 0) {

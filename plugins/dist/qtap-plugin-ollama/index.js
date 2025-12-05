@@ -204,7 +204,26 @@ var envSchema = import_zod.z.object({
   LOG_FILE_MAX_FILES: import_zod.z.string().regex(/^\d+$/).optional(),
   // Production SSL (optional)
   DOMAIN: import_zod.z.string().optional(),
-  SSL_EMAIL: import_zod.z.string().email().optional()
+  SSL_EMAIL: import_zod.z.string().email().optional(),
+  // Data Backend Configuration
+  DATA_BACKEND: import_zod.z.enum(["json", "mongodb", "dual"]).optional().default("json"),
+  // MongoDB Configuration (optional - only required when DATA_BACKEND is 'mongodb' or 'dual')
+  MONGODB_URI: import_zod.z.string().optional().default("mongodb://localhost:27017"),
+  MONGODB_DATABASE: import_zod.z.string().optional().default("quilltap"),
+  MONGODB_MODE: import_zod.z.enum(["external", "embedded"]).optional().default("external"),
+  MONGODB_DATA_DIR: import_zod.z.string().optional().default("/data/mongodb"),
+  MONGODB_CONNECTION_TIMEOUT_MS: import_zod.z.string().regex(/^\d+$/).optional(),
+  MONGODB_MAX_POOL_SIZE: import_zod.z.string().regex(/^\d+$/).optional(),
+  // S3 Configuration (optional - file storage backend)
+  S3_MODE: import_zod.z.enum(["embedded", "external", "disabled"]).optional().default("disabled"),
+  S3_ENDPOINT: import_zod.z.string().url().optional(),
+  S3_REGION: import_zod.z.string().optional().default("us-east-1"),
+  S3_ACCESS_KEY: import_zod.z.string().optional(),
+  S3_SECRET_KEY: import_zod.z.string().optional(),
+  S3_BUCKET: import_zod.z.string().optional().default("quilltap-files"),
+  S3_PATH_PREFIX: import_zod.z.string().optional(),
+  S3_PUBLIC_URL: import_zod.z.string().url().optional(),
+  S3_FORCE_PATH_STYLE: import_zod.z.enum(["true", "false"]).optional()
 });
 function validateEnv() {
   try {

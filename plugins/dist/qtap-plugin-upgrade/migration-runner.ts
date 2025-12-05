@@ -2,6 +2,7 @@
  * Migration Runner
  *
  * Handles running migrations in the correct order and tracking completed migrations.
+ * Supports both file-based (JSON) and MongoDB backends for migration state storage.
  */
 
 import fs from 'node:fs/promises';
@@ -16,13 +17,44 @@ import type {
   UpgradeResult,
 } from './migration-types';
 
-// Path to store migration state
+// Path to store migration state (file-based)
 const MIGRATIONS_STATE_FILE = path.join(process.cwd(), 'data', 'settings', 'migrations.json');
 
 /**
- * Load the current migration state from disk
+ * Check if MongoDB backend is enabled
+ */
+function isMongoDBBackend(): boolean {
+  const backend = process.env.DATA_BACKEND || '';
+  return backend === 'mongodb' || backend === 'dual';
+}
+
+/**
+ * Get MongoDB migrations repository (lazy load to avoid circular deps)
+ */
+async function getMongoMigrationsRepo() {
+  const { getMongoMigrationsRepository } = await import('@/lib/mongodb/repositories/migrations.repository');
+  return getMongoMigrationsRepository();
+}
+
+/**
+ * Load the current migration state from storage (MongoDB or file)
  */
 export async function loadMigrationState(): Promise<MigrationState> {
+  // Use MongoDB if configured
+  if (isMongoDBBackend()) {
+    try {
+      const repo = await getMongoMigrationsRepo();
+      return await repo.loadState();
+    } catch (error) {
+      logger.warn('Failed to load migration state from MongoDB, falling back to file', {
+        context: 'migration-runner.loadMigrationState',
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Fall through to file-based loading
+    }
+  }
+
+  // File-based loading
   try {
     const content = await fs.readFile(MIGRATIONS_STATE_FILE, 'utf-8');
     return JSON.parse(content);
@@ -37,10 +69,28 @@ export async function loadMigrationState(): Promise<MigrationState> {
 }
 
 /**
- * Save migration state to disk
+ * Save migration state to storage (MongoDB or file)
  */
 export async function saveMigrationState(state: MigrationState): Promise<void> {
-  // Ensure directory exists
+  // Save to MongoDB if configured
+  if (isMongoDBBackend()) {
+    try {
+      const repo = await getMongoMigrationsRepo();
+      await repo.saveState(state);
+      logger.debug('Migration state saved to MongoDB', {
+        context: 'migration-runner.saveMigrationState',
+      });
+      return;
+    } catch (error) {
+      logger.warn('Failed to save migration state to MongoDB, falling back to file', {
+        context: 'migration-runner.saveMigrationState',
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Fall through to file-based saving
+    }
+  }
+
+  // File-based saving
   const dir = path.dirname(MIGRATIONS_STATE_FILE);
   await fs.mkdir(dir, { recursive: true });
 

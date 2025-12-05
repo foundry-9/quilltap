@@ -4,10 +4,23 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/json-store/repositories'
-import { findFileById, getFileUrl } from '@/lib/file-manager'
+import { getRepositories } from '@/lib/repositories/factory'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
+import type { FileEntry } from '@/lib/json-store/schemas/types'
+
+/**
+ * Get the filepath for a file based on storage type
+ */
+function getFilePath(file: FileEntry): string {
+  if (file.s3Key) {
+    return `/api/files/${file.id}`
+  }
+  const ext = file.originalFilename.includes('.')
+    ? file.originalFilename.substring(file.originalFilename.lastIndexOf('.'))
+    : ''
+  return `data/files/storage/${file.id}${ext}`
+}
 
 // Validation schema
 const createCharacterSchema = z.object({
@@ -46,14 +59,14 @@ export async function GET(req: NextRequest) {
     // Enrich characters with related data (defaultImage and chat count)
     const enrichedCharacters = await Promise.all(
       characters.map(async (character) => {
-        // Get default image from file-manager if present
+        // Get default image from repository if present
         let defaultImage = null
         if (character.defaultImageId) {
-          const fileEntry = await findFileById(character.defaultImageId)
+          const fileEntry = await repos.files.findById(character.defaultImageId)
           if (fileEntry) {
             defaultImage = {
               id: fileEntry.id,
-              filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename),
+              filepath: getFilePath(fileEntry),
               url: null,
             }
           }

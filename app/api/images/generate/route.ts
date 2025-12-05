@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getRepositories } from '@/lib/repositories/factory'
 import { decryptApiKey } from '@/lib/encryption'
 import { createLLMProvider } from '@/lib/llm'
 import { logger } from '@/lib/logger'
@@ -142,28 +142,29 @@ export async function POST(request: NextRequest) {
 
         await writeFile(fullPath, imageBuffer)
 
-        // Create database record using images repository
-        const image = await repos.images.create({
+        // Create database record using files repository (FileEntry format)
+        const file = await repos.files.create({
           sha256: hash,
-          type: 'image',
           userId: session.user.id,
-          filename,
-          relativePath: filepath,
+          originalFilename: filename,
           mimeType: generatedImage.mimeType,
           size: imageBuffer.length,
-          source: 'generated',
+          source: 'GENERATED',
+          category: 'IMAGE',
+          linkedTo: [],
           generationPrompt: prompt,
           generationModel: profile.modelName,
+          generationRevisedPrompt: generatedImage.revisedPrompt || null,
           tags: tags?.map(t => t.tagId) || [],
         })
 
         return {
-          id: image.id,
-          filename: image.filename,
-          filepath: image.relativePath,
-          url: `/${image.relativePath}`,
-          mimeType: image.mimeType,
-          size: image.size,
+          id: file.id,
+          filename: file.originalFilename,
+          filepath,
+          url: `/${filepath}`,
+          mimeType: file.mimeType,
+          size: file.size,
           revisedPrompt: generatedImage.revisedPrompt,
           tags: tags || [],
         }

@@ -13,7 +13,7 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals'
 import { getServerSession } from 'next-auth'
 import { decryptApiKey } from '@/lib/encryption'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getRepositories } from '@/lib/repositories/factory'
 
 // Mock dependencies
 jest.mock('next-auth')

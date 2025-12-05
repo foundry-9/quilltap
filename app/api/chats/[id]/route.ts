@@ -5,11 +5,23 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/json-store/repositories'
-import { findFileById, getFileUrl, findFilesLinkedTo } from '@/lib/file-manager'
+import { getRepositories } from '@/lib/repositories/factory'
 import { z } from 'zod'
-import type { ChatParticipantBase, ChatMetadata } from '@/lib/json-store/schemas/types'
+import type { ChatParticipantBase, ChatMetadata, FileEntry } from '@/lib/json-store/schemas/types'
 import { logger } from '@/lib/logger'
+
+/**
+ * Get the filepath for a file based on storage type
+ */
+function getFilePath(file: FileEntry): string {
+  if (file.s3Key) {
+    return `/api/files/${file.id}`
+  }
+  const ext = file.originalFilename.includes('.')
+    ? file.originalFilename.substring(file.originalFilename.lastIndexOf('.'))
+    : ''
+  return `data/files/storage/${file.id}${ext}`
+}
 
 // Validation schema for chat updates
 const updateChatSchema = z.object({
@@ -55,9 +67,9 @@ async function getEnrichedCharacter(characterId: string, repos: Repos) {
 
   let defaultImage = null
   if (charData.defaultImageId) {
-    const fileEntry = await findFileById(charData.defaultImageId)
+    const fileEntry = await repos.files.findById(charData.defaultImageId)
     if (fileEntry) {
-      defaultImage = { id: fileEntry.id, filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename), url: null }
+      defaultImage = { id: fileEntry.id, filepath: getFilePath(fileEntry), url: null }
     }
   }
 
@@ -78,9 +90,9 @@ async function getEnrichedPersona(personaId: string, repos: Repos) {
 
   let defaultImage = null
   if (personaData.defaultImageId) {
-    const fileEntry = await findFileById(personaData.defaultImageId)
+    const fileEntry = await repos.files.findById(personaData.defaultImageId)
     if (fileEntry) {
-      defaultImage = { id: fileEntry.id, filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename), url: null }
+      defaultImage = { id: fileEntry.id, filepath: getFilePath(fileEntry), url: null }
     }
   }
 
@@ -329,12 +341,12 @@ export async function GET(
         .map(async event => {
           if (event.type !== 'message') return null
 
-          // Get attachments from file-manager using linkedTo
-          const linkedFiles = await findFilesLinkedTo(event.id)
+          // Get attachments from repository using linkedTo
+          const linkedFiles = await repos.files.findByLinkedTo(event.id)
           const attachments = linkedFiles.map(file => ({
             id: file.id,
             filename: file.originalFilename,
-            filepath: getFileUrl(file.id, file.originalFilename),
+            filepath: getFilePath(file),
             mimeType: file.mimeType,
           }))
 

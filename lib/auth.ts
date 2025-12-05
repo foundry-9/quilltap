@@ -7,6 +7,7 @@
  */
 
 import { NextAuthOptions } from "next-auth";
+import { Adapter } from "next-auth/adapters";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { verifyPassword } from "@/lib/auth/password";
 import { JsonStoreAdapter } from "@/lib/json-store/auth-adapter";
@@ -16,21 +17,35 @@ import { isAuthDisabled } from "@/lib/auth/config";
 import { logger } from "@/lib/logger";
 import { buildNextAuthProviders, getConfiguredAuthProviders } from "@/lib/plugins/auth-provider-registry";
 import { initializePlugins, isPluginSystemInitialized } from "@/lib/startup/plugin-initialization";
+import { getDataBackend } from "@/lib/repositories/factory";
+import { getMongoDBAuthAdapter } from "@/lib/mongodb/auth-adapter";
 
 // ============================================================================
 // LAZY-LOADED SINGLETONS
 // ============================================================================
 
 let usersRepo: UsersRepository | null = null;
-let adapter: ReturnType<typeof JsonStoreAdapter> | null = null;
+let adapter: Adapter | null = null;
 
 function getUsersRepository(): UsersRepository {
   usersRepo ??= new UsersRepository(getJsonStore());
   return usersRepo;
 }
 
-function getAdapter(): ReturnType<typeof JsonStoreAdapter> {
-  adapter ??= JsonStoreAdapter(getJsonStore());
+function getAdapter(): Adapter {
+  if (adapter) return adapter;
+
+  const backend = getDataBackend();
+  logger.debug('Selecting auth adapter', { context: 'getAdapter', backend });
+
+  if (backend === 'mongodb') {
+    adapter = getMongoDBAuthAdapter();
+    logger.info('Using MongoDB auth adapter', { context: 'getAdapter' });
+  } else {
+    adapter = JsonStoreAdapter(getJsonStore());
+    logger.info('Using JSON store auth adapter', { context: 'getAdapter' });
+  }
+
   return adapter;
 }
 
@@ -286,6 +301,7 @@ export const authOptions: NextAuthOptions = new Proxy({} as NextAuthOptions, {
 export function clearAuthOptionsCache(): void {
   cachedAuthOptions = null;
   cachedProviders = null;
+  adapter = null;
   // Reset logging flags so messages can appear again after refresh
   authDisabledLogged = false;
   noAuthPluginsWarningLogged = false;

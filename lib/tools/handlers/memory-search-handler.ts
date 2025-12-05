@@ -7,7 +7,7 @@
  */
 
 import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
 import {
   MemorySearchToolInput,

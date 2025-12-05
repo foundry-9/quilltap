@@ -286,7 +286,7 @@ export class AnthropicProvider implements LLMProvider {
       const client = new Anthropic({ apiKey })
       // Anthropic doesn't have a direct validation endpoint, so we make a minimal request
       await client.messages.create({
-        model: 'claude-haiku-4-5-20251015',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 1,
         messages: [{ role: 'user', content: 'test' }],
       })
@@ -307,7 +307,7 @@ export class AnthropicProvider implements LLMProvider {
     const models = [
       // Claude 4.5 models (latest)
       'claude-sonnet-4-5-20250929',
-      'claude-haiku-4-5-20251015',
+      'claude-haiku-4-5-20251001',
 
       // Claude 4 models
       'claude-opus-4-1-20250805',

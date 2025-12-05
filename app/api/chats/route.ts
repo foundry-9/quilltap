@@ -4,16 +4,28 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/json-store/repositories'
-import { findFileById, getFileUrl } from '@/lib/file-manager'
+import { getRepositories } from '@/lib/repositories/factory'
 import { buildChatContext, type ChatContext } from '@/lib/chat/initialize'
 import { decryptApiKey } from '@/lib/encryption'
 import { generateGreetingMessage } from '@/lib/chat/initial-greeting'
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
-import type { ChatEvent, ChatParticipantBase } from '@/lib/json-store/schemas/types'
+import type { ChatEvent, ChatParticipantBase, FileEntry } from '@/lib/json-store/schemas/types'
 
 type Repos = ReturnType<typeof getRepositories>
+
+/**
+ * Get the filepath for a file based on storage type
+ */
+function getFilePath(file: FileEntry): string {
+  if (file.s3Key) {
+    return `/api/files/${file.id}`
+  }
+  const ext = file.originalFilename.includes('.')
+    ? file.originalFilename.substring(file.originalFilename.lastIndexOf('.'))
+    : ''
+  return `data/files/storage/${file.id}${ext}`
+}
 
 // Result types for participant builders
 type ParticipantBuildSuccess = {
@@ -47,9 +59,9 @@ async function getCharacterSummary(characterId: string, repos: Repos) {
 
   let defaultImage = null
   if (character.defaultImageId) {
-    const fileEntry = await findFileById(character.defaultImageId)
+    const fileEntry = await repos.files.findById(character.defaultImageId)
     if (fileEntry) {
-      defaultImage = { id: fileEntry.id, filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename), url: null }
+      defaultImage = { id: fileEntry.id, filepath: getFilePath(fileEntry), url: null }
     }
   }
 
@@ -70,9 +82,9 @@ async function getPersonaSummary(personaId: string, repos: Repos) {
 
   let defaultImage = null
   if (persona.defaultImageId) {
-    const fileEntry = await findFileById(persona.defaultImageId)
+    const fileEntry = await repos.files.findById(persona.defaultImageId)
     if (fileEntry) {
-      defaultImage = { id: fileEntry.id, filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename), url: null }
+      defaultImage = { id: fileEntry.id, filepath: getFilePath(fileEntry), url: null }
     }
   }
 

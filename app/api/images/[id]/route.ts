@@ -3,14 +3,29 @@
  * GET /api/images/:id - Get single image
  * DELETE /api/images/:id - Delete image
  *
- * Uses only the file-manager system.
+ * Uses the repository pattern for metadata and S3 for file storage.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth/session';
-import { getRepositories } from '@/lib/json-store/repositories';
-import { findFileById, deleteFile, getFileUrl } from '@/lib/file-manager';
+import { getRepositories } from '@/lib/repositories/factory';
+import { isS3Enabled } from '@/lib/s3/config';
+import { deleteFile as deleteS3File } from '@/lib/s3/operations';
 import { logger } from '@/lib/logger';
+import type { FileEntry } from '@/lib/json-store/schemas/types';
+
+/**
+ * Get the filepath for an image based on storage type
+ */
+function getFilePath(image: FileEntry): string {
+  if (image.s3Key) {
+    return `/api/files/${image.id}`;
+  }
+  const ext = image.originalFilename.includes('.')
+    ? image.originalFilename.substring(image.originalFilename.lastIndexOf('.'))
+    : '';
+  return `data/files/storage/${image.id}${ext}`;
+}
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -33,7 +48,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     logger.debug('GET /api/images/[id] - Fetching image', { imageId: id, userId: session.user.id });
 
-    const image = await findFileById(id);
+    const image = await repos.files.findById(id);
 
     if (!image) {
       logger.debug('GET /api/images/[id] - Image not found', { imageId: id });
@@ -84,7 +99,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
         id: image.id,
         userId: session.user.id,
         filename: image.originalFilename,
-        filepath: getFileUrl(image.id, image.originalFilename),
+        filepath: getFilePath(image),
         mimeType: image.mimeType,
         size: image.size,
         width: image.width,
@@ -129,7 +144,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     logger.debug('DELETE /api/images/[id] - Deleting image', { imageId: id, userId: session.user.id });
 
     // Check if image exists
-    const image = await findFileById(id);
+    const image = await repos.files.findById(id);
 
     if (!image) {
       logger.debug('DELETE /api/images/[id] - Image not found', { imageId: id });
@@ -187,11 +202,27 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       );
     }
 
-    // Delete file and metadata
-    const deleted = await deleteFile(id);
+    // Delete from S3 if applicable
+    const s3Enabled = isS3Enabled();
+    if (s3Enabled && image.s3Key) {
+      try {
+        await deleteS3File(image.s3Key);
+        logger.debug('DELETE /api/images/[id] - Deleted from S3', { imageId: id, s3Key: image.s3Key });
+      } catch (s3Error) {
+        logger.warn('DELETE /api/images/[id] - Failed to delete from S3', {
+          imageId: id,
+          s3Key: image.s3Key,
+          error: s3Error instanceof Error ? s3Error.message : 'Unknown error',
+        });
+        // Continue with metadata deletion even if S3 deletion fails
+      }
+    }
+
+    // Delete file metadata from repository
+    const deleted = await repos.files.delete(id);
 
     if (!deleted) {
-      logger.warn('DELETE /api/images/[id] - Failed to delete file', { imageId: id });
+      logger.warn('DELETE /api/images/[id] - Failed to delete file metadata', { imageId: id });
       return NextResponse.json({ error: 'Failed to delete image' }, { status: 500 });
     }
 

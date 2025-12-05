@@ -6,7 +6,7 @@
  * embedding generation and vector store management.
  */
 
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getRepositories } from '@/lib/repositories/factory'
 import { Memory } from '@/lib/json-store/schemas/types'
 import { generateEmbeddingForUser, EmbeddingError, cosineSimilarity } from '@/lib/embedding/embedding-service'
 import { getCharacterVectorStore, getVectorStoreManager } from '@/lib/embedding/vector-store'

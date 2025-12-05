@@ -51,10 +51,11 @@ export class FilesRepository extends BaseRepository<FileEntry> {
 
   /**
    * Find entries by SHA256 hash
+   * Returns array for consistency with MongoDB (allows handling of hash collisions)
    */
-  async findBySha256(sha256: string): Promise<FileEntry | null> {
+  async findBySha256(sha256: string): Promise<FileEntry[]> {
     const entries = await this.readAllEntries();
-    return entries.find(entry => entry.sha256 === sha256) || null;
+    return entries.filter(entry => entry.sha256 === sha256);
   }
 
   /**

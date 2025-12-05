@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/session'
 import { generateTOTPSecret } from '@/lib/auth/totp'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
 
 export async function POST(req: NextRequest) {

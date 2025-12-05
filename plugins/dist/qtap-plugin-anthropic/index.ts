@@ -135,7 +135,7 @@ export const plugin: LLMProviderPlugin = {
         supportsTools: true,
       },
       {
-        id: 'claude-haiku-4-5-20251015',
+        id: 'claude-haiku-4-5-20251001',
         name: 'Claude Haiku 4.5',
         contextWindow: 200000,
         maxOutputTokens: 16000,

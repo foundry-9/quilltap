@@ -6,9 +6,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth/session';
-import { getRepositories } from '@/lib/json-store/repositories';
+import { getRepositories } from '@/lib/repositories/factory';
 import { uploadImage, importImageFromUrl } from '@/lib/images-v2';
-import { findFilesByCategory, findFilesByUserId, addFileTag, getFileUrl } from '@/lib/file-manager';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 
@@ -39,8 +38,8 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const tagId = searchParams.get('tagId');
 
-    // Get all image files
-    let allImages = await findFilesByCategory('IMAGE');
+    // Get all image files for this user from the repository (supports both JSON and MongoDB)
+    const allImages = await repos.files.findByCategory('IMAGE');
     let images = allImages.filter(img => img.userId === session.user.id);
 
     // Filter by tag if provided
@@ -99,11 +98,22 @@ export async function GET(request: NextRequest) {
                      img.source === 'IMPORTED' ? 'import' :
                      img.source === 'GENERATED' ? 'generated' : 'upload';
 
+      // Generate filepath - use API route for S3 files, local path for file-based
+      let filepath: string;
+      if (img.s3Key) {
+        filepath = `/api/files/${img.id}`;
+      } else {
+        const ext = img.originalFilename.includes('.')
+          ? img.originalFilename.substring(img.originalFilename.lastIndexOf('.'))
+          : '';
+        filepath = `data/files/storage/${img.id}${ext}`;
+      }
+
       return {
         id: img.id,
         userId: session.user.id,
         filename: img.originalFilename,
-        filepath: getFileUrl(img.id, img.originalFilename),
+        filepath,
         url: img.source === 'IMPORTED' ? img.description : null,
         mimeType: img.mimeType,
         size: img.size,
@@ -157,10 +167,11 @@ export async function POST(request: NextRequest) {
       // Import image from URL (creates file entry automatically)
       const imageData = await importImageFromUrl(url, session.user.id, linkedTo);
 
-      // Add tags to the file
+      // Add tags to the file using repository
+      const repos = getRepositories();
       if (tags) {
         for (const tag of tags) {
-          await addFileTag(imageData.id, tag.tagId);
+          await repos.files.addTag(imageData.id, tag.tagId);
         }
       }
 
@@ -210,10 +221,11 @@ export async function POST(request: NextRequest) {
       // Upload image (creates file entry automatically)
       const imageData = await uploadImage(file, session.user.id, linkedTo);
 
-      // Add tags to the file
+      // Add tags to the file using repository
+      const repos = getRepositories();
       if (tags) {
         for (const tag of tags) {
-          await addFileTag(imageData.id, tag.tagId);
+          await repos.files.addTag(imageData.id, tag.tagId);
         }
       }
 

@@ -12,13 +12,17 @@ import { ChatsRepository } from './chats.repository';
 import { TagsRepository } from './tags.repository';
 import { UsersRepository } from './users.repository';
 import { ConnectionProfilesRepository } from './connection-profiles.repository';
-import { ImagesRepository } from './images.repository';
+import { FilesRepository } from './files.repository';
 import { ImageProfilesRepository } from './image-profiles.repository';
 import { EmbeddingProfilesRepository } from './embedding-profiles.repository';
 import { MemoriesRepository } from './memories.repository';
 
 /**
  * All repositories available from JsonStore
+ *
+ * Note: The `images` property now points to FilesRepository for consistency
+ * with MongoDB backend. The deprecated ImagesRepository is still exported
+ * for migration scripts but should not be used for new code.
  */
 export interface RepositoryContainer {
   characters: CharactersRepository;
@@ -27,7 +31,8 @@ export interface RepositoryContainer {
   tags: TagsRepository;
   users: UsersRepository;
   connections: ConnectionProfilesRepository;
-  images: ImagesRepository;
+  images: FilesRepository;
+  files: FilesRepository;
   imageProfiles: ImageProfilesRepository;
   embeddingProfiles: EmbeddingProfilesRepository;
   memories: MemoriesRepository;
@@ -37,6 +42,10 @@ export interface RepositoryContainer {
  * Create repository instances
  */
 export function createRepositories(jsonStore: JsonStore): RepositoryContainer {
+  // Single FilesRepository instance handles both images and files
+  // Images are just files with additional metadata (category, generation info, etc.)
+  const filesRepo = new FilesRepository(jsonStore);
+
   return {
     characters: new CharactersRepository(jsonStore),
     personas: new PersonasRepository(jsonStore),
@@ -44,7 +53,8 @@ export function createRepositories(jsonStore: JsonStore): RepositoryContainer {
     tags: new TagsRepository(jsonStore),
     users: new UsersRepository(jsonStore),
     connections: new ConnectionProfilesRepository(jsonStore),
-    images: new ImagesRepository(jsonStore),
+    images: filesRepo,
+    files: filesRepo,
     imageProfiles: new ImageProfilesRepository(jsonStore),
     embeddingProfiles: new EmbeddingProfilesRepository(jsonStore),
     memories: new MemoriesRepository(jsonStore),
@@ -85,6 +95,7 @@ export { TagsRepository } from './tags.repository';
 export { UsersRepository } from './users.repository';
 export { ConnectionProfilesRepository } from './connection-profiles.repository';
 export { ImagesRepository } from './images.repository';
+export { FilesRepository } from './files.repository';
 export { ImageProfilesRepository } from './image-profiles.repository';
 export { EmbeddingProfilesRepository } from './embedding-profiles.repository';
 export { MemoriesRepository } from './memories.repository';

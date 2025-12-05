@@ -61,7 +61,7 @@ export interface CheapLLMSelection {
  * Updated for November 2025 model lineup
  */
 const CHEAPEST_MODEL_MAP: Record<Provider, string> = {
-  ANTHROPIC: 'claude-haiku-4-5-20251015',
+  ANTHROPIC: 'claude-haiku-4-5-20251001',
   OPENAI: 'gpt-4o-mini',
   GOOGLE: 'gemini-2.0-flash',
   GROK: 'grok-2-mini', // Grok's cheaper offering
@@ -76,7 +76,7 @@ const CHEAPEST_MODEL_MAP: Record<Provider, string> = {
  * (memory extraction, summarization, titling)
  */
 export const RECOMMENDED_CHEAP_MODELS: Record<Provider, string[]> = {
-  ANTHROPIC: ['claude-haiku-4-5-20251015', 'claude-3-haiku-20240307'],
+  ANTHROPIC: ['claude-haiku-4-5-20251001', 'claude-3-haiku-20240307'],
   OPENAI: ['gpt-4o-mini', 'gpt-3.5-turbo'],
   GOOGLE: ['gemini-2.0-flash', 'gemini-1.5-flash'],
   GROK: ['grok-2-mini'],

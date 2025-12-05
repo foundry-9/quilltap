@@ -3,16 +3,16 @@
  * POST /api/chat-files/:id - Tag a chat file with CHARACTER/PERSONA
  * DELETE /api/chat-files/:id - Delete a chat file
  *
- * All operations use the file-manager system exclusively.
- * Legacy gallery entries are no longer created or managed here.
+ * Uses the repository pattern for metadata and S3 for file storage.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
-import { findFileById, addFileTag, deleteFile } from '@/lib/file-manager'
+import { isS3Enabled } from '@/lib/s3/config'
+import { deleteFile as deleteS3File } from '@/lib/s3/operations'
 
 interface RouteContext {
   params: Promise<{ id: string }>
@@ -48,8 +48,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const repos = getRepositories()
 
-    // Get the file from the file-manager system
-    const fileEntry = await findFileById(id)
+    // Get the file from the repository
+    const fileEntry = await repos.files.findById(id)
 
     if (!fileEntry) {
       logger.debug('POST /api/chat-files/[id] - File not found', { fileId: id })
@@ -144,19 +144,19 @@ export async function POST(request: NextRequest, context: RouteContext) {
       })
     }
 
-    // Add the tag to the file
+    // Add the tag to the file using repository
     logger.debug('POST /api/chat-files/[id] - Adding tag to file', {
       fileId: id,
       tagType,
       tagId,
     })
-    const updatedFileEntry = await addFileTag(id, tagId)
+    const updatedFileEntry = await repos.files.addTag(id, tagId)
 
     logger.debug('POST /api/chat-files/[id] - Tag added successfully', {
       fileId: id,
       tagType,
       tagId,
-      updatedTags: updatedFileEntry.tags,
+      updatedTags: updatedFileEntry?.tags,
     })
 
     return NextResponse.json({
@@ -205,8 +205,8 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     const repos = getRepositories()
 
-    // Get the file from file-manager
-    const fileEntry = await findFileById(id)
+    // Get the file from repository
+    const fileEntry = await repos.files.findById(id)
 
     if (!fileEntry) {
       logger.debug('DELETE /api/chat-files/[id] - File not found', { fileId: id })
@@ -246,15 +246,34 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Delete the file from file-manager (both entry and physical file)
-    logger.debug('DELETE /api/chat-files/[id] - Deleting file from file-manager', {
+    // Delete from S3 if applicable
+    const s3Enabled = isS3Enabled()
+    if (s3Enabled && fileEntry.s3Key) {
+      try {
+        await deleteS3File(fileEntry.s3Key)
+        logger.debug('DELETE /api/chat-files/[id] - Deleted from S3', {
+          fileId: id,
+          s3Key: fileEntry.s3Key,
+        })
+      } catch (s3Error) {
+        logger.warn('DELETE /api/chat-files/[id] - Failed to delete from S3', {
+          fileId: id,
+          s3Key: fileEntry.s3Key,
+          error: s3Error instanceof Error ? s3Error.message : 'Unknown error',
+        })
+        // Continue with metadata deletion even if S3 deletion fails
+      }
+    }
+
+    // Delete the file metadata from repository
+    logger.debug('DELETE /api/chat-files/[id] - Deleting file metadata', {
       fileId: id,
       filename: fileEntry.originalFilename,
     })
-    const deleted = await deleteFile(id)
+    const deleted = await repos.files.delete(id)
 
     if (!deleted) {
-      logger.debug('DELETE /api/chat-files/[id] - File not found in file-manager', { fileId: id })
+      logger.debug('DELETE /api/chat-files/[id] - File metadata not found', { fileId: id })
       return NextResponse.json({ error: 'File not found' }, { status: 404 })
     }
 

@@ -2,6 +2,9 @@
  * NextAuth MongoDB Adapter
  *
  * Custom adapter for NextAuth v4+ that uses MongoDB for persistence.
+ * This adapter uses UUID-style string IDs (in the `id` field) instead of
+ * MongoDB ObjectIds to maintain compatibility with the rest of the application.
+ *
  * Implements the Adapter interface to support:
  * - User creation and retrieval
  * - Account linking for OAuth providers
@@ -18,102 +21,88 @@ import {
 } from 'next-auth/adapters';
 import { getMongoDatabase } from './client';
 import { logger } from '@/lib/logger';
-import { ObjectId } from 'mongodb';
+import crypto from 'node:crypto';
 
 /**
  * MongoDB user document type
+ * Uses `id` field (UUID) as the application identifier
  */
 interface MongoUser {
-  _id: ObjectId;
+  id: string; // UUID-style application ID
   email: string;
   emailVerified: string | null;
   name?: string | null;
   image?: string | null;
   passwordHash?: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /**
  * MongoDB account document type
+ * Uses string userId to match the user's `id` field
  */
 interface MongoAccount {
-  _id: ObjectId;
-  userId: ObjectId;
+  userId: string; // References user.id (UUID)
   type: string;
   provider: string;
   providerAccountId: string;
-  refreshToken?: string;
-  accessToken?: string;
-  expiresAt?: number;
-  tokenType?: string;
+  refresh_token?: string;
+  access_token?: string;
+  expires_at?: number;
+  token_type?: string;
   scope?: string;
-  idToken?: string;
-  sessionState?: string;
-  createdAt: Date;
-  updatedAt: Date;
+  id_token?: string;
+  session_state?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /**
  * MongoDB session document type
+ * Uses string userId to match the user's `id` field
  */
 interface MongoSession {
-  _id: ObjectId;
+  id: string;
   sessionToken: string;
-  userId: ObjectId;
-  expires: Date;
-  createdAt: Date;
-  updatedAt: Date;
+  userId: string; // References user.id (UUID)
+  expires: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /**
  * MongoDB verification token document type
  */
 interface MongoVerificationToken {
-  _id: ObjectId;
   identifier: string;
   token: string;
-  expires: Date;
-  createdAt: Date;
+  expires: string;
+  createdAt: string;
 }
 
 /**
- * Convert MongoDB ObjectId to string for adapter interface
- * @param id - ObjectId from MongoDB
- * @returns String representation of ObjectId
+ * Generate a UUID for new entities
  */
-function objectIdToString(id: ObjectId): string {
-  return id.toHexString();
+function generateId(): string {
+  return crypto.randomUUID();
 }
 
 /**
- * Convert string to MongoDB ObjectId
- * @param id - String representation of ObjectId
- * @returns ObjectId instance
+ * Get current timestamp as ISO string
  */
-function stringToObjectId(id: string): ObjectId {
-  if (!ObjectId.isValid(id)) {
-    throw new Error(`Invalid ObjectId: ${id}`);
-  }
-  return new ObjectId(id);
+function now(): string {
+  return new Date().toISOString();
 }
 
 /**
  * Get the NextAuth MongoDB adapter
  *
+ * This adapter uses UUID-style IDs stored in the `id` field, maintaining
+ * compatibility with the application's data model.
+ *
  * @returns Adapter instance for NextAuth
  * @throws Error if MongoDB connection fails
- *
- * @example
- * ```typescript
- * import NextAuth from 'next-auth';
- * import { getMongoDBAuthAdapter } from '@/lib/mongodb/auth-adapter';
- *
- * export const { handlers, auth } = NextAuth({
- *   adapter: getMongoDBAuthAdapter(),
- *   // ... other config
- * });
- * ```
  */
 export function getMongoDBAuthAdapter(): Adapter {
   return {
@@ -130,26 +119,30 @@ export function getMongoDBAuthAdapter(): Adapter {
         const db = await getMongoDatabase();
         const usersCollection = db.collection<MongoUser>('users');
 
-        const mongoUser: Omit<MongoUser, '_id'> = {
+        const id = generateId();
+        const timestamp = now();
+
+        const mongoUser: MongoUser = {
+          id,
           email: user.email,
           emailVerified: user.emailVerified
             ? user.emailVerified.toISOString()
             : null,
           name: user.name || null,
           image: user.image || null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          createdAt: timestamp,
+          updatedAt: timestamp,
         };
 
-        const result = await usersCollection.insertOne(mongoUser as any);
+        await usersCollection.insertOne(mongoUser as any);
 
         logger.debug('MongoDB Auth: User created successfully', {
-          userId: result.insertedId.toHexString(),
+          userId: id,
           email: user.email,
         });
 
         return {
-          id: objectIdToString(result.insertedId),
+          id,
           email: user.email,
           emailVerified: user.emailVerified,
           name: user.name,
@@ -166,7 +159,7 @@ export function getMongoDBAuthAdapter(): Adapter {
     },
 
     /**
-     * Get a user by their ID
+     * Get a user by their ID (UUID)
      */
     async getUser(id: string): Promise<AdapterUser | null> {
       try {
@@ -175,9 +168,8 @@ export function getMongoDBAuthAdapter(): Adapter {
         const db = await getMongoDatabase();
         const usersCollection = db.collection<MongoUser>('users');
 
-        const mongoUser = await usersCollection.findOne({
-          _id: stringToObjectId(id),
-        });
+        // Look up by the `id` field (UUID), not `_id`
+        const mongoUser = await usersCollection.findOne({ id });
 
         if (!mongoUser) {
           logger.debug('MongoDB Auth: User not found', { userId: id });
@@ -190,7 +182,7 @@ export function getMongoDBAuthAdapter(): Adapter {
         });
 
         return {
-          id: objectIdToString(mongoUser._id),
+          id: mongoUser.id,
           email: mongoUser.email,
           emailVerified: mongoUser.emailVerified
             ? new Date(mongoUser.emailVerified)
@@ -226,12 +218,12 @@ export function getMongoDBAuthAdapter(): Adapter {
         }
 
         logger.debug('MongoDB Auth: User retrieved by email', {
-          userId: objectIdToString(mongoUser._id),
+          userId: mongoUser.id,
           email,
         });
 
         return {
-          id: objectIdToString(mongoUser._id),
+          id: mongoUser.id,
           email: mongoUser.email,
           emailVerified: mongoUser.emailVerified
             ? new Date(mongoUser.emailVerified)
@@ -282,24 +274,25 @@ export function getMongoDBAuthAdapter(): Adapter {
           return null;
         }
 
+        // Look up user by the `id` field (account.userId is a UUID string)
         const mongoUser = await usersCollection.findOne({
-          _id: account.userId,
+          id: account.userId,
         });
 
         if (!mongoUser) {
           logger.debug('MongoDB Auth: User not found for account', {
-            userId: objectIdToString(account.userId),
+            userId: account.userId,
           });
           return null;
         }
 
         logger.debug('MongoDB Auth: User retrieved by account', {
-          userId: objectIdToString(mongoUser._id),
+          userId: mongoUser.id,
           provider,
         });
 
         return {
-          id: objectIdToString(mongoUser._id),
+          id: mongoUser.id,
           email: mongoUser.email,
           emailVerified: mongoUser.emailVerified
             ? new Date(mongoUser.emailVerified)
@@ -330,7 +323,7 @@ export function getMongoDBAuthAdapter(): Adapter {
         const usersCollection = db.collection<MongoUser>('users');
 
         const updateData: Partial<MongoUser> = {
-          updatedAt: new Date(),
+          updatedAt: now(),
         };
 
         if (user.email !== undefined) {
@@ -348,13 +341,14 @@ export function getMongoDBAuthAdapter(): Adapter {
             : null;
         }
 
+        // Update by `id` field, not `_id`
         const result = await usersCollection.findOneAndUpdate(
-          { _id: stringToObjectId(user.id) },
+          { id: user.id },
           { $set: updateData },
           { returnDocument: 'after' }
         );
 
-        const updatedUser = (result as any).value as MongoUser | null;
+        const updatedUser = result as unknown as MongoUser | null;
         if (!updatedUser) {
           throw new Error(`User ${user.id} not found`);
         }
@@ -364,7 +358,7 @@ export function getMongoDBAuthAdapter(): Adapter {
         });
 
         return {
-          id: objectIdToString(updatedUser._id),
+          id: updatedUser.id,
           email: updatedUser.email,
           emailVerified: updatedUser.emailVerified
             ? new Date(updatedUser.emailVerified)
@@ -394,16 +388,10 @@ export function getMongoDBAuthAdapter(): Adapter {
         const accountsCollection = db.collection<MongoAccount>('accounts');
         const sessionsCollection = db.collection<MongoSession>('sessions');
 
-        const objectId = stringToObjectId(userId);
-
-        // Delete user accounts
-        await accountsCollection.deleteMany({ userId: objectId });
-
-        // Delete user sessions
-        await sessionsCollection.deleteMany({ userId: objectId });
-
-        // Delete user
-        await usersCollection.deleteOne({ _id: objectId });
+        // Delete by userId (UUID string)
+        await accountsCollection.deleteMany({ userId });
+        await sessionsCollection.deleteMany({ userId });
+        await usersCollection.deleteOne({ id: userId });
 
         logger.debug('MongoDB Auth: User deleted successfully', { userId });
       } catch (error) {
@@ -429,20 +417,21 @@ export function getMongoDBAuthAdapter(): Adapter {
         const db = await getMongoDatabase();
         const accountsCollection = db.collection<MongoAccount>('accounts');
 
-        const mongoAccount: Omit<MongoAccount, '_id'> = {
-          userId: stringToObjectId(account.userId),
+        const timestamp = now();
+        const mongoAccount: MongoAccount = {
+          userId: account.userId, // UUID string
           type: account.type,
           provider: account.provider,
           providerAccountId: account.providerAccountId,
-          refreshToken: account.refresh_token,
-          accessToken: account.access_token,
-          expiresAt: account.expires_at,
-          tokenType: account.token_type,
+          refresh_token: account.refresh_token,
+          access_token: account.access_token,
+          expires_at: account.expires_at,
+          token_type: account.token_type,
           scope: account.scope,
-          idToken: account.id_token,
-          sessionState: account.session_state,
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          id_token: account.id_token,
+          session_state: account.session_state,
+          createdAt: timestamp,
+          updatedAt: timestamp,
         };
 
         await accountsCollection.insertOne(mongoAccount as any);
@@ -513,15 +502,18 @@ export function getMongoDBAuthAdapter(): Adapter {
         const db = await getMongoDatabase();
         const sessionsCollection = db.collection<MongoSession>('sessions');
 
-        const mongoSession: Omit<MongoSession, '_id'> = {
+        const id = generateId();
+        const timestamp = now();
+        const mongoSession: MongoSession = {
+          id,
           sessionToken: session.sessionToken,
-          userId: stringToObjectId(session.userId),
-          expires: session.expires,
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          userId: session.userId, // UUID string
+          expires: session.expires.toISOString(),
+          createdAt: timestamp,
+          updatedAt: timestamp,
         };
 
-        const result = await sessionsCollection.insertOne(mongoSession as any);
+        await sessionsCollection.insertOne(mongoSession as any);
 
         logger.debug('MongoDB Auth: Session created successfully', {
           sessionToken: session.sessionToken,
@@ -568,35 +560,37 @@ export function getMongoDBAuthAdapter(): Adapter {
         }
 
         // Check if session has expired
-        if (mongoSession.expires < new Date()) {
+        const expires = new Date(mongoSession.expires);
+        if (expires < new Date()) {
           logger.debug('MongoDB Auth: Session has expired', { sessionToken });
           return null;
         }
 
+        // Look up user by `id` field
         const mongoUser = await usersCollection.findOne({
-          _id: mongoSession.userId,
+          id: mongoSession.userId,
         });
 
         if (!mongoUser) {
           logger.debug('MongoDB Auth: User not found for session', {
-            userId: objectIdToString(mongoSession.userId),
+            userId: mongoSession.userId,
           });
           return null;
         }
 
         logger.debug('MongoDB Auth: Session and user retrieved', {
           sessionToken,
-          userId: objectIdToString(mongoUser._id),
+          userId: mongoUser.id,
         });
 
         return {
           session: {
             sessionToken: mongoSession.sessionToken,
-            userId: objectIdToString(mongoSession.userId),
-            expires: mongoSession.expires,
+            userId: mongoSession.userId,
+            expires,
           },
           user: {
-            id: objectIdToString(mongoUser._id),
+            id: mongoUser.id,
             email: mongoUser.email,
             emailVerified: mongoUser.emailVerified
               ? new Date(mongoUser.emailVerified)
@@ -630,11 +624,11 @@ export function getMongoDBAuthAdapter(): Adapter {
         const sessionsCollection = db.collection<MongoSession>('sessions');
 
         const updateData: Partial<MongoSession> = {
-          updatedAt: new Date(),
+          updatedAt: now(),
         };
 
         if (session.expires !== undefined) {
-          updateData.expires = session.expires;
+          updateData.expires = session.expires.toISOString();
         }
 
         const result = await sessionsCollection.findOneAndUpdate(
@@ -643,7 +637,7 @@ export function getMongoDBAuthAdapter(): Adapter {
           { returnDocument: 'after' }
         );
 
-        const updatedSession = (result as any).value as MongoSession | null;
+        const updatedSession = result as unknown as MongoSession | null;
         if (!updatedSession) {
           logger.debug('MongoDB Auth: Session not found for update', {
             sessionToken: session.sessionToken,
@@ -657,8 +651,8 @@ export function getMongoDBAuthAdapter(): Adapter {
 
         return {
           sessionToken: updatedSession.sessionToken,
-          userId: objectIdToString(updatedSession.userId),
-          expires: updatedSession.expires,
+          userId: updatedSession.userId,
+          expires: new Date(updatedSession.expires),
         };
       } catch (error) {
         logger.error(
@@ -711,11 +705,11 @@ export function getMongoDBAuthAdapter(): Adapter {
           'verification_tokens'
         );
 
-        const mongoToken: Omit<MongoVerificationToken, '_id'> = {
+        const mongoToken: MongoVerificationToken = {
           identifier: verificationToken.identifier,
           token: verificationToken.token,
-          expires: verificationToken.expires,
-          createdAt: new Date(),
+          expires: verificationToken.expires.toISOString(),
+          createdAt: now(),
         };
 
         await tokensCollection.insertOne(mongoToken as any);
@@ -758,7 +752,7 @@ export function getMongoDBAuthAdapter(): Adapter {
           token,
         });
 
-        const deletedToken = (result as any).value as MongoVerificationToken | null;
+        const deletedToken = result as unknown as MongoVerificationToken | null;
         if (!deletedToken) {
           logger.debug('MongoDB Auth: Verification token not found', {
             identifier,
@@ -773,7 +767,7 @@ export function getMongoDBAuthAdapter(): Adapter {
         return {
           identifier: deletedToken.identifier,
           token: deletedToken.token,
-          expires: deletedToken.expires,
+          expires: new Date(deletedToken.expires),
         };
       } catch (error) {
         logger.error(

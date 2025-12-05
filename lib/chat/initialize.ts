@@ -1,7 +1,7 @@
 // Chat Initialization Utility
 // Phase 0.5: Single Chat MVP
 
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getRepositories } from '@/lib/repositories/factory'
 import { processCharacterTemplates } from '@/lib/templates/processor'
 
 interface Character {

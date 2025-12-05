@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getRepositories } from '@/lib/repositories/factory'
 import type { EmbeddingProfileProvider } from '@/lib/json-store/schemas/types'
 import { logger } from '@/lib/logger'
 

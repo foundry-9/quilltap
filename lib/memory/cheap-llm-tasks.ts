@@ -10,7 +10,7 @@
 import { createLLMProvider } from '@/lib/llm'
 import { LLMMessage, LLMResponse } from '@/lib/llm/base'
 import { CheapLLMSelection } from '@/lib/llm/cheap-llm'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getRepositories } from '@/lib/repositories/factory'
 import { decryptApiKey } from '@/lib/encryption'
 
 /**

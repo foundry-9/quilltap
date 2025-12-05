@@ -3,7 +3,7 @@
  * Validates provider-specific calls, fallbacks, and similarity helpers.
  */
 
-jest.mock('@/lib/json-store/repositories', () => ({
+jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
 }))
 jest.mock('@/lib/encryption', () => ({
@@ -11,7 +11,7 @@ jest.mock('@/lib/encryption', () => ({
 }))
 
 import * as embeddingService from '@/lib/embedding/embedding-service'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getRepositories } from '@/lib/repositories/factory'
 import { decryptApiKey } from '@/lib/encryption'
 import type { EmbeddingProfile } from '@/lib/json-store/schemas/types'
 
