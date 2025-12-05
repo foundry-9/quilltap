@@ -23,9 +23,20 @@ import * as path from 'path';
 import { logger } from '@/lib/logger';
 import type { Migration, MigrationResult } from '../migration-types';
 import { validateS3Config } from '@/lib/s3/config';
-import { getAllFiles, updateFile } from '@/lib/file-manager/index';
+import { getAllFiles, updateFile, deleteFile } from '@/lib/file-manager/index';
 import { buildS3Key, getS3Bucket } from '@/lib/s3/client';
 import { uploadFile } from '@/lib/s3/operations';
+
+/**
+ * Error categorization for migration
+ */
+interface MigrationError {
+  fileId: string;
+  filename: string;
+  error: string;
+  /** If true, this is a warning (missing file) not a blocking error */
+  isWarning: boolean;
+}
 
 /**
  * Check if the local storage directory exists and has files
@@ -112,7 +123,8 @@ export const migrateFilesToS3Migration: Migration = {
     const migratedLogger = logger.child({ context: 'migration.migrate-files-to-s3' });
 
     let uploaded = 0;
-    const errors: Array<{ fileId: string; filename: string; error: string }> = [];
+    let skippedMissing = 0;
+    const errors: MigrationError[] = [];
 
     try {
       // Get S3 configuration
@@ -155,16 +167,51 @@ export const migrateFilesToS3Migration: Migration = {
             });
           } catch (readError) {
             const errorMessage = readError instanceof Error ? readError.message : 'Unknown error';
-            errors.push({
-              fileId: entry.id,
-              filename: entry.originalFilename,
-              error: `Failed to read file: ${errorMessage}`,
-            });
-            migratedLogger.warn('Failed to read file from local storage', {
-              fileId: entry.id,
-              filename: entry.originalFilename,
-              error: errorMessage,
-            });
+            const isMissingFile = errorMessage.includes('ENOENT');
+
+            if (isMissingFile) {
+              // File doesn't exist on disk - this is an orphaned metadata entry
+              // Clean it up by removing the metadata entry
+              migratedLogger.warn('File missing from local storage, removing orphaned metadata entry', {
+                fileId: entry.id,
+                filename: entry.originalFilename,
+              });
+
+              try {
+                await deleteFile(entry.id);
+                skippedMissing++;
+                migratedLogger.info('Removed orphaned file metadata entry', {
+                  fileId: entry.id,
+                  filename: entry.originalFilename,
+                });
+              } catch (deleteError) {
+                migratedLogger.warn('Failed to remove orphaned metadata entry', {
+                  fileId: entry.id,
+                  error: deleteError instanceof Error ? deleteError.message : 'Unknown error',
+                });
+              }
+
+              // This is a warning, not a blocking error
+              errors.push({
+                fileId: entry.id,
+                filename: entry.originalFilename,
+                error: `File missing from disk (orphaned entry cleaned up)`,
+                isWarning: true,
+              });
+            } else {
+              // Other read error - this is a real problem
+              errors.push({
+                fileId: entry.id,
+                filename: entry.originalFilename,
+                error: `Failed to read file: ${errorMessage}`,
+                isWarning: false,
+              });
+              migratedLogger.warn('Failed to read file from local storage', {
+                fileId: entry.id,
+                filename: entry.originalFilename,
+                error: errorMessage,
+              });
+            }
             continue;
           }
 
@@ -191,6 +238,7 @@ export const migrateFilesToS3Migration: Migration = {
               fileId: entry.id,
               filename: entry.originalFilename,
               error: `Failed to upload to S3: ${errorMessage}`,
+              isWarning: false,
             });
             migratedLogger.warn('Failed to upload file to S3', {
               fileId: entry.id,
@@ -220,6 +268,7 @@ export const migrateFilesToS3Migration: Migration = {
               fileId: entry.id,
               filename: entry.originalFilename,
               error: `Failed to update file entry: ${errorMessage}`,
+              isWarning: false,
             });
             migratedLogger.warn('Failed to update file entry with S3 reference', {
               fileId: entry.id,
@@ -236,6 +285,7 @@ export const migrateFilesToS3Migration: Migration = {
             fileId: entry.id,
             filename: entry.originalFilename,
             error: `Unexpected error: ${errorMessage}`,
+            isWarning: false,
           });
           migratedLogger.error('Unexpected error during file migration', {
             fileId: entry.id,
@@ -258,31 +308,49 @@ export const migrateFilesToS3Migration: Migration = {
       };
     }
 
-    const success = errors.length === 0;
+    const blockingErrors = errors.filter(e => !e.isWarning);
+    const warnings = errors.filter(e => e.isWarning);
+    const success = blockingErrors.length === 0;
     const durationMs = Date.now() - startTime;
 
-    if (success) {
+    if (success && warnings.length === 0) {
       migratedLogger.info('File migration to S3 completed successfully', {
         filesUploaded: uploaded,
+        durationMs,
+      });
+    } else if (success) {
+      migratedLogger.info('File migration to S3 completed with warnings', {
+        filesUploaded: uploaded,
+        skippedMissing,
+        warningCount: warnings.length,
         durationMs,
       });
     } else {
       migratedLogger.warn('File migration to S3 completed with errors', {
         filesUploaded: uploaded,
-        errorCount: errors.length,
+        skippedMissing,
+        errorCount: blockingErrors.length,
+        warningCount: warnings.length,
         durationMs,
       });
+    }
+
+    // Build message
+    let message = `Migrated ${uploaded} files to S3`;
+    if (skippedMissing > 0) {
+      message += `, cleaned up ${skippedMissing} orphaned entries`;
+    }
+    if (blockingErrors.length > 0) {
+      message += `, ${blockingErrors.length} errors`;
     }
 
     return {
       id: 'migrate-files-to-s3-v1',
       success,
-      itemsAffected: uploaded,
-      message: success
-        ? `Migrated ${uploaded} files to S3`
-        : `Migrated ${uploaded} files to S3 with ${errors.length} errors`,
-      error: errors.length > 0
-        ? errors
+      itemsAffected: uploaded + skippedMissing,
+      message,
+      error: blockingErrors.length > 0
+        ? blockingErrors
             .slice(0, 5)
             .map(e => `${e.fileId}: ${e.error}`)
             .join('; ')
