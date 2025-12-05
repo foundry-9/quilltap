@@ -64,9 +64,15 @@ export async function GET(
       });
 
       try {
-        // Use presigned URL redirect for large files (> 5MB)
+        // Check if we should use presigned URL redirect or proxy through API
+        // For HTTP endpoints (e.g., local MinIO), we must proxy to avoid mixed content issues
+        // when the app is served over HTTPS
+        const s3Endpoint = process.env.S3_ENDPOINT || '';
+        const isHttpEndpoint = s3Endpoint.startsWith('http://');
         const LARGE_FILE_THRESHOLD = 5 * 1024 * 1024; // 5MB
-        if (fileEntry.size > LARGE_FILE_THRESHOLD) {
+
+        // Use presigned URL redirect for large files ONLY if endpoint is HTTPS or AWS S3 (no custom endpoint)
+        if (fileEntry.size > LARGE_FILE_THRESHOLD && !isHttpEndpoint) {
           logger.debug('File size exceeds threshold, generating presigned URL redirect', {
             context: 'GET /api/files/[id]',
             fileId,
@@ -84,7 +90,17 @@ export async function GET(
           return NextResponse.redirect(presignedUrl);
         }
 
-        // Download small files and return directly
+        // Download files and serve through API (required for HTTP endpoints to avoid mixed content)
+        if (isHttpEndpoint && fileEntry.size > LARGE_FILE_THRESHOLD) {
+          logger.debug('Proxying large file through API due to HTTP S3 endpoint', {
+            context: 'GET /api/files/[id]',
+            fileId,
+            fileSize: fileEntry.size,
+            endpoint: s3Endpoint,
+          });
+        }
+
+        // Download files and return directly
         logger.debug('File size is small, downloading from S3', {
           context: 'GET /api/files/[id]',
           fileId,

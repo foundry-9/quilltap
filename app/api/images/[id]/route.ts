@@ -7,12 +7,16 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { promises as fs } from 'node:fs';
+import { join, extname } from 'node:path';
 import { getServerSession } from '@/lib/auth/session';
 import { getRepositories } from '@/lib/repositories/factory';
 import { isS3Enabled } from '@/lib/s3/config';
-import { deleteFile as deleteS3File } from '@/lib/s3/operations';
+import { deleteFile as deleteS3File, downloadFile as downloadS3File } from '@/lib/s3/operations';
 import { logger } from '@/lib/logger';
 import type { FileEntry } from '@/lib/json-store/schemas/types';
+
+const LOCAL_STORAGE_DIR = 'public/data/files/storage';
 
 /**
  * Get the filepath for an image based on storage type
@@ -167,30 +171,85 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Image not found' }, { status: 404 });
     }
 
+    // Check if the underlying file actually exists (to detect orphaned metadata)
+    let fileExists = false;
+    const s3Enabled = isS3Enabled();
+    if (s3Enabled && image.s3Key) {
+      try {
+        await downloadS3File(image.s3Key);
+        fileExists = true;
+      } catch {
+        logger.debug('DELETE /api/images/[id] - S3 file does not exist (orphaned)', { imageId: id, s3Key: image.s3Key });
+      }
+    } else if (!s3Enabled) {
+      const ext = image.originalFilename.includes('.')
+        ? image.originalFilename.substring(image.originalFilename.lastIndexOf('.'))
+        : '';
+      const localPath = join(LOCAL_STORAGE_DIR, `${image.id}${ext}`);
+      try {
+        await fs.access(localPath);
+        fileExists = true;
+      } catch {
+        logger.debug('DELETE /api/images/[id] - Local file does not exist (orphaned)', { imageId: id, localPath });
+      }
+    }
+
     // Count usages by checking related entities
     const [allCharacters, allPersonas] = await Promise.all([
       repos.characters.findByUserId(session.user.id),
       repos.personas.findByUserId(session.user.id),
     ]);
 
-    const charactersUsingAsDefault = allCharacters.filter(c => c.defaultImageId === id).length;
-    const personasUsingAsDefault = allPersonas.filter(p => p.defaultImageId === id).length;
-    const chatAvatarOverrides = allCharacters.reduce((count, c) => {
-      return count + c.avatarOverrides.filter(o => o.imageId === id).length;
-    }, 0);
+    const charactersUsingAsDefault = allCharacters.filter(c => c.defaultImageId === id);
+    const personasUsingAsDefault = allPersonas.filter(p => p.defaultImageId === id);
+    const chatAvatarOverrides = allCharacters.reduce((acc, c) => {
+      const overrides = c.avatarOverrides.filter(o => o.imageId === id);
+      return overrides.length > 0 ? [...acc, { characterId: c.id, overrides }] : acc;
+    }, [] as Array<{ characterId: string; overrides: Array<{ chatId: string; imageId: string }> }>);
 
     // Check if image is being used
     const isInUse =
-      charactersUsingAsDefault > 0 ||
-      personasUsingAsDefault > 0 ||
-      chatAvatarOverrides > 0;
+      charactersUsingAsDefault.length > 0 ||
+      personasUsingAsDefault.length > 0 ||
+      chatAvatarOverrides.length > 0;
 
-    if (isInUse) {
+    // If the file is orphaned (doesn't exist), clean up references and allow deletion
+    if (!fileExists && isInUse) {
+      logger.info('DELETE /api/images/[id] - Cleaning up references to orphaned image', {
+        imageId: id,
+        charactersUsingAsDefault: charactersUsingAsDefault.length,
+        personasUsingAsDefault: personasUsingAsDefault.length,
+        chatAvatarOverrides: chatAvatarOverrides.length,
+      });
+
+      // Clear defaultImageId on characters
+      for (const character of charactersUsingAsDefault) {
+        await repos.characters.update(character.id, { defaultImageId: null });
+        logger.debug('DELETE /api/images/[id] - Cleared defaultImageId on character', { characterId: character.id });
+      }
+
+      // Clear defaultImageId on personas
+      for (const persona of personasUsingAsDefault) {
+        await repos.personas.update(persona.id, { defaultImageId: null });
+        logger.debug('DELETE /api/images/[id] - Cleared defaultImageId on persona', { personaId: persona.id });
+      }
+
+      // Clear avatar overrides
+      for (const { characterId, overrides } of chatAvatarOverrides) {
+        const character = allCharacters.find(c => c.id === characterId);
+        if (character) {
+          const updatedOverrides = character.avatarOverrides.filter(o => o.imageId !== id);
+          await repos.characters.update(characterId, { avatarOverrides: updatedOverrides });
+          logger.debug('DELETE /api/images/[id] - Cleared avatar overrides on character', { characterId, removedCount: overrides.length });
+        }
+      }
+    } else if (isInUse) {
+      // File exists and is in use - don't allow deletion
       logger.debug('DELETE /api/images/[id] - Image is in use, cannot delete', {
         imageId: id,
-        charactersUsingAsDefault,
-        personasUsingAsDefault,
-        chatAvatarOverrides,
+        charactersUsingAsDefault: charactersUsingAsDefault.length,
+        personasUsingAsDefault: personasUsingAsDefault.length,
+        chatAvatarOverrides: chatAvatarOverrides.length,
       });
       return NextResponse.json(
         {
@@ -203,7 +262,6 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     }
 
     // Delete from S3 if applicable
-    const s3Enabled = isS3Enabled();
     if (s3Enabled && image.s3Key) {
       try {
         await deleteS3File(image.s3Key);

@@ -49,7 +49,9 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
 
 function getAvatarSrc(chat: RecentChat): string | null {
   if (chat.character.defaultImage) {
-    return chat.character.defaultImage.url || `/${chat.character.defaultImage.filepath}`
+    // Handle filepath - check if it already has a leading slash (e.g., S3 files use /api/files/...)
+    const filepath = chat.character.defaultImage.filepath
+    return chat.character.defaultImage.url || (filepath.startsWith('/') ? filepath : `/${filepath}`)
   }
   return chat.character.avatarUrl || null
 }

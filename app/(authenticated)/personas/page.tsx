@@ -57,7 +57,9 @@ export default function PersonasPage() {
 
   const getAvatarSrc = (persona: Persona): string | null => {
     if (persona.defaultImage) {
-      return persona.defaultImage.url || `/${persona.defaultImage.filepath}`
+      // Handle filepath - check if it already has a leading slash (e.g., S3 files use /api/files/...)
+      const filepath = persona.defaultImage.filepath
+      return persona.defaultImage.url || (filepath.startsWith('/') ? filepath : `/${filepath}`)
     }
     return persona.avatarUrl || null
   }

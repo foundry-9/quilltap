@@ -127,17 +127,46 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
   const existingFiles = await repos.files.findBySha256(sha256);
   if (existingFiles.length > 0) {
     const existing = existingFiles[0];
-    // File already exists, just update the linkedTo array if needed
-    const updatedLinkedTo = Array.from(new Set([...existing.linkedTo, ...linkedTo]));
-    if (updatedLinkedTo.length > existing.linkedTo.length) {
-      const updated = await repos.files.update(existing.id, { linkedTo: updatedLinkedTo });
-      if (updated) {
-        logger.debug('Updated existing file with new links', { fileId: existing.id, newLinks: linkedTo });
-        return updated;
+
+    // Verify the actual file bytes still exist before returning the cached entry
+    let fileExists = false;
+    if (existing.s3Key) {
+      try {
+        // Try to download from S3 to verify it exists
+        await downloadS3File(existing.s3Key);
+        fileExists = true;
+      } catch {
+        logger.debug('S3 file no longer exists, will re-upload', { fileId: existing.id, s3Key: existing.s3Key });
+      }
+    } else {
+      // Check local filesystem
+      const ext = getExtension(existing.originalFilename);
+      const localPath = join(LOCAL_STORAGE_DIR, `${existing.id}${ext}`);
+      try {
+        await fs.access(localPath);
+        fileExists = true;
+      } catch {
+        logger.debug('Local file no longer exists, will re-upload', { fileId: existing.id, localPath });
       }
     }
-    logger.debug('File with same hash already exists', { fileId: existing.id, sha256 });
-    return existing;
+
+    if (fileExists) {
+      // File already exists, just update the linkedTo array if needed
+      const updatedLinkedTo = Array.from(new Set([...existing.linkedTo, ...linkedTo]));
+      if (updatedLinkedTo.length > existing.linkedTo.length) {
+        const updated = await repos.files.update(existing.id, { linkedTo: updatedLinkedTo });
+        if (updated) {
+          logger.debug('Updated existing file with new links', { fileId: existing.id, newLinks: linkedTo });
+          return updated;
+        }
+      }
+      logger.debug('File with same hash already exists', { fileId: existing.id, sha256 });
+      return existing;
+    } else {
+      // File bytes are missing - delete the orphaned metadata and proceed with fresh upload
+      logger.info('Cleaning up orphaned file metadata before re-upload', { fileId: existing.id, sha256 });
+      await repos.files.delete(existing.id);
+    }
   }
 
   // Generate a new file ID

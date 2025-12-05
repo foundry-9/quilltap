@@ -22,8 +22,9 @@ describe('Avatar Display Logic', () => {
       }
 
       // Simulate the getAvatarSrc logic
+      const filepath = persona.defaultImage?.filepath
       const avatarSrc = persona.defaultImage
-        ? persona.defaultImage.url || `/${persona.defaultImage.filepath}`
+        ? persona.defaultImage.url || (filepath?.startsWith('/') ? filepath : `/${filepath}`)
         : persona.avatarUrl
 
       expect(avatarSrc).toBe('https://example.com/image1.jpg')
@@ -39,8 +40,9 @@ describe('Avatar Display Logic', () => {
         avatarUrl: null,
       }
 
+      const filepath = persona.defaultImage?.filepath
       const avatarSrc = persona.defaultImage
-        ? persona.defaultImage.url || `/${persona.defaultImage.filepath}`
+        ? persona.defaultImage.url || (filepath?.startsWith('/') ? filepath : `/${filepath}`)
         : persona.avatarUrl
 
       expect(avatarSrc).toBe('/uploads/images/user123/avatar.png')
@@ -52,8 +54,9 @@ describe('Avatar Display Logic', () => {
         avatarUrl: 'https://example.com/avatar.jpg',
       }
 
+      const filepath = persona.defaultImage?.filepath
       const avatarSrc = persona.defaultImage
-        ? persona.defaultImage.url || `/${persona.defaultImage.filepath}`
+        ? persona.defaultImage.url || (filepath?.startsWith('/') ? filepath : `/${filepath}`)
         : persona.avatarUrl
 
       expect(avatarSrc).toBe('https://example.com/avatar.jpg')
@@ -65,8 +68,9 @@ describe('Avatar Display Logic', () => {
         avatarUrl: null,
       }
 
+      const filepath = persona.defaultImage?.filepath
       const avatarSrc = persona.defaultImage
-        ? persona.defaultImage.url || `/${persona.defaultImage.filepath}`
+        ? persona.defaultImage.url || (filepath?.startsWith('/') ? filepath : `/${filepath}`)
         : persona.avatarUrl
 
       expect(avatarSrc).toBe(null)

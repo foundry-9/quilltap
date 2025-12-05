@@ -27,7 +27,9 @@ interface FavoriteCharactersProps {
 
 function getAvatarSrc(character: FavoriteCharacter): string | null {
   if (character.defaultImage) {
-    return character.defaultImage.url || `/${character.defaultImage.filepath}`
+    // Handle filepath - check if it already has a leading slash (e.g., S3 files use /api/files/...)
+    const filepath = character.defaultImage.filepath
+    return character.defaultImage.url || (filepath.startsWith('/') ? filepath : `/${filepath}`)
   }
   return character.avatarUrl || null
 }

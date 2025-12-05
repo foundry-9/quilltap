@@ -229,6 +229,25 @@ export function EmbeddedPhotoGallery({
     setConfirmDelete(null)
 
     try {
+      // If this is the current avatar (especially for missing images), clear it first
+      const isCurrentAvatar = currentAvatarId === image.id
+      if (isCurrentAvatar && onAvatarChange) {
+        const endpoint = entityType === 'character'
+          ? `/api/characters/${entityId}/avatar`
+          : `/api/personas/${entityId}/avatar`
+
+        const clearRes = await fetch(endpoint, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageId: null }),
+        })
+
+        if (!clearRes.ok) {
+          throw new Error('Failed to clear avatar before deletion')
+        }
+        onAvatarChange(null)
+      }
+
       const res = await fetch(`/api/images/${image.id}`, {
         method: 'DELETE',
       })
@@ -474,8 +493,8 @@ export function EmbeddedPhotoGallery({
                       </button>
                     )}
 
-                    {/* Delete button */}
-                    {!isAvatar && (
+                    {/* Delete button - show for non-avatars, or for missing avatar images */}
+                    {(!isAvatar || missingImages.has(image.id)) && (
                       <button
                         onClick={(e) => handleDeleteImage(e, image)}
                         disabled={deletingImage === image.id}

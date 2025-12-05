@@ -96,7 +96,8 @@ export default function GalleryImageViewModal({
 
   if (!isOpen) return null
 
-  const imageSrc = image.url || `/${image.filepath}`
+  // Handle filepath - check if it already has a leading slash (e.g., S3 files use /api/files/...)
+  const imageSrc = image.url || (image.filepath.startsWith('/') ? image.filepath : `/${image.filepath}`)
 
   return (
     <div

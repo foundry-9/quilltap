@@ -97,10 +97,13 @@ describe('Personas Page', () => {
         avatarUrl: 'https://old-url.com/persona.jpg',
       }
 
-      const getAvatarSrc = (p: any) =>
-        p.defaultImage
-          ? p.defaultImage.url || `/${p.defaultImage.filepath}`
-          : p.avatarUrl
+      const getAvatarSrc = (p: any) => {
+        if (p.defaultImage) {
+          const filepath = p.defaultImage.filepath
+          return p.defaultImage.url || (filepath?.startsWith('/') ? filepath : `/${filepath}`)
+        }
+        return p.avatarUrl
+      }
 
       const src = getAvatarSrc(persona)
       expect(src).toBe('https://cdn.example.com/persona1.jpg')
@@ -116,10 +119,13 @@ describe('Personas Page', () => {
         avatarUrl: null,
       }
 
-      const getAvatarSrc = (p: any) =>
-        p.defaultImage
-          ? p.defaultImage.url || `/${p.defaultImage.filepath}`
-          : p.avatarUrl
+      const getAvatarSrc = (p: any) => {
+        if (p.defaultImage) {
+          const filepath = p.defaultImage.filepath
+          return p.defaultImage.url || (filepath?.startsWith('/') ? filepath : `/${filepath}`)
+        }
+        return p.avatarUrl
+      }
 
       const src = getAvatarSrc(persona)
       expect(src).toBe('/uploads/images/user123/persona.png')
@@ -131,10 +137,13 @@ describe('Personas Page', () => {
         avatarUrl: 'https://example.com/avatar.jpg',
       }
 
-      const getAvatarSrc = (p: any) =>
-        p.defaultImage
-          ? p.defaultImage.url || `/${p.defaultImage.filepath}`
-          : p.avatarUrl
+      const getAvatarSrc = (p: any) => {
+        if (p.defaultImage) {
+          const filepath = p.defaultImage.filepath
+          return p.defaultImage.url || (filepath?.startsWith('/') ? filepath : `/${filepath}`)
+        }
+        return p.avatarUrl
+      }
 
       const src = getAvatarSrc(persona)
       expect(src).toBe('https://example.com/avatar.jpg')
@@ -146,10 +155,13 @@ describe('Personas Page', () => {
         avatarUrl: null,
       }
 
-      const getAvatarSrc = (p: any) =>
-        p.defaultImage
-          ? p.defaultImage.url || `/${p.defaultImage.filepath}`
-          : p.avatarUrl
+      const getAvatarSrc = (p: any) => {
+        if (p.defaultImage) {
+          const filepath = p.defaultImage.filepath
+          return p.defaultImage.url || (filepath?.startsWith('/') ? filepath : `/${filepath}`)
+        }
+        return p.avatarUrl
+      }
 
       const src = getAvatarSrc(persona)
       expect(src).toBeNull()

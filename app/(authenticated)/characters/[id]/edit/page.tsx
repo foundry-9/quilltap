@@ -324,7 +324,9 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
   const getAvatarSrc = () => {
     let src = null
     if (character?.defaultImage) {
-      src = character.defaultImage.url || `/${character.defaultImage.filepath}`
+      // Handle filepath - check if it already has a leading slash (e.g., S3 files use /api/files/...)
+      const filepath = character.defaultImage.filepath
+      src = character.defaultImage.url || (filepath.startsWith('/') ? filepath : `/${filepath}`)
     } else {
       src = character?.avatarUrl
     }

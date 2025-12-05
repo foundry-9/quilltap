@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
+// Using native img tag instead of next/image because /api/files/* routes
+// are dynamic API endpoints that can't go through Next.js image optimization
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
@@ -50,7 +51,9 @@ export default function CharactersPage() {
 
   const getAvatarSrc = (character: Character): string | null => {
     if (character.defaultImage) {
-      return character.defaultImage.url || `/${character.defaultImage.filepath}`
+      // Handle filepath - check if it already has a leading slash (e.g., S3 files use /api/files/...)
+      const filepath = character.defaultImage.filepath
+      return character.defaultImage.url || (filepath.startsWith('/') ? filepath : `/${filepath}`)
     }
     return character.avatarUrl || null
   }
@@ -196,7 +199,8 @@ export default function CharactersPage() {
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center flex-grow gap-4">
                   {getAvatarSrc(character) ? (
-                    <Image
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
                       src={getAvatarSrc(character)!}
                       alt={character.name}
                       width={48}
