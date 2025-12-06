@@ -7,7 +7,7 @@
  * and message selection to stay within model limits.
  */
 
-import { Provider, Memory, Character, ChatParticipantBase, ChatMetadataBase } from '@/lib/json-store/schemas/types'
+import { Provider, Memory, Character, ChatParticipantBase, ChatMetadataBase } from '@/lib/schemas/types'
 import { estimateTokens, countMessagesTokens, truncateToTokenLimit } from '@/lib/tokens/token-counter'
 import { getModelContextLimit, getRecommendedContextAllocation, shouldSummarizeConversation } from '@/lib/llm/model-context-data'
 import { searchMemoriesSemantic, SemanticSearchResult } from '@/lib/memory/memory-service'

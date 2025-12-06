@@ -6,12 +6,9 @@
 import speakeasy from 'speakeasy'
 import qrcode from 'qrcode'
 import { encryptData, decryptData } from '@/lib/encryption'
-import { UsersRepository } from '@/lib/json-store/repositories/users.repository'
-import { getJsonStore } from '@/lib/json-store/core/json-store'
+import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
 import crypto from 'crypto'
-
-const usersRepo = new UsersRepository(getJsonStore())
 
 /**
  * Generate a TOTP secret for a user
@@ -48,7 +45,8 @@ export async function verifyTOTP(
   token: string,
   checkBackupCode: boolean = true
 ): Promise<boolean> {
-  const user = await usersRepo.findById(userId)
+  const repos = getRepositories()
+  const user = await repos.users.findById(userId)
 
   if (!user || !user.totp?.enabled) {
     return false
@@ -101,7 +99,7 @@ export async function verifyTOTP(
         // Update user with remaining backup codes
         const encryptedRemainingCodes = encryptData(JSON.stringify(backupCodes), userId)
 
-        await usersRepo.update(userId, {
+        await repos.users.update(userId, {
           backupCodes: {
             ciphertext: encryptedRemainingCodes.encrypted,
             iv: encryptedRemainingCodes.iv,
@@ -151,8 +149,9 @@ export async function enableTOTP(
   encryptedAuthTag: string,
   verificationCode: string
 ): Promise<{ success: boolean; backupCodes?: string[] }> {
+  const repos = getRepositories()
   // First verify the code works
-  const user = await usersRepo.findById(userId)
+  const user = await repos.users.findById(userId)
 
   if (!user) {
     return { success: false }
@@ -185,8 +184,8 @@ export async function enableTOTP(
     const encryptedBackupCodes = encryptData(JSON.stringify(backupCodes), userId)
     const now = new Date().toISOString()
 
-    // Save to JSON store with both TOTP secret and encrypted backup codes
-    await usersRepo.update(userId, {
+    // Save with both TOTP secret and encrypted backup codes
+    await repos.users.update(userId, {
       totp: {
         ciphertext: encryptedSecret,
         iv: encryptedIv,
@@ -221,7 +220,8 @@ export async function enableTOTP(
  */
 export async function disableTOTP(userId: string): Promise<boolean> {
   try {
-    await usersRepo.update(userId, {
+    const repos = getRepositories()
+    await repos.users.update(userId, {
       totp: undefined,
       backupCodes: undefined,
     })
@@ -241,7 +241,8 @@ export async function disableTOTP(userId: string): Promise<boolean> {
  */
 export async function regenerateBackupCodes(userId: string): Promise<{ success: boolean; backupCodes?: string[] }> {
   try {
-    const user = await usersRepo.findById(userId)
+    const repos = getRepositories()
+    const user = await repos.users.findById(userId)
 
     if (!user?.totp?.enabled) {
       logger.warn('Cannot regenerate backup codes - TOTP not enabled', { context: 'regenerateBackupCodes', userId })
@@ -255,7 +256,7 @@ export async function regenerateBackupCodes(userId: string): Promise<{ success: 
     const encryptedBackupCodes = encryptData(JSON.stringify(backupCodes), userId)
     const now = new Date().toISOString()
 
-    await usersRepo.update(userId, {
+    await repos.users.update(userId, {
       backupCodes: {
         ciphertext: encryptedBackupCodes.encrypted,
         iv: encryptedBackupCodes.iv,

@@ -13,7 +13,7 @@ import {
   safeValidatePluginManifest,
   functionalityToCapabilities,
   type PluginCapability,
-} from '@/lib/json-store/schemas/plugin-manifest';
+} from '@/lib/schemas/plugin-manifest';
 import { isSitePluginEnabled } from './site-plugins';
 
 // ============================================================================

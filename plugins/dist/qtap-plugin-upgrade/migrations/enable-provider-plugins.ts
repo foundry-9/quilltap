@@ -16,10 +16,10 @@
  * - Users can manage providers through the plugin system
  */
 
-import { JsonStore } from '@/lib/json-store/core/json-store';
-import { ConnectionProfilesRepository } from '@/lib/json-store/repositories/connection-profiles.repository';
-import { ImageProfilesRepository } from '@/lib/json-store/repositories/image-profiles.repository';
-import { EmbeddingProfilesRepository } from '@/lib/json-store/repositories/embedding-profiles.repository';
+import { JsonStore } from '../lib/json-store/core/json-store';
+import { ConnectionProfilesRepository } from '../lib/json-store/repositories/connection-profiles.repository';
+import { ImageProfilesRepository } from '../lib/json-store/repositories/image-profiles.repository';
+import { EmbeddingProfilesRepository } from '../lib/json-store/repositories/embedding-profiles.repository';
 import { pluginRegistry } from '@/lib/plugins/registry';
 import { logger } from '@/lib/logger';
 import type { Migration, MigrationResult } from '../migration-types';

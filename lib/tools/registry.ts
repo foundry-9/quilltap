@@ -3,7 +3,7 @@
  * Manages available tools and provides provider-specific tool definitions
  */
 
-import { Provider } from '@/lib/json-store/schemas/types';
+import { Provider } from '@/lib/schemas/types';
 
 /**
  * Tool metadata and execution context

@@ -6,7 +6,7 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory';
-import { PhysicalDescription, ImageProvider } from '@/lib/json-store/schemas/types';
+import { PhysicalDescription, ImageProvider } from '@/lib/schemas/types';
 
 /**
  * Placeholder information extracted from a prompt

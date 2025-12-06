@@ -16,7 +16,7 @@ import {
   type CheapLLMConfig,
   type CheapLLMSelection,
 } from '@/lib/llm/cheap-llm'
-import type { ConnectionProfile, Provider } from '@/lib/json-store/schemas/types'
+import type { ConnectionProfile, Provider } from '@/lib/schemas/types'
 
 // Helper to create a mock connection profile
 function createMockProfile(

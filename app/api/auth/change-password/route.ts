@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/session'
 import { hashPassword, verifyPassword, validatePasswordStrength } from '@/lib/auth/password'
-import { UsersRepository } from '@/lib/json-store/repositories/users.repository'
-import { getJsonStore } from '@/lib/json-store/core/json-store'
+import { getRepositories } from '@/lib/repositories/factory'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
 
@@ -33,8 +32,8 @@ export async function POST(req: NextRequest) {
     const { currentPassword, newPassword } = ChangePasswordSchema.parse(body)
 
     // Get the user's current password hash
-    const usersRepo = new UsersRepository(getJsonStore())
-    const user = await usersRepo.findById(session.user.id)
+    const repos = getRepositories()
+    const user = await repos.users.findById(session.user.id)
 
     if (!user) {
       logger.warn('User not found for password change', {
@@ -94,7 +93,7 @@ export async function POST(req: NextRequest) {
     // Hash new password and update user
     const newPasswordHash = await hashPassword(newPassword)
 
-    await usersRepo.update(session.user.id, {
+    await repos.users.update(session.user.id, {
       passwordHash: newPasswordHash,
     })
 

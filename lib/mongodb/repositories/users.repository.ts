@@ -14,7 +14,7 @@ import {
   ChatSettingsSchema,
   GeneralSettings,
   GeneralSettingsSchema
-} from '@/lib/json-store/schemas/types';
+} from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { getMongoDatabase } from '../client';
 

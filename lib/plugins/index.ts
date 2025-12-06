@@ -19,7 +19,7 @@ export type {
   PluginCapability,
   FrontendFramework,
   CSSFramework,
-} from '@/lib/json-store/schemas/plugin-manifest';
+} from '@/lib/schemas/plugin-manifest';
 
 export {
   PluginManifestSchema,
@@ -29,7 +29,7 @@ export {
   PluginCapabilityEnum,
   FrontendFrameworkEnum,
   CSSFrameworkEnum,
-} from '@/lib/json-store/schemas/plugin-manifest';
+} from '@/lib/schemas/plugin-manifest';
 
 // Export manifest loader utilities
 export type {

@@ -10,7 +10,7 @@ import { decryptApiKey } from '@/lib/encryption'
 import { generateGreetingMessage } from '@/lib/chat/initial-greeting'
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
-import type { ChatEvent, ChatParticipantBase, FileEntry } from '@/lib/json-store/schemas/types'
+import type { ChatEvent, ChatParticipantBase, FileEntry } from '@/lib/schemas/types'
 
 type Repos = ReturnType<typeof getRepositories>
 

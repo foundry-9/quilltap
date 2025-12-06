@@ -10,7 +10,7 @@ import { Collection } from 'mongodb';
 import {
   EmbeddingProfile,
   EmbeddingProfileSchema,
-} from '@/lib/json-store/schemas/types';
+} from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { MongoBaseRepository } from './base.repository';
 

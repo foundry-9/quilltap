@@ -8,7 +8,7 @@
 import { Collection } from 'mongodb';
 import { logger } from '@/lib/logger';
 import { MongoBaseRepository } from './base.repository';
-import { FileEntry, FileEntrySchema, FileCategory, FileSource } from '@/lib/json-store/schemas/types';
+import { FileEntry, FileEntrySchema, FileCategory, FileSource } from '@/lib/schemas/types';
 
 /**
  * Files Repository for MongoDB

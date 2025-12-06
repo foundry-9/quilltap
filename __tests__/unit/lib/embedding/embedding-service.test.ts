@@ -13,7 +13,7 @@ jest.mock('@/lib/encryption', () => ({
 import * as embeddingService from '@/lib/embedding/embedding-service'
 import { getRepositories } from '@/lib/repositories/factory'
 import { decryptApiKey } from '@/lib/encryption'
-import type { EmbeddingProfile } from '@/lib/json-store/schemas/types'
+import type { EmbeddingProfile } from '@/lib/schemas/types'
 
 const {
   getDefaultEmbeddingProfile,

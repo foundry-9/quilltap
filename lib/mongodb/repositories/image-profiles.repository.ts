@@ -7,7 +7,7 @@
 
 import { Collection } from 'mongodb';
 import { logger } from '@/lib/logger';
-import { ImageProfile, ImageProfileSchema } from '@/lib/json-store/schemas/types';
+import { ImageProfile, ImageProfileSchema } from '@/lib/schemas/types';
 import { getMongoDatabase } from '../client';
 
 /**

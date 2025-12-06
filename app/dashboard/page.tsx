@@ -3,7 +3,7 @@ import { getRepositories } from "@/lib/repositories/factory";
 import Link from "next/link";
 import { RecentChatsSection } from "@/components/dashboard/recent-chats";
 import { FavoriteCharactersSection } from "@/components/dashboard/favorite-characters";
-import type { FileEntry } from "@/lib/json-store/schemas/types";
+import type { FileEntry } from "@/lib/schemas/types";
 
 /**
  * Get the filepath for a file based on storage type

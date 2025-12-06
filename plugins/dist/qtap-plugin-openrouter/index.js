@@ -176,7 +176,7 @@ var import_zod = require("zod");
 var envSchema = import_zod.z.object({
   // Node environment
   NODE_ENV: import_zod.z.enum(["development", "production", "test"]).default("development"),
-  // Database (optional - JSON store is now the default)
+  // Database (legacy - no longer used, MongoDB is required)
   DATABASE_URL: import_zod.z.string().url().optional(),
   // NextAuth
   NEXTAUTH_URL: import_zod.z.string().url().min(1, "NEXTAUTH_URL is required"),
@@ -209,16 +209,20 @@ var envSchema = import_zod.z.object({
   DOMAIN: import_zod.z.string().optional(),
   SSL_EMAIL: import_zod.z.string().email().optional(),
   // Data Backend Configuration
-  DATA_BACKEND: import_zod.z.enum(["json", "mongodb", "dual"]).optional().default("json"),
-  // MongoDB Configuration (optional - only required when DATA_BACKEND is 'mongodb' or 'dual')
-  MONGODB_URI: import_zod.z.string().optional().default("mongodb://localhost:27017"),
+  // NOTE: 'json' option is deprecated and will be removed in a future version.
+  // Use the migration plugin (qtap-plugin-upgrade) to migrate JSON data to MongoDB.
+  DATA_BACKEND: import_zod.z.enum(["json", "mongodb"]).optional().default("mongodb"),
+  // MongoDB Configuration (required - MongoDB is the default data backend)
+  MONGODB_URI: import_zod.z.string().min(1, "MONGODB_URI is required for MongoDB backend"),
   MONGODB_DATABASE: import_zod.z.string().optional().default("quilltap"),
   MONGODB_MODE: import_zod.z.enum(["external", "embedded"]).optional().default("external"),
   MONGODB_DATA_DIR: import_zod.z.string().optional().default("/data/mongodb"),
   MONGODB_CONNECTION_TIMEOUT_MS: import_zod.z.string().regex(/^\d+$/).optional(),
   MONGODB_MAX_POOL_SIZE: import_zod.z.string().regex(/^\d+$/).optional(),
-  // S3 Configuration (optional - file storage backend)
-  S3_MODE: import_zod.z.enum(["embedded", "external", "disabled"]).optional().default("disabled"),
+  // S3 Configuration (required - S3 is the only supported file storage backend)
+  // NOTE: 'disabled' option is deprecated and will be removed in a future version.
+  // Use the migration plugin (qtap-plugin-upgrade) to migrate local files to S3.
+  S3_MODE: import_zod.z.enum(["embedded", "external", "disabled"]).optional().default("embedded"),
   S3_ENDPOINT: import_zod.z.string().url().optional(),
   S3_REGION: import_zod.z.string().optional().default("us-east-1"),
   S3_ACCESS_KEY: import_zod.z.string().optional(),
@@ -227,7 +231,31 @@ var envSchema = import_zod.z.object({
   S3_PATH_PREFIX: import_zod.z.string().optional(),
   S3_PUBLIC_URL: import_zod.z.string().url().optional(),
   S3_FORCE_PATH_STYLE: import_zod.z.enum(["true", "false"]).optional()
-});
+}).refine(
+  (data) => {
+    if (data.DATA_BACKEND === "mongodb" && !data.MONGODB_URI) {
+      return false;
+    }
+    return true;
+  },
+  {
+    message: "MONGODB_URI is required when DATA_BACKEND is mongodb",
+    path: ["MONGODB_URI"]
+  }
+).refine(
+  (data) => {
+    if (data.S3_MODE === "external") {
+      if (!data.S3_ENDPOINT || !data.S3_ACCESS_KEY || !data.S3_SECRET_KEY) {
+        return false;
+      }
+    }
+    return true;
+  },
+  {
+    message: "S3_ENDPOINT, S3_ACCESS_KEY, and S3_SECRET_KEY are required when S3_MODE is external",
+    path: ["S3_MODE"]
+  }
+);
 function validateEnv() {
   try {
     const env2 = envSchema.parse(process.env);

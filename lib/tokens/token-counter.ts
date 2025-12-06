@@ -7,7 +7,7 @@
  * since we avoid adding tiktoken dependency for simplicity.
  */
 
-import { Provider } from '@/lib/json-store/schemas/types'
+import { Provider } from '@/lib/schemas/types'
 
 /**
  * Provider-specific tokens per character multipliers

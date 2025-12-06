@@ -9,7 +9,7 @@
 import { logger } from '@/lib/logger';
 import { pluginRegistry, getEnabledPluginsByCapability } from './registry';
 import type { LoadedPlugin } from './manifest-loader';
-import type { APIRoute } from '@/lib/json-store/schemas/plugin-manifest';
+import type { APIRoute } from '@/lib/schemas/plugin-manifest';
 import path from 'node:path';
 import fs from 'node:fs';
 

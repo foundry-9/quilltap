@@ -1,4 +1,4 @@
-import type { TagVisualStyle } from '@/lib/json-store/schemas/types';
+import type { TagVisualStyle } from '@/lib/schemas/types';
 
 export const DEFAULT_TAG_STYLE: TagVisualStyle = {
   emoji: null,

@@ -19,7 +19,7 @@ import {
   filterProfilesBySupportedMimeType,
   getBestProfileForFile,
 } from '@/lib/llm/connection-profile-utils'
-import type { ConnectionProfile } from '@/lib/json-store/schemas/types'
+import type { ConnectionProfile } from '@/lib/schemas/types'
 
 describe('LLM Attachment Support', () => {
   describe('getSupportedMimeTypes', () => {

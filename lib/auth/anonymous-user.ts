@@ -6,9 +6,8 @@
  */
 
 import { logger } from '@/lib/logger';
-import { User, GeneralSettings, GeneralSettingsSchema, AvatarDisplayMode } from '@/lib/json-store/schemas/types';
-import { UsersRepository } from '@/lib/json-store/repositories/users.repository';
-import { getJsonStore } from '@/lib/json-store/core/json-store';
+import { User, AvatarDisplayMode } from '@/lib/schemas/types';
+import { getRepositories } from '@/lib/repositories/factory';
 import { getAnonymousUserName, getAnonymousUserEmail } from './config';
 
 /**
@@ -47,11 +46,10 @@ export async function getOrCreateAnonymousUser(): Promise<User> {
   });
 
   try {
-    const jsonStore = getJsonStore();
-    const usersRepository = new UsersRepository(jsonStore);
+    const repos = getRepositories();
 
     // Check if anonymous user already exists
-    const existingUser = await usersRepository.findById(ANONYMOUS_USER_ID);
+    const existingUser = await repos.users.findById(ANONYMOUS_USER_ID);
 
     if (existingUser) {
       logger.debug('Anonymous user already exists', {
@@ -61,7 +59,7 @@ export async function getOrCreateAnonymousUser(): Promise<User> {
       return existingUser;
     }
 
-    // Create new anonymous user directly in settings
+    // Create new anonymous user
     logger.debug('Creating new anonymous user', {
       context: 'getOrCreateAnonymousUser',
       userId: ANONYMOUS_USER_ID,
@@ -87,40 +85,31 @@ export async function getOrCreateAnonymousUser(): Promise<User> {
       updatedAt: now,
     };
 
-    // Read existing settings or create new ones
-    let settings: GeneralSettings;
-    try {
-      // Try to read existing general settings
-      settings = await jsonStore.readJson<GeneralSettings>('settings/general.json');
-      settings.user = anonymousUser;
-      settings.updatedAt = now;
-    } catch {
-      // Create new settings with anonymous user
-      settings = {
-        version: 1,
-        user: anonymousUser,
-        chatSettings: {
-          id: generateRandomUuid(),
-          userId: ANONYMOUS_USER_ID,
-          avatarDisplayMode: 'ALWAYS' as AvatarDisplayMode,
-          avatarDisplayStyle: 'CIRCULAR',
-          tagStyles: {},
-          cheapLLMSettings: {
-            strategy: 'PROVIDER_CHEAPEST',
-            fallbackToLocal: true,
-            embeddingProvider: 'OPENAI',
-          },
-          createdAt: now,
-          updatedAt: now,
-        },
-        createdAt: now,
-        updatedAt: now,
-      };
-    }
+    // Insert the anonymous user directly using MongoDB
+    // The repository's create method generates a new ID, but we need the fixed anonymous ID
+    const { getMongoClient } = await import('@/lib/mongodb/client');
+    const client = await getMongoClient();
+    const db = client.db();
+    const usersCollection = db.collection('users');
 
-    // Validate and save settings using jsonStore
-    const validated = GeneralSettingsSchema.parse(settings);
-    await jsonStore.writeJson('settings/general.json', validated);
+    // Insert the anonymous user with the fixed ID (upsert to avoid duplicates)
+    await usersCollection.updateOne(
+      { id: ANONYMOUS_USER_ID },
+      { $setOnInsert: anonymousUser },
+      { upsert: true }
+    );
+
+    // Create chat settings using the repository method (which creates if not exists)
+    await repos.users.updateChatSettings(ANONYMOUS_USER_ID, {
+      avatarDisplayMode: 'ALWAYS' as AvatarDisplayMode,
+      avatarDisplayStyle: 'CIRCULAR',
+      tagStyles: {},
+      cheapLLMSettings: {
+        strategy: 'PROVIDER_CHEAPEST',
+        fallbackToLocal: true,
+        embeddingProvider: 'OPENAI',
+      },
+    });
 
     logger.debug('Anonymous user created successfully', {
       context: 'getOrCreateAnonymousUser',
@@ -141,18 +130,6 @@ export async function getOrCreateAnonymousUser(): Promise<User> {
     );
     throw error;
   }
-}
-
-/**
- * Generate a random UUID
- * Used for generating the chat settings ID
- */
-function generateRandomUuid(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replaceAll(/[xy]/g, function (c) {
-    const r = Math.trunc(Math.random() * 16);
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
 }
 
 /**

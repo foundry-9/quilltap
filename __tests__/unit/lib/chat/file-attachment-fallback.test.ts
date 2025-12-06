@@ -4,7 +4,7 @@
  * conditions surface clear metadata for the UI.
  */
 
-import type { ConnectionProfile } from '@/lib/json-store/schemas/types'
+import type { ConnectionProfile } from '@/lib/schemas/types'
 import type { FileAttachment } from '@/lib/llm/base'
 
 jest.mock('@/lib/llm/connection-profile-utils', () => ({

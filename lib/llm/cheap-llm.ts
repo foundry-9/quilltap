@@ -9,7 +9,7 @@
  * Now enhanced with real pricing data from provider APIs (Sprint 2.1).
  */
 
-import { ConnectionProfile, Provider } from '@/lib/json-store/schemas/types'
+import { ConnectionProfile, Provider } from '@/lib/schemas/types'
 import {
   ModelPricing,
   getAverageCostPer1M,

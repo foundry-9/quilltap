@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect } from '@jest/globals'
-import type { ConnectionProfile, CheapLLMSettings } from '@/lib/json-store/schemas/types'
+import type { ConnectionProfile, CheapLLMSettings } from '@/lib/schemas/types'
 
 // Import types only - we test the interfaces and structure
 import type {

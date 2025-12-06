@@ -4,7 +4,7 @@
  */
 
 import { zodToJsonSchema } from 'zod-to-json-schema';
-import { PluginManifestSchema } from '../lib/json-store/schemas/plugin-manifest';
+import { PluginManifestSchema } from '../lib/schemas/plugin-manifest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 

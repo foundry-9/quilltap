@@ -9,22 +9,10 @@ import { logger } from '@/lib/logger'
 import { getRepositories } from '@/lib/repositories/factory'
 import { deleteFile as deleteS3File } from '@/lib/s3/operations'
 import { getVectorStoreManager } from '@/lib/embedding/vector-store'
-import { promises as fs } from 'node:fs'
-import { join, extname } from 'node:path'
-import type { ChatMetadata, FileEntry } from '@/lib/json-store/schemas/types'
-
-const LOCAL_STORAGE_DIR = 'public/data/files/storage'
+import type { ChatMetadata, FileEntry } from '@/lib/schemas/types'
 
 /**
- * Get file extension from filename
- */
-function getExtension(filename: string): string {
-  const ext = extname(filename)
-  return ext || '.bin'
-}
-
-/**
- * Delete a file's bytes from storage (S3 or local) and metadata from repository
+ * Delete a file's bytes from storage (S3) and metadata from repository
  */
 async function deleteFileCompletely(fileId: string): Promise<boolean> {
   const repos = getRepositories()
@@ -35,7 +23,7 @@ async function deleteFileCompletely(fileId: string): Promise<boolean> {
     return false
   }
 
-  // Delete the file bytes
+  // Delete the file bytes from S3
   if (entry.s3Key) {
     try {
       await deleteS3File(entry.s3Key)
@@ -44,18 +32,7 @@ async function deleteFileCompletely(fileId: string): Promise<boolean> {
       logger.error('Failed to delete file from S3', { fileId, s3Key: entry.s3Key }, error instanceof Error ? error : undefined)
     }
   } else {
-    // Delete from local storage
-    const ext = getExtension(entry.originalFilename)
-    const localPath = join(LOCAL_STORAGE_DIR, `${fileId}${ext}`)
-    try {
-      await fs.unlink(localPath)
-      logger.debug('Deleted file from local storage', { fileId, localPath })
-    } catch (error: unknown) {
-      const err = error as NodeJS.ErrnoException
-      if (err.code !== 'ENOENT') {
-        logger.error('Failed to delete local file', { fileId, localPath }, err)
-      }
-    }
+    logger.warn('File has no S3 key, cannot delete bytes', { fileId })
   }
 
   // Delete metadata from repository

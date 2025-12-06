@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/session'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
-import type { ChatEvent, MessageEvent, ChatMetadata } from '@/lib/json-store/schemas/types'
+import type { ChatEvent, MessageEvent, ChatMetadata } from '@/lib/schemas/types'
 
 export async function PUT(
   req: NextRequest,

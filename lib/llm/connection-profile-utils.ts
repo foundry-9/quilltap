@@ -5,7 +5,7 @@
  * including attachment support information.
  */
 
-import { ConnectionProfile } from '@/lib/json-store/schemas/types'
+import { ConnectionProfile } from '@/lib/schemas/types'
 import {
   getSupportedMimeTypes,
   supportsFileAttachments,

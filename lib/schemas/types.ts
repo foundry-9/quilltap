@@ -1,14 +1,11 @@
 /**
- * JSON Store Type Definitions
+ * Shared Type Definitions
  *
- * Central types used across all JSON storage schemas.
- * These correspond to Prisma models mapped to JSON files.
+ * Central types used across the application.
+ * These correspond to entity schemas stored in MongoDB.
  */
 
 import { z } from 'zod';
-
-// Export plugin manifest schema
-export * from './plugin-manifest';
 
 // ============================================================================
 // ENUMS
@@ -554,7 +551,7 @@ export const FileEntrySchema = z.object({
   // Tags
   tags: z.array(UUIDSchema).default([]),
 
-  // S3 storage reference (Phase 3: MongoDB + S3 migration)
+  // S3 storage reference
   s3Key: z.string().nullable().optional(),    // Full S3 object key
   s3Bucket: z.string().nullable().optional(), // S3 bucket name
 
@@ -581,6 +578,15 @@ export const TagSchema = z.object({
 
 export type Tag = z.infer<typeof TagSchema>;
 
+export const TagsFileSchema = z.object({
+  version: z.number().default(1),
+  tags: z.array(TagSchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type TagsFile = z.infer<typeof TagsFileSchema>;
+
 // ============================================================================
 // IMAGE PROFILES
 // ============================================================================
@@ -601,48 +607,6 @@ export const ImageProfileSchema = z.object({
 });
 
 export type ImageProfile = z.infer<typeof ImageProfileSchema>;
-
-// ============================================================================
-// COMPOUND OBJECTS
-// ============================================================================
-
-export const GeneralSettingsSchema = z.object({
-  version: z.number().default(1),
-  user: UserSchema,
-  chatSettings: ChatSettingsSchema,
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type GeneralSettings = z.infer<typeof GeneralSettingsSchema>;
-
-export const ConnectionProfilesFileSchema = z.object({
-  version: z.number().default(1),
-  apiKeys: z.array(ApiKeySchema).default([]),
-  llmProfiles: z.array(ConnectionProfileSchema).default([]),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type ConnectionProfilesFile = z.infer<typeof ConnectionProfilesFileSchema>;
-
-export const AuthAccountsSchema = z.object({
-  version: z.number().default(1),
-  accounts: z.array(AccountSchema).default([]),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type AuthAccounts = z.infer<typeof AuthAccountsSchema>;
-
-export const TagsFileSchema = z.object({
-  version: z.number().default(1),
-  tags: z.array(TagSchema).default([]),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type TagsFile = z.infer<typeof TagsFileSchema>;
 
 export const ImageProfilesFileSchema = z.object({
   version: z.number().default(1),
@@ -719,3 +683,36 @@ export const MemoriesFileSchema = z.object({
 });
 
 export type MemoriesFile = z.infer<typeof MemoriesFileSchema>;
+
+// ============================================================================
+// COMPOUND OBJECTS
+// ============================================================================
+
+export const GeneralSettingsSchema = z.object({
+  version: z.number().default(1),
+  user: UserSchema,
+  chatSettings: ChatSettingsSchema,
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type GeneralSettings = z.infer<typeof GeneralSettingsSchema>;
+
+export const ConnectionProfilesFileSchema = z.object({
+  version: z.number().default(1),
+  apiKeys: z.array(ApiKeySchema).default([]),
+  llmProfiles: z.array(ConnectionProfileSchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type ConnectionProfilesFile = z.infer<typeof ConnectionProfilesFileSchema>;
+
+export const AuthAccountsSchema = z.object({
+  version: z.number().default(1),
+  accounts: z.array(AccountSchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type AuthAccounts = z.infer<typeof AuthAccountsSchema>;

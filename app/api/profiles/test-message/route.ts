@@ -13,7 +13,7 @@ import { createLLMProvider } from '@/lib/llm'
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup'
 import { providerRegistry } from '@/lib/plugins/provider-registry'
 import { validateProviderConfig } from '@/lib/plugins/provider-validation'
-import { ProviderEnum } from '@/lib/json-store/schemas/types'
+import { ProviderEnum } from '@/lib/schemas/types'
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
 

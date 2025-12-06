@@ -6,7 +6,7 @@
  */
 
 import { Collection, ObjectId } from 'mongodb';
-import { Persona, PersonaSchema, PhysicalDescription } from '@/lib/json-store/schemas/types';
+import { Persona, PersonaSchema, PhysicalDescription } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { MongoBaseRepository } from './base.repository';
 

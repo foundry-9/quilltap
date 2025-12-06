@@ -9,7 +9,7 @@ import { FileAttachment } from './llm/base';
 import { getRepositories } from './repositories/factory';
 import { uploadFile as uploadS3File, deleteFile as deleteS3File, downloadFile as downloadS3File } from './s3/operations';
 import { buildS3Key } from './s3/client';
-import type { FileEntry, FileCategory } from './json-store/schemas/types';
+import type { FileEntry, FileCategory } from './schemas/types';
 import { logger } from '@/lib/logger';
 
 export interface ChatFileUploadResult {

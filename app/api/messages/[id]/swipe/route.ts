@@ -10,7 +10,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { createLLMProvider } from '@/lib/llm'
 import { decryptApiKey } from '@/lib/encryption'
 import { logger } from '@/lib/logger'
-import type { ChatEvent, MessageEvent } from '@/lib/json-store/schemas/types'
+import type { ChatEvent, MessageEvent } from '@/lib/schemas/types'
 
 export async function POST(
   req: NextRequest,

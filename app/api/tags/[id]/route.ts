@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/session'
 import { getRepositories } from '@/lib/repositories/factory'
 import { z } from 'zod'
-import type { Tag } from '@/lib/json-store/schemas/types'
+import type { Tag } from '@/lib/schemas/types'
 import { logger } from '@/lib/logger'
 
 // Validation schema

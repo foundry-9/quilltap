@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/session'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
-import { TagStyleMapSchema, type AvatarDisplayMode } from '@/lib/json-store/schemas/types'
+import { TagStyleMapSchema, type AvatarDisplayMode } from '@/lib/schemas/types'
 
 /**
  * Validate and update chat settings

@@ -5,7 +5,7 @@
 
 import { NextResponse } from 'next/server';
 import { getRepositories } from '@/lib/repositories/factory';
-import type { FileCategory, FileSource } from '@/lib/json-store/schemas/types';
+import type { FileCategory, FileSource } from '@/lib/schemas/types';
 
 export async function GET() {
   try {

@@ -6,7 +6,7 @@
  * to enable cost-aware model selection for background tasks.
  */
 
-import { Provider } from '@/lib/json-store/schemas/types'
+import { Provider } from '@/lib/schemas/types'
 
 /**
  * Pricing information for a model (costs per 1M tokens)

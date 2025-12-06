@@ -430,10 +430,10 @@ var init_logger = __esm({
       /**
        * Log an HTTP request
        */
-      logRequest(method, path5, statusCode, duration, context) {
+      logRequest(method, path4, statusCode, duration, context) {
         this.info("HTTP request", {
           method,
-          path: path5,
+          path: path4,
           statusCode,
           duration,
           ...context
@@ -486,7 +486,7 @@ var require_package = __commonJS({
   "package.json"(exports2, module2) {
     module2.exports = {
       name: "quilltap",
-      version: "1.8.5-dev.24",
+      version: "1.8.5-dev.25",
       private: true,
       author: {
         name: "Charles Sebold",
@@ -870,10 +870,10 @@ var require_bson = __commonJS({
       return webByteUtils.fromNumberArray(Array.from({ length: byteLength }, () => Math.floor(Math.random() * 256)));
     }
     var webRandomBytes = (() => {
-      const { crypto: crypto4 } = globalThis;
-      if (crypto4 != null && typeof crypto4.getRandomValues === "function") {
+      const { crypto: crypto3 } = globalThis;
+      if (crypto3 != null && typeof crypto3.getRandomValues === "function") {
         return (byteLength) => {
-          return crypto4.getRandomValues(webByteUtils.allocate(byteLength));
+          return crypto3.getRandomValues(webByteUtils.allocate(byteLength));
         };
       } else {
         if (isReactNative()) {
@@ -3915,17 +3915,17 @@ var require_bson = __commonJS({
       index = index + size;
       return index;
     }
-    function serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path5) {
-      if (path5.has(value)) {
+    function serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path4) {
+      if (path4.has(value)) {
         throw new BSONError("Cannot convert circular structure to BSON");
       }
-      path5.add(value);
+      path4.add(value);
       buffer2[index++] = Array.isArray(value) ? BSON_DATA_ARRAY : BSON_DATA_OBJECT;
       const numberOfWrittenBytes = ByteUtils.encodeUTF8Into(buffer2, key, index);
       index = index + numberOfWrittenBytes;
       buffer2[index++] = 0;
-      const endIndex = serializeInto(buffer2, value, checkKeys, index, depth + 1, serializeFunctions, ignoreUndefined, path5);
-      path5.delete(value);
+      const endIndex = serializeInto(buffer2, value, checkKeys, index, depth + 1, serializeFunctions, ignoreUndefined, path4);
+      path4.delete(value);
       return endIndex;
     }
     function serializeDecimal128(buffer2, key, value, index) {
@@ -3977,7 +3977,7 @@ var require_bson = __commonJS({
       buffer2[index++] = 0;
       return index;
     }
-    function serializeCode(buffer2, key, value, index, checkKeys = false, depth = 0, serializeFunctions = false, ignoreUndefined = true, path5) {
+    function serializeCode(buffer2, key, value, index, checkKeys = false, depth = 0, serializeFunctions = false, ignoreUndefined = true, path4) {
       if (value.scope && typeof value.scope === "object") {
         buffer2[index++] = BSON_DATA_CODE_W_SCOPE;
         const numberOfWrittenBytes = ByteUtils.encodeUTF8Into(buffer2, key, index);
@@ -3990,7 +3990,7 @@ var require_bson = __commonJS({
         NumberUtils.setInt32LE(buffer2, index, codeSize);
         buffer2[index + 4 + codeSize - 1] = 0;
         index = index + codeSize + 4;
-        const endIndex = serializeInto(buffer2, value.scope, checkKeys, index, depth + 1, serializeFunctions, ignoreUndefined, path5);
+        const endIndex = serializeInto(buffer2, value.scope, checkKeys, index, depth + 1, serializeFunctions, ignoreUndefined, path4);
         index = endIndex - 1;
         const totalSize = endIndex - startIndex;
         startIndex += NumberUtils.setInt32LE(buffer2, startIndex, totalSize);
@@ -4046,7 +4046,7 @@ var require_bson = __commonJS({
       buffer2[index++] = 0;
       return index;
     }
-    function serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path5) {
+    function serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path4) {
       buffer2[index++] = BSON_DATA_OBJECT;
       const numberOfWrittenBytes = ByteUtils.encodeUTF8Into(buffer2, key, index);
       index = index + numberOfWrittenBytes;
@@ -4060,13 +4060,13 @@ var require_bson = __commonJS({
         output.$db = value.db;
       }
       output = Object.assign(output, value.fields);
-      const endIndex = serializeInto(buffer2, output, false, index, depth + 1, serializeFunctions, true, path5);
+      const endIndex = serializeInto(buffer2, output, false, index, depth + 1, serializeFunctions, true, path4);
       const size = endIndex - startIndex;
       startIndex += NumberUtils.setInt32LE(buffer2, index, size);
       return endIndex;
     }
-    function serializeInto(buffer2, object, checkKeys, startingIndex, depth, serializeFunctions, ignoreUndefined, path5) {
-      if (path5 == null) {
+    function serializeInto(buffer2, object, checkKeys, startingIndex, depth, serializeFunctions, ignoreUndefined, path4) {
+      if (path4 == null) {
         if (object == null) {
           buffer2[0] = 5;
           buffer2[1] = 0;
@@ -4085,9 +4085,9 @@ var require_bson = __commonJS({
         } else if (isDate(object) || isRegExp(object) || isUint8Array(object) || isAnyArrayBuffer(object)) {
           throw new BSONError(`date, regexp, typedarray, and arraybuffer cannot be BSON documents`);
         }
-        path5 = /* @__PURE__ */ new Set();
+        path4 = /* @__PURE__ */ new Set();
       }
-      path5.add(object);
+      path4.add(object);
       let index = startingIndex + 4;
       if (Array.isArray(object)) {
         for (let i4 = 0; i4 < object.length; i4++) {
@@ -4117,7 +4117,7 @@ var require_bson = __commonJS({
             } else if (value instanceof RegExp || isRegExp(value)) {
               index = serializeRegExp(buffer2, key, value, index);
             } else {
-              index = serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path5);
+              index = serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path4);
             }
           } else if (type === "object") {
             if (value[BSON_VERSION_SYMBOL] !== BSON_MAJOR_VERSION) {
@@ -4131,13 +4131,13 @@ var require_bson = __commonJS({
             } else if (value._bsontype === "Double") {
               index = serializeDouble(buffer2, key, value, index);
             } else if (value._bsontype === "Code") {
-              index = serializeCode(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path5);
+              index = serializeCode(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path4);
             } else if (value._bsontype === "Binary") {
               index = serializeBinary(buffer2, key, value, index);
             } else if (value._bsontype === "BSONSymbol") {
               index = serializeSymbol(buffer2, key, value, index);
             } else if (value._bsontype === "DBRef") {
-              index = serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path5);
+              index = serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path4);
             } else if (value._bsontype === "BSONRegExp") {
               index = serializeBSONRegExp(buffer2, key, value, index);
             } else if (value._bsontype === "Int32") {
@@ -4198,7 +4198,7 @@ var require_bson = __commonJS({
             } else if (value instanceof RegExp || isRegExp(value)) {
               index = serializeRegExp(buffer2, key, value, index);
             } else {
-              index = serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path5);
+              index = serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path4);
             }
           } else if (type === "object") {
             if (value[BSON_VERSION_SYMBOL] !== BSON_MAJOR_VERSION) {
@@ -4212,13 +4212,13 @@ var require_bson = __commonJS({
             } else if (value._bsontype === "Double") {
               index = serializeDouble(buffer2, key, value, index);
             } else if (value._bsontype === "Code") {
-              index = serializeCode(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path5);
+              index = serializeCode(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path4);
             } else if (value._bsontype === "Binary") {
               index = serializeBinary(buffer2, key, value, index);
             } else if (value._bsontype === "BSONSymbol") {
               index = serializeSymbol(buffer2, key, value, index);
             } else if (value._bsontype === "DBRef") {
-              index = serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path5);
+              index = serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path4);
             } else if (value._bsontype === "BSONRegExp") {
               index = serializeBSONRegExp(buffer2, key, value, index);
             } else if (value._bsontype === "Int32") {
@@ -4278,7 +4278,7 @@ var require_bson = __commonJS({
             } else if (value instanceof RegExp || isRegExp(value)) {
               index = serializeRegExp(buffer2, key, value, index);
             } else {
-              index = serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path5);
+              index = serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path4);
             }
           } else if (type === "object") {
             if (value[BSON_VERSION_SYMBOL] !== BSON_MAJOR_VERSION) {
@@ -4292,13 +4292,13 @@ var require_bson = __commonJS({
             } else if (value._bsontype === "Double") {
               index = serializeDouble(buffer2, key, value, index);
             } else if (value._bsontype === "Code") {
-              index = serializeCode(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path5);
+              index = serializeCode(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path4);
             } else if (value._bsontype === "Binary") {
               index = serializeBinary(buffer2, key, value, index);
             } else if (value._bsontype === "BSONSymbol") {
               index = serializeSymbol(buffer2, key, value, index);
             } else if (value._bsontype === "DBRef") {
-              index = serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path5);
+              index = serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path4);
             } else if (value._bsontype === "BSONRegExp") {
               index = serializeBSONRegExp(buffer2, key, value, index);
             } else if (value._bsontype === "Int32") {
@@ -4313,7 +4313,7 @@ var require_bson = __commonJS({
           }
         }
       }
-      path5.delete(object);
+      path4.delete(object);
       buffer2[index++] = 0;
       const size = index - startingIndex;
       startingIndex += NumberUtils.setInt32LE(buffer2, startingIndex, size);
@@ -7230,7 +7230,7 @@ var require_utils = __commonJS({
     exports2.decorateDecryptionResult = decorateDecryptionResult;
     exports2.addAbortListener = addAbortListener;
     exports2.abortable = abortable;
-    var crypto4 = require("crypto");
+    var crypto3 = require("crypto");
     var fs_1 = require("fs");
     var http = require("http");
     var timers_1 = require("timers");
@@ -7386,7 +7386,7 @@ var require_utils = __commonJS({
       }
     }
     function uuidV4() {
-      const result = crypto4.randomBytes(16);
+      const result = crypto3.randomBytes(16);
       result[6] = result[6] & 15 | 64;
       result[8] = result[8] & 63 | 128;
       return result;
@@ -7970,7 +7970,7 @@ var require_utils = __commonJS({
     function squashError(_error) {
       return;
     }
-    exports2.randomBytes = (0, util_1.promisify)(crypto4.randomBytes);
+    exports2.randomBytes = (0, util_1.promisify)(crypto3.randomBytes);
     async function once(ee, name, options) {
       options?.signal?.throwIfAborted();
       const { promise, resolve, reject } = promiseWithResolvers();
@@ -13649,14 +13649,14 @@ var require_url_state_machine = __commonJS({
       return url.replace(/\u0009|\u000A|\u000D/ug, "");
     }
     function shortenPath(url) {
-      const { path: path5 } = url;
-      if (path5.length === 0) {
+      const { path: path4 } = url;
+      if (path4.length === 0) {
         return;
       }
-      if (url.scheme === "file" && path5.length === 1 && isNormalizedWindowsDriveLetter(path5[0])) {
+      if (url.scheme === "file" && path4.length === 1 && isNormalizedWindowsDriveLetter(path4[0])) {
         return;
       }
-      path5.pop();
+      path4.pop();
     }
     function includesCredentials(url) {
       return url.username !== "" || url.password !== "";
@@ -16546,12 +16546,12 @@ var require_crypto_callbacks = __commonJS({
     exports2.sha256Hook = sha256Hook;
     exports2.makeHmacHook = makeHmacHook;
     exports2.signRsaSha256Hook = signRsaSha256Hook;
-    var crypto4 = require("crypto");
+    var crypto3 = require("crypto");
     function makeAES256Hook(method, mode) {
       return function(key, iv, input, output) {
         let result;
         try {
-          const cipher = crypto4[method](mode, key, iv);
+          const cipher = crypto3[method](mode, key, iv);
           cipher.setAutoPadding(false);
           result = cipher.update(input);
           const final = cipher.final();
@@ -16567,7 +16567,7 @@ var require_crypto_callbacks = __commonJS({
     }
     function randomHook(buffer, count) {
       try {
-        crypto4.randomFillSync(buffer, 0, count);
+        crypto3.randomFillSync(buffer, 0, count);
       } catch (e4) {
         return e4;
       }
@@ -16576,7 +16576,7 @@ var require_crypto_callbacks = __commonJS({
     function sha256Hook(input, output) {
       let result;
       try {
-        result = crypto4.createHash("sha256").update(input).digest();
+        result = crypto3.createHash("sha256").update(input).digest();
       } catch (e4) {
         return e4;
       }
@@ -16587,7 +16587,7 @@ var require_crypto_callbacks = __commonJS({
       return (key, input, output) => {
         let result;
         try {
-          result = crypto4.createHmac(algorithm, key).update(input).digest();
+          result = crypto3.createHmac(algorithm, key).update(input).digest();
         } catch (e4) {
           return e4;
         }
@@ -16598,7 +16598,7 @@ var require_crypto_callbacks = __commonJS({
     function signRsaSha256Hook(key, input, output) {
       let result;
       try {
-        const signer = crypto4.createSign("sha256WithRSAEncryption");
+        const signer = crypto3.createSign("sha256WithRSAEncryption");
         const privateKey = Buffer.from(`-----BEGIN PRIVATE KEY-----
 ${key.toString("base64")}
 -----END PRIVATE KEY-----
@@ -17032,7 +17032,7 @@ var require_state_machine = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.StateMachine = void 0;
-    var fs7 = require("fs/promises");
+    var fs6 = require("fs/promises");
     var net = require("net");
     var tls = require("tls");
     var bson_1 = require_bson2();
@@ -17319,11 +17319,11 @@ var require_state_machine = __commonJS({
           options.secureContext = tlsOptions.secureContext;
         }
         if (tlsOptions.tlsCertificateKeyFile) {
-          const cert = await fs7.readFile(tlsOptions.tlsCertificateKeyFile);
+          const cert = await fs6.readFile(tlsOptions.tlsCertificateKeyFile);
           options.cert = options.key = cert;
         }
         if (tlsOptions.tlsCAFile) {
-          options.ca = await fs7.readFile(tlsOptions.tlsCAFile);
+          options.ca = await fs6.readFile(tlsOptions.tlsCAFile);
         }
         if (tlsOptions.tlsCertificateKeyFilePassword) {
           options.passphrase = tlsOptions.tlsCertificateKeyFilePassword;
@@ -25246,7 +25246,7 @@ var require_token_machine_workflow = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.callback = void 0;
-    var fs7 = require("fs");
+    var fs6 = require("fs");
     var error_1 = require_error();
     var TOKEN_MISSING_ERROR = "OIDC_TOKEN_FILE must be set in the environment.";
     var callback = async () => {
@@ -25254,7 +25254,7 @@ var require_token_machine_workflow = __commonJS({
       if (!tokenFile) {
         throw new error_1.MongoAWSError(TOKEN_MISSING_ERROR);
       }
-      const token = await fs7.promises.readFile(tokenFile, "utf8");
+      const token = await fs6.promises.readFile(tokenFile, "utf8");
       return { accessToken: token };
     };
     exports2.callback = callback;
@@ -25807,7 +25807,7 @@ var require_scram = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.ScramSHA256 = exports2.ScramSHA1 = void 0;
     var saslprep_1 = require_node();
-    var crypto4 = require("crypto");
+    var crypto3 = require("crypto");
     var bson_1 = require_bson2();
     var error_1 = require_error();
     var utils_1 = require_utils();
@@ -25960,9 +25960,9 @@ var require_scram = __commonJS({
       }
       let md5;
       try {
-        md5 = crypto4.createHash("md5");
+        md5 = crypto3.createHash("md5");
       } catch (err) {
-        if (crypto4.getFips()) {
+        if (crypto3.getFips()) {
           throw new Error("Auth mechanism SCRAM-SHA-1 is not supported in FIPS mode");
         }
         throw err;
@@ -25985,10 +25985,10 @@ var require_scram = __commonJS({
       return Buffer.from(res).toString("base64");
     }
     function H2(method, text) {
-      return crypto4.createHash(method).update(text).digest();
+      return crypto3.createHash(method).update(text).digest();
     }
     function HMAC(method, key, text) {
-      return crypto4.createHmac(method, key).update(text).digest();
+      return crypto3.createHmac(method, key).update(text).digest();
     }
     var _hiCache = {};
     var _hiCacheCount = 0;
@@ -26005,7 +26005,7 @@ var require_scram = __commonJS({
       if (_hiCache[key] != null) {
         return _hiCache[key];
       }
-      const saltedData = crypto4.pbkdf2Sync(data2, salt, iterations, hiLengthMap[cryptoMethod], cryptoMethod);
+      const saltedData = crypto3.pbkdf2Sync(data2, salt, iterations, hiLengthMap[cryptoMethod], cryptoMethod);
       if (_hiCacheCount >= 200) {
         _hiCachePurge();
       }
@@ -26017,8 +26017,8 @@ var require_scram = __commonJS({
       if (lhs.length !== rhs.length) {
         return false;
       }
-      if (typeof crypto4.timingSafeEqual === "function") {
-        return crypto4.timingSafeEqual(lhs, rhs);
+      if (typeof crypto3.timingSafeEqual === "function") {
+        return crypto3.timingSafeEqual(lhs, rhs);
       }
       let result = 0;
       for (let i4 = 0; i4 < lhs.length; i4++) {
@@ -32582,8 +32582,8 @@ function validateMongoDBConfig() {
   } catch (error2) {
     if (error2 instanceof import_zod2.z.ZodError) {
       const validationErrors = error2.errors.map((err) => {
-        const path5 = err.path.join(".");
-        return `${path5}: ${err.message}`;
+        const path4 = err.path.join(".");
+        return `${path4}: ${err.message}`;
       });
       errors.push(...validationErrors);
       logger.warn("MongoDB configuration validation failed", {
@@ -33961,9 +33961,9 @@ var init_createPaginator = __esm({
       command = withCommand(command) ?? command;
       return await client.send(command, ...args);
     };
-    get = (fromObject, path5) => {
+    get = (fromObject, path4) => {
       let cursor2 = fromObject;
-      const pathComponents = path5.split(".");
+      const pathComponents = path4.split(".");
       for (const step of pathComponents) {
         if (!cursor2 || typeof cursor2 !== "object") {
           return void 0;
@@ -34926,12 +34926,12 @@ or increase socketAcquisitionWarningTimeout=(millis) in the NodeHttpHandler conf
             const password = request.password ?? "";
             auth = `${username}:${password}`;
           }
-          let path5 = request.path;
+          let path4 = request.path;
           if (queryString) {
-            path5 += `?${queryString}`;
+            path4 += `?${queryString}`;
           }
           if (request.fragment) {
-            path5 += `#${request.fragment}`;
+            path4 += `#${request.fragment}`;
           }
           let hostname = request.hostname ?? "";
           if (hostname[0] === "[" && hostname.endsWith("]")) {
@@ -34943,7 +34943,7 @@ or increase socketAcquisitionWarningTimeout=(millis) in the NodeHttpHandler conf
             headers: request.headers,
             host: hostname,
             method: request.method,
-            path: path5,
+            path: path4,
             port: request.port,
             agent,
             auth
@@ -35198,16 +35198,16 @@ or increase socketAcquisitionWarningTimeout=(millis) in the NodeHttpHandler conf
             reject(err);
           };
           const queryString = querystringBuilder.buildQueryString(query || {});
-          let path5 = request.path;
+          let path4 = request.path;
           if (queryString) {
-            path5 += `?${queryString}`;
+            path4 += `?${queryString}`;
           }
           if (request.fragment) {
-            path5 += `#${request.fragment}`;
+            path4 += `#${request.fragment}`;
           }
           const req = session.request({
             ...request.headers,
-            [http2.constants.HTTP2_HEADER_PATH]: path5,
+            [http2.constants.HTTP2_HEADER_PATH]: path4,
             [http2.constants.HTTP2_HEADER_METHOD]: method
           });
           session.ref();
@@ -35396,13 +35396,13 @@ var require_dist_cjs13 = __commonJS({
           abortError.name = "AbortError";
           return Promise.reject(abortError);
         }
-        let path5 = request.path;
+        let path4 = request.path;
         const queryString = querystringBuilder.buildQueryString(request.query || {});
         if (queryString) {
-          path5 += `?${queryString}`;
+          path4 += `?${queryString}`;
         }
         if (request.fragment) {
-          path5 += `#${request.fragment}`;
+          path4 += `#${request.fragment}`;
         }
         let auth = "";
         if (request.username != null || request.password != null) {
@@ -35411,7 +35411,7 @@ var require_dist_cjs13 = __commonJS({
           auth = `${username}:${password}@`;
         }
         const { port, method } = request;
-        const url = `${request.protocol}//${auth}${request.hostname}${port ? `:${port}` : ""}${path5}`;
+        const url = `${request.protocol}//${auth}${request.hostname}${port ? `:${port}` : ""}${path4}`;
         const body = method === "GET" || method === "HEAD" ? void 0 : request.body;
         const requestOptions = {
           body,
@@ -37473,13 +37473,13 @@ function __disposeResources(env2) {
   }
   return next();
 }
-function __rewriteRelativeImportExtension(path5, preserveJsx) {
-  if (typeof path5 === "string" && /^\.\.?\//.test(path5)) {
-    return path5.replace(/\.(tsx)$|((?:\.d)?)((?:\.[^./]+?)?)\.([cm]?)ts$/i, function(m4, tsx, d4, ext, cm) {
+function __rewriteRelativeImportExtension(path4, preserveJsx) {
+  if (typeof path4 === "string" && /^\.\.?\//.test(path4)) {
+    return path4.replace(/\.(tsx)$|((?:\.d)?)((?:\.[^./]+?)?)\.([cm]?)ts$/i, function(m4, tsx, d4, ext, cm) {
       return tsx ? preserveJsx ? ".jsx" : ".js" : d4 && (!ext || !cm) ? m4 : d4 + ext + "." + cm.toLowerCase() + "js";
     });
   }
-  return path5;
+  return path4;
 }
 var extendStatics, __assign, __createBinding, __setModuleDefault, ownKeys, _SuppressedError, tslib_es6_default;
 var init_tslib_es6 = __esm({
@@ -37792,12 +37792,12 @@ var splitHeader;
 var init_split_header = __esm({
   "node_modules/@smithy/core/dist-es/submodules/serde/split-header.js"() {
     splitHeader = (value) => {
-      const z9 = value.length;
+      const z7 = value.length;
       const values = [];
       let withinQuotes = false;
       let prevChar = void 0;
       let anchor = 0;
-      for (let i4 = 0; i4 < z9; ++i4) {
+      for (let i4 = 0; i4 < z7; ++i4) {
         const char = value[i4];
         switch (char) {
           case `"`:
@@ -37818,12 +37818,12 @@ var init_split_header = __esm({
       values.push(value.slice(anchor));
       return values.map((v4) => {
         v4 = v4.trim();
-        const z10 = v4.length;
-        if (z10 < 2) {
+        const z8 = v4.length;
+        if (z8 < 2) {
           return v4;
         }
-        if (v4[0] === `"` && v4[z10 - 1] === `"`) {
-          v4 = v4.slice(1, z10 - 1);
+        if (v4[0] === `"` && v4[z8 - 1] === `"`) {
+          v4 = v4.slice(1, z8 - 1);
         }
         return v4.replace(/\\"/g, '"');
       });
@@ -38351,11 +38351,11 @@ var init_HttpBindingProtocol = __esm({
           const opTraits = translateTraits(operationSchema.traits);
           if (opTraits.http) {
             request.method = opTraits.http[0];
-            const [path5, search] = opTraits.http[1].split("?");
+            const [path4, search] = opTraits.http[1].split("?");
             if (request.path == "/") {
-              request.path = path5;
+              request.path = path4;
             } else {
-              request.path += path5;
+              request.path += path4;
             }
             const traitSearchParams = new URLSearchParams(search ?? "");
             Object.assign(query, Object.fromEntries(traitSearchParams));
@@ -38733,8 +38733,8 @@ var init_requestBuilder = __esm({
         return this;
       }
       p(memberName, labelValueProvider, uriLabel, isGreedyLabel) {
-        this.resolvePathStack.push((path5) => {
-          this.path = resolvedPath(path5, this.input, memberName, labelValueProvider, uriLabel, isGreedyLabel);
+        this.resolvePathStack.push((path4) => {
+          this.path = resolvedPath(path4, this.input, memberName, labelValueProvider, uriLabel, isGreedyLabel);
         });
         return this;
       }
@@ -39761,10 +39761,10 @@ ${longDate}
 ${credentialScope}
 ${utilHexEncoding.toHex(hashedRequest)}`;
       }
-      getCanonicalPath({ path: path5 }) {
+      getCanonicalPath({ path: path4 }) {
         if (this.uriEscapePath) {
           const normalizedPathSegments = [];
-          for (const pathSegment of path5.split("/")) {
+          for (const pathSegment of path4.split("/")) {
             if (pathSegment?.length === 0)
               continue;
             if (pathSegment === ".")
@@ -39775,11 +39775,11 @@ ${utilHexEncoding.toHex(hashedRequest)}`;
               normalizedPathSegments.push(pathSegment);
             }
           }
-          const normalizedPath = `${path5?.startsWith("/") ? "/" : ""}${normalizedPathSegments.join("/")}${normalizedPathSegments.length > 0 && path5?.endsWith("/") ? "/" : ""}`;
+          const normalizedPath = `${path4?.startsWith("/") ? "/" : ""}${normalizedPathSegments.join("/")}${normalizedPathSegments.length > 0 && path4?.endsWith("/") ? "/" : ""}`;
           const doubleEncoded = utilUriEscape.escapeUri(normalizedPath);
           return doubleEncoded.replace(/%2F/g, "/");
         }
-        return path5;
+        return path4;
       }
       validateResolvedCredentials(credentials) {
         if (typeof credentials !== "object" || typeof credentials.accessKeyId !== "string" || typeof credentials.secretAccessKey !== "string") {
@@ -41047,11 +41047,11 @@ var init_SmithyRpcV2CborProtocol = __esm({
           }
         }
         const { service, operation: operation2 } = (0, import_util_middleware5.getSmithyContext)(context);
-        const path5 = `/service/${service}/operation/${operation2}`;
+        const path4 = `/service/${service}/operation/${operation2}`;
         if (request.path.endsWith("/")) {
-          request.path += path5.slice(1);
+          request.path += path4.slice(1);
         } else {
-          request.path += path5;
+          request.path += path4;
         }
         return request;
       }
@@ -43332,7 +43332,7 @@ var require_fxp = __commonJS({
           let l5 = 0;
           a5 && -1 !== this.options.unpairedTags.indexOf(a5) ? (l5 = s5.lastIndexOf(".", s5.lastIndexOf(".") - 1), this.tagsNodeStack.pop()) : l5 = s5.lastIndexOf("."), s5 = s5.substring(0, l5), n5 = this.tagsNodeStack.pop(), i5 = "", r5 = e6;
         } else if ("?" === t5[r5 + 1]) {
-          let e6 = z9(t5, r5, false, "?>");
+          let e6 = z7(t5, r5, false, "?>");
           if (!e6) throw new Error("Pi Tag is not closed.");
           if (i5 = this.saveTextToParentTag(i5, n5, s5), this.options.ignoreDeclaration && "?xml" === e6.tagName || this.options.ignorePiTags) ;
           else {
@@ -43356,7 +43356,7 @@ var require_fxp = __commonJS({
           let a5 = this.parseTextData(o5, n5.tagname, s5, true, false, true, true);
           null == a5 && (a5 = ""), this.options.cdataPropName ? n5.add(this.options.cdataPropName, [{ [this.options.textNodeName]: o5 }]) : n5.add(this.options.textNodeName, a5), r5 = e6 + 2;
         } else {
-          let o5 = z9(t5, r5, this.options.removeNSPrefix), a5 = o5.tagName;
+          let o5 = z7(t5, r5, this.options.removeNSPrefix), a5 = o5.tagName;
           const l5 = o5.rawTagName;
           let u5 = o5.tagExp, h5 = o5.attrExpPresent, d5 = o5.closeIndex;
           this.options.transformTagName && (a5 = this.options.transformTagName(a5)), n5 && i5 && "!xml" !== n5.tagname && (i5 = this.saveTextToParentTag(i5, n5, s5, false));
@@ -43428,7 +43428,7 @@ var require_fxp = __commonJS({
         if (-1 === s5) throw new Error(i5);
         return s5 + e5.length - 1;
       }
-      function z9(t5, e5, n5, i5 = ">") {
+      function z7(t5, e5, n5, i5 = ">") {
         const s5 = (function(t6, e6, n6 = ">") {
           let i6, s6 = "";
           for (let r6 = e6; r6 < t6.length; r6++) {
@@ -43465,7 +43465,7 @@ var require_fxp = __commonJS({
         else if ("!--" === t5.substr(n5 + 1, 3)) n5 = W(t5, "-->", n5 + 3, "StopNode is not closed.");
         else if ("![" === t5.substr(n5 + 1, 2)) n5 = W(t5, "]]>", n5, "StopNode is not closed.") - 2;
         else {
-          const i6 = z9(t5, n5, ">");
+          const i6 = z7(t5, n5, ">");
           i6 && ((i6 && i6.tagName) === e5 && "/" !== i6.tagExp[i6.tagExp.length - 1] && s5++, n5 = i6.closeIndex);
         }
       }
@@ -47241,18 +47241,18 @@ var require_dist_cjs32 = __commonJS({
       }
     };
     var booleanEquals = (value1, value2) => value1 === value2;
-    var getAttrPathList = (path5) => {
-      const parts = path5.split(".");
+    var getAttrPathList = (path4) => {
+      const parts = path4.split(".");
       const pathList = [];
       for (const part of parts) {
         const squareBracketIndex = part.indexOf("[");
         if (squareBracketIndex !== -1) {
           if (part.indexOf("]") !== part.length - 1) {
-            throw new EndpointError(`Path: '${path5}' does not end with ']'`);
+            throw new EndpointError(`Path: '${path4}' does not end with ']'`);
           }
           const arrayIndex = part.slice(squareBracketIndex + 1, -1);
           if (Number.isNaN(parseInt(arrayIndex))) {
-            throw new EndpointError(`Invalid array index: '${arrayIndex}' in path: '${path5}'`);
+            throw new EndpointError(`Invalid array index: '${arrayIndex}' in path: '${path4}'`);
           }
           if (squareBracketIndex !== 0) {
             pathList.push(part.slice(0, squareBracketIndex));
@@ -47264,9 +47264,9 @@ var require_dist_cjs32 = __commonJS({
       }
       return pathList;
     };
-    var getAttr = (value, path5) => getAttrPathList(path5).reduce((acc, index) => {
+    var getAttr = (value, path4) => getAttrPathList(path4).reduce((acc, index) => {
       if (typeof acc !== "object") {
-        throw new EndpointError(`Index '${index}' in '${path5}' not found in '${JSON.stringify(value)}'`);
+        throw new EndpointError(`Index '${index}' in '${path4}' not found in '${JSON.stringify(value)}'`);
       } else if (Array.isArray(acc)) {
         return acc[parseInt(index)];
       }
@@ -47285,8 +47285,8 @@ var require_dist_cjs32 = __commonJS({
             return value;
           }
           if (typeof value === "object" && "hostname" in value) {
-            const { hostname: hostname2, port, protocol: protocol2 = "", path: path5 = "", query = {} } = value;
-            const url = new URL(`${protocol2}//${hostname2}${port ? `:${port}` : ""}${path5}`);
+            const { hostname: hostname2, port, protocol: protocol2 = "", path: path4 = "", query = {} } = value;
+            const url = new URL(`${protocol2}//${hostname2}${port ? `:${port}` : ""}${path4}`);
             url.search = Object.entries(query).map(([k4, v4]) => `${k4}=${v4}`).join("&");
             return url;
           }
@@ -48528,16 +48528,16 @@ var require_readFile = __commonJS({
     var promises_1 = require("node:fs/promises");
     exports2.filePromises = {};
     exports2.fileIntercept = {};
-    var readFile6 = (path5, options) => {
-      if (exports2.fileIntercept[path5] !== void 0) {
-        return exports2.fileIntercept[path5];
+    var readFile4 = (path4, options) => {
+      if (exports2.fileIntercept[path4] !== void 0) {
+        return exports2.fileIntercept[path4];
       }
-      if (!exports2.filePromises[path5] || options?.ignoreCache) {
-        exports2.filePromises[path5] = (0, promises_1.readFile)(path5, "utf8");
+      if (!exports2.filePromises[path4] || options?.ignoreCache) {
+        exports2.filePromises[path4] = (0, promises_1.readFile)(path4, "utf8");
       }
-      return exports2.filePromises[path5];
+      return exports2.filePromises[path4];
     };
-    exports2.readFile = readFile6;
+    exports2.readFile = readFile4;
   }
 });
 
@@ -48548,9 +48548,9 @@ var require_dist_cjs40 = __commonJS({
     var getHomeDir = require_getHomeDir();
     var getSSOTokenFilepath = require_getSSOTokenFilepath();
     var getSSOTokenFromFile = require_getSSOTokenFromFile();
-    var path5 = require("path");
+    var path4 = require("path");
     var types = require_dist_cjs();
-    var readFile6 = require_readFile();
+    var readFile4 = require_readFile();
     var ENV_PROFILE = "AWS_PROFILE";
     var DEFAULT_PROFILE = "default";
     var getProfileName = (init) => init.profile || process.env[ENV_PROFILE] || DEFAULT_PROFILE;
@@ -48570,9 +48570,9 @@ var require_dist_cjs40 = __commonJS({
       ...data2.default && { default: data2.default }
     });
     var ENV_CONFIG_PATH = "AWS_CONFIG_FILE";
-    var getConfigFilepath = () => process.env[ENV_CONFIG_PATH] || path5.join(getHomeDir.getHomeDir(), ".aws", "config");
+    var getConfigFilepath = () => process.env[ENV_CONFIG_PATH] || path4.join(getHomeDir.getHomeDir(), ".aws", "config");
     var ENV_CREDENTIALS_PATH = "AWS_SHARED_CREDENTIALS_FILE";
-    var getCredentialsFilepath = () => process.env[ENV_CREDENTIALS_PATH] || path5.join(getHomeDir.getHomeDir(), ".aws", "credentials");
+    var getCredentialsFilepath = () => process.env[ENV_CREDENTIALS_PATH] || path4.join(getHomeDir.getHomeDir(), ".aws", "credentials");
     var prefixKeyRegex = /^([\w-]+)\s(["'])?([\w-@\+\.%:/]+)\2$/;
     var profileNameBlockList = ["__proto__", "profile __proto__"];
     var parseIni = (iniData) => {
@@ -48627,17 +48627,17 @@ var require_dist_cjs40 = __commonJS({
       const relativeHomeDirPrefix = "~/";
       let resolvedFilepath = filepath;
       if (filepath.startsWith(relativeHomeDirPrefix)) {
-        resolvedFilepath = path5.join(homeDir, filepath.slice(2));
+        resolvedFilepath = path4.join(homeDir, filepath.slice(2));
       }
       let resolvedConfigFilepath = configFilepath;
       if (configFilepath.startsWith(relativeHomeDirPrefix)) {
-        resolvedConfigFilepath = path5.join(homeDir, configFilepath.slice(2));
+        resolvedConfigFilepath = path4.join(homeDir, configFilepath.slice(2));
       }
       const parsedFiles = await Promise.all([
-        readFile6.readFile(resolvedConfigFilepath, {
+        readFile4.readFile(resolvedConfigFilepath, {
           ignoreCache: init.ignoreCache
         }).then(parseIni).then(getConfigData).catch(swallowError$1),
-        readFile6.readFile(resolvedFilepath, {
+        readFile4.readFile(resolvedFilepath, {
           ignoreCache: init.ignoreCache
         }).then(parseIni).catch(swallowError$1)
       ]);
@@ -48648,7 +48648,7 @@ var require_dist_cjs40 = __commonJS({
     };
     var getSsoSessionData = (data2) => Object.entries(data2).filter(([key]) => key.startsWith(types.IniSectionType.SSO_SESSION + CONFIG_PREFIX_SEPARATOR)).reduce((acc, [key, value]) => ({ ...acc, [key.substring(key.indexOf(CONFIG_PREFIX_SEPARATOR) + 1)]: value }), {});
     var swallowError = () => ({});
-    var loadSsoSessionData = async (init = {}) => readFile6.readFile(init.configFilepath ?? getConfigFilepath()).then(parseIni).then(getSsoSessionData).catch(swallowError);
+    var loadSsoSessionData = async (init = {}) => readFile4.readFile(init.configFilepath ?? getConfigFilepath()).then(parseIni).then(getSsoSessionData).catch(swallowError);
     var mergeConfigFiles = (...files) => {
       const merged = {};
       for (const file of files) {
@@ -48668,10 +48668,10 @@ var require_dist_cjs40 = __commonJS({
     };
     var externalDataInterceptor = {
       getFileRecord() {
-        return readFile6.fileIntercept;
+        return readFile4.fileIntercept;
       },
-      interceptFile(path6, contents) {
-        readFile6.fileIntercept[path6] = Promise.resolve(contents);
+      interceptFile(path5, contents) {
+        readFile4.fileIntercept[path5] = Promise.resolve(contents);
       },
       getTokenRecord() {
         return getSSOTokenFromFile.tokenIntercept;
@@ -48689,7 +48689,7 @@ var require_dist_cjs40 = __commonJS({
     Object.defineProperty(exports2, "readFile", {
       enumerable: true,
       get: function() {
-        return readFile6.readFile;
+        return readFile4.readFile;
       }
     });
     exports2.CONFIG_PREFIX_SEPARATOR = CONFIG_PREFIX_SEPARATOR;
@@ -48727,11 +48727,11 @@ var require_dist_cjs41 = __commonJS({
     var sharedIniFileLoader = require_dist_cjs40();
     function getSelectorName(functionString) {
       try {
-        const constants3 = new Set(Array.from(functionString.match(/([A-Z_]){3,}/g) ?? []));
-        constants3.delete("CONFIG");
-        constants3.delete("CONFIG_PREFIX_SEPARATOR");
-        constants3.delete("ENV");
-        return [...constants3].join(", ");
+        const constants2 = new Set(Array.from(functionString.match(/([A-Z_]){3,}/g) ?? []));
+        constants2.delete("CONFIG");
+        constants2.delete("CONFIG_PREFIX_SEPARATOR");
+        constants2.delete("ENV");
+        return [...constants2].join(", ");
       } catch (e4) {
         return functionString;
       }
@@ -48902,8 +48902,8 @@ var require_dist_cjs42 = __commonJS({
               return endpoint.url.href;
             }
             if ("hostname" in endpoint) {
-              const { protocol, hostname, port, path: path5 } = endpoint;
-              return `${protocol}//${hostname}${port ? ":" + port : ""}${path5}`;
+              const { protocol, hostname, port, path: path4 } = endpoint;
+              return `${protocol}//${hostname}${port ? ":" + port : ""}${path4}`;
             }
           }
           return endpoint;
@@ -49902,7 +49902,7 @@ var require_ruleset = __commonJS({
     var w4 = "bucketAliasSuffix";
     var x4 = "outpostId";
     var y2 = "isValidHostLabel";
-    var z9 = "sigv4a";
+    var z7 = "sigv4a";
     var A2 = "s3-outposts";
     var B2 = "s3";
     var C2 = "{url#scheme}://{url#authority}{url#normalizedPath}{Bucket}";
@@ -49952,7 +49952,7 @@ var require_ruleset = __commonJS({
     var au = { [cw]: r4, [cx]: [ac] };
     var av = { [cy]: u4 };
     var aw = { [cv]: [aq], [f4]: "Expected a endpoint to be specified but no endpoint was found", [ct]: f4 };
-    var ax = { [cD]: [{ [cE]: true, [j4]: z9, [cF]: A2, [cI]: ["*"] }, { [cE]: true, [j4]: "sigv4", [cF]: A2, [cG]: "{Region}" }] };
+    var ax = { [cD]: [{ [cE]: true, [j4]: z7, [cF]: A2, [cI]: ["*"] }, { [cE]: true, [j4]: "sigv4", [cF]: A2, [cG]: "{Region}" }] };
     var ay = { [cw]: e4, [cx]: [{ [cy]: "ForcePathStyle" }, false] };
     var az = { [cy]: "ForcePathStyle" };
     var aA = { [cw]: e4, [cx]: [{ [cy]: "Accelerate" }, false] };
@@ -49991,7 +49991,7 @@ var require_ruleset = __commonJS({
     var bh = { [f4]: "Invalid ARN: The ARN may only contain a single resource component after `accesspoint`.", [ct]: f4 };
     var bi = { [f4]: "Invalid ARN: Expected a resource of the format `accesspoint:<accesspoint name>` but no name was provided", [ct]: f4 };
     var bj = { [cD]: [{ [cE]: true, [j4]: "sigv4", [cF]: B2, [cG]: "{bucketArn#region}" }] };
-    var bk = { [cD]: [{ [cE]: true, [j4]: z9, [cF]: A2, [cI]: ["*"] }, { [cE]: true, [j4]: "sigv4", [cF]: A2, [cG]: "{bucketArn#region}" }] };
+    var bk = { [cD]: [{ [cE]: true, [j4]: z7, [cF]: A2, [cI]: ["*"] }, { [cE]: true, [j4]: "sigv4", [cF]: A2, [cG]: "{bucketArn#region}" }] };
     var bl = { [cw]: F2, [cx]: [ad] };
     var bm = { [cA]: "https://s3-fips.dualstack.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: aG, [cH]: {} };
     var bn = { [cA]: "https://s3-fips.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: aG, [cH]: {} };
@@ -50051,7 +50051,7 @@ var require_ruleset = __commonJS({
     var cp = [{ [cw]: y2, [cx]: [aV, false] }];
     var cq = [X];
     var cr = [{ [cw]: y2, [cx]: [{ [cy]: "Region" }, true] }];
-    var _data4 = { version: "1.0", parameters: { Bucket: T, Region: T, UseFIPS: U, UseDualStack: U, Endpoint: T, ForcePathStyle: U, Accelerate: U, UseGlobalEndpoint: U, UseObjectLambdaEndpoint: V, Key: T, Prefix: T, CopySource: T, DisableAccessPoints: V, DisableMultiRegionAccessPoints: U, UseArnRegion: V, UseS3ExpressControlEndpoint: V, DisableS3ExpressSessionAuth: V }, [cu]: [{ [cv]: [{ [cw]: d4, [cx]: by }], [cu]: [{ [cv]: [W, X], error: "Accelerate cannot be used with FIPS", [ct]: f4 }, { [cv]: [Y, Z], error: "Cannot set dual-stack in combination with a custom endpoint.", [ct]: f4 }, { [cv]: [Z, X], error: "A custom endpoint cannot be combined with FIPS", [ct]: f4 }, { [cv]: [Z, W], error: "A custom endpoint cannot be combined with S3 Accelerate", [ct]: f4 }, { [cv]: [X, aa, ab], error: "Partition does not support FIPS", [ct]: f4 }, { [cv]: [ac, { [cw]: k4, [cx]: [ad, 0, a4, c4], [cz]: l4 }, { [cw]: h4, [cx]: [{ [cy]: l4 }, "--x-s3"] }], [cu]: [ae, af, { [cv]: [ao, ap], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: [aj, aq], [cu]: [{ [cv]: bH, endpoint: { [cA]: "https://s3express-control-fips.dualstack.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bI, endpoint: { [cA]: "https://s3express-control-fips.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bJ, endpoint: { [cA]: "https://s3express-control.dualstack.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bK, endpoint: { [cA]: "https://s3express-control.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: ak, [cH]: al }, [ct]: n4 }], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { [cv]: bF, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: bD, [cu]: [{ [cv]: bL, [cu]: bM, [ct]: o4 }, { [cv]: bN, [cu]: bM, [ct]: o4 }, { [cv]: bO, [cu]: bM, [ct]: o4 }, { [cv]: bP, [cu]: bM, [ct]: o4 }, { [cv]: bQ, [cu]: bM, [ct]: o4 }, at], [ct]: o4 }, { [cv]: bL, [cu]: bR, [ct]: o4 }, { [cv]: bN, [cu]: bR, [ct]: o4 }, { [cv]: bO, [cu]: bR, [ct]: o4 }, { [cv]: bP, [cu]: bR, [ct]: o4 }, { [cv]: bQ, [cu]: bR, [ct]: o4 }, at], [ct]: o4 }], [ct]: o4 }, an], [ct]: o4 }, { [cv]: [ac, { [cw]: k4, [cx]: bS, [cz]: s4 }, { [cw]: h4, [cx]: [{ [cy]: s4 }, "--xa-s3"] }], [cu]: [ae, af, { [cv]: bF, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: bD, [cu]: [{ [cv]: bT, [cu]: bM, [ct]: o4 }, { [cv]: bU, [cu]: bM, [ct]: o4 }, { [cv]: bV, [cu]: bM, [ct]: o4 }, { [cv]: bW, [cu]: bM, [ct]: o4 }, { [cv]: bX, [cu]: bM, [ct]: o4 }, at], [ct]: o4 }, { [cv]: bT, [cu]: bR, [ct]: o4 }, { [cv]: bU, [cu]: bR, [ct]: o4 }, { [cv]: bV, [cu]: bR, [ct]: o4 }, { [cv]: bW, [cu]: bR, [ct]: o4 }, { [cv]: bX, [cu]: bR, [ct]: o4 }, at], [ct]: o4 }], [ct]: o4 }, an], [ct]: o4 }, { [cv]: [au, ao, ap], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: bC, endpoint: { [cA]: t4, [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bH, endpoint: { [cA]: "https://s3express-control-fips.dualstack.{Region}.{partitionResult#dnsSuffix}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bI, endpoint: { [cA]: "https://s3express-control-fips.{Region}.{partitionResult#dnsSuffix}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bJ, endpoint: { [cA]: "https://s3express-control.dualstack.{Region}.{partitionResult#dnsSuffix}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bK, endpoint: { [cA]: "https://s3express-control.{Region}.{partitionResult#dnsSuffix}", [cB]: ak, [cH]: al }, [ct]: n4 }], [ct]: o4 }], [ct]: o4 }, { [cv]: [ac, { [cw]: k4, [cx]: [ad, 49, 50, c4], [cz]: u4 }, { [cw]: k4, [cx]: [ad, 8, 12, c4], [cz]: v4 }, { [cw]: k4, [cx]: bS, [cz]: w4 }, { [cw]: k4, [cx]: [ad, 32, 49, c4], [cz]: x4 }, { [cw]: g4, [cx]: by, [cz]: "regionPartition" }, { [cw]: h4, [cx]: [{ [cy]: w4 }, "--op-s3"] }], [cu]: [{ [cv]: bZ, [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [av, "e"] }], [cu]: [{ [cv]: ca, [cu]: [aw, { [cv]: bC, endpoint: { [cA]: "https://{Bucket}.ec2.{url#authority}", [cB]: ax, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { endpoint: { [cA]: "https://{Bucket}.ec2.s3-outposts.{Region}.{regionPartition#dnsSuffix}", [cB]: ax, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { [cv]: [{ [cw]: h4, [cx]: [av, "o"] }], [cu]: [{ [cv]: ca, [cu]: [aw, { [cv]: bC, endpoint: { [cA]: "https://{Bucket}.op-{outpostId}.{url#authority}", [cB]: ax, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { endpoint: { [cA]: "https://{Bucket}.op-{outpostId}.s3-outposts.{Region}.{regionPartition#dnsSuffix}", [cB]: ax, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { error: 'Unrecognized hardware type: "Expected hardware type o or e but got {hardwareType}"', [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: The outpost Id must only contain a-z, A-Z, 0-9 and `-`.", [ct]: f4 }], [ct]: o4 }, { [cv]: bY, [cu]: [{ [cv]: [Z, { [cw]: r4, [cx]: [{ [cw]: d4, [cx]: [{ [cw]: m4, [cx]: bz }] }] }], error: "Custom endpoint `{Endpoint}` was not a valid URI", [ct]: f4 }, { [cv]: [ay, am], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cc, [cu]: [{ [cv]: [W, ab], error: "S3 Accelerate cannot be used in this region", [ct]: f4 }, { [cv]: [Y, X, aA, aq, aB], endpoint: { [cA]: "https://{Bucket}.s3-fips.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, X, aA, aq, aD, aE], [cu]: [{ endpoint: aF, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, X, aA, aq, aD, aH], endpoint: aF, [ct]: n4 }, { [cv]: [ar, X, aA, aq, aB], endpoint: { [cA]: "https://{Bucket}.s3-fips.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, X, aA, aq, aD, aE], [cu]: [{ endpoint: aI, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, X, aA, aq, aD, aH], endpoint: aI, [ct]: n4 }, { [cv]: [Y, as, W, aq, aB], endpoint: { [cA]: "https://{Bucket}.s3-accelerate.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, as, W, aq, aD, aE], [cu]: [{ endpoint: aJ, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, as, W, aq, aD, aH], endpoint: aJ, [ct]: n4 }, { [cv]: [Y, as, aA, aq, aB], endpoint: { [cA]: "https://{Bucket}.s3.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, as, aA, aq, aD, aE], [cu]: [{ endpoint: aK, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, as, aA, aq, aD, aH], endpoint: aK, [ct]: n4 }, { [cv]: [ar, as, aA, Z, ag, ah, aB], endpoint: { [cA]: C2, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, as, aA, Z, ag, aL, aB], endpoint: { [cA]: q4, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, as, aA, Z, ag, ah, aD, aE], [cu]: [{ [cv]: cd, endpoint: aM, [ct]: n4 }, { endpoint: aM, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, as, aA, Z, ag, aL, aD, aE], [cu]: [{ [cv]: cd, endpoint: aN, [ct]: n4 }, aO], [ct]: o4 }, { [cv]: [ar, as, aA, Z, ag, ah, aD, aH], endpoint: aM, [ct]: n4 }, { [cv]: [ar, as, aA, Z, ag, aL, aD, aH], endpoint: aN, [ct]: n4 }, { [cv]: [ar, as, W, aq, aB], endpoint: { [cA]: D2, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, as, W, aq, aD, aE], [cu]: [{ [cv]: cd, endpoint: aP, [ct]: n4 }, { endpoint: aP, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, as, W, aq, aD, aH], endpoint: aP, [ct]: n4 }, { [cv]: [ar, as, aA, aq, aB], endpoint: { [cA]: E2, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, as, aA, aq, aD, aE], [cu]: [{ [cv]: cd, endpoint: { [cA]: E2, [cB]: aG, [cH]: al }, [ct]: n4 }, { endpoint: aQ, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, as, aA, aq, aD, aH], endpoint: aQ, [ct]: n4 }], [ct]: o4 }, aR], [ct]: o4 }], [ct]: o4 }, { [cv]: [Z, ag, { [cw]: h4, [cx]: [{ [cw]: i4, [cx]: [ai, "scheme"] }, "http"] }, { [cw]: p4, [cx]: [ad, c4] }, ay, as, ar, aA], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cc, [cu]: [aO], [ct]: o4 }, aR], [ct]: o4 }], [ct]: o4 }, { [cv]: [ay, { [cw]: F2, [cx]: bA, [cz]: G2 }], [cu]: [{ [cv]: [{ [cw]: i4, [cx]: [aS, "resourceId[0]"], [cz]: H2 }, { [cw]: r4, [cx]: [{ [cw]: h4, [cx]: [aT, I2] }] }], [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [aU, J2] }], [cu]: [{ [cv]: ce, [cu]: [{ [cv]: cf, [cu]: [aW, aX, { [cv]: ci, [cu]: [aY, { [cv]: cj, [cu]: [aZ, { [cv]: cl, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cm, [cu]: [{ [cv]: cn, [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [bb, I2] }], error: "Invalid ARN: Missing account id", [ct]: f4 }, { [cv]: co, [cu]: [{ [cv]: cp, [cu]: [{ [cv]: bC, endpoint: { [cA]: M, [cB]: bc, [cH]: al }, [ct]: n4 }, { [cv]: cq, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-object-lambda-fips.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bc, [cH]: al }, [ct]: n4 }, { endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-object-lambda.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bc, [cH]: al }, [ct]: n4 }], [ct]: o4 }, bd], [ct]: o4 }, be], [ct]: o4 }, bf], [ct]: o4 }, bg], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, bh], [ct]: o4 }, { error: "Invalid ARN: bucket ARN is missing a region", [ct]: f4 }], [ct]: o4 }, bi], [ct]: o4 }, { error: "Invalid ARN: Object Lambda ARNs only support `accesspoint` arn types, but found: `{arnType}`", [ct]: f4 }], [ct]: o4 }, { [cv]: ce, [cu]: [{ [cv]: cf, [cu]: [{ [cv]: ci, [cu]: [{ [cv]: ce, [cu]: [{ [cv]: ci, [cu]: [aY, { [cv]: cj, [cu]: [aZ, { [cv]: cl, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [ba, "{partitionResult#name}"] }], [cu]: [{ [cv]: cn, [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [aU, B2] }], [cu]: [{ [cv]: co, [cu]: [{ [cv]: cp, [cu]: [{ [cv]: bB, error: "Access Points do not support S3 Accelerate", [ct]: f4 }, { [cv]: bH, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-accesspoint-fips.dualstack.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bj, [cH]: al }, [ct]: n4 }, { [cv]: bI, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-accesspoint-fips.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bj, [cH]: al }, [ct]: n4 }, { [cv]: bJ, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-accesspoint.dualstack.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bj, [cH]: al }, [ct]: n4 }, { [cv]: [as, ar, Z, ag], endpoint: { [cA]: M, [cB]: bj, [cH]: al }, [ct]: n4 }, { [cv]: bK, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-accesspoint.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bj, [cH]: al }, [ct]: n4 }], [ct]: o4 }, bd], [ct]: o4 }, be], [ct]: o4 }, { error: "Invalid ARN: The ARN was not for the S3 service, found: {bucketArn#service}", [ct]: f4 }], [ct]: o4 }, bf], [ct]: o4 }, bg], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, bh], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { [cv]: [{ [cw]: y2, [cx]: [aV, c4] }], [cu]: [{ [cv]: ch, error: "S3 MRAP does not support dual-stack", [ct]: f4 }, { [cv]: cq, error: "S3 MRAP does not support FIPS", [ct]: f4 }, { [cv]: bB, error: "S3 MRAP does not support S3 Accelerate", [ct]: f4 }, { [cv]: [{ [cw]: e4, [cx]: [{ [cy]: "DisableMultiRegionAccessPoints" }, c4] }], error: "Invalid configuration: Multi-Region Access Point ARNs are disabled.", [ct]: f4 }, { [cv]: [{ [cw]: g4, [cx]: by, [cz]: N }], [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [{ [cw]: i4, [cx]: [{ [cy]: N }, j4] }, { [cw]: i4, [cx]: [aS, "partition"] }] }], [cu]: [{ endpoint: { [cA]: "https://{accessPointName}.accesspoint.s3-global.{mrapPartition#dnsSuffix}", [cB]: { [cD]: [{ [cE]: c4, name: z9, [cF]: B2, [cI]: cb }] }, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { error: "Client was configured for partition `{mrapPartition#name}` but bucket referred to partition `{bucketArn#partition}`", [ct]: f4 }], [ct]: o4 }], [ct]: o4 }, { error: "Invalid Access Point Name", [ct]: f4 }], [ct]: o4 }, bi], [ct]: o4 }, { [cv]: [{ [cw]: h4, [cx]: [aU, A2] }], [cu]: [{ [cv]: ch, error: "S3 Outposts does not support Dual-stack", [ct]: f4 }, { [cv]: cq, error: "S3 Outposts does not support FIPS", [ct]: f4 }, { [cv]: bB, error: "S3 Outposts does not support S3 Accelerate", [ct]: f4 }, { [cv]: [{ [cw]: d4, [cx]: [{ [cw]: i4, [cx]: [aS, "resourceId[4]"] }] }], error: "Invalid Arn: Outpost Access Point ARN contains sub resources", [ct]: f4 }, { [cv]: [{ [cw]: i4, [cx]: cg, [cz]: x4 }], [cu]: [{ [cv]: bZ, [cu]: [aZ, { [cv]: cl, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cm, [cu]: [{ [cv]: cn, [cu]: [{ [cv]: co, [cu]: [{ [cv]: [{ [cw]: i4, [cx]: ck, [cz]: O }], [cu]: [{ [cv]: [{ [cw]: i4, [cx]: [aS, "resourceId[3]"], [cz]: L }], [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [{ [cy]: O }, K] }], [cu]: [{ [cv]: bC, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.{outpostId}.{url#authority}", [cB]: bk, [cH]: al }, [ct]: n4 }, { endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.{outpostId}.s3-outposts.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bk, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { error: "Expected an outpost type `accesspoint`, found {outpostType}", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: expected an access point name", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: Expected a 4-component resource", [ct]: f4 }], [ct]: o4 }, be], [ct]: o4 }, bf], [ct]: o4 }, bg], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { error: "Invalid ARN: The outpost Id may only contain a-z, A-Z, 0-9 and `-`. Found: `{outpostId}`", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: The Outpost Id was not set", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: Unrecognized format: {Bucket} (type: {arnType})", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: No ARN type specified", [ct]: f4 }], [ct]: o4 }, { [cv]: [{ [cw]: k4, [cx]: [ad, 0, 4, b4], [cz]: P }, { [cw]: h4, [cx]: [{ [cy]: P }, "arn:"] }, { [cw]: r4, [cx]: [{ [cw]: d4, [cx]: [bl] }] }], error: "Invalid ARN: `{Bucket}` was not a valid ARN", [ct]: f4 }, { [cv]: [{ [cw]: e4, [cx]: [az, c4] }, bl], error: "Path-style addressing cannot be used with ARN buckets", [ct]: f4 }, { [cv]: bE, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: [aA], [cu]: [{ [cv]: [Y, aq, X, aB], endpoint: { [cA]: "https://s3-fips.dualstack.us-east-1.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, aq, X, aD, aE], [cu]: [{ endpoint: bm, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, aq, X, aD, aH], endpoint: bm, [ct]: n4 }, { [cv]: [ar, aq, X, aB], endpoint: { [cA]: "https://s3-fips.us-east-1.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, aq, X, aD, aE], [cu]: [{ endpoint: bn, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, aq, X, aD, aH], endpoint: bn, [ct]: n4 }, { [cv]: [Y, aq, as, aB], endpoint: { [cA]: "https://s3.dualstack.us-east-1.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, aq, as, aD, aE], [cu]: [{ endpoint: bo, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, aq, as, aD, aH], endpoint: bo, [ct]: n4 }, { [cv]: [ar, Z, ag, as, aB], endpoint: { [cA]: Q, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, Z, ag, as, aD, aE], [cu]: [{ [cv]: cd, endpoint: bp, [ct]: n4 }, { endpoint: bp, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, Z, ag, as, aD, aH], endpoint: bp, [ct]: n4 }, { [cv]: [ar, aq, as, aB], endpoint: { [cA]: R, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, aq, as, aD, aE], [cu]: [{ [cv]: cd, endpoint: { [cA]: R, [cB]: aG, [cH]: al }, [ct]: n4 }, { endpoint: bq, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, aq, as, aD, aH], endpoint: bq, [ct]: n4 }], [ct]: o4 }, { error: "Path-style addressing cannot be used with S3 Accelerate", [ct]: f4 }], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { [cv]: [{ [cw]: d4, [cx]: [br] }, { [cw]: e4, [cx]: [br, c4] }], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cr, [cu]: [aW, aX, { [cv]: bC, endpoint: { [cA]: t4, [cB]: bs, [cH]: al }, [ct]: n4 }, { [cv]: cq, endpoint: { [cA]: "https://s3-object-lambda-fips.{Region}.{partitionResult#dnsSuffix}", [cB]: bs, [cH]: al }, [ct]: n4 }, { endpoint: { [cA]: "https://s3-object-lambda.{Region}.{partitionResult#dnsSuffix}", [cB]: bs, [cH]: al }, [ct]: n4 }], [ct]: o4 }, aR], [ct]: o4 }], [ct]: o4 }, { [cv]: [au], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cr, [cu]: [{ [cv]: [X, Y, aq, aB], endpoint: { [cA]: "https://s3-fips.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [X, Y, aq, aD, aE], [cu]: [{ endpoint: bt, [ct]: n4 }], [ct]: o4 }, { [cv]: [X, Y, aq, aD, aH], endpoint: bt, [ct]: n4 }, { [cv]: [X, ar, aq, aB], endpoint: { [cA]: "https://s3-fips.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [X, ar, aq, aD, aE], [cu]: [{ endpoint: bu, [ct]: n4 }], [ct]: o4 }, { [cv]: [X, ar, aq, aD, aH], endpoint: bu, [ct]: n4 }, { [cv]: [as, Y, aq, aB], endpoint: { [cA]: "https://s3.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [as, Y, aq, aD, aE], [cu]: [{ endpoint: bv, [ct]: n4 }], [ct]: o4 }, { [cv]: [as, Y, aq, aD, aH], endpoint: bv, [ct]: n4 }, { [cv]: [as, ar, Z, ag, aB], endpoint: { [cA]: t4, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [as, ar, Z, ag, aD, aE], [cu]: [{ [cv]: cd, endpoint: bw, [ct]: n4 }, { endpoint: bw, [ct]: n4 }], [ct]: o4 }, { [cv]: [as, ar, Z, ag, aD, aH], endpoint: bw, [ct]: n4 }, { [cv]: [as, ar, aq, aB], endpoint: { [cA]: S, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [as, ar, aq, aD, aE], [cu]: [{ [cv]: cd, endpoint: { [cA]: S, [cB]: aG, [cH]: al }, [ct]: n4 }, { endpoint: bx, [ct]: n4 }], [ct]: o4 }, { [cv]: [as, ar, aq, aD, aH], endpoint: bx, [ct]: n4 }], [ct]: o4 }, aR], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { error: "A region must be set when sending requests to S3.", [ct]: f4 }] };
+    var _data4 = { version: "1.0", parameters: { Bucket: T, Region: T, UseFIPS: U, UseDualStack: U, Endpoint: T, ForcePathStyle: U, Accelerate: U, UseGlobalEndpoint: U, UseObjectLambdaEndpoint: V, Key: T, Prefix: T, CopySource: T, DisableAccessPoints: V, DisableMultiRegionAccessPoints: U, UseArnRegion: V, UseS3ExpressControlEndpoint: V, DisableS3ExpressSessionAuth: V }, [cu]: [{ [cv]: [{ [cw]: d4, [cx]: by }], [cu]: [{ [cv]: [W, X], error: "Accelerate cannot be used with FIPS", [ct]: f4 }, { [cv]: [Y, Z], error: "Cannot set dual-stack in combination with a custom endpoint.", [ct]: f4 }, { [cv]: [Z, X], error: "A custom endpoint cannot be combined with FIPS", [ct]: f4 }, { [cv]: [Z, W], error: "A custom endpoint cannot be combined with S3 Accelerate", [ct]: f4 }, { [cv]: [X, aa, ab], error: "Partition does not support FIPS", [ct]: f4 }, { [cv]: [ac, { [cw]: k4, [cx]: [ad, 0, a4, c4], [cz]: l4 }, { [cw]: h4, [cx]: [{ [cy]: l4 }, "--x-s3"] }], [cu]: [ae, af, { [cv]: [ao, ap], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: [aj, aq], [cu]: [{ [cv]: bH, endpoint: { [cA]: "https://s3express-control-fips.dualstack.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bI, endpoint: { [cA]: "https://s3express-control-fips.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bJ, endpoint: { [cA]: "https://s3express-control.dualstack.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bK, endpoint: { [cA]: "https://s3express-control.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: ak, [cH]: al }, [ct]: n4 }], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { [cv]: bF, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: bD, [cu]: [{ [cv]: bL, [cu]: bM, [ct]: o4 }, { [cv]: bN, [cu]: bM, [ct]: o4 }, { [cv]: bO, [cu]: bM, [ct]: o4 }, { [cv]: bP, [cu]: bM, [ct]: o4 }, { [cv]: bQ, [cu]: bM, [ct]: o4 }, at], [ct]: o4 }, { [cv]: bL, [cu]: bR, [ct]: o4 }, { [cv]: bN, [cu]: bR, [ct]: o4 }, { [cv]: bO, [cu]: bR, [ct]: o4 }, { [cv]: bP, [cu]: bR, [ct]: o4 }, { [cv]: bQ, [cu]: bR, [ct]: o4 }, at], [ct]: o4 }], [ct]: o4 }, an], [ct]: o4 }, { [cv]: [ac, { [cw]: k4, [cx]: bS, [cz]: s4 }, { [cw]: h4, [cx]: [{ [cy]: s4 }, "--xa-s3"] }], [cu]: [ae, af, { [cv]: bF, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: bD, [cu]: [{ [cv]: bT, [cu]: bM, [ct]: o4 }, { [cv]: bU, [cu]: bM, [ct]: o4 }, { [cv]: bV, [cu]: bM, [ct]: o4 }, { [cv]: bW, [cu]: bM, [ct]: o4 }, { [cv]: bX, [cu]: bM, [ct]: o4 }, at], [ct]: o4 }, { [cv]: bT, [cu]: bR, [ct]: o4 }, { [cv]: bU, [cu]: bR, [ct]: o4 }, { [cv]: bV, [cu]: bR, [ct]: o4 }, { [cv]: bW, [cu]: bR, [ct]: o4 }, { [cv]: bX, [cu]: bR, [ct]: o4 }, at], [ct]: o4 }], [ct]: o4 }, an], [ct]: o4 }, { [cv]: [au, ao, ap], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: bC, endpoint: { [cA]: t4, [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bH, endpoint: { [cA]: "https://s3express-control-fips.dualstack.{Region}.{partitionResult#dnsSuffix}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bI, endpoint: { [cA]: "https://s3express-control-fips.{Region}.{partitionResult#dnsSuffix}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bJ, endpoint: { [cA]: "https://s3express-control.dualstack.{Region}.{partitionResult#dnsSuffix}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bK, endpoint: { [cA]: "https://s3express-control.{Region}.{partitionResult#dnsSuffix}", [cB]: ak, [cH]: al }, [ct]: n4 }], [ct]: o4 }], [ct]: o4 }, { [cv]: [ac, { [cw]: k4, [cx]: [ad, 49, 50, c4], [cz]: u4 }, { [cw]: k4, [cx]: [ad, 8, 12, c4], [cz]: v4 }, { [cw]: k4, [cx]: bS, [cz]: w4 }, { [cw]: k4, [cx]: [ad, 32, 49, c4], [cz]: x4 }, { [cw]: g4, [cx]: by, [cz]: "regionPartition" }, { [cw]: h4, [cx]: [{ [cy]: w4 }, "--op-s3"] }], [cu]: [{ [cv]: bZ, [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [av, "e"] }], [cu]: [{ [cv]: ca, [cu]: [aw, { [cv]: bC, endpoint: { [cA]: "https://{Bucket}.ec2.{url#authority}", [cB]: ax, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { endpoint: { [cA]: "https://{Bucket}.ec2.s3-outposts.{Region}.{regionPartition#dnsSuffix}", [cB]: ax, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { [cv]: [{ [cw]: h4, [cx]: [av, "o"] }], [cu]: [{ [cv]: ca, [cu]: [aw, { [cv]: bC, endpoint: { [cA]: "https://{Bucket}.op-{outpostId}.{url#authority}", [cB]: ax, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { endpoint: { [cA]: "https://{Bucket}.op-{outpostId}.s3-outposts.{Region}.{regionPartition#dnsSuffix}", [cB]: ax, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { error: 'Unrecognized hardware type: "Expected hardware type o or e but got {hardwareType}"', [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: The outpost Id must only contain a-z, A-Z, 0-9 and `-`.", [ct]: f4 }], [ct]: o4 }, { [cv]: bY, [cu]: [{ [cv]: [Z, { [cw]: r4, [cx]: [{ [cw]: d4, [cx]: [{ [cw]: m4, [cx]: bz }] }] }], error: "Custom endpoint `{Endpoint}` was not a valid URI", [ct]: f4 }, { [cv]: [ay, am], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cc, [cu]: [{ [cv]: [W, ab], error: "S3 Accelerate cannot be used in this region", [ct]: f4 }, { [cv]: [Y, X, aA, aq, aB], endpoint: { [cA]: "https://{Bucket}.s3-fips.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, X, aA, aq, aD, aE], [cu]: [{ endpoint: aF, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, X, aA, aq, aD, aH], endpoint: aF, [ct]: n4 }, { [cv]: [ar, X, aA, aq, aB], endpoint: { [cA]: "https://{Bucket}.s3-fips.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, X, aA, aq, aD, aE], [cu]: [{ endpoint: aI, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, X, aA, aq, aD, aH], endpoint: aI, [ct]: n4 }, { [cv]: [Y, as, W, aq, aB], endpoint: { [cA]: "https://{Bucket}.s3-accelerate.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, as, W, aq, aD, aE], [cu]: [{ endpoint: aJ, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, as, W, aq, aD, aH], endpoint: aJ, [ct]: n4 }, { [cv]: [Y, as, aA, aq, aB], endpoint: { [cA]: "https://{Bucket}.s3.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, as, aA, aq, aD, aE], [cu]: [{ endpoint: aK, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, as, aA, aq, aD, aH], endpoint: aK, [ct]: n4 }, { [cv]: [ar, as, aA, Z, ag, ah, aB], endpoint: { [cA]: C2, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, as, aA, Z, ag, aL, aB], endpoint: { [cA]: q4, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, as, aA, Z, ag, ah, aD, aE], [cu]: [{ [cv]: cd, endpoint: aM, [ct]: n4 }, { endpoint: aM, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, as, aA, Z, ag, aL, aD, aE], [cu]: [{ [cv]: cd, endpoint: aN, [ct]: n4 }, aO], [ct]: o4 }, { [cv]: [ar, as, aA, Z, ag, ah, aD, aH], endpoint: aM, [ct]: n4 }, { [cv]: [ar, as, aA, Z, ag, aL, aD, aH], endpoint: aN, [ct]: n4 }, { [cv]: [ar, as, W, aq, aB], endpoint: { [cA]: D2, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, as, W, aq, aD, aE], [cu]: [{ [cv]: cd, endpoint: aP, [ct]: n4 }, { endpoint: aP, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, as, W, aq, aD, aH], endpoint: aP, [ct]: n4 }, { [cv]: [ar, as, aA, aq, aB], endpoint: { [cA]: E2, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, as, aA, aq, aD, aE], [cu]: [{ [cv]: cd, endpoint: { [cA]: E2, [cB]: aG, [cH]: al }, [ct]: n4 }, { endpoint: aQ, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, as, aA, aq, aD, aH], endpoint: aQ, [ct]: n4 }], [ct]: o4 }, aR], [ct]: o4 }], [ct]: o4 }, { [cv]: [Z, ag, { [cw]: h4, [cx]: [{ [cw]: i4, [cx]: [ai, "scheme"] }, "http"] }, { [cw]: p4, [cx]: [ad, c4] }, ay, as, ar, aA], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cc, [cu]: [aO], [ct]: o4 }, aR], [ct]: o4 }], [ct]: o4 }, { [cv]: [ay, { [cw]: F2, [cx]: bA, [cz]: G2 }], [cu]: [{ [cv]: [{ [cw]: i4, [cx]: [aS, "resourceId[0]"], [cz]: H2 }, { [cw]: r4, [cx]: [{ [cw]: h4, [cx]: [aT, I2] }] }], [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [aU, J2] }], [cu]: [{ [cv]: ce, [cu]: [{ [cv]: cf, [cu]: [aW, aX, { [cv]: ci, [cu]: [aY, { [cv]: cj, [cu]: [aZ, { [cv]: cl, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cm, [cu]: [{ [cv]: cn, [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [bb, I2] }], error: "Invalid ARN: Missing account id", [ct]: f4 }, { [cv]: co, [cu]: [{ [cv]: cp, [cu]: [{ [cv]: bC, endpoint: { [cA]: M, [cB]: bc, [cH]: al }, [ct]: n4 }, { [cv]: cq, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-object-lambda-fips.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bc, [cH]: al }, [ct]: n4 }, { endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-object-lambda.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bc, [cH]: al }, [ct]: n4 }], [ct]: o4 }, bd], [ct]: o4 }, be], [ct]: o4 }, bf], [ct]: o4 }, bg], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, bh], [ct]: o4 }, { error: "Invalid ARN: bucket ARN is missing a region", [ct]: f4 }], [ct]: o4 }, bi], [ct]: o4 }, { error: "Invalid ARN: Object Lambda ARNs only support `accesspoint` arn types, but found: `{arnType}`", [ct]: f4 }], [ct]: o4 }, { [cv]: ce, [cu]: [{ [cv]: cf, [cu]: [{ [cv]: ci, [cu]: [{ [cv]: ce, [cu]: [{ [cv]: ci, [cu]: [aY, { [cv]: cj, [cu]: [aZ, { [cv]: cl, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [ba, "{partitionResult#name}"] }], [cu]: [{ [cv]: cn, [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [aU, B2] }], [cu]: [{ [cv]: co, [cu]: [{ [cv]: cp, [cu]: [{ [cv]: bB, error: "Access Points do not support S3 Accelerate", [ct]: f4 }, { [cv]: bH, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-accesspoint-fips.dualstack.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bj, [cH]: al }, [ct]: n4 }, { [cv]: bI, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-accesspoint-fips.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bj, [cH]: al }, [ct]: n4 }, { [cv]: bJ, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-accesspoint.dualstack.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bj, [cH]: al }, [ct]: n4 }, { [cv]: [as, ar, Z, ag], endpoint: { [cA]: M, [cB]: bj, [cH]: al }, [ct]: n4 }, { [cv]: bK, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-accesspoint.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bj, [cH]: al }, [ct]: n4 }], [ct]: o4 }, bd], [ct]: o4 }, be], [ct]: o4 }, { error: "Invalid ARN: The ARN was not for the S3 service, found: {bucketArn#service}", [ct]: f4 }], [ct]: o4 }, bf], [ct]: o4 }, bg], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, bh], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { [cv]: [{ [cw]: y2, [cx]: [aV, c4] }], [cu]: [{ [cv]: ch, error: "S3 MRAP does not support dual-stack", [ct]: f4 }, { [cv]: cq, error: "S3 MRAP does not support FIPS", [ct]: f4 }, { [cv]: bB, error: "S3 MRAP does not support S3 Accelerate", [ct]: f4 }, { [cv]: [{ [cw]: e4, [cx]: [{ [cy]: "DisableMultiRegionAccessPoints" }, c4] }], error: "Invalid configuration: Multi-Region Access Point ARNs are disabled.", [ct]: f4 }, { [cv]: [{ [cw]: g4, [cx]: by, [cz]: N }], [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [{ [cw]: i4, [cx]: [{ [cy]: N }, j4] }, { [cw]: i4, [cx]: [aS, "partition"] }] }], [cu]: [{ endpoint: { [cA]: "https://{accessPointName}.accesspoint.s3-global.{mrapPartition#dnsSuffix}", [cB]: { [cD]: [{ [cE]: c4, name: z7, [cF]: B2, [cI]: cb }] }, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { error: "Client was configured for partition `{mrapPartition#name}` but bucket referred to partition `{bucketArn#partition}`", [ct]: f4 }], [ct]: o4 }], [ct]: o4 }, { error: "Invalid Access Point Name", [ct]: f4 }], [ct]: o4 }, bi], [ct]: o4 }, { [cv]: [{ [cw]: h4, [cx]: [aU, A2] }], [cu]: [{ [cv]: ch, error: "S3 Outposts does not support Dual-stack", [ct]: f4 }, { [cv]: cq, error: "S3 Outposts does not support FIPS", [ct]: f4 }, { [cv]: bB, error: "S3 Outposts does not support S3 Accelerate", [ct]: f4 }, { [cv]: [{ [cw]: d4, [cx]: [{ [cw]: i4, [cx]: [aS, "resourceId[4]"] }] }], error: "Invalid Arn: Outpost Access Point ARN contains sub resources", [ct]: f4 }, { [cv]: [{ [cw]: i4, [cx]: cg, [cz]: x4 }], [cu]: [{ [cv]: bZ, [cu]: [aZ, { [cv]: cl, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cm, [cu]: [{ [cv]: cn, [cu]: [{ [cv]: co, [cu]: [{ [cv]: [{ [cw]: i4, [cx]: ck, [cz]: O }], [cu]: [{ [cv]: [{ [cw]: i4, [cx]: [aS, "resourceId[3]"], [cz]: L }], [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [{ [cy]: O }, K] }], [cu]: [{ [cv]: bC, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.{outpostId}.{url#authority}", [cB]: bk, [cH]: al }, [ct]: n4 }, { endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.{outpostId}.s3-outposts.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bk, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { error: "Expected an outpost type `accesspoint`, found {outpostType}", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: expected an access point name", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: Expected a 4-component resource", [ct]: f4 }], [ct]: o4 }, be], [ct]: o4 }, bf], [ct]: o4 }, bg], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { error: "Invalid ARN: The outpost Id may only contain a-z, A-Z, 0-9 and `-`. Found: `{outpostId}`", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: The Outpost Id was not set", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: Unrecognized format: {Bucket} (type: {arnType})", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: No ARN type specified", [ct]: f4 }], [ct]: o4 }, { [cv]: [{ [cw]: k4, [cx]: [ad, 0, 4, b4], [cz]: P }, { [cw]: h4, [cx]: [{ [cy]: P }, "arn:"] }, { [cw]: r4, [cx]: [{ [cw]: d4, [cx]: [bl] }] }], error: "Invalid ARN: `{Bucket}` was not a valid ARN", [ct]: f4 }, { [cv]: [{ [cw]: e4, [cx]: [az, c4] }, bl], error: "Path-style addressing cannot be used with ARN buckets", [ct]: f4 }, { [cv]: bE, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: [aA], [cu]: [{ [cv]: [Y, aq, X, aB], endpoint: { [cA]: "https://s3-fips.dualstack.us-east-1.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, aq, X, aD, aE], [cu]: [{ endpoint: bm, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, aq, X, aD, aH], endpoint: bm, [ct]: n4 }, { [cv]: [ar, aq, X, aB], endpoint: { [cA]: "https://s3-fips.us-east-1.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, aq, X, aD, aE], [cu]: [{ endpoint: bn, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, aq, X, aD, aH], endpoint: bn, [ct]: n4 }, { [cv]: [Y, aq, as, aB], endpoint: { [cA]: "https://s3.dualstack.us-east-1.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, aq, as, aD, aE], [cu]: [{ endpoint: bo, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, aq, as, aD, aH], endpoint: bo, [ct]: n4 }, { [cv]: [ar, Z, ag, as, aB], endpoint: { [cA]: Q, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, Z, ag, as, aD, aE], [cu]: [{ [cv]: cd, endpoint: bp, [ct]: n4 }, { endpoint: bp, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, Z, ag, as, aD, aH], endpoint: bp, [ct]: n4 }, { [cv]: [ar, aq, as, aB], endpoint: { [cA]: R, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, aq, as, aD, aE], [cu]: [{ [cv]: cd, endpoint: { [cA]: R, [cB]: aG, [cH]: al }, [ct]: n4 }, { endpoint: bq, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, aq, as, aD, aH], endpoint: bq, [ct]: n4 }], [ct]: o4 }, { error: "Path-style addressing cannot be used with S3 Accelerate", [ct]: f4 }], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { [cv]: [{ [cw]: d4, [cx]: [br] }, { [cw]: e4, [cx]: [br, c4] }], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cr, [cu]: [aW, aX, { [cv]: bC, endpoint: { [cA]: t4, [cB]: bs, [cH]: al }, [ct]: n4 }, { [cv]: cq, endpoint: { [cA]: "https://s3-object-lambda-fips.{Region}.{partitionResult#dnsSuffix}", [cB]: bs, [cH]: al }, [ct]: n4 }, { endpoint: { [cA]: "https://s3-object-lambda.{Region}.{partitionResult#dnsSuffix}", [cB]: bs, [cH]: al }, [ct]: n4 }], [ct]: o4 }, aR], [ct]: o4 }], [ct]: o4 }, { [cv]: [au], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cr, [cu]: [{ [cv]: [X, Y, aq, aB], endpoint: { [cA]: "https://s3-fips.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [X, Y, aq, aD, aE], [cu]: [{ endpoint: bt, [ct]: n4 }], [ct]: o4 }, { [cv]: [X, Y, aq, aD, aH], endpoint: bt, [ct]: n4 }, { [cv]: [X, ar, aq, aB], endpoint: { [cA]: "https://s3-fips.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [X, ar, aq, aD, aE], [cu]: [{ endpoint: bu, [ct]: n4 }], [ct]: o4 }, { [cv]: [X, ar, aq, aD, aH], endpoint: bu, [ct]: n4 }, { [cv]: [as, Y, aq, aB], endpoint: { [cA]: "https://s3.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [as, Y, aq, aD, aE], [cu]: [{ endpoint: bv, [ct]: n4 }], [ct]: o4 }, { [cv]: [as, Y, aq, aD, aH], endpoint: bv, [ct]: n4 }, { [cv]: [as, ar, Z, ag, aB], endpoint: { [cA]: t4, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [as, ar, Z, ag, aD, aE], [cu]: [{ [cv]: cd, endpoint: bw, [ct]: n4 }, { endpoint: bw, [ct]: n4 }], [ct]: o4 }, { [cv]: [as, ar, Z, ag, aD, aH], endpoint: bw, [ct]: n4 }, { [cv]: [as, ar, aq, aB], endpoint: { [cA]: S, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [as, ar, aq, aD, aE], [cu]: [{ [cv]: cd, endpoint: { [cA]: S, [cB]: aG, [cH]: al }, [ct]: n4 }, { endpoint: bx, [ct]: n4 }], [ct]: o4 }, { [cv]: [as, ar, aq, aD, aH], endpoint: bx, [ct]: n4 }], [ct]: o4 }, aR], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { error: "A region must be set when sending requests to S3.", [ct]: f4 }] };
     exports2.ruleSet = _data4;
   }
 });
@@ -51221,7 +51221,7 @@ var require_dist_cjs51 = __commonJS({
     var utilBufferFrom = require_dist_cjs7();
     var utilUtf8 = require_dist_cjs8();
     var buffer = require("buffer");
-    var crypto4 = require("crypto");
+    var crypto3 = require("crypto");
     var Hash4 = class {
       algorithmIdentifier;
       secret;
@@ -51238,7 +51238,7 @@ var require_dist_cjs51 = __commonJS({
         return Promise.resolve(this.hash.digest());
       }
       reset() {
-        this.hash = this.secret ? crypto4.createHmac(this.algorithmIdentifier, castSourceData(this.secret)) : crypto4.createHash(this.algorithmIdentifier);
+        this.hash = this.secret ? crypto3.createHmac(this.algorithmIdentifier, castSourceData(this.secret)) : crypto3.createHash(this.algorithmIdentifier);
       }
     };
     function castSourceData(toCast, encoding) {
@@ -52148,7 +52148,7 @@ var require_dist_cjs55 = __commonJS({
     var httpAuthSchemes = (init_httpAuthSchemes2(), __toCommonJS(httpAuthSchemes_exports));
     var propertyProvider = require_dist_cjs17();
     var sharedIniFileLoader = require_dist_cjs40();
-    var fs7 = require("fs");
+    var fs6 = require("fs");
     var fromEnvSigningName = ({ logger: logger3, signingName } = {}) => async () => {
       logger3?.debug?.("@aws-sdk/token-providers - fromEnvSigningName");
       if (!signingName) {
@@ -52194,11 +52194,11 @@ var require_dist_cjs55 = __commonJS({
         throw new propertyProvider.TokenProviderError(`Value not present for '${key}' in SSO Token${forRefresh ? ". Cannot refresh" : ""}. ${REFRESH_MESSAGE}`, false);
       }
     };
-    var { writeFile: writeFile5 } = fs7.promises;
+    var { writeFile: writeFile3 } = fs6.promises;
     var writeSSOTokenToFile = (id, ssoToken) => {
       const tokenFilepath = sharedIniFileLoader.getSSOTokenFilepath(id);
       const tokenString = JSON.stringify(ssoToken, null, 2);
-      return writeFile5(tokenFilepath, tokenString);
+      return writeFile3(tokenFilepath, tokenString);
     };
     var lastRefreshAttemptTime = /* @__PURE__ */ new Date(0);
     var fromSso = (_init = {}) => async ({ callerClientConfig } = {}) => {
@@ -54184,7 +54184,7 @@ var init_EndpointParameters3 = __esm({
 });
 
 // node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/endpoint/ruleset.js
-var F, G, H, I, J, a3, b3, c3, d3, e3, f3, g3, h3, i3, j3, k3, l3, m3, n3, o3, p3, q3, r3, s3, t3, u3, v3, w3, x3, y, z6, A, B, C, D, E, _data3, ruleSet3;
+var F, G, H, I, J, a3, b3, c3, d3, e3, f3, g3, h3, i3, j3, k3, l3, m3, n3, o3, p3, q3, r3, s3, t3, u3, v3, w3, x3, y, z5, A, B, C, D, E, _data3, ruleSet3;
 var init_ruleset3 = __esm({
   "node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/endpoint/ruleset.js"() {
     F = "required";
@@ -54217,13 +54217,13 @@ var init_ruleset3 = __esm({
     w3 = { "conditions": [{ [H]: d3, [I]: [q3, "aws-global"] }], [h3]: u3, [G]: h3 };
     x3 = { [H]: c3, [I]: [s3, true] };
     y = { [H]: c3, [I]: [t3, true] };
-    z6 = { [H]: l3, [I]: [{ [J]: "PartitionResult" }, "supportsFIPS"] };
+    z5 = { [H]: l3, [I]: [{ [J]: "PartitionResult" }, "supportsFIPS"] };
     A = { [J]: "PartitionResult" };
     B = { [H]: c3, [I]: [true, { [H]: l3, [I]: [A, "supportsDualStack"] }] };
     C = [{ [H]: "isSet", [I]: [o3] }];
     D = [x3];
     E = [y];
-    _data3 = { version: "1.0", parameters: { Region: m3, UseDualStack: n3, UseFIPS: n3, Endpoint: m3, UseGlobalEndpoint: n3 }, rules: [{ conditions: [{ [H]: c3, [I]: [{ [J]: "UseGlobalEndpoint" }, b3] }, { [H]: "not", [I]: C }, p3, r3, { [H]: c3, [I]: [s3, a3] }, { [H]: c3, [I]: [t3, a3] }], rules: [{ conditions: [{ [H]: d3, [I]: [q3, "ap-northeast-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "ap-south-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "ap-southeast-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "ap-southeast-2"] }], endpoint: u3, [G]: h3 }, w3, { conditions: [{ [H]: d3, [I]: [q3, "ca-central-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "eu-central-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "eu-north-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "eu-west-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "eu-west-2"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "eu-west-3"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "sa-east-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, g3] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "us-east-2"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "us-west-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "us-west-2"] }], endpoint: u3, [G]: h3 }, { endpoint: { url: i3, properties: { authSchemes: [{ name: e3, signingName: f3, signingRegion: "{Region}" }] }, headers: v3 }, [G]: h3 }], [G]: j3 }, { conditions: C, rules: [{ conditions: D, error: "Invalid Configuration: FIPS and custom endpoint are not supported", [G]: k3 }, { conditions: E, error: "Invalid Configuration: Dualstack and custom endpoint are not supported", [G]: k3 }, { endpoint: { url: o3, properties: v3, headers: v3 }, [G]: h3 }], [G]: j3 }, { conditions: [p3], rules: [{ conditions: [r3], rules: [{ conditions: [x3, y], rules: [{ conditions: [{ [H]: c3, [I]: [b3, z6] }, B], rules: [{ endpoint: { url: "https://sts-fips.{Region}.{PartitionResult#dualStackDnsSuffix}", properties: v3, headers: v3 }, [G]: h3 }], [G]: j3 }, { error: "FIPS and DualStack are enabled, but this partition does not support one or both", [G]: k3 }], [G]: j3 }, { conditions: D, rules: [{ conditions: [{ [H]: c3, [I]: [z6, b3] }], rules: [{ conditions: [{ [H]: d3, [I]: [{ [H]: l3, [I]: [A, "name"] }, "aws-us-gov"] }], endpoint: { url: "https://sts.{Region}.amazonaws.com", properties: v3, headers: v3 }, [G]: h3 }, { endpoint: { url: "https://sts-fips.{Region}.{PartitionResult#dnsSuffix}", properties: v3, headers: v3 }, [G]: h3 }], [G]: j3 }, { error: "FIPS is enabled but this partition does not support FIPS", [G]: k3 }], [G]: j3 }, { conditions: E, rules: [{ conditions: [B], rules: [{ endpoint: { url: "https://sts.{Region}.{PartitionResult#dualStackDnsSuffix}", properties: v3, headers: v3 }, [G]: h3 }], [G]: j3 }, { error: "DualStack is enabled but this partition does not support DualStack", [G]: k3 }], [G]: j3 }, w3, { endpoint: { url: i3, properties: v3, headers: v3 }, [G]: h3 }], [G]: j3 }], [G]: j3 }, { error: "Invalid Configuration: Missing Region", [G]: k3 }] };
+    _data3 = { version: "1.0", parameters: { Region: m3, UseDualStack: n3, UseFIPS: n3, Endpoint: m3, UseGlobalEndpoint: n3 }, rules: [{ conditions: [{ [H]: c3, [I]: [{ [J]: "UseGlobalEndpoint" }, b3] }, { [H]: "not", [I]: C }, p3, r3, { [H]: c3, [I]: [s3, a3] }, { [H]: c3, [I]: [t3, a3] }], rules: [{ conditions: [{ [H]: d3, [I]: [q3, "ap-northeast-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "ap-south-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "ap-southeast-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "ap-southeast-2"] }], endpoint: u3, [G]: h3 }, w3, { conditions: [{ [H]: d3, [I]: [q3, "ca-central-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "eu-central-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "eu-north-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "eu-west-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "eu-west-2"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "eu-west-3"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "sa-east-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, g3] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "us-east-2"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "us-west-1"] }], endpoint: u3, [G]: h3 }, { conditions: [{ [H]: d3, [I]: [q3, "us-west-2"] }], endpoint: u3, [G]: h3 }, { endpoint: { url: i3, properties: { authSchemes: [{ name: e3, signingName: f3, signingRegion: "{Region}" }] }, headers: v3 }, [G]: h3 }], [G]: j3 }, { conditions: C, rules: [{ conditions: D, error: "Invalid Configuration: FIPS and custom endpoint are not supported", [G]: k3 }, { conditions: E, error: "Invalid Configuration: Dualstack and custom endpoint are not supported", [G]: k3 }, { endpoint: { url: o3, properties: v3, headers: v3 }, [G]: h3 }], [G]: j3 }, { conditions: [p3], rules: [{ conditions: [r3], rules: [{ conditions: [x3, y], rules: [{ conditions: [{ [H]: c3, [I]: [b3, z5] }, B], rules: [{ endpoint: { url: "https://sts-fips.{Region}.{PartitionResult#dualStackDnsSuffix}", properties: v3, headers: v3 }, [G]: h3 }], [G]: j3 }, { error: "FIPS and DualStack are enabled, but this partition does not support one or both", [G]: k3 }], [G]: j3 }, { conditions: D, rules: [{ conditions: [{ [H]: c3, [I]: [z5, b3] }], rules: [{ conditions: [{ [H]: d3, [I]: [{ [H]: l3, [I]: [A, "name"] }, "aws-us-gov"] }], endpoint: { url: "https://sts.{Region}.amazonaws.com", properties: v3, headers: v3 }, [G]: h3 }, { endpoint: { url: "https://sts-fips.{Region}.{PartitionResult#dnsSuffix}", properties: v3, headers: v3 }, [G]: h3 }], [G]: j3 }, { error: "FIPS is enabled but this partition does not support FIPS", [G]: k3 }], [G]: j3 }, { conditions: E, rules: [{ conditions: [B], rules: [{ endpoint: { url: "https://sts.{Region}.{PartitionResult#dualStackDnsSuffix}", properties: v3, headers: v3 }, [G]: h3 }], [G]: j3 }, { error: "DualStack is enabled but this partition does not support DualStack", [G]: k3 }], [G]: j3 }, w3, { endpoint: { url: i3, properties: v3, headers: v3 }, [G]: h3 }], [G]: j3 }], [G]: j3 }, { error: "Invalid Configuration: Missing Region", [G]: k3 }] };
     ruleSet3 = _data3;
   }
 });
@@ -56454,7 +56454,7 @@ var require_dist_cjs66 = __commonJS({
 var require_dist_cjs67 = __commonJS({
   "node_modules/@smithy/hash-stream-node/dist-cjs/index.js"(exports2) {
     "use strict";
-    var fs7 = require("fs");
+    var fs6 = require("fs");
     var utilUtf8 = require_dist_cjs8();
     var stream = require("stream");
     var HashCalculator = class extends stream.Writable {
@@ -56477,7 +56477,7 @@ var require_dist_cjs67 = __commonJS({
         reject(new Error("Unable to calculate hash for non-file streams."));
         return;
       }
-      const fileStreamTee = fs7.createReadStream(fileStream.path, {
+      const fileStreamTee = fs6.createReadStream(fileStream.path, {
         start: fileStream.start,
         end: fileStream.end
       });
@@ -64748,8 +64748,7 @@ async function getPendingMigrations(migrations2) {
   return pending;
 }
 
-// lib/json-store/core/json-store.ts
-init_logger();
+// plugins/dist/qtap-plugin-upgrade/lib/json-store/core/json-store.ts
 var fs3 = __toESM(require("fs"));
 var path2 = __toESM(require("path"));
 var import_util = require("util");
@@ -64834,7 +64833,7 @@ var JsonStore = class {
       await unlink2(lockPath);
     } catch (error2) {
       if (error2.code !== "ENOENT") {
-        logger.error(`Failed to release lock for ${filePath}`, { context: { filePath } }, error2 instanceof Error ? error2 : void 0);
+        console.error(`Failed to release lock for ${filePath}:`, error2);
       }
     }
   }
@@ -65013,8 +65012,15 @@ var JsonStore = class {
     };
   }
 };
+var instance2 = null;
+function getJsonStore(config) {
+  if (!instance2) {
+    instance2 = new JsonStore(config);
+  }
+  return instance2;
+}
 
-// lib/json-store/repositories/base.repository.ts
+// plugins/dist/qtap-plugin-upgrade/lib/json-store/repositories/base.repository.ts
 var BaseRepository = class {
   constructor(jsonStore, schema) {
     this.jsonStore = jsonStore;
@@ -65055,391 +65061,43 @@ var BaseRepository = class {
   }
 };
 
-// lib/json-store/schemas/types.ts
-var import_zod5 = require("zod");
-
-// lib/json-store/schemas/plugin-manifest.ts
+// plugins/dist/qtap-plugin-upgrade/lib/json-store/schemas/types.ts
 var import_zod4 = require("zod");
-var PluginCapabilityEnum = import_zod4.z.enum([
-  "CHAT_COMMANDS",
-  // Provides custom chat commands
-  "MESSAGE_PROCESSORS",
-  // Processes/transforms messages
-  "UI_COMPONENTS",
-  // Provides React components
-  "DATA_STORAGE",
-  // Adds database tables/storage
-  "API_ROUTES",
-  // Adds new API endpoints
-  "AUTH_METHODS",
-  // Provides authentication methods
-  "WEBHOOKS",
-  // Handles webhooks
-  "BACKGROUND_TASKS",
-  // Runs background jobs
-  "CUSTOM_MODELS",
-  // Adds new data models
-  "FILE_HANDLERS",
-  // Handles file operations
-  "NOTIFICATIONS",
-  // Provides notification system
-  "BACKEND_INTEGRATIONS",
-  // Integrates with external services
-  "LLM_PROVIDER",
-  // Provides LLM integration
-  "IMAGE_PROVIDER",
-  // Provides image generation
-  "EMBEDDING_PROVIDER",
-  // Provides embedding generation
-  "THEME",
-  // Provides UI theme
-  "DATABASE_BACKEND",
-  // Replaces/augments database
-  "FILE_BACKEND",
-  // Replaces/augments file storage
-  "UPGRADE_MIGRATION"
-  // Provides version upgrade migrations (runs early in startup)
-]);
-var FrontendFrameworkEnum = import_zod4.z.enum([
-  "REACT",
-  "PREACT",
-  "VUE",
-  "SVELTE",
-  "NONE"
-]);
-var CSSFrameworkEnum = import_zod4.z.enum([
-  "TAILWIND",
-  "BOOTSTRAP",
-  "MATERIAL_UI",
-  "CSS_MODULES",
-  "STYLED_COMPONENTS",
-  "NONE"
-]);
-var PluginAuthorSchema = import_zod4.z.object({
-  name: import_zod4.z.string().min(1).max(100),
-  email: import_zod4.z.string().email().optional(),
-  url: import_zod4.z.string().url().optional()
-});
-var CompatibilitySchema = import_zod4.z.object({
-  /** Minimum Quilltap version (semver) */
-  quilltapVersion: import_zod4.z.string().regex(/^>=?\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?$/),
-  /** Maximum Quilltap version (optional) */
-  quilltapMaxVersion: import_zod4.z.string().regex(/^<=?\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?$/).optional(),
-  /** Minimum Node.js version */
-  nodeVersion: import_zod4.z.string().regex(/^>=?\d+\.\d+\.\d+$/).optional()
-});
-var FunctionalitySchema = import_zod4.z.object({
-  /** @deprecated Use capabilities array instead */
-  providesChatCommands: import_zod4.z.boolean().default(false).optional(),
-  /** @deprecated Use capabilities array instead */
-  providesMessageProcessors: import_zod4.z.boolean().default(false).optional(),
-  /** @deprecated Use capabilities array instead */
-  providesUIComponents: import_zod4.z.boolean().default(false).optional(),
-  /** @deprecated Use capabilities array instead */
-  providesDataStorage: import_zod4.z.boolean().default(false).optional(),
-  /** @deprecated Use capabilities array instead */
-  providesAPIRoutes: import_zod4.z.boolean().default(false).optional(),
-  /** @deprecated Use capabilities array instead */
-  providesAuthenticationMethods: import_zod4.z.boolean().default(false).optional(),
-  /** @deprecated Use capabilities array instead */
-  providesWebhooks: import_zod4.z.boolean().default(false).optional(),
-  /** @deprecated Use capabilities array instead */
-  providesBackgroundTasks: import_zod4.z.boolean().default(false).optional(),
-  /** @deprecated Use capabilities array instead */
-  providesCustomModels: import_zod4.z.boolean().default(false).optional(),
-  /** @deprecated Use capabilities array instead */
-  providesFileHandlers: import_zod4.z.boolean().default(false).optional(),
-  /** @deprecated Use capabilities array instead */
-  providesNotifications: import_zod4.z.boolean().default(false).optional(),
-  /** @deprecated Use capabilities array instead */
-  providesBackendIntegrations: import_zod4.z.boolean().default(false).optional()
-});
-var HookConfigSchema = import_zod4.z.object({
-  /** Hook identifier */
-  name: import_zod4.z.string().min(1).max(100),
-  /** Hook handler file path (relative to plugin root) */
-  handler: import_zod4.z.string(),
-  /** Priority (lower = runs first) */
-  priority: import_zod4.z.number().int().min(0).max(100).default(50),
-  /** Whether the hook is enabled */
-  enabled: import_zod4.z.boolean().default(true)
-});
-var APIRouteSchema = import_zod4.z.object({
-  /** Route path (e.g., "/api/plugin/my-route") */
-  path: import_zod4.z.string().regex(/^\/api\//),
-  /** HTTP methods supported */
-  methods: import_zod4.z.array(import_zod4.z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"])).min(1),
-  /** Handler file path (relative to plugin root) */
-  handler: import_zod4.z.string(),
-  /** Whether authentication is required */
-  requiresAuth: import_zod4.z.boolean().default(true),
-  /** Description of what the route does */
-  description: import_zod4.z.string().optional()
-});
-var UIComponentSchema = import_zod4.z.object({
-  /** Component identifier (used for registration) */
-  id: import_zod4.z.string().regex(/^[a-z][a-z0-9-]*$/),
-  /** Human-readable name */
-  name: import_zod4.z.string().min(1).max(100),
-  /** Component file path (relative to plugin root) */
-  path: import_zod4.z.string(),
-  /** Where the component can be used */
-  slots: import_zod4.z.array(import_zod4.z.string()).optional(),
-  /** Props schema (JSON Schema) */
-  propsSchema: import_zod4.z.record(import_zod4.z.unknown()).optional()
-});
-var DatabaseModelSchema = import_zod4.z.object({
-  /** Model name */
-  name: import_zod4.z.string().regex(/^[A-Z][a-zA-Z0-9]*$/),
-  /** Schema file path (Zod schema, relative to plugin root) */
-  schemaPath: import_zod4.z.string(),
-  /** Collection/table name */
-  collectionName: import_zod4.z.string().regex(/^[a-z][a-z0-9-_]*$/),
-  /** Description */
-  description: import_zod4.z.string().optional()
-});
-var PermissionsSchema = import_zod4.z.object({
-  /** File system access paths (relative to data directory) */
-  fileSystem: import_zod4.z.array(import_zod4.z.string()).default([]),
-  /** Network access (domains/URLs the plugin needs to access) */
-  network: import_zod4.z.array(import_zod4.z.string()).default([]),
-  /** Environment variables the plugin needs */
-  environment: import_zod4.z.array(import_zod4.z.string()).default([]),
-  /** Whether the plugin needs database access */
-  database: import_zod4.z.boolean().default(false),
-  /** Whether the plugin needs user data access */
-  userData: import_zod4.z.boolean().default(false)
-});
-var ConfigSchemaSchema = import_zod4.z.object({
-  /** Configuration key */
-  key: import_zod4.z.string().regex(/^[a-z][a-zA-Z0-9]*$/),
-  /** Display label */
-  label: import_zod4.z.string().min(1).max(100),
-  /** Input type */
-  type: import_zod4.z.enum(["text", "number", "boolean", "select", "textarea", "password", "url", "email"]),
-  /** Default value */
-  default: import_zod4.z.unknown().optional(),
-  /** Whether the field is required */
-  required: import_zod4.z.boolean().default(false),
-  /** Help text */
-  description: import_zod4.z.string().optional(),
-  /** Options for select type */
-  options: import_zod4.z.array(import_zod4.z.object({
-    label: import_zod4.z.string(),
-    value: import_zod4.z.unknown()
-  })).optional(),
-  /** Validation pattern (regex) */
-  pattern: import_zod4.z.string().optional(),
-  /** Minimum value (for number type) */
-  min: import_zod4.z.number().optional(),
-  /** Maximum value (for number type) */
-  max: import_zod4.z.number().optional()
-});
-var ProviderConfigSchema = import_zod4.z.object({
-  /** Internal identifier for the provider (e.g., 'OPENAI', 'ANTHROPIC') */
-  providerName: import_zod4.z.string().regex(/^[A-Z][A-Z0-9_]*$/),
-  /** Human-readable display name (e.g., 'OpenAI', 'Anthropic') */
-  displayName: import_zod4.z.string().min(1).max(100),
-  /** Short description of the provider */
-  description: import_zod4.z.string().min(1).max(500),
-  /** 2-4 character abbreviation for use in icons/badges (e.g., 'OAI', 'ANT') */
-  abbreviation: import_zod4.z.string().min(2).max(4).regex(/^[A-Z0-9]+$/),
-  /** Color configuration using Tailwind CSS classes */
-  colors: import_zod4.z.object({
-    /** Background color class (e.g., 'bg-blue-500') */
-    bg: import_zod4.z.string().min(1),
-    /** Text color class (e.g., 'text-white') */
-    text: import_zod4.z.string().min(1),
-    /** Icon color class (e.g., 'text-blue-600') */
-    icon: import_zod4.z.string().min(1)
-  }),
-  /** Whether the provider requires an API key */
-  requiresApiKey: import_zod4.z.boolean().default(true),
-  /** Whether the provider requires a custom base URL */
-  requiresBaseUrl: import_zod4.z.boolean().default(false),
-  /** Custom label for the API key field (defaults to 'API Key') */
-  apiKeyLabel: import_zod4.z.string().min(1).max(100).optional(),
-  /** Custom label for the base URL field (defaults to 'Base URL') */
-  baseUrlLabel: import_zod4.z.string().min(1).max(100).optional(),
-  /** Default base URL for the provider (if customizable) */
-  baseUrlDefault: import_zod4.z.string().url().optional(),
-  /** Capabilities supported by this provider */
-  capabilities: import_zod4.z.object({
-    /** Supports chat/completion endpoints */
-    chat: import_zod4.z.boolean().default(true).optional(),
-    /** Supports image generation */
-    imageGeneration: import_zod4.z.boolean().default(false).optional(),
-    /** Supports embeddings */
-    embeddings: import_zod4.z.boolean().default(false).optional(),
-    /** Supports web search */
-    webSearch: import_zod4.z.boolean().default(false).optional()
-  }).optional(),
-  /** File attachment support configuration */
-  attachmentSupport: import_zod4.z.object({
-    /** Whether attachments are supported */
-    supported: import_zod4.z.boolean().default(false),
-    /** List of supported MIME types (e.g., ['image/jpeg', 'application/pdf']) */
-    mimeTypes: import_zod4.z.array(import_zod4.z.string()).default([]),
-    /** Description of attachment support */
-    description: import_zod4.z.string().optional()
-  }).optional()
-});
-var AuthProviderConfigSchema = import_zod4.z.object({
-  /** Internal identifier for the provider (e.g., 'google', 'github') */
-  providerId: import_zod4.z.string().regex(/^[a-z][a-z0-9-]*$/),
-  /** Human-readable display name (e.g., 'Google', 'GitHub') */
-  displayName: import_zod4.z.string().min(1).max(100),
-  /** Environment variables required for this provider */
-  requiredEnvVars: import_zod4.z.array(import_zod4.z.string()).min(1),
-  /** Optional environment variables */
-  optionalEnvVars: import_zod4.z.array(import_zod4.z.string()).optional(),
-  /** Button background color (Tailwind classes) */
-  buttonColor: import_zod4.z.string().optional(),
-  /** Button text color (Tailwind classes) */
-  buttonTextColor: import_zod4.z.string().optional(),
-  /** Icon name or identifier */
-  icon: import_zod4.z.string().optional()
-});
-var PluginManifestSchema = import_zod4.z.object({
-  // ===== JSON SCHEMA REFERENCE =====
-  /** JSON Schema reference (for IDE support) */
-  $schema: import_zod4.z.string().optional(),
-  // ===== BASIC METADATA =====
-  /** Plugin package name (must start with 'qtap-plugin-') */
-  name: import_zod4.z.string().regex(/^qtap-plugin-[a-z0-9-]+$/),
-  /** Display title */
-  title: import_zod4.z.string().min(1).max(100),
-  /** Plugin description */
-  description: import_zod4.z.string().min(1).max(500),
-  /** Semantic version */
-  version: import_zod4.z.string().regex(/^\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?(\+[a-zA-Z0-9.-]+)?$/),
-  /** Author information */
-  author: import_zod4.z.union([import_zod4.z.string(), PluginAuthorSchema]),
-  /** License (SPDX identifier) */
-  license: import_zod4.z.string().default("MIT"),
-  /** Main entry point (JavaScript/TypeScript file) */
-  main: import_zod4.z.string().default("index.js"),
-  /** Homepage URL */
-  homepage: import_zod4.z.string().url().optional(),
-  /** Repository URL */
-  repository: import_zod4.z.union([
-    import_zod4.z.string().url(),
-    import_zod4.z.object({
-      type: import_zod4.z.string(),
-      url: import_zod4.z.string().url()
-    })
-  ]).optional(),
-  /** Bug tracker URL */
-  bugs: import_zod4.z.union([
-    import_zod4.z.string().url(),
-    import_zod4.z.object({
-      url: import_zod4.z.string().url(),
-      email: import_zod4.z.string().email().optional()
-    })
-  ]).optional(),
-  // ===== COMPATIBILITY =====
-  /** Version compatibility requirements */
-  compatibility: CompatibilitySchema,
-  /** Dependencies (other plugins required) */
-  requires: import_zod4.z.record(import_zod4.z.string()).optional(),
-  /** Peer dependencies */
-  peerDependencies: import_zod4.z.record(import_zod4.z.string()).optional(),
-  // ===== CAPABILITIES =====
-  /** Modern capability flags (preferred over functionality object) */
-  capabilities: import_zod4.z.array(PluginCapabilityEnum).default([]),
-  /** @deprecated Legacy functionality flags */
-  functionality: FunctionalitySchema.optional(),
-  // ===== TECHNICAL DETAILS =====
-  /** Frontend framework used */
-  frontend: FrontendFrameworkEnum.default("REACT").optional(),
-  /** CSS framework used */
-  styling: CSSFrameworkEnum.default("TAILWIND").optional(),
-  /** TypeScript support */
-  typescript: import_zod4.z.boolean().default(true).optional(),
-  // ===== HOOKS & EXTENSIONS =====
-  /** Hook registrations */
-  hooks: import_zod4.z.array(HookConfigSchema).default([]).optional(),
-  /** API routes provided */
-  apiRoutes: import_zod4.z.array(APIRouteSchema).default([]).optional(),
-  /** UI components provided */
-  components: import_zod4.z.array(UIComponentSchema).default([]).optional(),
-  /** Database models/tables */
-  models: import_zod4.z.array(DatabaseModelSchema).default([]).optional(),
-  // ===== CONFIGURATION =====
-  /** Configuration schema for the plugin */
-  configSchema: import_zod4.z.array(ConfigSchemaSchema).default([]).optional(),
-  /** Default configuration values */
-  defaultConfig: import_zod4.z.record(import_zod4.z.unknown()).default({}).optional(),
-  /** Provider configuration (for LLM/service provider plugins) */
-  providerConfig: ProviderConfigSchema.optional(),
-  /** Auth provider configuration (for authentication provider plugins) */
-  authProviderConfig: AuthProviderConfigSchema.optional(),
-  // ===== SECURITY & PERMISSIONS =====
-  /** Permissions required by the plugin */
-  permissions: PermissionsSchema.default({}).optional(),
-  /** Whether the plugin is sandboxed */
-  sandboxed: import_zod4.z.boolean().default(true).optional(),
-  // ===== METADATA =====
-  /** Keywords for search/discovery */
-  keywords: import_zod4.z.array(import_zod4.z.string()).default([]),
-  /** Icon file path (relative to plugin root) */
-  icon: import_zod4.z.string().optional(),
-  /** Screenshots (URLs or file paths) */
-  screenshots: import_zod4.z.array(import_zod4.z.string()).default([]).optional(),
-  /** Plugin category */
-  category: import_zod4.z.enum([
-    "PROVIDER",
-    "THEME",
-    "INTEGRATION",
-    "UTILITY",
-    "ENHANCEMENT",
-    "DATABASE",
-    "STORAGE",
-    "AUTHENTICATION",
-    "OTHER"
-  ]).default("OTHER").optional(),
-  /** Whether the plugin is enabled by default */
-  enabledByDefault: import_zod4.z.boolean().default(false).optional(),
-  /** Plugin status */
-  status: import_zod4.z.enum(["STABLE", "BETA", "ALPHA", "DEPRECATED"]).default("STABLE").optional()
-}).strict();
-
-// lib/json-store/schemas/types.ts
-var ProviderEnum = import_zod5.z.string().min(1, "Provider is required");
-var ImageProviderEnum = import_zod5.z.string().min(1, "Image provider is required");
-var EmbeddingProfileProviderEnum = import_zod5.z.enum(["OPENAI", "OLLAMA"]);
-var RoleEnum = import_zod5.z.enum(["SYSTEM", "USER", "ASSISTANT", "TOOL"]);
-var ImageTagTypeEnum = import_zod5.z.enum(["CHARACTER", "PERSONA", "CHAT", "THEME"]);
-var AvatarDisplayModeEnum = import_zod5.z.enum(["ALWAYS", "GROUP_ONLY", "NEVER"]);
-var UUIDSchema = import_zod5.z.string().uuid();
-var TimestampSchema = import_zod5.z.string().datetime().or(import_zod5.z.date()).transform((d4) => {
+var ProviderEnum = import_zod4.z.string().min(1, "Provider is required");
+var ImageProviderEnum = import_zod4.z.string().min(1, "Image provider is required");
+var EmbeddingProfileProviderEnum = import_zod4.z.enum(["OPENAI", "OLLAMA"]);
+var RoleEnum = import_zod4.z.enum(["SYSTEM", "USER", "ASSISTANT", "TOOL"]);
+var ImageTagTypeEnum = import_zod4.z.enum(["CHARACTER", "PERSONA", "CHAT", "THEME"]);
+var AvatarDisplayModeEnum = import_zod4.z.enum(["ALWAYS", "GROUP_ONLY", "NEVER"]);
+var UUIDSchema = import_zod4.z.string().uuid();
+var TimestampSchema = import_zod4.z.string().datetime().or(import_zod4.z.date()).transform((d4) => {
   if (d4 instanceof Date) return d4.toISOString();
   return d4;
 });
-var JsonSchema = import_zod5.z.record(import_zod5.z.unknown());
-var EncryptedFieldSchema = import_zod5.z.object({
-  ciphertext: import_zod5.z.string(),
-  iv: import_zod5.z.string(),
-  authTag: import_zod5.z.string()
+var JsonSchema = import_zod4.z.record(import_zod4.z.unknown());
+var EncryptedFieldSchema = import_zod4.z.object({
+  ciphertext: import_zod4.z.string(),
+  iv: import_zod4.z.string(),
+  authTag: import_zod4.z.string()
 });
 var TOTPSecretSchema = EncryptedFieldSchema.extend({
-  enabled: import_zod5.z.boolean().default(false),
+  enabled: import_zod4.z.boolean().default(false),
   verifiedAt: TimestampSchema.nullable().optional()
 });
-var BackupCodesSchema = import_zod5.z.object({
-  ciphertext: import_zod5.z.string(),
-  iv: import_zod5.z.string(),
-  authTag: import_zod5.z.string(),
+var BackupCodesSchema = import_zod4.z.object({
+  ciphertext: import_zod4.z.string(),
+  iv: import_zod4.z.string(),
+  authTag: import_zod4.z.string(),
   createdAt: TimestampSchema
 });
-var UserSchema = import_zod5.z.object({
+var UserSchema = import_zod4.z.object({
   id: UUIDSchema,
-  email: import_zod5.z.string().email(),
-  name: import_zod5.z.string().nullable().optional(),
-  image: import_zod5.z.string().nullable().optional(),
+  email: import_zod4.z.string().email(),
+  name: import_zod4.z.string().nullable().optional(),
+  image: import_zod4.z.string().nullable().optional(),
   emailVerified: TimestampSchema.nullable().optional(),
   // Password authentication
-  passwordHash: import_zod5.z.string().nullable().optional(),
+  passwordHash: import_zod4.z.string().nullable().optional(),
   // TOTP 2FA
   totp: TOTPSecretSchema.optional(),
   backupCodes: BackupCodesSchema.optional(),
@@ -65447,20 +65105,20 @@ var UserSchema = import_zod5.z.object({
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var HexColorSchema = import_zod5.z.string().regex(/^#(?:[0-9a-fA-F]{3}){1,2}$/);
-var TagVisualStyleSchema = import_zod5.z.object({
-  emoji: import_zod5.z.string().max(8).optional().nullable(),
+var HexColorSchema = import_zod4.z.string().regex(/^#(?:[0-9a-fA-F]{3}){1,2}$/);
+var TagVisualStyleSchema = import_zod4.z.object({
+  emoji: import_zod4.z.string().max(8).optional().nullable(),
   foregroundColor: HexColorSchema.default("#1f2937"),
   backgroundColor: HexColorSchema.default("#e5e7eb"),
-  emojiOnly: import_zod5.z.boolean().default(false),
-  bold: import_zod5.z.boolean().default(false),
-  italic: import_zod5.z.boolean().default(false),
-  strikethrough: import_zod5.z.boolean().default(false)
+  emojiOnly: import_zod4.z.boolean().default(false),
+  bold: import_zod4.z.boolean().default(false),
+  italic: import_zod4.z.boolean().default(false),
+  strikethrough: import_zod4.z.boolean().default(false)
 });
-var TagStyleMapSchema = import_zod5.z.record(TagVisualStyleSchema).default({});
-var CheapLLMStrategyEnum = import_zod5.z.enum(["USER_DEFINED", "PROVIDER_CHEAPEST", "LOCAL_FIRST"]);
-var EmbeddingProviderEnum = import_zod5.z.enum(["SAME_PROVIDER", "OPENAI", "LOCAL"]);
-var CheapLLMSettingsSchema = import_zod5.z.object({
+var TagStyleMapSchema = import_zod4.z.record(TagVisualStyleSchema).default({});
+var CheapLLMStrategyEnum = import_zod4.z.enum(["USER_DEFINED", "PROVIDER_CHEAPEST", "LOCAL_FIRST"]);
+var EmbeddingProviderEnum = import_zod4.z.enum(["SAME_PROVIDER", "OPENAI", "LOCAL"]);
+var CheapLLMSettingsSchema = import_zod4.z.object({
   /** Strategy for selecting the cheap LLM provider */
   strategy: CheapLLMStrategyEnum.default("PROVIDER_CHEAPEST"),
   /** If USER_DEFINED, which connection profile to use */
@@ -65468,17 +65126,17 @@ var CheapLLMSettingsSchema = import_zod5.z.object({
   /** Global default cheap LLM profile - always use this if set */
   defaultCheapProfileId: UUIDSchema.nullable().optional(),
   /** Whether to fall back to local models if available */
-  fallbackToLocal: import_zod5.z.boolean().default(true),
+  fallbackToLocal: import_zod4.z.boolean().default(true),
   /** Provider for generating embeddings */
   embeddingProvider: EmbeddingProviderEnum.default("OPENAI"),
   /** Embedding profile ID to use for text embeddings */
   embeddingProfileId: UUIDSchema.nullable().optional()
 });
-var ChatSettingsSchema = import_zod5.z.object({
+var ChatSettingsSchema = import_zod4.z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
   avatarDisplayMode: AvatarDisplayModeEnum.default("ALWAYS"),
-  avatarDisplayStyle: import_zod5.z.string().default("CIRCULAR"),
+  avatarDisplayStyle: import_zod4.z.string().default("CIRCULAR"),
   tagStyles: TagStyleMapSchema,
   /** Cheap LLM settings for memory extraction and summarization */
   cheapLLMSettings: CheapLLMSettingsSchema.default({
@@ -65491,147 +65149,147 @@ var ChatSettingsSchema = import_zod5.z.object({
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var AccountSchema = import_zod5.z.object({
+var AccountSchema = import_zod4.z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
-  type: import_zod5.z.string(),
-  provider: import_zod5.z.string(),
-  providerAccountId: import_zod5.z.string(),
-  refresh_token: import_zod5.z.string().nullable().optional(),
-  access_token: import_zod5.z.string().nullable().optional(),
-  expires_at: import_zod5.z.number().nullable().optional(),
-  token_type: import_zod5.z.string().nullable().optional(),
-  scope: import_zod5.z.string().nullable().optional(),
-  id_token: import_zod5.z.string().nullable().optional(),
-  session_state: import_zod5.z.string().nullable().optional()
+  type: import_zod4.z.string(),
+  provider: import_zod4.z.string(),
+  providerAccountId: import_zod4.z.string(),
+  refresh_token: import_zod4.z.string().nullable().optional(),
+  access_token: import_zod4.z.string().nullable().optional(),
+  expires_at: import_zod4.z.number().nullable().optional(),
+  token_type: import_zod4.z.string().nullable().optional(),
+  scope: import_zod4.z.string().nullable().optional(),
+  id_token: import_zod4.z.string().nullable().optional(),
+  session_state: import_zod4.z.string().nullable().optional()
 });
-var SessionSchema = import_zod5.z.object({
+var SessionSchema = import_zod4.z.object({
   id: UUIDSchema,
-  sessionToken: import_zod5.z.string(),
+  sessionToken: import_zod4.z.string(),
   userId: UUIDSchema,
   expires: TimestampSchema
 });
-var VerificationTokenSchema = import_zod5.z.object({
-  identifier: import_zod5.z.string(),
-  token: import_zod5.z.string(),
+var VerificationTokenSchema = import_zod4.z.object({
+  identifier: import_zod4.z.string(),
+  token: import_zod4.z.string(),
   expires: TimestampSchema
 });
-var ApiKeySchema = import_zod5.z.object({
+var ApiKeySchema = import_zod4.z.object({
   id: UUIDSchema,
-  label: import_zod5.z.string(),
+  label: import_zod4.z.string(),
   provider: ProviderEnum,
-  ciphertext: import_zod5.z.string(),
-  iv: import_zod5.z.string(),
-  authTag: import_zod5.z.string(),
-  isActive: import_zod5.z.boolean().default(true),
+  ciphertext: import_zod4.z.string(),
+  iv: import_zod4.z.string(),
+  authTag: import_zod4.z.string(),
+  isActive: import_zod4.z.boolean().default(true),
   lastUsed: TimestampSchema.nullable().optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var ConnectionProfileSchema = import_zod5.z.object({
+var ConnectionProfileSchema = import_zod4.z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
-  name: import_zod5.z.string(),
+  name: import_zod4.z.string(),
   provider: ProviderEnum,
   apiKeyId: UUIDSchema.nullable().optional(),
-  baseUrl: import_zod5.z.string().nullable().optional(),
-  modelName: import_zod5.z.string(),
+  baseUrl: import_zod4.z.string().nullable().optional(),
+  modelName: import_zod4.z.string(),
   parameters: JsonSchema.default({}),
-  isDefault: import_zod5.z.boolean().default(false),
+  isDefault: import_zod4.z.boolean().default(false),
   /** Whether this profile is suitable for use as a "cheap" LLM (low-cost tasks) */
-  isCheap: import_zod5.z.boolean().default(false),
+  isCheap: import_zod4.z.boolean().default(false),
   /** Whether web search is allowed for this profile (only if provider supports it) */
-  allowWebSearch: import_zod5.z.boolean().default(false),
-  tags: import_zod5.z.array(UUIDSchema).default([]),
+  allowWebSearch: import_zod4.z.boolean().default(false),
+  tags: import_zod4.z.array(UUIDSchema).default([]),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var PhysicalDescriptionSchema = import_zod5.z.object({
+var PhysicalDescriptionSchema = import_zod4.z.object({
   id: UUIDSchema,
-  name: import_zod5.z.string().min(1),
-  shortPrompt: import_zod5.z.string().max(350).nullable().optional(),
-  mediumPrompt: import_zod5.z.string().max(500).nullable().optional(),
-  longPrompt: import_zod5.z.string().max(750).nullable().optional(),
-  completePrompt: import_zod5.z.string().max(1e3).nullable().optional(),
-  fullDescription: import_zod5.z.string().nullable().optional(),
+  name: import_zod4.z.string().min(1),
+  shortPrompt: import_zod4.z.string().max(350).nullable().optional(),
+  mediumPrompt: import_zod4.z.string().max(500).nullable().optional(),
+  longPrompt: import_zod4.z.string().max(750).nullable().optional(),
+  completePrompt: import_zod4.z.string().max(1e3).nullable().optional(),
+  fullDescription: import_zod4.z.string().nullable().optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var CharacterSchema = import_zod5.z.object({
+var CharacterSchema = import_zod4.z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
-  name: import_zod5.z.string(),
-  title: import_zod5.z.string().nullable().optional(),
-  description: import_zod5.z.string().nullable().optional(),
-  personality: import_zod5.z.string().nullable().optional(),
-  scenario: import_zod5.z.string().nullable().optional(),
-  firstMessage: import_zod5.z.string().nullable().optional(),
-  exampleDialogues: import_zod5.z.string().nullable().optional(),
-  systemPrompt: import_zod5.z.string().nullable().optional(),
-  avatarUrl: import_zod5.z.string().nullable().optional(),
+  name: import_zod4.z.string(),
+  title: import_zod4.z.string().nullable().optional(),
+  description: import_zod4.z.string().nullable().optional(),
+  personality: import_zod4.z.string().nullable().optional(),
+  scenario: import_zod4.z.string().nullable().optional(),
+  firstMessage: import_zod4.z.string().nullable().optional(),
+  exampleDialogues: import_zod4.z.string().nullable().optional(),
+  systemPrompt: import_zod4.z.string().nullable().optional(),
+  avatarUrl: import_zod4.z.string().nullable().optional(),
   defaultImageId: UUIDSchema.nullable().optional(),
   defaultConnectionProfileId: UUIDSchema.nullable().optional(),
   sillyTavernData: JsonSchema.nullable().optional(),
-  isFavorite: import_zod5.z.boolean().default(false),
+  isFavorite: import_zod4.z.boolean().default(false),
   // Relationships
-  personaLinks: import_zod5.z.array(import_zod5.z.object({
+  personaLinks: import_zod4.z.array(import_zod4.z.object({
     personaId: UUIDSchema,
-    isDefault: import_zod5.z.boolean()
+    isDefault: import_zod4.z.boolean()
   })).default([]),
-  tags: import_zod5.z.array(UUIDSchema).default([]),
-  avatarOverrides: import_zod5.z.array(import_zod5.z.object({
+  tags: import_zod4.z.array(UUIDSchema).default([]),
+  avatarOverrides: import_zod4.z.array(import_zod4.z.object({
     chatId: UUIDSchema,
     imageId: UUIDSchema
   })).default([]),
-  physicalDescriptions: import_zod5.z.array(PhysicalDescriptionSchema).default([]),
+  physicalDescriptions: import_zod4.z.array(PhysicalDescriptionSchema).default([]),
   // Timestamps
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var PersonaSchema = import_zod5.z.object({
+var PersonaSchema = import_zod4.z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
-  name: import_zod5.z.string(),
-  title: import_zod5.z.string().nullable().optional(),
-  description: import_zod5.z.string(),
-  personalityTraits: import_zod5.z.string().nullable().optional(),
-  avatarUrl: import_zod5.z.string().nullable().optional(),
+  name: import_zod4.z.string(),
+  title: import_zod4.z.string().nullable().optional(),
+  description: import_zod4.z.string(),
+  personalityTraits: import_zod4.z.string().nullable().optional(),
+  avatarUrl: import_zod4.z.string().nullable().optional(),
   defaultImageId: UUIDSchema.nullable().optional(),
   sillyTavernData: JsonSchema.nullable().optional(),
   // Relationships
-  characterLinks: import_zod5.z.array(UUIDSchema).default([]),
-  tags: import_zod5.z.array(UUIDSchema).default([]),
-  physicalDescriptions: import_zod5.z.array(PhysicalDescriptionSchema).default([]),
+  characterLinks: import_zod4.z.array(UUIDSchema).default([]),
+  tags: import_zod4.z.array(UUIDSchema).default([]),
+  physicalDescriptions: import_zod4.z.array(PhysicalDescriptionSchema).default([]),
   // Timestamps
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var MessageEventSchema = import_zod5.z.object({
-  type: import_zod5.z.literal("message"),
+var MessageEventSchema = import_zod4.z.object({
+  type: import_zod4.z.literal("message"),
   id: UUIDSchema,
   role: RoleEnum,
-  content: import_zod5.z.string(),
+  content: import_zod4.z.string(),
   rawResponse: JsonSchema.nullable().optional(),
-  tokenCount: import_zod5.z.number().nullable().optional(),
-  swipeGroupId: import_zod5.z.string().nullable().optional(),
-  swipeIndex: import_zod5.z.number().nullable().optional(),
-  attachments: import_zod5.z.array(UUIDSchema).default([]),
+  tokenCount: import_zod4.z.number().nullable().optional(),
+  swipeGroupId: import_zod4.z.string().nullable().optional(),
+  swipeIndex: import_zod4.z.number().nullable().optional(),
+  attachments: import_zod4.z.array(UUIDSchema).default([]),
   createdAt: TimestampSchema,
   // Debug: Memory extraction logs (Sprint 6)
-  debugMemoryLogs: import_zod5.z.array(import_zod5.z.string()).optional()
+  debugMemoryLogs: import_zod4.z.array(import_zod4.z.string()).optional()
 });
-var ContextSummaryEventSchema = import_zod5.z.object({
-  type: import_zod5.z.literal("context-summary"),
+var ContextSummaryEventSchema = import_zod4.z.object({
+  type: import_zod4.z.literal("context-summary"),
   id: UUIDSchema,
-  context: import_zod5.z.string(),
+  context: import_zod4.z.string(),
   createdAt: TimestampSchema
 });
-var ChatEventSchema = import_zod5.z.union([
+var ChatEventSchema = import_zod4.z.union([
   MessageEventSchema,
   ContextSummaryEventSchema
 ]);
-var ParticipantTypeEnum = import_zod5.z.enum(["CHARACTER", "PERSONA"]);
-var ChatParticipantSchema = import_zod5.z.object({
+var ParticipantTypeEnum = import_zod4.z.enum(["CHARACTER", "PERSONA"]);
+var ChatParticipantSchema = import_zod4.z.object({
   id: UUIDSchema,
   // Participant type and identity
   type: ParticipantTypeEnum,
@@ -65645,12 +65303,12 @@ var ChatParticipantSchema = import_zod5.z.object({
   imageProfileId: UUIDSchema.nullable().optional(),
   // Image generation profile
   // Per-chat customization
-  systemPromptOverride: import_zod5.z.string().nullable().optional(),
+  systemPromptOverride: import_zod4.z.string().nullable().optional(),
   // Custom scenario/context for this chat
   // Display and state
-  displayOrder: import_zod5.z.number().default(0),
+  displayOrder: import_zod4.z.number().default(0),
   // For ordering in UI
-  isActive: import_zod5.z.boolean().default(true),
+  isActive: import_zod4.z.boolean().default(true),
   // Temporarily disable without removing
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
@@ -65674,111 +65332,111 @@ var ChatParticipantSchema = import_zod5.z.object({
   },
   { message: "CHARACTER participants must have a connectionProfileId" }
 );
-var ChatParticipantBaseSchema = import_zod5.z.object({
+var ChatParticipantBaseSchema = import_zod4.z.object({
   id: UUIDSchema,
   type: ParticipantTypeEnum,
   characterId: UUIDSchema.nullable().optional(),
   personaId: UUIDSchema.nullable().optional(),
   connectionProfileId: UUIDSchema.nullable().optional(),
   imageProfileId: UUIDSchema.nullable().optional(),
-  systemPromptOverride: import_zod5.z.string().nullable().optional(),
-  displayOrder: import_zod5.z.number().default(0),
-  isActive: import_zod5.z.boolean().default(true),
+  systemPromptOverride: import_zod4.z.string().nullable().optional(),
+  displayOrder: import_zod4.z.number().default(0),
+  isActive: import_zod4.z.boolean().default(true),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var ChatMetadataSchema = import_zod5.z.object({
+var ChatMetadataSchema = import_zod4.z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
   // Participants array (replaces characterId, personaId, connectionProfileId, imageProfileId)
-  participants: import_zod5.z.array(ChatParticipantBaseSchema).default([]),
-  title: import_zod5.z.string(),
-  contextSummary: import_zod5.z.string().nullable().optional(),
+  participants: import_zod4.z.array(ChatParticipantBaseSchema).default([]),
+  title: import_zod4.z.string(),
+  contextSummary: import_zod4.z.string().nullable().optional(),
   sillyTavernMetadata: JsonSchema.nullable().optional(),
-  tags: import_zod5.z.array(UUIDSchema).default([]),
-  messageCount: import_zod5.z.number().default(0),
+  tags: import_zod4.z.array(UUIDSchema).default([]),
+  messageCount: import_zod4.z.number().default(0),
   lastMessageAt: TimestampSchema.nullable().optional(),
-  lastRenameCheckInterchange: import_zod5.z.number().default(0),
+  lastRenameCheckInterchange: import_zod4.z.number().default(0),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 }).refine(
   (data2) => data2.participants.length > 0,
   { message: "Chat must have at least one participant" }
 );
-var ChatMetadataBaseSchema = import_zod5.z.object({
+var ChatMetadataBaseSchema = import_zod4.z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
-  participants: import_zod5.z.array(ChatParticipantBaseSchema).default([]),
-  title: import_zod5.z.string(),
-  contextSummary: import_zod5.z.string().nullable().optional(),
+  participants: import_zod4.z.array(ChatParticipantBaseSchema).default([]),
+  title: import_zod4.z.string(),
+  contextSummary: import_zod4.z.string().nullable().optional(),
   sillyTavernMetadata: JsonSchema.nullable().optional(),
-  tags: import_zod5.z.array(UUIDSchema).default([]),
-  messageCount: import_zod5.z.number().default(0),
+  tags: import_zod4.z.array(UUIDSchema).default([]),
+  messageCount: import_zod4.z.number().default(0),
   lastMessageAt: TimestampSchema.nullable().optional(),
-  lastRenameCheckInterchange: import_zod5.z.number().default(0),
+  lastRenameCheckInterchange: import_zod4.z.number().default(0),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var ChatMetadataLegacySchema = import_zod5.z.object({
+var ChatMetadataLegacySchema = import_zod4.z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
   characterId: UUIDSchema,
   personaId: UUIDSchema.nullable().optional(),
   connectionProfileId: UUIDSchema,
   imageProfileId: UUIDSchema.nullable().optional(),
-  title: import_zod5.z.string(),
-  contextSummary: import_zod5.z.string().nullable().optional(),
+  title: import_zod4.z.string(),
+  contextSummary: import_zod4.z.string().nullable().optional(),
   sillyTavernMetadata: JsonSchema.nullable().optional(),
-  tags: import_zod5.z.array(UUIDSchema).default([]),
-  messageCount: import_zod5.z.number().default(0),
+  tags: import_zod4.z.array(UUIDSchema).default([]),
+  messageCount: import_zod4.z.number().default(0),
   lastMessageAt: TimestampSchema.nullable().optional(),
-  lastRenameCheckInterchange: import_zod5.z.number().default(0),
+  lastRenameCheckInterchange: import_zod4.z.number().default(0),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var BinaryIndexEntrySchema = import_zod5.z.object({
+var BinaryIndexEntrySchema = import_zod4.z.object({
   id: UUIDSchema,
-  sha256: import_zod5.z.string().length(64),
-  type: import_zod5.z.enum(["image", "chat_file", "avatar"]),
+  sha256: import_zod4.z.string().length(64),
+  type: import_zod4.z.enum(["image", "chat_file", "avatar"]),
   userId: UUIDSchema,
-  filename: import_zod5.z.string(),
-  relativePath: import_zod5.z.string(),
-  mimeType: import_zod5.z.string(),
-  size: import_zod5.z.number(),
-  width: import_zod5.z.number().nullable().optional(),
-  height: import_zod5.z.number().nullable().optional(),
-  source: import_zod5.z.enum(["upload", "import", "generated"]).default("upload"),
-  generationPrompt: import_zod5.z.string().nullable().optional(),
-  generationModel: import_zod5.z.string().nullable().optional(),
+  filename: import_zod4.z.string(),
+  relativePath: import_zod4.z.string(),
+  mimeType: import_zod4.z.string(),
+  size: import_zod4.z.number(),
+  width: import_zod4.z.number().nullable().optional(),
+  height: import_zod4.z.number().nullable().optional(),
+  source: import_zod4.z.enum(["upload", "import", "generated"]).default("upload"),
+  generationPrompt: import_zod4.z.string().nullable().optional(),
+  generationModel: import_zod4.z.string().nullable().optional(),
   chatId: UUIDSchema.nullable().optional(),
   characterId: UUIDSchema.nullable().optional(),
   // For avatar overrides
   messageId: UUIDSchema.nullable().optional(),
-  tags: import_zod5.z.array(UUIDSchema).default([]),
+  tags: import_zod4.z.array(UUIDSchema).default([]),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var FileSourceEnum = import_zod5.z.enum(["UPLOADED", "GENERATED", "IMPORTED", "SYSTEM"]);
-var FileCategoryEnum = import_zod5.z.enum(["IMAGE", "DOCUMENT", "AVATAR", "ATTACHMENT", "EXPORT"]);
-var FileEntrySchema = import_zod5.z.object({
+var FileSourceEnum = import_zod4.z.enum(["UPLOADED", "GENERATED", "IMPORTED", "SYSTEM"]);
+var FileCategoryEnum = import_zod4.z.enum(["IMAGE", "DOCUMENT", "AVATAR", "ATTACHMENT", "EXPORT"]);
+var FileEntrySchema = import_zod4.z.object({
   // Identity & Storage
   id: UUIDSchema,
   // File UUID (also the base filename in storage)
   userId: UUIDSchema,
   // Owner of the file
-  sha256: import_zod5.z.string().length(64),
+  sha256: import_zod4.z.string().length(64),
   // Content hash for deduplication
-  originalFilename: import_zod5.z.string(),
+  originalFilename: import_zod4.z.string(),
   // Original filename from upload/generation
-  mimeType: import_zod5.z.string(),
+  mimeType: import_zod4.z.string(),
   // Specific MIME type
-  size: import_zod5.z.number(),
+  size: import_zod4.z.number(),
   // File size in bytes
   // Image metadata (if applicable)
-  width: import_zod5.z.number().nullable().optional(),
-  height: import_zod5.z.number().nullable().optional(),
+  width: import_zod4.z.number().nullable().optional(),
+  height: import_zod4.z.number().nullable().optional(),
   // Linking - array of IDs this file is associated with
-  linkedTo: import_zod5.z.array(UUIDSchema).default([]),
+  linkedTo: import_zod4.z.array(UUIDSchema).default([]),
   // messageId, chatId, characterId, personaId, etc.
   // Classification
   source: FileSourceEnum,
@@ -65786,117 +65444,97 @@ var FileEntrySchema = import_zod5.z.object({
   category: FileCategoryEnum,
   // What type of file it is
   // Generation metadata (for AI-generated files)
-  generationPrompt: import_zod5.z.string().nullable().optional(),
-  generationModel: import_zod5.z.string().nullable().optional(),
-  generationRevisedPrompt: import_zod5.z.string().nullable().optional(),
-  description: import_zod5.z.string().nullable().optional(),
+  generationPrompt: import_zod4.z.string().nullable().optional(),
+  generationModel: import_zod4.z.string().nullable().optional(),
+  generationRevisedPrompt: import_zod4.z.string().nullable().optional(),
+  description: import_zod4.z.string().nullable().optional(),
   // AI description or user-provided description
   // Tags
-  tags: import_zod5.z.array(UUIDSchema).default([]),
+  tags: import_zod4.z.array(UUIDSchema).default([]),
   // S3 storage reference (Phase 3: MongoDB + S3 migration)
-  s3Key: import_zod5.z.string().nullable().optional(),
+  s3Key: import_zod4.z.string().nullable().optional(),
   // Full S3 object key
-  s3Bucket: import_zod5.z.string().nullable().optional(),
+  s3Bucket: import_zod4.z.string().nullable().optional(),
   // S3 bucket name
   // Timestamps
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var TagSchema = import_zod5.z.object({
+var TagSchema = import_zod4.z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
-  name: import_zod5.z.string(),
-  nameLower: import_zod5.z.string(),
-  quickHide: import_zod5.z.boolean().default(false),
+  name: import_zod4.z.string(),
+  nameLower: import_zod4.z.string(),
+  quickHide: import_zod4.z.boolean().default(false),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var ImageProfileSchema = import_zod5.z.object({
+var TagsFileSchema = import_zod4.z.object({
+  version: import_zod4.z.number().default(1),
+  tags: import_zod4.z.array(TagSchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+});
+var ImageProfileSchema = import_zod4.z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
-  name: import_zod5.z.string(),
+  name: import_zod4.z.string(),
   provider: ImageProviderEnum,
   apiKeyId: UUIDSchema.nullable().optional(),
-  baseUrl: import_zod5.z.string().nullable().optional(),
-  modelName: import_zod5.z.string(),
+  baseUrl: import_zod4.z.string().nullable().optional(),
+  modelName: import_zod4.z.string(),
   parameters: JsonSchema.default({}),
-  isDefault: import_zod5.z.boolean().default(false),
-  tags: import_zod5.z.array(UUIDSchema).default([]),
+  isDefault: import_zod4.z.boolean().default(false),
+  tags: import_zod4.z.array(UUIDSchema).default([]),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var GeneralSettingsSchema = import_zod5.z.object({
-  version: import_zod5.z.number().default(1),
-  user: UserSchema,
-  chatSettings: ChatSettingsSchema,
+var ImageProfilesFileSchema = import_zod4.z.object({
+  version: import_zod4.z.number().default(1),
+  profiles: import_zod4.z.array(ImageProfileSchema).default([]),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var ConnectionProfilesFileSchema = import_zod5.z.object({
-  version: import_zod5.z.number().default(1),
-  apiKeys: import_zod5.z.array(ApiKeySchema).default([]),
-  llmProfiles: import_zod5.z.array(ConnectionProfileSchema).default([]),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema
-});
-var AuthAccountsSchema = import_zod5.z.object({
-  version: import_zod5.z.number().default(1),
-  accounts: import_zod5.z.array(AccountSchema).default([]),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema
-});
-var TagsFileSchema = import_zod5.z.object({
-  version: import_zod5.z.number().default(1),
-  tags: import_zod5.z.array(TagSchema).default([]),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema
-});
-var ImageProfilesFileSchema = import_zod5.z.object({
-  version: import_zod5.z.number().default(1),
-  profiles: import_zod5.z.array(ImageProfileSchema).default([]),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema
-});
-var EmbeddingProfileSchema = import_zod5.z.object({
+var EmbeddingProfileSchema = import_zod4.z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
-  name: import_zod5.z.string(),
+  name: import_zod4.z.string(),
   provider: EmbeddingProfileProviderEnum,
   apiKeyId: UUIDSchema.nullable().optional(),
-  baseUrl: import_zod5.z.string().nullable().optional(),
-  modelName: import_zod5.z.string(),
+  baseUrl: import_zod4.z.string().nullable().optional(),
+  modelName: import_zod4.z.string(),
   /** Embedding dimension size (provider-specific) */
-  dimensions: import_zod5.z.number().nullable().optional(),
-  isDefault: import_zod5.z.boolean().default(false),
-  tags: import_zod5.z.array(UUIDSchema).default([]),
+  dimensions: import_zod4.z.number().nullable().optional(),
+  isDefault: import_zod4.z.boolean().default(false),
+  tags: import_zod4.z.array(UUIDSchema).default([]),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var EmbeddingProfilesFileSchema = import_zod5.z.object({
-  version: import_zod5.z.number().default(1),
-  profiles: import_zod5.z.array(EmbeddingProfileSchema).default([]),
+var EmbeddingProfilesFileSchema = import_zod4.z.object({
+  version: import_zod4.z.number().default(1),
+  profiles: import_zod4.z.array(EmbeddingProfileSchema).default([]),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var MemorySourceEnum = import_zod5.z.enum(["AUTO", "MANUAL"]);
-var MemorySchema = import_zod5.z.object({
+var MemorySourceEnum = import_zod4.z.enum(["AUTO", "MANUAL"]);
+var MemorySchema = import_zod4.z.object({
   id: UUIDSchema,
   characterId: UUIDSchema,
   personaId: UUIDSchema.nullable().optional(),
   // Optional: specific persona interaction
   chatId: UUIDSchema.nullable().optional(),
   // Optional: source chat reference
-  content: import_zod5.z.string(),
+  content: import_zod4.z.string(),
   // The actual memory content
-  summary: import_zod5.z.string(),
+  summary: import_zod4.z.string(),
   // Distilled version for context injection
-  keywords: import_zod5.z.array(import_zod5.z.string()).default([]),
+  keywords: import_zod4.z.array(import_zod4.z.string()).default([]),
   // For text-based search
-  tags: import_zod5.z.array(UUIDSchema).default([]),
+  tags: import_zod4.z.array(UUIDSchema).default([]),
   // Derived from character/persona/chat tags
-  importance: import_zod5.z.number().min(0).max(1).default(0.5),
+  importance: import_zod4.z.number().min(0).max(1).default(0.5),
   // 0-1 scale for prioritization
-  embedding: import_zod5.z.array(import_zod5.z.number()).nullable().optional(),
+  embedding: import_zod4.z.array(import_zod4.z.number()).nullable().optional(),
   // Vector embedding for semantic search
   source: MemorySourceEnum.default("MANUAL"),
   // How it was created
@@ -65907,14 +65545,34 @@ var MemorySchema = import_zod5.z.object({
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var MemoriesFileSchema = import_zod5.z.object({
-  version: import_zod5.z.number().default(1),
-  memories: import_zod5.z.array(MemorySchema).default([]),
+var MemoriesFileSchema = import_zod4.z.object({
+  version: import_zod4.z.number().default(1),
+  memories: import_zod4.z.array(MemorySchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+});
+var GeneralSettingsSchema = import_zod4.z.object({
+  version: import_zod4.z.number().default(1),
+  user: UserSchema,
+  chatSettings: ChatSettingsSchema,
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+});
+var ConnectionProfilesFileSchema = import_zod4.z.object({
+  version: import_zod4.z.number().default(1),
+  apiKeys: import_zod4.z.array(ApiKeySchema).default([]),
+  llmProfiles: import_zod4.z.array(ConnectionProfileSchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+});
+var AuthAccountsSchema = import_zod4.z.object({
+  version: import_zod4.z.number().default(1),
+  accounts: import_zod4.z.array(AccountSchema).default([]),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
 
-// lib/json-store/repositories/connection-profiles.repository.ts
+// plugins/dist/qtap-plugin-upgrade/lib/json-store/repositories/connection-profiles.repository.ts
 var ConnectionProfilesRepository = class extends BaseRepository {
   constructor(jsonStore) {
     super(jsonStore, ConnectionProfileSchema);
@@ -66259,7 +65917,7 @@ var convertOpenRouterProfilesMigration = {
   }
 };
 
-// lib/json-store/repositories/image-profiles.repository.ts
+// plugins/dist/qtap-plugin-upgrade/lib/json-store/repositories/image-profiles.repository.ts
 var ImageProfilesRepository = class extends BaseRepository {
   constructor(jsonStore) {
     super(jsonStore, ImageProfileSchema);
@@ -66446,7 +66104,7 @@ var ImageProfilesRepository = class extends BaseRepository {
   }
 };
 
-// lib/json-store/repositories/embedding-profiles.repository.ts
+// plugins/dist/qtap-plugin-upgrade/lib/json-store/repositories/embedding-profiles.repository.ts
 var EmbeddingProfilesRepository = class extends BaseRepository {
   constructor(jsonStore) {
     super(jsonStore, EmbeddingProfileSchema);
@@ -67093,19 +66751,19 @@ var validateMongoDBConfigMigration = {
 };
 
 // lib/s3/config.ts
-var import_zod6 = require("zod");
+var import_zod5 = require("zod");
 var import_client_s3 = __toESM(require_dist_cjs71());
 init_logger();
-var s3ConfigSchema = import_zod6.z.object({
-  mode: import_zod6.z.enum(["embedded", "external"]),
-  endpoint: import_zod6.z.string().url().optional(),
-  region: import_zod6.z.string().min(1, "S3 region is required"),
-  accessKey: import_zod6.z.string().optional(),
-  secretKey: import_zod6.z.string().optional(),
-  bucket: import_zod6.z.string().min(1, "S3 bucket name is required"),
-  pathPrefix: import_zod6.z.string().optional(),
-  publicUrl: import_zod6.z.string().url().optional(),
-  forcePathStyle: import_zod6.z.boolean()
+var s3ConfigSchema = import_zod5.z.object({
+  mode: import_zod5.z.enum(["embedded", "external"]),
+  endpoint: import_zod5.z.string().url().optional(),
+  region: import_zod5.z.string().min(1, "S3 region is required"),
+  accessKey: import_zod5.z.string().optional(),
+  secretKey: import_zod5.z.string().optional(),
+  bucket: import_zod5.z.string().min(1, "S3 bucket name is required"),
+  pathPrefix: import_zod5.z.string().optional(),
+  publicUrl: import_zod5.z.string().url().optional(),
+  forcePathStyle: import_zod5.z.boolean()
 });
 function sanitizeCredentials(accessKey, secretKey) {
   const maskSecret = () => "****";
@@ -67230,10 +66888,10 @@ function validateS3Config() {
       errors: []
     };
   } catch (error2) {
-    if (error2 instanceof import_zod6.z.ZodError) {
+    if (error2 instanceof import_zod5.z.ZodError) {
       const validationErrors = error2.errors.map((err) => {
-        const path5 = err.path.join(".");
-        return `${path5}: ${err.message}`;
+        const path4 = err.path.join(".");
+        return `${path4}: ${err.message}`;
       });
       errors.push(...validationErrors);
       logger_inst.warn("S3 configuration validation failed with Zod schema", {
@@ -67476,834 +67134,10 @@ var validateS3ConfigMigration = {
   }
 };
 
-// plugins/dist/qtap-plugin-upgrade/lib/json-store/core/json-store.ts
-var fs4 = __toESM(require("fs"));
-var path3 = __toESM(require("path"));
-var import_util2 = require("util");
-var crypto3 = __toESM(require("crypto"));
-var mkdir4 = (0, import_util2.promisify)(fs4.mkdir);
-var readFile4 = (0, import_util2.promisify)(fs4.readFile);
-var writeFile4 = (0, import_util2.promisify)(fs4.writeFile);
-var appendFile4 = (0, import_util2.promisify)(fs4.appendFile);
-var rename4 = (0, import_util2.promisify)(fs4.rename);
-var unlink4 = (0, import_util2.promisify)(fs4.unlink);
-var readdir4 = (0, import_util2.promisify)(fs4.readdir);
-var stat4 = (0, import_util2.promisify)(fs4.stat);
-var JsonStore2 = class {
-  constructor(config = {}) {
-    this.locks = /* @__PURE__ */ new Map();
-    this.cache = /* @__PURE__ */ new Map();
-    this.dataDir = config.dataDir || process.env.DATA_DIR || "./data";
-    this.enableCache = config.enableCache ?? true;
-    this.lockTimeout = config.lockTimeout ?? 5e3;
-    this.fsyncInterval = config.fsyncInterval ?? 10;
-    if (!fs4.existsSync(this.dataDir)) {
-      fs4.mkdirSync(this.dataDir, { recursive: true });
-    }
-  }
-  /**
-   * Get the configured data directory path
-   */
-  getDataDir() {
-    return this.dataDir;
-  }
-  /**
-   * Resolve a relative path within data directory
-   */
-  resolvePath(...segments) {
-    return path3.join(this.dataDir, ...segments);
-  }
-  /**
-   * Ensure a directory exists
-   */
-  async ensureDir(dirPath) {
-    await mkdir4(dirPath, { recursive: true });
-  }
-  /**
-   * Acquire a lock for a file path
-   */
-  async acquireLock(filePath) {
-    const lockPath = `${filePath}.lock`;
-    const lockDir = path3.dirname(lockPath);
-    const startTime = Date.now();
-    await this.ensureDir(lockDir);
-    while (true) {
-      try {
-        const fd = fs4.openSync(lockPath, fs4.constants.O_CREAT | fs4.constants.O_EXCL | fs4.constants.O_WRONLY);
-        fs4.closeSync(fd);
-        return;
-      } catch (error2) {
-        if (error2.code !== "EEXIST") {
-          throw error2;
-        }
-        try {
-          const stats = await stat4(lockPath);
-          if (Date.now() - stats.mtimeMs > 3e4) {
-            await unlink4(lockPath);
-            continue;
-          }
-        } catch {
-          continue;
-        }
-        if (Date.now() - startTime > this.lockTimeout) {
-          throw new Error(`Failed to acquire lock for ${filePath} within ${this.lockTimeout}ms`);
-        }
-        await new Promise((resolve) => setTimeout(resolve, 10));
-      }
-    }
-  }
-  /**
-   * Release a lock for a file path
-   */
-  async releaseLock(filePath) {
-    const lockPath = `${filePath}.lock`;
-    try {
-      await unlink4(lockPath);
-    } catch (error2) {
-      if (error2.code !== "ENOENT") {
-        console.error(`Failed to release lock for ${filePath}:`, error2);
-      }
-    }
-  }
-  /**
-   * Read JSON file with caching
-   */
-  async readJson(filePath) {
-    const fullPath = this.resolvePath(filePath);
-    const cacheKey = fullPath;
-    if (this.enableCache && this.cache.has(cacheKey)) {
-      return this.cache.get(cacheKey);
-    }
-    try {
-      const content = await readFile4(fullPath, "utf-8");
-      const data2 = JSON.parse(content);
-      if (this.enableCache) {
-        this.cache.set(cacheKey, data2);
-      }
-      return data2;
-    } catch (error2) {
-      if (error2.code === "ENOENT") {
-        throw new Error(`File not found: ${filePath}`);
-      }
-      throw new Error(`Failed to read JSON from ${filePath}: ${error2.message}`);
-    }
-  }
-  /**
-   * Write JSON file atomically with locking
-   */
-  async writeJson(filePath, data2) {
-    const fullPath = this.resolvePath(filePath);
-    const dir = path3.dirname(fullPath);
-    await this.ensureDir(dir);
-    await this.acquireLock(fullPath);
-    try {
-      const tempPath = `${fullPath}.tmp.${crypto3.randomBytes(4).toString("hex")}`;
-      const content = JSON.stringify(data2, null, 2);
-      await writeFile4(tempPath, content, "utf-8");
-      await rename4(tempPath, fullPath);
-      if (this.enableCache) {
-        this.cache.delete(fullPath);
-      }
-    } finally {
-      await this.releaseLock(fullPath);
-    }
-  }
-  /**
-   * Read JSONL file line by line
-   */
-  async readJsonl(filePath) {
-    const fullPath = this.resolvePath(filePath);
-    try {
-      const content = await readFile4(fullPath, "utf-8");
-      const lines = content.trim().split("\n").filter((line) => line.length > 0);
-      return lines.map((line) => JSON.parse(line));
-    } catch (error2) {
-      if (error2.code === "ENOENT") {
-        return [];
-      }
-      throw new Error(`Failed to read JSONL from ${filePath}: ${error2.message}`);
-    }
-  }
-  /**
-   * Write raw content to file atomically with locking (for pre-formatted JSONL)
-   */
-  async writeRaw(filePath, content) {
-    const fullPath = this.resolvePath(filePath);
-    const dir = path3.dirname(fullPath);
-    await this.ensureDir(dir);
-    await this.acquireLock(fullPath);
-    try {
-      const tempPath = `${fullPath}.tmp.${crypto3.randomBytes(4).toString("hex")}`;
-      await writeFile4(tempPath, content, "utf-8");
-      await rename4(tempPath, fullPath);
-      if (this.enableCache) {
-        this.cache.delete(fullPath);
-      }
-    } finally {
-      await this.releaseLock(fullPath);
-    }
-  }
-  /**
-   * Write JSONL file atomically (full rewrite for updates/deletes)
-   */
-  async writeJsonl(filePath, items) {
-    const content = items.length > 0 ? items.map((item) => JSON.stringify(item)).join("\n") + "\n" : "";
-    await this.writeRaw(filePath, content);
-  }
-  /**
-   * Append to JSONL file (line-delimited JSON)
-   */
-  async appendJsonl(filePath, items) {
-    const fullPath = this.resolvePath(filePath);
-    const dir = path3.dirname(fullPath);
-    await this.ensureDir(dir);
-    await this.acquireLock(fullPath);
-    try {
-      const lines = items.map((item) => JSON.stringify(item)).join("\n") + "\n";
-      if (fs4.existsSync(fullPath)) {
-        await appendFile4(fullPath, lines, "utf-8");
-      } else {
-        await writeFile4(fullPath, lines, "utf-8");
-      }
-      if (this.enableCache) {
-        this.cache.delete(fullPath);
-      }
-    } finally {
-      await this.releaseLock(fullPath);
-    }
-  }
-  /**
-   * Get file size in bytes
-   */
-  async getFileSize(filePath) {
-    const fullPath = this.resolvePath(filePath);
-    try {
-      const stats = await stat4(fullPath);
-      return stats.size;
-    } catch (error2) {
-      if (error2.code === "ENOENT") {
-        return 0;
-      }
-      throw error2;
-    }
-  }
-  /**
-   * Check if file exists
-   */
-  exists(filePath) {
-    const fullPath = this.resolvePath(filePath);
-    return fs4.existsSync(fullPath);
-  }
-  /**
-   * List files in a directory
-   */
-  async listDir(dirPath) {
-    const fullPath = this.resolvePath(dirPath);
-    try {
-      return await readdir4(fullPath);
-    } catch (error2) {
-      if (error2.code === "ENOENT") {
-        return [];
-      }
-      throw error2;
-    }
-  }
-  /**
-   * Delete a file
-   */
-  async deleteFile(filePath) {
-    const fullPath = this.resolvePath(filePath);
-    try {
-      await unlink4(fullPath);
-      if (this.enableCache) {
-        this.cache.delete(fullPath);
-      }
-    } catch (error2) {
-      if (error2.code !== "ENOENT") {
-        throw error2;
-      }
-    }
-  }
-  /**
-   * Clear in-memory cache
-   */
-  clearCache() {
-    this.cache.clear();
-  }
-  /**
-   * Get cache stats
-   */
-  getCacheStats() {
-    return {
-      size: this.cache.size,
-      enabled: this.enableCache
-    };
-  }
-};
-var instance2 = null;
-function getJsonStore(config) {
-  if (!instance2) {
-    instance2 = new JsonStore2(config);
-  }
-  return instance2;
-}
-
-// plugins/dist/qtap-plugin-upgrade/lib/json-store/repositories/base.repository.ts
-var BaseRepository2 = class {
-  constructor(jsonStore, schema) {
-    this.jsonStore = jsonStore;
-    this.schema = schema;
-  }
-  /**
-   * Validate data against schema
-   */
-  validate(data2) {
-    return this.schema.parse(data2);
-  }
-  /**
-   * Safely validate without throwing
-   */
-  validateSafe(data2) {
-    try {
-      const validated = this.validate(data2);
-      return { success: true, data: validated };
-    } catch (error2) {
-      return { success: false, error: error2.message };
-    }
-  }
-  /**
-   * Generate UUID v4
-   */
-  generateId() {
-    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c4) {
-      const r4 = Math.random() * 16 | 0;
-      const v4 = c4 === "x" ? r4 : r4 & 3 | 8;
-      return v4.toString(16);
-    });
-  }
-  /**
-   * Get current ISO timestamp
-   */
-  getCurrentTimestamp() {
-    return (/* @__PURE__ */ new Date()).toISOString();
-  }
-};
-
-// plugins/dist/qtap-plugin-upgrade/lib/json-store/schemas/types.ts
-var import_zod7 = require("zod");
-var ProviderEnum2 = import_zod7.z.string().min(1, "Provider is required");
-var ImageProviderEnum2 = import_zod7.z.string().min(1, "Image provider is required");
-var EmbeddingProfileProviderEnum2 = import_zod7.z.enum(["OPENAI", "OLLAMA"]);
-var RoleEnum2 = import_zod7.z.enum(["SYSTEM", "USER", "ASSISTANT", "TOOL"]);
-var ImageTagTypeEnum2 = import_zod7.z.enum(["CHARACTER", "PERSONA", "CHAT", "THEME"]);
-var AvatarDisplayModeEnum2 = import_zod7.z.enum(["ALWAYS", "GROUP_ONLY", "NEVER"]);
-var UUIDSchema2 = import_zod7.z.string().uuid();
-var TimestampSchema2 = import_zod7.z.string().datetime().or(import_zod7.z.date()).transform((d4) => {
-  if (d4 instanceof Date) return d4.toISOString();
-  return d4;
-});
-var JsonSchema2 = import_zod7.z.record(import_zod7.z.unknown());
-var EncryptedFieldSchema2 = import_zod7.z.object({
-  ciphertext: import_zod7.z.string(),
-  iv: import_zod7.z.string(),
-  authTag: import_zod7.z.string()
-});
-var TOTPSecretSchema2 = EncryptedFieldSchema2.extend({
-  enabled: import_zod7.z.boolean().default(false),
-  verifiedAt: TimestampSchema2.nullable().optional()
-});
-var BackupCodesSchema2 = import_zod7.z.object({
-  ciphertext: import_zod7.z.string(),
-  iv: import_zod7.z.string(),
-  authTag: import_zod7.z.string(),
-  createdAt: TimestampSchema2
-});
-var UserSchema2 = import_zod7.z.object({
-  id: UUIDSchema2,
-  email: import_zod7.z.string().email(),
-  name: import_zod7.z.string().nullable().optional(),
-  image: import_zod7.z.string().nullable().optional(),
-  emailVerified: TimestampSchema2.nullable().optional(),
-  // Password authentication
-  passwordHash: import_zod7.z.string().nullable().optional(),
-  // TOTP 2FA
-  totp: TOTPSecretSchema2.optional(),
-  backupCodes: BackupCodesSchema2.optional(),
-  // Timestamps
-  createdAt: TimestampSchema2,
-  updatedAt: TimestampSchema2
-});
-var HexColorSchema2 = import_zod7.z.string().regex(/^#(?:[0-9a-fA-F]{3}){1,2}$/);
-var TagVisualStyleSchema2 = import_zod7.z.object({
-  emoji: import_zod7.z.string().max(8).optional().nullable(),
-  foregroundColor: HexColorSchema2.default("#1f2937"),
-  backgroundColor: HexColorSchema2.default("#e5e7eb"),
-  emojiOnly: import_zod7.z.boolean().default(false),
-  bold: import_zod7.z.boolean().default(false),
-  italic: import_zod7.z.boolean().default(false),
-  strikethrough: import_zod7.z.boolean().default(false)
-});
-var TagStyleMapSchema2 = import_zod7.z.record(TagVisualStyleSchema2).default({});
-var CheapLLMStrategyEnum2 = import_zod7.z.enum(["USER_DEFINED", "PROVIDER_CHEAPEST", "LOCAL_FIRST"]);
-var EmbeddingProviderEnum2 = import_zod7.z.enum(["SAME_PROVIDER", "OPENAI", "LOCAL"]);
-var CheapLLMSettingsSchema2 = import_zod7.z.object({
-  /** Strategy for selecting the cheap LLM provider */
-  strategy: CheapLLMStrategyEnum2.default("PROVIDER_CHEAPEST"),
-  /** If USER_DEFINED, which connection profile to use */
-  userDefinedProfileId: UUIDSchema2.nullable().optional(),
-  /** Global default cheap LLM profile - always use this if set */
-  defaultCheapProfileId: UUIDSchema2.nullable().optional(),
-  /** Whether to fall back to local models if available */
-  fallbackToLocal: import_zod7.z.boolean().default(true),
-  /** Provider for generating embeddings */
-  embeddingProvider: EmbeddingProviderEnum2.default("OPENAI"),
-  /** Embedding profile ID to use for text embeddings */
-  embeddingProfileId: UUIDSchema2.nullable().optional()
-});
-var ChatSettingsSchema2 = import_zod7.z.object({
-  id: UUIDSchema2,
-  userId: UUIDSchema2,
-  avatarDisplayMode: AvatarDisplayModeEnum2.default("ALWAYS"),
-  avatarDisplayStyle: import_zod7.z.string().default("CIRCULAR"),
-  tagStyles: TagStyleMapSchema2,
-  /** Cheap LLM settings for memory extraction and summarization */
-  cheapLLMSettings: CheapLLMSettingsSchema2.default({
-    strategy: "PROVIDER_CHEAPEST",
-    fallbackToLocal: true,
-    embeddingProvider: "OPENAI"
-  }),
-  /** Profile ID to use for image description fallback (when provider doesn't support images) */
-  imageDescriptionProfileId: UUIDSchema2.nullable().optional(),
-  createdAt: TimestampSchema2,
-  updatedAt: TimestampSchema2
-});
-var AccountSchema2 = import_zod7.z.object({
-  id: UUIDSchema2,
-  userId: UUIDSchema2,
-  type: import_zod7.z.string(),
-  provider: import_zod7.z.string(),
-  providerAccountId: import_zod7.z.string(),
-  refresh_token: import_zod7.z.string().nullable().optional(),
-  access_token: import_zod7.z.string().nullable().optional(),
-  expires_at: import_zod7.z.number().nullable().optional(),
-  token_type: import_zod7.z.string().nullable().optional(),
-  scope: import_zod7.z.string().nullable().optional(),
-  id_token: import_zod7.z.string().nullable().optional(),
-  session_state: import_zod7.z.string().nullable().optional()
-});
-var SessionSchema2 = import_zod7.z.object({
-  id: UUIDSchema2,
-  sessionToken: import_zod7.z.string(),
-  userId: UUIDSchema2,
-  expires: TimestampSchema2
-});
-var VerificationTokenSchema2 = import_zod7.z.object({
-  identifier: import_zod7.z.string(),
-  token: import_zod7.z.string(),
-  expires: TimestampSchema2
-});
-var ApiKeySchema2 = import_zod7.z.object({
-  id: UUIDSchema2,
-  label: import_zod7.z.string(),
-  provider: ProviderEnum2,
-  ciphertext: import_zod7.z.string(),
-  iv: import_zod7.z.string(),
-  authTag: import_zod7.z.string(),
-  isActive: import_zod7.z.boolean().default(true),
-  lastUsed: TimestampSchema2.nullable().optional(),
-  createdAt: TimestampSchema2,
-  updatedAt: TimestampSchema2
-});
-var ConnectionProfileSchema2 = import_zod7.z.object({
-  id: UUIDSchema2,
-  userId: UUIDSchema2,
-  name: import_zod7.z.string(),
-  provider: ProviderEnum2,
-  apiKeyId: UUIDSchema2.nullable().optional(),
-  baseUrl: import_zod7.z.string().nullable().optional(),
-  modelName: import_zod7.z.string(),
-  parameters: JsonSchema2.default({}),
-  isDefault: import_zod7.z.boolean().default(false),
-  /** Whether this profile is suitable for use as a "cheap" LLM (low-cost tasks) */
-  isCheap: import_zod7.z.boolean().default(false),
-  /** Whether web search is allowed for this profile (only if provider supports it) */
-  allowWebSearch: import_zod7.z.boolean().default(false),
-  tags: import_zod7.z.array(UUIDSchema2).default([]),
-  createdAt: TimestampSchema2,
-  updatedAt: TimestampSchema2
-});
-var PhysicalDescriptionSchema2 = import_zod7.z.object({
-  id: UUIDSchema2,
-  name: import_zod7.z.string().min(1),
-  shortPrompt: import_zod7.z.string().max(350).nullable().optional(),
-  mediumPrompt: import_zod7.z.string().max(500).nullable().optional(),
-  longPrompt: import_zod7.z.string().max(750).nullable().optional(),
-  completePrompt: import_zod7.z.string().max(1e3).nullable().optional(),
-  fullDescription: import_zod7.z.string().nullable().optional(),
-  createdAt: TimestampSchema2,
-  updatedAt: TimestampSchema2
-});
-var CharacterSchema2 = import_zod7.z.object({
-  id: UUIDSchema2,
-  userId: UUIDSchema2,
-  name: import_zod7.z.string(),
-  title: import_zod7.z.string().nullable().optional(),
-  description: import_zod7.z.string().nullable().optional(),
-  personality: import_zod7.z.string().nullable().optional(),
-  scenario: import_zod7.z.string().nullable().optional(),
-  firstMessage: import_zod7.z.string().nullable().optional(),
-  exampleDialogues: import_zod7.z.string().nullable().optional(),
-  systemPrompt: import_zod7.z.string().nullable().optional(),
-  avatarUrl: import_zod7.z.string().nullable().optional(),
-  defaultImageId: UUIDSchema2.nullable().optional(),
-  defaultConnectionProfileId: UUIDSchema2.nullable().optional(),
-  sillyTavernData: JsonSchema2.nullable().optional(),
-  isFavorite: import_zod7.z.boolean().default(false),
-  // Relationships
-  personaLinks: import_zod7.z.array(import_zod7.z.object({
-    personaId: UUIDSchema2,
-    isDefault: import_zod7.z.boolean()
-  })).default([]),
-  tags: import_zod7.z.array(UUIDSchema2).default([]),
-  avatarOverrides: import_zod7.z.array(import_zod7.z.object({
-    chatId: UUIDSchema2,
-    imageId: UUIDSchema2
-  })).default([]),
-  physicalDescriptions: import_zod7.z.array(PhysicalDescriptionSchema2).default([]),
-  // Timestamps
-  createdAt: TimestampSchema2,
-  updatedAt: TimestampSchema2
-});
-var PersonaSchema2 = import_zod7.z.object({
-  id: UUIDSchema2,
-  userId: UUIDSchema2,
-  name: import_zod7.z.string(),
-  title: import_zod7.z.string().nullable().optional(),
-  description: import_zod7.z.string(),
-  personalityTraits: import_zod7.z.string().nullable().optional(),
-  avatarUrl: import_zod7.z.string().nullable().optional(),
-  defaultImageId: UUIDSchema2.nullable().optional(),
-  sillyTavernData: JsonSchema2.nullable().optional(),
-  // Relationships
-  characterLinks: import_zod7.z.array(UUIDSchema2).default([]),
-  tags: import_zod7.z.array(UUIDSchema2).default([]),
-  physicalDescriptions: import_zod7.z.array(PhysicalDescriptionSchema2).default([]),
-  // Timestamps
-  createdAt: TimestampSchema2,
-  updatedAt: TimestampSchema2
-});
-var MessageEventSchema2 = import_zod7.z.object({
-  type: import_zod7.z.literal("message"),
-  id: UUIDSchema2,
-  role: RoleEnum2,
-  content: import_zod7.z.string(),
-  rawResponse: JsonSchema2.nullable().optional(),
-  tokenCount: import_zod7.z.number().nullable().optional(),
-  swipeGroupId: import_zod7.z.string().nullable().optional(),
-  swipeIndex: import_zod7.z.number().nullable().optional(),
-  attachments: import_zod7.z.array(UUIDSchema2).default([]),
-  createdAt: TimestampSchema2,
-  // Debug: Memory extraction logs (Sprint 6)
-  debugMemoryLogs: import_zod7.z.array(import_zod7.z.string()).optional()
-});
-var ContextSummaryEventSchema2 = import_zod7.z.object({
-  type: import_zod7.z.literal("context-summary"),
-  id: UUIDSchema2,
-  context: import_zod7.z.string(),
-  createdAt: TimestampSchema2
-});
-var ChatEventSchema2 = import_zod7.z.union([
-  MessageEventSchema2,
-  ContextSummaryEventSchema2
-]);
-var ParticipantTypeEnum2 = import_zod7.z.enum(["CHARACTER", "PERSONA"]);
-var ChatParticipantSchema2 = import_zod7.z.object({
-  id: UUIDSchema2,
-  // Participant type and identity
-  type: ParticipantTypeEnum2,
-  characterId: UUIDSchema2.nullable().optional(),
-  // Set when type is CHARACTER
-  personaId: UUIDSchema2.nullable().optional(),
-  // Set when type is PERSONA
-  // LLM configuration (for AI characters only)
-  connectionProfileId: UUIDSchema2.nullable().optional(),
-  // Required for CHARACTER, null for PERSONA
-  imageProfileId: UUIDSchema2.nullable().optional(),
-  // Image generation profile
-  // Per-chat customization
-  systemPromptOverride: import_zod7.z.string().nullable().optional(),
-  // Custom scenario/context for this chat
-  // Display and state
-  displayOrder: import_zod7.z.number().default(0),
-  // For ordering in UI
-  isActive: import_zod7.z.boolean().default(true),
-  // Temporarily disable without removing
-  createdAt: TimestampSchema2,
-  updatedAt: TimestampSchema2
-}).refine(
-  (data2) => {
-    if (data2.type === "CHARACTER") {
-      return data2.characterId != null;
-    }
-    if (data2.type === "PERSONA") {
-      return data2.personaId != null;
-    }
-    return false;
-  },
-  { message: "CHARACTER participants must have characterId, PERSONA participants must have personaId" }
-).refine(
-  (data2) => {
-    if (data2.type === "CHARACTER") {
-      return data2.connectionProfileId != null;
-    }
-    return true;
-  },
-  { message: "CHARACTER participants must have a connectionProfileId" }
-);
-var ChatParticipantBaseSchema2 = import_zod7.z.object({
-  id: UUIDSchema2,
-  type: ParticipantTypeEnum2,
-  characterId: UUIDSchema2.nullable().optional(),
-  personaId: UUIDSchema2.nullable().optional(),
-  connectionProfileId: UUIDSchema2.nullable().optional(),
-  imageProfileId: UUIDSchema2.nullable().optional(),
-  systemPromptOverride: import_zod7.z.string().nullable().optional(),
-  displayOrder: import_zod7.z.number().default(0),
-  isActive: import_zod7.z.boolean().default(true),
-  createdAt: TimestampSchema2,
-  updatedAt: TimestampSchema2
-});
-var ChatMetadataSchema2 = import_zod7.z.object({
-  id: UUIDSchema2,
-  userId: UUIDSchema2,
-  // Participants array (replaces characterId, personaId, connectionProfileId, imageProfileId)
-  participants: import_zod7.z.array(ChatParticipantBaseSchema2).default([]),
-  title: import_zod7.z.string(),
-  contextSummary: import_zod7.z.string().nullable().optional(),
-  sillyTavernMetadata: JsonSchema2.nullable().optional(),
-  tags: import_zod7.z.array(UUIDSchema2).default([]),
-  messageCount: import_zod7.z.number().default(0),
-  lastMessageAt: TimestampSchema2.nullable().optional(),
-  lastRenameCheckInterchange: import_zod7.z.number().default(0),
-  createdAt: TimestampSchema2,
-  updatedAt: TimestampSchema2
-}).refine(
-  (data2) => data2.participants.length > 0,
-  { message: "Chat must have at least one participant" }
-);
-var ChatMetadataBaseSchema2 = import_zod7.z.object({
-  id: UUIDSchema2,
-  userId: UUIDSchema2,
-  participants: import_zod7.z.array(ChatParticipantBaseSchema2).default([]),
-  title: import_zod7.z.string(),
-  contextSummary: import_zod7.z.string().nullable().optional(),
-  sillyTavernMetadata: JsonSchema2.nullable().optional(),
-  tags: import_zod7.z.array(UUIDSchema2).default([]),
-  messageCount: import_zod7.z.number().default(0),
-  lastMessageAt: TimestampSchema2.nullable().optional(),
-  lastRenameCheckInterchange: import_zod7.z.number().default(0),
-  createdAt: TimestampSchema2,
-  updatedAt: TimestampSchema2
-});
-var ChatMetadataLegacySchema2 = import_zod7.z.object({
-  id: UUIDSchema2,
-  userId: UUIDSchema2,
-  characterId: UUIDSchema2,
-  personaId: UUIDSchema2.nullable().optional(),
-  connectionProfileId: UUIDSchema2,
-  imageProfileId: UUIDSchema2.nullable().optional(),
-  title: import_zod7.z.string(),
-  contextSummary: import_zod7.z.string().nullable().optional(),
-  sillyTavernMetadata: JsonSchema2.nullable().optional(),
-  tags: import_zod7.z.array(UUIDSchema2).default([]),
-  messageCount: import_zod7.z.number().default(0),
-  lastMessageAt: TimestampSchema2.nullable().optional(),
-  lastRenameCheckInterchange: import_zod7.z.number().default(0),
-  createdAt: TimestampSchema2,
-  updatedAt: TimestampSchema2
-});
-var BinaryIndexEntrySchema2 = import_zod7.z.object({
-  id: UUIDSchema2,
-  sha256: import_zod7.z.string().length(64),
-  type: import_zod7.z.enum(["image", "chat_file", "avatar"]),
-  userId: UUIDSchema2,
-  filename: import_zod7.z.string(),
-  relativePath: import_zod7.z.string(),
-  mimeType: import_zod7.z.string(),
-  size: import_zod7.z.number(),
-  width: import_zod7.z.number().nullable().optional(),
-  height: import_zod7.z.number().nullable().optional(),
-  source: import_zod7.z.enum(["upload", "import", "generated"]).default("upload"),
-  generationPrompt: import_zod7.z.string().nullable().optional(),
-  generationModel: import_zod7.z.string().nullable().optional(),
-  chatId: UUIDSchema2.nullable().optional(),
-  characterId: UUIDSchema2.nullable().optional(),
-  // For avatar overrides
-  messageId: UUIDSchema2.nullable().optional(),
-  tags: import_zod7.z.array(UUIDSchema2).default([]),
-  createdAt: TimestampSchema2,
-  updatedAt: TimestampSchema2
-});
-var FileSourceEnum2 = import_zod7.z.enum(["UPLOADED", "GENERATED", "IMPORTED", "SYSTEM"]);
-var FileCategoryEnum2 = import_zod7.z.enum(["IMAGE", "DOCUMENT", "AVATAR", "ATTACHMENT", "EXPORT"]);
-var FileEntrySchema2 = import_zod7.z.object({
-  // Identity & Storage
-  id: UUIDSchema2,
-  // File UUID (also the base filename in storage)
-  userId: UUIDSchema2,
-  // Owner of the file
-  sha256: import_zod7.z.string().length(64),
-  // Content hash for deduplication
-  originalFilename: import_zod7.z.string(),
-  // Original filename from upload/generation
-  mimeType: import_zod7.z.string(),
-  // Specific MIME type
-  size: import_zod7.z.number(),
-  // File size in bytes
-  // Image metadata (if applicable)
-  width: import_zod7.z.number().nullable().optional(),
-  height: import_zod7.z.number().nullable().optional(),
-  // Linking - array of IDs this file is associated with
-  linkedTo: import_zod7.z.array(UUIDSchema2).default([]),
-  // messageId, chatId, characterId, personaId, etc.
-  // Classification
-  source: FileSourceEnum2,
-  // Where the file came from
-  category: FileCategoryEnum2,
-  // What type of file it is
-  // Generation metadata (for AI-generated files)
-  generationPrompt: import_zod7.z.string().nullable().optional(),
-  generationModel: import_zod7.z.string().nullable().optional(),
-  generationRevisedPrompt: import_zod7.z.string().nullable().optional(),
-  description: import_zod7.z.string().nullable().optional(),
-  // AI description or user-provided description
-  // Tags
-  tags: import_zod7.z.array(UUIDSchema2).default([]),
-  // S3 storage reference (Phase 3: MongoDB + S3 migration)
-  s3Key: import_zod7.z.string().nullable().optional(),
-  // Full S3 object key
-  s3Bucket: import_zod7.z.string().nullable().optional(),
-  // S3 bucket name
-  // Timestamps
-  createdAt: TimestampSchema2,
-  updatedAt: TimestampSchema2
-});
-var TagSchema2 = import_zod7.z.object({
-  id: UUIDSchema2,
-  userId: UUIDSchema2,
-  name: import_zod7.z.string(),
-  nameLower: import_zod7.z.string(),
-  quickHide: import_zod7.z.boolean().default(false),
-  createdAt: TimestampSchema2,
-  updatedAt: TimestampSchema2
-});
-var TagsFileSchema2 = import_zod7.z.object({
-  version: import_zod7.z.number().default(1),
-  tags: import_zod7.z.array(TagSchema2).default([]),
-  createdAt: TimestampSchema2,
-  updatedAt: TimestampSchema2
-});
-var ImageProfileSchema2 = import_zod7.z.object({
-  id: UUIDSchema2,
-  userId: UUIDSchema2,
-  name: import_zod7.z.string(),
-  provider: ImageProviderEnum2,
-  apiKeyId: UUIDSchema2.nullable().optional(),
-  baseUrl: import_zod7.z.string().nullable().optional(),
-  modelName: import_zod7.z.string(),
-  parameters: JsonSchema2.default({}),
-  isDefault: import_zod7.z.boolean().default(false),
-  tags: import_zod7.z.array(UUIDSchema2).default([]),
-  createdAt: TimestampSchema2,
-  updatedAt: TimestampSchema2
-});
-var ImageProfilesFileSchema2 = import_zod7.z.object({
-  version: import_zod7.z.number().default(1),
-  profiles: import_zod7.z.array(ImageProfileSchema2).default([]),
-  createdAt: TimestampSchema2,
-  updatedAt: TimestampSchema2
-});
-var EmbeddingProfileSchema2 = import_zod7.z.object({
-  id: UUIDSchema2,
-  userId: UUIDSchema2,
-  name: import_zod7.z.string(),
-  provider: EmbeddingProfileProviderEnum2,
-  apiKeyId: UUIDSchema2.nullable().optional(),
-  baseUrl: import_zod7.z.string().nullable().optional(),
-  modelName: import_zod7.z.string(),
-  /** Embedding dimension size (provider-specific) */
-  dimensions: import_zod7.z.number().nullable().optional(),
-  isDefault: import_zod7.z.boolean().default(false),
-  tags: import_zod7.z.array(UUIDSchema2).default([]),
-  createdAt: TimestampSchema2,
-  updatedAt: TimestampSchema2
-});
-var EmbeddingProfilesFileSchema2 = import_zod7.z.object({
-  version: import_zod7.z.number().default(1),
-  profiles: import_zod7.z.array(EmbeddingProfileSchema2).default([]),
-  createdAt: TimestampSchema2,
-  updatedAt: TimestampSchema2
-});
-var MemorySourceEnum2 = import_zod7.z.enum(["AUTO", "MANUAL"]);
-var MemorySchema2 = import_zod7.z.object({
-  id: UUIDSchema2,
-  characterId: UUIDSchema2,
-  personaId: UUIDSchema2.nullable().optional(),
-  // Optional: specific persona interaction
-  chatId: UUIDSchema2.nullable().optional(),
-  // Optional: source chat reference
-  content: import_zod7.z.string(),
-  // The actual memory content
-  summary: import_zod7.z.string(),
-  // Distilled version for context injection
-  keywords: import_zod7.z.array(import_zod7.z.string()).default([]),
-  // For text-based search
-  tags: import_zod7.z.array(UUIDSchema2).default([]),
-  // Derived from character/persona/chat tags
-  importance: import_zod7.z.number().min(0).max(1).default(0.5),
-  // 0-1 scale for prioritization
-  embedding: import_zod7.z.array(import_zod7.z.number()).nullable().optional(),
-  // Vector embedding for semantic search
-  source: MemorySourceEnum2.default("MANUAL"),
-  // How it was created
-  sourceMessageId: UUIDSchema2.nullable().optional(),
-  // If auto-created, which message triggered it
-  lastAccessedAt: TimestampSchema2.nullable().optional(),
-  // For housekeeping decisions
-  createdAt: TimestampSchema2,
-  updatedAt: TimestampSchema2
-});
-var MemoriesFileSchema2 = import_zod7.z.object({
-  version: import_zod7.z.number().default(1),
-  memories: import_zod7.z.array(MemorySchema2).default([]),
-  createdAt: TimestampSchema2,
-  updatedAt: TimestampSchema2
-});
-var GeneralSettingsSchema2 = import_zod7.z.object({
-  version: import_zod7.z.number().default(1),
-  user: UserSchema2,
-  chatSettings: ChatSettingsSchema2,
-  createdAt: TimestampSchema2,
-  updatedAt: TimestampSchema2
-});
-var ConnectionProfilesFileSchema2 = import_zod7.z.object({
-  version: import_zod7.z.number().default(1),
-  apiKeys: import_zod7.z.array(ApiKeySchema2).default([]),
-  llmProfiles: import_zod7.z.array(ConnectionProfileSchema2).default([]),
-  createdAt: TimestampSchema2,
-  updatedAt: TimestampSchema2
-});
-var AuthAccountsSchema2 = import_zod7.z.object({
-  version: import_zod7.z.number().default(1),
-  accounts: import_zod7.z.array(AccountSchema2).default([]),
-  createdAt: TimestampSchema2,
-  updatedAt: TimestampSchema2
-});
-
 // plugins/dist/qtap-plugin-upgrade/lib/json-store/repositories/characters.repository.ts
-var CharactersRepository = class extends BaseRepository2 {
+var CharactersRepository = class extends BaseRepository {
   constructor(jsonStore) {
-    super(jsonStore, CharacterSchema2);
+    super(jsonStore, CharacterSchema);
   }
   /**
    * Find a character by ID
@@ -68550,9 +67384,9 @@ var CharactersRepository = class extends BaseRepository2 {
 };
 
 // plugins/dist/qtap-plugin-upgrade/lib/json-store/repositories/personas.repository.ts
-var PersonasRepository = class extends BaseRepository2 {
+var PersonasRepository = class extends BaseRepository {
   constructor(jsonStore) {
-    super(jsonStore, PersonaSchema2);
+    super(jsonStore, PersonaSchema);
   }
   /**
    * Find a persona by ID
@@ -68792,9 +67626,9 @@ var PersonasRepository = class extends BaseRepository2 {
 };
 
 // plugins/dist/qtap-plugin-upgrade/lib/json-store/repositories/chats.repository.ts
-var ChatsRepository = class extends BaseRepository2 {
+var ChatsRepository = class extends BaseRepository {
   constructor(jsonStore) {
-    super(jsonStore, ChatMetadataBaseSchema2);
+    super(jsonStore, ChatMetadataBaseSchema);
   }
   /**
    * Get the chats index file path
@@ -68813,7 +67647,7 @@ var ChatsRepository = class extends BaseRepository2 {
    */
   migrateFromLegacy(rawData) {
     if ("characterId" in rawData && !("participants" in rawData)) {
-      const legacyResult = ChatMetadataLegacySchema2.safeParse(rawData);
+      const legacyResult = ChatMetadataLegacySchema.safeParse(rawData);
       if (legacyResult.success) {
         const legacy = legacyResult.data;
         const now = this.getCurrentTimestamp();
@@ -69023,7 +67857,7 @@ var ChatsRepository = class extends BaseRepository2 {
       createdAt: now,
       updatedAt: now
     };
-    ChatParticipantBaseSchema2.parse(newParticipant);
+    ChatParticipantBaseSchema.parse(newParticipant);
     const participants = [...chat.participants, newParticipant];
     return await this.update(chatId, { participants });
   }
@@ -69048,7 +67882,7 @@ var ChatsRepository = class extends BaseRepository2 {
       createdAt: existingParticipant.createdAt,
       updatedAt: now
     };
-    ChatParticipantBaseSchema2.parse(updatedParticipant);
+    ChatParticipantBaseSchema.parse(updatedParticipant);
     const participants = [...chat.participants];
     participants[participantIndex] = updatedParticipant;
     return await this.update(chatId, { participants });
@@ -69094,7 +67928,7 @@ var ChatsRepository = class extends BaseRepository2 {
   async getMessages(chatId) {
     try {
       const messages = await this.jsonStore.readJsonl(this.getChatPath(chatId));
-      return messages.map((msg) => ChatEventSchema2.parse(msg));
+      return messages.map((msg) => ChatEventSchema.parse(msg));
     } catch (error2) {
       return [];
     }
@@ -69103,7 +67937,7 @@ var ChatsRepository = class extends BaseRepository2 {
    * Add a message to a chat
    */
   async addMessage(chatId, message) {
-    const validated = ChatEventSchema2.parse(message);
+    const validated = ChatEventSchema.parse(message);
     await this.jsonStore.appendJsonl(this.getChatPath(chatId), [validated]);
     const chat = await this.findById(chatId);
     if (chat) {
@@ -69119,7 +67953,7 @@ var ChatsRepository = class extends BaseRepository2 {
    * Add multiple messages to a chat
    */
   async addMessages(chatId, messages) {
-    const validated = messages.map((msg) => ChatEventSchema2.parse(msg));
+    const validated = messages.map((msg) => ChatEventSchema.parse(msg));
     await this.jsonStore.appendJsonl(this.getChatPath(chatId), validated);
     const chat = await this.findById(chatId);
     if (chat) {
@@ -69142,7 +67976,7 @@ var ChatsRepository = class extends BaseRepository2 {
         return null;
       }
       const updatedMessage = { ...messages[messageIndex], ...updates };
-      const validated = ChatEventSchema2.parse(updatedMessage);
+      const validated = ChatEventSchema.parse(updatedMessage);
       messages[messageIndex] = validated;
       await this.jsonStore.writeJsonl(this.getChatPath(chatId), messages);
       return validated;
@@ -69208,9 +68042,9 @@ var ChatsRepository = class extends BaseRepository2 {
 };
 
 // plugins/dist/qtap-plugin-upgrade/lib/json-store/repositories/tags.repository.ts
-var TagsRepository = class extends BaseRepository2 {
+var TagsRepository = class extends BaseRepository {
   constructor(jsonStore) {
-    super(jsonStore, TagSchema2);
+    super(jsonStore, TagSchema);
   }
   /**
    * Get the tags file path
@@ -69225,7 +68059,7 @@ var TagsRepository = class extends BaseRepository2 {
     try {
       const filePath = this.getFilePath();
       const data2 = await this.jsonStore.readJson(filePath);
-      return TagsFileSchema2.parse(data2);
+      return TagsFileSchema.parse(data2);
     } catch (error2) {
       return {
         version: 1,
@@ -69239,7 +68073,7 @@ var TagsRepository = class extends BaseRepository2 {
    * Write tags file with validation
    */
   async writeTagsFile(data2) {
-    const validated = TagsFileSchema2.parse({
+    const validated = TagsFileSchema.parse({
       ...data2,
       updatedAt: this.getCurrentTimestamp()
     });
@@ -69339,9 +68173,9 @@ var TagsRepository = class extends BaseRepository2 {
 };
 
 // plugins/dist/qtap-plugin-upgrade/lib/json-store/repositories/users.repository.ts
-var UsersRepository = class extends BaseRepository2 {
+var UsersRepository = class extends BaseRepository {
   constructor(jsonStore) {
-    super(jsonStore, UserSchema2);
+    super(jsonStore, UserSchema);
   }
   /**
    * Get the general settings file path
@@ -69356,7 +68190,7 @@ var UsersRepository = class extends BaseRepository2 {
     try {
       const filePath = this.getFilePath();
       const data2 = await this.jsonStore.readJson(filePath);
-      return GeneralSettingsSchema2.parse(data2);
+      return GeneralSettingsSchema.parse(data2);
     } catch (error2) {
       throw new Error("General settings file not found or invalid");
     }
@@ -69365,7 +68199,7 @@ var UsersRepository = class extends BaseRepository2 {
    * Write general settings file with validation
    */
   async writeGeneralSettings(data2) {
-    const validated = GeneralSettingsSchema2.parse({
+    const validated = GeneralSettingsSchema.parse({
       ...data2,
       updatedAt: this.getCurrentTimestamp()
     });
@@ -69514,261 +68348,17 @@ var UsersRepository = class extends BaseRepository2 {
       // Preserve creation timestamp
       updatedAt: now
     };
-    const validated = ChatSettingsSchema2.parse(updated);
+    const validated = ChatSettingsSchema.parse(updated);
     settings.chatSettings = validated;
     await this.writeGeneralSettings(settings);
     return validated;
   }
 };
 
-// plugins/dist/qtap-plugin-upgrade/lib/json-store/repositories/connection-profiles.repository.ts
-var ConnectionProfilesRepository2 = class extends BaseRepository2 {
-  constructor(jsonStore) {
-    super(jsonStore, ConnectionProfileSchema2);
-  }
-  /**
-   * Get the connection profiles file path
-   */
-  getFilePath() {
-    return "settings/connection-profiles.json";
-  }
-  /**
-   * Read connection profiles file with default structure
-   */
-  async readProfilesFile() {
-    try {
-      const filePath = this.getFilePath();
-      const data2 = await this.jsonStore.readJson(filePath);
-      return ConnectionProfilesFileSchema2.parse(data2);
-    } catch (error2) {
-      return {
-        version: 1,
-        apiKeys: [],
-        llmProfiles: [],
-        createdAt: this.getCurrentTimestamp(),
-        updatedAt: this.getCurrentTimestamp()
-      };
-    }
-  }
-  /**
-   * Write connection profiles file with validation
-   */
-  async writeProfilesFile(data2) {
-    const validated = ConnectionProfilesFileSchema2.parse({
-      ...data2,
-      updatedAt: this.getCurrentTimestamp()
-    });
-    await this.jsonStore.writeJson(this.getFilePath(), validated);
-  }
-  /**
-   * Find a connection profile by ID
-   */
-  async findById(id) {
-    const file = await this.readProfilesFile();
-    return file.llmProfiles.find((profile) => profile.id === id) || null;
-  }
-  /**
-   * Find all connection profiles
-   */
-  async findAll() {
-    const file = await this.readProfilesFile();
-    return file.llmProfiles;
-  }
-  /**
-   * Find connection profiles by user ID
-   */
-  async findByUserId(userId) {
-    const file = await this.readProfilesFile();
-    return file.llmProfiles.filter((profile) => profile.userId === userId);
-  }
-  /**
-   * Find connection profiles with a specific tag
-   */
-  async findByTag(tagId) {
-    const file = await this.readProfilesFile();
-    return file.llmProfiles.filter((profile) => profile.tags.includes(tagId));
-  }
-  /**
-   * Find default connection profile for user
-   */
-  async findDefault(userId) {
-    const file = await this.readProfilesFile();
-    return file.llmProfiles.find(
-      (profile) => profile.userId === userId && profile.isDefault
-    ) || null;
-  }
-  /**
-   * Create a new connection profile
-   */
-  async create(data2) {
-    const id = this.generateId();
-    const now = this.getCurrentTimestamp();
-    const profile = {
-      ...data2,
-      id,
-      createdAt: now,
-      updatedAt: now
-    };
-    const validated = this.validate(profile);
-    const file = await this.readProfilesFile();
-    file.llmProfiles.push(validated);
-    await this.writeProfilesFile(file);
-    this.jsonStore.clearCache();
-    return validated;
-  }
-  /**
-   * Update a connection profile
-   */
-  async update(id, data2) {
-    const file = await this.readProfilesFile();
-    const index = file.llmProfiles.findIndex((profile) => profile.id === id);
-    if (index === -1) {
-      return null;
-    }
-    const existing = file.llmProfiles[index];
-    const now = this.getCurrentTimestamp();
-    const updated = {
-      ...existing,
-      ...data2,
-      id: existing.id,
-      // Preserve ID
-      createdAt: existing.createdAt,
-      // Preserve creation timestamp
-      updatedAt: now
-    };
-    const validated = this.validate(updated);
-    file.llmProfiles[index] = validated;
-    await this.writeProfilesFile(file);
-    this.jsonStore.clearCache();
-    return validated;
-  }
-  /**
-   * Delete a connection profile
-   */
-  async delete(id) {
-    const file = await this.readProfilesFile();
-    const initialLength = file.llmProfiles.length;
-    file.llmProfiles = file.llmProfiles.filter((profile) => profile.id !== id);
-    if (file.llmProfiles.length === initialLength) {
-      return false;
-    }
-    await this.writeProfilesFile(file);
-    this.jsonStore.clearCache();
-    return true;
-  }
-  /**
-   * Add a tag to a connection profile
-   */
-  async addTag(profileId, tagId) {
-    const profile = await this.findById(profileId);
-    if (!profile) {
-      return null;
-    }
-    if (!profile.tags.includes(tagId)) {
-      profile.tags.push(tagId);
-      return await this.update(profileId, { tags: profile.tags });
-    }
-    return profile;
-  }
-  /**
-   * Remove a tag from a connection profile
-   */
-  async removeTag(profileId, tagId) {
-    const profile = await this.findById(profileId);
-    if (!profile) {
-      return null;
-    }
-    profile.tags = profile.tags.filter((id) => id !== tagId);
-    return await this.update(profileId, { tags: profile.tags });
-  }
-  // ============================================================================
-  // API KEY OPERATIONS
-  // ============================================================================
-  /**
-   * Get all API keys
-   */
-  async getAllApiKeys() {
-    const file = await this.readProfilesFile();
-    return file.apiKeys;
-  }
-  /**
-   * Find API key by ID
-   */
-  async findApiKeyById(id) {
-    const file = await this.readProfilesFile();
-    return file.apiKeys.find((key) => key.id === id) || null;
-  }
-  /**
-   * Create a new API key
-   */
-  async createApiKey(data2) {
-    const id = this.generateId();
-    const now = this.getCurrentTimestamp();
-    const apiKey = {
-      ...data2,
-      id,
-      createdAt: now,
-      updatedAt: now
-    };
-    const validated = ApiKeySchema2.parse(apiKey);
-    const file = await this.readProfilesFile();
-    file.apiKeys.push(validated);
-    await this.writeProfilesFile(file);
-    this.jsonStore.clearCache();
-    return validated;
-  }
-  /**
-   * Update an API key
-   */
-  async updateApiKey(id, data2) {
-    const file = await this.readProfilesFile();
-    const index = file.apiKeys.findIndex((key) => key.id === id);
-    if (index === -1) {
-      return null;
-    }
-    const existing = file.apiKeys[index];
-    const now = this.getCurrentTimestamp();
-    const updated = {
-      ...existing,
-      ...data2,
-      id: existing.id,
-      // Preserve ID
-      createdAt: existing.createdAt,
-      // Preserve creation timestamp
-      updatedAt: now
-    };
-    const validated = ApiKeySchema2.parse(updated);
-    file.apiKeys[index] = validated;
-    await this.writeProfilesFile(file);
-    this.jsonStore.clearCache();
-    return validated;
-  }
-  /**
-   * Delete an API key
-   */
-  async deleteApiKey(id) {
-    const file = await this.readProfilesFile();
-    const initialLength = file.apiKeys.length;
-    file.apiKeys = file.apiKeys.filter((key) => key.id !== id);
-    if (file.apiKeys.length === initialLength) {
-      return false;
-    }
-    await this.writeProfilesFile(file);
-    this.jsonStore.clearCache();
-    return true;
-  }
-  /**
-   * Update API key last used timestamp
-   */
-  async recordApiKeyUsage(id) {
-    return await this.updateApiKey(id, { lastUsed: this.getCurrentTimestamp() });
-  }
-};
-
 // plugins/dist/qtap-plugin-upgrade/lib/json-store/repositories/files.repository.ts
-var FilesRepository = class extends BaseRepository2 {
+var FilesRepository = class extends BaseRepository {
   constructor(jsonStore) {
-    super(jsonStore, FileEntrySchema2);
+    super(jsonStore, FileEntrySchema);
   }
   /**
    * Get the files index file path
@@ -69944,384 +68534,10 @@ var FilesRepository = class extends BaseRepository2 {
   }
 };
 
-// plugins/dist/qtap-plugin-upgrade/lib/json-store/repositories/image-profiles.repository.ts
-var ImageProfilesRepository2 = class extends BaseRepository2 {
-  constructor(jsonStore) {
-    super(jsonStore, ImageProfileSchema2);
-  }
-  /**
-   * Get the image profiles file path
-   */
-  getFilePath() {
-    return "settings/image-profiles.json";
-  }
-  /**
-   * Read image profiles file with default structure
-   */
-  async readProfilesFile() {
-    try {
-      const filePath = this.getFilePath();
-      const data2 = await this.jsonStore.readJson(filePath);
-      return ImageProfilesFileSchema2.parse(data2);
-    } catch (error2) {
-      return {
-        version: 1,
-        profiles: [],
-        createdAt: this.getCurrentTimestamp(),
-        updatedAt: this.getCurrentTimestamp()
-      };
-    }
-  }
-  /**
-   * Write image profiles file with validation
-   */
-  async writeProfilesFile(data2) {
-    const validated = ImageProfilesFileSchema2.parse({
-      ...data2,
-      updatedAt: this.getCurrentTimestamp()
-    });
-    await this.jsonStore.writeJson(this.getFilePath(), validated);
-  }
-  /**
-   * Find an image profile by ID
-   */
-  async findById(id) {
-    const file = await this.readProfilesFile();
-    return file.profiles.find((profile) => profile.id === id) || null;
-  }
-  /**
-   * Find all image profiles
-   */
-  async findAll() {
-    const file = await this.readProfilesFile();
-    return file.profiles;
-  }
-  /**
-   * Find image profiles by user ID
-   */
-  async findByUserId(userId) {
-    const file = await this.readProfilesFile();
-    return file.profiles.filter((profile) => profile.userId === userId);
-  }
-  /**
-   * Find image profiles with a specific tag
-   */
-  async findByTag(tagId) {
-    const file = await this.readProfilesFile();
-    return file.profiles.filter((profile) => profile.tags.includes(tagId));
-  }
-  /**
-   * Find default image profile for user
-   */
-  async findDefault(userId) {
-    const file = await this.readProfilesFile();
-    return file.profiles.find(
-      (profile) => profile.userId === userId && profile.isDefault
-    ) || null;
-  }
-  /**
-   * Find image profile by name for user
-   */
-  async findByName(userId, name) {
-    const file = await this.readProfilesFile();
-    return file.profiles.find(
-      (profile) => profile.userId === userId && profile.name === name
-    ) || null;
-  }
-  /**
-   * Create a new image profile
-   */
-  async create(data2) {
-    const id = this.generateId();
-    const now = this.getCurrentTimestamp();
-    const profile = {
-      ...data2,
-      id,
-      createdAt: now,
-      updatedAt: now
-    };
-    const validated = this.validate(profile);
-    const file = await this.readProfilesFile();
-    file.profiles.push(validated);
-    await this.writeProfilesFile(file);
-    return validated;
-  }
-  /**
-   * Update an image profile
-   */
-  async update(id, data2) {
-    const file = await this.readProfilesFile();
-    const index = file.profiles.findIndex((profile) => profile.id === id);
-    if (index === -1) {
-      return null;
-    }
-    const existing = file.profiles[index];
-    const now = this.getCurrentTimestamp();
-    const updated = {
-      ...existing,
-      ...data2,
-      id: existing.id,
-      // Preserve ID
-      createdAt: existing.createdAt,
-      // Preserve creation timestamp
-      updatedAt: now
-    };
-    const validated = this.validate(updated);
-    file.profiles[index] = validated;
-    await this.writeProfilesFile(file);
-    return validated;
-  }
-  /**
-   * Delete an image profile
-   */
-  async delete(id) {
-    const file = await this.readProfilesFile();
-    const initialLength = file.profiles.length;
-    file.profiles = file.profiles.filter((profile) => profile.id !== id);
-    if (file.profiles.length === initialLength) {
-      return false;
-    }
-    await this.writeProfilesFile(file);
-    return true;
-  }
-  /**
-   * Add a tag to an image profile
-   */
-  async addTag(profileId, tagId) {
-    const profile = await this.findById(profileId);
-    if (!profile) {
-      return null;
-    }
-    if (!profile.tags.includes(tagId)) {
-      profile.tags.push(tagId);
-      return await this.update(profileId, { tags: profile.tags });
-    }
-    return profile;
-  }
-  /**
-   * Remove a tag from an image profile
-   */
-  async removeTag(profileId, tagId) {
-    const profile = await this.findById(profileId);
-    if (!profile) {
-      return null;
-    }
-    profile.tags = profile.tags.filter((id) => id !== tagId);
-    return await this.update(profileId, { tags: profile.tags });
-  }
-  /**
-   * Unset default flag on all profiles for a user
-   */
-  async unsetAllDefaults(userId) {
-    const file = await this.readProfilesFile();
-    let changed = false;
-    for (let i4 = 0; i4 < file.profiles.length; i4++) {
-      if (file.profiles[i4].userId === userId && file.profiles[i4].isDefault) {
-        file.profiles[i4] = {
-          ...file.profiles[i4],
-          isDefault: false,
-          updatedAt: this.getCurrentTimestamp()
-        };
-        changed = true;
-      }
-    }
-    if (changed) {
-      await this.writeProfilesFile(file);
-    }
-  }
-};
-
-// plugins/dist/qtap-plugin-upgrade/lib/json-store/repositories/embedding-profiles.repository.ts
-var EmbeddingProfilesRepository2 = class extends BaseRepository2 {
-  constructor(jsonStore) {
-    super(jsonStore, EmbeddingProfileSchema2);
-  }
-  /**
-   * Get the embedding profiles file path
-   */
-  getFilePath() {
-    return "settings/embedding-profiles.json";
-  }
-  /**
-   * Read embedding profiles file with default structure
-   */
-  async readProfilesFile() {
-    try {
-      const filePath = this.getFilePath();
-      const data2 = await this.jsonStore.readJson(filePath);
-      return EmbeddingProfilesFileSchema2.parse(data2);
-    } catch (error2) {
-      return {
-        version: 1,
-        profiles: [],
-        createdAt: this.getCurrentTimestamp(),
-        updatedAt: this.getCurrentTimestamp()
-      };
-    }
-  }
-  /**
-   * Write embedding profiles file with validation
-   */
-  async writeProfilesFile(data2) {
-    const validated = EmbeddingProfilesFileSchema2.parse({
-      ...data2,
-      updatedAt: this.getCurrentTimestamp()
-    });
-    await this.jsonStore.writeJson(this.getFilePath(), validated);
-  }
-  /**
-   * Find an embedding profile by ID
-   */
-  async findById(id) {
-    const file = await this.readProfilesFile();
-    return file.profiles.find((profile) => profile.id === id) || null;
-  }
-  /**
-   * Find all embedding profiles
-   */
-  async findAll() {
-    const file = await this.readProfilesFile();
-    return file.profiles;
-  }
-  /**
-   * Find embedding profiles by user ID
-   */
-  async findByUserId(userId) {
-    const file = await this.readProfilesFile();
-    return file.profiles.filter((profile) => profile.userId === userId);
-  }
-  /**
-   * Find embedding profiles with a specific tag
-   */
-  async findByTag(tagId) {
-    const file = await this.readProfilesFile();
-    return file.profiles.filter((profile) => profile.tags.includes(tagId));
-  }
-  /**
-   * Find default embedding profile for user
-   */
-  async findDefault(userId) {
-    const file = await this.readProfilesFile();
-    return file.profiles.find(
-      (profile) => profile.userId === userId && profile.isDefault
-    ) || null;
-  }
-  /**
-   * Find embedding profile by name for user
-   */
-  async findByName(userId, name) {
-    const file = await this.readProfilesFile();
-    return file.profiles.find(
-      (profile) => profile.userId === userId && profile.name === name
-    ) || null;
-  }
-  /**
-   * Create a new embedding profile
-   */
-  async create(data2) {
-    const id = this.generateId();
-    const now = this.getCurrentTimestamp();
-    const profile = {
-      ...data2,
-      id,
-      createdAt: now,
-      updatedAt: now
-    };
-    const validated = this.validate(profile);
-    const file = await this.readProfilesFile();
-    file.profiles.push(validated);
-    await this.writeProfilesFile(file);
-    return validated;
-  }
-  /**
-   * Update an embedding profile
-   */
-  async update(id, data2) {
-    const file = await this.readProfilesFile();
-    const index = file.profiles.findIndex((profile) => profile.id === id);
-    if (index === -1) {
-      return null;
-    }
-    const existing = file.profiles[index];
-    const now = this.getCurrentTimestamp();
-    const updated = {
-      ...existing,
-      ...data2,
-      id: existing.id,
-      // Preserve ID
-      createdAt: existing.createdAt,
-      // Preserve creation timestamp
-      updatedAt: now
-    };
-    const validated = this.validate(updated);
-    file.profiles[index] = validated;
-    await this.writeProfilesFile(file);
-    return validated;
-  }
-  /**
-   * Delete an embedding profile
-   */
-  async delete(id) {
-    const file = await this.readProfilesFile();
-    const initialLength = file.profiles.length;
-    file.profiles = file.profiles.filter((profile) => profile.id !== id);
-    if (file.profiles.length === initialLength) {
-      return false;
-    }
-    await this.writeProfilesFile(file);
-    return true;
-  }
-  /**
-   * Add a tag to an embedding profile
-   */
-  async addTag(profileId, tagId) {
-    const profile = await this.findById(profileId);
-    if (!profile) {
-      return null;
-    }
-    if (!profile.tags.includes(tagId)) {
-      profile.tags.push(tagId);
-      return await this.update(profileId, { tags: profile.tags });
-    }
-    return profile;
-  }
-  /**
-   * Remove a tag from an embedding profile
-   */
-  async removeTag(profileId, tagId) {
-    const profile = await this.findById(profileId);
-    if (!profile) {
-      return null;
-    }
-    profile.tags = profile.tags.filter((id) => id !== tagId);
-    return await this.update(profileId, { tags: profile.tags });
-  }
-  /**
-   * Unset default flag on all profiles for a user
-   */
-  async unsetAllDefaults(userId) {
-    const file = await this.readProfilesFile();
-    let changed = false;
-    for (let i4 = 0; i4 < file.profiles.length; i4++) {
-      if (file.profiles[i4].userId === userId && file.profiles[i4].isDefault) {
-        file.profiles[i4] = {
-          ...file.profiles[i4],
-          isDefault: false,
-          updatedAt: this.getCurrentTimestamp()
-        };
-        changed = true;
-      }
-    }
-    if (changed) {
-      await this.writeProfilesFile(file);
-    }
-  }
-};
-
 // plugins/dist/qtap-plugin-upgrade/lib/json-store/repositories/memories.repository.ts
-var MemoriesRepository = class extends BaseRepository2 {
+var MemoriesRepository = class extends BaseRepository {
   constructor(jsonStore) {
-    super(jsonStore, MemorySchema2);
+    super(jsonStore, MemorySchema);
   }
   /**
    * Get the memories file path for a character
@@ -70336,7 +68552,7 @@ var MemoriesRepository = class extends BaseRepository2 {
     try {
       const filePath = this.getFilePath(characterId);
       const data2 = await this.jsonStore.readJson(filePath);
-      return MemoriesFileSchema2.parse(data2);
+      return MemoriesFileSchema.parse(data2);
     } catch (error2) {
       return {
         version: 1,
@@ -70350,7 +68566,7 @@ var MemoriesRepository = class extends BaseRepository2 {
    * Write memories file with validation
    */
   async writeMemoriesFile(characterId, data2) {
-    const validated = MemoriesFileSchema2.parse({
+    const validated = MemoriesFileSchema.parse({
       ...data2,
       updatedAt: this.getCurrentTimestamp()
     });
@@ -70581,11 +68797,11 @@ function createRepositories(jsonStore) {
     chats: new ChatsRepository(jsonStore),
     tags: new TagsRepository(jsonStore),
     users: new UsersRepository(jsonStore),
-    connections: new ConnectionProfilesRepository2(jsonStore),
+    connections: new ConnectionProfilesRepository(jsonStore),
     images: filesRepo,
     files: filesRepo,
-    imageProfiles: new ImageProfilesRepository2(jsonStore),
-    embeddingProfiles: new EmbeddingProfilesRepository2(jsonStore),
+    imageProfiles: new ImageProfilesRepository(jsonStore),
+    embeddingProfiles: new EmbeddingProfilesRepository(jsonStore),
     memories: new MemoriesRepository(jsonStore)
   };
 }
@@ -70882,16 +69098,16 @@ var migrateJsonToMongoDBMigration = {
       }
       console.log("[migration.migrate-json-to-mongodb] Migrating vector indices...");
       try {
-        const fs7 = await import("fs/promises");
-        const path5 = await import("path");
-        const vectorIndicesPath = path5.join(process.cwd(), "data", "vector-indices");
+        const fs6 = await import("fs/promises");
+        const path4 = await import("path");
+        const vectorIndicesPath = path4.join(process.cwd(), "data", "vector-indices");
         try {
-          const files = await fs7.readdir(vectorIndicesPath);
+          const files = await fs6.readdir(vectorIndicesPath);
           const jsonFiles = files.filter((f4) => f4.endsWith(".json"));
           if (jsonFiles.length > 0) {
             for (const file of jsonFiles) {
               try {
-                const content = await fs7.readFile(path5.join(vectorIndicesPath, file), "utf-8");
+                const content = await fs6.readFile(path4.join(vectorIndicesPath, file), "utf-8");
                 const vectorIndex = JSON.parse(content);
                 if (!vectorIndex.id) {
                   vectorIndex.id = vectorIndex.characterId;
@@ -70923,11 +69139,11 @@ var migrateJsonToMongoDBMigration = {
       }
       console.log("[migration.migrate-json-to-mongodb] Migrating migration state...");
       try {
-        const fs7 = await import("fs/promises");
-        const path5 = await import("path");
-        const migrationsFilePath = path5.join(process.cwd(), "data", "settings", "migrations.json");
+        const fs6 = await import("fs/promises");
+        const path4 = await import("path");
+        const migrationsFilePath = path4.join(process.cwd(), "data", "settings", "migrations.json");
         try {
-          const content = await fs7.readFile(migrationsFilePath, "utf-8");
+          const content = await fs6.readFile(migrationsFilePath, "utf-8");
           const migrationState = JSON.parse(content);
           await db.collection("migrations_state").updateOne(
             { _id: "migration_state" },
@@ -70990,8 +69206,8 @@ var migrateJsonToMongoDBMigration = {
 };
 
 // plugins/dist/qtap-plugin-upgrade/migrations/migrate-files-to-s3.ts
-var fs6 = __toESM(require("fs/promises"));
-var path4 = __toESM(require("path"));
+var fs5 = __toESM(require("fs/promises"));
+var path3 = __toESM(require("path"));
 
 // plugins/dist/qtap-plugin-upgrade/lib/file-manager.ts
 var import_fs2 = require("fs");
@@ -71006,7 +69222,7 @@ async function readAllEntries() {
   try {
     const content = await import_fs2.promises.readFile(INDEX_FILE, "utf-8");
     const lines = content.trim().split("\n").filter((line) => line.length > 0);
-    return lines.map((line) => FileEntrySchema2.parse(JSON.parse(line)));
+    return lines.map((line) => FileEntrySchema.parse(JSON.parse(line)));
   } catch (error2) {
     if (error2.code === "ENOENT") {
       return [];
@@ -71041,7 +69257,7 @@ async function updateFile(id, updates) {
     // Preserve creation time
     updatedAt: now
   };
-  const validated = FileEntrySchema2.parse(updated);
+  const validated = FileEntrySchema.parse(updated);
   entries[index] = validated;
   await writeAllEntries(entries);
   return validated;
@@ -71204,9 +69420,9 @@ async function uploadFile(key, body, contentType, metadata) {
 // plugins/dist/qtap-plugin-upgrade/migrations/migrate-files-to-s3.ts
 async function checkLocalStorageExists() {
   try {
-    const storagePath = path4.join(process.cwd(), "public/data/files/storage");
-    const stat6 = await fs6.stat(storagePath);
-    return stat6.isDirectory();
+    const storagePath = path3.join(process.cwd(), "public/data/files/storage");
+    const stat4 = await fs5.stat(storagePath);
+    return stat4.isDirectory();
   } catch {
     return false;
   }
@@ -71267,15 +69483,15 @@ var migrateFilesToS3Migration = {
       });
       for (const entry of filesToMigrate) {
         try {
-          const ext = path4.extname(entry.originalFilename);
-          const localFilePath = path4.join(
+          const ext = path3.extname(entry.originalFilename);
+          const localFilePath = path3.join(
             process.cwd(),
             "public/data/files/storage",
             `${entry.id}${ext}`
           );
           let fileBuffer;
           try {
-            fileBuffer = await fs6.readFile(localFilePath);
+            fileBuffer = await fs5.readFile(localFilePath);
             console.log("[migration.migrate-files-to-s3] Read file from local storage", {
               fileId: entry.id,
               filename: entry.originalFilename,

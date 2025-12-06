@@ -8,7 +8,7 @@
 import { Collection, ObjectId } from 'mongodb';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { Tag, TagSchema } from '@/lib/json-store/schemas/types';
+import { Tag, TagSchema } from '@/lib/schemas/types';
 import { getMongoDatabase } from '../client';
 
 /**

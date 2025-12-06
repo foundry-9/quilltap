@@ -8,7 +8,7 @@
  * - Display helpful error messages when unsupported files are attached
  */
 
-import { Provider } from '@/lib/json-store/schemas/types'
+import { Provider } from '@/lib/schemas/types'
 
 /**
  * MIME type categories for file validation

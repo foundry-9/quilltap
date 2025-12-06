@@ -11,7 +11,7 @@ import { getServerSession } from '@/lib/auth/session';
 import { getRepositories } from '@/lib/repositories/factory';
 import { deleteFile as deleteS3File, downloadFile as downloadS3File } from '@/lib/s3/operations';
 import { logger } from '@/lib/logger';
-import type { FileEntry } from '@/lib/json-store/schemas/types';
+import type { FileEntry } from '@/lib/schemas/types';
 
 /**
  * Get the filepath for an image - always returns API path for S3-backed files

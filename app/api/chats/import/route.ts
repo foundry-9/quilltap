@@ -8,7 +8,7 @@ import { getServerSession } from '@/lib/auth/session'
 import { getRepositories } from '@/lib/repositories/factory'
 import { importSTChat } from '@/lib/sillytavern/chat'
 import { logger } from '@/lib/logger'
-import type { ChatParticipantBase, FileEntry } from '@/lib/json-store/schemas/types'
+import type { ChatParticipantBase, FileEntry } from '@/lib/schemas/types'
 
 /**
  * Get the filepath for a file based on storage type

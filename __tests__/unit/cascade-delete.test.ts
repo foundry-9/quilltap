@@ -16,7 +16,7 @@ import {
 } from '@/lib/cascade-delete'
 import { getRepositories } from '@/lib/repositories/factory'
 import { getVectorStoreManager } from '@/lib/embedding/vector-store'
-import type { ChatMetadata, FileEntry } from '@/lib/json-store/schemas/types'
+import type { ChatMetadata, FileEntry } from '@/lib/schemas/types'
 
 // Mock dependencies
 jest.mock('@/lib/repositories/factory')

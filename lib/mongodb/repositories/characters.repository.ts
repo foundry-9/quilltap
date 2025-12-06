@@ -5,7 +5,7 @@
  * Each character is stored as a document in the 'characters' MongoDB collection.
  */
 
-import { Character, CharacterSchema, PhysicalDescription } from '@/lib/json-store/schemas/types';
+import { Character, CharacterSchema, PhysicalDescription } from '@/lib/schemas/types';
 import { MongoBaseRepository } from './base.repository';
 import { logger } from '@/lib/logger';
 

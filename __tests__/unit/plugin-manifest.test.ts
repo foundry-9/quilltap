@@ -8,7 +8,7 @@ import {
   safeValidatePluginManifest,
   functionalityToCapabilities,
   type PluginManifest,
-} from '@/lib/json-store/schemas/plugin-manifest';
+} from '@/lib/schemas/plugin-manifest';
 
 describe('Plugin Manifest Schema', () => {
   describe('validatePluginManifest', () => {

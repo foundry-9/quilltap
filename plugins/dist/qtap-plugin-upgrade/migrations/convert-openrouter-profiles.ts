@@ -5,8 +5,8 @@
  * Originally located at lib/llm/convert-openrouter-profiles.ts
  */
 
-import { JsonStore } from '@/lib/json-store/core/json-store';
-import { ConnectionProfilesRepository } from '@/lib/json-store/repositories/connection-profiles.repository';
+import { JsonStore } from '../lib/json-store/core/json-store';
+import { ConnectionProfilesRepository } from '../lib/json-store/repositories/connection-profiles.repository';
 import { logger } from '@/lib/logger';
 import type { Migration, MigrationResult } from '../migration-types';
 

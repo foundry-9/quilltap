@@ -8,7 +8,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { uploadFile as uploadS3File } from '@/lib/s3/operations';
 import { buildS3Key } from '@/lib/s3/client';
 import { decryptApiKey } from '@/lib/encryption';
-import type { FileCategory, FileSource } from '@/lib/json-store/schemas/types';
+import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import {
   ImageGenerationToolInput,

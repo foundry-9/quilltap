@@ -5,7 +5,7 @@
  * Each memory is stored as a document in the 'memories' MongoDB collection.
  */
 
-import { Memory, MemorySchema } from '@/lib/json-store/schemas/types';
+import { Memory, MemorySchema } from '@/lib/schemas/types';
 import { MongoBaseRepository } from './base.repository';
 import { logger } from '@/lib/logger';
 

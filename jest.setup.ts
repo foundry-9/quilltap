@@ -148,8 +148,8 @@ jest.mock('@/lib/llm/plugin-factory', () => ({
   isProviderFromPlugin: jest.fn(() => true),
 }))
 
-// Mock JSON Store Repositories
-jest.mock('@/lib/json-store/repositories', () => ({
+// Mock Repositories
+jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
   resetRepositories: jest.fn(),
 }))

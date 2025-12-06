@@ -175,18 +175,26 @@ Files updated (removed local file fallback logic):
 - [x] `lib/chat-files-v2.ts` - Removed local file operations, S3-only for all file ops
 - [x] `lib/tools/handlers/image-generation-handler.ts` - Removed local storage fallback, S3-only for generated images
 
-### Phase 5: Delete Obsolete Code
+### Phase 5: Delete Obsolete Code ✅ COMPLETED
 
 #### 5.1 Remove JSON-Store Library
 
-- [ ] Delete `lib/json-store/` directory entirely
-- [ ] Remove any imports of `@/lib/json-store` from main codebase
+- [x] Delete `lib/json-store/` directory entirely
+- [x] Remove any imports of `@/lib/json-store` from main codebase
+- [x] Move shared type definitions to `lib/schemas/types.ts`
+- [x] Move plugin-manifest schema to `lib/schemas/plugin-manifest.ts`
+- [x] Update all imports throughout codebase to use new locations
 
 #### 5.2 Clean Up Related Files
 
-- [ ] Remove `public/data/` directory references in code
-- [ ] Update `.gitignore` to remove local data directory ignores (if appropriate)
-- [ ] Remove local file path utilities that are no longer needed
+- [x] Remove `public/data/` directory references in code (removed `LOCAL_STORAGE_DIR` from cascade-delete.ts)
+- [x] Delete legacy migration scripts (`scripts/consolidate-images.ts`, `scripts/migrate-files.ts`)
+- [x] Delete obsolete tests (`__tests__/integration/json-store.integration.test.ts`, `__tests__/unit/lib/json-store/`)
+- [x] Update `lib/auth/anonymous-user.ts` to use MongoDB repository instead of JSON store
+- [x] Update `lib/auth/totp.ts` to use MongoDB repository instead of JSON store
+- [x] Update `app/api/auth/change-password/route.ts` to use MongoDB repository
+- [x] Update plugin migration files to use local json-store copy instead of `@/lib/json-store`
+- [x] Verified build passes with no errors
 
 ### Phase 6: Update Documentation
 

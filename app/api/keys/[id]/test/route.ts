@@ -10,7 +10,7 @@ import { getServerSession } from '@/lib/auth/session'
 import { getRepositories } from '@/lib/repositories/factory'
 import { decryptApiKey } from '@/lib/encryption'
 import { logger } from '@/lib/logger'
-import { Provider } from '@/lib/json-store/schemas/types'
+import { Provider } from '@/lib/schemas/types'
 import { providerRegistry } from '@/lib/plugins/provider-registry'
 
 /**

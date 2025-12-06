@@ -7,7 +7,7 @@
  * can be included in a request.
  */
 
-import { Provider } from '@/lib/json-store/schemas/types'
+import { Provider } from '@/lib/schemas/types'
 import { FALLBACK_PRICING, ModelPricing } from './pricing'
 
 /**

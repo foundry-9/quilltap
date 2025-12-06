@@ -2,7 +2,7 @@
 
 import { MouseEvent } from 'react'
 import { useTagStyles } from '@/components/providers/tag-style-provider'
-import type { TagVisualStyle } from '@/lib/json-store/schemas/types'
+import type { TagVisualStyle } from '@/lib/schemas/types'
 import { mergeWithDefaultTagStyle } from '@/lib/tags/styles'
 
 interface TagBadgeProps {

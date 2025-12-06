@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { useTagStyles } from '@/components/providers/tag-style-provider'
 import { DEFAULT_TAG_STYLE, mergeWithDefaultTagStyle } from '@/lib/tags/styles'
-import type { TagVisualStyle } from '@/lib/json-store/schemas/types'
+import type { TagVisualStyle } from '@/lib/schemas/types'
 import { TagBadge } from '@/components/tags/tag-badge'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 

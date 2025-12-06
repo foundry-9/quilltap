@@ -9,7 +9,7 @@ import fetch from 'node-fetch';
 import { getRepositories } from './repositories/factory';
 import { uploadFile as uploadS3File, deleteFile as deleteS3File, downloadFile as downloadS3File } from './s3/operations';
 import { buildS3Key } from './s3/client';
-import type { FileEntry, FileSource, FileCategory } from './json-store/schemas/types';
+import type { FileEntry, FileSource, FileCategory } from './schemas/types';
 import { logger } from './logger';
 
 export interface ImageUploadResult {

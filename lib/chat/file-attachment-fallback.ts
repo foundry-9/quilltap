@@ -9,7 +9,7 @@
 import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils'
 import { createLLMProvider } from '@/lib/llm'
 import { decryptApiKey } from '@/lib/encryption'
-import type { ConnectionProfile } from '@/lib/json-store/schemas/types'
+import type { ConnectionProfile } from '@/lib/schemas/types'
 import type { FileAttachment } from '@/lib/llm/base'
 import { join } from 'path'
 import { readFile } from 'fs/promises'
