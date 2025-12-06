@@ -4,17 +4,13 @@
  */
 
 import { createHash } from 'node:crypto';
-import { promises as fs } from 'node:fs';
-import { join, extname } from 'node:path';
+import { extname } from 'node:path';
 import { FileAttachment } from './llm/base';
 import { getRepositories } from './repositories/factory';
-import { isS3Enabled } from './s3/config';
 import { uploadFile as uploadS3File, deleteFile as deleteS3File, downloadFile as downloadS3File } from './s3/operations';
 import { buildS3Key } from './s3/client';
 import type { FileEntry, FileCategory } from './json-store/schemas/types';
 import { logger } from '@/lib/logger';
-
-const LOCAL_STORAGE_DIR = 'public/data/files/storage';
 
 export interface ChatFileUploadResult {
   id: string;
@@ -51,13 +47,6 @@ const ALLOWED_CHAT_FILE_TYPES = [
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 /**
- * Ensure local storage directory exists
- */
-async function ensureLocalStorageDir(): Promise<void> {
-  await fs.mkdir(LOCAL_STORAGE_DIR, { recursive: true });
-}
-
-/**
  * Get the file extension from an original filename
  */
 function getExtension(filename: string): string {
@@ -66,14 +55,10 @@ function getExtension(filename: string): string {
 }
 
 /**
- * Get the filepath for a file based on storage type
+ * Get the filepath for a file - always returns API path for S3-backed files
  */
-function getFilePath(fileId: string, originalFilename: string, s3Key?: string | null): string {
-  if (s3Key) {
-    return `/api/files/${fileId}`;
-  }
-  const ext = getExtension(originalFilename);
-  return `data/files/storage/${fileId}${ext}`;
+function getFilePath(fileId: string): string {
+  return `/api/files/${fileId}`;
 }
 
 /**
@@ -132,7 +117,7 @@ export async function uploadChatFile(
         return {
           id: updated.id,
           filename: updated.originalFilename,
-          filepath: getFilePath(updated.id, updated.originalFilename, updated.s3Key),
+          filepath: getFilePath(updated.id),
           mimeType: updated.mimeType,
           size: updated.size,
           sha256: updated.sha256,
@@ -145,7 +130,7 @@ export async function uploadChatFile(
     return {
       id: existing.id,
       filename: existing.originalFilename,
-      filepath: getFilePath(existing.id, existing.originalFilename, existing.s3Key),
+      filepath: getFilePath(existing.id),
       mimeType: existing.mimeType,
       size: existing.size,
       sha256: existing.sha256,
@@ -156,28 +141,17 @@ export async function uploadChatFile(
 
   // Generate a new file ID
   const fileId = crypto.randomUUID();
-  const ext = getExtension(file.name);
-  let s3Key: string | null = null;
 
-  // Store the file bytes
-  if (isS3Enabled()) {
-    // Upload to S3
-    s3Key = buildS3Key(userId, fileId, file.name, category);
-    await uploadS3File(s3Key, buffer, file.type, {
-      userId,
-      fileId,
-      category,
-      filename: file.name,
-      sha256,
-    });
-    logger.debug('Uploaded chat file to S3', { fileId, s3Key, size: buffer.length });
-  } else {
-    // Store locally
-    await ensureLocalStorageDir();
-    const localPath = join(LOCAL_STORAGE_DIR, `${fileId}${ext}`);
-    await fs.writeFile(localPath, buffer);
-    logger.debug('Stored chat file locally', { fileId, localPath, size: buffer.length });
-  }
+  // Upload to S3
+  const s3Key = buildS3Key(userId, fileId, file.name, category);
+  await uploadS3File(s3Key, buffer, file.type, {
+    userId,
+    fileId,
+    category,
+    filename: file.name,
+    sha256,
+  });
+  logger.debug('Uploaded chat file to S3', { fileId, s3Key, size: buffer.length });
 
   // Create metadata in repository
   const fileEntry = await repos.files.create({
@@ -204,7 +178,7 @@ export async function uploadChatFile(
   return {
     id: fileEntry.id,
     filename: fileEntry.originalFilename,
-    filepath: getFilePath(fileEntry.id, fileEntry.originalFilename, fileEntry.s3Key),
+    filepath: getFilePath(fileEntry.id),
     mimeType: fileEntry.mimeType,
     size: fileEntry.size,
     sha256: fileEntry.sha256,
@@ -214,7 +188,7 @@ export async function uploadChatFile(
 }
 
 /**
- * Read a file as base64
+ * Read a file as base64 from S3
  */
 async function readFileAsBase64(fileId: string): Promise<string> {
   const repos = getRepositories();
@@ -224,19 +198,13 @@ async function readFileAsBase64(fileId: string): Promise<string> {
     throw new Error(`File not found: ${fileId}`);
   }
 
-  let buffer: Buffer;
-
-  if (entry.s3Key) {
-    // Download from S3
-    buffer = await downloadS3File(entry.s3Key);
-    logger.debug('Downloaded file from S3 for base64', { fileId, s3Key: entry.s3Key, size: buffer.length });
-  } else {
-    // Read from local storage
-    const ext = getExtension(entry.originalFilename);
-    const localPath = join(LOCAL_STORAGE_DIR, `${fileId}${ext}`);
-    buffer = await fs.readFile(localPath);
-    logger.debug('Read file from local storage for base64', { fileId, localPath, size: buffer.length });
+  if (!entry.s3Key) {
+    throw new Error(`File ${fileId} has no S3 key - file may need migration`);
   }
+
+  // Download from S3
+  const buffer = await downloadS3File(entry.s3Key);
+  logger.debug('Downloaded file from S3 for base64', { fileId, s3Key: entry.s3Key, size: buffer.length });
 
   return buffer.toString('base64');
 }
@@ -264,7 +232,7 @@ export async function loadChatFilesForLLM(
 
       attachments.push({
         id: fileEntry.id,
-        filepath: getFilePath(fileEntry.id, fileEntry.originalFilename, fileEntry.s3Key),
+        filepath: getFilePath(fileEntry.id),
         filename: fileEntry.originalFilename,
         mimeType: fileEntry.mimeType,
         size: fileEntry.size,
@@ -289,7 +257,7 @@ export async function loadChatFilesForLLM(
 }
 
 /**
- * Delete a chat file from the server
+ * Delete a chat file from S3 and repository
  */
 export async function deleteChatFileById(fileId: string): Promise<void> {
   const repos = getRepositories();
@@ -300,26 +268,13 @@ export async function deleteChatFileById(fileId: string): Promise<void> {
     return;
   }
 
-  // Delete the file bytes
+  // Delete the file bytes from S3
   if (entry.s3Key) {
     try {
       await deleteS3File(entry.s3Key);
       logger.debug('Deleted chat file from S3', { fileId, s3Key: entry.s3Key });
     } catch (error) {
       logger.error('Failed to delete chat file from S3', { fileId, s3Key: entry.s3Key }, error instanceof Error ? error : undefined);
-    }
-  } else {
-    // Delete from local storage
-    const ext = getExtension(entry.originalFilename);
-    const localPath = join(LOCAL_STORAGE_DIR, `${fileId}${ext}`);
-    try {
-      await fs.unlink(localPath);
-      logger.debug('Deleted chat file from local storage', { fileId, localPath });
-    } catch (error: unknown) {
-      const err = error as NodeJS.ErrnoException;
-      if (err.code !== 'ENOENT') {
-        logger.error('Failed to delete local chat file', { fileId, localPath }, err);
-      }
     }
   }
 
@@ -337,7 +292,7 @@ export async function getChatFileById(fileId: string): Promise<FileEntry | null>
 }
 
 /**
- * Read chat file as buffer
+ * Read chat file as buffer from S3
  */
 export async function readChatFileBuffer(fileId: string): Promise<Buffer> {
   const repos = getRepositories();
@@ -347,19 +302,14 @@ export async function readChatFileBuffer(fileId: string): Promise<Buffer> {
     throw new Error(`File not found: ${fileId}`);
   }
 
-  if (entry.s3Key) {
-    // Download from S3
-    const buffer = await downloadS3File(entry.s3Key);
-    logger.debug('Downloaded chat file from S3', { fileId, s3Key: entry.s3Key, size: buffer.length });
-    return buffer;
-  } else {
-    // Read from local storage
-    const ext = getExtension(entry.originalFilename);
-    const localPath = join(LOCAL_STORAGE_DIR, `${fileId}${ext}`);
-    const buffer = await fs.readFile(localPath);
-    logger.debug('Read chat file from local storage', { fileId, localPath, size: buffer.length });
-    return buffer;
+  if (!entry.s3Key) {
+    throw new Error(`File ${fileId} has no S3 key - file may need migration`);
   }
+
+  // Download from S3
+  const buffer = await downloadS3File(entry.s3Key);
+  logger.debug('Downloaded chat file from S3', { fileId, s3Key: entry.s3Key, size: buffer.length });
+  return buffer;
 }
 
 /**

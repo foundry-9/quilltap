@@ -4,17 +4,13 @@
  */
 
 import { createHash } from 'node:crypto';
-import { promises as fs } from 'node:fs';
-import { join, extname } from 'node:path';
+import { extname } from 'node:path';
 import fetch from 'node-fetch';
 import { getRepositories } from './repositories/factory';
-import { isS3Enabled } from './s3/config';
 import { uploadFile as uploadS3File, deleteFile as deleteS3File, downloadFile as downloadS3File } from './s3/operations';
 import { buildS3Key } from './s3/client';
 import type { FileEntry, FileSource, FileCategory } from './json-store/schemas/types';
 import { logger } from './logger';
-
-const LOCAL_STORAGE_DIR = 'public/data/files/storage';
 
 export interface ImageUploadResult {
   id: string;
@@ -57,13 +53,6 @@ async function getImageDimensions(_buffer: Buffer, _mimeType: string): Promise<{
 }
 
 /**
- * Ensure local storage directory exists
- */
-async function ensureLocalStorageDir(): Promise<void> {
-  await fs.mkdir(LOCAL_STORAGE_DIR, { recursive: true });
-}
-
-/**
  * Get the file extension from an original filename
  */
 function getExtension(filename: string): string {
@@ -72,14 +61,10 @@ function getExtension(filename: string): string {
 }
 
 /**
- * Get the filepath for a file based on storage type
+ * Get the filepath for a file - always returns the API path for S3-backed files
  */
-function getFilePath(fileId: string, originalFilename: string, s3Key?: string | null): string {
-  if (s3Key) {
-    return `/api/files/${fileId}`;
-  }
-  const ext = getExtension(originalFilename);
-  return `data/files/storage/${fileId}${ext}`;
+function getFilePath(fileId: string): string {
+  return `/api/files/${fileId}`;
 }
 
 interface CreateFileParams {
@@ -100,7 +85,7 @@ interface CreateFileParams {
 }
 
 /**
- * Create a new file - stores bytes to S3 or local filesystem, and metadata to repository
+ * Create a new file - stores bytes to S3 and metadata to repository
  */
 async function createFile(params: CreateFileParams): Promise<FileEntry> {
   const {
@@ -128,7 +113,7 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
   if (existingFiles.length > 0) {
     const existing = existingFiles[0];
 
-    // Verify the actual file bytes still exist before returning the cached entry
+    // Verify the actual file bytes still exist in S3 before returning the cached entry
     let fileExists = false;
     if (existing.s3Key) {
       try {
@@ -137,16 +122,6 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
         fileExists = true;
       } catch {
         logger.debug('S3 file no longer exists, will re-upload', { fileId: existing.id, s3Key: existing.s3Key });
-      }
-    } else {
-      // Check local filesystem
-      const ext = getExtension(existing.originalFilename);
-      const localPath = join(LOCAL_STORAGE_DIR, `${existing.id}${ext}`);
-      try {
-        await fs.access(localPath);
-        fileExists = true;
-      } catch {
-        logger.debug('Local file no longer exists, will re-upload', { fileId: existing.id, localPath });
       }
     }
 
@@ -171,28 +146,17 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
 
   // Generate a new file ID
   const fileId = crypto.randomUUID();
-  const ext = getExtension(originalFilename);
-  let s3Key: string | null = null;
 
-  // Store the file bytes
-  if (isS3Enabled()) {
-    // Upload to S3
-    s3Key = buildS3Key(userId, fileId, originalFilename, category);
-    await uploadS3File(s3Key, buffer, mimeType, {
-      userId,
-      fileId,
-      category,
-      filename: originalFilename,
-      sha256,
-    });
-    logger.debug('Uploaded file to S3', { fileId, s3Key, size: buffer.length });
-  } else {
-    // Store locally
-    await ensureLocalStorageDir();
-    const localPath = join(LOCAL_STORAGE_DIR, `${fileId}${ext}`);
-    await fs.writeFile(localPath, buffer);
-    logger.debug('Stored file locally', { fileId, localPath, size: buffer.length });
-  }
+  // Upload to S3
+  const s3Key = buildS3Key(userId, fileId, originalFilename, category);
+  await uploadS3File(s3Key, buffer, mimeType, {
+    userId,
+    fileId,
+    category,
+    filename: originalFilename,
+    sha256,
+  });
+  logger.debug('Uploaded file to S3', { fileId, s3Key, size: buffer.length });
 
   // Create metadata in repository
   const fileEntry = await repos.files.create({
@@ -219,7 +183,7 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
 }
 
 /**
- * Delete a file - removes bytes from S3 or local filesystem, and metadata from repository
+ * Delete a file - removes bytes from S3 and metadata from repository
  */
 async function deleteFile(fileId: string): Promise<boolean> {
   const repos = getRepositories();
@@ -230,26 +194,13 @@ async function deleteFile(fileId: string): Promise<boolean> {
     return false;
   }
 
-  // Delete the file bytes
+  // Delete the file bytes from S3
   if (entry.s3Key) {
     try {
       await deleteS3File(entry.s3Key);
       logger.debug('Deleted file from S3', { fileId, s3Key: entry.s3Key });
     } catch (error) {
       logger.error('Failed to delete file from S3', { fileId, s3Key: entry.s3Key }, error instanceof Error ? error : undefined);
-    }
-  } else {
-    // Delete from local storage
-    const ext = getExtension(entry.originalFilename);
-    const localPath = join(LOCAL_STORAGE_DIR, `${fileId}${ext}`);
-    try {
-      await fs.unlink(localPath);
-      logger.debug('Deleted file from local storage', { fileId, localPath });
-    } catch (error: unknown) {
-      const err = error as NodeJS.ErrnoException;
-      if (err.code !== 'ENOENT') {
-        logger.error('Failed to delete local file', { fileId, localPath }, err);
-      }
     }
   }
 
@@ -260,7 +211,7 @@ async function deleteFile(fileId: string): Promise<boolean> {
 }
 
 /**
- * Read a file as buffer
+ * Read a file as buffer from S3
  */
 async function readFile(fileId: string): Promise<Buffer> {
   const repos = getRepositories();
@@ -270,19 +221,14 @@ async function readFile(fileId: string): Promise<Buffer> {
     throw new Error(`File not found: ${fileId}`);
   }
 
-  if (entry.s3Key) {
-    // Download from S3
-    const buffer = await downloadS3File(entry.s3Key);
-    logger.debug('Downloaded file from S3', { fileId, s3Key: entry.s3Key, size: buffer.length });
-    return buffer;
-  } else {
-    // Read from local storage
-    const ext = getExtension(entry.originalFilename);
-    const localPath = join(LOCAL_STORAGE_DIR, `${fileId}${ext}`);
-    const buffer = await fs.readFile(localPath);
-    logger.debug('Read file from local storage', { fileId, localPath, size: buffer.length });
-    return buffer;
+  if (!entry.s3Key) {
+    throw new Error(`File ${fileId} has no S3 key - file may need migration`);
   }
+
+  // Download from S3
+  const buffer = await downloadS3File(entry.s3Key);
+  logger.debug('Downloaded file from S3', { fileId, s3Key: entry.s3Key, size: buffer.length });
+  return buffer;
 }
 
 /**
@@ -333,7 +279,7 @@ export async function uploadImage(file: File, userId: string, linkedTo: string[]
   return {
     id: fileEntry.id,
     filename: fileEntry.originalFilename,
-    filepath: getFilePath(fileEntry.id, fileEntry.originalFilename, fileEntry.s3Key),
+    filepath: getFilePath(fileEntry.id),
     mimeType: fileEntry.mimeType,
     size: fileEntry.size,
     width: fileEntry.width || undefined,
@@ -391,7 +337,7 @@ export async function importImageFromUrl(url: string, userId: string, linkedTo: 
   return {
     id: fileEntry.id,
     filename: fileEntry.originalFilename,
-    filepath: getFilePath(fileEntry.id, fileEntry.originalFilename, fileEntry.s3Key),
+    filepath: getFilePath(fileEntry.id),
     mimeType: fileEntry.mimeType,
     size: fileEntry.size,
     width: fileEntry.width || undefined,

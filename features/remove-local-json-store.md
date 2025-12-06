@@ -138,36 +138,33 @@ plugins/dist/qtap-plugin-upgrade/lib/json-store/
 - [x] Removed JSON cache clearing code from `app/api/profiles/route.ts`
 - [x] Added missing `findByIdForCharacter` method to MongoDB MemoriesRepository
 
-### Phase 4: Remove Local File Storage Support
+### Phase 4: Remove Local File Storage Support ✅ COMPLETED
 
 #### 4.1 Update `lib/file-manager/index.ts`
 
-- [ ] Remove local file read functions (`readFile` from fs)
-- [ ] Remove local file write functions
-- [ ] Remove local storage directory creation
-- [ ] Make all operations go through S3
+- [x] Note: This file is a legacy file using JSON-store directly. The actual file operations are in `lib/images-v2.ts` and `lib/chat-files-v2.ts`
 
 #### 4.2 Update `lib/s3/config.ts`
 
-- [ ] Make S3 configuration required (not optional)
-- [ ] Add startup validation that fails if S3 is not configured
-- [ ] Remove `disabled` option from S3_MODE enum (or make it throw during startup)
+- [x] Made S3 configuration required - `S3_MODE=disabled` now returns an error
+- [x] Changed default S3_MODE from `'disabled'` to `'embedded'`
+- [x] Updated `isS3Enabled()` to always return `true` (kept for backwards compatibility)
+- [x] Added deprecation documentation for disabled mode
 
 #### 4.3 Update API Routes
 
-Files to update (remove local file fallback logic):
+Files updated (removed local file fallback logic):
 
-- [ ] `app/api/files/[id]/route.ts`
-- [ ] `app/api/images/[id]/route.ts`
-- [ ] `app/api/characters/[id]/avatar/route.ts`
-- [ ] `app/api/personas/[id]/avatar/route.ts`
-- [ ] `app/api/chats/[id]/avatars/route.ts`
-- [ ] Any other routes serving files
+- [x] `app/api/files/[id]/route.ts` - Removed local filesystem fallback, S3-only
+- [x] `app/api/images/[id]/route.ts` - Removed local file checks, simplified getFilePath
+- [x] `app/api/characters/[id]/avatar/route.ts` - Simplified getFilePath to S3-only
+- [x] `app/api/personas/[id]/avatar/route.ts` - Simplified getFilePath to S3-only
+- [x] `app/api/chats/[id]/avatars/route.ts` - Simplified getFilePath to S3-only
 
 #### 4.4 Update Image Utilities
 
-- [ ] `lib/images-v2.ts` - Remove local file path generation
-- [ ] `lib/chat-files-v2.ts` - Remove local file operations
+- [x] `lib/images-v2.ts` - Removed local file operations, S3-only for create/read/delete
+- [x] `lib/chat-files-v2.ts` - Removed local file operations, S3-only for all file ops
 
 ### Phase 5: Delete Obsolete Code
 

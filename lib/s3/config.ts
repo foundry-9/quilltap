@@ -25,6 +25,8 @@ const s3ConfigSchema = z.object({
 
 /**
  * S3 storage mode type
+ * NOTE: 'disabled' mode is deprecated and will throw an error at runtime.
+ * S3 storage (embedded or external) is now required.
  */
 export type S3Mode = 'embedded' | 'external' | 'disabled';
 
@@ -163,7 +165,7 @@ function validateRegionEndpoint(
 export function validateS3Config(): S3Config {
   const logger_inst = logger.child({ module: 's3:config' });
 
-  const mode = (process.env.S3_MODE || 'disabled') as S3Mode;
+  const mode = (process.env.S3_MODE || 'embedded') as S3Mode;
   const errors: string[] = [];
 
   logger_inst.debug('Starting S3 configuration validation', {
@@ -172,16 +174,17 @@ export function validateS3Config(): S3Config {
     bucket: process.env.S3_BUCKET,
   });
 
-  // If disabled, return early with minimal config
+  // If disabled, return error - S3 is now required
   if (mode === 'disabled') {
-    logger_inst.debug('S3 mode is disabled, skipping validation');
+    const errorMsg = 'S3_MODE=disabled is no longer supported. S3 storage (embedded or external) is required. Set S3_MODE=embedded or S3_MODE=external.';
+    logger_inst.error(errorMsg);
     return {
       mode,
       region: 'us-east-1',
       bucket: '',
       forcePathStyle: false,
-      isConfigured: true,
-      errors: [],
+      isConfigured: false,
+      errors: [errorMsg],
     };
   }
 
@@ -300,13 +303,15 @@ export function validateS3Config(): S3Config {
 
 /**
  * Check if S3 is enabled in the current configuration
- * Returns false if S3_MODE is 'disabled'
+ * S3 is now always required, so this always returns true.
  *
- * @returns boolean True if S3 is enabled, false if disabled
+ * @deprecated S3 is now always required. This function always returns true.
+ * @returns boolean Always returns true as S3 is required
  */
 export function isS3Enabled(): boolean {
-  const mode = (process.env.S3_MODE || 'disabled') as S3Mode;
-  return mode !== 'disabled';
+  // S3 is now required - this function is kept for backwards compatibility
+  // but always returns true
+  return true;
 }
 
 /**

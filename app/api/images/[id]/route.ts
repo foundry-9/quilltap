@@ -7,28 +7,17 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { promises as fs } from 'node:fs';
-import { join, extname } from 'node:path';
 import { getServerSession } from '@/lib/auth/session';
 import { getRepositories } from '@/lib/repositories/factory';
-import { isS3Enabled } from '@/lib/s3/config';
 import { deleteFile as deleteS3File, downloadFile as downloadS3File } from '@/lib/s3/operations';
 import { logger } from '@/lib/logger';
 import type { FileEntry } from '@/lib/json-store/schemas/types';
 
-const LOCAL_STORAGE_DIR = 'public/data/files/storage';
-
 /**
- * Get the filepath for an image based on storage type
+ * Get the filepath for an image - always returns API path for S3-backed files
  */
 function getFilePath(image: FileEntry): string {
-  if (image.s3Key) {
-    return `/api/files/${image.id}`;
-  }
-  const ext = image.originalFilename.includes('.')
-    ? image.originalFilename.substring(image.originalFilename.lastIndexOf('.'))
-    : '';
-  return `data/files/storage/${image.id}${ext}`;
+  return `/api/files/${image.id}`;
 }
 
 interface RouteContext {
@@ -171,26 +160,14 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Image not found' }, { status: 404 });
     }
 
-    // Check if the underlying file actually exists (to detect orphaned metadata)
+    // Check if the underlying file actually exists in S3 (to detect orphaned metadata)
     let fileExists = false;
-    const s3Enabled = isS3Enabled();
-    if (s3Enabled && image.s3Key) {
+    if (image.s3Key) {
       try {
         await downloadS3File(image.s3Key);
         fileExists = true;
       } catch {
         logger.debug('DELETE /api/images/[id] - S3 file does not exist (orphaned)', { imageId: id, s3Key: image.s3Key });
-      }
-    } else if (!s3Enabled) {
-      const ext = image.originalFilename.includes('.')
-        ? image.originalFilename.substring(image.originalFilename.lastIndexOf('.'))
-        : '';
-      const localPath = join(LOCAL_STORAGE_DIR, `${image.id}${ext}`);
-      try {
-        await fs.access(localPath);
-        fileExists = true;
-      } catch {
-        logger.debug('DELETE /api/images/[id] - Local file does not exist (orphaned)', { imageId: id, localPath });
       }
     }
 
@@ -261,8 +238,8 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       );
     }
 
-    // Delete from S3 if applicable
-    if (s3Enabled && image.s3Key) {
+    // Delete from S3 if file has s3Key
+    if (image.s3Key) {
       try {
         await deleteS3File(image.s3Key);
         logger.debug('DELETE /api/images/[id] - Deleted from S3', { imageId: id, s3Key: image.s3Key });

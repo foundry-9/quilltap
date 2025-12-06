@@ -16,16 +16,10 @@ import { z } from 'zod';
 import type { FileEntry } from '@/lib/json-store/schemas/types';
 
 /**
- * Get the filepath for a file based on storage type
+ * Get the filepath for a file - always returns API path for S3-backed files
  */
 function getFilePath(file: FileEntry): string {
-  if (file.s3Key) {
-    return `/api/files/${file.id}`;
-  }
-  const ext = file.originalFilename.includes('.')
-    ? file.originalFilename.substring(file.originalFilename.lastIndexOf('.'))
-    : '';
-  return `data/files/storage/${file.id}${ext}`;
+  return `/api/files/${file.id}`;
 }
 
 interface RouteContext {

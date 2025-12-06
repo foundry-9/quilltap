@@ -10,26 +10,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth/session';
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
-import { isS3Enabled } from '@/lib/s3/config';
 import { downloadFile as downloadS3File, getPresignedUrl, deleteFile as deleteS3File } from '@/lib/s3/operations';
-import { promises as fs } from 'node:fs';
-import { join, extname } from 'node:path';
-
-const LOCAL_STORAGE_DIR = 'public/data/files/storage';
-
-/**
- * Read a file from local storage
- */
-async function readLocalFile(fileId: string, originalFilename: string): Promise<Buffer> {
-  const ext = extname(originalFilename) || '';
-  const localPath = join(LOCAL_STORAGE_DIR, `${fileId}${ext}`);
-  return await fs.readFile(localPath);
-}
 
 /**
  * GET /api/files/:id
- * Retrieve a file by its ID
- * Supports both local filesystem and S3 storage
+ * Retrieve a file by its ID from S3 storage
  */
 export async function GET(
   _request: NextRequest,
@@ -43,7 +28,7 @@ export async function GET(
 
     const { id: fileId } = await params;
 
-    // Get file metadata from repository (supports MongoDB and JSON backends)
+    // Get file metadata from repository
     const repos = getRepositories();
     const fileEntry = await repos.files.findById(fileId);
     if (!fileEntry) {
@@ -51,110 +36,57 @@ export async function GET(
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 
-    logger.debug('Serving file', { context: 'GET /api/files/[id]', fileId, hasS3Key: !!fileEntry.s3Key });
-
-    // Check if file should be served from S3
-    const s3Enabled = isS3Enabled();
-    if (s3Enabled && fileEntry.s3Key) {
-      logger.debug('S3 enabled and file has s3Key, attempting S3 serving', {
-        context: 'GET /api/files/[id]',
-        fileId,
-        s3Key: fileEntry.s3Key,
-        fileSize: fileEntry.size,
-      });
-
-      try {
-        // Check if we should use presigned URL redirect or proxy through API
-        // For HTTP endpoints (e.g., local MinIO), we must proxy to avoid mixed content issues
-        // when the app is served over HTTPS
-        const s3Endpoint = process.env.S3_ENDPOINT || '';
-        const isHttpEndpoint = s3Endpoint.startsWith('http://');
-        const LARGE_FILE_THRESHOLD = 5 * 1024 * 1024; // 5MB
-
-        // Use presigned URL redirect for large files ONLY if endpoint is HTTPS or AWS S3 (no custom endpoint)
-        if (fileEntry.size > LARGE_FILE_THRESHOLD && !isHttpEndpoint) {
-          logger.debug('File size exceeds threshold, generating presigned URL redirect', {
-            context: 'GET /api/files/[id]',
-            fileId,
-            fileSize: fileEntry.size,
-            threshold: LARGE_FILE_THRESHOLD,
-          });
-
-          const presignedUrl = await getPresignedUrl(fileEntry.s3Key);
-          logger.debug('Presigned URL generated successfully', {
-            context: 'GET /api/files/[id]',
-            fileId,
-            hasUrl: !!presignedUrl,
-          });
-
-          return NextResponse.redirect(presignedUrl);
-        }
-
-        // Download files and serve through API (required for HTTP endpoints to avoid mixed content)
-        if (isHttpEndpoint && fileEntry.size > LARGE_FILE_THRESHOLD) {
-          logger.debug('Proxying large file through API due to HTTP S3 endpoint', {
-            context: 'GET /api/files/[id]',
-            fileId,
-            fileSize: fileEntry.size,
-            endpoint: s3Endpoint,
-          });
-        }
-
-        // Download files and return directly
-        logger.debug('File size is small, downloading from S3', {
-          context: 'GET /api/files/[id]',
-          fileId,
-          fileSize: fileEntry.size,
-        });
-
-        const buffer = await downloadS3File(fileEntry.s3Key);
-
-        logger.debug('File downloaded from S3', {
-          context: 'GET /api/files/[id]',
-          fileId,
-          downloadedSize: buffer.length,
-        });
-
-        return new NextResponse(new Uint8Array(buffer), {
-          headers: {
-            'Content-Type': fileEntry.mimeType,
-            'Content-Length': buffer.length.toString(),
-            'Content-Disposition': `inline; filename="${fileEntry.originalFilename}"`,
-            'Cache-Control': 'public, max-age=31536000, immutable',
-          },
-        });
-      } catch (s3Error) {
-        logger.warn('S3 serving failed, falling back to local filesystem', {
-          context: 'GET /api/files/[id]',
-          fileId,
-          s3Key: fileEntry.s3Key,
-          error: s3Error instanceof Error ? s3Error.message : 'Unknown error',
-        });
-
-        // Fall through to local filesystem serving
-      }
+    if (!fileEntry.s3Key) {
+      logger.error('File has no S3 key - may need migration', { context: 'GET /api/files/[id]', fileId });
+      return NextResponse.json({ error: 'File not available - migration required' }, { status: 500 });
     }
 
-    // Serve from local filesystem (default or fallback)
-    logger.debug('Serving file from local filesystem', {
+    logger.debug('Serving file from S3', { context: 'GET /api/files/[id]', fileId, s3Key: fileEntry.s3Key });
+
+    // Check if we should use presigned URL redirect or proxy through API
+    // For HTTP endpoints (e.g., local MinIO), we must proxy to avoid mixed content issues
+    const s3Endpoint = process.env.S3_ENDPOINT || '';
+    const isHttpEndpoint = s3Endpoint.startsWith('http://');
+    const LARGE_FILE_THRESHOLD = 5 * 1024 * 1024; // 5MB
+
+    // Use presigned URL redirect for large files ONLY if endpoint is HTTPS or AWS S3 (no custom endpoint)
+    if (fileEntry.size > LARGE_FILE_THRESHOLD && !isHttpEndpoint) {
+      logger.debug('File size exceeds threshold, generating presigned URL redirect', {
+        context: 'GET /api/files/[id]',
+        fileId,
+        fileSize: fileEntry.size,
+        threshold: LARGE_FILE_THRESHOLD,
+      });
+
+      const presignedUrl = await getPresignedUrl(fileEntry.s3Key);
+      logger.debug('Presigned URL generated successfully', {
+        context: 'GET /api/files/[id]',
+        fileId,
+        hasUrl: !!presignedUrl,
+      });
+
+      return NextResponse.redirect(presignedUrl);
+    }
+
+    // Download file and serve through API
+    logger.debug('Downloading file from S3', {
       context: 'GET /api/files/[id]',
       fileId,
-      s3Enabled,
+      fileSize: fileEntry.size,
     });
 
-    const buffer = await readLocalFile(fileId, fileEntry.originalFilename);
+    const buffer = await downloadS3File(fileEntry.s3Key);
 
-    logger.debug('File read from local storage', {
+    logger.debug('File downloaded from S3', {
       context: 'GET /api/files/[id]',
       fileId,
-      size: buffer.length,
+      downloadedSize: buffer.length,
     });
 
-    // Return file with appropriate headers
-    return new NextResponse(Buffer.from(buffer), {
+    return new NextResponse(new Uint8Array(buffer), {
       headers: {
         'Content-Type': fileEntry.mimeType,
-        'Content-Length': fileEntry.size.toString(),
+        'Content-Length': buffer.length.toString(),
         'Content-Disposition': `inline; filename="${fileEntry.originalFilename}"`,
         'Cache-Control': 'public, max-age=31536000, immutable',
       },
@@ -170,8 +102,7 @@ export async function GET(
 
 /**
  * DELETE /api/files/:id
- * Delete a file by its ID
- * Handles deletion from both local filesystem and S3 storage
+ * Delete a file by its ID from S3 storage
  */
 export async function DELETE(
   _request: NextRequest,
@@ -185,7 +116,7 @@ export async function DELETE(
 
     const { id: fileId } = await params;
 
-    // Get file metadata from repository (supports MongoDB and JSON backends)
+    // Get file metadata from repository
     const repos = getRepositories();
     const fileEntry = await repos.files.findById(fileId);
     if (!fileEntry) {
@@ -212,10 +143,9 @@ export async function DELETE(
       );
     }
 
-    // Delete from S3 if applicable
-    const s3Enabled = isS3Enabled();
-    if (s3Enabled && fileEntry.s3Key) {
-      logger.debug('S3 enabled and file has s3Key, deleting from S3', {
+    // Delete from S3 if file has s3Key
+    if (fileEntry.s3Key) {
+      logger.debug('Deleting file from S3', {
         context: 'DELETE /api/files/[id]',
         fileId,
         s3Key: fileEntry.s3Key,
@@ -235,7 +165,6 @@ export async function DELETE(
           s3Key: fileEntry.s3Key,
           error: s3Error instanceof Error ? s3Error.message : 'Unknown error',
         });
-
         // Continue with metadata deletion even if S3 deletion fails
       }
     }
