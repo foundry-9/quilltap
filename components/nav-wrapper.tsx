@@ -16,6 +16,9 @@ export default function NavWrapper() {
   const [tagsFetched, setTagsFetched] = useState(false);
   const [chatId, setChatId] = useState<string | null>(null);
 
+  // Check if we're on an auth page - hide nav on these routes regardless of session state
+  const isAuthPage = pathname?.startsWith('/auth/');
+
   // Extract chat ID from pathname
   useEffect(() => {
     const chatMatch = pathname?.match(/^\/chats\/([^/]+)$/);
@@ -98,7 +101,8 @@ export default function NavWrapper() {
     }
   };
 
-  if (!session) {
+  // Hide nav on auth pages or if no session
+  if (isAuthPage || !session) {
     return null;
   }
 

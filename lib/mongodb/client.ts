@@ -97,7 +97,7 @@ export async function getMongoClient(): Promise<MongoClient> {
 
     // Set up event listeners for connection events
     mongoClient.on('connectionClosed', () => {
-      logger.info('MongoDB connection closed');
+      logger.debug('MongoDB connection closed');
     });
 
     mongoClient.on('error', (error) => {
@@ -186,7 +186,7 @@ export async function closeMongoConnection(): Promise<void> {
     if (mongoClient) {
       logger.debug('Closing MongoDB connection');
       await mongoClient.close();
-      logger.info('MongoDB connection closed successfully');
+      logger.debug('MongoDB connection closed successfully');
     }
 
     mongoClient = null;
@@ -206,7 +206,7 @@ export async function closeMongoConnection(): Promise<void> {
  */
 export function setupMongoDBShutdownHandlers(): void {
   const handleShutdown = async () => {
-    logger.info('Process shutdown signal received, closing MongoDB connection');
+    logger.debug('Process shutdown signal received, closing MongoDB connection');
     await closeMongoConnection();
   };
 
