@@ -34,15 +34,14 @@ async function loadAttachedFiles(repos: ReturnType<typeof getRepositories>, chat
     return []
   }
 
-  // Use the new file manager system instead of repos.images
-  const { findFilesLinkedTo, getFileUrl } = await import('@/lib/file-manager')
-  const chatFiles = await findFilesLinkedTo(chatId)
+  // Use the repository to find files linked to the chat
+  const chatFiles = await repos.files.findByLinkedTo(chatId)
 
   const matched = chatFiles.filter(file => fileIds.includes(file.id))
 
   return matched.map(file => ({
     id: file.id,
-    filepath: getFileUrl(file.id, file.originalFilename).slice(1), // Remove leading slash for consistency
+    filepath: `api/files/${file.id}`, // Always use API route for S3-backed files
     filename: file.originalFilename,
     mimeType: file.mimeType,
     size: file.size,
@@ -130,8 +129,6 @@ async function saveToolMessages(
   generatedImagePaths: Array<{ id: string; filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number; sha256?: string }>,
   characterId?: string
 ) {
-  const { addFileLink, addFileTag } = await import('@/lib/file-manager')
-
   let firstToolMessageId: string | null = null
   const generatedImageIds: string[] = generatedImagePaths.map(img => img.id)
 
@@ -169,11 +166,11 @@ async function saveToolMessages(
     try {
       // Link to the tool message
       if (firstToolMessageId) {
-        await addFileLink(imageId, firstToolMessageId)
+        await repos.files.addLink(imageId, firstToolMessageId)
       }
       // Add character tag so it shows up in character's gallery
       if (characterId) {
-        await addFileTag(imageId, characterId)
+        await repos.files.addTag(imageId, characterId)
       }
     } catch (error) {
       logger.warn('Failed to link/tag generated image:', { imageId, error: error instanceof Error ? error.message : String(error) })
@@ -270,12 +267,11 @@ export async function POST(
     // Add user message to chat
     await repos.chats.addMessage(id, userMessage)
 
-    // Update file attachments with message ID using file manager
+    // Update file attachments with message ID using repository
     if (attachedFiles.length > 0) {
-      const { addFileLink } = await import('@/lib/file-manager')
       for (const file of attachedFiles) {
         // Link the file to the message ID
-        await addFileLink(file.id, userMessageId)
+        await repos.files.addLink(file.id, userMessageId)
       }
     }
 
@@ -696,10 +692,9 @@ export async function POST(
 
             // Link images to assistant message as well
             if (assistantAttachments.length > 0) {
-              const { addFileLink } = await import('@/lib/file-manager')
               for (const imageId of assistantAttachments) {
                 try {
-                  await addFileLink(imageId, assistantMessageId)
+                  await repos.files.addLink(imageId, assistantMessageId)
                 } catch (error) {
                   logger.warn('Failed to link image to assistant message:', { imageId, error: error instanceof Error ? error.message : String(error) })
                 }

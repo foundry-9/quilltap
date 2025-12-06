@@ -237,7 +237,7 @@ var init_env = __esm({
     envSchema = import_zod.z.object({
       // Node environment
       NODE_ENV: import_zod.z.enum(["development", "production", "test"]).default("development"),
-      // Database (optional - JSON store is now the default)
+      // Database (legacy - no longer used, MongoDB is required)
       DATABASE_URL: import_zod.z.string().url().optional(),
       // NextAuth
       NEXTAUTH_URL: import_zod.z.string().url().min(1, "NEXTAUTH_URL is required"),
@@ -270,16 +270,20 @@ var init_env = __esm({
       DOMAIN: import_zod.z.string().optional(),
       SSL_EMAIL: import_zod.z.string().email().optional(),
       // Data Backend Configuration
-      DATA_BACKEND: import_zod.z.enum(["json", "mongodb", "dual"]).optional().default("json"),
-      // MongoDB Configuration (optional - only required when DATA_BACKEND is 'mongodb' or 'dual')
-      MONGODB_URI: import_zod.z.string().optional().default("mongodb://localhost:27017"),
+      // NOTE: 'json' option is deprecated and will be removed in a future version.
+      // Use the migration plugin (qtap-plugin-upgrade) to migrate JSON data to MongoDB.
+      DATA_BACKEND: import_zod.z.enum(["json", "mongodb"]).optional().default("mongodb"),
+      // MongoDB Configuration (required - MongoDB is the default data backend)
+      MONGODB_URI: import_zod.z.string().min(1, "MONGODB_URI is required for MongoDB backend"),
       MONGODB_DATABASE: import_zod.z.string().optional().default("quilltap"),
       MONGODB_MODE: import_zod.z.enum(["external", "embedded"]).optional().default("external"),
       MONGODB_DATA_DIR: import_zod.z.string().optional().default("/data/mongodb"),
       MONGODB_CONNECTION_TIMEOUT_MS: import_zod.z.string().regex(/^\d+$/).optional(),
       MONGODB_MAX_POOL_SIZE: import_zod.z.string().regex(/^\d+$/).optional(),
-      // S3 Configuration (optional - file storage backend)
-      S3_MODE: import_zod.z.enum(["embedded", "external", "disabled"]).optional().default("disabled"),
+      // S3 Configuration (required - S3 is the only supported file storage backend)
+      // NOTE: 'disabled' option is deprecated and will be removed in a future version.
+      // Use the migration plugin (qtap-plugin-upgrade) to migrate local files to S3.
+      S3_MODE: import_zod.z.enum(["embedded", "external", "disabled"]).optional().default("embedded"),
       S3_ENDPOINT: import_zod.z.string().url().optional(),
       S3_REGION: import_zod.z.string().optional().default("us-east-1"),
       S3_ACCESS_KEY: import_zod.z.string().optional(),
@@ -288,7 +292,31 @@ var init_env = __esm({
       S3_PATH_PREFIX: import_zod.z.string().optional(),
       S3_PUBLIC_URL: import_zod.z.string().url().optional(),
       S3_FORCE_PATH_STYLE: import_zod.z.enum(["true", "false"]).optional()
-    });
+    }).refine(
+      (data2) => {
+        if (data2.DATA_BACKEND === "mongodb" && !data2.MONGODB_URI) {
+          return false;
+        }
+        return true;
+      },
+      {
+        message: "MONGODB_URI is required when DATA_BACKEND is mongodb",
+        path: ["MONGODB_URI"]
+      }
+    ).refine(
+      (data2) => {
+        if (data2.S3_MODE === "external") {
+          if (!data2.S3_ENDPOINT || !data2.S3_ACCESS_KEY || !data2.S3_SECRET_KEY) {
+            return false;
+          }
+        }
+        return true;
+      },
+      {
+        message: "S3_ENDPOINT, S3_ACCESS_KEY, and S3_SECRET_KEY are required when S3_MODE is external",
+        path: ["S3_MODE"]
+      }
+    );
     env = validateEnv();
     isProduction = env.NODE_ENV === "production";
     isDevelopment = env.NODE_ENV === "development";
@@ -458,7 +486,7 @@ var require_package = __commonJS({
   "package.json"(exports2, module2) {
     module2.exports = {
       name: "quilltap",
-      version: "1.8.5-dev.18",
+      version: "1.8.5-dev.24",
       private: true,
       author: {
         name: "Charles Sebold",
@@ -37557,11 +37585,11 @@ var require_randomUUID = __commonJS({
 var require_dist_cjs16 = __commonJS({
   "node_modules/@smithy/uuid/dist-cjs/index.js"(exports2) {
     "use strict";
-    var randomUUID2 = require_randomUUID();
+    var randomUUID = require_randomUUID();
     var decimalToHex = Array.from({ length: 256 }, (_, i4) => i4.toString(16).padStart(2, "0"));
     var v4 = () => {
-      if (randomUUID2.randomUUID) {
-        return randomUUID2.randomUUID();
+      if (randomUUID.randomUUID) {
+        return randomUUID.randomUUID();
       }
       const rnds = new Uint8Array(16);
       crypto.getRandomValues(rnds);
@@ -67069,7 +67097,7 @@ var import_zod6 = require("zod");
 var import_client_s3 = __toESM(require_dist_cjs71());
 init_logger();
 var s3ConfigSchema = import_zod6.z.object({
-  mode: import_zod6.z.enum(["embedded", "external", "disabled"]),
+  mode: import_zod6.z.enum(["embedded", "external"]),
   endpoint: import_zod6.z.string().url().optional(),
   region: import_zod6.z.string().min(1, "S3 region is required"),
   accessKey: import_zod6.z.string().optional(),
@@ -67095,18 +67123,15 @@ function sanitizeEndpoint(endpoint) {
     return "****";
   }
 }
-function validateCredentials(mode, accessKey, secretKey, logger_inst) {
+function validateCredentials(accessKey, secretKey, logger_inst) {
   const errors = [];
-  if (mode === "disabled") {
-    return errors;
-  }
   if (!accessKey) {
-    const errorMsg = "S3_ACCESS_KEY is required when S3_MODE is not disabled";
+    const errorMsg = "S3_ACCESS_KEY is required";
     logger_inst.warn(errorMsg);
     errors.push(errorMsg);
   }
   if (!secretKey) {
-    const errorMsg = "S3_SECRET_KEY is required when S3_MODE is not disabled";
+    const errorMsg = "S3_SECRET_KEY is required";
     logger_inst.warn(errorMsg);
     errors.push(errorMsg);
   }
@@ -67123,24 +67148,26 @@ function validateRegionEndpoint(mode, endpoint, region, logger_inst) {
 }
 function validateS3Config() {
   const logger_inst = logger.child({ module: "s3:config" });
-  const mode = process.env.S3_MODE || "disabled";
+  const modeEnv = process.env.S3_MODE || "embedded";
   const errors = [];
+  if (modeEnv !== "embedded" && modeEnv !== "external") {
+    const errorMsg = `Invalid S3_MODE="${modeEnv}". Must be "embedded" or "external".`;
+    logger_inst.error(errorMsg);
+    return {
+      mode: "embedded",
+      region: "us-east-1",
+      bucket: "",
+      forcePathStyle: false,
+      isConfigured: false,
+      errors: [errorMsg]
+    };
+  }
+  const mode = modeEnv;
   logger_inst.debug("Starting S3 configuration validation", {
     mode,
     endpoint: sanitizeEndpoint(process.env.S3_ENDPOINT),
     bucket: process.env.S3_BUCKET
   });
-  if (mode === "disabled") {
-    logger_inst.debug("S3 mode is disabled, skipping validation");
-    return {
-      mode,
-      region: "us-east-1",
-      bucket: "",
-      forcePathStyle: false,
-      isConfigured: true,
-      errors: []
-    };
-  }
   const endpoint = process.env.S3_ENDPOINT;
   const region = process.env.S3_REGION || "us-east-1";
   const accessKey = process.env.S3_ACCESS_KEY;
@@ -67150,7 +67177,7 @@ function validateS3Config() {
   const publicUrl = process.env.S3_PUBLIC_URL;
   const forcePathStyle = endpoint ? true : process.env.S3_FORCE_PATH_STYLE === "true";
   errors.push(
-    ...validateCredentials(mode, accessKey, secretKey, logger_inst),
+    ...validateCredentials(accessKey, secretKey, logger_inst),
     ...validateRegionEndpoint(mode, endpoint, region, logger_inst)
   );
   const configData = {
@@ -67236,20 +67263,9 @@ function validateS3Config() {
     };
   }
 }
-function isS3Enabled() {
-  const mode = process.env.S3_MODE || "disabled";
-  return mode !== "disabled";
-}
 async function testS3Connection() {
   const logger_inst = logger.child({ module: "s3:config" });
   const config = validateS3Config();
-  if (config.mode === "disabled") {
-    logger_inst.debug("S3 mode is disabled, skipping connection test");
-    return {
-      success: true,
-      message: "S3 is disabled"
-    };
-  }
   if (!config.isConfigured) {
     const errorMsg = `S3 configuration is invalid: ${config.errors.join("; ")}`;
     logger_inst.error(errorMsg);
@@ -67374,13 +67390,12 @@ var validateS3ConfigMigration = {
     const logger_inst = logger.child({ context: "migration.validate-s3-config" });
     logger_inst.debug("Checking if S3 config validation migration should run", {});
     const config = validateS3Config();
-    const shouldRun = config.mode !== "disabled";
     logger_inst.debug("S3 config validation migration shouldRun check", {
       mode: config.mode,
-      shouldRun,
+      shouldRun: true,
       isConfigured: config.isConfigured
     });
-    return shouldRun;
+    return true;
   },
   async run() {
     const startTime = Date.now();
@@ -70978,25 +70993,20 @@ var migrateJsonToMongoDBMigration = {
 var fs6 = __toESM(require("fs/promises"));
 var path4 = __toESM(require("path"));
 
-// lib/file-manager/index.ts
+// plugins/dist/qtap-plugin-upgrade/lib/file-manager.ts
 var import_fs2 = require("fs");
 var import_path2 = require("path");
-var import_crypto = require("crypto");
 var FILES_DIR = "public/data/files";
 var STORAGE_DIR = (0, import_path2.join)(FILES_DIR, "storage");
 var INDEX_FILE = (0, import_path2.join)(FILES_DIR, "files.jsonl");
 async function ensureDirectories() {
   await import_fs2.promises.mkdir(STORAGE_DIR, { recursive: true });
 }
-function getStoragePath(fileId, originalFilename) {
-  const ext = (0, import_path2.extname)(originalFilename);
-  return (0, import_path2.join)(STORAGE_DIR, `${fileId}${ext}`);
-}
 async function readAllEntries() {
   try {
     const content = await import_fs2.promises.readFile(INDEX_FILE, "utf-8");
     const lines = content.trim().split("\n").filter((line) => line.length > 0);
-    return lines.map((line) => FileEntrySchema.parse(JSON.parse(line)));
+    return lines.map((line) => FileEntrySchema2.parse(JSON.parse(line)));
   } catch (error2) {
     if (error2.code === "ENOENT") {
       return [];
@@ -71008,10 +71018,6 @@ async function writeAllEntries(entries) {
   await ensureDirectories();
   const content = entries.map((entry) => JSON.stringify(entry)).join("\n") + (entries.length > 0 ? "\n" : "");
   await import_fs2.promises.writeFile(INDEX_FILE, content, "utf-8");
-}
-async function findFileById(id) {
-  const entries = await readAllEntries();
-  return entries.find((entry) => entry.id === id) || null;
 }
 async function getAllFiles() {
   return await readAllEntries();
@@ -71035,17 +71041,19 @@ async function updateFile(id, updates) {
     // Preserve creation time
     updatedAt: now
   };
-  const validated = FileEntrySchema.parse(updated);
+  const validated = FileEntrySchema2.parse(updated);
   entries[index] = validated;
   await writeAllEntries(entries);
   return validated;
 }
 async function deleteFile(id) {
-  const entry = await findFileById(id);
+  const entries = await readAllEntries();
+  const entry = entries.find((e4) => e4.id === id);
   if (!entry) {
     return false;
   }
-  const storagePath = getStoragePath(id, entry.originalFilename);
+  const ext = (0, import_path2.extname)(entry.originalFilename);
+  const storagePath = (0, import_path2.join)(STORAGE_DIR, `${id}${ext}`);
   try {
     await import_fs2.promises.unlink(storagePath);
   } catch (error2) {
@@ -71053,7 +71061,6 @@ async function deleteFile(id) {
       throw error2;
     }
   }
-  const entries = await readAllEntries();
   const filtered = entries.filter((e4) => e4.id !== id);
   if (filtered.length === entries.length) {
     return false;
@@ -71066,17 +71073,11 @@ async function deleteFile(id) {
 var import_client_s32 = __toESM(require_dist_cjs71());
 init_logger();
 var s3Client = null;
-var s3Disabled = false;
 function sanitizeFilename(filename) {
   return filename.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 function getS3Client() {
   const moduleLogger = logger.child({ module: "s3:client" });
-  if (s3Disabled || !isS3Enabled()) {
-    moduleLogger.debug("S3 is disabled, returning null");
-    s3Disabled = true;
-    return null;
-  }
   if (s3Client) {
     moduleLogger.debug("Returning existing S3 client");
     return s3Client;
@@ -71131,11 +71132,6 @@ function getS3Client() {
 function getS3Bucket() {
   const moduleLogger = logger.child({ module: "s3:client" });
   const config = validateS3Config();
-  if (config.mode === "disabled") {
-    const errorMsg = "S3 is disabled, cannot get bucket";
-    moduleLogger.error(errorMsg);
-    throw new Error(errorMsg);
-  }
   if (!config.bucket) {
     const errorMsg = "S3 bucket not configured";
     moduleLogger.error(errorMsg);
@@ -71230,10 +71226,6 @@ var migrateFilesToS3Migration = {
   dependsOn: ["validate-s3-config-v1", "migrate-json-to-mongodb-v1"],
   async shouldRun() {
     const s3Config = validateS3Config();
-    if (s3Config.mode === "disabled") {
-      console.log("[migration.migrate-files-to-s3] S3 is disabled, skipping file migration");
-      return false;
-    }
     if (!s3Config.isConfigured) {
       console.log("[migration.migrate-files-to-s3] S3 is not properly configured, skipping file migration", {
         errors: s3Config.errors

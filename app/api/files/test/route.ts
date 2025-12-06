@@ -5,21 +5,7 @@
 
 import { NextResponse } from 'next/server';
 import { getRepositories } from '@/lib/repositories/factory';
-import { isS3Enabled } from '@/lib/s3/config';
-import type { FileEntry, FileCategory, FileSource } from '@/lib/json-store/schemas/types';
-
-/**
- * Get the filepath for a file based on storage type
- */
-function getFilePath(file: FileEntry): string {
-  if (file.s3Key) {
-    return `/api/files/${file.id}`;
-  }
-  const ext = file.originalFilename.includes('.')
-    ? file.originalFilename.substring(file.originalFilename.lastIndexOf('.'))
-    : '';
-  return `data/files/storage/${file.id}${ext}`;
-}
+import type { FileCategory, FileSource } from '@/lib/json-store/schemas/types';
 
 export async function GET() {
   try {
@@ -32,7 +18,6 @@ export async function GET() {
       totalSize: files.reduce((sum, f) => sum + f.size, 0),
       byCategory: {} as Record<FileCategory, number>,
       bySource: {} as Record<FileSource, number>,
-      s3Enabled: isS3Enabled(),
       withS3Key: files.filter(f => f.s3Key).length,
       withoutS3Key: files.filter(f => !f.s3Key).length,
     };
@@ -61,12 +46,12 @@ export async function GET() {
 
     return NextResponse.json({
       status: 'OK',
-      message: 'File system is working (repository pattern)',
+      message: 'File system is working (repository pattern, S3 storage)',
       stats,
       sampleFiles: files.slice(0, 5).map(f => ({
         id: f.id,
         filename: f.originalFilename,
-        url: getFilePath(f),
+        url: `/api/files/${f.id}`,
         category: f.category,
         source: f.source,
         hasS3Key: !!f.s3Key,

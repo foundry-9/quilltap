@@ -34,16 +34,14 @@ export const validateS3ConfigMigration: Migration = {
     // Validate S3 configuration
     const config = validateS3Config();
 
-    // Only run if S3 is not disabled
-    const shouldRun = config.mode !== 'disabled';
-
+    // S3 is always required now, always run validation
     logger_inst.debug('S3 config validation migration shouldRun check', {
       mode: config.mode,
-      shouldRun,
+      shouldRun: true,
       isConfigured: config.isConfigured,
     });
 
-    return shouldRun;
+    return true;
   },
 
   async run(): Promise<MigrationResult> {

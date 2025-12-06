@@ -6,17 +6,12 @@
 
 import { S3Client, S3ClientConfig, HeadBucketCommand } from '@aws-sdk/client-s3';
 import { logger } from '@/lib/logger';
-import { validateS3Config, isS3Enabled } from './config';
+import { validateS3Config } from './config';
 
 /**
  * Singleton S3 client instance
  */
 let s3Client: S3Client | null = null;
-
-/**
- * Flag to track if S3 is disabled in configuration
- */
-let s3Disabled = false;
 
 /**
  * Sanitize filename for S3 key by replacing unsafe characters
@@ -32,20 +27,12 @@ function sanitizeFilename(filename: string): string {
 /**
  * Get or create the singleton S3 client
  * Creates the client lazily on first use with configuration from environment variables
- * Returns null if S3 is disabled in configuration
  *
- * @throws Error if S3 is not disabled but required credentials are missing
- * @returns The singleton S3Client instance, or null if S3 is disabled
+ * @throws Error if required credentials are missing or configuration is invalid
+ * @returns The singleton S3Client instance
  */
-export function getS3Client(): S3Client | null {
+export function getS3Client(): S3Client {
   const moduleLogger = logger.child({ module: 's3:client' });
-
-  // Check if S3 is disabled
-  if (s3Disabled || !isS3Enabled()) {
-    moduleLogger.debug('S3 is disabled, returning null');
-    s3Disabled = true;
-    return null;
-  }
 
   // Return existing client if already initialized
   if (s3Client) {
@@ -173,12 +160,6 @@ export async function testS3Connection(): Promise<{
   const moduleLogger = logger.child({ module: 's3:client' });
   const config = validateS3Config();
 
-  // Return early if S3 is disabled
-  if (config.mode === 'disabled') {
-    moduleLogger.debug('S3 mode is disabled, skipping connection test');
-    return { success: true, message: 'S3 is disabled' };
-  }
-
   // Check for configuration errors
   if (!config.isConfigured) {
     const errorMsg = `S3 configuration is invalid: ${config.errors.join('; ')}`;
@@ -257,18 +238,12 @@ export async function testS3Connection(): Promise<{
  * Validates S3 configuration and returns the bucket name
  *
  * @returns The S3 bucket name from configuration
- * @throws Error if S3 is disabled or bucket is not configured
+ * @throws Error if bucket is not configured
  */
 export function getS3Bucket(): string {
   const moduleLogger = logger.child({ module: 's3:client' });
 
   const config = validateS3Config();
-
-  if (config.mode === 'disabled') {
-    const errorMsg = 'S3 is disabled, cannot get bucket';
-    moduleLogger.error(errorMsg);
-    throw new Error(errorMsg);
-  }
 
   if (!config.bucket) {
     const errorMsg = 'S3 bucket not configured';

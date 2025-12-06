@@ -12,7 +12,7 @@ import { logger } from '@/lib/logger';
  * Zod schema for S3 configuration validation
  */
 const s3ConfigSchema = z.object({
-  mode: z.enum(['embedded', 'external', 'disabled']),
+  mode: z.enum(['embedded', 'external']),
   endpoint: z.string().url().optional(),
   region: z.string().min(1, 'S3 region is required'),
   accessKey: z.string().optional(),
@@ -25,17 +25,17 @@ const s3ConfigSchema = z.object({
 
 /**
  * S3 storage mode type
- * NOTE: 'disabled' mode is deprecated and will throw an error at runtime.
- * S3 storage (embedded or external) is now required.
+ * - 'embedded': App-managed MinIO instance
+ * - 'external': User-provided S3-compatible service
  */
-export type S3Mode = 'embedded' | 'external' | 'disabled';
+export type S3Mode = 'embedded' | 'external';
 
 /**
  * S3 Configuration Interface
  * Contains all configuration settings and validation state
  */
 export interface S3Config {
-  /** Storage mode: embedded (app-managed), external (user-provided), or disabled */
+  /** Storage mode: embedded (app-managed MinIO) or external (user-provided S3-compatible) */
   mode: S3Mode;
   /** Optional endpoint URL for MinIO or other S3-compatible services */
   endpoint?: string;
@@ -92,33 +92,27 @@ function sanitizeEndpoint(endpoint?: string): string | undefined {
 }
 
 /**
- * Validate required credentials for non-disabled mode
- * @param mode - S3 mode
+ * Validate required credentials
  * @param accessKey - S3 access key
  * @param secretKey - S3 secret key
  * @param logger_inst - Logger instance
  * @returns Array of validation errors
  */
 function validateCredentials(
-  mode: S3Mode,
   accessKey: string | undefined,
   secretKey: string | undefined,
   logger_inst: ReturnType<typeof logger.child>
 ): string[] {
   const errors: string[] = [];
 
-  if (mode === 'disabled') {
-    return errors;
-  }
-
   if (!accessKey) {
-    const errorMsg = 'S3_ACCESS_KEY is required when S3_MODE is not disabled';
+    const errorMsg = 'S3_ACCESS_KEY is required';
     logger_inst.warn(errorMsg);
     errors.push(errorMsg);
   }
 
   if (!secretKey) {
-    const errorMsg = 'S3_SECRET_KEY is required when S3_MODE is not disabled';
+    const errorMsg = 'S3_SECRET_KEY is required';
     logger_inst.warn(errorMsg);
     errors.push(errorMsg);
   }
@@ -156,7 +150,7 @@ function validateRegionEndpoint(
  * Collects all validation errors without throwing
  *
  * Validation rules:
- * - If mode !== 'disabled', accessKey and secretKey are required
+ * - accessKey and secretKey are always required
  * - If mode === 'external' and no endpoint, region is required
  * - If endpoint is set, forcePathStyle defaults to true
  *
@@ -165,21 +159,15 @@ function validateRegionEndpoint(
 export function validateS3Config(): S3Config {
   const logger_inst = logger.child({ module: 's3:config' });
 
-  const mode = (process.env.S3_MODE || 'embedded') as S3Mode;
+  const modeEnv = process.env.S3_MODE || 'embedded';
   const errors: string[] = [];
 
-  logger_inst.debug('Starting S3 configuration validation', {
-    mode,
-    endpoint: sanitizeEndpoint(process.env.S3_ENDPOINT),
-    bucket: process.env.S3_BUCKET,
-  });
-
-  // If disabled, return error - S3 is now required
-  if (mode === 'disabled') {
-    const errorMsg = 'S3_MODE=disabled is no longer supported. S3 storage (embedded or external) is required. Set S3_MODE=embedded or S3_MODE=external.';
+  // Validate mode is valid
+  if (modeEnv !== 'embedded' && modeEnv !== 'external') {
+    const errorMsg = `Invalid S3_MODE="${modeEnv}". Must be "embedded" or "external".`;
     logger_inst.error(errorMsg);
     return {
-      mode,
+      mode: 'embedded',
       region: 'us-east-1',
       bucket: '',
       forcePathStyle: false,
@@ -187,6 +175,14 @@ export function validateS3Config(): S3Config {
       errors: [errorMsg],
     };
   }
+
+  const mode: S3Mode = modeEnv;
+
+  logger_inst.debug('Starting S3 configuration validation', {
+    mode,
+    endpoint: sanitizeEndpoint(process.env.S3_ENDPOINT),
+    bucket: process.env.S3_BUCKET,
+  });
 
   // Extract configuration values from environment
   const endpoint = process.env.S3_ENDPOINT;
@@ -200,7 +196,7 @@ export function validateS3Config(): S3Config {
 
   // Perform custom validation checks
   errors.push(
-    ...validateCredentials(mode, accessKey, secretKey, logger_inst),
+    ...validateCredentials(accessKey, secretKey, logger_inst),
     ...validateRegionEndpoint(mode, endpoint, region, logger_inst)
   );
 
@@ -301,18 +297,6 @@ export function validateS3Config(): S3Config {
   }
 }
 
-/**
- * Check if S3 is enabled in the current configuration
- * S3 is now always required, so this always returns true.
- *
- * @deprecated S3 is now always required. This function always returns true.
- * @returns boolean Always returns true as S3 is required
- */
-export function isS3Enabled(): boolean {
-  // S3 is now required - this function is kept for backwards compatibility
-  // but always returns true
-  return true;
-}
 
 /**
  * Test S3 connection by attempting to access the configured bucket
@@ -328,15 +312,6 @@ export async function testS3Connection(): Promise<{
   const logger_inst = logger.child({ module: 's3:config' });
 
   const config = validateS3Config();
-
-  // Return early if S3 is disabled
-  if (config.mode === 'disabled') {
-    logger_inst.debug('S3 mode is disabled, skipping connection test');
-    return {
-      success: true,
-      message: 'S3 is disabled',
-    };
-  }
 
   // Check for configuration errors
   if (!config.isConfigured) {

@@ -6,7 +6,7 @@
 
 import { Readable } from 'node:stream';
 import { logger } from '@/lib/logger';
-import { isS3Enabled, validateS3Config } from './config';
+import { validateS3Config } from './config';
 import {
   uploadFile,
   downloadFile,
@@ -59,18 +59,6 @@ class S3FileService {
   private moduleLogger = logger.child({ module: 's3:file-service' });
 
   /**
-   * Check if S3 is enabled and configured
-   * @returns true if S3 is enabled, false otherwise
-   */
-  private checkS3Enabled(): boolean {
-    if (!isS3Enabled()) {
-      this.moduleLogger.debug('S3 is disabled, operation skipped');
-      return false;
-    }
-    return true;
-  }
-
-  /**
    * Upload a file with automatic S3 key generation
    * @param userId The user ID
    * @param fileId The file ID
@@ -79,7 +67,7 @@ class S3FileService {
    * @param content The file content as Buffer or Readable
    * @param contentType The MIME type of the file
    * @returns Promise that resolves when upload is complete
-   * @throws Error if S3 is disabled or upload fails
+   * @throws Error if upload fails
    */
   async uploadUserFile(
     userId: string,
@@ -89,9 +77,6 @@ class S3FileService {
     content: Buffer | Readable,
     contentType: string
   ): Promise<void> {
-    if (!this.checkS3Enabled()) {
-      throw new Error('S3 is disabled. Enable S3 by setting S3_MODE to "external" or "embedded".');
-    }
 
     const s3Key = buildS3Key(userId, fileId, filename, category);
 
@@ -133,13 +118,9 @@ class S3FileService {
    * Upload a file with complete metadata
    * @param metadata File upload metadata including content and S3 key components
    * @returns Promise that resolves when upload is complete
-   * @throws Error if S3 is disabled or upload fails
+   * @throws Error if upload fails
    */
   async uploadWithMetadata(metadata: FileUploadMetadata): Promise<void> {
-    if (!this.checkS3Enabled()) {
-      throw new Error('S3 is disabled. Enable S3 by setting S3_MODE to "external" or "embedded".');
-    }
-
     const s3Key = buildS3Key(
       metadata.userId,
       metadata.fileId,
@@ -210,7 +191,7 @@ class S3FileService {
    * @param filename The filename
    * @param category The file category
    * @returns Promise resolving to file content as Buffer
-   * @throws Error if S3 is disabled, file not found, or download fails
+   * @throws Error if file not found or download fails
    */
   async downloadUserFile(
     userId: string,
@@ -218,10 +199,6 @@ class S3FileService {
     filename: string,
     category: string
   ): Promise<Buffer> {
-    if (!this.checkS3Enabled()) {
-      throw new Error('S3 is disabled. Enable S3 by setting S3_MODE to "external" or "embedded".');
-    }
-
     const s3Key = buildS3Key(userId, fileId, filename, category);
 
     this.moduleLogger.debug('Downloading user file from S3', {
@@ -260,13 +237,9 @@ class S3FileService {
    * @param s3Key The S3 object key
    * @param options Optional URL options (presigned, expiresIn)
    * @returns Promise resolving to the URL string
-   * @throws Error if S3 is disabled or URL generation fails
+   * @throws Error if URL generation fails
    */
   async getFileUrl(s3Key: string, options?: GetUrlOptions): Promise<string> {
-    if (!this.checkS3Enabled()) {
-      throw new Error('S3 is disabled. Enable S3 by setting S3_MODE to "external" or "embedded".');
-    }
-
     const { presigned = false, expiresIn = 3600 } = options || {};
 
     this.moduleLogger.debug('Getting file URL', {
@@ -307,7 +280,7 @@ class S3FileService {
    * @param filename The filename
    * @param category The file category
    * @returns Promise that resolves when deletion is complete
-   * @throws Error if S3 is disabled or deletion fails
+   * @throws Error if deletion fails
    */
   async deleteUserFile(
     userId: string,
@@ -315,10 +288,6 @@ class S3FileService {
     filename: string,
     category: string
   ): Promise<void> {
-    if (!this.checkS3Enabled()) {
-      throw new Error('S3 is disabled. Enable S3 by setting S3_MODE to "external" or "embedded".');
-    }
-
     const s3Key = buildS3Key(userId, fileId, filename, category);
 
     this.moduleLogger.debug('Deleting user file from S3', {
@@ -353,13 +322,9 @@ class S3FileService {
    * Delete a file directly by S3 key
    * @param s3Key The S3 object key
    * @returns Promise that resolves when deletion is complete
-   * @throws Error if S3 is disabled or deletion fails
+   * @throws Error if deletion fails
    */
   async deleteByS3Key(s3Key: string): Promise<void> {
-    if (!this.checkS3Enabled()) {
-      throw new Error('S3 is disabled. Enable S3 by setting S3_MODE to "external" or "embedded".');
-    }
-
     this.moduleLogger.debug('Deleting file by S3 key', { s3Key });
 
     try {
@@ -380,13 +345,9 @@ class S3FileService {
    * Check if a file exists by S3 key
    * @param s3Key The S3 object key
    * @returns Promise resolving to true if file exists, false otherwise
-   * @throws Error if S3 is disabled or check fails
+   * @throws Error if check fails
    */
   async fileExistsByKey(s3Key: string): Promise<boolean> {
-    if (!this.checkS3Enabled()) {
-      throw new Error('S3 is disabled. Enable S3 by setting S3_MODE to "external" or "embedded".');
-    }
-
     this.moduleLogger.debug('Checking if file exists by S3 key', { s3Key });
 
     try {
@@ -411,13 +372,9 @@ class S3FileService {
    * @param category Optional category to filter by
    * @param maxKeys Optional maximum number of keys to return (default: 1000)
    * @returns Promise resolving to array of S3 keys
-   * @throws Error if S3 is disabled or listing fails
+   * @throws Error if listing fails
    */
   async listUserFiles(userId: string, category?: string, maxKeys?: number): Promise<string[]> {
-    if (!this.checkS3Enabled()) {
-      throw new Error('S3 is disabled. Enable S3 by setting S3_MODE to "external" or "embedded".');
-    }
-
     const config = validateS3Config();
     const prefix = config.pathPrefix || '';
     const listPrefix = category
@@ -455,13 +412,9 @@ class S3FileService {
    * Get file metadata from S3
    * @param s3Key The S3 object key
    * @returns Promise resolving to file metadata or null if file doesn't exist
-   * @throws Error if S3 is disabled or metadata retrieval fails
+   * @throws Error if metadata retrieval fails
    */
   async getFileInfo(s3Key: string): Promise<FileMetadataInfo | null> {
-    if (!this.checkS3Enabled()) {
-      throw new Error('S3 is disabled. Enable S3 by setting S3_MODE to "external" or "embedded".');
-    }
-
     this.moduleLogger.debug('Getting file metadata', { s3Key });
 
     try {
@@ -527,7 +480,7 @@ class S3FileService {
    * @param contentType The MIME type
    * @param expiresIn The URL expiration time in seconds (default: 3600)
    * @returns Promise resolving to the presigned upload URL
-   * @throws Error if S3 is disabled or URL generation fails
+   * @throws Error if URL generation fails
    */
   async generatePresignedUploadUrl(
     userId: string,
@@ -537,10 +490,6 @@ class S3FileService {
     contentType: string,
     expiresIn: number = 3600
   ): Promise<string> {
-    if (!this.checkS3Enabled()) {
-      throw new Error('S3 is disabled. Enable S3 by setting S3_MODE to "external" or "embedded".');
-    }
-
     const s3Key = buildS3Key(userId, fileId, filename, category);
 
     this.moduleLogger.debug('Generating presigned upload URL', {

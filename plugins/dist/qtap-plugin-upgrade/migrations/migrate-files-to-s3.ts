@@ -22,7 +22,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import type { Migration, MigrationResult } from '../migration-types';
 import { validateS3Config } from '@/lib/s3/config';
-import { getAllFiles, updateFile, deleteFile } from '@/lib/file-manager/index';
+import { getAllFiles, updateFile, deleteFile } from '../lib/file-manager';
 import { buildS3Key, getS3Bucket } from '@/lib/s3/client';
 import { uploadFile } from '@/lib/s3/operations';
 
@@ -73,12 +73,6 @@ export const migrateFilesToS3Migration: Migration = {
 
   async shouldRun(): Promise<boolean> {
     const s3Config = validateS3Config();
-
-    // Return false if S3 mode is 'disabled'
-    if (s3Config.mode === 'disabled') {
-      console.log('[migration.migrate-files-to-s3] S3 is disabled, skipping file migration');
-      return false;
-    }
 
     // Check if S3 is properly configured
     if (!s3Config.isConfigured) {

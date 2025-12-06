@@ -11,7 +11,6 @@ import { getServerSession } from '@/lib/auth/session'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
-import { isS3Enabled } from '@/lib/s3/config'
 import { deleteFile as deleteS3File } from '@/lib/s3/operations'
 
 interface RouteContext {
@@ -246,9 +245,8 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Delete from S3 if applicable
-    const s3Enabled = isS3Enabled()
-    if (s3Enabled && fileEntry.s3Key) {
+    // Delete from S3 if file has S3 key
+    if (fileEntry.s3Key) {
       try {
         await deleteS3File(fileEntry.s3Key)
         logger.debug('DELETE /api/chat-files/[id] - Deleted from S3', {

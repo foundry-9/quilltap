@@ -19,7 +19,6 @@ import { getVectorStoreManager } from '@/lib/embedding/vector-store'
 import type { ChatMetadata, FileEntry } from '@/lib/json-store/schemas/types'
 
 // Mock dependencies
-jest.mock('@/lib/file-manager')
 jest.mock('@/lib/repositories/factory')
 jest.mock('@/lib/embedding/vector-store')
 

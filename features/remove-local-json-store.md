@@ -140,31 +140,40 @@ plugins/dist/qtap-plugin-upgrade/lib/json-store/
 
 ### Phase 4: Remove Local File Storage Support ✅ COMPLETED
 
-#### 4.1 Update `lib/file-manager/index.ts`
+#### 4.1 Delete `lib/file-manager/` entirely
 
-- [x] Note: This file is a legacy file using JSON-store directly. The actual file operations are in `lib/images-v2.ts` and `lib/chat-files-v2.ts`
+- [x] Deleted `lib/file-manager/index.ts`, `lib/file-manager/compat.ts`, `lib/file-manager/README.md`
+- [x] Deleted `__tests__/unit/lib/file-manager.test.ts`
+- [x] Copied necessary functions (`getAllFiles`, `updateFile`, `deleteFile`) to migration plugin at `plugins/dist/qtap-plugin-upgrade/lib/file-manager.ts`
+- [x] Updated `plugins/dist/qtap-plugin-upgrade/migrations/migrate-files-to-s3.ts` to use local file-manager
+- [x] Updated `app/api/chats/[id]/messages/route.ts` to use repository methods instead of file-manager imports
 
-#### 4.2 Update `lib/s3/config.ts`
+#### 4.2 Update `lib/s3/config.ts` - S3 is now required
 
-- [x] Made S3 configuration required - `S3_MODE=disabled` now returns an error
-- [x] Changed default S3_MODE from `'disabled'` to `'embedded'`
-- [x] Updated `isS3Enabled()` to always return `true` (kept for backwards compatibility)
-- [x] Added deprecation documentation for disabled mode
+- [x] Removed `'disabled'` from S3Mode type - only `'embedded'` and `'external'` are valid
+- [x] Removed `isS3Enabled()` function entirely - S3 is always enabled
+- [x] Updated `validateS3Config()` to error if S3_MODE is not 'embedded' or 'external'
+- [x] Updated `testS3Connection()` to remove disabled mode check
+- [x] Updated `lib/s3/client.ts` - removed `isS3Enabled` import and `s3Disabled` flag, `getS3Client()` now always returns S3Client (not null)
+- [x] Updated `lib/s3/file-service.ts` - removed all `checkS3Enabled()` calls and the method itself
 
 #### 4.3 Update API Routes
 
 Files updated (removed local file fallback logic):
 
 - [x] `app/api/files/[id]/route.ts` - Removed local filesystem fallback, S3-only
+- [x] `app/api/files/test/route.ts` - Removed `isS3Enabled()` call, simplified stats
 - [x] `app/api/images/[id]/route.ts` - Removed local file checks, simplified getFilePath
 - [x] `app/api/characters/[id]/avatar/route.ts` - Simplified getFilePath to S3-only
 - [x] `app/api/personas/[id]/avatar/route.ts` - Simplified getFilePath to S3-only
 - [x] `app/api/chats/[id]/avatars/route.ts` - Simplified getFilePath to S3-only
+- [x] `app/api/chat-files/[id]/route.ts` - Removed `isS3Enabled()` check, always delete from S3
 
 #### 4.4 Update Image Utilities
 
 - [x] `lib/images-v2.ts` - Removed local file operations, S3-only for create/read/delete
 - [x] `lib/chat-files-v2.ts` - Removed local file operations, S3-only for all file ops
+- [x] `lib/tools/handlers/image-generation-handler.ts` - Removed local storage fallback, S3-only for generated images
 
 ### Phase 5: Delete Obsolete Code
 

@@ -4,16 +4,11 @@
  */
 
 import { createHash } from 'node:crypto';
-import { promises as fs } from 'node:fs';
-import { join, extname } from 'node:path';
 import { getRepositories } from '@/lib/repositories/factory';
-import { isS3Enabled } from '@/lib/s3/config';
 import { uploadFile as uploadS3File } from '@/lib/s3/operations';
 import { buildS3Key } from '@/lib/s3/client';
 import { decryptApiKey } from '@/lib/encryption';
-import type { FileEntry, FileCategory, FileSource } from '@/lib/json-store/schemas/types';
-
-const LOCAL_STORAGE_DIR = 'public/data/files/storage';
+import type { FileCategory, FileSource } from '@/lib/json-store/schemas/types';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import {
   ImageGenerationToolInput,
@@ -52,32 +47,6 @@ export class ImageGenerationError extends Error {
 }
 
 /**
- * Ensure local storage directory exists
- */
-async function ensureLocalStorageDir(): Promise<void> {
-  await fs.mkdir(LOCAL_STORAGE_DIR, { recursive: true });
-}
-
-/**
- * Get file extension from filename
- */
-function getExtension(filename: string): string {
-  const ext = extname(filename);
-  return ext || '.bin';
-}
-
-/**
- * Get the filepath for a file based on storage type
- */
-function getFilePath(fileId: string, originalFilename: string, s3Key?: string | null): string {
-  if (s3Key) {
-    return `/api/files/${fileId}`;
-  }
-  const ext = getExtension(originalFilename);
-  return `data/files/storage/${fileId}${ext}`;
-}
-
-/**
  * Save generated image to storage and database
  */
 async function saveGeneratedImage(
@@ -109,28 +78,17 @@ async function saveGeneratedImage(
 
     // Generate a new file ID
     const fileId = crypto.randomUUID();
-    const fileExt = getExtension(originalFilename);
-    let s3Key: string | null = null;
 
-    // Store the file bytes
-    if (isS3Enabled()) {
-      // Upload to S3
-      s3Key = buildS3Key(userId, fileId, originalFilename, category);
-      await uploadS3File(s3Key, buffer, mimeType, {
-        userId,
-        fileId,
-        category,
-        filename: originalFilename,
-        sha256,
-      });
-      logger.debug('Uploaded generated image to S3', { fileId, s3Key, size: buffer.length });
-    } else {
-      // Store locally
-      await ensureLocalStorageDir();
-      const localPath = join(LOCAL_STORAGE_DIR, `${fileId}${fileExt}`);
-      await fs.writeFile(localPath, buffer);
-      logger.debug('Stored generated image locally', { fileId, localPath, size: buffer.length });
-    }
+    // Upload to S3
+    const s3Key = buildS3Key(userId, fileId, originalFilename, category);
+    await uploadS3File(s3Key, buffer, mimeType, {
+      userId,
+      fileId,
+      category,
+      filename: originalFilename,
+      sha256,
+    });
+    logger.debug('Uploaded generated image to S3', { fileId, s3Key, size: buffer.length });
 
     // Create metadata in repository
     const fileEntry = await repos.files.create({
@@ -152,7 +110,8 @@ async function saveGeneratedImage(
       s3Key,
     });
 
-    const filepath = getFilePath(fileEntry.id, fileEntry.originalFilename, fileEntry.s3Key);
+    // Always use API route for S3-backed files
+    const filepath = `/api/files/${fileEntry.id}`;
 
     return {
       id: fileEntry.id,
