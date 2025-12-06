@@ -20,7 +20,6 @@
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { logger } from '@/lib/logger';
 import type { Migration, MigrationResult } from '../migration-types';
 import { validateS3Config } from '@/lib/s3/config';
 import { getAllFiles, updateFile, deleteFile } from '@/lib/file-manager/index';
@@ -77,16 +76,13 @@ export const migrateFilesToS3Migration: Migration = {
 
     // Return false if S3 mode is 'disabled'
     if (s3Config.mode === 'disabled') {
-      logger.debug('S3 is disabled, skipping file migration', {
-        context: 'migration.migrate-files-to-s3',
-      });
+      console.log('[migration.migrate-files-to-s3] S3 is disabled, skipping file migration');
       return false;
     }
 
     // Check if S3 is properly configured
     if (!s3Config.isConfigured) {
-      logger.debug('S3 is not properly configured, skipping file migration', {
-        context: 'migration.migrate-files-to-s3',
+      console.log('[migration.migrate-files-to-s3] S3 is not properly configured, skipping file migration', {
         errors: s3Config.errors,
       });
       return false;
@@ -95,23 +91,18 @@ export const migrateFilesToS3Migration: Migration = {
     // Check if local storage directory exists
     const localStorageExists = await checkLocalStorageExists();
     if (!localStorageExists) {
-      logger.debug('Local storage directory does not exist, skipping file migration', {
-        context: 'migration.migrate-files-to-s3',
-      });
+      console.log('[migration.migrate-files-to-s3] Local storage directory does not exist, skipping file migration');
       return false;
     }
 
     // Check if there are files to migrate
     const filesToMigrate = await countFilesToMigrate();
     if (filesToMigrate === 0) {
-      logger.debug('No files need migration (all already have s3Key)', {
-        context: 'migration.migrate-files-to-s3',
-      });
+      console.log('[migration.migrate-files-to-s3] No files need migration (all already have s3Key)');
       return false;
     }
 
-    logger.debug('Files need migration to S3', {
-      context: 'migration.migrate-files-to-s3',
+    console.log('[migration.migrate-files-to-s3] Files need migration to S3', {
       count: filesToMigrate,
     });
 
@@ -120,7 +111,6 @@ export const migrateFilesToS3Migration: Migration = {
 
   async run(): Promise<MigrationResult> {
     const startTime = Date.now();
-    const migratedLogger = logger.child({ context: 'migration.migrate-files-to-s3' });
 
     let uploaded = 0;
     let skippedMissing = 0;
@@ -131,7 +121,7 @@ export const migrateFilesToS3Migration: Migration = {
       const s3Config = validateS3Config();
       const bucket = getS3Bucket();
 
-      migratedLogger.info('Starting file migration to S3', {
+      console.log('[migration.migrate-files-to-s3] Starting file migration to S3', {
         bucket,
         s3Mode: s3Config.mode,
       });
@@ -140,7 +130,7 @@ export const migrateFilesToS3Migration: Migration = {
       const files = await getAllFiles();
       const filesToMigrate = files.filter(entry => !entry.s3Key);
 
-      migratedLogger.debug('Found files to migrate', {
+      console.log('[migration.migrate-files-to-s3] Found files to migrate', {
         total: files.length,
         toMigrate: filesToMigrate.length,
       });
@@ -160,7 +150,7 @@ export const migrateFilesToS3Migration: Migration = {
           let fileBuffer: Buffer;
           try {
             fileBuffer = await fs.readFile(localFilePath);
-            migratedLogger.debug('Read file from local storage', {
+            console.log('[migration.migrate-files-to-s3] Read file from local storage', {
               fileId: entry.id,
               filename: entry.originalFilename,
               size: fileBuffer.length,
@@ -172,7 +162,7 @@ export const migrateFilesToS3Migration: Migration = {
             if (isMissingFile) {
               // File doesn't exist on disk - this is an orphaned metadata entry
               // Clean it up by removing the metadata entry
-              migratedLogger.warn('File missing from local storage, removing orphaned metadata entry', {
+              console.warn('[migration.migrate-files-to-s3] File missing from local storage, removing orphaned metadata entry', {
                 fileId: entry.id,
                 filename: entry.originalFilename,
               });
@@ -180,12 +170,12 @@ export const migrateFilesToS3Migration: Migration = {
               try {
                 await deleteFile(entry.id);
                 skippedMissing++;
-                migratedLogger.info('Removed orphaned file metadata entry', {
+                console.log('[migration.migrate-files-to-s3] Removed orphaned file metadata entry', {
                   fileId: entry.id,
                   filename: entry.originalFilename,
                 });
               } catch (deleteError) {
-                migratedLogger.warn('Failed to remove orphaned metadata entry', {
+                console.warn('[migration.migrate-files-to-s3] Failed to remove orphaned metadata entry', {
                   fileId: entry.id,
                   error: deleteError instanceof Error ? deleteError.message : 'Unknown error',
                 });
@@ -206,7 +196,7 @@ export const migrateFilesToS3Migration: Migration = {
                 error: `Failed to read file: ${errorMessage}`,
                 isWarning: false,
               });
-              migratedLogger.warn('Failed to read file from local storage', {
+              console.warn('[migration.migrate-files-to-s3] Failed to read file from local storage', {
                 fileId: entry.id,
                 filename: entry.originalFilename,
                 error: errorMessage,
@@ -226,7 +216,7 @@ export const migrateFilesToS3Migration: Migration = {
           // Upload to S3
           try {
             await uploadFile(s3Key, fileBuffer, entry.mimeType);
-            migratedLogger.debug('Uploaded file to S3', {
+            console.log('[migration.migrate-files-to-s3] Uploaded file to S3', {
               fileId: entry.id,
               filename: entry.originalFilename,
               s3Key,
@@ -240,7 +230,7 @@ export const migrateFilesToS3Migration: Migration = {
               error: `Failed to upload to S3: ${errorMessage}`,
               isWarning: false,
             });
-            migratedLogger.warn('Failed to upload file to S3', {
+            console.warn('[migration.migrate-files-to-s3] Failed to upload file to S3', {
               fileId: entry.id,
               filename: entry.originalFilename,
               s3Key,
@@ -257,7 +247,7 @@ export const migrateFilesToS3Migration: Migration = {
               updatedAt: new Date().toISOString(),
             });
             uploaded++;
-            migratedLogger.debug('Updated file entry with S3 reference', {
+            console.log('[migration.migrate-files-to-s3] Updated file entry with S3 reference', {
               fileId: entry.id,
               s3Key,
               bucket,
@@ -270,7 +260,7 @@ export const migrateFilesToS3Migration: Migration = {
               error: `Failed to update file entry: ${errorMessage}`,
               isWarning: false,
             });
-            migratedLogger.warn('Failed to update file entry with S3 reference', {
+            console.warn('[migration.migrate-files-to-s3] Failed to update file entry with S3 reference', {
               fileId: entry.id,
               error: errorMessage,
             });
@@ -287,15 +277,13 @@ export const migrateFilesToS3Migration: Migration = {
             error: `Unexpected error: ${errorMessage}`,
             isWarning: false,
           });
-          migratedLogger.error('Unexpected error during file migration', {
+          console.error('[migration.migrate-files-to-s3] Unexpected error during file migration', {
             fileId: entry.id,
           }, error instanceof Error ? error : undefined);
         }
       }
     } catch (error) {
-      migratedLogger.error('Failed to initialize file migration', {
-        context: 'migration.migrate-files-to-s3',
-      }, error instanceof Error ? error : undefined);
+      console.error('[migration.migrate-files-to-s3] Failed to initialize file migration', error instanceof Error ? error : undefined);
 
       return {
         id: 'migrate-files-to-s3-v1',
@@ -314,19 +302,19 @@ export const migrateFilesToS3Migration: Migration = {
     const durationMs = Date.now() - startTime;
 
     if (success && warnings.length === 0) {
-      migratedLogger.info('File migration to S3 completed successfully', {
+      console.log('[migration.migrate-files-to-s3] File migration to S3 completed successfully', {
         filesUploaded: uploaded,
         durationMs,
       });
     } else if (success) {
-      migratedLogger.info('File migration to S3 completed with warnings', {
+      console.log('[migration.migrate-files-to-s3] File migration to S3 completed with warnings', {
         filesUploaded: uploaded,
         skippedMissing,
         warningCount: warnings.length,
         durationMs,
       });
     } else {
-      migratedLogger.warn('File migration to S3 completed with errors', {
+      console.warn('[migration.migrate-files-to-s3] File migration to S3 completed with errors', {
         filesUploaded: uploaded,
         skippedMissing,
         errorCount: blockingErrors.length,

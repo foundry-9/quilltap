@@ -402,10 +402,10 @@ var init_logger = __esm({
       /**
        * Log an HTTP request
        */
-      logRequest(method, path4, statusCode, duration, context) {
+      logRequest(method, path5, statusCode, duration, context) {
         this.info("HTTP request", {
           method,
-          path: path4,
+          path: path5,
           statusCode,
           duration,
           ...context
@@ -458,7 +458,7 @@ var require_package = __commonJS({
   "package.json"(exports2, module2) {
     module2.exports = {
       name: "quilltap",
-      version: "1.8.5-dev.13",
+      version: "1.8.5-dev.18",
       private: true,
       author: {
         name: "Charles Sebold",
@@ -595,7 +595,7 @@ var require_bson = __commonJS({
       }
     }
     var BSON_MAJOR_VERSION = 6;
-    var BSON_VERSION_SYMBOL = Symbol.for("@@mdb.bson.version");
+    var BSON_VERSION_SYMBOL = /* @__PURE__ */ Symbol.for("@@mdb.bson.version");
     var BSON_INT32_MAX = 2147483647;
     var BSON_INT32_MIN = -2147483648;
     var BSON_INT64_MAX = Math.pow(2, 63) - 1;
@@ -842,10 +842,10 @@ var require_bson = __commonJS({
       return webByteUtils.fromNumberArray(Array.from({ length: byteLength }, () => Math.floor(Math.random() * 256)));
     }
     var webRandomBytes = (() => {
-      const { crypto: crypto3 } = globalThis;
-      if (crypto3 != null && typeof crypto3.getRandomValues === "function") {
+      const { crypto: crypto4 } = globalThis;
+      if (crypto4 != null && typeof crypto4.getRandomValues === "function") {
         return (byteLength) => {
-          return crypto3.getRandomValues(webByteUtils.allocate(byteLength));
+          return crypto4.getRandomValues(webByteUtils.allocate(byteLength));
         };
       } else {
         if (isReactNative()) {
@@ -964,7 +964,7 @@ var require_bson = __commonJS({
       get [BSON_VERSION_SYMBOL]() {
         return BSON_MAJOR_VERSION;
       }
-      [Symbol.for("nodejs.util.inspect.custom")](depth, options, inspect) {
+      [/* @__PURE__ */ Symbol.for("nodejs.util.inspect.custom")](depth, options, inspect) {
         return this.inspect(depth, options, inspect);
       }
     };
@@ -3887,17 +3887,17 @@ var require_bson = __commonJS({
       index = index + size;
       return index;
     }
-    function serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path4) {
-      if (path4.has(value)) {
+    function serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path5) {
+      if (path5.has(value)) {
         throw new BSONError("Cannot convert circular structure to BSON");
       }
-      path4.add(value);
+      path5.add(value);
       buffer2[index++] = Array.isArray(value) ? BSON_DATA_ARRAY : BSON_DATA_OBJECT;
       const numberOfWrittenBytes = ByteUtils.encodeUTF8Into(buffer2, key, index);
       index = index + numberOfWrittenBytes;
       buffer2[index++] = 0;
-      const endIndex = serializeInto(buffer2, value, checkKeys, index, depth + 1, serializeFunctions, ignoreUndefined, path4);
-      path4.delete(value);
+      const endIndex = serializeInto(buffer2, value, checkKeys, index, depth + 1, serializeFunctions, ignoreUndefined, path5);
+      path5.delete(value);
       return endIndex;
     }
     function serializeDecimal128(buffer2, key, value, index) {
@@ -3949,7 +3949,7 @@ var require_bson = __commonJS({
       buffer2[index++] = 0;
       return index;
     }
-    function serializeCode(buffer2, key, value, index, checkKeys = false, depth = 0, serializeFunctions = false, ignoreUndefined = true, path4) {
+    function serializeCode(buffer2, key, value, index, checkKeys = false, depth = 0, serializeFunctions = false, ignoreUndefined = true, path5) {
       if (value.scope && typeof value.scope === "object") {
         buffer2[index++] = BSON_DATA_CODE_W_SCOPE;
         const numberOfWrittenBytes = ByteUtils.encodeUTF8Into(buffer2, key, index);
@@ -3962,7 +3962,7 @@ var require_bson = __commonJS({
         NumberUtils.setInt32LE(buffer2, index, codeSize);
         buffer2[index + 4 + codeSize - 1] = 0;
         index = index + codeSize + 4;
-        const endIndex = serializeInto(buffer2, value.scope, checkKeys, index, depth + 1, serializeFunctions, ignoreUndefined, path4);
+        const endIndex = serializeInto(buffer2, value.scope, checkKeys, index, depth + 1, serializeFunctions, ignoreUndefined, path5);
         index = endIndex - 1;
         const totalSize = endIndex - startIndex;
         startIndex += NumberUtils.setInt32LE(buffer2, startIndex, totalSize);
@@ -4018,7 +4018,7 @@ var require_bson = __commonJS({
       buffer2[index++] = 0;
       return index;
     }
-    function serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path4) {
+    function serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path5) {
       buffer2[index++] = BSON_DATA_OBJECT;
       const numberOfWrittenBytes = ByteUtils.encodeUTF8Into(buffer2, key, index);
       index = index + numberOfWrittenBytes;
@@ -4032,13 +4032,13 @@ var require_bson = __commonJS({
         output.$db = value.db;
       }
       output = Object.assign(output, value.fields);
-      const endIndex = serializeInto(buffer2, output, false, index, depth + 1, serializeFunctions, true, path4);
+      const endIndex = serializeInto(buffer2, output, false, index, depth + 1, serializeFunctions, true, path5);
       const size = endIndex - startIndex;
       startIndex += NumberUtils.setInt32LE(buffer2, index, size);
       return endIndex;
     }
-    function serializeInto(buffer2, object, checkKeys, startingIndex, depth, serializeFunctions, ignoreUndefined, path4) {
-      if (path4 == null) {
+    function serializeInto(buffer2, object, checkKeys, startingIndex, depth, serializeFunctions, ignoreUndefined, path5) {
+      if (path5 == null) {
         if (object == null) {
           buffer2[0] = 5;
           buffer2[1] = 0;
@@ -4057,9 +4057,9 @@ var require_bson = __commonJS({
         } else if (isDate(object) || isRegExp(object) || isUint8Array(object) || isAnyArrayBuffer(object)) {
           throw new BSONError(`date, regexp, typedarray, and arraybuffer cannot be BSON documents`);
         }
-        path4 = /* @__PURE__ */ new Set();
+        path5 = /* @__PURE__ */ new Set();
       }
-      path4.add(object);
+      path5.add(object);
       let index = startingIndex + 4;
       if (Array.isArray(object)) {
         for (let i4 = 0; i4 < object.length; i4++) {
@@ -4089,7 +4089,7 @@ var require_bson = __commonJS({
             } else if (value instanceof RegExp || isRegExp(value)) {
               index = serializeRegExp(buffer2, key, value, index);
             } else {
-              index = serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path4);
+              index = serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path5);
             }
           } else if (type === "object") {
             if (value[BSON_VERSION_SYMBOL] !== BSON_MAJOR_VERSION) {
@@ -4103,13 +4103,13 @@ var require_bson = __commonJS({
             } else if (value._bsontype === "Double") {
               index = serializeDouble(buffer2, key, value, index);
             } else if (value._bsontype === "Code") {
-              index = serializeCode(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path4);
+              index = serializeCode(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path5);
             } else if (value._bsontype === "Binary") {
               index = serializeBinary(buffer2, key, value, index);
             } else if (value._bsontype === "BSONSymbol") {
               index = serializeSymbol(buffer2, key, value, index);
             } else if (value._bsontype === "DBRef") {
-              index = serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path4);
+              index = serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path5);
             } else if (value._bsontype === "BSONRegExp") {
               index = serializeBSONRegExp(buffer2, key, value, index);
             } else if (value._bsontype === "Int32") {
@@ -4170,7 +4170,7 @@ var require_bson = __commonJS({
             } else if (value instanceof RegExp || isRegExp(value)) {
               index = serializeRegExp(buffer2, key, value, index);
             } else {
-              index = serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path4);
+              index = serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path5);
             }
           } else if (type === "object") {
             if (value[BSON_VERSION_SYMBOL] !== BSON_MAJOR_VERSION) {
@@ -4184,13 +4184,13 @@ var require_bson = __commonJS({
             } else if (value._bsontype === "Double") {
               index = serializeDouble(buffer2, key, value, index);
             } else if (value._bsontype === "Code") {
-              index = serializeCode(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path4);
+              index = serializeCode(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path5);
             } else if (value._bsontype === "Binary") {
               index = serializeBinary(buffer2, key, value, index);
             } else if (value._bsontype === "BSONSymbol") {
               index = serializeSymbol(buffer2, key, value, index);
             } else if (value._bsontype === "DBRef") {
-              index = serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path4);
+              index = serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path5);
             } else if (value._bsontype === "BSONRegExp") {
               index = serializeBSONRegExp(buffer2, key, value, index);
             } else if (value._bsontype === "Int32") {
@@ -4250,7 +4250,7 @@ var require_bson = __commonJS({
             } else if (value instanceof RegExp || isRegExp(value)) {
               index = serializeRegExp(buffer2, key, value, index);
             } else {
-              index = serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path4);
+              index = serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path5);
             }
           } else if (type === "object") {
             if (value[BSON_VERSION_SYMBOL] !== BSON_MAJOR_VERSION) {
@@ -4264,13 +4264,13 @@ var require_bson = __commonJS({
             } else if (value._bsontype === "Double") {
               index = serializeDouble(buffer2, key, value, index);
             } else if (value._bsontype === "Code") {
-              index = serializeCode(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path4);
+              index = serializeCode(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path5);
             } else if (value._bsontype === "Binary") {
               index = serializeBinary(buffer2, key, value, index);
             } else if (value._bsontype === "BSONSymbol") {
               index = serializeSymbol(buffer2, key, value, index);
             } else if (value._bsontype === "DBRef") {
-              index = serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path4);
+              index = serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path5);
             } else if (value._bsontype === "BSONRegExp") {
               index = serializeBSONRegExp(buffer2, key, value, index);
             } else if (value._bsontype === "Int32") {
@@ -4285,7 +4285,7 @@ var require_bson = __commonJS({
           }
         }
       }
-      path4.delete(object);
+      path5.delete(object);
       buffer2[index++] = 0;
       const size = index - startingIndex;
       startingIndex += NumberUtils.setInt32LE(buffer2, startingIndex, size);
@@ -6505,8 +6505,8 @@ var require_constants2 = __commonJS({
     ]);
     exports2.LEGACY_HELLO_COMMAND = "ismaster";
     exports2.LEGACY_HELLO_COMMAND_CAMEL_CASE = "isMaster";
-    exports2.kDecorateResult = Symbol.for("@@mdb.decorateDecryptionResult");
-    exports2.kDecoratedKeys = Symbol.for("@@mdb.decryptedKeys");
+    exports2.kDecorateResult = /* @__PURE__ */ Symbol.for("@@mdb.decorateDecryptionResult");
+    exports2.kDecoratedKeys = /* @__PURE__ */ Symbol.for("@@mdb.decryptedKeys");
   }
 });
 
@@ -7202,7 +7202,7 @@ var require_utils = __commonJS({
     exports2.decorateDecryptionResult = decorateDecryptionResult;
     exports2.addAbortListener = addAbortListener;
     exports2.abortable = abortable;
-    var crypto3 = require("crypto");
+    var crypto4 = require("crypto");
     var fs_1 = require("fs");
     var http = require("http");
     var timers_1 = require("timers");
@@ -7358,7 +7358,7 @@ var require_utils = __commonJS({
       }
     }
     function uuidV4() {
-      const result = crypto3.randomBytes(16);
+      const result = crypto4.randomBytes(16);
       result[6] = result[6] & 15 | 64;
       result[8] = result[8] & 63 | 128;
       return result;
@@ -7738,7 +7738,7 @@ var require_utils = __commonJS({
         }
         Object.freeze(this);
       }
-      [Symbol.for("nodejs.util.inspect.custom")]() {
+      [/* @__PURE__ */ Symbol.for("nodejs.util.inspect.custom")]() {
         return this.inspect();
       }
       inspect() {
@@ -7942,7 +7942,7 @@ var require_utils = __commonJS({
     function squashError(_error) {
       return;
     }
-    exports2.randomBytes = (0, util_1.promisify)(crypto3.randomBytes);
+    exports2.randomBytes = (0, util_1.promisify)(crypto4.randomBytes);
     async function once(ee, name, options) {
       options?.signal?.throwIfAborted();
       const { promise, resolve, reject } = promiseWithResolvers();
@@ -8016,7 +8016,7 @@ var require_utils = __commonJS({
         decorateDecryptionResult(decrypted[k4], originalValue, false);
       }
     }
-    exports2.kDispose = Symbol.dispose ?? Symbol("dispose");
+    exports2.kDispose = Symbol.dispose ?? /* @__PURE__ */ Symbol("dispose");
     function addAbortListener(signal, listener) {
       if (signal == null)
         return;
@@ -8370,15 +8370,15 @@ var require_operation = __commonJS({
     var bson_1 = require_bson2();
     var read_preference_1 = require_read_preference();
     exports2.Aspect = {
-      READ_OPERATION: Symbol("READ_OPERATION"),
-      WRITE_OPERATION: Symbol("WRITE_OPERATION"),
-      RETRYABLE: Symbol("RETRYABLE"),
-      EXPLAINABLE: Symbol("EXPLAINABLE"),
-      SKIP_COLLATION: Symbol("SKIP_COLLATION"),
-      CURSOR_CREATING: Symbol("CURSOR_CREATING"),
-      MUST_SELECT_SAME_SERVER: Symbol("MUST_SELECT_SAME_SERVER"),
-      COMMAND_BATCHING: Symbol("COMMAND_BATCHING"),
-      SUPPORTS_RAW_DATA: Symbol("SUPPORTS_RAW_DATA")
+      READ_OPERATION: /* @__PURE__ */ Symbol("READ_OPERATION"),
+      WRITE_OPERATION: /* @__PURE__ */ Symbol("WRITE_OPERATION"),
+      RETRYABLE: /* @__PURE__ */ Symbol("RETRYABLE"),
+      EXPLAINABLE: /* @__PURE__ */ Symbol("EXPLAINABLE"),
+      SKIP_COLLATION: /* @__PURE__ */ Symbol("SKIP_COLLATION"),
+      CURSOR_CREATING: /* @__PURE__ */ Symbol("CURSOR_CREATING"),
+      MUST_SELECT_SAME_SERVER: /* @__PURE__ */ Symbol("MUST_SELECT_SAME_SERVER"),
+      COMMAND_BATCHING: /* @__PURE__ */ Symbol("COMMAND_BATCHING"),
+      SUPPORTS_RAW_DATA: /* @__PURE__ */ Symbol("SUPPORTS_RAW_DATA")
     };
     var AbstractOperation = class {
       constructor(options = {}) {
@@ -8648,7 +8648,7 @@ var require_execute_operation = __commonJS({
       let session = operation2.session;
       let owner;
       if (session == null) {
-        owner = Symbol();
+        owner = /* @__PURE__ */ Symbol();
         session = client.startSession({ owner, explicit: false });
       } else if (session.hasEnded) {
         throw new error_1.MongoExpiredSessionError("Use of expired sessions is not permitted");
@@ -12364,10 +12364,10 @@ var require_utils2 = __commonJS({
         Object.getOwnPropertyDescriptors(object)
       );
     }
-    var wrapperSymbol = Symbol("wrapper");
-    var implSymbol = Symbol("impl");
-    var sameObjectCaches = Symbol("SameObject caches");
-    var ctorRegistrySymbol = Symbol.for("[webidl2js] constructor registry");
+    var wrapperSymbol = /* @__PURE__ */ Symbol("wrapper");
+    var implSymbol = /* @__PURE__ */ Symbol("impl");
+    var sameObjectCaches = /* @__PURE__ */ Symbol("SameObject caches");
+    var ctorRegistrySymbol = /* @__PURE__ */ Symbol.for("[webidl2js] constructor registry");
     var AsyncIteratorPrototype = Object.getPrototypeOf(Object.getPrototypeOf(async function* () {
     }).prototype);
     function initCtorRegistry(globalObject) {
@@ -12415,7 +12415,7 @@ var require_utils2 = __commonJS({
       const impl = implForWrapper(wrapper);
       return impl ? impl : wrapper;
     }
-    var iterInternalSymbol = Symbol("internal");
+    var iterInternalSymbol = /* @__PURE__ */ Symbol("internal");
     function isArrayIndexPropName(P) {
       if (typeof P !== "string") {
         return false;
@@ -12454,21 +12454,21 @@ var require_utils2 = __commonJS({
       }
       return { value: result, done: false };
     }
-    var supportsPropertyIndex = Symbol("supports property index");
-    var supportedPropertyIndices = Symbol("supported property indices");
-    var supportsPropertyName = Symbol("supports property name");
-    var supportedPropertyNames = Symbol("supported property names");
-    var indexedGet = Symbol("indexed property get");
-    var indexedSetNew = Symbol("indexed property set new");
-    var indexedSetExisting = Symbol("indexed property set existing");
-    var namedGet = Symbol("named property get");
-    var namedSetNew = Symbol("named property set new");
-    var namedSetExisting = Symbol("named property set existing");
-    var namedDelete = Symbol("named property delete");
-    var asyncIteratorNext = Symbol("async iterator get the next iteration result");
-    var asyncIteratorReturn = Symbol("async iterator return steps");
-    var asyncIteratorInit = Symbol("async iterator initialization steps");
-    var asyncIteratorEOI = Symbol("async iterator end of iteration");
+    var supportsPropertyIndex = /* @__PURE__ */ Symbol("supports property index");
+    var supportedPropertyIndices = /* @__PURE__ */ Symbol("supported property indices");
+    var supportsPropertyName = /* @__PURE__ */ Symbol("supports property name");
+    var supportedPropertyNames = /* @__PURE__ */ Symbol("supported property names");
+    var indexedGet = /* @__PURE__ */ Symbol("indexed property get");
+    var indexedSetNew = /* @__PURE__ */ Symbol("indexed property set new");
+    var indexedSetExisting = /* @__PURE__ */ Symbol("indexed property set existing");
+    var namedGet = /* @__PURE__ */ Symbol("named property get");
+    var namedSetNew = /* @__PURE__ */ Symbol("named property set new");
+    var namedSetExisting = /* @__PURE__ */ Symbol("named property set existing");
+    var namedDelete = /* @__PURE__ */ Symbol("named property delete");
+    var asyncIteratorNext = /* @__PURE__ */ Symbol("async iterator get the next iteration result");
+    var asyncIteratorReturn = /* @__PURE__ */ Symbol("async iterator return steps");
+    var asyncIteratorInit = /* @__PURE__ */ Symbol("async iterator initialization steps");
+    var asyncIteratorEOI = /* @__PURE__ */ Symbol("async iterator end of iteration");
     module2.exports = exports2 = {
       isObject,
       hasOwn,
@@ -13259,7 +13259,7 @@ var require_url_state_machine = __commonJS({
       ws: 80,
       wss: 443
     };
-    var failure = Symbol("failure");
+    var failure = /* @__PURE__ */ Symbol("failure");
     function countSymbols(str) {
       return [...str].length;
     }
@@ -13621,14 +13621,14 @@ var require_url_state_machine = __commonJS({
       return url.replace(/\u0009|\u000A|\u000D/ug, "");
     }
     function shortenPath(url) {
-      const { path: path4 } = url;
-      if (path4.length === 0) {
+      const { path: path5 } = url;
+      if (path5.length === 0) {
         return;
       }
-      if (url.scheme === "file" && path4.length === 1 && isNormalizedWindowsDriveLetter(path4[0])) {
+      if (url.scheme === "file" && path5.length === 1 && isNormalizedWindowsDriveLetter(path5[0])) {
         return;
       }
-      path4.pop();
+      path5.pop();
     }
     function includesCredentials(url) {
       return url.username !== "" || url.password !== "";
@@ -15893,7 +15893,7 @@ var require_lib2 = __commonJS({
         const sametype = false;
         return this.searchParams;
       }
-      [Symbol.for("nodejs.util.inspect.custom")]() {
+      [/* @__PURE__ */ Symbol.for("nodejs.util.inspect.custom")]() {
         const { href, origin, protocol, username, password, hosts, pathname, search, searchParams, hash } = this;
         return { href, origin, protocol, username, password, hosts, pathname, search, searchParams, hash };
       }
@@ -16518,12 +16518,12 @@ var require_crypto_callbacks = __commonJS({
     exports2.sha256Hook = sha256Hook;
     exports2.makeHmacHook = makeHmacHook;
     exports2.signRsaSha256Hook = signRsaSha256Hook;
-    var crypto3 = require("crypto");
+    var crypto4 = require("crypto");
     function makeAES256Hook(method, mode) {
       return function(key, iv, input, output) {
         let result;
         try {
-          const cipher = crypto3[method](mode, key, iv);
+          const cipher = crypto4[method](mode, key, iv);
           cipher.setAutoPadding(false);
           result = cipher.update(input);
           const final = cipher.final();
@@ -16539,7 +16539,7 @@ var require_crypto_callbacks = __commonJS({
     }
     function randomHook(buffer, count) {
       try {
-        crypto3.randomFillSync(buffer, 0, count);
+        crypto4.randomFillSync(buffer, 0, count);
       } catch (e4) {
         return e4;
       }
@@ -16548,7 +16548,7 @@ var require_crypto_callbacks = __commonJS({
     function sha256Hook(input, output) {
       let result;
       try {
-        result = crypto3.createHash("sha256").update(input).digest();
+        result = crypto4.createHash("sha256").update(input).digest();
       } catch (e4) {
         return e4;
       }
@@ -16559,7 +16559,7 @@ var require_crypto_callbacks = __commonJS({
       return (key, input, output) => {
         let result;
         try {
-          result = crypto3.createHmac(algorithm, key).update(input).digest();
+          result = crypto4.createHmac(algorithm, key).update(input).digest();
         } catch (e4) {
           return e4;
         }
@@ -16570,7 +16570,7 @@ var require_crypto_callbacks = __commonJS({
     function signRsaSha256Hook(key, input, output) {
       let result;
       try {
-        const signer = crypto3.createSign("sha256WithRSAEncryption");
+        const signer = crypto4.createSign("sha256WithRSAEncryption");
         const privateKey = Buffer.from(`-----BEGIN PRIVATE KEY-----
 ${key.toString("base64")}
 -----END PRIVATE KEY-----
@@ -17004,7 +17004,7 @@ var require_state_machine = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.StateMachine = void 0;
-    var fs6 = require("fs/promises");
+    var fs7 = require("fs/promises");
     var net = require("net");
     var tls = require("tls");
     var bson_1 = require_bson2();
@@ -17291,11 +17291,11 @@ var require_state_machine = __commonJS({
           options.secureContext = tlsOptions.secureContext;
         }
         if (tlsOptions.tlsCertificateKeyFile) {
-          const cert = await fs6.readFile(tlsOptions.tlsCertificateKeyFile);
+          const cert = await fs7.readFile(tlsOptions.tlsCertificateKeyFile);
           options.cert = options.key = cert;
         }
         if (tlsOptions.tlsCAFile) {
-          options.ca = await fs6.readFile(tlsOptions.tlsCAFile);
+          options.ca = await fs7.readFile(tlsOptions.tlsCAFile);
         }
         if (tlsOptions.tlsCertificateKeyFilePassword) {
           options.passphrase = tlsOptions.tlsCertificateKeyFilePassword;
@@ -17317,7 +17317,7 @@ var require_state_machine = __commonJS({
         const cursor2 = client.db(db).listCollections(filter, {
           promoteLongs: false,
           promoteValues: false,
-          timeoutContext: options?.timeoutContext && new abstract_cursor_1.CursorTimeoutContext(options?.timeoutContext, Symbol()),
+          timeoutContext: options?.timeoutContext && new abstract_cursor_1.CursorTimeoutContext(options?.timeoutContext, /* @__PURE__ */ Symbol()),
           signal: options?.signal,
           nameOnly: false
         });
@@ -17366,7 +17366,7 @@ var require_state_machine = __commonJS({
           signal: void 0
         };
         if (options?.timeoutContext != null) {
-          commandOptions.timeoutContext = new abstract_cursor_1.CursorTimeoutContext(options.timeoutContext, Symbol());
+          commandOptions.timeoutContext = new abstract_cursor_1.CursorTimeoutContext(options.timeoutContext, /* @__PURE__ */ Symbol());
         }
         if (options?.signal != null) {
           commandOptions.signal = options.signal;
@@ -24083,7 +24083,7 @@ var require_drop = __commonJS({
         const listCollectionsResult = await db.listCollections({ name }, {
           nameOnly: false,
           session: options.session,
-          timeoutContext: new abstract_cursor_1.CursorTimeoutContext(timeoutContext, Symbol())
+          timeoutContext: new abstract_cursor_1.CursorTimeoutContext(timeoutContext, /* @__PURE__ */ Symbol())
         }).toArray();
         encryptedFields = listCollectionsResult?.[0]?.options?.encryptedFields;
       }
@@ -25218,7 +25218,7 @@ var require_token_machine_workflow = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.callback = void 0;
-    var fs6 = require("fs");
+    var fs7 = require("fs");
     var error_1 = require_error();
     var TOKEN_MISSING_ERROR = "OIDC_TOKEN_FILE must be set in the environment.";
     var callback = async () => {
@@ -25226,7 +25226,7 @@ var require_token_machine_workflow = __commonJS({
       if (!tokenFile) {
         throw new error_1.MongoAWSError(TOKEN_MISSING_ERROR);
       }
-      const token = await fs6.promises.readFile(tokenFile, "utf8");
+      const token = await fs7.promises.readFile(tokenFile, "utf8");
       return { accessToken: token };
     };
     exports2.callback = callback;
@@ -25779,7 +25779,7 @@ var require_scram = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.ScramSHA256 = exports2.ScramSHA1 = void 0;
     var saslprep_1 = require_node();
-    var crypto3 = require("crypto");
+    var crypto4 = require("crypto");
     var bson_1 = require_bson2();
     var error_1 = require_error();
     var utils_1 = require_utils();
@@ -25932,9 +25932,9 @@ var require_scram = __commonJS({
       }
       let md5;
       try {
-        md5 = crypto3.createHash("md5");
+        md5 = crypto4.createHash("md5");
       } catch (err) {
-        if (crypto3.getFips()) {
+        if (crypto4.getFips()) {
           throw new Error("Auth mechanism SCRAM-SHA-1 is not supported in FIPS mode");
         }
         throw err;
@@ -25957,10 +25957,10 @@ var require_scram = __commonJS({
       return Buffer.from(res).toString("base64");
     }
     function H2(method, text) {
-      return crypto3.createHash(method).update(text).digest();
+      return crypto4.createHash(method).update(text).digest();
     }
     function HMAC(method, key, text) {
-      return crypto3.createHmac(method, key).update(text).digest();
+      return crypto4.createHmac(method, key).update(text).digest();
     }
     var _hiCache = {};
     var _hiCacheCount = 0;
@@ -25977,7 +25977,7 @@ var require_scram = __commonJS({
       if (_hiCache[key] != null) {
         return _hiCache[key];
       }
-      const saltedData = crypto3.pbkdf2Sync(data2, salt, iterations, hiLengthMap[cryptoMethod], cryptoMethod);
+      const saltedData = crypto4.pbkdf2Sync(data2, salt, iterations, hiLengthMap[cryptoMethod], cryptoMethod);
       if (_hiCacheCount >= 200) {
         _hiCachePurge();
       }
@@ -25989,8 +25989,8 @@ var require_scram = __commonJS({
       if (lhs.length !== rhs.length) {
         return false;
       }
-      if (typeof crypto3.timingSafeEqual === "function") {
-        return crypto3.timingSafeEqual(lhs, rhs);
+      if (typeof crypto4.timingSafeEqual === "function") {
+        return crypto4.timingSafeEqual(lhs, rhs);
       }
       let result = 0;
       for (let i4 = 0; i4 < lhs.length; i4++) {
@@ -26740,7 +26740,7 @@ var require_executor = __commonJS({
         } else {
           const resultsMerger = new results_merger_1.ClientBulkWriteResultsMerger(this.options);
           while (commandBuilder.hasNextBatch()) {
-            const cursorContext = new abstract_cursor_1.CursorTimeoutContext(context, Symbol());
+            const cursorContext = new abstract_cursor_1.CursorTimeoutContext(context, /* @__PURE__ */ Symbol());
             const options = {
               ...this.options,
               timeoutContext: cursorContext,
@@ -27964,7 +27964,7 @@ var require_mongo_client = __commonJS({
       async withSession(optionsOrExecutor, executor) {
         const options = {
           // Always define an owner
-          owner: Symbol(),
+          owner: /* @__PURE__ */ Symbol(),
           // If it's an object inherit the options
           ...typeof optionsOrExecutor === "object" ? optionsOrExecutor : {}
         };
@@ -30921,9 +30921,9 @@ var require_change_stream = __commonJS({
       "showExpandedEvents"
     ];
     var CHANGE_DOMAIN_TYPES = {
-      COLLECTION: Symbol("Collection"),
-      DATABASE: Symbol("Database"),
-      CLUSTER: Symbol("Cluster")
+      COLLECTION: /* @__PURE__ */ Symbol("Collection"),
+      DATABASE: /* @__PURE__ */ Symbol("Database"),
+      CLUSTER: /* @__PURE__ */ Symbol("Cluster")
     };
     var CHANGE_STREAM_EVENTS = [constants_1.RESUME_TOKEN_CHANGED, constants_1.END, constants_1.CLOSE];
     var NO_RESUME_TOKEN_ERROR = "A change stream document has been received that lacks a resume token (_id).";
@@ -30957,7 +30957,7 @@ var require_change_stream = __commonJS({
         } else {
           throw new error_1.MongoChangeStreamError("Parent provided to ChangeStream constructor must be an instance of Collection, Db, or MongoClient");
         }
-        this.contextOwner = Symbol();
+        this.contextOwner = /* @__PURE__ */ Symbol();
         this.parent = parent;
         this.namespace = parent.s.namespace;
         if (!this.options.readPreference && parent.readPreference) {
@@ -32554,8 +32554,8 @@ function validateMongoDBConfig() {
   } catch (error2) {
     if (error2 instanceof import_zod2.z.ZodError) {
       const validationErrors = error2.errors.map((err) => {
-        const path4 = err.path.join(".");
-        return `${path4}: ${err.message}`;
+        const path5 = err.path.join(".");
+        return `${path5}: ${err.message}`;
       });
       errors.push(...validationErrors);
       logger.warn("MongoDB configuration validation failed", {
@@ -32992,1853 +32992,6 @@ var init_migrations_repository = __esm({
       }
     };
     instance = null;
-  }
-});
-
-// lib/json-store/core/json-store.ts
-var json_store_exports = {};
-__export(json_store_exports, {
-  JsonStore: () => JsonStore,
-  getJsonStore: () => getJsonStore,
-  resetJsonStore: () => resetJsonStore
-});
-function getJsonStore(config) {
-  if (!instance2) {
-    instance2 = new JsonStore(config);
-  }
-  return instance2;
-}
-function resetJsonStore() {
-  instance2 = null;
-}
-var fs3, path2, import_util, crypto2, mkdir2, readFile2, writeFile2, appendFile2, rename2, unlink2, readdir2, stat2, JsonStore, instance2;
-var init_json_store = __esm({
-  "lib/json-store/core/json-store.ts"() {
-    "use strict";
-    init_logger();
-    fs3 = __toESM(require("fs"));
-    path2 = __toESM(require("path"));
-    import_util = require("util");
-    crypto2 = __toESM(require("crypto"));
-    mkdir2 = (0, import_util.promisify)(fs3.mkdir);
-    readFile2 = (0, import_util.promisify)(fs3.readFile);
-    writeFile2 = (0, import_util.promisify)(fs3.writeFile);
-    appendFile2 = (0, import_util.promisify)(fs3.appendFile);
-    rename2 = (0, import_util.promisify)(fs3.rename);
-    unlink2 = (0, import_util.promisify)(fs3.unlink);
-    readdir2 = (0, import_util.promisify)(fs3.readdir);
-    stat2 = (0, import_util.promisify)(fs3.stat);
-    JsonStore = class {
-      constructor(config = {}) {
-        this.locks = /* @__PURE__ */ new Map();
-        this.cache = /* @__PURE__ */ new Map();
-        this.dataDir = config.dataDir || process.env.DATA_DIR || "./data";
-        this.enableCache = config.enableCache ?? true;
-        this.lockTimeout = config.lockTimeout ?? 5e3;
-        this.fsyncInterval = config.fsyncInterval ?? 10;
-        if (!fs3.existsSync(this.dataDir)) {
-          fs3.mkdirSync(this.dataDir, { recursive: true });
-        }
-      }
-      /**
-       * Get the configured data directory path
-       */
-      getDataDir() {
-        return this.dataDir;
-      }
-      /**
-       * Resolve a relative path within data directory
-       */
-      resolvePath(...segments) {
-        return path2.join(this.dataDir, ...segments);
-      }
-      /**
-       * Ensure a directory exists
-       */
-      async ensureDir(dirPath) {
-        await mkdir2(dirPath, { recursive: true });
-      }
-      /**
-       * Acquire a lock for a file path
-       */
-      async acquireLock(filePath) {
-        const lockPath = `${filePath}.lock`;
-        const lockDir = path2.dirname(lockPath);
-        const startTime = Date.now();
-        await this.ensureDir(lockDir);
-        while (true) {
-          try {
-            const fd = fs3.openSync(lockPath, fs3.constants.O_CREAT | fs3.constants.O_EXCL | fs3.constants.O_WRONLY);
-            fs3.closeSync(fd);
-            return;
-          } catch (error2) {
-            if (error2.code !== "EEXIST") {
-              throw error2;
-            }
-            try {
-              const stats = await stat2(lockPath);
-              if (Date.now() - stats.mtimeMs > 3e4) {
-                await unlink2(lockPath);
-                continue;
-              }
-            } catch {
-              continue;
-            }
-            if (Date.now() - startTime > this.lockTimeout) {
-              throw new Error(`Failed to acquire lock for ${filePath} within ${this.lockTimeout}ms`);
-            }
-            await new Promise((resolve) => setTimeout(resolve, 10));
-          }
-        }
-      }
-      /**
-       * Release a lock for a file path
-       */
-      async releaseLock(filePath) {
-        const lockPath = `${filePath}.lock`;
-        try {
-          await unlink2(lockPath);
-        } catch (error2) {
-          if (error2.code !== "ENOENT") {
-            logger.error(`Failed to release lock for ${filePath}`, { context: { filePath } }, error2 instanceof Error ? error2 : void 0);
-          }
-        }
-      }
-      /**
-       * Read JSON file with caching
-       */
-      async readJson(filePath) {
-        const fullPath = this.resolvePath(filePath);
-        const cacheKey = fullPath;
-        if (this.enableCache && this.cache.has(cacheKey)) {
-          return this.cache.get(cacheKey);
-        }
-        try {
-          const content = await readFile2(fullPath, "utf-8");
-          const data2 = JSON.parse(content);
-          if (this.enableCache) {
-            this.cache.set(cacheKey, data2);
-          }
-          return data2;
-        } catch (error2) {
-          if (error2.code === "ENOENT") {
-            throw new Error(`File not found: ${filePath}`);
-          }
-          throw new Error(`Failed to read JSON from ${filePath}: ${error2.message}`);
-        }
-      }
-      /**
-       * Write JSON file atomically with locking
-       */
-      async writeJson(filePath, data2) {
-        const fullPath = this.resolvePath(filePath);
-        const dir = path2.dirname(fullPath);
-        await this.ensureDir(dir);
-        await this.acquireLock(fullPath);
-        try {
-          const tempPath = `${fullPath}.tmp.${crypto2.randomBytes(4).toString("hex")}`;
-          const content = JSON.stringify(data2, null, 2);
-          await writeFile2(tempPath, content, "utf-8");
-          await rename2(tempPath, fullPath);
-          if (this.enableCache) {
-            this.cache.delete(fullPath);
-          }
-        } finally {
-          await this.releaseLock(fullPath);
-        }
-      }
-      /**
-       * Read JSONL file line by line
-       */
-      async readJsonl(filePath) {
-        const fullPath = this.resolvePath(filePath);
-        try {
-          const content = await readFile2(fullPath, "utf-8");
-          const lines = content.trim().split("\n").filter((line) => line.length > 0);
-          return lines.map((line) => JSON.parse(line));
-        } catch (error2) {
-          if (error2.code === "ENOENT") {
-            return [];
-          }
-          throw new Error(`Failed to read JSONL from ${filePath}: ${error2.message}`);
-        }
-      }
-      /**
-       * Write raw content to file atomically with locking (for pre-formatted JSONL)
-       */
-      async writeRaw(filePath, content) {
-        const fullPath = this.resolvePath(filePath);
-        const dir = path2.dirname(fullPath);
-        await this.ensureDir(dir);
-        await this.acquireLock(fullPath);
-        try {
-          const tempPath = `${fullPath}.tmp.${crypto2.randomBytes(4).toString("hex")}`;
-          await writeFile2(tempPath, content, "utf-8");
-          await rename2(tempPath, fullPath);
-          if (this.enableCache) {
-            this.cache.delete(fullPath);
-          }
-        } finally {
-          await this.releaseLock(fullPath);
-        }
-      }
-      /**
-       * Write JSONL file atomically (full rewrite for updates/deletes)
-       */
-      async writeJsonl(filePath, items) {
-        const content = items.length > 0 ? items.map((item) => JSON.stringify(item)).join("\n") + "\n" : "";
-        await this.writeRaw(filePath, content);
-      }
-      /**
-       * Append to JSONL file (line-delimited JSON)
-       */
-      async appendJsonl(filePath, items) {
-        const fullPath = this.resolvePath(filePath);
-        const dir = path2.dirname(fullPath);
-        await this.ensureDir(dir);
-        await this.acquireLock(fullPath);
-        try {
-          const lines = items.map((item) => JSON.stringify(item)).join("\n") + "\n";
-          if (fs3.existsSync(fullPath)) {
-            await appendFile2(fullPath, lines, "utf-8");
-          } else {
-            await writeFile2(fullPath, lines, "utf-8");
-          }
-          if (this.enableCache) {
-            this.cache.delete(fullPath);
-          }
-        } finally {
-          await this.releaseLock(fullPath);
-        }
-      }
-      /**
-       * Get file size in bytes
-       */
-      async getFileSize(filePath) {
-        const fullPath = this.resolvePath(filePath);
-        try {
-          const stats = await stat2(fullPath);
-          return stats.size;
-        } catch (error2) {
-          if (error2.code === "ENOENT") {
-            return 0;
-          }
-          throw error2;
-        }
-      }
-      /**
-       * Check if file exists
-       */
-      exists(filePath) {
-        const fullPath = this.resolvePath(filePath);
-        return fs3.existsSync(fullPath);
-      }
-      /**
-       * List files in a directory
-       */
-      async listDir(dirPath) {
-        const fullPath = this.resolvePath(dirPath);
-        try {
-          return await readdir2(fullPath);
-        } catch (error2) {
-          if (error2.code === "ENOENT") {
-            return [];
-          }
-          throw error2;
-        }
-      }
-      /**
-       * Delete a file
-       */
-      async deleteFile(filePath) {
-        const fullPath = this.resolvePath(filePath);
-        try {
-          await unlink2(fullPath);
-          if (this.enableCache) {
-            this.cache.delete(fullPath);
-          }
-        } catch (error2) {
-          if (error2.code !== "ENOENT") {
-            throw error2;
-          }
-        }
-      }
-      /**
-       * Clear in-memory cache
-       */
-      clearCache() {
-        this.cache.clear();
-      }
-      /**
-       * Get cache stats
-       */
-      getCacheStats() {
-        return {
-          size: this.cache.size,
-          enabled: this.enableCache
-        };
-      }
-    };
-    instance2 = null;
-  }
-});
-
-// lib/json-store/repositories/base.repository.ts
-var BaseRepository;
-var init_base_repository = __esm({
-  "lib/json-store/repositories/base.repository.ts"() {
-    "use strict";
-    BaseRepository = class {
-      constructor(jsonStore, schema) {
-        this.jsonStore = jsonStore;
-        this.schema = schema;
-      }
-      /**
-       * Validate data against schema
-       */
-      validate(data2) {
-        return this.schema.parse(data2);
-      }
-      /**
-       * Safely validate without throwing
-       */
-      validateSafe(data2) {
-        try {
-          const validated = this.validate(data2);
-          return { success: true, data: validated };
-        } catch (error2) {
-          return { success: false, error: error2.message };
-        }
-      }
-      /**
-       * Generate UUID v4
-       */
-      generateId() {
-        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c4) {
-          const r4 = Math.random() * 16 | 0;
-          const v4 = c4 === "x" ? r4 : r4 & 3 | 8;
-          return v4.toString(16);
-        });
-      }
-      /**
-       * Get current ISO timestamp
-       */
-      getCurrentTimestamp() {
-        return (/* @__PURE__ */ new Date()).toISOString();
-      }
-    };
-  }
-});
-
-// lib/json-store/schemas/plugin-manifest.ts
-var import_zod4, PluginCapabilityEnum, FrontendFrameworkEnum, CSSFrameworkEnum, PluginAuthorSchema, CompatibilitySchema, FunctionalitySchema, HookConfigSchema, APIRouteSchema, UIComponentSchema, DatabaseModelSchema, PermissionsSchema, ConfigSchemaSchema, ProviderConfigSchema, AuthProviderConfigSchema, PluginManifestSchema;
-var init_plugin_manifest = __esm({
-  "lib/json-store/schemas/plugin-manifest.ts"() {
-    "use strict";
-    import_zod4 = require("zod");
-    PluginCapabilityEnum = import_zod4.z.enum([
-      "CHAT_COMMANDS",
-      // Provides custom chat commands
-      "MESSAGE_PROCESSORS",
-      // Processes/transforms messages
-      "UI_COMPONENTS",
-      // Provides React components
-      "DATA_STORAGE",
-      // Adds database tables/storage
-      "API_ROUTES",
-      // Adds new API endpoints
-      "AUTH_METHODS",
-      // Provides authentication methods
-      "WEBHOOKS",
-      // Handles webhooks
-      "BACKGROUND_TASKS",
-      // Runs background jobs
-      "CUSTOM_MODELS",
-      // Adds new data models
-      "FILE_HANDLERS",
-      // Handles file operations
-      "NOTIFICATIONS",
-      // Provides notification system
-      "BACKEND_INTEGRATIONS",
-      // Integrates with external services
-      "LLM_PROVIDER",
-      // Provides LLM integration
-      "IMAGE_PROVIDER",
-      // Provides image generation
-      "EMBEDDING_PROVIDER",
-      // Provides embedding generation
-      "THEME",
-      // Provides UI theme
-      "DATABASE_BACKEND",
-      // Replaces/augments database
-      "FILE_BACKEND",
-      // Replaces/augments file storage
-      "UPGRADE_MIGRATION"
-      // Provides version upgrade migrations (runs early in startup)
-    ]);
-    FrontendFrameworkEnum = import_zod4.z.enum([
-      "REACT",
-      "PREACT",
-      "VUE",
-      "SVELTE",
-      "NONE"
-    ]);
-    CSSFrameworkEnum = import_zod4.z.enum([
-      "TAILWIND",
-      "BOOTSTRAP",
-      "MATERIAL_UI",
-      "CSS_MODULES",
-      "STYLED_COMPONENTS",
-      "NONE"
-    ]);
-    PluginAuthorSchema = import_zod4.z.object({
-      name: import_zod4.z.string().min(1).max(100),
-      email: import_zod4.z.string().email().optional(),
-      url: import_zod4.z.string().url().optional()
-    });
-    CompatibilitySchema = import_zod4.z.object({
-      /** Minimum Quilltap version (semver) */
-      quilltapVersion: import_zod4.z.string().regex(/^>=?\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?$/),
-      /** Maximum Quilltap version (optional) */
-      quilltapMaxVersion: import_zod4.z.string().regex(/^<=?\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?$/).optional(),
-      /** Minimum Node.js version */
-      nodeVersion: import_zod4.z.string().regex(/^>=?\d+\.\d+\.\d+$/).optional()
-    });
-    FunctionalitySchema = import_zod4.z.object({
-      /** @deprecated Use capabilities array instead */
-      providesChatCommands: import_zod4.z.boolean().default(false).optional(),
-      /** @deprecated Use capabilities array instead */
-      providesMessageProcessors: import_zod4.z.boolean().default(false).optional(),
-      /** @deprecated Use capabilities array instead */
-      providesUIComponents: import_zod4.z.boolean().default(false).optional(),
-      /** @deprecated Use capabilities array instead */
-      providesDataStorage: import_zod4.z.boolean().default(false).optional(),
-      /** @deprecated Use capabilities array instead */
-      providesAPIRoutes: import_zod4.z.boolean().default(false).optional(),
-      /** @deprecated Use capabilities array instead */
-      providesAuthenticationMethods: import_zod4.z.boolean().default(false).optional(),
-      /** @deprecated Use capabilities array instead */
-      providesWebhooks: import_zod4.z.boolean().default(false).optional(),
-      /** @deprecated Use capabilities array instead */
-      providesBackgroundTasks: import_zod4.z.boolean().default(false).optional(),
-      /** @deprecated Use capabilities array instead */
-      providesCustomModels: import_zod4.z.boolean().default(false).optional(),
-      /** @deprecated Use capabilities array instead */
-      providesFileHandlers: import_zod4.z.boolean().default(false).optional(),
-      /** @deprecated Use capabilities array instead */
-      providesNotifications: import_zod4.z.boolean().default(false).optional(),
-      /** @deprecated Use capabilities array instead */
-      providesBackendIntegrations: import_zod4.z.boolean().default(false).optional()
-    });
-    HookConfigSchema = import_zod4.z.object({
-      /** Hook identifier */
-      name: import_zod4.z.string().min(1).max(100),
-      /** Hook handler file path (relative to plugin root) */
-      handler: import_zod4.z.string(),
-      /** Priority (lower = runs first) */
-      priority: import_zod4.z.number().int().min(0).max(100).default(50),
-      /** Whether the hook is enabled */
-      enabled: import_zod4.z.boolean().default(true)
-    });
-    APIRouteSchema = import_zod4.z.object({
-      /** Route path (e.g., "/api/plugin/my-route") */
-      path: import_zod4.z.string().regex(/^\/api\//),
-      /** HTTP methods supported */
-      methods: import_zod4.z.array(import_zod4.z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"])).min(1),
-      /** Handler file path (relative to plugin root) */
-      handler: import_zod4.z.string(),
-      /** Whether authentication is required */
-      requiresAuth: import_zod4.z.boolean().default(true),
-      /** Description of what the route does */
-      description: import_zod4.z.string().optional()
-    });
-    UIComponentSchema = import_zod4.z.object({
-      /** Component identifier (used for registration) */
-      id: import_zod4.z.string().regex(/^[a-z][a-z0-9-]*$/),
-      /** Human-readable name */
-      name: import_zod4.z.string().min(1).max(100),
-      /** Component file path (relative to plugin root) */
-      path: import_zod4.z.string(),
-      /** Where the component can be used */
-      slots: import_zod4.z.array(import_zod4.z.string()).optional(),
-      /** Props schema (JSON Schema) */
-      propsSchema: import_zod4.z.record(import_zod4.z.unknown()).optional()
-    });
-    DatabaseModelSchema = import_zod4.z.object({
-      /** Model name */
-      name: import_zod4.z.string().regex(/^[A-Z][a-zA-Z0-9]*$/),
-      /** Schema file path (Zod schema, relative to plugin root) */
-      schemaPath: import_zod4.z.string(),
-      /** Collection/table name */
-      collectionName: import_zod4.z.string().regex(/^[a-z][a-z0-9-_]*$/),
-      /** Description */
-      description: import_zod4.z.string().optional()
-    });
-    PermissionsSchema = import_zod4.z.object({
-      /** File system access paths (relative to data directory) */
-      fileSystem: import_zod4.z.array(import_zod4.z.string()).default([]),
-      /** Network access (domains/URLs the plugin needs to access) */
-      network: import_zod4.z.array(import_zod4.z.string()).default([]),
-      /** Environment variables the plugin needs */
-      environment: import_zod4.z.array(import_zod4.z.string()).default([]),
-      /** Whether the plugin needs database access */
-      database: import_zod4.z.boolean().default(false),
-      /** Whether the plugin needs user data access */
-      userData: import_zod4.z.boolean().default(false)
-    });
-    ConfigSchemaSchema = import_zod4.z.object({
-      /** Configuration key */
-      key: import_zod4.z.string().regex(/^[a-z][a-zA-Z0-9]*$/),
-      /** Display label */
-      label: import_zod4.z.string().min(1).max(100),
-      /** Input type */
-      type: import_zod4.z.enum(["text", "number", "boolean", "select", "textarea", "password", "url", "email"]),
-      /** Default value */
-      default: import_zod4.z.unknown().optional(),
-      /** Whether the field is required */
-      required: import_zod4.z.boolean().default(false),
-      /** Help text */
-      description: import_zod4.z.string().optional(),
-      /** Options for select type */
-      options: import_zod4.z.array(import_zod4.z.object({
-        label: import_zod4.z.string(),
-        value: import_zod4.z.unknown()
-      })).optional(),
-      /** Validation pattern (regex) */
-      pattern: import_zod4.z.string().optional(),
-      /** Minimum value (for number type) */
-      min: import_zod4.z.number().optional(),
-      /** Maximum value (for number type) */
-      max: import_zod4.z.number().optional()
-    });
-    ProviderConfigSchema = import_zod4.z.object({
-      /** Internal identifier for the provider (e.g., 'OPENAI', 'ANTHROPIC') */
-      providerName: import_zod4.z.string().regex(/^[A-Z][A-Z0-9_]*$/),
-      /** Human-readable display name (e.g., 'OpenAI', 'Anthropic') */
-      displayName: import_zod4.z.string().min(1).max(100),
-      /** Short description of the provider */
-      description: import_zod4.z.string().min(1).max(500),
-      /** 2-4 character abbreviation for use in icons/badges (e.g., 'OAI', 'ANT') */
-      abbreviation: import_zod4.z.string().min(2).max(4).regex(/^[A-Z0-9]+$/),
-      /** Color configuration using Tailwind CSS classes */
-      colors: import_zod4.z.object({
-        /** Background color class (e.g., 'bg-blue-500') */
-        bg: import_zod4.z.string().min(1),
-        /** Text color class (e.g., 'text-white') */
-        text: import_zod4.z.string().min(1),
-        /** Icon color class (e.g., 'text-blue-600') */
-        icon: import_zod4.z.string().min(1)
-      }),
-      /** Whether the provider requires an API key */
-      requiresApiKey: import_zod4.z.boolean().default(true),
-      /** Whether the provider requires a custom base URL */
-      requiresBaseUrl: import_zod4.z.boolean().default(false),
-      /** Custom label for the API key field (defaults to 'API Key') */
-      apiKeyLabel: import_zod4.z.string().min(1).max(100).optional(),
-      /** Custom label for the base URL field (defaults to 'Base URL') */
-      baseUrlLabel: import_zod4.z.string().min(1).max(100).optional(),
-      /** Default base URL for the provider (if customizable) */
-      baseUrlDefault: import_zod4.z.string().url().optional(),
-      /** Capabilities supported by this provider */
-      capabilities: import_zod4.z.object({
-        /** Supports chat/completion endpoints */
-        chat: import_zod4.z.boolean().default(true).optional(),
-        /** Supports image generation */
-        imageGeneration: import_zod4.z.boolean().default(false).optional(),
-        /** Supports embeddings */
-        embeddings: import_zod4.z.boolean().default(false).optional(),
-        /** Supports web search */
-        webSearch: import_zod4.z.boolean().default(false).optional()
-      }).optional(),
-      /** File attachment support configuration */
-      attachmentSupport: import_zod4.z.object({
-        /** Whether attachments are supported */
-        supported: import_zod4.z.boolean().default(false),
-        /** List of supported MIME types (e.g., ['image/jpeg', 'application/pdf']) */
-        mimeTypes: import_zod4.z.array(import_zod4.z.string()).default([]),
-        /** Description of attachment support */
-        description: import_zod4.z.string().optional()
-      }).optional()
-    });
-    AuthProviderConfigSchema = import_zod4.z.object({
-      /** Internal identifier for the provider (e.g., 'google', 'github') */
-      providerId: import_zod4.z.string().regex(/^[a-z][a-z0-9-]*$/),
-      /** Human-readable display name (e.g., 'Google', 'GitHub') */
-      displayName: import_zod4.z.string().min(1).max(100),
-      /** Environment variables required for this provider */
-      requiredEnvVars: import_zod4.z.array(import_zod4.z.string()).min(1),
-      /** Optional environment variables */
-      optionalEnvVars: import_zod4.z.array(import_zod4.z.string()).optional(),
-      /** Button background color (Tailwind classes) */
-      buttonColor: import_zod4.z.string().optional(),
-      /** Button text color (Tailwind classes) */
-      buttonTextColor: import_zod4.z.string().optional(),
-      /** Icon name or identifier */
-      icon: import_zod4.z.string().optional()
-    });
-    PluginManifestSchema = import_zod4.z.object({
-      // ===== JSON SCHEMA REFERENCE =====
-      /** JSON Schema reference (for IDE support) */
-      $schema: import_zod4.z.string().optional(),
-      // ===== BASIC METADATA =====
-      /** Plugin package name (must start with 'qtap-plugin-') */
-      name: import_zod4.z.string().regex(/^qtap-plugin-[a-z0-9-]+$/),
-      /** Display title */
-      title: import_zod4.z.string().min(1).max(100),
-      /** Plugin description */
-      description: import_zod4.z.string().min(1).max(500),
-      /** Semantic version */
-      version: import_zod4.z.string().regex(/^\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?(\+[a-zA-Z0-9.-]+)?$/),
-      /** Author information */
-      author: import_zod4.z.union([import_zod4.z.string(), PluginAuthorSchema]),
-      /** License (SPDX identifier) */
-      license: import_zod4.z.string().default("MIT"),
-      /** Main entry point (JavaScript/TypeScript file) */
-      main: import_zod4.z.string().default("index.js"),
-      /** Homepage URL */
-      homepage: import_zod4.z.string().url().optional(),
-      /** Repository URL */
-      repository: import_zod4.z.union([
-        import_zod4.z.string().url(),
-        import_zod4.z.object({
-          type: import_zod4.z.string(),
-          url: import_zod4.z.string().url()
-        })
-      ]).optional(),
-      /** Bug tracker URL */
-      bugs: import_zod4.z.union([
-        import_zod4.z.string().url(),
-        import_zod4.z.object({
-          url: import_zod4.z.string().url(),
-          email: import_zod4.z.string().email().optional()
-        })
-      ]).optional(),
-      // ===== COMPATIBILITY =====
-      /** Version compatibility requirements */
-      compatibility: CompatibilitySchema,
-      /** Dependencies (other plugins required) */
-      requires: import_zod4.z.record(import_zod4.z.string()).optional(),
-      /** Peer dependencies */
-      peerDependencies: import_zod4.z.record(import_zod4.z.string()).optional(),
-      // ===== CAPABILITIES =====
-      /** Modern capability flags (preferred over functionality object) */
-      capabilities: import_zod4.z.array(PluginCapabilityEnum).default([]),
-      /** @deprecated Legacy functionality flags */
-      functionality: FunctionalitySchema.optional(),
-      // ===== TECHNICAL DETAILS =====
-      /** Frontend framework used */
-      frontend: FrontendFrameworkEnum.default("REACT").optional(),
-      /** CSS framework used */
-      styling: CSSFrameworkEnum.default("TAILWIND").optional(),
-      /** TypeScript support */
-      typescript: import_zod4.z.boolean().default(true).optional(),
-      // ===== HOOKS & EXTENSIONS =====
-      /** Hook registrations */
-      hooks: import_zod4.z.array(HookConfigSchema).default([]).optional(),
-      /** API routes provided */
-      apiRoutes: import_zod4.z.array(APIRouteSchema).default([]).optional(),
-      /** UI components provided */
-      components: import_zod4.z.array(UIComponentSchema).default([]).optional(),
-      /** Database models/tables */
-      models: import_zod4.z.array(DatabaseModelSchema).default([]).optional(),
-      // ===== CONFIGURATION =====
-      /** Configuration schema for the plugin */
-      configSchema: import_zod4.z.array(ConfigSchemaSchema).default([]).optional(),
-      /** Default configuration values */
-      defaultConfig: import_zod4.z.record(import_zod4.z.unknown()).default({}).optional(),
-      /** Provider configuration (for LLM/service provider plugins) */
-      providerConfig: ProviderConfigSchema.optional(),
-      /** Auth provider configuration (for authentication provider plugins) */
-      authProviderConfig: AuthProviderConfigSchema.optional(),
-      // ===== SECURITY & PERMISSIONS =====
-      /** Permissions required by the plugin */
-      permissions: PermissionsSchema.default({}).optional(),
-      /** Whether the plugin is sandboxed */
-      sandboxed: import_zod4.z.boolean().default(true).optional(),
-      // ===== METADATA =====
-      /** Keywords for search/discovery */
-      keywords: import_zod4.z.array(import_zod4.z.string()).default([]),
-      /** Icon file path (relative to plugin root) */
-      icon: import_zod4.z.string().optional(),
-      /** Screenshots (URLs or file paths) */
-      screenshots: import_zod4.z.array(import_zod4.z.string()).default([]).optional(),
-      /** Plugin category */
-      category: import_zod4.z.enum([
-        "PROVIDER",
-        "THEME",
-        "INTEGRATION",
-        "UTILITY",
-        "ENHANCEMENT",
-        "DATABASE",
-        "STORAGE",
-        "AUTHENTICATION",
-        "OTHER"
-      ]).default("OTHER").optional(),
-      /** Whether the plugin is enabled by default */
-      enabledByDefault: import_zod4.z.boolean().default(false).optional(),
-      /** Plugin status */
-      status: import_zod4.z.enum(["STABLE", "BETA", "ALPHA", "DEPRECATED"]).default("STABLE").optional()
-    }).strict();
-  }
-});
-
-// lib/json-store/schemas/types.ts
-var import_zod5, ProviderEnum, ImageProviderEnum, EmbeddingProfileProviderEnum, RoleEnum, ImageTagTypeEnum, AvatarDisplayModeEnum, UUIDSchema, TimestampSchema, JsonSchema, EncryptedFieldSchema, TOTPSecretSchema, BackupCodesSchema, UserSchema, HexColorSchema, TagVisualStyleSchema, TagStyleMapSchema, CheapLLMStrategyEnum, EmbeddingProviderEnum, CheapLLMSettingsSchema, ChatSettingsSchema, AccountSchema, SessionSchema, VerificationTokenSchema, ApiKeySchema, ConnectionProfileSchema, PhysicalDescriptionSchema, CharacterSchema, PersonaSchema, MessageEventSchema, ContextSummaryEventSchema, ChatEventSchema, ParticipantTypeEnum, ChatParticipantSchema, ChatParticipantBaseSchema, ChatMetadataSchema, ChatMetadataBaseSchema, ChatMetadataLegacySchema, BinaryIndexEntrySchema, FileSourceEnum, FileCategoryEnum, FileEntrySchema, TagSchema, ImageProfileSchema, GeneralSettingsSchema, ConnectionProfilesFileSchema, AuthAccountsSchema, TagsFileSchema, ImageProfilesFileSchema, EmbeddingProfileSchema, EmbeddingProfilesFileSchema, MemorySourceEnum, MemorySchema, MemoriesFileSchema;
-var init_types = __esm({
-  "lib/json-store/schemas/types.ts"() {
-    "use strict";
-    import_zod5 = require("zod");
-    init_plugin_manifest();
-    ProviderEnum = import_zod5.z.string().min(1, "Provider is required");
-    ImageProviderEnum = import_zod5.z.string().min(1, "Image provider is required");
-    EmbeddingProfileProviderEnum = import_zod5.z.enum(["OPENAI", "OLLAMA"]);
-    RoleEnum = import_zod5.z.enum(["SYSTEM", "USER", "ASSISTANT", "TOOL"]);
-    ImageTagTypeEnum = import_zod5.z.enum(["CHARACTER", "PERSONA", "CHAT", "THEME"]);
-    AvatarDisplayModeEnum = import_zod5.z.enum(["ALWAYS", "GROUP_ONLY", "NEVER"]);
-    UUIDSchema = import_zod5.z.string().uuid();
-    TimestampSchema = import_zod5.z.string().datetime().or(import_zod5.z.date()).transform((d4) => {
-      if (d4 instanceof Date) return d4.toISOString();
-      return d4;
-    });
-    JsonSchema = import_zod5.z.record(import_zod5.z.unknown());
-    EncryptedFieldSchema = import_zod5.z.object({
-      ciphertext: import_zod5.z.string(),
-      iv: import_zod5.z.string(),
-      authTag: import_zod5.z.string()
-    });
-    TOTPSecretSchema = EncryptedFieldSchema.extend({
-      enabled: import_zod5.z.boolean().default(false),
-      verifiedAt: TimestampSchema.nullable().optional()
-    });
-    BackupCodesSchema = import_zod5.z.object({
-      ciphertext: import_zod5.z.string(),
-      iv: import_zod5.z.string(),
-      authTag: import_zod5.z.string(),
-      createdAt: TimestampSchema
-    });
-    UserSchema = import_zod5.z.object({
-      id: UUIDSchema,
-      email: import_zod5.z.string().email(),
-      name: import_zod5.z.string().nullable().optional(),
-      image: import_zod5.z.string().nullable().optional(),
-      emailVerified: TimestampSchema.nullable().optional(),
-      // Password authentication
-      passwordHash: import_zod5.z.string().nullable().optional(),
-      // TOTP 2FA
-      totp: TOTPSecretSchema.optional(),
-      backupCodes: BackupCodesSchema.optional(),
-      // Timestamps
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    HexColorSchema = import_zod5.z.string().regex(/^#(?:[0-9a-fA-F]{3}){1,2}$/);
-    TagVisualStyleSchema = import_zod5.z.object({
-      emoji: import_zod5.z.string().max(8).optional().nullable(),
-      foregroundColor: HexColorSchema.default("#1f2937"),
-      backgroundColor: HexColorSchema.default("#e5e7eb"),
-      emojiOnly: import_zod5.z.boolean().default(false),
-      bold: import_zod5.z.boolean().default(false),
-      italic: import_zod5.z.boolean().default(false),
-      strikethrough: import_zod5.z.boolean().default(false)
-    });
-    TagStyleMapSchema = import_zod5.z.record(TagVisualStyleSchema).default({});
-    CheapLLMStrategyEnum = import_zod5.z.enum(["USER_DEFINED", "PROVIDER_CHEAPEST", "LOCAL_FIRST"]);
-    EmbeddingProviderEnum = import_zod5.z.enum(["SAME_PROVIDER", "OPENAI", "LOCAL"]);
-    CheapLLMSettingsSchema = import_zod5.z.object({
-      /** Strategy for selecting the cheap LLM provider */
-      strategy: CheapLLMStrategyEnum.default("PROVIDER_CHEAPEST"),
-      /** If USER_DEFINED, which connection profile to use */
-      userDefinedProfileId: UUIDSchema.nullable().optional(),
-      /** Global default cheap LLM profile - always use this if set */
-      defaultCheapProfileId: UUIDSchema.nullable().optional(),
-      /** Whether to fall back to local models if available */
-      fallbackToLocal: import_zod5.z.boolean().default(true),
-      /** Provider for generating embeddings */
-      embeddingProvider: EmbeddingProviderEnum.default("OPENAI"),
-      /** Embedding profile ID to use for text embeddings */
-      embeddingProfileId: UUIDSchema.nullable().optional()
-    });
-    ChatSettingsSchema = import_zod5.z.object({
-      id: UUIDSchema,
-      userId: UUIDSchema,
-      avatarDisplayMode: AvatarDisplayModeEnum.default("ALWAYS"),
-      avatarDisplayStyle: import_zod5.z.string().default("CIRCULAR"),
-      tagStyles: TagStyleMapSchema,
-      /** Cheap LLM settings for memory extraction and summarization */
-      cheapLLMSettings: CheapLLMSettingsSchema.default({
-        strategy: "PROVIDER_CHEAPEST",
-        fallbackToLocal: true,
-        embeddingProvider: "OPENAI"
-      }),
-      /** Profile ID to use for image description fallback (when provider doesn't support images) */
-      imageDescriptionProfileId: UUIDSchema.nullable().optional(),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    AccountSchema = import_zod5.z.object({
-      id: UUIDSchema,
-      userId: UUIDSchema,
-      type: import_zod5.z.string(),
-      provider: import_zod5.z.string(),
-      providerAccountId: import_zod5.z.string(),
-      refresh_token: import_zod5.z.string().nullable().optional(),
-      access_token: import_zod5.z.string().nullable().optional(),
-      expires_at: import_zod5.z.number().nullable().optional(),
-      token_type: import_zod5.z.string().nullable().optional(),
-      scope: import_zod5.z.string().nullable().optional(),
-      id_token: import_zod5.z.string().nullable().optional(),
-      session_state: import_zod5.z.string().nullable().optional()
-    });
-    SessionSchema = import_zod5.z.object({
-      id: UUIDSchema,
-      sessionToken: import_zod5.z.string(),
-      userId: UUIDSchema,
-      expires: TimestampSchema
-    });
-    VerificationTokenSchema = import_zod5.z.object({
-      identifier: import_zod5.z.string(),
-      token: import_zod5.z.string(),
-      expires: TimestampSchema
-    });
-    ApiKeySchema = import_zod5.z.object({
-      id: UUIDSchema,
-      label: import_zod5.z.string(),
-      provider: ProviderEnum,
-      ciphertext: import_zod5.z.string(),
-      iv: import_zod5.z.string(),
-      authTag: import_zod5.z.string(),
-      isActive: import_zod5.z.boolean().default(true),
-      lastUsed: TimestampSchema.nullable().optional(),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    ConnectionProfileSchema = import_zod5.z.object({
-      id: UUIDSchema,
-      userId: UUIDSchema,
-      name: import_zod5.z.string(),
-      provider: ProviderEnum,
-      apiKeyId: UUIDSchema.nullable().optional(),
-      baseUrl: import_zod5.z.string().nullable().optional(),
-      modelName: import_zod5.z.string(),
-      parameters: JsonSchema.default({}),
-      isDefault: import_zod5.z.boolean().default(false),
-      /** Whether this profile is suitable for use as a "cheap" LLM (low-cost tasks) */
-      isCheap: import_zod5.z.boolean().default(false),
-      /** Whether web search is allowed for this profile (only if provider supports it) */
-      allowWebSearch: import_zod5.z.boolean().default(false),
-      tags: import_zod5.z.array(UUIDSchema).default([]),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    PhysicalDescriptionSchema = import_zod5.z.object({
-      id: UUIDSchema,
-      name: import_zod5.z.string().min(1),
-      shortPrompt: import_zod5.z.string().max(350).nullable().optional(),
-      mediumPrompt: import_zod5.z.string().max(500).nullable().optional(),
-      longPrompt: import_zod5.z.string().max(750).nullable().optional(),
-      completePrompt: import_zod5.z.string().max(1e3).nullable().optional(),
-      fullDescription: import_zod5.z.string().nullable().optional(),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    CharacterSchema = import_zod5.z.object({
-      id: UUIDSchema,
-      userId: UUIDSchema,
-      name: import_zod5.z.string(),
-      title: import_zod5.z.string().nullable().optional(),
-      description: import_zod5.z.string().nullable().optional(),
-      personality: import_zod5.z.string().nullable().optional(),
-      scenario: import_zod5.z.string().nullable().optional(),
-      firstMessage: import_zod5.z.string().nullable().optional(),
-      exampleDialogues: import_zod5.z.string().nullable().optional(),
-      systemPrompt: import_zod5.z.string().nullable().optional(),
-      avatarUrl: import_zod5.z.string().nullable().optional(),
-      defaultImageId: UUIDSchema.nullable().optional(),
-      defaultConnectionProfileId: UUIDSchema.nullable().optional(),
-      sillyTavernData: JsonSchema.nullable().optional(),
-      isFavorite: import_zod5.z.boolean().default(false),
-      // Relationships
-      personaLinks: import_zod5.z.array(import_zod5.z.object({
-        personaId: UUIDSchema,
-        isDefault: import_zod5.z.boolean()
-      })).default([]),
-      tags: import_zod5.z.array(UUIDSchema).default([]),
-      avatarOverrides: import_zod5.z.array(import_zod5.z.object({
-        chatId: UUIDSchema,
-        imageId: UUIDSchema
-      })).default([]),
-      physicalDescriptions: import_zod5.z.array(PhysicalDescriptionSchema).default([]),
-      // Timestamps
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    PersonaSchema = import_zod5.z.object({
-      id: UUIDSchema,
-      userId: UUIDSchema,
-      name: import_zod5.z.string(),
-      title: import_zod5.z.string().nullable().optional(),
-      description: import_zod5.z.string(),
-      personalityTraits: import_zod5.z.string().nullable().optional(),
-      avatarUrl: import_zod5.z.string().nullable().optional(),
-      defaultImageId: UUIDSchema.nullable().optional(),
-      sillyTavernData: JsonSchema.nullable().optional(),
-      // Relationships
-      characterLinks: import_zod5.z.array(UUIDSchema).default([]),
-      tags: import_zod5.z.array(UUIDSchema).default([]),
-      physicalDescriptions: import_zod5.z.array(PhysicalDescriptionSchema).default([]),
-      // Timestamps
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    MessageEventSchema = import_zod5.z.object({
-      type: import_zod5.z.literal("message"),
-      id: UUIDSchema,
-      role: RoleEnum,
-      content: import_zod5.z.string(),
-      rawResponse: JsonSchema.nullable().optional(),
-      tokenCount: import_zod5.z.number().nullable().optional(),
-      swipeGroupId: import_zod5.z.string().nullable().optional(),
-      swipeIndex: import_zod5.z.number().nullable().optional(),
-      attachments: import_zod5.z.array(UUIDSchema).default([]),
-      createdAt: TimestampSchema,
-      // Debug: Memory extraction logs (Sprint 6)
-      debugMemoryLogs: import_zod5.z.array(import_zod5.z.string()).optional()
-    });
-    ContextSummaryEventSchema = import_zod5.z.object({
-      type: import_zod5.z.literal("context-summary"),
-      id: UUIDSchema,
-      context: import_zod5.z.string(),
-      createdAt: TimestampSchema
-    });
-    ChatEventSchema = import_zod5.z.union([
-      MessageEventSchema,
-      ContextSummaryEventSchema
-    ]);
-    ParticipantTypeEnum = import_zod5.z.enum(["CHARACTER", "PERSONA"]);
-    ChatParticipantSchema = import_zod5.z.object({
-      id: UUIDSchema,
-      // Participant type and identity
-      type: ParticipantTypeEnum,
-      characterId: UUIDSchema.nullable().optional(),
-      // Set when type is CHARACTER
-      personaId: UUIDSchema.nullable().optional(),
-      // Set when type is PERSONA
-      // LLM configuration (for AI characters only)
-      connectionProfileId: UUIDSchema.nullable().optional(),
-      // Required for CHARACTER, null for PERSONA
-      imageProfileId: UUIDSchema.nullable().optional(),
-      // Image generation profile
-      // Per-chat customization
-      systemPromptOverride: import_zod5.z.string().nullable().optional(),
-      // Custom scenario/context for this chat
-      // Display and state
-      displayOrder: import_zod5.z.number().default(0),
-      // For ordering in UI
-      isActive: import_zod5.z.boolean().default(true),
-      // Temporarily disable without removing
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    }).refine(
-      (data2) => {
-        if (data2.type === "CHARACTER") {
-          return data2.characterId != null;
-        }
-        if (data2.type === "PERSONA") {
-          return data2.personaId != null;
-        }
-        return false;
-      },
-      { message: "CHARACTER participants must have characterId, PERSONA participants must have personaId" }
-    ).refine(
-      (data2) => {
-        if (data2.type === "CHARACTER") {
-          return data2.connectionProfileId != null;
-        }
-        return true;
-      },
-      { message: "CHARACTER participants must have a connectionProfileId" }
-    );
-    ChatParticipantBaseSchema = import_zod5.z.object({
-      id: UUIDSchema,
-      type: ParticipantTypeEnum,
-      characterId: UUIDSchema.nullable().optional(),
-      personaId: UUIDSchema.nullable().optional(),
-      connectionProfileId: UUIDSchema.nullable().optional(),
-      imageProfileId: UUIDSchema.nullable().optional(),
-      systemPromptOverride: import_zod5.z.string().nullable().optional(),
-      displayOrder: import_zod5.z.number().default(0),
-      isActive: import_zod5.z.boolean().default(true),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    ChatMetadataSchema = import_zod5.z.object({
-      id: UUIDSchema,
-      userId: UUIDSchema,
-      // Participants array (replaces characterId, personaId, connectionProfileId, imageProfileId)
-      participants: import_zod5.z.array(ChatParticipantBaseSchema).default([]),
-      title: import_zod5.z.string(),
-      contextSummary: import_zod5.z.string().nullable().optional(),
-      sillyTavernMetadata: JsonSchema.nullable().optional(),
-      tags: import_zod5.z.array(UUIDSchema).default([]),
-      messageCount: import_zod5.z.number().default(0),
-      lastMessageAt: TimestampSchema.nullable().optional(),
-      lastRenameCheckInterchange: import_zod5.z.number().default(0),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    }).refine(
-      (data2) => data2.participants.length > 0,
-      { message: "Chat must have at least one participant" }
-    );
-    ChatMetadataBaseSchema = import_zod5.z.object({
-      id: UUIDSchema,
-      userId: UUIDSchema,
-      participants: import_zod5.z.array(ChatParticipantBaseSchema).default([]),
-      title: import_zod5.z.string(),
-      contextSummary: import_zod5.z.string().nullable().optional(),
-      sillyTavernMetadata: JsonSchema.nullable().optional(),
-      tags: import_zod5.z.array(UUIDSchema).default([]),
-      messageCount: import_zod5.z.number().default(0),
-      lastMessageAt: TimestampSchema.nullable().optional(),
-      lastRenameCheckInterchange: import_zod5.z.number().default(0),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    ChatMetadataLegacySchema = import_zod5.z.object({
-      id: UUIDSchema,
-      userId: UUIDSchema,
-      characterId: UUIDSchema,
-      personaId: UUIDSchema.nullable().optional(),
-      connectionProfileId: UUIDSchema,
-      imageProfileId: UUIDSchema.nullable().optional(),
-      title: import_zod5.z.string(),
-      contextSummary: import_zod5.z.string().nullable().optional(),
-      sillyTavernMetadata: JsonSchema.nullable().optional(),
-      tags: import_zod5.z.array(UUIDSchema).default([]),
-      messageCount: import_zod5.z.number().default(0),
-      lastMessageAt: TimestampSchema.nullable().optional(),
-      lastRenameCheckInterchange: import_zod5.z.number().default(0),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    BinaryIndexEntrySchema = import_zod5.z.object({
-      id: UUIDSchema,
-      sha256: import_zod5.z.string().length(64),
-      type: import_zod5.z.enum(["image", "chat_file", "avatar"]),
-      userId: UUIDSchema,
-      filename: import_zod5.z.string(),
-      relativePath: import_zod5.z.string(),
-      mimeType: import_zod5.z.string(),
-      size: import_zod5.z.number(),
-      width: import_zod5.z.number().nullable().optional(),
-      height: import_zod5.z.number().nullable().optional(),
-      source: import_zod5.z.enum(["upload", "import", "generated"]).default("upload"),
-      generationPrompt: import_zod5.z.string().nullable().optional(),
-      generationModel: import_zod5.z.string().nullable().optional(),
-      chatId: UUIDSchema.nullable().optional(),
-      characterId: UUIDSchema.nullable().optional(),
-      // For avatar overrides
-      messageId: UUIDSchema.nullable().optional(),
-      tags: import_zod5.z.array(UUIDSchema).default([]),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    FileSourceEnum = import_zod5.z.enum(["UPLOADED", "GENERATED", "IMPORTED", "SYSTEM"]);
-    FileCategoryEnum = import_zod5.z.enum(["IMAGE", "DOCUMENT", "AVATAR", "ATTACHMENT", "EXPORT"]);
-    FileEntrySchema = import_zod5.z.object({
-      // Identity & Storage
-      id: UUIDSchema,
-      // File UUID (also the base filename in storage)
-      userId: UUIDSchema,
-      // Owner of the file
-      sha256: import_zod5.z.string().length(64),
-      // Content hash for deduplication
-      originalFilename: import_zod5.z.string(),
-      // Original filename from upload/generation
-      mimeType: import_zod5.z.string(),
-      // Specific MIME type
-      size: import_zod5.z.number(),
-      // File size in bytes
-      // Image metadata (if applicable)
-      width: import_zod5.z.number().nullable().optional(),
-      height: import_zod5.z.number().nullable().optional(),
-      // Linking - array of IDs this file is associated with
-      linkedTo: import_zod5.z.array(UUIDSchema).default([]),
-      // messageId, chatId, characterId, personaId, etc.
-      // Classification
-      source: FileSourceEnum,
-      // Where the file came from
-      category: FileCategoryEnum,
-      // What type of file it is
-      // Generation metadata (for AI-generated files)
-      generationPrompt: import_zod5.z.string().nullable().optional(),
-      generationModel: import_zod5.z.string().nullable().optional(),
-      generationRevisedPrompt: import_zod5.z.string().nullable().optional(),
-      description: import_zod5.z.string().nullable().optional(),
-      // AI description or user-provided description
-      // Tags
-      tags: import_zod5.z.array(UUIDSchema).default([]),
-      // S3 storage reference (Phase 3: MongoDB + S3 migration)
-      s3Key: import_zod5.z.string().nullable().optional(),
-      // Full S3 object key
-      s3Bucket: import_zod5.z.string().nullable().optional(),
-      // S3 bucket name
-      // Timestamps
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    TagSchema = import_zod5.z.object({
-      id: UUIDSchema,
-      userId: UUIDSchema,
-      name: import_zod5.z.string(),
-      nameLower: import_zod5.z.string(),
-      quickHide: import_zod5.z.boolean().default(false),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    ImageProfileSchema = import_zod5.z.object({
-      id: UUIDSchema,
-      userId: UUIDSchema,
-      name: import_zod5.z.string(),
-      provider: ImageProviderEnum,
-      apiKeyId: UUIDSchema.nullable().optional(),
-      baseUrl: import_zod5.z.string().nullable().optional(),
-      modelName: import_zod5.z.string(),
-      parameters: JsonSchema.default({}),
-      isDefault: import_zod5.z.boolean().default(false),
-      tags: import_zod5.z.array(UUIDSchema).default([]),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    GeneralSettingsSchema = import_zod5.z.object({
-      version: import_zod5.z.number().default(1),
-      user: UserSchema,
-      chatSettings: ChatSettingsSchema,
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    ConnectionProfilesFileSchema = import_zod5.z.object({
-      version: import_zod5.z.number().default(1),
-      apiKeys: import_zod5.z.array(ApiKeySchema).default([]),
-      llmProfiles: import_zod5.z.array(ConnectionProfileSchema).default([]),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    AuthAccountsSchema = import_zod5.z.object({
-      version: import_zod5.z.number().default(1),
-      accounts: import_zod5.z.array(AccountSchema).default([]),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    TagsFileSchema = import_zod5.z.object({
-      version: import_zod5.z.number().default(1),
-      tags: import_zod5.z.array(TagSchema).default([]),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    ImageProfilesFileSchema = import_zod5.z.object({
-      version: import_zod5.z.number().default(1),
-      profiles: import_zod5.z.array(ImageProfileSchema).default([]),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    EmbeddingProfileSchema = import_zod5.z.object({
-      id: UUIDSchema,
-      userId: UUIDSchema,
-      name: import_zod5.z.string(),
-      provider: EmbeddingProfileProviderEnum,
-      apiKeyId: UUIDSchema.nullable().optional(),
-      baseUrl: import_zod5.z.string().nullable().optional(),
-      modelName: import_zod5.z.string(),
-      /** Embedding dimension size (provider-specific) */
-      dimensions: import_zod5.z.number().nullable().optional(),
-      isDefault: import_zod5.z.boolean().default(false),
-      tags: import_zod5.z.array(UUIDSchema).default([]),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    EmbeddingProfilesFileSchema = import_zod5.z.object({
-      version: import_zod5.z.number().default(1),
-      profiles: import_zod5.z.array(EmbeddingProfileSchema).default([]),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    MemorySourceEnum = import_zod5.z.enum(["AUTO", "MANUAL"]);
-    MemorySchema = import_zod5.z.object({
-      id: UUIDSchema,
-      characterId: UUIDSchema,
-      personaId: UUIDSchema.nullable().optional(),
-      // Optional: specific persona interaction
-      chatId: UUIDSchema.nullable().optional(),
-      // Optional: source chat reference
-      content: import_zod5.z.string(),
-      // The actual memory content
-      summary: import_zod5.z.string(),
-      // Distilled version for context injection
-      keywords: import_zod5.z.array(import_zod5.z.string()).default([]),
-      // For text-based search
-      tags: import_zod5.z.array(UUIDSchema).default([]),
-      // Derived from character/persona/chat tags
-      importance: import_zod5.z.number().min(0).max(1).default(0.5),
-      // 0-1 scale for prioritization
-      embedding: import_zod5.z.array(import_zod5.z.number()).nullable().optional(),
-      // Vector embedding for semantic search
-      source: MemorySourceEnum.default("MANUAL"),
-      // How it was created
-      sourceMessageId: UUIDSchema.nullable().optional(),
-      // If auto-created, which message triggered it
-      lastAccessedAt: TimestampSchema.nullable().optional(),
-      // For housekeeping decisions
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-    MemoriesFileSchema = import_zod5.z.object({
-      version: import_zod5.z.number().default(1),
-      memories: import_zod5.z.array(MemorySchema).default([]),
-      createdAt: TimestampSchema,
-      updatedAt: TimestampSchema
-    });
-  }
-});
-
-// lib/json-store/repositories/connection-profiles.repository.ts
-var ConnectionProfilesRepository;
-var init_connection_profiles_repository = __esm({
-  "lib/json-store/repositories/connection-profiles.repository.ts"() {
-    "use strict";
-    init_base_repository();
-    init_types();
-    ConnectionProfilesRepository = class extends BaseRepository {
-      constructor(jsonStore) {
-        super(jsonStore, ConnectionProfileSchema);
-      }
-      /**
-       * Get the connection profiles file path
-       */
-      getFilePath() {
-        return "settings/connection-profiles.json";
-      }
-      /**
-       * Read connection profiles file with default structure
-       */
-      async readProfilesFile() {
-        try {
-          const filePath = this.getFilePath();
-          const data2 = await this.jsonStore.readJson(filePath);
-          return ConnectionProfilesFileSchema.parse(data2);
-        } catch (error2) {
-          return {
-            version: 1,
-            apiKeys: [],
-            llmProfiles: [],
-            createdAt: this.getCurrentTimestamp(),
-            updatedAt: this.getCurrentTimestamp()
-          };
-        }
-      }
-      /**
-       * Write connection profiles file with validation
-       */
-      async writeProfilesFile(data2) {
-        const validated = ConnectionProfilesFileSchema.parse({
-          ...data2,
-          updatedAt: this.getCurrentTimestamp()
-        });
-        await this.jsonStore.writeJson(this.getFilePath(), validated);
-      }
-      /**
-       * Find a connection profile by ID
-       */
-      async findById(id) {
-        const file = await this.readProfilesFile();
-        return file.llmProfiles.find((profile) => profile.id === id) || null;
-      }
-      /**
-       * Find all connection profiles
-       */
-      async findAll() {
-        const file = await this.readProfilesFile();
-        return file.llmProfiles;
-      }
-      /**
-       * Find connection profiles by user ID
-       */
-      async findByUserId(userId) {
-        const file = await this.readProfilesFile();
-        return file.llmProfiles.filter((profile) => profile.userId === userId);
-      }
-      /**
-       * Find connection profiles with a specific tag
-       */
-      async findByTag(tagId) {
-        const file = await this.readProfilesFile();
-        return file.llmProfiles.filter((profile) => profile.tags.includes(tagId));
-      }
-      /**
-       * Find default connection profile for user
-       */
-      async findDefault(userId) {
-        const file = await this.readProfilesFile();
-        return file.llmProfiles.find(
-          (profile) => profile.userId === userId && profile.isDefault
-        ) || null;
-      }
-      /**
-       * Create a new connection profile
-       */
-      async create(data2) {
-        const id = this.generateId();
-        const now = this.getCurrentTimestamp();
-        const profile = {
-          ...data2,
-          id,
-          createdAt: now,
-          updatedAt: now
-        };
-        const validated = this.validate(profile);
-        const file = await this.readProfilesFile();
-        file.llmProfiles.push(validated);
-        await this.writeProfilesFile(file);
-        this.jsonStore.clearCache();
-        return validated;
-      }
-      /**
-       * Update a connection profile
-       */
-      async update(id, data2) {
-        const file = await this.readProfilesFile();
-        const index = file.llmProfiles.findIndex((profile) => profile.id === id);
-        if (index === -1) {
-          return null;
-        }
-        const existing = file.llmProfiles[index];
-        const now = this.getCurrentTimestamp();
-        const updated = {
-          ...existing,
-          ...data2,
-          id: existing.id,
-          // Preserve ID
-          createdAt: existing.createdAt,
-          // Preserve creation timestamp
-          updatedAt: now
-        };
-        const validated = this.validate(updated);
-        file.llmProfiles[index] = validated;
-        await this.writeProfilesFile(file);
-        this.jsonStore.clearCache();
-        return validated;
-      }
-      /**
-       * Delete a connection profile
-       */
-      async delete(id) {
-        const file = await this.readProfilesFile();
-        const initialLength = file.llmProfiles.length;
-        file.llmProfiles = file.llmProfiles.filter((profile) => profile.id !== id);
-        if (file.llmProfiles.length === initialLength) {
-          return false;
-        }
-        await this.writeProfilesFile(file);
-        this.jsonStore.clearCache();
-        return true;
-      }
-      /**
-       * Add a tag to a connection profile
-       */
-      async addTag(profileId, tagId) {
-        const profile = await this.findById(profileId);
-        if (!profile) {
-          return null;
-        }
-        if (!profile.tags.includes(tagId)) {
-          profile.tags.push(tagId);
-          return await this.update(profileId, { tags: profile.tags });
-        }
-        return profile;
-      }
-      /**
-       * Remove a tag from a connection profile
-       */
-      async removeTag(profileId, tagId) {
-        const profile = await this.findById(profileId);
-        if (!profile) {
-          return null;
-        }
-        profile.tags = profile.tags.filter((id) => id !== tagId);
-        return await this.update(profileId, { tags: profile.tags });
-      }
-      // ============================================================================
-      // API KEY OPERATIONS
-      // ============================================================================
-      /**
-       * Get all API keys
-       */
-      async getAllApiKeys() {
-        const file = await this.readProfilesFile();
-        return file.apiKeys;
-      }
-      /**
-       * Find API key by ID
-       */
-      async findApiKeyById(id) {
-        const file = await this.readProfilesFile();
-        return file.apiKeys.find((key) => key.id === id) || null;
-      }
-      /**
-       * Create a new API key
-       */
-      async createApiKey(data2) {
-        const id = this.generateId();
-        const now = this.getCurrentTimestamp();
-        const apiKey = {
-          ...data2,
-          id,
-          createdAt: now,
-          updatedAt: now
-        };
-        const validated = ApiKeySchema.parse(apiKey);
-        const file = await this.readProfilesFile();
-        file.apiKeys.push(validated);
-        await this.writeProfilesFile(file);
-        this.jsonStore.clearCache();
-        return validated;
-      }
-      /**
-       * Update an API key
-       */
-      async updateApiKey(id, data2) {
-        const file = await this.readProfilesFile();
-        const index = file.apiKeys.findIndex((key) => key.id === id);
-        if (index === -1) {
-          return null;
-        }
-        const existing = file.apiKeys[index];
-        const now = this.getCurrentTimestamp();
-        const updated = {
-          ...existing,
-          ...data2,
-          id: existing.id,
-          // Preserve ID
-          createdAt: existing.createdAt,
-          // Preserve creation timestamp
-          updatedAt: now
-        };
-        const validated = ApiKeySchema.parse(updated);
-        file.apiKeys[index] = validated;
-        await this.writeProfilesFile(file);
-        this.jsonStore.clearCache();
-        return validated;
-      }
-      /**
-       * Delete an API key
-       */
-      async deleteApiKey(id) {
-        const file = await this.readProfilesFile();
-        const initialLength = file.apiKeys.length;
-        file.apiKeys = file.apiKeys.filter((key) => key.id !== id);
-        if (file.apiKeys.length === initialLength) {
-          return false;
-        }
-        await this.writeProfilesFile(file);
-        this.jsonStore.clearCache();
-        return true;
-      }
-      /**
-       * Update API key last used timestamp
-       */
-      async recordApiKeyUsage(id) {
-        return await this.updateApiKey(id, { lastUsed: this.getCurrentTimestamp() });
-      }
-    };
-  }
-});
-
-// lib/json-store/repositories/image-profiles.repository.ts
-var ImageProfilesRepository;
-var init_image_profiles_repository = __esm({
-  "lib/json-store/repositories/image-profiles.repository.ts"() {
-    "use strict";
-    init_base_repository();
-    init_types();
-    ImageProfilesRepository = class extends BaseRepository {
-      constructor(jsonStore) {
-        super(jsonStore, ImageProfileSchema);
-      }
-      /**
-       * Get the image profiles file path
-       */
-      getFilePath() {
-        return "settings/image-profiles.json";
-      }
-      /**
-       * Read image profiles file with default structure
-       */
-      async readProfilesFile() {
-        try {
-          const filePath = this.getFilePath();
-          const data2 = await this.jsonStore.readJson(filePath);
-          return ImageProfilesFileSchema.parse(data2);
-        } catch (error2) {
-          return {
-            version: 1,
-            profiles: [],
-            createdAt: this.getCurrentTimestamp(),
-            updatedAt: this.getCurrentTimestamp()
-          };
-        }
-      }
-      /**
-       * Write image profiles file with validation
-       */
-      async writeProfilesFile(data2) {
-        const validated = ImageProfilesFileSchema.parse({
-          ...data2,
-          updatedAt: this.getCurrentTimestamp()
-        });
-        await this.jsonStore.writeJson(this.getFilePath(), validated);
-      }
-      /**
-       * Find an image profile by ID
-       */
-      async findById(id) {
-        const file = await this.readProfilesFile();
-        return file.profiles.find((profile) => profile.id === id) || null;
-      }
-      /**
-       * Find all image profiles
-       */
-      async findAll() {
-        const file = await this.readProfilesFile();
-        return file.profiles;
-      }
-      /**
-       * Find image profiles by user ID
-       */
-      async findByUserId(userId) {
-        const file = await this.readProfilesFile();
-        return file.profiles.filter((profile) => profile.userId === userId);
-      }
-      /**
-       * Find image profiles with a specific tag
-       */
-      async findByTag(tagId) {
-        const file = await this.readProfilesFile();
-        return file.profiles.filter((profile) => profile.tags.includes(tagId));
-      }
-      /**
-       * Find default image profile for user
-       */
-      async findDefault(userId) {
-        const file = await this.readProfilesFile();
-        return file.profiles.find(
-          (profile) => profile.userId === userId && profile.isDefault
-        ) || null;
-      }
-      /**
-       * Find image profile by name for user
-       */
-      async findByName(userId, name) {
-        const file = await this.readProfilesFile();
-        return file.profiles.find(
-          (profile) => profile.userId === userId && profile.name === name
-        ) || null;
-      }
-      /**
-       * Create a new image profile
-       */
-      async create(data2) {
-        const id = this.generateId();
-        const now = this.getCurrentTimestamp();
-        const profile = {
-          ...data2,
-          id,
-          createdAt: now,
-          updatedAt: now
-        };
-        const validated = this.validate(profile);
-        const file = await this.readProfilesFile();
-        file.profiles.push(validated);
-        await this.writeProfilesFile(file);
-        return validated;
-      }
-      /**
-       * Update an image profile
-       */
-      async update(id, data2) {
-        const file = await this.readProfilesFile();
-        const index = file.profiles.findIndex((profile) => profile.id === id);
-        if (index === -1) {
-          return null;
-        }
-        const existing = file.profiles[index];
-        const now = this.getCurrentTimestamp();
-        const updated = {
-          ...existing,
-          ...data2,
-          id: existing.id,
-          // Preserve ID
-          createdAt: existing.createdAt,
-          // Preserve creation timestamp
-          updatedAt: now
-        };
-        const validated = this.validate(updated);
-        file.profiles[index] = validated;
-        await this.writeProfilesFile(file);
-        return validated;
-      }
-      /**
-       * Delete an image profile
-       */
-      async delete(id) {
-        const file = await this.readProfilesFile();
-        const initialLength = file.profiles.length;
-        file.profiles = file.profiles.filter((profile) => profile.id !== id);
-        if (file.profiles.length === initialLength) {
-          return false;
-        }
-        await this.writeProfilesFile(file);
-        return true;
-      }
-      /**
-       * Add a tag to an image profile
-       */
-      async addTag(profileId, tagId) {
-        const profile = await this.findById(profileId);
-        if (!profile) {
-          return null;
-        }
-        if (!profile.tags.includes(tagId)) {
-          profile.tags.push(tagId);
-          return await this.update(profileId, { tags: profile.tags });
-        }
-        return profile;
-      }
-      /**
-       * Remove a tag from an image profile
-       */
-      async removeTag(profileId, tagId) {
-        const profile = await this.findById(profileId);
-        if (!profile) {
-          return null;
-        }
-        profile.tags = profile.tags.filter((id) => id !== tagId);
-        return await this.update(profileId, { tags: profile.tags });
-      }
-      /**
-       * Unset default flag on all profiles for a user
-       */
-      async unsetAllDefaults(userId) {
-        const file = await this.readProfilesFile();
-        let changed = false;
-        for (let i4 = 0; i4 < file.profiles.length; i4++) {
-          if (file.profiles[i4].userId === userId && file.profiles[i4].isDefault) {
-            file.profiles[i4] = {
-              ...file.profiles[i4],
-              isDefault: false,
-              updatedAt: this.getCurrentTimestamp()
-            };
-            changed = true;
-          }
-        }
-        if (changed) {
-          await this.writeProfilesFile(file);
-        }
-      }
-    };
-  }
-});
-
-// lib/json-store/repositories/embedding-profiles.repository.ts
-var EmbeddingProfilesRepository;
-var init_embedding_profiles_repository = __esm({
-  "lib/json-store/repositories/embedding-profiles.repository.ts"() {
-    "use strict";
-    init_base_repository();
-    init_types();
-    EmbeddingProfilesRepository = class extends BaseRepository {
-      constructor(jsonStore) {
-        super(jsonStore, EmbeddingProfileSchema);
-      }
-      /**
-       * Get the embedding profiles file path
-       */
-      getFilePath() {
-        return "settings/embedding-profiles.json";
-      }
-      /**
-       * Read embedding profiles file with default structure
-       */
-      async readProfilesFile() {
-        try {
-          const filePath = this.getFilePath();
-          const data2 = await this.jsonStore.readJson(filePath);
-          return EmbeddingProfilesFileSchema.parse(data2);
-        } catch (error2) {
-          return {
-            version: 1,
-            profiles: [],
-            createdAt: this.getCurrentTimestamp(),
-            updatedAt: this.getCurrentTimestamp()
-          };
-        }
-      }
-      /**
-       * Write embedding profiles file with validation
-       */
-      async writeProfilesFile(data2) {
-        const validated = EmbeddingProfilesFileSchema.parse({
-          ...data2,
-          updatedAt: this.getCurrentTimestamp()
-        });
-        await this.jsonStore.writeJson(this.getFilePath(), validated);
-      }
-      /**
-       * Find an embedding profile by ID
-       */
-      async findById(id) {
-        const file = await this.readProfilesFile();
-        return file.profiles.find((profile) => profile.id === id) || null;
-      }
-      /**
-       * Find all embedding profiles
-       */
-      async findAll() {
-        const file = await this.readProfilesFile();
-        return file.profiles;
-      }
-      /**
-       * Find embedding profiles by user ID
-       */
-      async findByUserId(userId) {
-        const file = await this.readProfilesFile();
-        return file.profiles.filter((profile) => profile.userId === userId);
-      }
-      /**
-       * Find embedding profiles with a specific tag
-       */
-      async findByTag(tagId) {
-        const file = await this.readProfilesFile();
-        return file.profiles.filter((profile) => profile.tags.includes(tagId));
-      }
-      /**
-       * Find default embedding profile for user
-       */
-      async findDefault(userId) {
-        const file = await this.readProfilesFile();
-        return file.profiles.find(
-          (profile) => profile.userId === userId && profile.isDefault
-        ) || null;
-      }
-      /**
-       * Find embedding profile by name for user
-       */
-      async findByName(userId, name) {
-        const file = await this.readProfilesFile();
-        return file.profiles.find(
-          (profile) => profile.userId === userId && profile.name === name
-        ) || null;
-      }
-      /**
-       * Create a new embedding profile
-       */
-      async create(data2) {
-        const id = this.generateId();
-        const now = this.getCurrentTimestamp();
-        const profile = {
-          ...data2,
-          id,
-          createdAt: now,
-          updatedAt: now
-        };
-        const validated = this.validate(profile);
-        const file = await this.readProfilesFile();
-        file.profiles.push(validated);
-        await this.writeProfilesFile(file);
-        return validated;
-      }
-      /**
-       * Update an embedding profile
-       */
-      async update(id, data2) {
-        const file = await this.readProfilesFile();
-        const index = file.profiles.findIndex((profile) => profile.id === id);
-        if (index === -1) {
-          return null;
-        }
-        const existing = file.profiles[index];
-        const now = this.getCurrentTimestamp();
-        const updated = {
-          ...existing,
-          ...data2,
-          id: existing.id,
-          // Preserve ID
-          createdAt: existing.createdAt,
-          // Preserve creation timestamp
-          updatedAt: now
-        };
-        const validated = this.validate(updated);
-        file.profiles[index] = validated;
-        await this.writeProfilesFile(file);
-        return validated;
-      }
-      /**
-       * Delete an embedding profile
-       */
-      async delete(id) {
-        const file = await this.readProfilesFile();
-        const initialLength = file.profiles.length;
-        file.profiles = file.profiles.filter((profile) => profile.id !== id);
-        if (file.profiles.length === initialLength) {
-          return false;
-        }
-        await this.writeProfilesFile(file);
-        return true;
-      }
-      /**
-       * Add a tag to an embedding profile
-       */
-      async addTag(profileId, tagId) {
-        const profile = await this.findById(profileId);
-        if (!profile) {
-          return null;
-        }
-        if (!profile.tags.includes(tagId)) {
-          profile.tags.push(tagId);
-          return await this.update(profileId, { tags: profile.tags });
-        }
-        return profile;
-      }
-      /**
-       * Remove a tag from an embedding profile
-       */
-      async removeTag(profileId, tagId) {
-        const profile = await this.findById(profileId);
-        if (!profile) {
-          return null;
-        }
-        profile.tags = profile.tags.filter((id) => id !== tagId);
-        return await this.update(profileId, { tags: profile.tags });
-      }
-      /**
-       * Unset default flag on all profiles for a user
-       */
-      async unsetAllDefaults(userId) {
-        const file = await this.readProfilesFile();
-        let changed = false;
-        for (let i4 = 0; i4 < file.profiles.length; i4++) {
-          if (file.profiles[i4].userId === userId && file.profiles[i4].isDefault) {
-            file.profiles[i4] = {
-              ...file.profiles[i4],
-              isDefault: false,
-              updatedAt: this.getCurrentTimestamp()
-            };
-            changed = true;
-          }
-        }
-        if (changed) {
-          await this.writeProfilesFile(file);
-        }
-      }
-    };
   }
 });
 
@@ -35780,9 +33933,9 @@ var init_createPaginator = __esm({
       command = withCommand(command) ?? command;
       return await client.send(command, ...args);
     };
-    get = (fromObject, path4) => {
+    get = (fromObject, path5) => {
       let cursor2 = fromObject;
-      const pathComponents = path4.split(".");
+      const pathComponents = path5.split(".");
       for (const step of pathComponents) {
         if (!cursor2 || typeof cursor2 !== "object") {
           return void 0;
@@ -36745,12 +34898,12 @@ or increase socketAcquisitionWarningTimeout=(millis) in the NodeHttpHandler conf
             const password = request.password ?? "";
             auth = `${username}:${password}`;
           }
-          let path4 = request.path;
+          let path5 = request.path;
           if (queryString) {
-            path4 += `?${queryString}`;
+            path5 += `?${queryString}`;
           }
           if (request.fragment) {
-            path4 += `#${request.fragment}`;
+            path5 += `#${request.fragment}`;
           }
           let hostname = request.hostname ?? "";
           if (hostname[0] === "[" && hostname.endsWith("]")) {
@@ -36762,7 +34915,7 @@ or increase socketAcquisitionWarningTimeout=(millis) in the NodeHttpHandler conf
             headers: request.headers,
             host: hostname,
             method: request.method,
-            path: path4,
+            path: path5,
             port: request.port,
             agent,
             auth
@@ -37017,16 +35170,16 @@ or increase socketAcquisitionWarningTimeout=(millis) in the NodeHttpHandler conf
             reject(err);
           };
           const queryString = querystringBuilder.buildQueryString(query || {});
-          let path4 = request.path;
+          let path5 = request.path;
           if (queryString) {
-            path4 += `?${queryString}`;
+            path5 += `?${queryString}`;
           }
           if (request.fragment) {
-            path4 += `#${request.fragment}`;
+            path5 += `#${request.fragment}`;
           }
           const req = session.request({
             ...request.headers,
-            [http2.constants.HTTP2_HEADER_PATH]: path4,
+            [http2.constants.HTTP2_HEADER_PATH]: path5,
             [http2.constants.HTTP2_HEADER_METHOD]: method
           });
           session.ref();
@@ -37215,13 +35368,13 @@ var require_dist_cjs13 = __commonJS({
           abortError.name = "AbortError";
           return Promise.reject(abortError);
         }
-        let path4 = request.path;
+        let path5 = request.path;
         const queryString = querystringBuilder.buildQueryString(request.query || {});
         if (queryString) {
-          path4 += `?${queryString}`;
+          path5 += `?${queryString}`;
         }
         if (request.fragment) {
-          path4 += `#${request.fragment}`;
+          path5 += `#${request.fragment}`;
         }
         let auth = "";
         if (request.username != null || request.password != null) {
@@ -37230,7 +35383,7 @@ var require_dist_cjs13 = __commonJS({
           auth = `${username}:${password}@`;
         }
         const { port, method } = request;
-        const url = `${request.protocol}//${auth}${request.hostname}${port ? `:${port}` : ""}${path4}`;
+        const url = `${request.protocol}//${auth}${request.hostname}${port ? `:${port}` : ""}${path5}`;
         const body = method === "GET" || method === "HEAD" ? void 0 : request.body;
         const requestOptions = {
           body,
@@ -37889,7 +36042,7 @@ var init_ListSchema = __esm({
   "node_modules/@smithy/core/dist-es/submodules/schema/schemas/ListSchema.js"() {
     init_Schema();
     ListSchema = class _ListSchema extends Schema {
-      static symbol = Symbol.for("@smithy/lis");
+      static symbol = /* @__PURE__ */ Symbol.for("@smithy/lis");
       name;
       traits;
       valueSchema;
@@ -37910,7 +36063,7 @@ var init_MapSchema = __esm({
   "node_modules/@smithy/core/dist-es/submodules/schema/schemas/MapSchema.js"() {
     init_Schema();
     MapSchema = class _MapSchema extends Schema {
-      static symbol = Symbol.for("@smithy/map");
+      static symbol = /* @__PURE__ */ Symbol.for("@smithy/map");
       name;
       traits;
       keySchema;
@@ -37933,7 +36086,7 @@ var init_OperationSchema = __esm({
   "node_modules/@smithy/core/dist-es/submodules/schema/schemas/OperationSchema.js"() {
     init_Schema();
     OperationSchema = class _OperationSchema extends Schema {
-      static symbol = Symbol.for("@smithy/ope");
+      static symbol = /* @__PURE__ */ Symbol.for("@smithy/ope");
       name;
       traits;
       input;
@@ -37956,7 +36109,7 @@ var init_StructureSchema = __esm({
   "node_modules/@smithy/core/dist-es/submodules/schema/schemas/StructureSchema.js"() {
     init_Schema();
     StructureSchema = class _StructureSchema extends Schema {
-      static symbol = Symbol.for("@smithy/str");
+      static symbol = /* @__PURE__ */ Symbol.for("@smithy/str");
       name;
       traits;
       memberNames;
@@ -37980,7 +36133,7 @@ var init_ErrorSchema = __esm({
     init_Schema();
     init_StructureSchema();
     ErrorSchema = class _ErrorSchema extends StructureSchema {
-      static symbol = Symbol.for("@smithy/err");
+      static symbol = /* @__PURE__ */ Symbol.for("@smithy/err");
       ctor;
       symbol = _ErrorSchema.symbol;
     };
@@ -38042,7 +36195,7 @@ var init_NormalizedSchema = __esm({
     NormalizedSchema = class _NormalizedSchema {
       ref;
       memberName;
-      static symbol = Symbol.for("@smithy/nor");
+      static symbol = /* @__PURE__ */ Symbol.for("@smithy/nor");
       symbol = _NormalizedSchema.symbol;
       name;
       schema;
@@ -38269,7 +36422,7 @@ var init_SimpleSchema = __esm({
   "node_modules/@smithy/core/dist-es/submodules/schema/schemas/SimpleSchema.js"() {
     init_Schema();
     SimpleSchema = class _SimpleSchema extends Schema {
-      static symbol = Symbol.for("@smithy/sim");
+      static symbol = /* @__PURE__ */ Symbol.for("@smithy/sim");
       name;
       schemaRef;
       traits;
@@ -39292,13 +37445,13 @@ function __disposeResources(env2) {
   }
   return next();
 }
-function __rewriteRelativeImportExtension(path4, preserveJsx) {
-  if (typeof path4 === "string" && /^\.\.?\//.test(path4)) {
-    return path4.replace(/\.(tsx)$|((?:\.d)?)((?:\.[^./]+?)?)\.([cm]?)ts$/i, function(m4, tsx, d4, ext, cm) {
+function __rewriteRelativeImportExtension(path5, preserveJsx) {
+  if (typeof path5 === "string" && /^\.\.?\//.test(path5)) {
+    return path5.replace(/\.(tsx)$|((?:\.d)?)((?:\.[^./]+?)?)\.([cm]?)ts$/i, function(m4, tsx, d4, ext, cm) {
       return tsx ? preserveJsx ? ".jsx" : ".js" : d4 && (!ext || !cm) ? m4 : d4 + ext + "." + cm.toLowerCase() + "js";
     });
   }
-  return path4;
+  return path5;
 }
 var extendStatics, __assign, __createBinding, __setModuleDefault, ownKeys, _SuppressedError, tslib_es6_default;
 var init_tslib_es6 = __esm({
@@ -39611,12 +37764,12 @@ var splitHeader;
 var init_split_header = __esm({
   "node_modules/@smithy/core/dist-es/submodules/serde/split-header.js"() {
     splitHeader = (value) => {
-      const z8 = value.length;
+      const z9 = value.length;
       const values = [];
       let withinQuotes = false;
       let prevChar = void 0;
       let anchor = 0;
-      for (let i4 = 0; i4 < z8; ++i4) {
+      for (let i4 = 0; i4 < z9; ++i4) {
         const char = value[i4];
         switch (char) {
           case `"`:
@@ -39637,12 +37790,12 @@ var init_split_header = __esm({
       values.push(value.slice(anchor));
       return values.map((v4) => {
         v4 = v4.trim();
-        const z9 = v4.length;
-        if (z9 < 2) {
+        const z10 = v4.length;
+        if (z10 < 2) {
           return v4;
         }
-        if (v4[0] === `"` && v4[z9 - 1] === `"`) {
-          v4 = v4.slice(1, z9 - 1);
+        if (v4[0] === `"` && v4[z10 - 1] === `"`) {
+          v4 = v4.slice(1, z10 - 1);
         }
         return v4.replace(/\\"/g, '"');
       });
@@ -39780,7 +37933,7 @@ var init_EventStreamSerde = __esm({
         const unionSchema = requestSchema.getMemberSchema(eventStreamMember);
         const serializer = this.serializer;
         const defaultContentType = this.defaultContentType;
-        const initialRequestMarker = Symbol("initialRequestMarker");
+        const initialRequestMarker = /* @__PURE__ */ Symbol("initialRequestMarker");
         const eventStreamIterable = {
           async *[Symbol.asyncIterator]() {
             if (initialRequest) {
@@ -39830,7 +37983,7 @@ var init_EventStreamSerde = __esm({
         const eventStreamMember = responseSchema.getEventStreamMember();
         const unionSchema = responseSchema.getMemberSchema(eventStreamMember);
         const memberSchemas = unionSchema.getMemberSchemas();
-        const initialResponseMarker = Symbol("initialResponseMarker");
+        const initialResponseMarker = /* @__PURE__ */ Symbol("initialResponseMarker");
         const asyncIterable = marshaller.deserialize(response.body, async (event) => {
           const unionMember = Object.keys(event).find((key) => {
             return key !== "__type";
@@ -40170,11 +38323,11 @@ var init_HttpBindingProtocol = __esm({
           const opTraits = translateTraits(operationSchema.traits);
           if (opTraits.http) {
             request.method = opTraits.http[0];
-            const [path4, search] = opTraits.http[1].split("?");
+            const [path5, search] = opTraits.http[1].split("?");
             if (request.path == "/") {
-              request.path = path4;
+              request.path = path5;
             } else {
-              request.path += path4;
+              request.path += path5;
             }
             const traitSearchParams = new URLSearchParams(search ?? "");
             Object.assign(query, Object.fromEntries(traitSearchParams));
@@ -40552,8 +38705,8 @@ var init_requestBuilder = __esm({
         return this;
       }
       p(memberName, labelValueProvider, uriLabel, isGreedyLabel) {
-        this.resolvePathStack.push((path4) => {
-          this.path = resolvedPath(path4, this.input, memberName, labelValueProvider, uriLabel, isGreedyLabel);
+        this.resolvePathStack.push((path5) => {
+          this.path = resolvedPath(path5, this.input, memberName, labelValueProvider, uriLabel, isGreedyLabel);
         });
         return this;
       }
@@ -41580,10 +39733,10 @@ ${longDate}
 ${credentialScope}
 ${utilHexEncoding.toHex(hashedRequest)}`;
       }
-      getCanonicalPath({ path: path4 }) {
+      getCanonicalPath({ path: path5 }) {
         if (this.uriEscapePath) {
           const normalizedPathSegments = [];
-          for (const pathSegment of path4.split("/")) {
+          for (const pathSegment of path5.split("/")) {
             if (pathSegment?.length === 0)
               continue;
             if (pathSegment === ".")
@@ -41594,11 +39747,11 @@ ${utilHexEncoding.toHex(hashedRequest)}`;
               normalizedPathSegments.push(pathSegment);
             }
           }
-          const normalizedPath = `${path4?.startsWith("/") ? "/" : ""}${normalizedPathSegments.join("/")}${normalizedPathSegments.length > 0 && path4?.endsWith("/") ? "/" : ""}`;
+          const normalizedPath = `${path5?.startsWith("/") ? "/" : ""}${normalizedPathSegments.join("/")}${normalizedPathSegments.length > 0 && path5?.endsWith("/") ? "/" : ""}`;
           const doubleEncoded = utilUriEscape.escapeUri(normalizedPath);
           return doubleEncoded.replace(/%2F/g, "/");
         }
-        return path4;
+        return path5;
       }
       validateResolvedCredentials(credentials) {
         if (typeof credentials !== "object" || typeof credentials.accessKeyId !== "string" || typeof credentials.secretAccessKey !== "string") {
@@ -41968,7 +40121,7 @@ var init_cbor_types = __esm({
     extendedFloat32 = 26;
     extendedFloat64 = 27;
     minorIndefinite = 31;
-    tagSymbol = Symbol("@smithy/core/cbor::tagSymbol");
+    tagSymbol = /* @__PURE__ */ Symbol("@smithy/core/cbor::tagSymbol");
   }
 });
 
@@ -42866,11 +41019,11 @@ var init_SmithyRpcV2CborProtocol = __esm({
           }
         }
         const { service, operation: operation2 } = (0, import_util_middleware5.getSmithyContext)(context);
-        const path4 = `/service/${service}/operation/${operation2}`;
+        const path5 = `/service/${service}/operation/${operation2}`;
         if (request.path.endsWith("/")) {
-          request.path += path4.slice(1);
+          request.path += path5.slice(1);
         } else {
-          request.path += path4;
+          request.path += path5;
         }
         return request;
       }
@@ -43839,8 +41992,17 @@ var init_ProtocolLib = __esm({
           const msg = exception.Message ?? additions.Message;
           const error2 = (0, import_smithy_client.decorateServiceException)(exception, additions);
           if (msg) {
-            error2.Message = msg;
             error2.message = msg;
+          }
+          error2.Error = {
+            ...error2.Error,
+            Type: error2.Error.Type,
+            Code: error2.Error.Code,
+            Message: error2.Error.message ?? error2.Error.Message ?? msg
+          };
+          const reqId = error2.$metadata.requestId;
+          if (reqId) {
+            error2.RequestId = reqId;
           }
           return error2;
         }
@@ -43857,7 +42019,7 @@ var init_ProtocolLib = __esm({
           };
           Object.assign(output, Error2);
           for (const [k4, v4] of entries) {
-            Error2[k4] = v4;
+            Error2[k4 === "message" ? "Message" : k4] = v4;
           }
           delete Error2.__type;
           output.Error = Error2;
@@ -43872,6 +42034,13 @@ var init_ProtocolLib = __esm({
         }
         if (queryCompatErrorData.Code) {
           errorData.Code = queryCompatErrorData.Code;
+        }
+      }
+      findQueryCompatibleError(registry, errorName) {
+        try {
+          return registry.getSchema(errorName);
+        } catch (e4) {
+          return registry.find((schema) => NormalizedSchema.of(schema).getMergedTraits().awsQueryError?.[0] === errorName);
         }
       }
     };
@@ -43904,15 +42073,23 @@ var init_AwsSmithyRpcV2CborProtocol = __esm({
         if (this.awsQueryCompatible) {
           this.mixin.setQueryCompatError(dataObject, response);
         }
-        const errorName = loadSmithyRpcV2CborErrorCode(response, dataObject) ?? "Unknown";
-        const { errorSchema, errorMetadata } = await this.mixin.getErrorSchemaOrThrowBaseException(errorName, this.options.defaultNamespace, response, dataObject, metadata);
+        const errorName = (() => {
+          const compatHeader = response.headers["x-amzn-query-error"];
+          if (compatHeader && this.awsQueryCompatible) {
+            return compatHeader.split(";")[0];
+          }
+          return loadSmithyRpcV2CborErrorCode(response, dataObject) ?? "Unknown";
+        })();
+        const { errorSchema, errorMetadata } = await this.mixin.getErrorSchemaOrThrowBaseException(errorName, this.options.defaultNamespace, response, dataObject, metadata, this.awsQueryCompatible ? this.mixin.findQueryCompatibleError : void 0);
         const ns = NormalizedSchema.of(errorSchema);
         const message = dataObject.message ?? dataObject.Message ?? "Unknown";
         const ErrorCtor = TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error;
         const exception = new ErrorCtor(message);
         const output = {};
         for (const [name, member2] of ns.structIterator()) {
-          output[name] = this.deserializer.readValue(member2, dataObject[name]);
+          if (dataObject[name] != null) {
+            output[name] = this.deserializer.readValue(member2, dataObject[name]);
+          }
         }
         if (this.awsQueryCompatible) {
           this.mixin.queryCompatOutput(dataObject, output);
@@ -44566,15 +42743,16 @@ var init_AwsJsonRpcProtocol = __esm({
           this.mixin.setQueryCompatError(dataObject, response);
         }
         const errorIdentifier = loadRestJsonErrorCode(response, dataObject) ?? "Unknown";
-        const { errorSchema, errorMetadata } = await this.mixin.getErrorSchemaOrThrowBaseException(errorIdentifier, this.options.defaultNamespace, response, dataObject, metadata);
+        const { errorSchema, errorMetadata } = await this.mixin.getErrorSchemaOrThrowBaseException(errorIdentifier, this.options.defaultNamespace, response, dataObject, metadata, this.awsQueryCompatible ? this.mixin.findQueryCompatibleError : void 0);
         const ns = NormalizedSchema.of(errorSchema);
         const message = dataObject.message ?? dataObject.Message ?? "Unknown";
         const ErrorCtor = TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error;
         const exception = new ErrorCtor(message);
         const output = {};
         for (const [name, member2] of ns.structIterator()) {
-          const target = member2.getMergedTraits().jsonName ?? name;
-          output[name] = this.codec.createDeserializer().readObject(member2, dataObject[target]);
+          if (dataObject[name] != null) {
+            output[name] = this.codec.createDeserializer().readObject(member2, dataObject[name]);
+          }
         }
         if (this.awsQueryCompatible) {
           this.mixin.queryCompatOutput(dataObject, output);
@@ -44946,7 +43124,7 @@ var require_fxp = __commonJS({
         return t5;
       }, captureMetaData: false };
       let y2;
-      y2 = "function" != typeof Symbol ? "@@xmlMetadata" : Symbol("XML Node Metadata");
+      y2 = "function" != typeof Symbol ? "@@xmlMetadata" : /* @__PURE__ */ Symbol("XML Node Metadata");
       class T {
         constructor(t5) {
           this.tagname = t5, this.child = [], this[":@"] = {};
@@ -45126,7 +43304,7 @@ var require_fxp = __commonJS({
           let l5 = 0;
           a5 && -1 !== this.options.unpairedTags.indexOf(a5) ? (l5 = s5.lastIndexOf(".", s5.lastIndexOf(".") - 1), this.tagsNodeStack.pop()) : l5 = s5.lastIndexOf("."), s5 = s5.substring(0, l5), n5 = this.tagsNodeStack.pop(), i5 = "", r5 = e6;
         } else if ("?" === t5[r5 + 1]) {
-          let e6 = z8(t5, r5, false, "?>");
+          let e6 = z9(t5, r5, false, "?>");
           if (!e6) throw new Error("Pi Tag is not closed.");
           if (i5 = this.saveTextToParentTag(i5, n5, s5), this.options.ignoreDeclaration && "?xml" === e6.tagName || this.options.ignorePiTags) ;
           else {
@@ -45150,7 +43328,7 @@ var require_fxp = __commonJS({
           let a5 = this.parseTextData(o5, n5.tagname, s5, true, false, true, true);
           null == a5 && (a5 = ""), this.options.cdataPropName ? n5.add(this.options.cdataPropName, [{ [this.options.textNodeName]: o5 }]) : n5.add(this.options.textNodeName, a5), r5 = e6 + 2;
         } else {
-          let o5 = z8(t5, r5, this.options.removeNSPrefix), a5 = o5.tagName;
+          let o5 = z9(t5, r5, this.options.removeNSPrefix), a5 = o5.tagName;
           const l5 = o5.rawTagName;
           let u5 = o5.tagExp, h5 = o5.attrExpPresent, d5 = o5.closeIndex;
           this.options.transformTagName && (a5 = this.options.transformTagName(a5)), n5 && i5 && "!xml" !== n5.tagname && (i5 = this.saveTextToParentTag(i5, n5, s5, false));
@@ -45222,7 +43400,7 @@ var require_fxp = __commonJS({
         if (-1 === s5) throw new Error(i5);
         return s5 + e5.length - 1;
       }
-      function z8(t5, e5, n5, i5 = ">") {
+      function z9(t5, e5, n5, i5 = ">") {
         const s5 = (function(t6, e6, n6 = ">") {
           let i6, s6 = "";
           for (let r6 = e6; r6 < t6.length; r6++) {
@@ -45259,7 +43437,7 @@ var require_fxp = __commonJS({
         else if ("!--" === t5.substr(n5 + 1, 3)) n5 = W(t5, "-->", n5 + 3, "StopNode is not closed.");
         else if ("![" === t5.substr(n5 + 1, 2)) n5 = W(t5, "]]>", n5, "StopNode is not closed.") - 2;
         else {
-          const i6 = z8(t5, n5, ">");
+          const i6 = z9(t5, n5, ">");
           i6 && ((i6 && i6.tagName) === e5 && "/" !== i6.tagExp[i6.tagExp.length - 1] && s5++, n5 = i6.closeIndex);
         }
       }
@@ -46076,17 +44254,13 @@ var init_AwsQueryProtocol = __esm({
           Code: errorData.Code,
           Message: message
         };
-        const { errorSchema, errorMetadata } = await this.mixin.getErrorSchemaOrThrowBaseException(errorIdentifier, this.options.defaultNamespace, response, errorData, metadata, (registry, errorName) => {
-          try {
-            return registry.getSchema(errorName);
-          } catch (e4) {
-            return registry.find((schema) => NormalizedSchema.of(schema).getMergedTraits().awsQueryError?.[0] === errorName);
-          }
-        });
+        const { errorSchema, errorMetadata } = await this.mixin.getErrorSchemaOrThrowBaseException(errorIdentifier, this.options.defaultNamespace, response, errorData, metadata, this.mixin.findQueryCompatibleError);
         const ns = NormalizedSchema.of(errorSchema);
         const ErrorCtor = TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error;
         const exception = new ErrorCtor(message);
         const output = {
+          Type: errorData.Error.Type,
+          Code: errorData.Error.Code,
           Error: errorData.Error
         };
         for (const [name, member2] of ns.structIterator()) {
@@ -46535,7 +44709,9 @@ var init_AwsRestXmlProtocol = __esm({
         }
         if (request.headers["content-type"] === this.getDefaultContentType()) {
           if (typeof request.body === "string") {
-            request.body = '<?xml version="1.0" encoding="UTF-8"?>' + request.body;
+            if (!request.body.startsWith("<?xml ")) {
+              request.body = '<?xml version="1.0" encoding="UTF-8"?>' + request.body;
+            }
           }
         }
         return request;
@@ -48129,9 +46305,9 @@ var PROTECTED_KEYS, NO_GLOBAL_AWS_LAMBDA, InvokeStoreBase, InvokeStoreSingle, In
 var init_invoke_store = __esm({
   "node_modules/@aws/lambda-invoke-store/dist-es/invoke-store.js"() {
     PROTECTED_KEYS = {
-      REQUEST_ID: Symbol.for("_AWS_LAMBDA_REQUEST_ID"),
-      X_RAY_TRACE_ID: Symbol.for("_AWS_LAMBDA_X_RAY_TRACE_ID"),
-      TENANT_ID: Symbol.for("_AWS_LAMBDA_TENANT_ID")
+      REQUEST_ID: /* @__PURE__ */ Symbol.for("_AWS_LAMBDA_REQUEST_ID"),
+      X_RAY_TRACE_ID: /* @__PURE__ */ Symbol.for("_AWS_LAMBDA_X_RAY_TRACE_ID"),
+      TENANT_ID: /* @__PURE__ */ Symbol.for("_AWS_LAMBDA_TENANT_ID")
     };
     NO_GLOBAL_AWS_LAMBDA = ["true", "1"].includes(process.env?.AWS_LAMBDA_NODEJS_NO_GLOBAL_AWSLAMBDA ?? "");
     if (!NO_GLOBAL_AWS_LAMBDA) {
@@ -49037,18 +47213,18 @@ var require_dist_cjs32 = __commonJS({
       }
     };
     var booleanEquals = (value1, value2) => value1 === value2;
-    var getAttrPathList = (path4) => {
-      const parts = path4.split(".");
+    var getAttrPathList = (path5) => {
+      const parts = path5.split(".");
       const pathList = [];
       for (const part of parts) {
         const squareBracketIndex = part.indexOf("[");
         if (squareBracketIndex !== -1) {
           if (part.indexOf("]") !== part.length - 1) {
-            throw new EndpointError(`Path: '${path4}' does not end with ']'`);
+            throw new EndpointError(`Path: '${path5}' does not end with ']'`);
           }
           const arrayIndex = part.slice(squareBracketIndex + 1, -1);
           if (Number.isNaN(parseInt(arrayIndex))) {
-            throw new EndpointError(`Invalid array index: '${arrayIndex}' in path: '${path4}'`);
+            throw new EndpointError(`Invalid array index: '${arrayIndex}' in path: '${path5}'`);
           }
           if (squareBracketIndex !== 0) {
             pathList.push(part.slice(0, squareBracketIndex));
@@ -49060,9 +47236,9 @@ var require_dist_cjs32 = __commonJS({
       }
       return pathList;
     };
-    var getAttr = (value, path4) => getAttrPathList(path4).reduce((acc, index) => {
+    var getAttr = (value, path5) => getAttrPathList(path5).reduce((acc, index) => {
       if (typeof acc !== "object") {
-        throw new EndpointError(`Index '${index}' in '${path4}' not found in '${JSON.stringify(value)}'`);
+        throw new EndpointError(`Index '${index}' in '${path5}' not found in '${JSON.stringify(value)}'`);
       } else if (Array.isArray(acc)) {
         return acc[parseInt(index)];
       }
@@ -49081,8 +47257,8 @@ var require_dist_cjs32 = __commonJS({
             return value;
           }
           if (typeof value === "object" && "hostname" in value) {
-            const { hostname: hostname2, port, protocol: protocol2 = "", path: path4 = "", query = {} } = value;
-            const url = new URL(`${protocol2}//${hostname2}${port ? `:${port}` : ""}${path4}`);
+            const { hostname: hostname2, port, protocol: protocol2 = "", path: path5 = "", query = {} } = value;
+            const url = new URL(`${protocol2}//${hostname2}${port ? `:${port}` : ""}${path5}`);
             url.search = Object.entries(query).map(([k4, v4]) => `${k4}=${v4}`).join("&");
             return url;
           }
@@ -50324,16 +48500,16 @@ var require_readFile = __commonJS({
     var promises_1 = require("node:fs/promises");
     exports2.filePromises = {};
     exports2.fileIntercept = {};
-    var readFile4 = (path4, options) => {
-      if (exports2.fileIntercept[path4] !== void 0) {
-        return exports2.fileIntercept[path4];
+    var readFile6 = (path5, options) => {
+      if (exports2.fileIntercept[path5] !== void 0) {
+        return exports2.fileIntercept[path5];
       }
-      if (!exports2.filePromises[path4] || options?.ignoreCache) {
-        exports2.filePromises[path4] = (0, promises_1.readFile)(path4, "utf8");
+      if (!exports2.filePromises[path5] || options?.ignoreCache) {
+        exports2.filePromises[path5] = (0, promises_1.readFile)(path5, "utf8");
       }
-      return exports2.filePromises[path4];
+      return exports2.filePromises[path5];
     };
-    exports2.readFile = readFile4;
+    exports2.readFile = readFile6;
   }
 });
 
@@ -50344,9 +48520,9 @@ var require_dist_cjs40 = __commonJS({
     var getHomeDir = require_getHomeDir();
     var getSSOTokenFilepath = require_getSSOTokenFilepath();
     var getSSOTokenFromFile = require_getSSOTokenFromFile();
-    var path4 = require("path");
+    var path5 = require("path");
     var types = require_dist_cjs();
-    var readFile4 = require_readFile();
+    var readFile6 = require_readFile();
     var ENV_PROFILE = "AWS_PROFILE";
     var DEFAULT_PROFILE = "default";
     var getProfileName = (init) => init.profile || process.env[ENV_PROFILE] || DEFAULT_PROFILE;
@@ -50366,9 +48542,9 @@ var require_dist_cjs40 = __commonJS({
       ...data2.default && { default: data2.default }
     });
     var ENV_CONFIG_PATH = "AWS_CONFIG_FILE";
-    var getConfigFilepath = () => process.env[ENV_CONFIG_PATH] || path4.join(getHomeDir.getHomeDir(), ".aws", "config");
+    var getConfigFilepath = () => process.env[ENV_CONFIG_PATH] || path5.join(getHomeDir.getHomeDir(), ".aws", "config");
     var ENV_CREDENTIALS_PATH = "AWS_SHARED_CREDENTIALS_FILE";
-    var getCredentialsFilepath = () => process.env[ENV_CREDENTIALS_PATH] || path4.join(getHomeDir.getHomeDir(), ".aws", "credentials");
+    var getCredentialsFilepath = () => process.env[ENV_CREDENTIALS_PATH] || path5.join(getHomeDir.getHomeDir(), ".aws", "credentials");
     var prefixKeyRegex = /^([\w-]+)\s(["'])?([\w-@\+\.%:/]+)\2$/;
     var profileNameBlockList = ["__proto__", "profile __proto__"];
     var parseIni = (iniData) => {
@@ -50423,17 +48599,17 @@ var require_dist_cjs40 = __commonJS({
       const relativeHomeDirPrefix = "~/";
       let resolvedFilepath = filepath;
       if (filepath.startsWith(relativeHomeDirPrefix)) {
-        resolvedFilepath = path4.join(homeDir, filepath.slice(2));
+        resolvedFilepath = path5.join(homeDir, filepath.slice(2));
       }
       let resolvedConfigFilepath = configFilepath;
       if (configFilepath.startsWith(relativeHomeDirPrefix)) {
-        resolvedConfigFilepath = path4.join(homeDir, configFilepath.slice(2));
+        resolvedConfigFilepath = path5.join(homeDir, configFilepath.slice(2));
       }
       const parsedFiles = await Promise.all([
-        readFile4.readFile(resolvedConfigFilepath, {
+        readFile6.readFile(resolvedConfigFilepath, {
           ignoreCache: init.ignoreCache
         }).then(parseIni).then(getConfigData).catch(swallowError$1),
-        readFile4.readFile(resolvedFilepath, {
+        readFile6.readFile(resolvedFilepath, {
           ignoreCache: init.ignoreCache
         }).then(parseIni).catch(swallowError$1)
       ]);
@@ -50444,7 +48620,7 @@ var require_dist_cjs40 = __commonJS({
     };
     var getSsoSessionData = (data2) => Object.entries(data2).filter(([key]) => key.startsWith(types.IniSectionType.SSO_SESSION + CONFIG_PREFIX_SEPARATOR)).reduce((acc, [key, value]) => ({ ...acc, [key.substring(key.indexOf(CONFIG_PREFIX_SEPARATOR) + 1)]: value }), {});
     var swallowError = () => ({});
-    var loadSsoSessionData = async (init = {}) => readFile4.readFile(init.configFilepath ?? getConfigFilepath()).then(parseIni).then(getSsoSessionData).catch(swallowError);
+    var loadSsoSessionData = async (init = {}) => readFile6.readFile(init.configFilepath ?? getConfigFilepath()).then(parseIni).then(getSsoSessionData).catch(swallowError);
     var mergeConfigFiles = (...files) => {
       const merged = {};
       for (const file of files) {
@@ -50464,10 +48640,10 @@ var require_dist_cjs40 = __commonJS({
     };
     var externalDataInterceptor = {
       getFileRecord() {
-        return readFile4.fileIntercept;
+        return readFile6.fileIntercept;
       },
-      interceptFile(path5, contents) {
-        readFile4.fileIntercept[path5] = Promise.resolve(contents);
+      interceptFile(path6, contents) {
+        readFile6.fileIntercept[path6] = Promise.resolve(contents);
       },
       getTokenRecord() {
         return getSSOTokenFromFile.tokenIntercept;
@@ -50485,7 +48661,7 @@ var require_dist_cjs40 = __commonJS({
     Object.defineProperty(exports2, "readFile", {
       enumerable: true,
       get: function() {
-        return readFile4.readFile;
+        return readFile6.readFile;
       }
     });
     exports2.CONFIG_PREFIX_SEPARATOR = CONFIG_PREFIX_SEPARATOR;
@@ -50523,11 +48699,11 @@ var require_dist_cjs41 = __commonJS({
     var sharedIniFileLoader = require_dist_cjs40();
     function getSelectorName(functionString) {
       try {
-        const constants2 = new Set(Array.from(functionString.match(/([A-Z_]){3,}/g) ?? []));
-        constants2.delete("CONFIG");
-        constants2.delete("CONFIG_PREFIX_SEPARATOR");
-        constants2.delete("ENV");
-        return [...constants2].join(", ");
+        const constants3 = new Set(Array.from(functionString.match(/([A-Z_]){3,}/g) ?? []));
+        constants3.delete("CONFIG");
+        constants3.delete("CONFIG_PREFIX_SEPARATOR");
+        constants3.delete("ENV");
+        return [...constants3].join(", ");
       } catch (e4) {
         return functionString;
       }
@@ -50698,8 +48874,8 @@ var require_dist_cjs42 = __commonJS({
               return endpoint.url.href;
             }
             if ("hostname" in endpoint) {
-              const { protocol, hostname, port, path: path4 } = endpoint;
-              return `${protocol}//${hostname}${port ? ":" + port : ""}${path4}`;
+              const { protocol, hostname, port, path: path5 } = endpoint;
+              return `${protocol}//${hostname}${port ? ":" + port : ""}${path5}`;
             }
           }
           return endpoint;
@@ -51698,7 +49874,7 @@ var require_ruleset = __commonJS({
     var w4 = "bucketAliasSuffix";
     var x4 = "outpostId";
     var y2 = "isValidHostLabel";
-    var z8 = "sigv4a";
+    var z9 = "sigv4a";
     var A2 = "s3-outposts";
     var B2 = "s3";
     var C2 = "{url#scheme}://{url#authority}{url#normalizedPath}{Bucket}";
@@ -51748,7 +49924,7 @@ var require_ruleset = __commonJS({
     var au = { [cw]: r4, [cx]: [ac] };
     var av = { [cy]: u4 };
     var aw = { [cv]: [aq], [f4]: "Expected a endpoint to be specified but no endpoint was found", [ct]: f4 };
-    var ax = { [cD]: [{ [cE]: true, [j4]: z8, [cF]: A2, [cI]: ["*"] }, { [cE]: true, [j4]: "sigv4", [cF]: A2, [cG]: "{Region}" }] };
+    var ax = { [cD]: [{ [cE]: true, [j4]: z9, [cF]: A2, [cI]: ["*"] }, { [cE]: true, [j4]: "sigv4", [cF]: A2, [cG]: "{Region}" }] };
     var ay = { [cw]: e4, [cx]: [{ [cy]: "ForcePathStyle" }, false] };
     var az = { [cy]: "ForcePathStyle" };
     var aA = { [cw]: e4, [cx]: [{ [cy]: "Accelerate" }, false] };
@@ -51787,7 +49963,7 @@ var require_ruleset = __commonJS({
     var bh = { [f4]: "Invalid ARN: The ARN may only contain a single resource component after `accesspoint`.", [ct]: f4 };
     var bi = { [f4]: "Invalid ARN: Expected a resource of the format `accesspoint:<accesspoint name>` but no name was provided", [ct]: f4 };
     var bj = { [cD]: [{ [cE]: true, [j4]: "sigv4", [cF]: B2, [cG]: "{bucketArn#region}" }] };
-    var bk = { [cD]: [{ [cE]: true, [j4]: z8, [cF]: A2, [cI]: ["*"] }, { [cE]: true, [j4]: "sigv4", [cF]: A2, [cG]: "{bucketArn#region}" }] };
+    var bk = { [cD]: [{ [cE]: true, [j4]: z9, [cF]: A2, [cI]: ["*"] }, { [cE]: true, [j4]: "sigv4", [cF]: A2, [cG]: "{bucketArn#region}" }] };
     var bl = { [cw]: F2, [cx]: [ad] };
     var bm = { [cA]: "https://s3-fips.dualstack.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: aG, [cH]: {} };
     var bn = { [cA]: "https://s3-fips.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: aG, [cH]: {} };
@@ -51847,7 +50023,7 @@ var require_ruleset = __commonJS({
     var cp = [{ [cw]: y2, [cx]: [aV, false] }];
     var cq = [X];
     var cr = [{ [cw]: y2, [cx]: [{ [cy]: "Region" }, true] }];
-    var _data4 = { version: "1.0", parameters: { Bucket: T, Region: T, UseFIPS: U, UseDualStack: U, Endpoint: T, ForcePathStyle: U, Accelerate: U, UseGlobalEndpoint: U, UseObjectLambdaEndpoint: V, Key: T, Prefix: T, CopySource: T, DisableAccessPoints: V, DisableMultiRegionAccessPoints: U, UseArnRegion: V, UseS3ExpressControlEndpoint: V, DisableS3ExpressSessionAuth: V }, [cu]: [{ [cv]: [{ [cw]: d4, [cx]: by }], [cu]: [{ [cv]: [W, X], error: "Accelerate cannot be used with FIPS", [ct]: f4 }, { [cv]: [Y, Z], error: "Cannot set dual-stack in combination with a custom endpoint.", [ct]: f4 }, { [cv]: [Z, X], error: "A custom endpoint cannot be combined with FIPS", [ct]: f4 }, { [cv]: [Z, W], error: "A custom endpoint cannot be combined with S3 Accelerate", [ct]: f4 }, { [cv]: [X, aa, ab], error: "Partition does not support FIPS", [ct]: f4 }, { [cv]: [ac, { [cw]: k4, [cx]: [ad, 0, a4, c4], [cz]: l4 }, { [cw]: h4, [cx]: [{ [cy]: l4 }, "--x-s3"] }], [cu]: [ae, af, { [cv]: [ao, ap], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: [aj, aq], [cu]: [{ [cv]: bH, endpoint: { [cA]: "https://s3express-control-fips.dualstack.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bI, endpoint: { [cA]: "https://s3express-control-fips.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bJ, endpoint: { [cA]: "https://s3express-control.dualstack.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bK, endpoint: { [cA]: "https://s3express-control.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: ak, [cH]: al }, [ct]: n4 }], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { [cv]: bF, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: bD, [cu]: [{ [cv]: bL, [cu]: bM, [ct]: o4 }, { [cv]: bN, [cu]: bM, [ct]: o4 }, { [cv]: bO, [cu]: bM, [ct]: o4 }, { [cv]: bP, [cu]: bM, [ct]: o4 }, { [cv]: bQ, [cu]: bM, [ct]: o4 }, at], [ct]: o4 }, { [cv]: bL, [cu]: bR, [ct]: o4 }, { [cv]: bN, [cu]: bR, [ct]: o4 }, { [cv]: bO, [cu]: bR, [ct]: o4 }, { [cv]: bP, [cu]: bR, [ct]: o4 }, { [cv]: bQ, [cu]: bR, [ct]: o4 }, at], [ct]: o4 }], [ct]: o4 }, an], [ct]: o4 }, { [cv]: [ac, { [cw]: k4, [cx]: bS, [cz]: s4 }, { [cw]: h4, [cx]: [{ [cy]: s4 }, "--xa-s3"] }], [cu]: [ae, af, { [cv]: bF, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: bD, [cu]: [{ [cv]: bT, [cu]: bM, [ct]: o4 }, { [cv]: bU, [cu]: bM, [ct]: o4 }, { [cv]: bV, [cu]: bM, [ct]: o4 }, { [cv]: bW, [cu]: bM, [ct]: o4 }, { [cv]: bX, [cu]: bM, [ct]: o4 }, at], [ct]: o4 }, { [cv]: bT, [cu]: bR, [ct]: o4 }, { [cv]: bU, [cu]: bR, [ct]: o4 }, { [cv]: bV, [cu]: bR, [ct]: o4 }, { [cv]: bW, [cu]: bR, [ct]: o4 }, { [cv]: bX, [cu]: bR, [ct]: o4 }, at], [ct]: o4 }], [ct]: o4 }, an], [ct]: o4 }, { [cv]: [au, ao, ap], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: bC, endpoint: { [cA]: t4, [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bH, endpoint: { [cA]: "https://s3express-control-fips.dualstack.{Region}.{partitionResult#dnsSuffix}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bI, endpoint: { [cA]: "https://s3express-control-fips.{Region}.{partitionResult#dnsSuffix}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bJ, endpoint: { [cA]: "https://s3express-control.dualstack.{Region}.{partitionResult#dnsSuffix}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bK, endpoint: { [cA]: "https://s3express-control.{Region}.{partitionResult#dnsSuffix}", [cB]: ak, [cH]: al }, [ct]: n4 }], [ct]: o4 }], [ct]: o4 }, { [cv]: [ac, { [cw]: k4, [cx]: [ad, 49, 50, c4], [cz]: u4 }, { [cw]: k4, [cx]: [ad, 8, 12, c4], [cz]: v4 }, { [cw]: k4, [cx]: bS, [cz]: w4 }, { [cw]: k4, [cx]: [ad, 32, 49, c4], [cz]: x4 }, { [cw]: g4, [cx]: by, [cz]: "regionPartition" }, { [cw]: h4, [cx]: [{ [cy]: w4 }, "--op-s3"] }], [cu]: [{ [cv]: bZ, [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [av, "e"] }], [cu]: [{ [cv]: ca, [cu]: [aw, { [cv]: bC, endpoint: { [cA]: "https://{Bucket}.ec2.{url#authority}", [cB]: ax, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { endpoint: { [cA]: "https://{Bucket}.ec2.s3-outposts.{Region}.{regionPartition#dnsSuffix}", [cB]: ax, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { [cv]: [{ [cw]: h4, [cx]: [av, "o"] }], [cu]: [{ [cv]: ca, [cu]: [aw, { [cv]: bC, endpoint: { [cA]: "https://{Bucket}.op-{outpostId}.{url#authority}", [cB]: ax, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { endpoint: { [cA]: "https://{Bucket}.op-{outpostId}.s3-outposts.{Region}.{regionPartition#dnsSuffix}", [cB]: ax, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { error: 'Unrecognized hardware type: "Expected hardware type o or e but got {hardwareType}"', [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: The outpost Id must only contain a-z, A-Z, 0-9 and `-`.", [ct]: f4 }], [ct]: o4 }, { [cv]: bY, [cu]: [{ [cv]: [Z, { [cw]: r4, [cx]: [{ [cw]: d4, [cx]: [{ [cw]: m4, [cx]: bz }] }] }], error: "Custom endpoint `{Endpoint}` was not a valid URI", [ct]: f4 }, { [cv]: [ay, am], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cc, [cu]: [{ [cv]: [W, ab], error: "S3 Accelerate cannot be used in this region", [ct]: f4 }, { [cv]: [Y, X, aA, aq, aB], endpoint: { [cA]: "https://{Bucket}.s3-fips.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, X, aA, aq, aD, aE], [cu]: [{ endpoint: aF, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, X, aA, aq, aD, aH], endpoint: aF, [ct]: n4 }, { [cv]: [ar, X, aA, aq, aB], endpoint: { [cA]: "https://{Bucket}.s3-fips.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, X, aA, aq, aD, aE], [cu]: [{ endpoint: aI, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, X, aA, aq, aD, aH], endpoint: aI, [ct]: n4 }, { [cv]: [Y, as, W, aq, aB], endpoint: { [cA]: "https://{Bucket}.s3-accelerate.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, as, W, aq, aD, aE], [cu]: [{ endpoint: aJ, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, as, W, aq, aD, aH], endpoint: aJ, [ct]: n4 }, { [cv]: [Y, as, aA, aq, aB], endpoint: { [cA]: "https://{Bucket}.s3.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, as, aA, aq, aD, aE], [cu]: [{ endpoint: aK, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, as, aA, aq, aD, aH], endpoint: aK, [ct]: n4 }, { [cv]: [ar, as, aA, Z, ag, ah, aB], endpoint: { [cA]: C2, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, as, aA, Z, ag, aL, aB], endpoint: { [cA]: q4, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, as, aA, Z, ag, ah, aD, aE], [cu]: [{ [cv]: cd, endpoint: aM, [ct]: n4 }, { endpoint: aM, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, as, aA, Z, ag, aL, aD, aE], [cu]: [{ [cv]: cd, endpoint: aN, [ct]: n4 }, aO], [ct]: o4 }, { [cv]: [ar, as, aA, Z, ag, ah, aD, aH], endpoint: aM, [ct]: n4 }, { [cv]: [ar, as, aA, Z, ag, aL, aD, aH], endpoint: aN, [ct]: n4 }, { [cv]: [ar, as, W, aq, aB], endpoint: { [cA]: D2, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, as, W, aq, aD, aE], [cu]: [{ [cv]: cd, endpoint: aP, [ct]: n4 }, { endpoint: aP, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, as, W, aq, aD, aH], endpoint: aP, [ct]: n4 }, { [cv]: [ar, as, aA, aq, aB], endpoint: { [cA]: E2, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, as, aA, aq, aD, aE], [cu]: [{ [cv]: cd, endpoint: { [cA]: E2, [cB]: aG, [cH]: al }, [ct]: n4 }, { endpoint: aQ, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, as, aA, aq, aD, aH], endpoint: aQ, [ct]: n4 }], [ct]: o4 }, aR], [ct]: o4 }], [ct]: o4 }, { [cv]: [Z, ag, { [cw]: h4, [cx]: [{ [cw]: i4, [cx]: [ai, "scheme"] }, "http"] }, { [cw]: p4, [cx]: [ad, c4] }, ay, as, ar, aA], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cc, [cu]: [aO], [ct]: o4 }, aR], [ct]: o4 }], [ct]: o4 }, { [cv]: [ay, { [cw]: F2, [cx]: bA, [cz]: G2 }], [cu]: [{ [cv]: [{ [cw]: i4, [cx]: [aS, "resourceId[0]"], [cz]: H2 }, { [cw]: r4, [cx]: [{ [cw]: h4, [cx]: [aT, I2] }] }], [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [aU, J2] }], [cu]: [{ [cv]: ce, [cu]: [{ [cv]: cf, [cu]: [aW, aX, { [cv]: ci, [cu]: [aY, { [cv]: cj, [cu]: [aZ, { [cv]: cl, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cm, [cu]: [{ [cv]: cn, [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [bb, I2] }], error: "Invalid ARN: Missing account id", [ct]: f4 }, { [cv]: co, [cu]: [{ [cv]: cp, [cu]: [{ [cv]: bC, endpoint: { [cA]: M, [cB]: bc, [cH]: al }, [ct]: n4 }, { [cv]: cq, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-object-lambda-fips.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bc, [cH]: al }, [ct]: n4 }, { endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-object-lambda.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bc, [cH]: al }, [ct]: n4 }], [ct]: o4 }, bd], [ct]: o4 }, be], [ct]: o4 }, bf], [ct]: o4 }, bg], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, bh], [ct]: o4 }, { error: "Invalid ARN: bucket ARN is missing a region", [ct]: f4 }], [ct]: o4 }, bi], [ct]: o4 }, { error: "Invalid ARN: Object Lambda ARNs only support `accesspoint` arn types, but found: `{arnType}`", [ct]: f4 }], [ct]: o4 }, { [cv]: ce, [cu]: [{ [cv]: cf, [cu]: [{ [cv]: ci, [cu]: [{ [cv]: ce, [cu]: [{ [cv]: ci, [cu]: [aY, { [cv]: cj, [cu]: [aZ, { [cv]: cl, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [ba, "{partitionResult#name}"] }], [cu]: [{ [cv]: cn, [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [aU, B2] }], [cu]: [{ [cv]: co, [cu]: [{ [cv]: cp, [cu]: [{ [cv]: bB, error: "Access Points do not support S3 Accelerate", [ct]: f4 }, { [cv]: bH, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-accesspoint-fips.dualstack.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bj, [cH]: al }, [ct]: n4 }, { [cv]: bI, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-accesspoint-fips.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bj, [cH]: al }, [ct]: n4 }, { [cv]: bJ, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-accesspoint.dualstack.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bj, [cH]: al }, [ct]: n4 }, { [cv]: [as, ar, Z, ag], endpoint: { [cA]: M, [cB]: bj, [cH]: al }, [ct]: n4 }, { [cv]: bK, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-accesspoint.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bj, [cH]: al }, [ct]: n4 }], [ct]: o4 }, bd], [ct]: o4 }, be], [ct]: o4 }, { error: "Invalid ARN: The ARN was not for the S3 service, found: {bucketArn#service}", [ct]: f4 }], [ct]: o4 }, bf], [ct]: o4 }, bg], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, bh], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { [cv]: [{ [cw]: y2, [cx]: [aV, c4] }], [cu]: [{ [cv]: ch, error: "S3 MRAP does not support dual-stack", [ct]: f4 }, { [cv]: cq, error: "S3 MRAP does not support FIPS", [ct]: f4 }, { [cv]: bB, error: "S3 MRAP does not support S3 Accelerate", [ct]: f4 }, { [cv]: [{ [cw]: e4, [cx]: [{ [cy]: "DisableMultiRegionAccessPoints" }, c4] }], error: "Invalid configuration: Multi-Region Access Point ARNs are disabled.", [ct]: f4 }, { [cv]: [{ [cw]: g4, [cx]: by, [cz]: N }], [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [{ [cw]: i4, [cx]: [{ [cy]: N }, j4] }, { [cw]: i4, [cx]: [aS, "partition"] }] }], [cu]: [{ endpoint: { [cA]: "https://{accessPointName}.accesspoint.s3-global.{mrapPartition#dnsSuffix}", [cB]: { [cD]: [{ [cE]: c4, name: z8, [cF]: B2, [cI]: cb }] }, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { error: "Client was configured for partition `{mrapPartition#name}` but bucket referred to partition `{bucketArn#partition}`", [ct]: f4 }], [ct]: o4 }], [ct]: o4 }, { error: "Invalid Access Point Name", [ct]: f4 }], [ct]: o4 }, bi], [ct]: o4 }, { [cv]: [{ [cw]: h4, [cx]: [aU, A2] }], [cu]: [{ [cv]: ch, error: "S3 Outposts does not support Dual-stack", [ct]: f4 }, { [cv]: cq, error: "S3 Outposts does not support FIPS", [ct]: f4 }, { [cv]: bB, error: "S3 Outposts does not support S3 Accelerate", [ct]: f4 }, { [cv]: [{ [cw]: d4, [cx]: [{ [cw]: i4, [cx]: [aS, "resourceId[4]"] }] }], error: "Invalid Arn: Outpost Access Point ARN contains sub resources", [ct]: f4 }, { [cv]: [{ [cw]: i4, [cx]: cg, [cz]: x4 }], [cu]: [{ [cv]: bZ, [cu]: [aZ, { [cv]: cl, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cm, [cu]: [{ [cv]: cn, [cu]: [{ [cv]: co, [cu]: [{ [cv]: [{ [cw]: i4, [cx]: ck, [cz]: O }], [cu]: [{ [cv]: [{ [cw]: i4, [cx]: [aS, "resourceId[3]"], [cz]: L }], [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [{ [cy]: O }, K] }], [cu]: [{ [cv]: bC, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.{outpostId}.{url#authority}", [cB]: bk, [cH]: al }, [ct]: n4 }, { endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.{outpostId}.s3-outposts.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bk, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { error: "Expected an outpost type `accesspoint`, found {outpostType}", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: expected an access point name", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: Expected a 4-component resource", [ct]: f4 }], [ct]: o4 }, be], [ct]: o4 }, bf], [ct]: o4 }, bg], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { error: "Invalid ARN: The outpost Id may only contain a-z, A-Z, 0-9 and `-`. Found: `{outpostId}`", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: The Outpost Id was not set", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: Unrecognized format: {Bucket} (type: {arnType})", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: No ARN type specified", [ct]: f4 }], [ct]: o4 }, { [cv]: [{ [cw]: k4, [cx]: [ad, 0, 4, b4], [cz]: P }, { [cw]: h4, [cx]: [{ [cy]: P }, "arn:"] }, { [cw]: r4, [cx]: [{ [cw]: d4, [cx]: [bl] }] }], error: "Invalid ARN: `{Bucket}` was not a valid ARN", [ct]: f4 }, { [cv]: [{ [cw]: e4, [cx]: [az, c4] }, bl], error: "Path-style addressing cannot be used with ARN buckets", [ct]: f4 }, { [cv]: bE, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: [aA], [cu]: [{ [cv]: [Y, aq, X, aB], endpoint: { [cA]: "https://s3-fips.dualstack.us-east-1.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, aq, X, aD, aE], [cu]: [{ endpoint: bm, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, aq, X, aD, aH], endpoint: bm, [ct]: n4 }, { [cv]: [ar, aq, X, aB], endpoint: { [cA]: "https://s3-fips.us-east-1.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, aq, X, aD, aE], [cu]: [{ endpoint: bn, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, aq, X, aD, aH], endpoint: bn, [ct]: n4 }, { [cv]: [Y, aq, as, aB], endpoint: { [cA]: "https://s3.dualstack.us-east-1.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, aq, as, aD, aE], [cu]: [{ endpoint: bo, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, aq, as, aD, aH], endpoint: bo, [ct]: n4 }, { [cv]: [ar, Z, ag, as, aB], endpoint: { [cA]: Q, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, Z, ag, as, aD, aE], [cu]: [{ [cv]: cd, endpoint: bp, [ct]: n4 }, { endpoint: bp, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, Z, ag, as, aD, aH], endpoint: bp, [ct]: n4 }, { [cv]: [ar, aq, as, aB], endpoint: { [cA]: R, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, aq, as, aD, aE], [cu]: [{ [cv]: cd, endpoint: { [cA]: R, [cB]: aG, [cH]: al }, [ct]: n4 }, { endpoint: bq, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, aq, as, aD, aH], endpoint: bq, [ct]: n4 }], [ct]: o4 }, { error: "Path-style addressing cannot be used with S3 Accelerate", [ct]: f4 }], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { [cv]: [{ [cw]: d4, [cx]: [br] }, { [cw]: e4, [cx]: [br, c4] }], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cr, [cu]: [aW, aX, { [cv]: bC, endpoint: { [cA]: t4, [cB]: bs, [cH]: al }, [ct]: n4 }, { [cv]: cq, endpoint: { [cA]: "https://s3-object-lambda-fips.{Region}.{partitionResult#dnsSuffix}", [cB]: bs, [cH]: al }, [ct]: n4 }, { endpoint: { [cA]: "https://s3-object-lambda.{Region}.{partitionResult#dnsSuffix}", [cB]: bs, [cH]: al }, [ct]: n4 }], [ct]: o4 }, aR], [ct]: o4 }], [ct]: o4 }, { [cv]: [au], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cr, [cu]: [{ [cv]: [X, Y, aq, aB], endpoint: { [cA]: "https://s3-fips.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [X, Y, aq, aD, aE], [cu]: [{ endpoint: bt, [ct]: n4 }], [ct]: o4 }, { [cv]: [X, Y, aq, aD, aH], endpoint: bt, [ct]: n4 }, { [cv]: [X, ar, aq, aB], endpoint: { [cA]: "https://s3-fips.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [X, ar, aq, aD, aE], [cu]: [{ endpoint: bu, [ct]: n4 }], [ct]: o4 }, { [cv]: [X, ar, aq, aD, aH], endpoint: bu, [ct]: n4 }, { [cv]: [as, Y, aq, aB], endpoint: { [cA]: "https://s3.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [as, Y, aq, aD, aE], [cu]: [{ endpoint: bv, [ct]: n4 }], [ct]: o4 }, { [cv]: [as, Y, aq, aD, aH], endpoint: bv, [ct]: n4 }, { [cv]: [as, ar, Z, ag, aB], endpoint: { [cA]: t4, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [as, ar, Z, ag, aD, aE], [cu]: [{ [cv]: cd, endpoint: bw, [ct]: n4 }, { endpoint: bw, [ct]: n4 }], [ct]: o4 }, { [cv]: [as, ar, Z, ag, aD, aH], endpoint: bw, [ct]: n4 }, { [cv]: [as, ar, aq, aB], endpoint: { [cA]: S, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [as, ar, aq, aD, aE], [cu]: [{ [cv]: cd, endpoint: { [cA]: S, [cB]: aG, [cH]: al }, [ct]: n4 }, { endpoint: bx, [ct]: n4 }], [ct]: o4 }, { [cv]: [as, ar, aq, aD, aH], endpoint: bx, [ct]: n4 }], [ct]: o4 }, aR], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { error: "A region must be set when sending requests to S3.", [ct]: f4 }] };
+    var _data4 = { version: "1.0", parameters: { Bucket: T, Region: T, UseFIPS: U, UseDualStack: U, Endpoint: T, ForcePathStyle: U, Accelerate: U, UseGlobalEndpoint: U, UseObjectLambdaEndpoint: V, Key: T, Prefix: T, CopySource: T, DisableAccessPoints: V, DisableMultiRegionAccessPoints: U, UseArnRegion: V, UseS3ExpressControlEndpoint: V, DisableS3ExpressSessionAuth: V }, [cu]: [{ [cv]: [{ [cw]: d4, [cx]: by }], [cu]: [{ [cv]: [W, X], error: "Accelerate cannot be used with FIPS", [ct]: f4 }, { [cv]: [Y, Z], error: "Cannot set dual-stack in combination with a custom endpoint.", [ct]: f4 }, { [cv]: [Z, X], error: "A custom endpoint cannot be combined with FIPS", [ct]: f4 }, { [cv]: [Z, W], error: "A custom endpoint cannot be combined with S3 Accelerate", [ct]: f4 }, { [cv]: [X, aa, ab], error: "Partition does not support FIPS", [ct]: f4 }, { [cv]: [ac, { [cw]: k4, [cx]: [ad, 0, a4, c4], [cz]: l4 }, { [cw]: h4, [cx]: [{ [cy]: l4 }, "--x-s3"] }], [cu]: [ae, af, { [cv]: [ao, ap], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: [aj, aq], [cu]: [{ [cv]: bH, endpoint: { [cA]: "https://s3express-control-fips.dualstack.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bI, endpoint: { [cA]: "https://s3express-control-fips.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bJ, endpoint: { [cA]: "https://s3express-control.dualstack.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bK, endpoint: { [cA]: "https://s3express-control.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: ak, [cH]: al }, [ct]: n4 }], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { [cv]: bF, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: bD, [cu]: [{ [cv]: bL, [cu]: bM, [ct]: o4 }, { [cv]: bN, [cu]: bM, [ct]: o4 }, { [cv]: bO, [cu]: bM, [ct]: o4 }, { [cv]: bP, [cu]: bM, [ct]: o4 }, { [cv]: bQ, [cu]: bM, [ct]: o4 }, at], [ct]: o4 }, { [cv]: bL, [cu]: bR, [ct]: o4 }, { [cv]: bN, [cu]: bR, [ct]: o4 }, { [cv]: bO, [cu]: bR, [ct]: o4 }, { [cv]: bP, [cu]: bR, [ct]: o4 }, { [cv]: bQ, [cu]: bR, [ct]: o4 }, at], [ct]: o4 }], [ct]: o4 }, an], [ct]: o4 }, { [cv]: [ac, { [cw]: k4, [cx]: bS, [cz]: s4 }, { [cw]: h4, [cx]: [{ [cy]: s4 }, "--xa-s3"] }], [cu]: [ae, af, { [cv]: bF, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: bD, [cu]: [{ [cv]: bT, [cu]: bM, [ct]: o4 }, { [cv]: bU, [cu]: bM, [ct]: o4 }, { [cv]: bV, [cu]: bM, [ct]: o4 }, { [cv]: bW, [cu]: bM, [ct]: o4 }, { [cv]: bX, [cu]: bM, [ct]: o4 }, at], [ct]: o4 }, { [cv]: bT, [cu]: bR, [ct]: o4 }, { [cv]: bU, [cu]: bR, [ct]: o4 }, { [cv]: bV, [cu]: bR, [ct]: o4 }, { [cv]: bW, [cu]: bR, [ct]: o4 }, { [cv]: bX, [cu]: bR, [ct]: o4 }, at], [ct]: o4 }], [ct]: o4 }, an], [ct]: o4 }, { [cv]: [au, ao, ap], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: bC, endpoint: { [cA]: t4, [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bH, endpoint: { [cA]: "https://s3express-control-fips.dualstack.{Region}.{partitionResult#dnsSuffix}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bI, endpoint: { [cA]: "https://s3express-control-fips.{Region}.{partitionResult#dnsSuffix}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bJ, endpoint: { [cA]: "https://s3express-control.dualstack.{Region}.{partitionResult#dnsSuffix}", [cB]: ak, [cH]: al }, [ct]: n4 }, { [cv]: bK, endpoint: { [cA]: "https://s3express-control.{Region}.{partitionResult#dnsSuffix}", [cB]: ak, [cH]: al }, [ct]: n4 }], [ct]: o4 }], [ct]: o4 }, { [cv]: [ac, { [cw]: k4, [cx]: [ad, 49, 50, c4], [cz]: u4 }, { [cw]: k4, [cx]: [ad, 8, 12, c4], [cz]: v4 }, { [cw]: k4, [cx]: bS, [cz]: w4 }, { [cw]: k4, [cx]: [ad, 32, 49, c4], [cz]: x4 }, { [cw]: g4, [cx]: by, [cz]: "regionPartition" }, { [cw]: h4, [cx]: [{ [cy]: w4 }, "--op-s3"] }], [cu]: [{ [cv]: bZ, [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [av, "e"] }], [cu]: [{ [cv]: ca, [cu]: [aw, { [cv]: bC, endpoint: { [cA]: "https://{Bucket}.ec2.{url#authority}", [cB]: ax, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { endpoint: { [cA]: "https://{Bucket}.ec2.s3-outposts.{Region}.{regionPartition#dnsSuffix}", [cB]: ax, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { [cv]: [{ [cw]: h4, [cx]: [av, "o"] }], [cu]: [{ [cv]: ca, [cu]: [aw, { [cv]: bC, endpoint: { [cA]: "https://{Bucket}.op-{outpostId}.{url#authority}", [cB]: ax, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { endpoint: { [cA]: "https://{Bucket}.op-{outpostId}.s3-outposts.{Region}.{regionPartition#dnsSuffix}", [cB]: ax, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { error: 'Unrecognized hardware type: "Expected hardware type o or e but got {hardwareType}"', [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: The outpost Id must only contain a-z, A-Z, 0-9 and `-`.", [ct]: f4 }], [ct]: o4 }, { [cv]: bY, [cu]: [{ [cv]: [Z, { [cw]: r4, [cx]: [{ [cw]: d4, [cx]: [{ [cw]: m4, [cx]: bz }] }] }], error: "Custom endpoint `{Endpoint}` was not a valid URI", [ct]: f4 }, { [cv]: [ay, am], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cc, [cu]: [{ [cv]: [W, ab], error: "S3 Accelerate cannot be used in this region", [ct]: f4 }, { [cv]: [Y, X, aA, aq, aB], endpoint: { [cA]: "https://{Bucket}.s3-fips.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, X, aA, aq, aD, aE], [cu]: [{ endpoint: aF, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, X, aA, aq, aD, aH], endpoint: aF, [ct]: n4 }, { [cv]: [ar, X, aA, aq, aB], endpoint: { [cA]: "https://{Bucket}.s3-fips.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, X, aA, aq, aD, aE], [cu]: [{ endpoint: aI, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, X, aA, aq, aD, aH], endpoint: aI, [ct]: n4 }, { [cv]: [Y, as, W, aq, aB], endpoint: { [cA]: "https://{Bucket}.s3-accelerate.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, as, W, aq, aD, aE], [cu]: [{ endpoint: aJ, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, as, W, aq, aD, aH], endpoint: aJ, [ct]: n4 }, { [cv]: [Y, as, aA, aq, aB], endpoint: { [cA]: "https://{Bucket}.s3.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, as, aA, aq, aD, aE], [cu]: [{ endpoint: aK, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, as, aA, aq, aD, aH], endpoint: aK, [ct]: n4 }, { [cv]: [ar, as, aA, Z, ag, ah, aB], endpoint: { [cA]: C2, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, as, aA, Z, ag, aL, aB], endpoint: { [cA]: q4, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, as, aA, Z, ag, ah, aD, aE], [cu]: [{ [cv]: cd, endpoint: aM, [ct]: n4 }, { endpoint: aM, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, as, aA, Z, ag, aL, aD, aE], [cu]: [{ [cv]: cd, endpoint: aN, [ct]: n4 }, aO], [ct]: o4 }, { [cv]: [ar, as, aA, Z, ag, ah, aD, aH], endpoint: aM, [ct]: n4 }, { [cv]: [ar, as, aA, Z, ag, aL, aD, aH], endpoint: aN, [ct]: n4 }, { [cv]: [ar, as, W, aq, aB], endpoint: { [cA]: D2, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, as, W, aq, aD, aE], [cu]: [{ [cv]: cd, endpoint: aP, [ct]: n4 }, { endpoint: aP, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, as, W, aq, aD, aH], endpoint: aP, [ct]: n4 }, { [cv]: [ar, as, aA, aq, aB], endpoint: { [cA]: E2, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, as, aA, aq, aD, aE], [cu]: [{ [cv]: cd, endpoint: { [cA]: E2, [cB]: aG, [cH]: al }, [ct]: n4 }, { endpoint: aQ, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, as, aA, aq, aD, aH], endpoint: aQ, [ct]: n4 }], [ct]: o4 }, aR], [ct]: o4 }], [ct]: o4 }, { [cv]: [Z, ag, { [cw]: h4, [cx]: [{ [cw]: i4, [cx]: [ai, "scheme"] }, "http"] }, { [cw]: p4, [cx]: [ad, c4] }, ay, as, ar, aA], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cc, [cu]: [aO], [ct]: o4 }, aR], [ct]: o4 }], [ct]: o4 }, { [cv]: [ay, { [cw]: F2, [cx]: bA, [cz]: G2 }], [cu]: [{ [cv]: [{ [cw]: i4, [cx]: [aS, "resourceId[0]"], [cz]: H2 }, { [cw]: r4, [cx]: [{ [cw]: h4, [cx]: [aT, I2] }] }], [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [aU, J2] }], [cu]: [{ [cv]: ce, [cu]: [{ [cv]: cf, [cu]: [aW, aX, { [cv]: ci, [cu]: [aY, { [cv]: cj, [cu]: [aZ, { [cv]: cl, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cm, [cu]: [{ [cv]: cn, [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [bb, I2] }], error: "Invalid ARN: Missing account id", [ct]: f4 }, { [cv]: co, [cu]: [{ [cv]: cp, [cu]: [{ [cv]: bC, endpoint: { [cA]: M, [cB]: bc, [cH]: al }, [ct]: n4 }, { [cv]: cq, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-object-lambda-fips.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bc, [cH]: al }, [ct]: n4 }, { endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-object-lambda.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bc, [cH]: al }, [ct]: n4 }], [ct]: o4 }, bd], [ct]: o4 }, be], [ct]: o4 }, bf], [ct]: o4 }, bg], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, bh], [ct]: o4 }, { error: "Invalid ARN: bucket ARN is missing a region", [ct]: f4 }], [ct]: o4 }, bi], [ct]: o4 }, { error: "Invalid ARN: Object Lambda ARNs only support `accesspoint` arn types, but found: `{arnType}`", [ct]: f4 }], [ct]: o4 }, { [cv]: ce, [cu]: [{ [cv]: cf, [cu]: [{ [cv]: ci, [cu]: [{ [cv]: ce, [cu]: [{ [cv]: ci, [cu]: [aY, { [cv]: cj, [cu]: [aZ, { [cv]: cl, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [ba, "{partitionResult#name}"] }], [cu]: [{ [cv]: cn, [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [aU, B2] }], [cu]: [{ [cv]: co, [cu]: [{ [cv]: cp, [cu]: [{ [cv]: bB, error: "Access Points do not support S3 Accelerate", [ct]: f4 }, { [cv]: bH, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-accesspoint-fips.dualstack.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bj, [cH]: al }, [ct]: n4 }, { [cv]: bI, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-accesspoint-fips.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bj, [cH]: al }, [ct]: n4 }, { [cv]: bJ, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-accesspoint.dualstack.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bj, [cH]: al }, [ct]: n4 }, { [cv]: [as, ar, Z, ag], endpoint: { [cA]: M, [cB]: bj, [cH]: al }, [ct]: n4 }, { [cv]: bK, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.s3-accesspoint.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bj, [cH]: al }, [ct]: n4 }], [ct]: o4 }, bd], [ct]: o4 }, be], [ct]: o4 }, { error: "Invalid ARN: The ARN was not for the S3 service, found: {bucketArn#service}", [ct]: f4 }], [ct]: o4 }, bf], [ct]: o4 }, bg], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, bh], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { [cv]: [{ [cw]: y2, [cx]: [aV, c4] }], [cu]: [{ [cv]: ch, error: "S3 MRAP does not support dual-stack", [ct]: f4 }, { [cv]: cq, error: "S3 MRAP does not support FIPS", [ct]: f4 }, { [cv]: bB, error: "S3 MRAP does not support S3 Accelerate", [ct]: f4 }, { [cv]: [{ [cw]: e4, [cx]: [{ [cy]: "DisableMultiRegionAccessPoints" }, c4] }], error: "Invalid configuration: Multi-Region Access Point ARNs are disabled.", [ct]: f4 }, { [cv]: [{ [cw]: g4, [cx]: by, [cz]: N }], [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [{ [cw]: i4, [cx]: [{ [cy]: N }, j4] }, { [cw]: i4, [cx]: [aS, "partition"] }] }], [cu]: [{ endpoint: { [cA]: "https://{accessPointName}.accesspoint.s3-global.{mrapPartition#dnsSuffix}", [cB]: { [cD]: [{ [cE]: c4, name: z9, [cF]: B2, [cI]: cb }] }, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { error: "Client was configured for partition `{mrapPartition#name}` but bucket referred to partition `{bucketArn#partition}`", [ct]: f4 }], [ct]: o4 }], [ct]: o4 }, { error: "Invalid Access Point Name", [ct]: f4 }], [ct]: o4 }, bi], [ct]: o4 }, { [cv]: [{ [cw]: h4, [cx]: [aU, A2] }], [cu]: [{ [cv]: ch, error: "S3 Outposts does not support Dual-stack", [ct]: f4 }, { [cv]: cq, error: "S3 Outposts does not support FIPS", [ct]: f4 }, { [cv]: bB, error: "S3 Outposts does not support S3 Accelerate", [ct]: f4 }, { [cv]: [{ [cw]: d4, [cx]: [{ [cw]: i4, [cx]: [aS, "resourceId[4]"] }] }], error: "Invalid Arn: Outpost Access Point ARN contains sub resources", [ct]: f4 }, { [cv]: [{ [cw]: i4, [cx]: cg, [cz]: x4 }], [cu]: [{ [cv]: bZ, [cu]: [aZ, { [cv]: cl, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cm, [cu]: [{ [cv]: cn, [cu]: [{ [cv]: co, [cu]: [{ [cv]: [{ [cw]: i4, [cx]: ck, [cz]: O }], [cu]: [{ [cv]: [{ [cw]: i4, [cx]: [aS, "resourceId[3]"], [cz]: L }], [cu]: [{ [cv]: [{ [cw]: h4, [cx]: [{ [cy]: O }, K] }], [cu]: [{ [cv]: bC, endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.{outpostId}.{url#authority}", [cB]: bk, [cH]: al }, [ct]: n4 }, { endpoint: { [cA]: "https://{accessPointName}-{bucketArn#accountId}.{outpostId}.s3-outposts.{bucketArn#region}.{bucketPartition#dnsSuffix}", [cB]: bk, [cH]: al }, [ct]: n4 }], [ct]: o4 }, { error: "Expected an outpost type `accesspoint`, found {outpostType}", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: expected an access point name", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: Expected a 4-component resource", [ct]: f4 }], [ct]: o4 }, be], [ct]: o4 }, bf], [ct]: o4 }, bg], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { error: "Invalid ARN: The outpost Id may only contain a-z, A-Z, 0-9 and `-`. Found: `{outpostId}`", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: The Outpost Id was not set", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: Unrecognized format: {Bucket} (type: {arnType})", [ct]: f4 }], [ct]: o4 }, { error: "Invalid ARN: No ARN type specified", [ct]: f4 }], [ct]: o4 }, { [cv]: [{ [cw]: k4, [cx]: [ad, 0, 4, b4], [cz]: P }, { [cw]: h4, [cx]: [{ [cy]: P }, "arn:"] }, { [cw]: r4, [cx]: [{ [cw]: d4, [cx]: [bl] }] }], error: "Invalid ARN: `{Bucket}` was not a valid ARN", [ct]: f4 }, { [cv]: [{ [cw]: e4, [cx]: [az, c4] }, bl], error: "Path-style addressing cannot be used with ARN buckets", [ct]: f4 }, { [cv]: bE, [cu]: [{ [cv]: bG, [cu]: [{ [cv]: [aA], [cu]: [{ [cv]: [Y, aq, X, aB], endpoint: { [cA]: "https://s3-fips.dualstack.us-east-1.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, aq, X, aD, aE], [cu]: [{ endpoint: bm, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, aq, X, aD, aH], endpoint: bm, [ct]: n4 }, { [cv]: [ar, aq, X, aB], endpoint: { [cA]: "https://s3-fips.us-east-1.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, aq, X, aD, aE], [cu]: [{ endpoint: bn, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, aq, X, aD, aH], endpoint: bn, [ct]: n4 }, { [cv]: [Y, aq, as, aB], endpoint: { [cA]: "https://s3.dualstack.us-east-1.{partitionResult#dnsSuffix}/{uri_encoded_bucket}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [Y, aq, as, aD, aE], [cu]: [{ endpoint: bo, [ct]: n4 }], [ct]: o4 }, { [cv]: [Y, aq, as, aD, aH], endpoint: bo, [ct]: n4 }, { [cv]: [ar, Z, ag, as, aB], endpoint: { [cA]: Q, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, Z, ag, as, aD, aE], [cu]: [{ [cv]: cd, endpoint: bp, [ct]: n4 }, { endpoint: bp, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, Z, ag, as, aD, aH], endpoint: bp, [ct]: n4 }, { [cv]: [ar, aq, as, aB], endpoint: { [cA]: R, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [ar, aq, as, aD, aE], [cu]: [{ [cv]: cd, endpoint: { [cA]: R, [cB]: aG, [cH]: al }, [ct]: n4 }, { endpoint: bq, [ct]: n4 }], [ct]: o4 }, { [cv]: [ar, aq, as, aD, aH], endpoint: bq, [ct]: n4 }], [ct]: o4 }, { error: "Path-style addressing cannot be used with S3 Accelerate", [ct]: f4 }], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { [cv]: [{ [cw]: d4, [cx]: [br] }, { [cw]: e4, [cx]: [br, c4] }], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cr, [cu]: [aW, aX, { [cv]: bC, endpoint: { [cA]: t4, [cB]: bs, [cH]: al }, [ct]: n4 }, { [cv]: cq, endpoint: { [cA]: "https://s3-object-lambda-fips.{Region}.{partitionResult#dnsSuffix}", [cB]: bs, [cH]: al }, [ct]: n4 }, { endpoint: { [cA]: "https://s3-object-lambda.{Region}.{partitionResult#dnsSuffix}", [cB]: bs, [cH]: al }, [ct]: n4 }], [ct]: o4 }, aR], [ct]: o4 }], [ct]: o4 }, { [cv]: [au], [cu]: [{ [cv]: bG, [cu]: [{ [cv]: cr, [cu]: [{ [cv]: [X, Y, aq, aB], endpoint: { [cA]: "https://s3-fips.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [X, Y, aq, aD, aE], [cu]: [{ endpoint: bt, [ct]: n4 }], [ct]: o4 }, { [cv]: [X, Y, aq, aD, aH], endpoint: bt, [ct]: n4 }, { [cv]: [X, ar, aq, aB], endpoint: { [cA]: "https://s3-fips.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [X, ar, aq, aD, aE], [cu]: [{ endpoint: bu, [ct]: n4 }], [ct]: o4 }, { [cv]: [X, ar, aq, aD, aH], endpoint: bu, [ct]: n4 }, { [cv]: [as, Y, aq, aB], endpoint: { [cA]: "https://s3.dualstack.us-east-1.{partitionResult#dnsSuffix}", [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [as, Y, aq, aD, aE], [cu]: [{ endpoint: bv, [ct]: n4 }], [ct]: o4 }, { [cv]: [as, Y, aq, aD, aH], endpoint: bv, [ct]: n4 }, { [cv]: [as, ar, Z, ag, aB], endpoint: { [cA]: t4, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [as, ar, Z, ag, aD, aE], [cu]: [{ [cv]: cd, endpoint: bw, [ct]: n4 }, { endpoint: bw, [ct]: n4 }], [ct]: o4 }, { [cv]: [as, ar, Z, ag, aD, aH], endpoint: bw, [ct]: n4 }, { [cv]: [as, ar, aq, aB], endpoint: { [cA]: S, [cB]: aC, [cH]: al }, [ct]: n4 }, { [cv]: [as, ar, aq, aD, aE], [cu]: [{ [cv]: cd, endpoint: { [cA]: S, [cB]: aG, [cH]: al }, [ct]: n4 }, { endpoint: bx, [ct]: n4 }], [ct]: o4 }, { [cv]: [as, ar, aq, aD, aH], endpoint: bx, [ct]: n4 }], [ct]: o4 }, aR], [ct]: o4 }], [ct]: o4 }], [ct]: o4 }, { error: "A region must be set when sending requests to S3.", [ct]: f4 }] };
     exports2.ruleSet = _data4;
   }
 });
@@ -52026,7 +50202,7 @@ var require_package3 = __commonJS({
     module2.exports = {
       name: "@aws-sdk/client-s3",
       description: "AWS SDK for JavaScript S3 Client for Node.js, Browser and React Native",
-      version: "3.943.0",
+      version: "3.946.0",
       scripts: {
         build: "concurrently 'yarn:build:cjs' 'yarn:build:es' 'yarn:build:types'",
         "build:cjs": "node ../../scripts/compilation/inline client-s3",
@@ -52042,6 +50218,7 @@ var require_package3 = __commonJS({
         "test:browser:watch": "node ./test/browser-build/esbuild && yarn g:vitest watch -c vitest.config.browser.mts",
         "test:e2e": "yarn g:vitest run -c vitest.config.e2e.mts && yarn test:browser",
         "test:e2e:watch": "yarn g:vitest watch -c vitest.config.e2e.mts",
+        "test:index": "tsc --noEmit ./test/index-types.ts && node ./test/index-objects.spec.mjs",
         "test:integration": "yarn g:vitest run -c vitest.config.integ.mts",
         "test:integration:watch": "yarn g:vitest watch -c vitest.config.integ.mts",
         "test:watch": "yarn g:vitest watch"
@@ -52054,26 +50231,26 @@ var require_package3 = __commonJS({
         "@aws-crypto/sha1-browser": "5.2.0",
         "@aws-crypto/sha256-browser": "5.2.0",
         "@aws-crypto/sha256-js": "5.2.0",
-        "@aws-sdk/core": "3.943.0",
-        "@aws-sdk/credential-provider-node": "3.943.0",
+        "@aws-sdk/core": "3.946.0",
+        "@aws-sdk/credential-provider-node": "3.946.0",
         "@aws-sdk/middleware-bucket-endpoint": "3.936.0",
         "@aws-sdk/middleware-expect-continue": "3.936.0",
-        "@aws-sdk/middleware-flexible-checksums": "3.943.0",
+        "@aws-sdk/middleware-flexible-checksums": "3.946.0",
         "@aws-sdk/middleware-host-header": "3.936.0",
         "@aws-sdk/middleware-location-constraint": "3.936.0",
         "@aws-sdk/middleware-logger": "3.936.0",
         "@aws-sdk/middleware-recursion-detection": "3.936.0",
-        "@aws-sdk/middleware-sdk-s3": "3.943.0",
+        "@aws-sdk/middleware-sdk-s3": "3.946.0",
         "@aws-sdk/middleware-ssec": "3.936.0",
-        "@aws-sdk/middleware-user-agent": "3.943.0",
+        "@aws-sdk/middleware-user-agent": "3.946.0",
         "@aws-sdk/region-config-resolver": "3.936.0",
-        "@aws-sdk/signature-v4-multi-region": "3.943.0",
+        "@aws-sdk/signature-v4-multi-region": "3.946.0",
         "@aws-sdk/types": "3.936.0",
         "@aws-sdk/util-endpoints": "3.936.0",
         "@aws-sdk/util-user-agent-browser": "3.936.0",
-        "@aws-sdk/util-user-agent-node": "3.943.0",
+        "@aws-sdk/util-user-agent-node": "3.946.0",
         "@smithy/config-resolver": "^4.4.3",
-        "@smithy/core": "^3.18.5",
+        "@smithy/core": "^3.18.7",
         "@smithy/eventstream-serde-browser": "^4.2.5",
         "@smithy/eventstream-serde-config-resolver": "^4.3.5",
         "@smithy/eventstream-serde-node": "^4.2.5",
@@ -52084,21 +50261,21 @@ var require_package3 = __commonJS({
         "@smithy/invalid-dependency": "^4.2.5",
         "@smithy/md5-js": "^4.2.5",
         "@smithy/middleware-content-length": "^4.2.5",
-        "@smithy/middleware-endpoint": "^4.3.12",
-        "@smithy/middleware-retry": "^4.4.12",
+        "@smithy/middleware-endpoint": "^4.3.14",
+        "@smithy/middleware-retry": "^4.4.14",
         "@smithy/middleware-serde": "^4.2.6",
         "@smithy/middleware-stack": "^4.2.5",
         "@smithy/node-config-provider": "^4.3.5",
         "@smithy/node-http-handler": "^4.4.5",
         "@smithy/protocol-http": "^5.3.5",
-        "@smithy/smithy-client": "^4.9.8",
+        "@smithy/smithy-client": "^4.9.10",
         "@smithy/types": "^4.9.0",
         "@smithy/url-parser": "^4.2.5",
         "@smithy/util-base64": "^4.3.0",
         "@smithy/util-body-length-browser": "^4.2.0",
         "@smithy/util-body-length-node": "^4.2.1",
-        "@smithy/util-defaults-mode-browser": "^4.3.11",
-        "@smithy/util-defaults-mode-node": "^4.2.14",
+        "@smithy/util-defaults-mode-browser": "^4.3.13",
+        "@smithy/util-defaults-mode-node": "^4.2.16",
         "@smithy/util-endpoints": "^3.2.5",
         "@smithy/util-middleware": "^4.2.5",
         "@smithy/util-retry": "^4.2.5",
@@ -52108,7 +50285,7 @@ var require_package3 = __commonJS({
         tslib: "^2.6.2"
       },
       devDependencies: {
-        "@aws-sdk/signature-v4-crt": "3.943.0",
+        "@aws-sdk/signature-v4-crt": "3.946.0",
         "@tsconfig/node18": "18.2.4",
         "@types/node": "^18.19.69",
         concurrently: "7.0.0",
@@ -52823,7 +51000,7 @@ var init_package = __esm({
   "node_modules/@aws-sdk/nested-clients/package.json"() {
     package_default = {
       name: "@aws-sdk/nested-clients",
-      version: "3.943.0",
+      version: "3.946.0",
       description: "Nested clients for AWS SDK packages.",
       main: "./dist-cjs/index.js",
       module: "./dist-es/index.js",
@@ -52852,37 +51029,37 @@ var init_package = __esm({
       dependencies: {
         "@aws-crypto/sha256-browser": "5.2.0",
         "@aws-crypto/sha256-js": "5.2.0",
-        "@aws-sdk/core": "3.943.0",
+        "@aws-sdk/core": "3.946.0",
         "@aws-sdk/middleware-host-header": "3.936.0",
         "@aws-sdk/middleware-logger": "3.936.0",
         "@aws-sdk/middleware-recursion-detection": "3.936.0",
-        "@aws-sdk/middleware-user-agent": "3.943.0",
+        "@aws-sdk/middleware-user-agent": "3.946.0",
         "@aws-sdk/region-config-resolver": "3.936.0",
         "@aws-sdk/types": "3.936.0",
         "@aws-sdk/util-endpoints": "3.936.0",
         "@aws-sdk/util-user-agent-browser": "3.936.0",
-        "@aws-sdk/util-user-agent-node": "3.943.0",
+        "@aws-sdk/util-user-agent-node": "3.946.0",
         "@smithy/config-resolver": "^4.4.3",
-        "@smithy/core": "^3.18.5",
+        "@smithy/core": "^3.18.7",
         "@smithy/fetch-http-handler": "^5.3.6",
         "@smithy/hash-node": "^4.2.5",
         "@smithy/invalid-dependency": "^4.2.5",
         "@smithy/middleware-content-length": "^4.2.5",
-        "@smithy/middleware-endpoint": "^4.3.12",
-        "@smithy/middleware-retry": "^4.4.12",
+        "@smithy/middleware-endpoint": "^4.3.14",
+        "@smithy/middleware-retry": "^4.4.14",
         "@smithy/middleware-serde": "^4.2.6",
         "@smithy/middleware-stack": "^4.2.5",
         "@smithy/node-config-provider": "^4.3.5",
         "@smithy/node-http-handler": "^4.4.5",
         "@smithy/protocol-http": "^5.3.5",
-        "@smithy/smithy-client": "^4.9.8",
+        "@smithy/smithy-client": "^4.9.10",
         "@smithy/types": "^4.9.0",
         "@smithy/url-parser": "^4.2.5",
         "@smithy/util-base64": "^4.3.0",
         "@smithy/util-body-length-browser": "^4.2.0",
         "@smithy/util-body-length-node": "^4.2.1",
-        "@smithy/util-defaults-mode-browser": "^4.3.11",
-        "@smithy/util-defaults-mode-node": "^4.2.14",
+        "@smithy/util-defaults-mode-browser": "^4.3.13",
+        "@smithy/util-defaults-mode-node": "^4.2.16",
         "@smithy/util-endpoints": "^3.2.5",
         "@smithy/util-middleware": "^4.2.5",
         "@smithy/util-retry": "^4.2.5",
@@ -53016,7 +51193,7 @@ var require_dist_cjs51 = __commonJS({
     var utilBufferFrom = require_dist_cjs7();
     var utilUtf8 = require_dist_cjs8();
     var buffer = require("buffer");
-    var crypto3 = require("crypto");
+    var crypto4 = require("crypto");
     var Hash4 = class {
       algorithmIdentifier;
       secret;
@@ -53033,7 +51210,7 @@ var require_dist_cjs51 = __commonJS({
         return Promise.resolve(this.hash.digest());
       }
       reset() {
-        this.hash = this.secret ? crypto3.createHmac(this.algorithmIdentifier, castSourceData(this.secret)) : crypto3.createHash(this.algorithmIdentifier);
+        this.hash = this.secret ? crypto4.createHmac(this.algorithmIdentifier, castSourceData(this.secret)) : crypto4.createHash(this.algorithmIdentifier);
       }
     };
     function castSourceData(toCast, encoding) {
@@ -53079,6 +51256,79 @@ var require_dist_cjs52 = __commonJS({
       throw new Error(`Body Length computation failed for ${body}`);
     };
     exports2.calculateBodyLength = calculateBodyLength4;
+  }
+});
+
+// node_modules/@smithy/util-defaults-mode-node/dist-cjs/index.js
+var require_dist_cjs53 = __commonJS({
+  "node_modules/@smithy/util-defaults-mode-node/dist-cjs/index.js"(exports2) {
+    "use strict";
+    var configResolver = require_dist_cjs37();
+    var nodeConfigProvider = require_dist_cjs41();
+    var propertyProvider = require_dist_cjs17();
+    var AWS_EXECUTION_ENV = "AWS_EXECUTION_ENV";
+    var AWS_REGION_ENV = "AWS_REGION";
+    var AWS_DEFAULT_REGION_ENV = "AWS_DEFAULT_REGION";
+    var ENV_IMDS_DISABLED = "AWS_EC2_METADATA_DISABLED";
+    var DEFAULTS_MODE_OPTIONS = ["in-region", "cross-region", "mobile", "standard", "legacy"];
+    var IMDS_REGION_PATH = "/latest/meta-data/placement/region";
+    var AWS_DEFAULTS_MODE_ENV = "AWS_DEFAULTS_MODE";
+    var AWS_DEFAULTS_MODE_CONFIG = "defaults_mode";
+    var NODE_DEFAULTS_MODE_CONFIG_OPTIONS = {
+      environmentVariableSelector: (env2) => {
+        return env2[AWS_DEFAULTS_MODE_ENV];
+      },
+      configFileSelector: (profile) => {
+        return profile[AWS_DEFAULTS_MODE_CONFIG];
+      },
+      default: "legacy"
+    };
+    var resolveDefaultsModeConfig4 = ({ region = nodeConfigProvider.loadConfig(configResolver.NODE_REGION_CONFIG_OPTIONS), defaultsMode = nodeConfigProvider.loadConfig(NODE_DEFAULTS_MODE_CONFIG_OPTIONS) } = {}) => propertyProvider.memoize(async () => {
+      const mode = typeof defaultsMode === "function" ? await defaultsMode() : defaultsMode;
+      switch (mode?.toLowerCase()) {
+        case "auto":
+          return resolveNodeDefaultsModeAuto(region);
+        case "in-region":
+        case "cross-region":
+        case "mobile":
+        case "standard":
+        case "legacy":
+          return Promise.resolve(mode?.toLocaleLowerCase());
+        case void 0:
+          return Promise.resolve("legacy");
+        default:
+          throw new Error(`Invalid parameter for "defaultsMode", expect ${DEFAULTS_MODE_OPTIONS.join(", ")}, got ${mode}`);
+      }
+    });
+    var resolveNodeDefaultsModeAuto = async (clientRegion) => {
+      if (clientRegion) {
+        const resolvedRegion = typeof clientRegion === "function" ? await clientRegion() : clientRegion;
+        const inferredRegion = await inferPhysicalRegion();
+        if (!inferredRegion) {
+          return "standard";
+        }
+        if (resolvedRegion === inferredRegion) {
+          return "in-region";
+        } else {
+          return "cross-region";
+        }
+      }
+      return "standard";
+    };
+    var inferPhysicalRegion = async () => {
+      if (process.env[AWS_EXECUTION_ENV] && (process.env[AWS_REGION_ENV] || process.env[AWS_DEFAULT_REGION_ENV])) {
+        return process.env[AWS_REGION_ENV] ?? process.env[AWS_DEFAULT_REGION_ENV];
+      }
+      if (!process.env[ENV_IMDS_DISABLED]) {
+        try {
+          const { getInstanceMetadataEndpoint, httpRequest } = await Promise.resolve().then(() => __toESM(require_dist_cjs48()));
+          const endpoint = await getInstanceMetadataEndpoint();
+          return (await httpRequest({ ...endpoint, path: IMDS_REGION_PATH })).toString();
+        } catch (e4) {
+        }
+      }
+    };
+    exports2.resolveDefaultsModeConfig = resolveDefaultsModeConfig4;
   }
 });
 
@@ -53181,81 +51431,8 @@ var init_runtimeConfig_shared = __esm({
   }
 });
 
-// node_modules/@smithy/util-defaults-mode-node/dist-cjs/index.js
-var require_dist_cjs53 = __commonJS({
-  "node_modules/@smithy/util-defaults-mode-node/dist-cjs/index.js"(exports2) {
-    "use strict";
-    var configResolver = require_dist_cjs37();
-    var nodeConfigProvider = require_dist_cjs41();
-    var propertyProvider = require_dist_cjs17();
-    var AWS_EXECUTION_ENV = "AWS_EXECUTION_ENV";
-    var AWS_REGION_ENV = "AWS_REGION";
-    var AWS_DEFAULT_REGION_ENV = "AWS_DEFAULT_REGION";
-    var ENV_IMDS_DISABLED = "AWS_EC2_METADATA_DISABLED";
-    var DEFAULTS_MODE_OPTIONS = ["in-region", "cross-region", "mobile", "standard", "legacy"];
-    var IMDS_REGION_PATH = "/latest/meta-data/placement/region";
-    var AWS_DEFAULTS_MODE_ENV = "AWS_DEFAULTS_MODE";
-    var AWS_DEFAULTS_MODE_CONFIG = "defaults_mode";
-    var NODE_DEFAULTS_MODE_CONFIG_OPTIONS = {
-      environmentVariableSelector: (env2) => {
-        return env2[AWS_DEFAULTS_MODE_ENV];
-      },
-      configFileSelector: (profile) => {
-        return profile[AWS_DEFAULTS_MODE_CONFIG];
-      },
-      default: "legacy"
-    };
-    var resolveDefaultsModeConfig4 = ({ region = nodeConfigProvider.loadConfig(configResolver.NODE_REGION_CONFIG_OPTIONS), defaultsMode = nodeConfigProvider.loadConfig(NODE_DEFAULTS_MODE_CONFIG_OPTIONS) } = {}) => propertyProvider.memoize(async () => {
-      const mode = typeof defaultsMode === "function" ? await defaultsMode() : defaultsMode;
-      switch (mode?.toLowerCase()) {
-        case "auto":
-          return resolveNodeDefaultsModeAuto(region);
-        case "in-region":
-        case "cross-region":
-        case "mobile":
-        case "standard":
-        case "legacy":
-          return Promise.resolve(mode?.toLocaleLowerCase());
-        case void 0:
-          return Promise.resolve("legacy");
-        default:
-          throw new Error(`Invalid parameter for "defaultsMode", expect ${DEFAULTS_MODE_OPTIONS.join(", ")}, got ${mode}`);
-      }
-    });
-    var resolveNodeDefaultsModeAuto = async (clientRegion) => {
-      if (clientRegion) {
-        const resolvedRegion = typeof clientRegion === "function" ? await clientRegion() : clientRegion;
-        const inferredRegion = await inferPhysicalRegion();
-        if (!inferredRegion) {
-          return "standard";
-        }
-        if (resolvedRegion === inferredRegion) {
-          return "in-region";
-        } else {
-          return "cross-region";
-        }
-      }
-      return "standard";
-    };
-    var inferPhysicalRegion = async () => {
-      if (process.env[AWS_EXECUTION_ENV] && (process.env[AWS_REGION_ENV] || process.env[AWS_DEFAULT_REGION_ENV])) {
-        return process.env[AWS_REGION_ENV] ?? process.env[AWS_DEFAULT_REGION_ENV];
-      }
-      if (!process.env[ENV_IMDS_DISABLED]) {
-        try {
-          const { getInstanceMetadataEndpoint, httpRequest } = await Promise.resolve().then(() => __toESM(require_dist_cjs48()));
-          const endpoint = await getInstanceMetadataEndpoint();
-          return (await httpRequest({ ...endpoint, path: IMDS_REGION_PATH })).toString();
-        } catch (e4) {
-        }
-      }
-    };
-    exports2.resolveDefaultsModeConfig = resolveDefaultsModeConfig4;
-  }
-});
-
 // node_modules/@aws-sdk/nested-clients/dist-es/submodules/sso-oidc/runtimeConfig.js
-var import_util_user_agent_node, import_config_resolver, import_hash_node, import_middleware_retry, import_node_config_provider, import_node_http_handler, import_util_body_length_node, import_util_retry, import_smithy_client9, import_util_defaults_mode_node, import_smithy_client10, getRuntimeConfig2;
+var import_util_user_agent_node, import_config_resolver, import_hash_node, import_middleware_retry, import_node_config_provider, import_node_http_handler, import_smithy_client9, import_util_body_length_node, import_util_defaults_mode_node, import_util_retry, getRuntimeConfig2;
 var init_runtimeConfig = __esm({
   "node_modules/@aws-sdk/nested-clients/dist-es/submodules/sso-oidc/runtimeConfig.js"() {
     init_package();
@@ -53266,14 +51443,13 @@ var init_runtimeConfig = __esm({
     import_middleware_retry = __toESM(require_dist_cjs45());
     import_node_config_provider = __toESM(require_dist_cjs41());
     import_node_http_handler = __toESM(require_dist_cjs12());
+    import_smithy_client9 = __toESM(require_dist_cjs20());
     import_util_body_length_node = __toESM(require_dist_cjs52());
+    import_util_defaults_mode_node = __toESM(require_dist_cjs53());
     import_util_retry = __toESM(require_dist_cjs44());
     init_runtimeConfig_shared();
-    import_smithy_client9 = __toESM(require_dist_cjs20());
-    import_util_defaults_mode_node = __toESM(require_dist_cjs53());
-    import_smithy_client10 = __toESM(require_dist_cjs20());
     getRuntimeConfig2 = (config) => {
-      (0, import_smithy_client10.emitWarningIfUnsupportedVersion)(process.version);
+      (0, import_smithy_client9.emitWarningIfUnsupportedVersion)(process.version);
       const defaultsMode = (0, import_util_defaults_mode_node.resolveDefaultsModeConfig)(config);
       const defaultConfigProvider = () => defaultsMode().then(import_smithy_client9.loadConfigsForDefaultMode);
       const clientSharedValues = getRuntimeConfig(config);
@@ -53442,23 +51618,23 @@ var init_httpAuthExtensionConfiguration = __esm({
 });
 
 // node_modules/@aws-sdk/nested-clients/dist-es/submodules/sso-oidc/runtimeExtensions.js
-var import_region_config_resolver, import_protocol_http12, import_smithy_client11, resolveRuntimeExtensions;
+var import_region_config_resolver, import_protocol_http12, import_smithy_client10, resolveRuntimeExtensions;
 var init_runtimeExtensions = __esm({
   "node_modules/@aws-sdk/nested-clients/dist-es/submodules/sso-oidc/runtimeExtensions.js"() {
     import_region_config_resolver = __toESM(require_dist_cjs54());
     import_protocol_http12 = __toESM(require_dist_cjs2());
-    import_smithy_client11 = __toESM(require_dist_cjs20());
+    import_smithy_client10 = __toESM(require_dist_cjs20());
     init_httpAuthExtensionConfiguration();
     resolveRuntimeExtensions = (runtimeConfig, extensions) => {
-      const extensionConfiguration = Object.assign((0, import_region_config_resolver.getAwsRegionExtensionConfiguration)(runtimeConfig), (0, import_smithy_client11.getDefaultExtensionConfiguration)(runtimeConfig), (0, import_protocol_http12.getHttpHandlerExtensionConfiguration)(runtimeConfig), getHttpAuthExtensionConfiguration(runtimeConfig));
+      const extensionConfiguration = Object.assign((0, import_region_config_resolver.getAwsRegionExtensionConfiguration)(runtimeConfig), (0, import_smithy_client10.getDefaultExtensionConfiguration)(runtimeConfig), (0, import_protocol_http12.getHttpHandlerExtensionConfiguration)(runtimeConfig), getHttpAuthExtensionConfiguration(runtimeConfig));
       extensions.forEach((extension) => extension.configure(extensionConfiguration));
-      return Object.assign(runtimeConfig, (0, import_region_config_resolver.resolveAwsRegionExtensionConfiguration)(extensionConfiguration), (0, import_smithy_client11.resolveDefaultRuntimeConfig)(extensionConfiguration), (0, import_protocol_http12.resolveHttpHandlerRuntimeConfig)(extensionConfiguration), resolveHttpAuthRuntimeConfig(extensionConfiguration));
+      return Object.assign(runtimeConfig, (0, import_region_config_resolver.resolveAwsRegionExtensionConfiguration)(extensionConfiguration), (0, import_smithy_client10.resolveDefaultRuntimeConfig)(extensionConfiguration), (0, import_protocol_http12.resolveHttpHandlerRuntimeConfig)(extensionConfiguration), resolveHttpAuthRuntimeConfig(extensionConfiguration));
     };
   }
 });
 
 // node_modules/@aws-sdk/nested-clients/dist-es/submodules/sso-oidc/SSOOIDCClient.js
-var import_middleware_host_header, import_middleware_logger, import_middleware_recursion_detection, import_middleware_user_agent, import_config_resolver2, import_middleware_content_length, import_middleware_endpoint, import_middleware_retry2, import_smithy_client12, SSOOIDCClient;
+var import_middleware_host_header, import_middleware_logger, import_middleware_recursion_detection, import_middleware_user_agent, import_config_resolver2, import_middleware_content_length, import_middleware_endpoint, import_middleware_retry2, import_smithy_client11, SSOOIDCClient;
 var init_SSOOIDCClient = __esm({
   "node_modules/@aws-sdk/nested-clients/dist-es/submodules/sso-oidc/SSOOIDCClient.js"() {
     import_middleware_host_header = __toESM(require_dist_cjs26());
@@ -53471,12 +51647,12 @@ var init_SSOOIDCClient = __esm({
     import_middleware_content_length = __toESM(require_dist_cjs39());
     import_middleware_endpoint = __toESM(require_dist_cjs42());
     import_middleware_retry2 = __toESM(require_dist_cjs45());
-    import_smithy_client12 = __toESM(require_dist_cjs20());
+    import_smithy_client11 = __toESM(require_dist_cjs20());
     init_httpAuthSchemeProvider();
     init_EndpointParameters();
     init_runtimeConfig();
     init_runtimeExtensions();
-    SSOOIDCClient = class extends import_smithy_client12.Client {
+    SSOOIDCClient = class extends import_smithy_client11.Client {
       config;
       constructor(...[configuration]) {
         const _config_0 = getRuntimeConfig2(configuration || {});
@@ -53514,11 +51690,11 @@ var init_SSOOIDCClient = __esm({
 });
 
 // node_modules/@aws-sdk/nested-clients/dist-es/submodules/sso-oidc/models/SSOOIDCServiceException.js
-var import_smithy_client13, SSOOIDCServiceException;
+var import_smithy_client12, SSOOIDCServiceException;
 var init_SSOOIDCServiceException = __esm({
   "node_modules/@aws-sdk/nested-clients/dist-es/submodules/sso-oidc/models/SSOOIDCServiceException.js"() {
-    import_smithy_client13 = __toESM(require_dist_cjs20());
-    SSOOIDCServiceException = class _SSOOIDCServiceException extends import_smithy_client13.ServiceException {
+    import_smithy_client12 = __toESM(require_dist_cjs20());
+    SSOOIDCServiceException = class _SSOOIDCServiceException extends import_smithy_client12.ServiceException {
       constructor(options) {
         super(options);
         Object.setPrototypeOf(this, _SSOOIDCServiceException.prototype);
@@ -53772,10 +51948,7 @@ var init_schemas_0 = __esm({
       -3,
       n0,
       _ADE,
-      {
-        [_e]: _c,
-        [_hE]: 400
-      },
+      { [_e]: _c, [_hE]: 400 },
       [_e, _r, _ed],
       [0, 0, 0]
     ];
@@ -53784,10 +51957,7 @@ var init_schemas_0 = __esm({
       -3,
       n0,
       _APE,
-      {
-        [_e]: _c,
-        [_hE]: 400
-      },
+      { [_e]: _c, [_hE]: 400 },
       [_e, _ed],
       [0, 0]
     ];
@@ -53808,110 +51978,34 @@ var init_schemas_0 = __esm({
       [_aT, _tT, _eI, _rT, _iT],
       [[() => AccessToken, 0], 0, 1, [() => RefreshToken, 0], [() => IdToken, 0]]
     ];
-    ExpiredTokenException2 = [
-      -3,
-      n0,
-      _ETE,
-      {
-        [_e]: _c,
-        [_hE]: 400
-      },
-      [_e, _ed],
-      [0, 0]
-    ];
+    ExpiredTokenException2 = [-3, n0, _ETE, { [_e]: _c, [_hE]: 400 }, [_e, _ed], [0, 0]];
     TypeRegistry.for(n0).registerError(ExpiredTokenException2, ExpiredTokenException);
-    InternalServerException2 = [
-      -3,
-      n0,
-      _ISE,
-      {
-        [_e]: _se,
-        [_hE]: 500
-      },
-      [_e, _ed],
-      [0, 0]
-    ];
+    InternalServerException2 = [-3, n0, _ISE, { [_e]: _se, [_hE]: 500 }, [_e, _ed], [0, 0]];
     TypeRegistry.for(n0).registerError(InternalServerException2, InternalServerException);
-    InvalidClientException2 = [
-      -3,
-      n0,
-      _ICE,
-      {
-        [_e]: _c,
-        [_hE]: 401
-      },
-      [_e, _ed],
-      [0, 0]
-    ];
+    InvalidClientException2 = [-3, n0, _ICE, { [_e]: _c, [_hE]: 401 }, [_e, _ed], [0, 0]];
     TypeRegistry.for(n0).registerError(InvalidClientException2, InvalidClientException);
-    InvalidGrantException2 = [
-      -3,
-      n0,
-      _IGE,
-      {
-        [_e]: _c,
-        [_hE]: 400
-      },
-      [_e, _ed],
-      [0, 0]
-    ];
+    InvalidGrantException2 = [-3, n0, _IGE, { [_e]: _c, [_hE]: 400 }, [_e, _ed], [0, 0]];
     TypeRegistry.for(n0).registerError(InvalidGrantException2, InvalidGrantException);
     InvalidRequestException2 = [
       -3,
       n0,
       _IRE,
-      {
-        [_e]: _c,
-        [_hE]: 400
-      },
+      { [_e]: _c, [_hE]: 400 },
       [_e, _r, _ed],
       [0, 0, 0]
     ];
     TypeRegistry.for(n0).registerError(InvalidRequestException2, InvalidRequestException);
-    InvalidScopeException2 = [
-      -3,
-      n0,
-      _ISEn,
-      {
-        [_e]: _c,
-        [_hE]: 400
-      },
-      [_e, _ed],
-      [0, 0]
-    ];
+    InvalidScopeException2 = [-3, n0, _ISEn, { [_e]: _c, [_hE]: 400 }, [_e, _ed], [0, 0]];
     TypeRegistry.for(n0).registerError(InvalidScopeException2, InvalidScopeException);
-    SlowDownException2 = [
-      -3,
-      n0,
-      _SDE,
-      {
-        [_e]: _c,
-        [_hE]: 400
-      },
-      [_e, _ed],
-      [0, 0]
-    ];
+    SlowDownException2 = [-3, n0, _SDE, { [_e]: _c, [_hE]: 400 }, [_e, _ed], [0, 0]];
     TypeRegistry.for(n0).registerError(SlowDownException2, SlowDownException);
-    UnauthorizedClientException2 = [
-      -3,
-      n0,
-      _UCE,
-      {
-        [_e]: _c,
-        [_hE]: 400
-      },
-      [_e, _ed],
-      [0, 0]
-    ];
+    UnauthorizedClientException2 = [-3, n0, _UCE, { [_e]: _c, [_hE]: 400 }, [_e, _ed], [0, 0]];
     TypeRegistry.for(n0).registerError(UnauthorizedClientException2, UnauthorizedClientException);
     UnsupportedGrantTypeException2 = [
       -3,
       n0,
       _UGTE,
-      {
-        [_e]: _c,
-        [_hE]: 400
-      },
+      { [_e]: _c, [_hE]: 400 },
       [_e, _ed],
       [0, 0]
     ];
@@ -53923,9 +52017,7 @@ var init_schemas_0 = __esm({
       9,
       n0,
       _CT,
-      {
-        [_h]: ["POST", "/token", 200]
-      },
+      { [_h]: ["POST", "/token", 200] },
       () => CreateTokenRequest,
       () => CreateTokenResponse
     ];
@@ -53933,14 +52025,14 @@ var init_schemas_0 = __esm({
 });
 
 // node_modules/@aws-sdk/nested-clients/dist-es/submodules/sso-oidc/commands/CreateTokenCommand.js
-var import_middleware_endpoint2, import_smithy_client14, CreateTokenCommand;
+var import_middleware_endpoint2, import_smithy_client13, CreateTokenCommand;
 var init_CreateTokenCommand = __esm({
   "node_modules/@aws-sdk/nested-clients/dist-es/submodules/sso-oidc/commands/CreateTokenCommand.js"() {
     import_middleware_endpoint2 = __toESM(require_dist_cjs42());
-    import_smithy_client14 = __toESM(require_dist_cjs20());
+    import_smithy_client13 = __toESM(require_dist_cjs20());
     init_EndpointParameters();
     init_schemas_0();
-    CreateTokenCommand = class extends import_smithy_client14.Command.classBuilder().ep(commonParams).m(function(Command, cs, config, o4) {
+    CreateTokenCommand = class extends import_smithy_client13.Command.classBuilder().ep(commonParams).m(function(Command, cs, config, o4) {
       return [(0, import_middleware_endpoint2.getEndpointPlugin)(config, Command.getEndpointParameterInstructions())];
     }).s("AWSSSOOIDCService", "CreateToken", {}).n("SSOOIDCClient", "CreateTokenCommand").sc(CreateToken).build() {
     };
@@ -53948,10 +52040,10 @@ var init_CreateTokenCommand = __esm({
 });
 
 // node_modules/@aws-sdk/nested-clients/dist-es/submodules/sso-oidc/SSOOIDC.js
-var import_smithy_client15, commands, SSOOIDC;
+var import_smithy_client14, commands, SSOOIDC;
 var init_SSOOIDC = __esm({
   "node_modules/@aws-sdk/nested-clients/dist-es/submodules/sso-oidc/SSOOIDC.js"() {
-    import_smithy_client15 = __toESM(require_dist_cjs20());
+    import_smithy_client14 = __toESM(require_dist_cjs20());
     init_CreateTokenCommand();
     init_SSOOIDCClient();
     commands = {
@@ -53959,7 +52051,7 @@ var init_SSOOIDC = __esm({
     };
     SSOOIDC = class extends SSOOIDCClient {
     };
-    (0, import_smithy_client15.createAggregatedClient)(commands, SSOOIDC);
+    (0, import_smithy_client14.createAggregatedClient)(commands, SSOOIDC);
   }
 });
 
@@ -53989,7 +52081,7 @@ var init_enums = __esm({
 // node_modules/@aws-sdk/nested-clients/dist-es/submodules/sso-oidc/index.js
 var sso_oidc_exports = {};
 __export(sso_oidc_exports, {
-  $Command: () => import_smithy_client14.Command,
+  $Command: () => import_smithy_client13.Command,
   AccessDeniedException: () => AccessDeniedException,
   AccessDeniedExceptionReason: () => AccessDeniedExceptionReason,
   AuthorizationPendingException: () => AuthorizationPendingException,
@@ -54007,7 +52099,7 @@ __export(sso_oidc_exports, {
   SlowDownException: () => SlowDownException,
   UnauthorizedClientException: () => UnauthorizedClientException,
   UnsupportedGrantTypeException: () => UnsupportedGrantTypeException,
-  __Client: () => import_smithy_client12.Client
+  __Client: () => import_smithy_client11.Client
 });
 var init_sso_oidc = __esm({
   "node_modules/@aws-sdk/nested-clients/dist-es/submodules/sso-oidc/index.js"() {
@@ -54028,7 +52120,7 @@ var require_dist_cjs55 = __commonJS({
     var httpAuthSchemes = (init_httpAuthSchemes2(), __toCommonJS(httpAuthSchemes_exports));
     var propertyProvider = require_dist_cjs17();
     var sharedIniFileLoader = require_dist_cjs40();
-    var fs6 = require("fs");
+    var fs7 = require("fs");
     var fromEnvSigningName = ({ logger: logger3, signingName } = {}) => async () => {
       logger3?.debug?.("@aws-sdk/token-providers - fromEnvSigningName");
       if (!signingName) {
@@ -54074,11 +52166,11 @@ var require_dist_cjs55 = __commonJS({
         throw new propertyProvider.TokenProviderError(`Value not present for '${key}' in SSO Token${forRefresh ? ". Cannot refresh" : ""}. ${REFRESH_MESSAGE}`, false);
       }
     };
-    var { writeFile: writeFile3 } = fs6.promises;
+    var { writeFile: writeFile5 } = fs7.promises;
     var writeSSOTokenToFile = (id, ssoToken) => {
       const tokenFilepath = sharedIniFileLoader.getSSOTokenFilepath(id);
       const tokenString = JSON.stringify(ssoToken, null, 2);
-      return writeFile3(tokenFilepath, tokenString);
+      return writeFile5(tokenFilepath, tokenString);
     };
     var lastRefreshAttemptTime = /* @__PURE__ */ new Date(0);
     var fromSso = (_init = {}) => async ({ callerClientConfig } = {}) => {
@@ -54253,7 +52345,7 @@ var require_package4 = __commonJS({
     module2.exports = {
       name: "@aws-sdk/client-sso",
       description: "AWS SDK for JavaScript Sso Client for Node.js, Browser and React Native",
-      version: "3.943.0",
+      version: "3.946.0",
       scripts: {
         build: "concurrently 'yarn:build:cjs' 'yarn:build:es' 'yarn:build:types'",
         "build:cjs": "node ../../scripts/compilation/inline client-sso",
@@ -54263,7 +52355,8 @@ var require_package4 = __commonJS({
         "build:types:downlevel": "downlevel-dts dist-types dist-types/ts3.4",
         clean: "rimraf ./dist-* && rimraf *.tsbuildinfo",
         "extract:docs": "api-extractor run --local",
-        "generate:client": "node ../../scripts/generate-clients/single-service --solo sso"
+        "generate:client": "node ../../scripts/generate-clients/single-service --solo sso",
+        "test:index": "tsc --noEmit ./test/index-types.ts && node ./test/index-objects.spec.mjs"
       },
       main: "./dist-cjs/index.js",
       types: "./dist-types/index.d.ts",
@@ -54272,37 +52365,37 @@ var require_package4 = __commonJS({
       dependencies: {
         "@aws-crypto/sha256-browser": "5.2.0",
         "@aws-crypto/sha256-js": "5.2.0",
-        "@aws-sdk/core": "3.943.0",
+        "@aws-sdk/core": "3.946.0",
         "@aws-sdk/middleware-host-header": "3.936.0",
         "@aws-sdk/middleware-logger": "3.936.0",
         "@aws-sdk/middleware-recursion-detection": "3.936.0",
-        "@aws-sdk/middleware-user-agent": "3.943.0",
+        "@aws-sdk/middleware-user-agent": "3.946.0",
         "@aws-sdk/region-config-resolver": "3.936.0",
         "@aws-sdk/types": "3.936.0",
         "@aws-sdk/util-endpoints": "3.936.0",
         "@aws-sdk/util-user-agent-browser": "3.936.0",
-        "@aws-sdk/util-user-agent-node": "3.943.0",
+        "@aws-sdk/util-user-agent-node": "3.946.0",
         "@smithy/config-resolver": "^4.4.3",
-        "@smithy/core": "^3.18.5",
+        "@smithy/core": "^3.18.7",
         "@smithy/fetch-http-handler": "^5.3.6",
         "@smithy/hash-node": "^4.2.5",
         "@smithy/invalid-dependency": "^4.2.5",
         "@smithy/middleware-content-length": "^4.2.5",
-        "@smithy/middleware-endpoint": "^4.3.12",
-        "@smithy/middleware-retry": "^4.4.12",
+        "@smithy/middleware-endpoint": "^4.3.14",
+        "@smithy/middleware-retry": "^4.4.14",
         "@smithy/middleware-serde": "^4.2.6",
         "@smithy/middleware-stack": "^4.2.5",
         "@smithy/node-config-provider": "^4.3.5",
         "@smithy/node-http-handler": "^4.4.5",
         "@smithy/protocol-http": "^5.3.5",
-        "@smithy/smithy-client": "^4.9.8",
+        "@smithy/smithy-client": "^4.9.10",
         "@smithy/types": "^4.9.0",
         "@smithy/url-parser": "^4.2.5",
         "@smithy/util-base64": "^4.3.0",
         "@smithy/util-body-length-browser": "^4.2.0",
         "@smithy/util-body-length-node": "^4.2.1",
-        "@smithy/util-defaults-mode-browser": "^4.3.11",
-        "@smithy/util-defaults-mode-node": "^4.2.14",
+        "@smithy/util-defaults-mode-browser": "^4.3.13",
+        "@smithy/util-defaults-mode-node": "^4.2.16",
         "@smithy/util-endpoints": "^3.2.5",
         "@smithy/util-middleware": "^4.2.5",
         "@smithy/util-retry": "^4.2.5",
@@ -54473,14 +52566,13 @@ var require_runtimeConfig = __commonJS({
     var middleware_retry_1 = require_dist_cjs45();
     var node_config_provider_1 = require_dist_cjs41();
     var node_http_handler_1 = require_dist_cjs12();
+    var smithy_client_1 = require_dist_cjs20();
     var util_body_length_node_1 = require_dist_cjs52();
+    var util_defaults_mode_node_1 = require_dist_cjs53();
     var util_retry_1 = require_dist_cjs44();
     var runtimeConfig_shared_1 = require_runtimeConfig_shared();
-    var smithy_client_1 = require_dist_cjs20();
-    var util_defaults_mode_node_1 = require_dist_cjs53();
-    var smithy_client_2 = require_dist_cjs20();
     var getRuntimeConfig7 = (config) => {
-      (0, smithy_client_2.emitWarningIfUnsupportedVersion)(process.version);
+      (0, smithy_client_1.emitWarningIfUnsupportedVersion)(process.version);
       const defaultsMode = (0, util_defaults_mode_node_1.resolveDefaultsModeConfig)(config);
       const defaultConfigProvider = () => defaultsMode().then(smithy_client_1.loadConfigsForDefaultMode);
       const clientSharedValues = (0, runtimeConfig_shared_1.getRuntimeConfig)(config);
@@ -54739,38 +52831,13 @@ var require_dist_cjs56 = __commonJS({
       0,
       [_rN, _aI, _aT3],
       [
-        [
-          0,
-          {
-            [_hQ]: _rn
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _ai
-          }
-        ],
-        [
-          () => AccessTokenType,
-          {
-            [_hH]: _xasbt
-          }
-        ]
+        [0, { [_hQ]: _rn }],
+        [0, { [_hQ]: _ai }],
+        [() => AccessTokenType, { [_hH]: _xasbt }]
       ]
     ];
     var GetRoleCredentialsResponse = [3, n04, _GRCRe, 0, [_rC], [[() => RoleCredentials, 0]]];
-    var InvalidRequestException3 = [
-      -3,
-      n04,
-      _IRE2,
-      {
-        [_e4]: _c4,
-        [_hE4]: 400
-      },
-      [_m3],
-      [0]
-    ];
+    var InvalidRequestException3 = [-3, n04, _IRE2, { [_e4]: _c4, [_hE4]: 400 }, [_m3], [0]];
     schema.TypeRegistry.for(n04).registerError(InvalidRequestException3, InvalidRequestException$1);
     var ListAccountRolesRequest = [
       3,
@@ -54779,30 +52846,10 @@ var require_dist_cjs56 = __commonJS({
       0,
       [_nT, _mR, _aT3, _aI],
       [
-        [
-          0,
-          {
-            [_hQ]: _nt
-          }
-        ],
-        [
-          1,
-          {
-            [_hQ]: _mr
-          }
-        ],
-        [
-          () => AccessTokenType,
-          {
-            [_hH]: _xasbt
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _ai
-          }
-        ]
+        [0, { [_hQ]: _nt }],
+        [1, { [_hQ]: _mr }],
+        [() => AccessTokenType, { [_hH]: _xasbt }],
+        [0, { [_hQ]: _ai }]
       ]
     ];
     var ListAccountRolesResponse = [3, n04, _LARRi, 0, [_nT, _rL], [0, () => RoleListType]];
@@ -54813,53 +52860,14 @@ var require_dist_cjs56 = __commonJS({
       0,
       [_nT, _mR, _aT3],
       [
-        [
-          0,
-          {
-            [_hQ]: _nt
-          }
-        ],
-        [
-          1,
-          {
-            [_hQ]: _mr
-          }
-        ],
-        [
-          () => AccessTokenType,
-          {
-            [_hH]: _xasbt
-          }
-        ]
+        [0, { [_hQ]: _nt }],
+        [1, { [_hQ]: _mr }],
+        [() => AccessTokenType, { [_hH]: _xasbt }]
       ]
     ];
     var ListAccountsResponse = [3, n04, _LARi, 0, [_nT, _aL], [0, () => AccountListType]];
-    var LogoutRequest = [
-      3,
-      n04,
-      _LR,
-      0,
-      [_aT3],
-      [
-        [
-          () => AccessTokenType,
-          {
-            [_hH]: _xasbt
-          }
-        ]
-      ]
-    ];
-    var ResourceNotFoundException = [
-      -3,
-      n04,
-      _RNFE,
-      {
-        [_e4]: _c4,
-        [_hE4]: 404
-      },
-      [_m3],
-      [0]
-    ];
+    var LogoutRequest = [3, n04, _LR, 0, [_aT3], [[() => AccessTokenType, { [_hH]: _xasbt }]]];
+    var ResourceNotFoundException = [-3, n04, _RNFE, { [_e4]: _c4, [_hE4]: 404 }, [_m3], [0]];
     schema.TypeRegistry.for(n04).registerError(ResourceNotFoundException, ResourceNotFoundException$1);
     var RoleCredentials = [
       3,
@@ -54870,29 +52878,9 @@ var require_dist_cjs56 = __commonJS({
       [0, [() => SecretAccessKeyType, 0], [() => SessionTokenType, 0], 1]
     ];
     var RoleInfo = [3, n04, _RI, 0, [_rN, _aI], [0, 0]];
-    var TooManyRequestsException = [
-      -3,
-      n04,
-      _TMRE2,
-      {
-        [_e4]: _c4,
-        [_hE4]: 429
-      },
-      [_m3],
-      [0]
-    ];
+    var TooManyRequestsException = [-3, n04, _TMRE2, { [_e4]: _c4, [_hE4]: 429 }, [_m3], [0]];
     schema.TypeRegistry.for(n04).registerError(TooManyRequestsException, TooManyRequestsException$1);
-    var UnauthorizedException = [
-      -3,
-      n04,
-      _UE,
-      {
-        [_e4]: _c4,
-        [_hE4]: 401
-      },
-      [_m3],
-      [0]
-    ];
+    var UnauthorizedException = [-3, n04, _UE, { [_e4]: _c4, [_hE4]: 401 }, [_m3], [0]];
     schema.TypeRegistry.for(n04).registerError(UnauthorizedException, UnauthorizedException$1);
     var __Unit = "unit";
     var SSOServiceException = [-3, _s4, "SSOServiceException", 0, [], []];
@@ -54903,9 +52891,7 @@ var require_dist_cjs56 = __commonJS({
       9,
       n04,
       _GRC,
-      {
-        [_h3]: ["GET", "/federation/credentials", 200]
-      },
+      { [_h3]: ["GET", "/federation/credentials", 200] },
       () => GetRoleCredentialsRequest,
       () => GetRoleCredentialsResponse
     ];
@@ -54913,9 +52899,7 @@ var require_dist_cjs56 = __commonJS({
       9,
       n04,
       _LARis,
-      {
-        [_h3]: ["GET", "/assignment/roles", 200]
-      },
+      { [_h3]: ["GET", "/assignment/roles", 200] },
       () => ListAccountRolesRequest,
       () => ListAccountRolesResponse
     ];
@@ -54923,9 +52907,7 @@ var require_dist_cjs56 = __commonJS({
       9,
       n04,
       _LA,
-      {
-        [_h3]: ["GET", "/assignment/accounts", 200]
-      },
+      { [_h3]: ["GET", "/assignment/accounts", 200] },
       () => ListAccountsRequest,
       () => ListAccountsResponse
     ];
@@ -54933,9 +52915,7 @@ var require_dist_cjs56 = __commonJS({
       9,
       n04,
       _L,
-      {
-        [_h3]: ["POST", "/logout", 200]
-      },
+      { [_h3]: ["POST", "/logout", 200] },
       () => LogoutRequest,
       () => __Unit
     ];
@@ -55323,13 +53303,13 @@ var init_endpointResolver2 = __esm({
 });
 
 // node_modules/@aws-sdk/nested-clients/dist-es/submodules/signin/runtimeConfig.shared.js
-var import_smithy_client16, import_url_parser2, import_util_base649, import_util_utf89, getRuntimeConfig3;
+var import_smithy_client15, import_url_parser2, import_util_base649, import_util_utf89, getRuntimeConfig3;
 var init_runtimeConfig_shared2 = __esm({
   "node_modules/@aws-sdk/nested-clients/dist-es/submodules/signin/runtimeConfig.shared.js"() {
     init_dist_es2();
     init_protocols2();
     init_dist_es();
-    import_smithy_client16 = __toESM(require_dist_cjs20());
+    import_smithy_client15 = __toESM(require_dist_cjs20());
     import_url_parser2 = __toESM(require_dist_cjs34());
     import_util_base649 = __toESM(require_dist_cjs9());
     import_util_utf89 = __toESM(require_dist_cjs8());
@@ -55356,7 +53336,7 @@ var init_runtimeConfig_shared2 = __esm({
             signer: new NoAuthSigner()
           }
         ],
-        logger: config?.logger ?? new import_smithy_client16.NoOpLogger(),
+        logger: config?.logger ?? new import_smithy_client15.NoOpLogger(),
         protocol: config?.protocol ?? new AwsRestJsonProtocol({ defaultNamespace: "com.amazonaws.signin" }),
         serviceId: config?.serviceId ?? "Signin",
         urlParser: config?.urlParser ?? import_url_parser2.parseUrl,
@@ -55368,7 +53348,7 @@ var init_runtimeConfig_shared2 = __esm({
 });
 
 // node_modules/@aws-sdk/nested-clients/dist-es/submodules/signin/runtimeConfig.js
-var import_util_user_agent_node2, import_config_resolver3, import_hash_node2, import_middleware_retry3, import_node_config_provider2, import_node_http_handler2, import_util_body_length_node2, import_util_retry2, import_smithy_client17, import_util_defaults_mode_node2, import_smithy_client18, getRuntimeConfig4;
+var import_util_user_agent_node2, import_config_resolver3, import_hash_node2, import_middleware_retry3, import_node_config_provider2, import_node_http_handler2, import_smithy_client16, import_util_body_length_node2, import_util_defaults_mode_node2, import_util_retry2, getRuntimeConfig4;
 var init_runtimeConfig2 = __esm({
   "node_modules/@aws-sdk/nested-clients/dist-es/submodules/signin/runtimeConfig.js"() {
     init_package();
@@ -55379,16 +53359,15 @@ var init_runtimeConfig2 = __esm({
     import_middleware_retry3 = __toESM(require_dist_cjs45());
     import_node_config_provider2 = __toESM(require_dist_cjs41());
     import_node_http_handler2 = __toESM(require_dist_cjs12());
+    import_smithy_client16 = __toESM(require_dist_cjs20());
     import_util_body_length_node2 = __toESM(require_dist_cjs52());
+    import_util_defaults_mode_node2 = __toESM(require_dist_cjs53());
     import_util_retry2 = __toESM(require_dist_cjs44());
     init_runtimeConfig_shared2();
-    import_smithy_client17 = __toESM(require_dist_cjs20());
-    import_util_defaults_mode_node2 = __toESM(require_dist_cjs53());
-    import_smithy_client18 = __toESM(require_dist_cjs20());
     getRuntimeConfig4 = (config) => {
-      (0, import_smithy_client18.emitWarningIfUnsupportedVersion)(process.version);
+      (0, import_smithy_client16.emitWarningIfUnsupportedVersion)(process.version);
       const defaultsMode = (0, import_util_defaults_mode_node2.resolveDefaultsModeConfig)(config);
-      const defaultConfigProvider = () => defaultsMode().then(import_smithy_client17.loadConfigsForDefaultMode);
+      const defaultConfigProvider = () => defaultsMode().then(import_smithy_client16.loadConfigsForDefaultMode);
       const clientSharedValues = getRuntimeConfig3(config);
       emitWarningIfUnsupportedVersion(process.version);
       const loaderConfig = {
@@ -55465,23 +53444,23 @@ var init_httpAuthExtensionConfiguration2 = __esm({
 });
 
 // node_modules/@aws-sdk/nested-clients/dist-es/submodules/signin/runtimeExtensions.js
-var import_region_config_resolver2, import_protocol_http13, import_smithy_client19, resolveRuntimeExtensions2;
+var import_region_config_resolver2, import_protocol_http13, import_smithy_client17, resolveRuntimeExtensions2;
 var init_runtimeExtensions2 = __esm({
   "node_modules/@aws-sdk/nested-clients/dist-es/submodules/signin/runtimeExtensions.js"() {
     import_region_config_resolver2 = __toESM(require_dist_cjs54());
     import_protocol_http13 = __toESM(require_dist_cjs2());
-    import_smithy_client19 = __toESM(require_dist_cjs20());
+    import_smithy_client17 = __toESM(require_dist_cjs20());
     init_httpAuthExtensionConfiguration2();
     resolveRuntimeExtensions2 = (runtimeConfig, extensions) => {
-      const extensionConfiguration = Object.assign((0, import_region_config_resolver2.getAwsRegionExtensionConfiguration)(runtimeConfig), (0, import_smithy_client19.getDefaultExtensionConfiguration)(runtimeConfig), (0, import_protocol_http13.getHttpHandlerExtensionConfiguration)(runtimeConfig), getHttpAuthExtensionConfiguration2(runtimeConfig));
+      const extensionConfiguration = Object.assign((0, import_region_config_resolver2.getAwsRegionExtensionConfiguration)(runtimeConfig), (0, import_smithy_client17.getDefaultExtensionConfiguration)(runtimeConfig), (0, import_protocol_http13.getHttpHandlerExtensionConfiguration)(runtimeConfig), getHttpAuthExtensionConfiguration2(runtimeConfig));
       extensions.forEach((extension) => extension.configure(extensionConfiguration));
-      return Object.assign(runtimeConfig, (0, import_region_config_resolver2.resolveAwsRegionExtensionConfiguration)(extensionConfiguration), (0, import_smithy_client19.resolveDefaultRuntimeConfig)(extensionConfiguration), (0, import_protocol_http13.resolveHttpHandlerRuntimeConfig)(extensionConfiguration), resolveHttpAuthRuntimeConfig2(extensionConfiguration));
+      return Object.assign(runtimeConfig, (0, import_region_config_resolver2.resolveAwsRegionExtensionConfiguration)(extensionConfiguration), (0, import_smithy_client17.resolveDefaultRuntimeConfig)(extensionConfiguration), (0, import_protocol_http13.resolveHttpHandlerRuntimeConfig)(extensionConfiguration), resolveHttpAuthRuntimeConfig2(extensionConfiguration));
     };
   }
 });
 
 // node_modules/@aws-sdk/nested-clients/dist-es/submodules/signin/SigninClient.js
-var import_middleware_host_header2, import_middleware_logger2, import_middleware_recursion_detection2, import_middleware_user_agent2, import_config_resolver4, import_middleware_content_length2, import_middleware_endpoint3, import_middleware_retry4, import_smithy_client20, SigninClient;
+var import_middleware_host_header2, import_middleware_logger2, import_middleware_recursion_detection2, import_middleware_user_agent2, import_config_resolver4, import_middleware_content_length2, import_middleware_endpoint3, import_middleware_retry4, import_smithy_client18, SigninClient;
 var init_SigninClient = __esm({
   "node_modules/@aws-sdk/nested-clients/dist-es/submodules/signin/SigninClient.js"() {
     import_middleware_host_header2 = __toESM(require_dist_cjs26());
@@ -55494,12 +53473,12 @@ var init_SigninClient = __esm({
     import_middleware_content_length2 = __toESM(require_dist_cjs39());
     import_middleware_endpoint3 = __toESM(require_dist_cjs42());
     import_middleware_retry4 = __toESM(require_dist_cjs45());
-    import_smithy_client20 = __toESM(require_dist_cjs20());
+    import_smithy_client18 = __toESM(require_dist_cjs20());
     init_httpAuthSchemeProvider2();
     init_EndpointParameters2();
     init_runtimeConfig2();
     init_runtimeExtensions2();
-    SigninClient = class extends import_smithy_client20.Client {
+    SigninClient = class extends import_smithy_client18.Client {
       config;
       constructor(...[configuration]) {
         const _config_0 = getRuntimeConfig4(configuration || {});
@@ -55537,11 +53516,11 @@ var init_SigninClient = __esm({
 });
 
 // node_modules/@aws-sdk/nested-clients/dist-es/submodules/signin/models/SigninServiceException.js
-var import_smithy_client21, SigninServiceException;
+var import_smithy_client19, SigninServiceException;
 var init_SigninServiceException = __esm({
   "node_modules/@aws-sdk/nested-clients/dist-es/submodules/signin/models/SigninServiceException.js"() {
-    import_smithy_client21 = __toESM(require_dist_cjs20());
-    SigninServiceException = class _SigninServiceException extends import_smithy_client21.ServiceException {
+    import_smithy_client19 = __toESM(require_dist_cjs20());
+    SigninServiceException = class _SigninServiceException extends import_smithy_client19.ServiceException {
       constructor(options) {
         super(options);
         Object.setPrototypeOf(this, _SigninServiceException.prototype);
@@ -55657,16 +53636,7 @@ var init_schemas_02 = __esm({
     _tT2 = "tokenType";
     n02 = "com.amazonaws.signin";
     RefreshToken2 = [0, n02, _RT2, 8, 0];
-    AccessDeniedException4 = [
-      -3,
-      n02,
-      _ADE2,
-      {
-        [_e2]: _c2
-      },
-      [_e2, _m],
-      [0, 0]
-    ];
+    AccessDeniedException4 = [-3, n02, _ADE2, { [_e2]: _c2 }, [_e2, _m], [0, 0]];
     TypeRegistry.for(n02).registerError(AccessDeniedException4, AccessDeniedException3);
     AccessToken2 = [
       3,
@@ -55675,24 +53645,9 @@ var init_schemas_02 = __esm({
       8,
       [_aKI, _sAK, _sT],
       [
-        [
-          0,
-          {
-            [_jN]: _aKI
-          }
-        ],
-        [
-          0,
-          {
-            [_jN]: _sAK
-          }
-        ],
-        [
-          0,
-          {
-            [_jN]: _sT
-          }
-        ]
+        [0, { [_jN]: _aKI }],
+        [0, { [_jN]: _sAK }],
+        [0, { [_jN]: _sT }]
       ]
     ];
     CreateOAuth2TokenRequest = [
@@ -55710,37 +53665,12 @@ var init_schemas_02 = __esm({
       0,
       [_cI2, _gT2, _co2, _rU2, _cV2, _rT2],
       [
-        [
-          0,
-          {
-            [_jN]: _cI2
-          }
-        ],
-        [
-          0,
-          {
-            [_jN]: _gT2
-          }
-        ],
+        [0, { [_jN]: _cI2 }],
+        [0, { [_jN]: _gT2 }],
         0,
-        [
-          0,
-          {
-            [_jN]: _rU2
-          }
-        ],
-        [
-          0,
-          {
-            [_jN]: _cV2
-          }
-        ],
-        [
-          () => RefreshToken2,
-          {
-            [_jN]: _rT2
-          }
-        ]
+        [0, { [_jN]: _rU2 }],
+        [0, { [_jN]: _cV2 }],
+        [() => RefreshToken2, { [_jN]: _rT2 }]
       ]
     ];
     CreateOAuth2TokenResponse = [
@@ -55758,73 +53688,18 @@ var init_schemas_02 = __esm({
       0,
       [_aT2, _tT2, _eI2, _rT2, _iT2],
       [
-        [
-          () => AccessToken2,
-          {
-            [_jN]: _aT2
-          }
-        ],
-        [
-          0,
-          {
-            [_jN]: _tT2
-          }
-        ],
-        [
-          1,
-          {
-            [_jN]: _eI2
-          }
-        ],
-        [
-          () => RefreshToken2,
-          {
-            [_jN]: _rT2
-          }
-        ],
-        [
-          0,
-          {
-            [_jN]: _iT2
-          }
-        ]
+        [() => AccessToken2, { [_jN]: _aT2 }],
+        [0, { [_jN]: _tT2 }],
+        [1, { [_jN]: _eI2 }],
+        [() => RefreshToken2, { [_jN]: _rT2 }],
+        [0, { [_jN]: _iT2 }]
       ]
     ];
-    InternalServerException4 = [
-      -3,
-      n02,
-      _ISE2,
-      {
-        [_e2]: _s2,
-        [_hE2]: 500
-      },
-      [_e2, _m],
-      [0, 0]
-    ];
+    InternalServerException4 = [-3, n02, _ISE2, { [_e2]: _s2, [_hE2]: 500 }, [_e2, _m], [0, 0]];
     TypeRegistry.for(n02).registerError(InternalServerException4, InternalServerException3);
-    TooManyRequestsError2 = [
-      -3,
-      n02,
-      _TMRE,
-      {
-        [_e2]: _c2,
-        [_hE2]: 429
-      },
-      [_e2, _m],
-      [0, 0]
-    ];
+    TooManyRequestsError2 = [-3, n02, _TMRE, { [_e2]: _c2, [_hE2]: 429 }, [_e2, _m], [0, 0]];
     TypeRegistry.for(n02).registerError(TooManyRequestsError2, TooManyRequestsError);
-    ValidationException2 = [
-      -3,
-      n02,
-      _VE,
-      {
-        [_e2]: _c2,
-        [_hE2]: 400
-      },
-      [_e2, _m],
-      [0, 0]
-    ];
+    ValidationException2 = [-3, n02, _VE, { [_e2]: _c2, [_hE2]: 400 }, [_e2, _m], [0, 0]];
     TypeRegistry.for(n02).registerError(ValidationException2, ValidationException);
     SigninServiceException2 = [-3, _sm2, "SigninServiceException", 0, [], []];
     TypeRegistry.for(_sm2).registerError(SigninServiceException2, SigninServiceException);
@@ -55832,9 +53707,7 @@ var init_schemas_02 = __esm({
       9,
       n02,
       _COAT,
-      {
-        [_h2]: ["POST", "/v1/token", 200]
-      },
+      { [_h2]: ["POST", "/v1/token", 200] },
       () => CreateOAuth2TokenRequest,
       () => CreateOAuth2TokenResponse
     ];
@@ -55842,14 +53715,14 @@ var init_schemas_02 = __esm({
 });
 
 // node_modules/@aws-sdk/nested-clients/dist-es/submodules/signin/commands/CreateOAuth2TokenCommand.js
-var import_middleware_endpoint4, import_smithy_client22, CreateOAuth2TokenCommand;
+var import_middleware_endpoint4, import_smithy_client20, CreateOAuth2TokenCommand;
 var init_CreateOAuth2TokenCommand = __esm({
   "node_modules/@aws-sdk/nested-clients/dist-es/submodules/signin/commands/CreateOAuth2TokenCommand.js"() {
     import_middleware_endpoint4 = __toESM(require_dist_cjs42());
-    import_smithy_client22 = __toESM(require_dist_cjs20());
+    import_smithy_client20 = __toESM(require_dist_cjs20());
     init_EndpointParameters2();
     init_schemas_02();
-    CreateOAuth2TokenCommand = class extends import_smithy_client22.Command.classBuilder().ep(commonParams2).m(function(Command, cs, config, o4) {
+    CreateOAuth2TokenCommand = class extends import_smithy_client20.Command.classBuilder().ep(commonParams2).m(function(Command, cs, config, o4) {
       return [(0, import_middleware_endpoint4.getEndpointPlugin)(config, Command.getEndpointParameterInstructions())];
     }).s("Signin", "CreateOAuth2Token", {}).n("SigninClient", "CreateOAuth2TokenCommand").sc(CreateOAuth2Token).build() {
     };
@@ -55857,10 +53730,10 @@ var init_CreateOAuth2TokenCommand = __esm({
 });
 
 // node_modules/@aws-sdk/nested-clients/dist-es/submodules/signin/Signin.js
-var import_smithy_client23, commands2, Signin;
+var import_smithy_client21, commands2, Signin;
 var init_Signin = __esm({
   "node_modules/@aws-sdk/nested-clients/dist-es/submodules/signin/Signin.js"() {
-    import_smithy_client23 = __toESM(require_dist_cjs20());
+    import_smithy_client21 = __toESM(require_dist_cjs20());
     init_CreateOAuth2TokenCommand();
     init_SigninClient();
     commands2 = {
@@ -55868,7 +53741,7 @@ var init_Signin = __esm({
     };
     Signin = class extends SigninClient {
     };
-    (0, import_smithy_client23.createAggregatedClient)(commands2, Signin);
+    (0, import_smithy_client21.createAggregatedClient)(commands2, Signin);
   }
 });
 
@@ -55897,7 +53770,7 @@ var init_enums2 = __esm({
 // node_modules/@aws-sdk/nested-clients/dist-es/submodules/signin/index.js
 var signin_exports = {};
 __export(signin_exports, {
-  $Command: () => import_smithy_client22.Command,
+  $Command: () => import_smithy_client20.Command,
   AccessDeniedException: () => AccessDeniedException3,
   CreateOAuth2TokenCommand: () => CreateOAuth2TokenCommand,
   InternalServerException: () => InternalServerException3,
@@ -55907,7 +53780,7 @@ __export(signin_exports, {
   SigninServiceException: () => SigninServiceException,
   TooManyRequestsError: () => TooManyRequestsError,
   ValidationException: () => ValidationException,
-  __Client: () => import_smithy_client20.Client
+  __Client: () => import_smithy_client18.Client
 });
 var init_signin = __esm({
   "node_modules/@aws-sdk/nested-clients/dist-es/submodules/signin/index.js"() {
@@ -56349,13 +54222,13 @@ var init_endpointResolver3 = __esm({
 });
 
 // node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/runtimeConfig.shared.js
-var import_smithy_client24, import_url_parser3, import_util_base6410, import_util_utf810, getRuntimeConfig5;
+var import_smithy_client22, import_url_parser3, import_util_base6410, import_util_utf810, getRuntimeConfig5;
 var init_runtimeConfig_shared3 = __esm({
   "node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/runtimeConfig.shared.js"() {
     init_dist_es2();
     init_protocols2();
     init_dist_es();
-    import_smithy_client24 = __toESM(require_dist_cjs20());
+    import_smithy_client22 = __toESM(require_dist_cjs20());
     import_url_parser3 = __toESM(require_dist_cjs34());
     import_util_base6410 = __toESM(require_dist_cjs9());
     import_util_utf810 = __toESM(require_dist_cjs8());
@@ -56382,7 +54255,7 @@ var init_runtimeConfig_shared3 = __esm({
             signer: new NoAuthSigner()
           }
         ],
-        logger: config?.logger ?? new import_smithy_client24.NoOpLogger(),
+        logger: config?.logger ?? new import_smithy_client22.NoOpLogger(),
         protocol: config?.protocol ?? new AwsQueryProtocol({
           defaultNamespace: "com.amazonaws.sts",
           xmlNamespace: "https://sts.amazonaws.com/doc/2011-06-15/",
@@ -56398,7 +54271,7 @@ var init_runtimeConfig_shared3 = __esm({
 });
 
 // node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/runtimeConfig.js
-var import_util_user_agent_node3, import_config_resolver5, import_hash_node3, import_middleware_retry5, import_node_config_provider3, import_node_http_handler3, import_util_body_length_node3, import_util_retry3, import_smithy_client25, import_util_defaults_mode_node3, import_smithy_client26, getRuntimeConfig6;
+var import_util_user_agent_node3, import_config_resolver5, import_hash_node3, import_middleware_retry5, import_node_config_provider3, import_node_http_handler3, import_smithy_client23, import_util_body_length_node3, import_util_defaults_mode_node3, import_util_retry3, getRuntimeConfig6;
 var init_runtimeConfig3 = __esm({
   "node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/runtimeConfig.js"() {
     init_package();
@@ -56410,16 +54283,15 @@ var init_runtimeConfig3 = __esm({
     import_middleware_retry5 = __toESM(require_dist_cjs45());
     import_node_config_provider3 = __toESM(require_dist_cjs41());
     import_node_http_handler3 = __toESM(require_dist_cjs12());
+    import_smithy_client23 = __toESM(require_dist_cjs20());
     import_util_body_length_node3 = __toESM(require_dist_cjs52());
+    import_util_defaults_mode_node3 = __toESM(require_dist_cjs53());
     import_util_retry3 = __toESM(require_dist_cjs44());
     init_runtimeConfig_shared3();
-    import_smithy_client25 = __toESM(require_dist_cjs20());
-    import_util_defaults_mode_node3 = __toESM(require_dist_cjs53());
-    import_smithy_client26 = __toESM(require_dist_cjs20());
     getRuntimeConfig6 = (config) => {
-      (0, import_smithy_client26.emitWarningIfUnsupportedVersion)(process.version);
+      (0, import_smithy_client23.emitWarningIfUnsupportedVersion)(process.version);
       const defaultsMode = (0, import_util_defaults_mode_node3.resolveDefaultsModeConfig)(config);
-      const defaultConfigProvider = () => defaultsMode().then(import_smithy_client25.loadConfigsForDefaultMode);
+      const defaultConfigProvider = () => defaultsMode().then(import_smithy_client23.loadConfigsForDefaultMode);
       const clientSharedValues = getRuntimeConfig5(config);
       emitWarningIfUnsupportedVersion(process.version);
       const loaderConfig = {
@@ -56508,23 +54380,23 @@ var init_httpAuthExtensionConfiguration3 = __esm({
 });
 
 // node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/runtimeExtensions.js
-var import_region_config_resolver3, import_protocol_http14, import_smithy_client27, resolveRuntimeExtensions3;
+var import_region_config_resolver3, import_protocol_http14, import_smithy_client24, resolveRuntimeExtensions3;
 var init_runtimeExtensions3 = __esm({
   "node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/runtimeExtensions.js"() {
     import_region_config_resolver3 = __toESM(require_dist_cjs54());
     import_protocol_http14 = __toESM(require_dist_cjs2());
-    import_smithy_client27 = __toESM(require_dist_cjs20());
+    import_smithy_client24 = __toESM(require_dist_cjs20());
     init_httpAuthExtensionConfiguration3();
     resolveRuntimeExtensions3 = (runtimeConfig, extensions) => {
-      const extensionConfiguration = Object.assign((0, import_region_config_resolver3.getAwsRegionExtensionConfiguration)(runtimeConfig), (0, import_smithy_client27.getDefaultExtensionConfiguration)(runtimeConfig), (0, import_protocol_http14.getHttpHandlerExtensionConfiguration)(runtimeConfig), getHttpAuthExtensionConfiguration3(runtimeConfig));
+      const extensionConfiguration = Object.assign((0, import_region_config_resolver3.getAwsRegionExtensionConfiguration)(runtimeConfig), (0, import_smithy_client24.getDefaultExtensionConfiguration)(runtimeConfig), (0, import_protocol_http14.getHttpHandlerExtensionConfiguration)(runtimeConfig), getHttpAuthExtensionConfiguration3(runtimeConfig));
       extensions.forEach((extension) => extension.configure(extensionConfiguration));
-      return Object.assign(runtimeConfig, (0, import_region_config_resolver3.resolveAwsRegionExtensionConfiguration)(extensionConfiguration), (0, import_smithy_client27.resolveDefaultRuntimeConfig)(extensionConfiguration), (0, import_protocol_http14.resolveHttpHandlerRuntimeConfig)(extensionConfiguration), resolveHttpAuthRuntimeConfig3(extensionConfiguration));
+      return Object.assign(runtimeConfig, (0, import_region_config_resolver3.resolveAwsRegionExtensionConfiguration)(extensionConfiguration), (0, import_smithy_client24.resolveDefaultRuntimeConfig)(extensionConfiguration), (0, import_protocol_http14.resolveHttpHandlerRuntimeConfig)(extensionConfiguration), resolveHttpAuthRuntimeConfig3(extensionConfiguration));
     };
   }
 });
 
 // node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/STSClient.js
-var import_middleware_host_header3, import_middleware_logger3, import_middleware_recursion_detection3, import_middleware_user_agent3, import_config_resolver6, import_middleware_content_length3, import_middleware_endpoint5, import_middleware_retry6, import_smithy_client28, STSClient;
+var import_middleware_host_header3, import_middleware_logger3, import_middleware_recursion_detection3, import_middleware_user_agent3, import_config_resolver6, import_middleware_content_length3, import_middleware_endpoint5, import_middleware_retry6, import_smithy_client25, STSClient;
 var init_STSClient = __esm({
   "node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/STSClient.js"() {
     import_middleware_host_header3 = __toESM(require_dist_cjs26());
@@ -56537,12 +54409,12 @@ var init_STSClient = __esm({
     import_middleware_content_length3 = __toESM(require_dist_cjs39());
     import_middleware_endpoint5 = __toESM(require_dist_cjs42());
     import_middleware_retry6 = __toESM(require_dist_cjs45());
-    import_smithy_client28 = __toESM(require_dist_cjs20());
+    import_smithy_client25 = __toESM(require_dist_cjs20());
     init_httpAuthSchemeProvider3();
     init_EndpointParameters3();
     init_runtimeConfig3();
     init_runtimeExtensions3();
-    STSClient = class extends import_smithy_client28.Client {
+    STSClient = class extends import_smithy_client25.Client {
       config;
       constructor(...[configuration]) {
         const _config_0 = getRuntimeConfig6(configuration || {});
@@ -56580,11 +54452,11 @@ var init_STSClient = __esm({
 });
 
 // node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/models/STSServiceException.js
-var import_smithy_client29, STSServiceException;
+var import_smithy_client26, STSServiceException;
 var init_STSServiceException = __esm({
   "node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/models/STSServiceException.js"() {
-    import_smithy_client29 = __toESM(require_dist_cjs20());
-    STSServiceException = class _STSServiceException extends import_smithy_client29.ServiceException {
+    import_smithy_client26 = __toESM(require_dist_cjs20());
+    STSServiceException = class _STSServiceException extends import_smithy_client26.ServiceException {
       constructor(options) {
         super(options);
         Object.setPrototypeOf(this, _STSServiceException.prototype);
@@ -56798,11 +54670,7 @@ var init_schemas_03 = __esm({
       -3,
       n03,
       _ETE2,
-      {
-        [_e3]: _c3,
-        [_hE3]: 400,
-        [_aQE]: [`ExpiredTokenException`, 400]
-      },
+      { [_e3]: _c3, [_hE3]: 400, [_aQE]: [`ExpiredTokenException`, 400] },
       [_m2],
       [0]
     ];
@@ -56811,11 +54679,7 @@ var init_schemas_03 = __esm({
       -3,
       n03,
       _IDPCEE,
-      {
-        [_e3]: _c3,
-        [_hE3]: 400,
-        [_aQE]: [`IDPCommunicationError`, 400]
-      },
+      { [_e3]: _c3, [_hE3]: 400, [_aQE]: [`IDPCommunicationError`, 400] },
       [_m2],
       [0]
     ];
@@ -56824,11 +54688,7 @@ var init_schemas_03 = __esm({
       -3,
       n03,
       _IDPRCE,
-      {
-        [_e3]: _c3,
-        [_hE3]: 403,
-        [_aQE]: [`IDPRejectedClaim`, 403]
-      },
+      { [_e3]: _c3, [_hE3]: 403, [_aQE]: [`IDPRejectedClaim`, 403] },
       [_m2],
       [0]
     ];
@@ -56837,11 +54697,7 @@ var init_schemas_03 = __esm({
       -3,
       n03,
       _IITE,
-      {
-        [_e3]: _c3,
-        [_hE3]: 400,
-        [_aQE]: [`InvalidIdentityToken`, 400]
-      },
+      { [_e3]: _c3, [_hE3]: 400, [_aQE]: [`InvalidIdentityToken`, 400] },
       [_m2],
       [0]
     ];
@@ -56850,11 +54706,7 @@ var init_schemas_03 = __esm({
       -3,
       n03,
       _MPDE,
-      {
-        [_e3]: _c3,
-        [_hE3]: 400,
-        [_aQE]: [`MalformedPolicyDocument`, 400]
-      },
+      { [_e3]: _c3, [_hE3]: 400, [_aQE]: [`MalformedPolicyDocument`, 400] },
       [_m2],
       [0]
     ];
@@ -56863,11 +54715,7 @@ var init_schemas_03 = __esm({
       -3,
       n03,
       _PPTLE,
-      {
-        [_e3]: _c3,
-        [_hE3]: 400,
-        [_aQE]: [`PackedPolicyTooLarge`, 400]
-      },
+      { [_e3]: _c3, [_hE3]: 400, [_aQE]: [`PackedPolicyTooLarge`, 400] },
       [_m2],
       [0]
     ];
@@ -56878,11 +54726,7 @@ var init_schemas_03 = __esm({
       -3,
       n03,
       _RDE,
-      {
-        [_e3]: _c3,
-        [_hE3]: 403,
-        [_aQE]: [`RegionDisabledException`, 403]
-      },
+      { [_e3]: _c3, [_hE3]: 403, [_aQE]: [`RegionDisabledException`, 403] },
       [_m2],
       [0]
     ];
@@ -56907,14 +54751,14 @@ var init_schemas_03 = __esm({
 });
 
 // node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/commands/AssumeRoleCommand.js
-var import_middleware_endpoint6, import_smithy_client30, AssumeRoleCommand;
+var import_middleware_endpoint6, import_smithy_client27, AssumeRoleCommand;
 var init_AssumeRoleCommand = __esm({
   "node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/commands/AssumeRoleCommand.js"() {
     import_middleware_endpoint6 = __toESM(require_dist_cjs42());
-    import_smithy_client30 = __toESM(require_dist_cjs20());
+    import_smithy_client27 = __toESM(require_dist_cjs20());
     init_EndpointParameters3();
     init_schemas_03();
-    AssumeRoleCommand = class extends import_smithy_client30.Command.classBuilder().ep(commonParams3).m(function(Command, cs, config, o4) {
+    AssumeRoleCommand = class extends import_smithy_client27.Command.classBuilder().ep(commonParams3).m(function(Command, cs, config, o4) {
       return [(0, import_middleware_endpoint6.getEndpointPlugin)(config, Command.getEndpointParameterInstructions())];
     }).s("AWSSecurityTokenServiceV20110615", "AssumeRole", {}).n("STSClient", "AssumeRoleCommand").sc(AssumeRole).build() {
     };
@@ -56922,14 +54766,14 @@ var init_AssumeRoleCommand = __esm({
 });
 
 // node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/commands/AssumeRoleWithWebIdentityCommand.js
-var import_middleware_endpoint7, import_smithy_client31, AssumeRoleWithWebIdentityCommand;
+var import_middleware_endpoint7, import_smithy_client28, AssumeRoleWithWebIdentityCommand;
 var init_AssumeRoleWithWebIdentityCommand = __esm({
   "node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/commands/AssumeRoleWithWebIdentityCommand.js"() {
     import_middleware_endpoint7 = __toESM(require_dist_cjs42());
-    import_smithy_client31 = __toESM(require_dist_cjs20());
+    import_smithy_client28 = __toESM(require_dist_cjs20());
     init_EndpointParameters3();
     init_schemas_03();
-    AssumeRoleWithWebIdentityCommand = class extends import_smithy_client31.Command.classBuilder().ep(commonParams3).m(function(Command, cs, config, o4) {
+    AssumeRoleWithWebIdentityCommand = class extends import_smithy_client28.Command.classBuilder().ep(commonParams3).m(function(Command, cs, config, o4) {
       return [(0, import_middleware_endpoint7.getEndpointPlugin)(config, Command.getEndpointParameterInstructions())];
     }).s("AWSSecurityTokenServiceV20110615", "AssumeRoleWithWebIdentity", {}).n("STSClient", "AssumeRoleWithWebIdentityCommand").sc(AssumeRoleWithWebIdentity).build() {
     };
@@ -56937,10 +54781,10 @@ var init_AssumeRoleWithWebIdentityCommand = __esm({
 });
 
 // node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/STS.js
-var import_smithy_client32, commands3, STS;
+var import_smithy_client29, commands3, STS;
 var init_STS = __esm({
   "node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/STS.js"() {
-    import_smithy_client32 = __toESM(require_dist_cjs20());
+    import_smithy_client29 = __toESM(require_dist_cjs20());
     init_AssumeRoleCommand();
     init_AssumeRoleWithWebIdentityCommand();
     init_STSClient();
@@ -56950,7 +54794,7 @@ var init_STS = __esm({
     };
     STS = class extends STSClient {
     };
-    (0, import_smithy_client32.createAggregatedClient)(commands3, STS);
+    (0, import_smithy_client29.createAggregatedClient)(commands3, STS);
   }
 });
 
@@ -57114,7 +54958,7 @@ __export(sts_exports, {
   STS: () => STS,
   STSClient: () => STSClient,
   STSServiceException: () => STSServiceException,
-  __Client: () => import_smithy_client28.Client,
+  __Client: () => import_smithy_client25.Client,
   decorateDefaultCredentialProvider: () => decorateDefaultCredentialProvider,
   getDefaultRoleAssumer: () => getDefaultRoleAssumer2,
   getDefaultRoleAssumerWithWebIdentity: () => getDefaultRoleAssumerWithWebIdentity2
@@ -58582,7 +56426,7 @@ var require_dist_cjs66 = __commonJS({
 var require_dist_cjs67 = __commonJS({
   "node_modules/@smithy/hash-stream-node/dist-cjs/index.js"(exports2) {
     "use strict";
-    var fs6 = require("fs");
+    var fs7 = require("fs");
     var utilUtf8 = require_dist_cjs8();
     var stream = require("stream");
     var HashCalculator = class extends stream.Writable {
@@ -58605,7 +56449,7 @@ var require_dist_cjs67 = __commonJS({
         reject(new Error("Unable to calculate hash for non-file streams."));
         return;
       }
-      const fileStreamTee = fs6.createReadStream(fileStream.path, {
+      const fileStreamTee = fs7.createReadStream(fileStream.path, {
         start: fileStream.start,
         end: fileStream.end
       });
@@ -58723,14 +56567,13 @@ var require_runtimeConfig2 = __commonJS({
     var middleware_retry_1 = require_dist_cjs45();
     var node_config_provider_1 = require_dist_cjs41();
     var node_http_handler_1 = require_dist_cjs12();
+    var smithy_client_1 = require_dist_cjs20();
     var util_body_length_node_1 = require_dist_cjs52();
+    var util_defaults_mode_node_1 = require_dist_cjs53();
     var util_retry_1 = require_dist_cjs44();
     var runtimeConfig_shared_1 = require_runtimeConfig_shared2();
-    var smithy_client_1 = require_dist_cjs20();
-    var util_defaults_mode_node_1 = require_dist_cjs53();
-    var smithy_client_2 = require_dist_cjs20();
     var getRuntimeConfig7 = (config) => {
-      (0, smithy_client_2.emitWarningIfUnsupportedVersion)(process.version);
+      (0, smithy_client_1.emitWarningIfUnsupportedVersion)(process.version);
       const defaultsMode = (0, util_defaults_mode_node_1.resolveDefaultsModeConfig)(config);
       const defaultConfigProvider = () => defaultsMode().then(smithy_client_1.loadConfigsForDefaultMode);
       const clientSharedValues = (0, runtimeConfig_shared_1.getRuntimeConfig)(config);
@@ -60289,32 +58132,10 @@ var require_dist_cjs71 = __commonJS({
     var SSECustomerKey = [0, n04, _SSECK, 8, 0];
     var SSEKMSEncryptionContext = [0, n04, _SSEKMSEC, 8, 0];
     var SSEKMSKeyId = [0, n04, _SSEKMSKI, 8, 0];
-    var StreamingBlob = [
-      0,
-      n04,
-      _SB,
-      {
-        [_s4]: 1
-      },
-      42
-    ];
+    var StreamingBlob = [0, n04, _SB, { [_s4]: 1 }, 42];
     var AbacStatus = [3, n04, _AS, 0, [_S], [0]];
     var AbortIncompleteMultipartUpload = [3, n04, _AIMU, 0, [_DAI], [1]];
-    var AbortMultipartUploadOutput = [
-      3,
-      n04,
-      _AMUO,
-      0,
-      [_RC],
-      [
-        [
-          0,
-          {
-            [_hH]: _xarc
-          }
-        ]
-      ]
-    ];
+    var AbortMultipartUploadOutput = [3, n04, _AMUO, 0, [_RC], [[0, { [_hH]: _xarc }]]];
     var AbortMultipartUploadRequest = [
       3,
       n04,
@@ -60324,30 +58145,10 @@ var require_dist_cjs71 = __commonJS({
       [
         [0, 1],
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _uI
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ],
-        [
-          6,
-          {
-            [_hH]: _xaimit
-          }
-        ]
+        [0, { [_hQ]: _uI }],
+        [0, { [_hH]: _xarp }],
+        [0, { [_hH]: _xaebo }],
+        [6, { [_hH]: _xaimit }]
       ]
     ];
     var AccelerateConfiguration = [3, n04, _AC, 0, [_S], [0]];
@@ -60357,15 +58158,7 @@ var require_dist_cjs71 = __commonJS({
       _ACP,
       0,
       [_G, _O],
-      [
-        [
-          () => Grants,
-          {
-            [_xN]: _ACL
-          }
-        ],
-        () => Owner
-      ]
+      [[() => Grants, { [_xN]: _ACL }], () => Owner]
     ];
     var AccessControlTranslation = [3, n04, _ACT, 0, [_O], [0]];
     var AnalyticsAndOperator = [
@@ -60374,16 +58167,7 @@ var require_dist_cjs71 = __commonJS({
       _AAO,
       0,
       [_P2, _T2],
-      [
-        0,
-        [
-          () => TagSet,
-          {
-            [_xN]: _Ta2,
-            [_xF]: 1
-          }
-        ]
-      ]
+      [0, [() => TagSet, { [_xN]: _Ta2, [_xF]: 1 }]]
     ];
     var AnalyticsConfiguration = [
       3,
@@ -60408,39 +58192,12 @@ var require_dist_cjs71 = __commonJS({
       _BET,
       0,
       [_ET],
-      [
-        [
-          () => EncryptionTypeList,
-          {
-            [_xF]: 1
-          }
-        ]
-      ]
+      [[() => EncryptionTypeList, { [_xF]: 1 }]]
     ];
     var Bucket = [3, n04, _B, 0, [_N, _CD, _BR, _BA], [0, 4, 0, 0]];
-    var BucketAlreadyExists = [
-      -3,
-      n04,
-      _BAE,
-      {
-        [_e4]: _c4,
-        [_hE4]: 409
-      },
-      [],
-      []
-    ];
+    var BucketAlreadyExists = [-3, n04, _BAE, { [_e4]: _c4, [_hE4]: 409 }, [], []];
     schema.TypeRegistry.for(n04).registerError(BucketAlreadyExists, BucketAlreadyExists$1);
-    var BucketAlreadyOwnedByYou = [
-      -3,
-      n04,
-      _BAOBY,
-      {
-        [_e4]: _c4,
-        [_hE4]: 409
-      },
-      [],
-      []
-    ];
+    var BucketAlreadyOwnedByYou = [-3, n04, _BAOBY, { [_e4]: _c4, [_hE4]: 409 }, [], []];
     schema.TypeRegistry.for(n04).registerError(BucketAlreadyOwnedByYou, BucketAlreadyOwnedByYou$1);
     var BucketInfo = [3, n04, _BI, 0, [_DR, _Ty], [0, 0]];
     var BucketLifecycleConfiguration = [
@@ -60449,15 +58206,7 @@ var require_dist_cjs71 = __commonJS({
       _BLC,
       0,
       [_R],
-      [
-        [
-          () => LifecycleRules,
-          {
-            [_xN]: _Ru,
-            [_xF]: 1
-          }
-        ]
-      ]
+      [[() => LifecycleRules, { [_xN]: _Ru, [_xF]: 1 }]]
     ];
     var BucketLoggingStatus = [3, n04, _BLS, 0, [_LE], [[() => LoggingEnabled, 0]]];
     var Checksum = [
@@ -60475,15 +58224,7 @@ var require_dist_cjs71 = __commonJS({
       _CMU,
       0,
       [_Pa],
-      [
-        [
-          () => CompletedPartList,
-          {
-            [_xN]: _Par,
-            [_xF]: 1
-          }
-        ]
-      ]
+      [[() => CompletedPartList, { [_xN]: _Par, [_xF]: 1 }]]
     ];
     var CompletedPart = [
       3,
@@ -60497,20 +58238,13 @@ var require_dist_cjs71 = __commonJS({
       3,
       n04,
       _CMUO,
-      {
-        [_xN]: _CMUR
-      },
+      { [_xN]: _CMUR },
       [_L, _B, _K2, _E2, _ETa, _CCRC, _CCRCC, _CCRCNVME, _CSHA, _CSHAh, _CT2, _SSE, _VI, _SSEKMSKI, _BKE, _RC],
       [
         0,
         0,
         0,
-        [
-          0,
-          {
-            [_hH]: _xae
-          }
-        ],
+        [0, { [_hH]: _xae }],
         0,
         0,
         0,
@@ -60518,36 +58252,11 @@ var require_dist_cjs71 = __commonJS({
         0,
         0,
         0,
-        [
-          0,
-          {
-            [_hH]: _xasse
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xavi
-          }
-        ],
-        [
-          () => SSEKMSKeyId,
-          {
-            [_hH]: _xasseakki
-          }
-        ],
-        [
-          2,
-          {
-            [_hH]: _xassebke
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarc
-          }
-        ]
+        [0, { [_hH]: _xasse }],
+        [0, { [_hH]: _xavi }],
+        [() => SSEKMSKeyId, { [_hH]: _xasseakki }],
+        [2, { [_hH]: _xassebke }],
+        [0, { [_hH]: _xarc }]
       ]
     ];
     var CompleteMultipartUploadRequest = [
@@ -60578,103 +58287,22 @@ var require_dist_cjs71 = __commonJS({
       [
         [0, 1],
         [0, 1],
-        [
-          () => CompletedMultipartUpload,
-          {
-            [_xN]: _CMUo,
-            [_hP]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _uI
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacc_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacc__
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacs
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacs_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xact
-          }
-        ],
-        [
-          1,
-          {
-            [_hH]: _xamos
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _IM_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _INM_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseca
-          }
-        ],
-        [
-          () => SSECustomerKey,
-          {
-            [_hH]: _xasseck
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseckM
-          }
-        ]
+        [() => CompletedMultipartUpload, { [_xN]: _CMUo, [_hP]: 1 }],
+        [0, { [_hQ]: _uI }],
+        [0, { [_hH]: _xacc }],
+        [0, { [_hH]: _xacc_ }],
+        [0, { [_hH]: _xacc__ }],
+        [0, { [_hH]: _xacs }],
+        [0, { [_hH]: _xacs_ }],
+        [0, { [_hH]: _xact }],
+        [1, { [_hH]: _xamos }],
+        [0, { [_hH]: _xarp }],
+        [0, { [_hH]: _xaebo }],
+        [0, { [_hH]: _IM_ }],
+        [0, { [_hH]: _INM_ }],
+        [0, { [_hH]: _xasseca }],
+        [() => SSECustomerKey, { [_hH]: _xasseck }],
+        [0, { [_hH]: _xasseckM }]
       ]
     ];
     var Condition = [3, n04, _Co, 0, [_HECRE, _KPE], [0, 0]];
@@ -60687,66 +58315,16 @@ var require_dist_cjs71 = __commonJS({
       [_COR, _E2, _CSVI, _VI, _SSE, _SSECA, _SSECKMD, _SSEKMSKI, _SSEKMSEC, _BKE, _RC],
       [
         [() => CopyObjectResult, 16],
-        [
-          0,
-          {
-            [_hH]: _xae
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacsvi
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xavi
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasse
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseca
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseckM
-          }
-        ],
-        [
-          () => SSEKMSKeyId,
-          {
-            [_hH]: _xasseakki
-          }
-        ],
-        [
-          () => SSEKMSEncryptionContext,
-          {
-            [_hH]: _xassec
-          }
-        ],
-        [
-          2,
-          {
-            [_hH]: _xassebke
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarc
-          }
-        ]
+        [0, { [_hH]: _xae }],
+        [0, { [_hH]: _xacsvi }],
+        [0, { [_hH]: _xavi }],
+        [0, { [_hH]: _xasse }],
+        [0, { [_hH]: _xasseca }],
+        [0, { [_hH]: _xasseckM }],
+        [() => SSEKMSKeyId, { [_hH]: _xasseakki }],
+        [() => SSEKMSEncryptionContext, { [_hH]: _xassec }],
+        [2, { [_hH]: _xassebke }],
+        [0, { [_hH]: _xarc }]
       ]
     ];
     var CopyObjectRequest = [
@@ -60800,254 +58378,49 @@ var require_dist_cjs71 = __commonJS({
         _ESBO
       ],
       [
-        [
-          0,
-          {
-            [_hH]: _xaa
-          }
-        ],
+        [0, { [_hH]: _xaa }],
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _CC_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaca
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CD_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CE_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CL_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CT_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacs__
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacsim
-          }
-        ],
-        [
-          4,
-          {
-            [_hH]: _xacsims
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacsinm
-          }
-        ],
-        [
-          4,
-          {
-            [_hH]: _xacsius
-          }
-        ],
-        [
-          4,
-          {
-            [_hH]: _Ex
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xagfc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xagr
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xagra
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xagwa
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _IM_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _INM_
-          }
-        ],
+        [0, { [_hH]: _CC_ }],
+        [0, { [_hH]: _xaca }],
+        [0, { [_hH]: _CD_ }],
+        [0, { [_hH]: _CE_ }],
+        [0, { [_hH]: _CL_ }],
+        [0, { [_hH]: _CT_ }],
+        [0, { [_hH]: _xacs__ }],
+        [0, { [_hH]: _xacsim }],
+        [4, { [_hH]: _xacsims }],
+        [0, { [_hH]: _xacsinm }],
+        [4, { [_hH]: _xacsius }],
+        [4, { [_hH]: _Ex }],
+        [0, { [_hH]: _xagfc }],
+        [0, { [_hH]: _xagr }],
+        [0, { [_hH]: _xagra }],
+        [0, { [_hH]: _xagwa }],
+        [0, { [_hH]: _IM_ }],
+        [0, { [_hH]: _INM_ }],
         [0, 1],
-        [
-          128 | 0,
-          {
-            [_hPH]: _xam
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xamd
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xatd
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasse
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xawrl
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseca
-          }
-        ],
-        [
-          () => SSECustomerKey,
-          {
-            [_hH]: _xasseck
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseckM
-          }
-        ],
-        [
-          () => SSEKMSKeyId,
-          {
-            [_hH]: _xasseakki
-          }
-        ],
-        [
-          () => SSEKMSEncryptionContext,
-          {
-            [_hH]: _xassec
-          }
-        ],
-        [
-          2,
-          {
-            [_hH]: _xassebke
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacssseca
-          }
-        ],
-        [
-          () => CopySourceSSECustomerKey,
-          {
-            [_hH]: _xacssseck
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacssseckM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xat
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaolm
-          }
-        ],
-        [
-          5,
-          {
-            [_hH]: _xaolrud
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaollh
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasebo
-          }
-        ]
+        [128 | 0, { [_hPH]: _xam }],
+        [0, { [_hH]: _xamd }],
+        [0, { [_hH]: _xatd }],
+        [0, { [_hH]: _xasse }],
+        [0, { [_hH]: _xasc }],
+        [0, { [_hH]: _xawrl }],
+        [0, { [_hH]: _xasseca }],
+        [() => SSECustomerKey, { [_hH]: _xasseck }],
+        [0, { [_hH]: _xasseckM }],
+        [() => SSEKMSKeyId, { [_hH]: _xasseakki }],
+        [() => SSEKMSEncryptionContext, { [_hH]: _xassec }],
+        [2, { [_hH]: _xassebke }],
+        [0, { [_hH]: _xacssseca }],
+        [() => CopySourceSSECustomerKey, { [_hH]: _xacssseck }],
+        [0, { [_hH]: _xacssseckM }],
+        [0, { [_hH]: _xarp }],
+        [0, { [_hH]: _xat }],
+        [0, { [_hH]: _xaolm }],
+        [5, { [_hH]: _xaolrud }],
+        [0, { [_hH]: _xaollh }],
+        [0, { [_hH]: _xaebo }],
+        [0, { [_hH]: _xasebo }]
       ]
     ];
     var CopyObjectResult = [
@@ -61072,15 +58445,7 @@ var require_dist_cjs71 = __commonJS({
       _CORSC,
       0,
       [_CORSR],
-      [
-        [
-          () => CORSRules,
-          {
-            [_xN]: _CORSRu,
-            [_xF]: 1
-          }
-        ]
-      ]
+      [[() => CORSRules, { [_xN]: _CORSRu, [_xF]: 1 }]]
     ];
     var CORSRule = [
       3,
@@ -61090,34 +58455,10 @@ var require_dist_cjs71 = __commonJS({
       [_ID, _AH, _AM, _AO, _EH, _MAS],
       [
         0,
-        [
-          64 | 0,
-          {
-            [_xN]: _AHl,
-            [_xF]: 1
-          }
-        ],
-        [
-          64 | 0,
-          {
-            [_xN]: _AMl,
-            [_xF]: 1
-          }
-        ],
-        [
-          64 | 0,
-          {
-            [_xN]: _AOl,
-            [_xF]: 1
-          }
-        ],
-        [
-          64 | 0,
-          {
-            [_xN]: _EHx,
-            [_xF]: 1
-          }
-        ],
+        [64 | 0, { [_xN]: _AHl, [_xF]: 1 }],
+        [64 | 0, { [_xN]: _AMl, [_xF]: 1 }],
+        [64 | 0, { [_xN]: _AOl, [_xF]: 1 }],
+        [64 | 0, { [_xN]: _EHx, [_xF]: 1 }],
         1
       ]
     ];
@@ -61137,31 +58478,10 @@ var require_dist_cjs71 = __commonJS({
       [_B, _CMD, _CA2, _MC, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _CM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ],
-        [
-          () => MetadataConfiguration,
-          {
-            [_xN]: _MC,
-            [_hP]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _CM }],
+        [0, { [_hH]: _xasca }],
+        [() => MetadataConfiguration, { [_xN]: _MC, [_hP]: 1 }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var CreateBucketMetadataTableConfigurationRequest = [
@@ -61172,31 +58492,10 @@ var require_dist_cjs71 = __commonJS({
       [_B, _CMD, _CA2, _MTC, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _CM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ],
-        [
-          () => MetadataTableConfiguration,
-          {
-            [_xN]: _MTC,
-            [_hP]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _CM }],
+        [0, { [_hH]: _xasca }],
+        [() => MetadataTableConfiguration, { [_xN]: _MTC, [_hP]: 1 }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var CreateBucketOutput = [
@@ -61206,18 +58505,8 @@ var require_dist_cjs71 = __commonJS({
       0,
       [_L, _BA],
       [
-        [
-          0,
-          {
-            [_hH]: _L
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaba
-          }
-        ]
+        [0, { [_hH]: _L }],
+        [0, { [_hH]: _xaba }]
       ]
     ];
     var CreateBucketRequest = [
@@ -61227,147 +58516,39 @@ var require_dist_cjs71 = __commonJS({
       0,
       [_ACL_, _B, _CBC, _GFC, _GR, _GRACP, _GW, _GWACP, _OLEFB, _OO],
       [
-        [
-          0,
-          {
-            [_hH]: _xaa
-          }
-        ],
+        [0, { [_hH]: _xaa }],
         [0, 1],
-        [
-          () => CreateBucketConfiguration,
-          {
-            [_xN]: _CBC,
-            [_hP]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xagfc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xagr
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xagra
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xagw
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xagwa
-          }
-        ],
-        [
-          2,
-          {
-            [_hH]: _xabole
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaoo
-          }
-        ]
+        [() => CreateBucketConfiguration, { [_xN]: _CBC, [_hP]: 1 }],
+        [0, { [_hH]: _xagfc }],
+        [0, { [_hH]: _xagr }],
+        [0, { [_hH]: _xagra }],
+        [0, { [_hH]: _xagw }],
+        [0, { [_hH]: _xagwa }],
+        [2, { [_hH]: _xabole }],
+        [0, { [_hH]: _xaoo }]
       ]
     ];
     var CreateMultipartUploadOutput = [
       3,
       n04,
       _CMUOr,
-      {
-        [_xN]: _IMUR
-      },
+      { [_xN]: _IMUR },
       [_AD, _ARI2, _B, _K2, _UI, _SSE, _SSECA, _SSECKMD, _SSEKMSKI, _SSEKMSEC, _BKE, _RC, _CA2, _CT2],
       [
-        [
-          4,
-          {
-            [_hH]: _xaad
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaari
-          }
-        ],
-        [
-          0,
-          {
-            [_xN]: _B
-          }
-        ],
+        [4, { [_hH]: _xaad }],
+        [0, { [_hH]: _xaari }],
+        [0, { [_xN]: _B }],
         0,
         0,
-        [
-          0,
-          {
-            [_hH]: _xasse
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseca
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseckM
-          }
-        ],
-        [
-          () => SSEKMSKeyId,
-          {
-            [_hH]: _xasseakki
-          }
-        ],
-        [
-          () => SSEKMSEncryptionContext,
-          {
-            [_hH]: _xassec
-          }
-        ],
-        [
-          2,
-          {
-            [_hH]: _xassebke
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaca
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xact
-          }
-        ]
+        [0, { [_hH]: _xasse }],
+        [0, { [_hH]: _xasseca }],
+        [0, { [_hH]: _xasseckM }],
+        [() => SSEKMSKeyId, { [_hH]: _xasseakki }],
+        [() => SSEKMSEncryptionContext, { [_hH]: _xassec }],
+        [2, { [_hH]: _xassebke }],
+        [0, { [_hH]: _xarc }],
+        [0, { [_hH]: _xaca }],
+        [0, { [_hH]: _xact }]
       ]
     ];
     var CreateMultipartUploadRequest = [
@@ -61409,223 +58590,51 @@ var require_dist_cjs71 = __commonJS({
         _CT2
       ],
       [
-        [
-          0,
-          {
-            [_hH]: _xaa
-          }
-        ],
+        [0, { [_hH]: _xaa }],
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _CC_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CD_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CE_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CL_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CT_
-          }
-        ],
-        [
-          4,
-          {
-            [_hH]: _Ex
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xagfc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xagr
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xagra
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xagwa
-          }
-        ],
+        [0, { [_hH]: _CC_ }],
+        [0, { [_hH]: _CD_ }],
+        [0, { [_hH]: _CE_ }],
+        [0, { [_hH]: _CL_ }],
+        [0, { [_hH]: _CT_ }],
+        [4, { [_hH]: _Ex }],
+        [0, { [_hH]: _xagfc }],
+        [0, { [_hH]: _xagr }],
+        [0, { [_hH]: _xagra }],
+        [0, { [_hH]: _xagwa }],
         [0, 1],
-        [
-          128 | 0,
-          {
-            [_hPH]: _xam
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasse
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xawrl
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseca
-          }
-        ],
-        [
-          () => SSECustomerKey,
-          {
-            [_hH]: _xasseck
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseckM
-          }
-        ],
-        [
-          () => SSEKMSKeyId,
-          {
-            [_hH]: _xasseakki
-          }
-        ],
-        [
-          () => SSEKMSEncryptionContext,
-          {
-            [_hH]: _xassec
-          }
-        ],
-        [
-          2,
-          {
-            [_hH]: _xassebke
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xat
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaolm
-          }
-        ],
-        [
-          5,
-          {
-            [_hH]: _xaolrud
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaollh
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaca
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xact
-          }
-        ]
+        [128 | 0, { [_hPH]: _xam }],
+        [0, { [_hH]: _xasse }],
+        [0, { [_hH]: _xasc }],
+        [0, { [_hH]: _xawrl }],
+        [0, { [_hH]: _xasseca }],
+        [() => SSECustomerKey, { [_hH]: _xasseck }],
+        [0, { [_hH]: _xasseckM }],
+        [() => SSEKMSKeyId, { [_hH]: _xasseakki }],
+        [() => SSEKMSEncryptionContext, { [_hH]: _xassec }],
+        [2, { [_hH]: _xassebke }],
+        [0, { [_hH]: _xarp }],
+        [0, { [_hH]: _xat }],
+        [0, { [_hH]: _xaolm }],
+        [5, { [_hH]: _xaolrud }],
+        [0, { [_hH]: _xaollh }],
+        [0, { [_hH]: _xaebo }],
+        [0, { [_hH]: _xaca }],
+        [0, { [_hH]: _xact }]
       ]
     ];
     var CreateSessionOutput = [
       3,
       n04,
       _CSO,
-      {
-        [_xN]: _CSR
-      },
+      { [_xN]: _CSR },
       [_SSE, _SSEKMSKI, _SSEKMSEC, _BKE, _Cr],
       [
-        [
-          0,
-          {
-            [_hH]: _xasse
-          }
-        ],
-        [
-          () => SSEKMSKeyId,
-          {
-            [_hH]: _xasseakki
-          }
-        ],
-        [
-          () => SSEKMSEncryptionContext,
-          {
-            [_hH]: _xassec
-          }
-        ],
-        [
-          2,
-          {
-            [_hH]: _xassebke
-          }
-        ],
-        [
-          () => SessionCredentials,
-          {
-            [_xN]: _Cr
-          }
-        ]
+        [0, { [_hH]: _xasse }],
+        [() => SSEKMSKeyId, { [_hH]: _xasseakki }],
+        [() => SSEKMSEncryptionContext, { [_hH]: _xassec }],
+        [2, { [_hH]: _xassebke }],
+        [() => SessionCredentials, { [_xN]: _Cr }]
       ]
     ];
     var CreateSessionRequest = [
@@ -61635,37 +58644,12 @@ var require_dist_cjs71 = __commonJS({
       0,
       [_SM, _B, _SSE, _SSEKMSKI, _SSEKMSEC, _BKE],
       [
-        [
-          0,
-          {
-            [_hH]: _xacsm
-          }
-        ],
+        [0, { [_hH]: _xacsm }],
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xasse
-          }
-        ],
-        [
-          () => SSEKMSKeyId,
-          {
-            [_hH]: _xasseakki
-          }
-        ],
-        [
-          () => SSEKMSEncryptionContext,
-          {
-            [_hH]: _xassec
-          }
-        ],
-        [
-          2,
-          {
-            [_hH]: _xassebke
-          }
-        ]
+        [0, { [_hH]: _xasse }],
+        [() => SSEKMSKeyId, { [_hH]: _xasseakki }],
+        [() => SSEKMSEncryptionContext, { [_hH]: _xassec }],
+        [2, { [_hH]: _xassebke }]
       ]
     ];
     var CSVInput = [
@@ -61684,16 +58668,7 @@ var require_dist_cjs71 = __commonJS({
       _De,
       0,
       [_Ob, _Q],
-      [
-        [
-          () => ObjectIdentifierList,
-          {
-            [_xN]: _Obj,
-            [_xF]: 1
-          }
-        ],
-        2
-      ]
+      [[() => ObjectIdentifierList, { [_xN]: _Obj, [_xF]: 1 }], 2]
     ];
     var DeleteBucketAnalyticsConfigurationRequest = [
       3,
@@ -61703,18 +58678,8 @@ var require_dist_cjs71 = __commonJS({
       [_B, _I, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _i
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hQ]: _i }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var DeleteBucketCorsRequest = [
@@ -61725,12 +58690,7 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var DeleteBucketEncryptionRequest = [
@@ -61741,12 +58701,7 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var DeleteBucketIntelligentTieringConfigurationRequest = [
@@ -61757,18 +58712,8 @@ var require_dist_cjs71 = __commonJS({
       [_B, _I, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _i
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hQ]: _i }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var DeleteBucketInventoryConfigurationRequest = [
@@ -61779,18 +58724,8 @@ var require_dist_cjs71 = __commonJS({
       [_B, _I, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _i
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hQ]: _i }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var DeleteBucketLifecycleRequest = [
@@ -61801,12 +58736,7 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var DeleteBucketMetadataConfigurationRequest = [
@@ -61817,12 +58747,7 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var DeleteBucketMetadataTableConfigurationRequest = [
@@ -61833,12 +58758,7 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var DeleteBucketMetricsConfigurationRequest = [
@@ -61849,18 +58769,8 @@ var require_dist_cjs71 = __commonJS({
       [_B, _I, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _i
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hQ]: _i }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var DeleteBucketOwnershipControlsRequest = [
@@ -61871,12 +58781,7 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var DeleteBucketPolicyRequest = [
@@ -61887,12 +58792,7 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var DeleteBucketReplicationRequest = [
@@ -61903,12 +58803,7 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var DeleteBucketRequest = [
@@ -61919,12 +58814,7 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var DeleteBucketTaggingRequest = [
@@ -61935,12 +58825,7 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var DeleteBucketWebsiteRequest = [
@@ -61951,12 +58836,7 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var DeletedObject = [3, n04, _DO, 0, [_K2, _VI, _DM, _DMVI], [0, 0, 2, 0]];
@@ -61976,24 +58856,9 @@ var require_dist_cjs71 = __commonJS({
       0,
       [_DM, _VI, _RC],
       [
-        [
-          2,
-          {
-            [_hH]: _xadm
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xavi
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarc
-          }
-        ]
+        [2, { [_hH]: _xadm }],
+        [0, { [_hH]: _xavi }],
+        [0, { [_hH]: _xarc }]
       ]
     ];
     var DeleteObjectRequest = [
@@ -62005,84 +58870,26 @@ var require_dist_cjs71 = __commonJS({
       [
         [0, 1],
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xam_
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _vI
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ],
-        [
-          2,
-          {
-            [_hH]: _xabgr
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _IM_
-          }
-        ],
-        [
-          6,
-          {
-            [_hH]: _xaimlmt
-          }
-        ],
-        [
-          1,
-          {
-            [_hH]: _xaims
-          }
-        ]
+        [0, { [_hH]: _xam_ }],
+        [0, { [_hQ]: _vI }],
+        [0, { [_hH]: _xarp }],
+        [2, { [_hH]: _xabgr }],
+        [0, { [_hH]: _xaebo }],
+        [0, { [_hH]: _IM_ }],
+        [6, { [_hH]: _xaimlmt }],
+        [1, { [_hH]: _xaims }]
       ]
     ];
     var DeleteObjectsOutput = [
       3,
       n04,
       _DOOe,
-      {
-        [_xN]: _DRel
-      },
+      { [_xN]: _DRel },
       [_Del, _RC, _Er],
       [
-        [
-          () => DeletedObjects,
-          {
-            [_xF]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarc
-          }
-        ],
-        [
-          () => Errors,
-          {
-            [_xN]: _Err,
-            [_xF]: 1
-          }
-        ]
+        [() => DeletedObjects, { [_xF]: 1 }],
+        [0, { [_hH]: _xarc }],
+        [() => Errors, { [_xN]: _Err, [_xF]: 1 }]
       ]
     ];
     var DeleteObjectsRequest = [
@@ -62093,60 +58900,15 @@ var require_dist_cjs71 = __commonJS({
       [_B, _De, _MFA, _RP, _BGR, _EBO, _CA2],
       [
         [0, 1],
-        [
-          () => Delete,
-          {
-            [_xN]: _De,
-            [_hP]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xam_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ],
-        [
-          2,
-          {
-            [_hH]: _xabgr
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ]
+        [() => Delete, { [_xN]: _De, [_hP]: 1 }],
+        [0, { [_hH]: _xam_ }],
+        [0, { [_hH]: _xarp }],
+        [2, { [_hH]: _xabgr }],
+        [0, { [_hH]: _xaebo }],
+        [0, { [_hH]: _xasca }]
       ]
     ];
-    var DeleteObjectTaggingOutput = [
-      3,
-      n04,
-      _DOTO,
-      0,
-      [_VI],
-      [
-        [
-          0,
-          {
-            [_hH]: _xavi
-          }
-        ]
-      ]
-    ];
+    var DeleteObjectTaggingOutput = [3, n04, _DOTO, 0, [_VI], [[0, { [_hH]: _xavi }]]];
     var DeleteObjectTaggingRequest = [
       3,
       n04,
@@ -62156,18 +58918,8 @@ var require_dist_cjs71 = __commonJS({
       [
         [0, 1],
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _vI
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hQ]: _vI }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var DeletePublicAccessBlockRequest = [
@@ -62178,12 +58930,7 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var Destination = [
@@ -62197,17 +58944,7 @@ var require_dist_cjs71 = __commonJS({
     var DestinationResult = [3, n04, _DRes, 0, [_TBT, _TBA, _TN], [0, 0, 0]];
     var Encryption = [3, n04, _En, 0, [_ET, _KMSKI, _KMSC], [0, [() => SSEKMSKeyId, 0], 0]];
     var EncryptionConfiguration = [3, n04, _EC, 0, [_RKKID], [0]];
-    var EncryptionTypeMismatch = [
-      -3,
-      n04,
-      _ETM,
-      {
-        [_e4]: _c4,
-        [_hE4]: 400
-      },
-      [],
-      []
-    ];
+    var EncryptionTypeMismatch = [-3, n04, _ETM, { [_e4]: _c4, [_hE4]: 400 }, [], []];
     schema.TypeRegistry.for(n04).registerError(EncryptionTypeMismatch, EncryptionTypeMismatch$1);
     var EndEvent = [3, n04, _EE, 0, [], []];
     var _Error = [3, n04, _Err, 0, [_K2, _VI, _Cod, _Mes], [0, 0, 0, 0]];
@@ -62225,31 +58962,16 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var GetBucketAccelerateConfigurationOutput = [
       3,
       n04,
       _GBACO,
-      {
-        [_xN]: _AC
-      },
+      { [_xN]: _AC },
       [_S, _RC],
-      [
-        0,
-        [
-          0,
-          {
-            [_hH]: _xarc
-          }
-        ]
-      ]
+      [0, [0, { [_hH]: _xarc }]]
     ];
     var GetBucketAccelerateConfigurationRequest = [
       3,
@@ -62259,37 +58981,17 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO, _RP],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ]
+        [0, { [_hH]: _xaebo }],
+        [0, { [_hH]: _xarp }]
       ]
     ];
     var GetBucketAclOutput = [
       3,
       n04,
       _GBAOe,
-      {
-        [_xN]: _ACP
-      },
+      { [_xN]: _ACP },
       [_O, _G],
-      [
-        () => Owner,
-        [
-          () => Grants,
-          {
-            [_xN]: _ACL
-          }
-        ]
-      ]
+      [() => Owner, [() => Grants, { [_xN]: _ACL }]]
     ];
     var GetBucketAclRequest = [
       3,
@@ -62299,12 +59001,7 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var GetBucketAnalyticsConfigurationOutput = [
@@ -62323,37 +59020,17 @@ var require_dist_cjs71 = __commonJS({
       [_B, _I, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _i
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hQ]: _i }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var GetBucketCorsOutput = [
       3,
       n04,
       _GBCO,
-      {
-        [_xN]: _CORSC
-      },
+      { [_xN]: _CORSC },
       [_CORSR],
-      [
-        [
-          () => CORSRules,
-          {
-            [_xN]: _CORSRu,
-            [_xF]: 1
-          }
-        ]
-      ]
+      [[() => CORSRules, { [_xN]: _CORSRu, [_xF]: 1 }]]
     ];
     var GetBucketCorsRequest = [
       3,
@@ -62363,12 +59040,7 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var GetBucketEncryptionOutput = [
@@ -62387,12 +59059,7 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var GetBucketIntelligentTieringConfigurationOutput = [
@@ -62411,18 +59078,8 @@ var require_dist_cjs71 = __commonJS({
       [_B, _I, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _i
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hQ]: _i }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var GetBucketInventoryConfigurationOutput = [
@@ -62441,42 +59098,19 @@ var require_dist_cjs71 = __commonJS({
       [_B, _I, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _i
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hQ]: _i }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var GetBucketLifecycleConfigurationOutput = [
       3,
       n04,
       _GBLCO,
-      {
-        [_xN]: _LCi
-      },
+      { [_xN]: _LCi },
       [_R, _TDMOS],
       [
-        [
-          () => LifecycleRules,
-          {
-            [_xN]: _Ru,
-            [_xF]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xatdmos
-          }
-        ]
+        [() => LifecycleRules, { [_xN]: _Ru, [_xF]: 1 }],
+        [0, { [_hH]: _xatdmos }]
       ]
     ];
     var GetBucketLifecycleConfigurationRequest = [
@@ -62487,24 +59121,10 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
-    var GetBucketLocationOutput = [
-      3,
-      n04,
-      _GBLO,
-      {
-        [_xN]: _LC
-      },
-      [_LC],
-      [0]
-    ];
+    var GetBucketLocationOutput = [3, n04, _GBLO, { [_xN]: _LC }, [_LC], [0]];
     var GetBucketLocationRequest = [
       3,
       n04,
@@ -62513,21 +59133,14 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var GetBucketLoggingOutput = [
       3,
       n04,
       _GBLOe,
-      {
-        [_xN]: _BLS
-      },
+      { [_xN]: _BLS },
       [_LE],
       [[() => LoggingEnabled, 0]]
     ];
@@ -62539,12 +59152,7 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var GetBucketMetadataConfigurationOutput = [
@@ -62563,12 +59171,7 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var GetBucketMetadataConfigurationResult = [
@@ -62595,12 +59198,7 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var GetBucketMetadataTableConfigurationResult = [
@@ -62627,18 +59225,8 @@ var require_dist_cjs71 = __commonJS({
       [_B, _I, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _i
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hQ]: _i }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var GetBucketNotificationConfigurationRequest = [
@@ -62649,12 +59237,7 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var GetBucketOwnershipControlsOutput = [
@@ -62673,12 +59256,7 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var GetBucketPolicyOutput = [3, n04, _GBPO, 0, [_Po], [[0, 16]]];
@@ -62690,12 +59268,7 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var GetBucketPolicyStatusOutput = [3, n04, _GBPSO, 0, [_PS], [[() => PolicyStatus, 16]]];
@@ -62707,12 +59280,7 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var GetBucketReplicationOutput = [
@@ -62731,24 +59299,10 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
-    var GetBucketRequestPaymentOutput = [
-      3,
-      n04,
-      _GBRPO,
-      {
-        [_xN]: _RPC
-      },
-      [_Pay],
-      [0]
-    ];
+    var GetBucketRequestPaymentOutput = [3, n04, _GBRPO, { [_xN]: _RPC }, [_Pay], [0]];
     var GetBucketRequestPaymentRequest = [
       3,
       n04,
@@ -62757,24 +59311,10 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
-    var GetBucketTaggingOutput = [
-      3,
-      n04,
-      _GBTO,
-      {
-        [_xN]: _Tag
-      },
-      [_TS],
-      [[() => TagSet, 0]]
-    ];
+    var GetBucketTaggingOutput = [3, n04, _GBTO, { [_xN]: _Tag }, [_TS], [[() => TagSet, 0]]];
     var GetBucketTaggingRequest = [
       3,
       n04,
@@ -62783,31 +59323,16 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var GetBucketVersioningOutput = [
       3,
       n04,
       _GBVO,
-      {
-        [_xN]: _VC
-      },
+      { [_xN]: _VC },
       [_S, _MFAD],
-      [
-        0,
-        [
-          0,
-          {
-            [_xN]: _MDf
-          }
-        ]
-      ]
+      [0, [0, { [_xN]: _MDf }]]
     ];
     var GetBucketVersioningRequest = [
       3,
@@ -62817,21 +59342,14 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var GetBucketWebsiteOutput = [
       3,
       n04,
       _GBWO,
-      {
-        [_xN]: _WC
-      },
+      { [_xN]: _WC },
       [_RART, _IDn, _EDr, _RR],
       [() => RedirectAllRequestsTo, () => IndexDocument, () => ErrorDocument, [() => RoutingRules, 0]]
     ];
@@ -62843,37 +59361,16 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var GetObjectAclOutput = [
       3,
       n04,
       _GOAO,
-      {
-        [_xN]: _ACP
-      },
+      { [_xN]: _ACP },
       [_O, _G, _RC],
-      [
-        () => Owner,
-        [
-          () => Grants,
-          {
-            [_xN]: _ACL
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarc
-          }
-        ]
-      ]
+      [() => Owner, [() => Grants, { [_xN]: _ACL }], [0, { [_hH]: _xarc }]]
     ];
     var GetObjectAclRequest = [
       3,
@@ -62884,59 +59381,22 @@ var require_dist_cjs71 = __commonJS({
       [
         [0, 1],
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _vI
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hQ]: _vI }],
+        [0, { [_hH]: _xarp }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var GetObjectAttributesOutput = [
       3,
       n04,
       _GOAOe,
-      {
-        [_xN]: _GOARe
-      },
+      { [_xN]: _GOARe },
       [_DM, _LM, _VI, _RC, _ETa, _C2, _OP, _SC, _OS],
       [
-        [
-          2,
-          {
-            [_hH]: _xadm
-          }
-        ],
-        [
-          4,
-          {
-            [_hH]: _LM_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xavi
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarc
-          }
-        ],
+        [2, { [_hH]: _xadm }],
+        [4, { [_hH]: _LM_ }],
+        [0, { [_hH]: _xavi }],
+        [0, { [_hH]: _xarc }],
         0,
         () => Checksum,
         [() => GetObjectAttributesParts, 0],
@@ -62950,25 +59410,7 @@ var require_dist_cjs71 = __commonJS({
       _GOAP,
       0,
       [_TPC, _PNM, _NPNM, _MP, _IT2, _Pa],
-      [
-        [
-          1,
-          {
-            [_xN]: _PC2
-          }
-        ],
-        0,
-        0,
-        1,
-        2,
-        [
-          () => PartsList,
-          {
-            [_xN]: _Par,
-            [_xF]: 1
-          }
-        ]
-      ]
+      [[1, { [_xN]: _PC2 }], 0, 0, 1, 2, [() => PartsList, { [_xN]: _Par, [_xF]: 1 }]]
     ];
     var GetObjectAttributesRequest = [
       3,
@@ -62979,60 +59421,15 @@ var require_dist_cjs71 = __commonJS({
       [
         [0, 1],
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _vI
-          }
-        ],
-        [
-          1,
-          {
-            [_hH]: _xamp
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xapnm
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseca
-          }
-        ],
-        [
-          () => SSECustomerKey,
-          {
-            [_hH]: _xasseck
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseckM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ],
-        [
-          64 | 0,
-          {
-            [_hH]: _xaoa
-          }
-        ]
+        [0, { [_hQ]: _vI }],
+        [1, { [_hH]: _xamp }],
+        [0, { [_hH]: _xapnm }],
+        [0, { [_hH]: _xasseca }],
+        [() => SSECustomerKey, { [_hH]: _xasseck }],
+        [0, { [_hH]: _xasseckM }],
+        [0, { [_hH]: _xarp }],
+        [0, { [_hH]: _xaebo }],
+        [64 | 0, { [_hH]: _xaoa }]
       ]
     ];
     var GetObjectLegalHoldOutput = [
@@ -63041,15 +59438,7 @@ var require_dist_cjs71 = __commonJS({
       _GOLHO,
       0,
       [_LH],
-      [
-        [
-          () => ObjectLockLegalHold,
-          {
-            [_xN]: _LH,
-            [_hP]: 1
-          }
-        ]
-      ]
+      [[() => ObjectLockLegalHold, { [_xN]: _LH, [_hP]: 1 }]]
     ];
     var GetObjectLegalHoldRequest = [
       3,
@@ -63060,24 +59449,9 @@ var require_dist_cjs71 = __commonJS({
       [
         [0, 1],
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _vI
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hQ]: _vI }],
+        [0, { [_hH]: _xarp }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var GetObjectLockConfigurationOutput = [
@@ -63096,12 +59470,7 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var GetObjectOutput = [
@@ -63152,234 +59521,44 @@ var require_dist_cjs71 = __commonJS({
       ],
       [
         [() => StreamingBlob, 16],
-        [
-          2,
-          {
-            [_hH]: _xadm
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _ar
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xae
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xar
-          }
-        ],
-        [
-          4,
-          {
-            [_hH]: _LM_
-          }
-        ],
-        [
-          1,
-          {
-            [_hH]: _CL__
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _ETa
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacc_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacc__
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacs
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacs_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xact
-          }
-        ],
-        [
-          1,
-          {
-            [_hH]: _xamm
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xavi
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CC_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CD_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CE_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CL_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CR_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CT_
-          }
-        ],
-        [
-          4,
-          {
-            [_hH]: _Ex
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _ES
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xawrl
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasse
-          }
-        ],
-        [
-          128 | 0,
-          {
-            [_hPH]: _xam
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseca
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseckM
-          }
-        ],
-        [
-          () => SSEKMSKeyId,
-          {
-            [_hH]: _xasseakki
-          }
-        ],
-        [
-          2,
-          {
-            [_hH]: _xassebke
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xars
-          }
-        ],
-        [
-          1,
-          {
-            [_hH]: _xampc
-          }
-        ],
-        [
-          1,
-          {
-            [_hH]: _xatc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaolm
-          }
-        ],
-        [
-          5,
-          {
-            [_hH]: _xaolrud
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaollh
-          }
-        ]
+        [2, { [_hH]: _xadm }],
+        [0, { [_hH]: _ar }],
+        [0, { [_hH]: _xae }],
+        [0, { [_hH]: _xar }],
+        [4, { [_hH]: _LM_ }],
+        [1, { [_hH]: _CL__ }],
+        [0, { [_hH]: _ETa }],
+        [0, { [_hH]: _xacc }],
+        [0, { [_hH]: _xacc_ }],
+        [0, { [_hH]: _xacc__ }],
+        [0, { [_hH]: _xacs }],
+        [0, { [_hH]: _xacs_ }],
+        [0, { [_hH]: _xact }],
+        [1, { [_hH]: _xamm }],
+        [0, { [_hH]: _xavi }],
+        [0, { [_hH]: _CC_ }],
+        [0, { [_hH]: _CD_ }],
+        [0, { [_hH]: _CE_ }],
+        [0, { [_hH]: _CL_ }],
+        [0, { [_hH]: _CR_ }],
+        [0, { [_hH]: _CT_ }],
+        [4, { [_hH]: _Ex }],
+        [0, { [_hH]: _ES }],
+        [0, { [_hH]: _xawrl }],
+        [0, { [_hH]: _xasse }],
+        [128 | 0, { [_hPH]: _xam }],
+        [0, { [_hH]: _xasseca }],
+        [0, { [_hH]: _xasseckM }],
+        [() => SSEKMSKeyId, { [_hH]: _xasseakki }],
+        [2, { [_hH]: _xassebke }],
+        [0, { [_hH]: _xasc }],
+        [0, { [_hH]: _xarc }],
+        [0, { [_hH]: _xars }],
+        [1, { [_hH]: _xampc }],
+        [1, { [_hH]: _xatc }],
+        [0, { [_hH]: _xaolm }],
+        [5, { [_hH]: _xaolrud }],
+        [0, { [_hH]: _xaollh }]
       ]
     ];
     var GetObjectRequest = [
@@ -63412,121 +59591,26 @@ var require_dist_cjs71 = __commonJS({
       ],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _IM_
-          }
-        ],
-        [
-          4,
-          {
-            [_hH]: _IMS_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _INM_
-          }
-        ],
-        [
-          4,
-          {
-            [_hH]: _IUS_
-          }
-        ],
+        [0, { [_hH]: _IM_ }],
+        [4, { [_hH]: _IMS_ }],
+        [0, { [_hH]: _INM_ }],
+        [4, { [_hH]: _IUS_ }],
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _Ra
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _rcc
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _rcd
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _rce
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _rcl
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _rct
-          }
-        ],
-        [
-          6,
-          {
-            [_hQ]: _re
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _vI
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseca
-          }
-        ],
-        [
-          () => SSECustomerKey,
-          {
-            [_hH]: _xasseck
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseckM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ],
-        [
-          1,
-          {
-            [_hQ]: _pN
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacm
-          }
-        ]
+        [0, { [_hH]: _Ra }],
+        [0, { [_hQ]: _rcc }],
+        [0, { [_hQ]: _rcd }],
+        [0, { [_hQ]: _rce }],
+        [0, { [_hQ]: _rcl }],
+        [0, { [_hQ]: _rct }],
+        [6, { [_hQ]: _re }],
+        [0, { [_hQ]: _vI }],
+        [0, { [_hH]: _xasseca }],
+        [() => SSECustomerKey, { [_hH]: _xasseck }],
+        [0, { [_hH]: _xasseckM }],
+        [0, { [_hH]: _xarp }],
+        [1, { [_hQ]: _pN }],
+        [0, { [_hH]: _xaebo }],
+        [0, { [_hH]: _xacm }]
       ]
     ];
     var GetObjectRetentionOutput = [
@@ -63535,15 +59619,7 @@ var require_dist_cjs71 = __commonJS({
       _GORO,
       0,
       [_Ret],
-      [
-        [
-          () => ObjectLockRetention,
-          {
-            [_xN]: _Ret,
-            [_hP]: 1
-          }
-        ]
-      ]
+      [[() => ObjectLockRetention, { [_xN]: _Ret, [_hP]: 1 }]]
     ];
     var GetObjectRetentionRequest = [
       3,
@@ -63554,41 +59630,19 @@ var require_dist_cjs71 = __commonJS({
       [
         [0, 1],
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _vI
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hQ]: _vI }],
+        [0, { [_hH]: _xarp }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var GetObjectTaggingOutput = [
       3,
       n04,
       _GOTO,
-      {
-        [_xN]: _Tag
-      },
+      { [_xN]: _Tag },
       [_VI, _TS],
       [
-        [
-          0,
-          {
-            [_hH]: _xavi
-          }
-        ],
+        [0, { [_hH]: _xavi }],
         [() => TagSet, 0]
       ]
     ];
@@ -63601,24 +59655,9 @@ var require_dist_cjs71 = __commonJS({
       [
         [0, 1],
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _vI
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ]
+        [0, { [_hQ]: _vI }],
+        [0, { [_hH]: _xaebo }],
+        [0, { [_hH]: _xarp }]
       ]
     ];
     var GetObjectTorrentOutput = [
@@ -63629,12 +59668,7 @@ var require_dist_cjs71 = __commonJS({
       [_Bo, _RC],
       [
         [() => StreamingBlob, 16],
-        [
-          0,
-          {
-            [_hH]: _xarc
-          }
-        ]
+        [0, { [_hH]: _xarc }]
       ]
     ];
     var GetObjectTorrentRequest = [
@@ -63646,18 +59680,8 @@ var require_dist_cjs71 = __commonJS({
       [
         [0, 1],
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xarp }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var GetPublicAccessBlockOutput = [
@@ -63676,50 +59700,18 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var GlacierJobParameters = [3, n04, _GJP, 0, [_Ti], [0]];
-    var Grant = [
-      3,
-      n04,
-      _Gr,
-      0,
-      [_Gra, _Pe],
-      [
-        [
-          () => Grantee,
-          {
-            [_xNm]: [_x, _hi]
-          }
-        ],
-        0
-      ]
-    ];
+    var Grant = [3, n04, _Gr, 0, [_Gra, _Pe], [[() => Grantee, { [_xNm]: [_x, _hi] }], 0]];
     var Grantee = [
       3,
       n04,
       _Gra,
       0,
       [_DN, _EA, _ID, _URI, _Ty],
-      [
-        0,
-        0,
-        0,
-        0,
-        [
-          0,
-          {
-            [_xN]: _xs,
-            [_xA]: 1
-          }
-        ]
-      ]
+      [0, 0, 0, 0, [0, { [_xN]: _xs, [_xA]: 1 }]]
     ];
     var HeadBucketOutput = [
       3,
@@ -63728,36 +59720,11 @@ var require_dist_cjs71 = __commonJS({
       0,
       [_BA, _BLT, _BLN, _BR, _APA],
       [
-        [
-          0,
-          {
-            [_hH]: _xaba
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xablt
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xabln
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xabr
-          }
-        ],
-        [
-          2,
-          {
-            [_hH]: _xaapa
-          }
-        ]
+        [0, { [_hH]: _xaba }],
+        [0, { [_hH]: _xablt }],
+        [0, { [_hH]: _xabln }],
+        [0, { [_hH]: _xabr }],
+        [2, { [_hH]: _xaapa }]
       ]
     ];
     var HeadBucketRequest = [
@@ -63768,12 +59735,7 @@ var require_dist_cjs71 = __commonJS({
       [_B, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var HeadObjectOutput = [
@@ -63823,240 +59785,45 @@ var require_dist_cjs71 = __commonJS({
         _OLLHS
       ],
       [
-        [
-          2,
-          {
-            [_hH]: _xadm
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _ar
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xae
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xar
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaas
-          }
-        ],
-        [
-          4,
-          {
-            [_hH]: _LM_
-          }
-        ],
-        [
-          1,
-          {
-            [_hH]: _CL__
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacc_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacc__
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacs
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacs_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xact
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _ETa
-          }
-        ],
-        [
-          1,
-          {
-            [_hH]: _xamm
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xavi
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CC_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CD_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CE_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CL_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CT_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CR_
-          }
-        ],
-        [
-          4,
-          {
-            [_hH]: _Ex
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _ES
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xawrl
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasse
-          }
-        ],
-        [
-          128 | 0,
-          {
-            [_hPH]: _xam
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseca
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseckM
-          }
-        ],
-        [
-          () => SSEKMSKeyId,
-          {
-            [_hH]: _xasseakki
-          }
-        ],
-        [
-          2,
-          {
-            [_hH]: _xassebke
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xars
-          }
-        ],
-        [
-          1,
-          {
-            [_hH]: _xampc
-          }
-        ],
-        [
-          1,
-          {
-            [_hH]: _xatc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaolm
-          }
-        ],
-        [
-          5,
-          {
-            [_hH]: _xaolrud
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaollh
-          }
-        ]
+        [2, { [_hH]: _xadm }],
+        [0, { [_hH]: _ar }],
+        [0, { [_hH]: _xae }],
+        [0, { [_hH]: _xar }],
+        [0, { [_hH]: _xaas }],
+        [4, { [_hH]: _LM_ }],
+        [1, { [_hH]: _CL__ }],
+        [0, { [_hH]: _xacc }],
+        [0, { [_hH]: _xacc_ }],
+        [0, { [_hH]: _xacc__ }],
+        [0, { [_hH]: _xacs }],
+        [0, { [_hH]: _xacs_ }],
+        [0, { [_hH]: _xact }],
+        [0, { [_hH]: _ETa }],
+        [1, { [_hH]: _xamm }],
+        [0, { [_hH]: _xavi }],
+        [0, { [_hH]: _CC_ }],
+        [0, { [_hH]: _CD_ }],
+        [0, { [_hH]: _CE_ }],
+        [0, { [_hH]: _CL_ }],
+        [0, { [_hH]: _CT_ }],
+        [0, { [_hH]: _CR_ }],
+        [4, { [_hH]: _Ex }],
+        [0, { [_hH]: _ES }],
+        [0, { [_hH]: _xawrl }],
+        [0, { [_hH]: _xasse }],
+        [128 | 0, { [_hPH]: _xam }],
+        [0, { [_hH]: _xasseca }],
+        [0, { [_hH]: _xasseckM }],
+        [() => SSEKMSKeyId, { [_hH]: _xasseakki }],
+        [2, { [_hH]: _xassebke }],
+        [0, { [_hH]: _xasc }],
+        [0, { [_hH]: _xarc }],
+        [0, { [_hH]: _xars }],
+        [1, { [_hH]: _xampc }],
+        [1, { [_hH]: _xatc }],
+        [0, { [_hH]: _xaolm }],
+        [5, { [_hH]: _xaolrud }],
+        [0, { [_hH]: _xaollh }]
       ]
     ];
     var HeadObjectRequest = [
@@ -64089,134 +59856,29 @@ var require_dist_cjs71 = __commonJS({
       ],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _IM_
-          }
-        ],
-        [
-          4,
-          {
-            [_hH]: _IMS_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _INM_
-          }
-        ],
-        [
-          4,
-          {
-            [_hH]: _IUS_
-          }
-        ],
+        [0, { [_hH]: _IM_ }],
+        [4, { [_hH]: _IMS_ }],
+        [0, { [_hH]: _INM_ }],
+        [4, { [_hH]: _IUS_ }],
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _Ra
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _rcc
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _rcd
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _rce
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _rcl
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _rct
-          }
-        ],
-        [
-          6,
-          {
-            [_hQ]: _re
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _vI
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseca
-          }
-        ],
-        [
-          () => SSECustomerKey,
-          {
-            [_hH]: _xasseck
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseckM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ],
-        [
-          1,
-          {
-            [_hQ]: _pN
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacm
-          }
-        ]
+        [0, { [_hH]: _Ra }],
+        [0, { [_hQ]: _rcc }],
+        [0, { [_hQ]: _rcd }],
+        [0, { [_hQ]: _rce }],
+        [0, { [_hQ]: _rcl }],
+        [0, { [_hQ]: _rct }],
+        [6, { [_hQ]: _re }],
+        [0, { [_hQ]: _vI }],
+        [0, { [_hH]: _xasseca }],
+        [() => SSECustomerKey, { [_hH]: _xasseck }],
+        [0, { [_hH]: _xasseckM }],
+        [0, { [_hH]: _xarp }],
+        [1, { [_hQ]: _pN }],
+        [0, { [_hH]: _xaebo }],
+        [0, { [_hH]: _xacm }]
       ]
     ];
-    var IdempotencyParameterMismatch = [
-      -3,
-      n04,
-      _IPM,
-      {
-        [_e4]: _c4,
-        [_hE4]: 400
-      },
-      [],
-      []
-    ];
+    var IdempotencyParameterMismatch = [-3, n04, _IPM, { [_e4]: _c4, [_hE4]: 400 }, [], []];
     schema.TypeRegistry.for(n04).registerError(IdempotencyParameterMismatch, IdempotencyParameterMismatch$1);
     var IndexDocument = [3, n04, _IDn, 0, [_Su], [0]];
     var Initiator = [3, n04, _In, 0, [_ID, _DN], [0, 0]];
@@ -64234,16 +59896,7 @@ var require_dist_cjs71 = __commonJS({
       _ITAO,
       0,
       [_P2, _T2],
-      [
-        0,
-        [
-          () => TagSet,
-          {
-            [_xN]: _Ta2,
-            [_xF]: 1
-          }
-        ]
-      ]
+      [0, [() => TagSet, { [_xN]: _Ta2, [_xF]: 1 }]]
     ];
     var IntelligentTieringConfiguration = [
       3,
@@ -64251,18 +59904,7 @@ var require_dist_cjs71 = __commonJS({
       _ITC,
       0,
       [_I, _F, _S, _Tie],
-      [
-        0,
-        [() => IntelligentTieringFilter, 0],
-        0,
-        [
-          () => TieringList,
-          {
-            [_xN]: _Tier,
-            [_xF]: 1
-          }
-        ]
-      ]
+      [0, [() => IntelligentTieringFilter, 0], 0, [() => TieringList, { [_xN]: _Tier, [_xF]: 1 }]]
     ];
     var IntelligentTieringFilter = [
       3,
@@ -64272,41 +59914,11 @@ var require_dist_cjs71 = __commonJS({
       [_P2, _Ta2, _An],
       [0, () => Tag3, [() => IntelligentTieringAndOperator, 0]]
     ];
-    var InvalidObjectState = [
-      -3,
-      n04,
-      _IOS,
-      {
-        [_e4]: _c4,
-        [_hE4]: 403
-      },
-      [_SC, _AT3],
-      [0, 0]
-    ];
+    var InvalidObjectState = [-3, n04, _IOS, { [_e4]: _c4, [_hE4]: 403 }, [_SC, _AT3], [0, 0]];
     schema.TypeRegistry.for(n04).registerError(InvalidObjectState, InvalidObjectState$1);
-    var InvalidRequest = [
-      -3,
-      n04,
-      _IR,
-      {
-        [_e4]: _c4,
-        [_hE4]: 400
-      },
-      [],
-      []
-    ];
+    var InvalidRequest = [-3, n04, _IR, { [_e4]: _c4, [_hE4]: 400 }, [], []];
     schema.TypeRegistry.for(n04).registerError(InvalidRequest, InvalidRequest$1);
-    var InvalidWriteOffset = [
-      -3,
-      n04,
-      _IWO,
-      {
-        [_e4]: _c4,
-        [_hE4]: 400
-      },
-      [],
-      []
-    ];
+    var InvalidWriteOffset = [-3, n04, _IWO, { [_e4]: _c4, [_hE4]: 400 }, [], []];
     schema.TypeRegistry.for(n04).registerError(InvalidWriteOffset, InvalidWriteOffset$1);
     var InventoryConfiguration = [
       3,
@@ -64339,18 +59951,8 @@ var require_dist_cjs71 = __commonJS({
       0,
       [_SSES, _SSEKMS],
       [
-        [
-          () => SSES3,
-          {
-            [_xN]: _SS
-          }
-        ],
-        [
-          () => SSEKMS,
-          {
-            [_xN]: _SK
-          }
-        ]
+        [() => SSES3, { [_xN]: _SS }],
+        [() => SSEKMS, { [_xN]: _SK }]
       ]
     ];
     var InventoryFilter = [3, n04, _IF, 0, [_P2], [0]];
@@ -64419,23 +60021,7 @@ var require_dist_cjs71 = __commonJS({
       _LFC,
       0,
       [_I, _LFA, _Ev, _F],
-      [
-        0,
-        [
-          0,
-          {
-            [_xN]: _CF
-          }
-        ],
-        [
-          64 | 0,
-          {
-            [_xN]: _Eve,
-            [_xF]: 1
-          }
-        ],
-        [() => NotificationConfigurationFilter, 0]
-      ]
+      [0, [0, { [_xN]: _CF }], [64 | 0, { [_xN]: _Eve, [_xF]: 1 }], [() => NotificationConfigurationFilter, 0]]
     ];
     var LifecycleExpiration = [3, n04, _LEi, 0, [_Da, _D, _EODM], [5, 1, 2]];
     var LifecycleRule = [
@@ -64450,20 +60036,8 @@ var require_dist_cjs71 = __commonJS({
         0,
         [() => LifecycleRuleFilter, 0],
         0,
-        [
-          () => TransitionList,
-          {
-            [_xN]: _Tra,
-            [_xF]: 1
-          }
-        ],
-        [
-          () => NoncurrentVersionTransitionList,
-          {
-            [_xN]: _NVTo,
-            [_xF]: 1
-          }
-        ],
+        [() => TransitionList, { [_xN]: _Tra, [_xF]: 1 }],
+        [() => NoncurrentVersionTransitionList, { [_xN]: _NVTo, [_xF]: 1 }],
         () => NoncurrentVersionExpiration,
         () => AbortIncompleteMultipartUpload
       ]
@@ -64474,18 +60048,7 @@ var require_dist_cjs71 = __commonJS({
       _LRAO,
       0,
       [_P2, _T2, _OSGT, _OSLT],
-      [
-        0,
-        [
-          () => TagSet,
-          {
-            [_xN]: _Ta2,
-            [_xF]: 1
-          }
-        ],
-        1,
-        1
-      ]
+      [0, [() => TagSet, { [_xN]: _Ta2, [_xF]: 1 }], 1, 1]
     ];
     var LifecycleRuleFilter = [
       3,
@@ -64499,22 +60062,9 @@ var require_dist_cjs71 = __commonJS({
       3,
       n04,
       _LBACO,
-      {
-        [_xN]: _LBACR
-      },
+      { [_xN]: _LBACR },
       [_IT2, _CTon, _NCT, _ACLn],
-      [
-        2,
-        0,
-        0,
-        [
-          () => AnalyticsConfigurationList,
-          {
-            [_xN]: _ACn,
-            [_xF]: 1
-          }
-        ]
-      ]
+      [2, 0, 0, [() => AnalyticsConfigurationList, { [_xN]: _ACn, [_xF]: 1 }]]
     ];
     var ListBucketAnalyticsConfigurationsRequest = [
       3,
@@ -64524,18 +60074,8 @@ var require_dist_cjs71 = __commonJS({
       [_B, _CTon, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _ct
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hQ]: _ct }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var ListBucketIntelligentTieringConfigurationsOutput = [
@@ -64544,18 +60084,7 @@ var require_dist_cjs71 = __commonJS({
       _LBITCO,
       0,
       [_IT2, _CTon, _NCT, _ITCL],
-      [
-        2,
-        0,
-        0,
-        [
-          () => IntelligentTieringConfigurationList,
-          {
-            [_xN]: _ITC,
-            [_xF]: 1
-          }
-        ]
-      ]
+      [2, 0, 0, [() => IntelligentTieringConfigurationList, { [_xN]: _ITC, [_xF]: 1 }]]
     ];
     var ListBucketIntelligentTieringConfigurationsRequest = [
       3,
@@ -64565,40 +60094,17 @@ var require_dist_cjs71 = __commonJS({
       [_B, _CTon, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _ct
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hQ]: _ct }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var ListBucketInventoryConfigurationsOutput = [
       3,
       n04,
       _LBICO,
-      {
-        [_xN]: _LICR
-      },
+      { [_xN]: _LICR },
       [_CTon, _ICL, _IT2, _NCT],
-      [
-        0,
-        [
-          () => InventoryConfigurationList,
-          {
-            [_xN]: _IC,
-            [_xF]: 1
-          }
-        ],
-        2,
-        0
-      ]
+      [0, [() => InventoryConfigurationList, { [_xN]: _IC, [_xF]: 1 }], 2, 0]
     ];
     var ListBucketInventoryConfigurationsRequest = [
       3,
@@ -64608,40 +60114,17 @@ var require_dist_cjs71 = __commonJS({
       [_B, _CTon, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _ct
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hQ]: _ct }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var ListBucketMetricsConfigurationsOutput = [
       3,
       n04,
       _LBMCO,
-      {
-        [_xN]: _LMCR
-      },
+      { [_xN]: _LMCR },
       [_IT2, _CTon, _NCT, _MCL],
-      [
-        2,
-        0,
-        0,
-        [
-          () => MetricsConfigurationList,
-          {
-            [_xN]: _MCe,
-            [_xF]: 1
-          }
-        ]
-      ]
+      [2, 0, 0, [() => MetricsConfigurationList, { [_xN]: _MCe, [_xF]: 1 }]]
     ];
     var ListBucketMetricsConfigurationsRequest = [
       3,
@@ -64651,27 +60134,15 @@ var require_dist_cjs71 = __commonJS({
       [_B, _CTon, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _ct
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hQ]: _ct }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var ListBucketsOutput = [
       3,
       n04,
       _LBO,
-      {
-        [_xN]: _LAMBR
-      },
+      { [_xN]: _LAMBR },
       [_Bu, _O, _CTon, _P2],
       [[() => Buckets, 0], () => Owner, 0, 0]
     ];
@@ -64682,39 +60153,17 @@ var require_dist_cjs71 = __commonJS({
       0,
       [_MB, _CTon, _P2, _BR],
       [
-        [
-          1,
-          {
-            [_hQ]: _mb
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _ct
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _p
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _br
-          }
-        ]
+        [1, { [_hQ]: _mb }],
+        [0, { [_hQ]: _ct }],
+        [0, { [_hQ]: _p }],
+        [0, { [_hQ]: _br }]
       ]
     ];
     var ListDirectoryBucketsOutput = [
       3,
       n04,
       _LDBO,
-      {
-        [_xN]: _LAMDBR
-      },
+      { [_xN]: _LAMDBR },
       [_Bu, _CTon],
       [[() => Buckets, 0], 0]
     ];
@@ -64725,27 +60174,15 @@ var require_dist_cjs71 = __commonJS({
       0,
       [_CTon, _MDB],
       [
-        [
-          0,
-          {
-            [_hQ]: _ct
-          }
-        ],
-        [
-          1,
-          {
-            [_hQ]: _mdb
-          }
-        ]
+        [0, { [_hQ]: _ct }],
+        [1, { [_hQ]: _mdb }]
       ]
     ];
     var ListMultipartUploadsOutput = [
       3,
       n04,
       _LMUO,
-      {
-        [_xN]: _LMUR
-      },
+      { [_xN]: _LMUR },
       [_B, _KM, _UIM, _NKM, _P2, _Deli, _NUIM, _MUa, _IT2, _U, _CPom, _ETn, _RC],
       [
         0,
@@ -64757,26 +60194,10 @@ var require_dist_cjs71 = __commonJS({
         0,
         1,
         2,
-        [
-          () => MultipartUploadList,
-          {
-            [_xN]: _Up,
-            [_xF]: 1
-          }
-        ],
-        [
-          () => CommonPrefixList,
-          {
-            [_xF]: 1
-          }
-        ],
+        [() => MultipartUploadList, { [_xN]: _Up, [_xF]: 1 }],
+        [() => CommonPrefixList, { [_xF]: 1 }],
         0,
-        [
-          0,
-          {
-            [_hH]: _xarc
-          }
-        ]
+        [0, { [_hH]: _xarc }]
       ]
     ];
     var ListMultipartUploadsRequest = [
@@ -64787,91 +60208,34 @@ var require_dist_cjs71 = __commonJS({
       [_B, _Deli, _ETn, _KM, _MUa, _P2, _UIM, _EBO, _RP],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _d
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _et
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _km
-          }
-        ],
-        [
-          1,
-          {
-            [_hQ]: _mu
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _p
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _uim
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ]
+        [0, { [_hQ]: _d }],
+        [0, { [_hQ]: _et }],
+        [0, { [_hQ]: _km }],
+        [1, { [_hQ]: _mu }],
+        [0, { [_hQ]: _p }],
+        [0, { [_hQ]: _uim }],
+        [0, { [_hH]: _xaebo }],
+        [0, { [_hH]: _xarp }]
       ]
     ];
     var ListObjectsOutput = [
       3,
       n04,
       _LOO,
-      {
-        [_xN]: _LBRi
-      },
+      { [_xN]: _LBRi },
       [_IT2, _Ma, _NM, _Con, _N, _P2, _Deli, _MK, _CPom, _ETn, _RC],
       [
         2,
         0,
         0,
-        [
-          () => ObjectList,
-          {
-            [_xF]: 1
-          }
-        ],
+        [() => ObjectList, { [_xF]: 1 }],
         0,
         0,
         0,
         1,
-        [
-          () => CommonPrefixList,
-          {
-            [_xF]: 1
-          }
-        ],
+        [() => CommonPrefixList, { [_xF]: 1 }],
         0,
-        [
-          0,
-          {
-            [_hH]: _xarc
-          }
-        ]
+        [0, { [_hH]: _xarc }]
       ]
     ];
     var ListObjectsRequest = [
@@ -64882,93 +60246,36 @@ var require_dist_cjs71 = __commonJS({
       [_B, _Deli, _ETn, _Ma, _MK, _P2, _RP, _EBO, _OOA],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _d
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _et
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _m3
-          }
-        ],
-        [
-          1,
-          {
-            [_hQ]: _mk
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _p
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ],
-        [
-          64 | 0,
-          {
-            [_hH]: _xaooa
-          }
-        ]
+        [0, { [_hQ]: _d }],
+        [0, { [_hQ]: _et }],
+        [0, { [_hQ]: _m3 }],
+        [1, { [_hQ]: _mk }],
+        [0, { [_hQ]: _p }],
+        [0, { [_hH]: _xarp }],
+        [0, { [_hH]: _xaebo }],
+        [64 | 0, { [_hH]: _xaooa }]
       ]
     ];
     var ListObjectsV2Output = [
       3,
       n04,
       _LOVO,
-      {
-        [_xN]: _LBRi
-      },
+      { [_xN]: _LBRi },
       [_IT2, _Con, _N, _P2, _Deli, _MK, _CPom, _ETn, _KC, _CTon, _NCT, _SA, _RC],
       [
         2,
-        [
-          () => ObjectList,
-          {
-            [_xF]: 1
-          }
-        ],
+        [() => ObjectList, { [_xF]: 1 }],
         0,
         0,
         0,
         1,
-        [
-          () => CommonPrefixList,
-          {
-            [_xF]: 1
-          }
-        ],
+        [() => CommonPrefixList, { [_xF]: 1 }],
         0,
         1,
         0,
         0,
         0,
-        [
-          0,
-          {
-            [_hH]: _xarc
-          }
-        ]
+        [0, { [_hH]: _xarc }]
       ]
     ];
     var ListObjectsV2Request = [
@@ -64979,75 +60286,23 @@ var require_dist_cjs71 = __commonJS({
       [_B, _Deli, _ETn, _MK, _P2, _CTon, _FO, _SA, _RP, _EBO, _OOA],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _d
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _et
-          }
-        ],
-        [
-          1,
-          {
-            [_hQ]: _mk
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _p
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _ct
-          }
-        ],
-        [
-          2,
-          {
-            [_hQ]: _fo
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _sa
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ],
-        [
-          64 | 0,
-          {
-            [_hH]: _xaooa
-          }
-        ]
+        [0, { [_hQ]: _d }],
+        [0, { [_hQ]: _et }],
+        [1, { [_hQ]: _mk }],
+        [0, { [_hQ]: _p }],
+        [0, { [_hQ]: _ct }],
+        [2, { [_hQ]: _fo }],
+        [0, { [_hQ]: _sa }],
+        [0, { [_hH]: _xarp }],
+        [0, { [_hH]: _xaebo }],
+        [64 | 0, { [_hH]: _xaooa }]
       ]
     ];
     var ListObjectVersionsOutput = [
       3,
       n04,
       _LOVOi,
-      {
-        [_xN]: _LVR
-      },
+      { [_xN]: _LVR },
       [_IT2, _KM, _VIM, _NKM, _NVIM, _Ve, _DMe, _N, _P2, _Deli, _MK, _CPom, _ETn, _RC],
       [
         2,
@@ -65055,37 +60310,15 @@ var require_dist_cjs71 = __commonJS({
         0,
         0,
         0,
-        [
-          () => ObjectVersionList,
-          {
-            [_xN]: _Ver,
-            [_xF]: 1
-          }
-        ],
-        [
-          () => DeleteMarkers,
-          {
-            [_xN]: _DM,
-            [_xF]: 1
-          }
-        ],
+        [() => ObjectVersionList, { [_xN]: _Ver, [_xF]: 1 }],
+        [() => DeleteMarkers, { [_xN]: _DM, [_xF]: 1 }],
         0,
         0,
         0,
         1,
-        [
-          () => CommonPrefixList,
-          {
-            [_xF]: 1
-          }
-        ],
+        [() => CommonPrefixList, { [_xF]: 1 }],
         0,
-        [
-          0,
-          {
-            [_hH]: _xarc
-          }
-        ]
+        [0, { [_hH]: _xarc }]
       ]
     ];
     var ListObjectVersionsRequest = [
@@ -65096,83 +60329,26 @@ var require_dist_cjs71 = __commonJS({
       [_B, _Deli, _ETn, _KM, _MK, _P2, _VIM, _EBO, _RP, _OOA],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _d
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _et
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _km
-          }
-        ],
-        [
-          1,
-          {
-            [_hQ]: _mk
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _p
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _vim
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ],
-        [
-          64 | 0,
-          {
-            [_hH]: _xaooa
-          }
-        ]
+        [0, { [_hQ]: _d }],
+        [0, { [_hQ]: _et }],
+        [0, { [_hQ]: _km }],
+        [1, { [_hQ]: _mk }],
+        [0, { [_hQ]: _p }],
+        [0, { [_hQ]: _vim }],
+        [0, { [_hH]: _xaebo }],
+        [0, { [_hH]: _xarp }],
+        [64 | 0, { [_hH]: _xaooa }]
       ]
     ];
     var ListPartsOutput = [
       3,
       n04,
       _LPO,
-      {
-        [_xN]: _LPR
-      },
+      { [_xN]: _LPR },
       [_AD, _ARI2, _B, _K2, _UI, _PNM, _NPNM, _MP, _IT2, _Pa, _In, _O, _SC, _RC, _CA2, _CT2],
       [
-        [
-          4,
-          {
-            [_hH]: _xaad
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaari
-          }
-        ],
+        [4, { [_hH]: _xaad }],
+        [0, { [_hH]: _xaari }],
         0,
         0,
         0,
@@ -65180,22 +60356,11 @@ var require_dist_cjs71 = __commonJS({
         0,
         1,
         2,
-        [
-          () => Parts,
-          {
-            [_xN]: _Par,
-            [_xF]: 1
-          }
-        ],
+        [() => Parts, { [_xN]: _Par, [_xF]: 1 }],
         () => Initiator,
         () => Owner,
         0,
-        [
-          0,
-          {
-            [_hH]: _xarc
-          }
-        ],
+        [0, { [_hH]: _xarc }],
         0,
         0
       ]
@@ -65209,54 +60374,14 @@ var require_dist_cjs71 = __commonJS({
       [
         [0, 1],
         [0, 1],
-        [
-          1,
-          {
-            [_hQ]: _mp
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _pnm
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _uI
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseca
-          }
-        ],
-        [
-          () => SSECustomerKey,
-          {
-            [_hH]: _xasseck
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseckM
-          }
-        ]
+        [1, { [_hQ]: _mp }],
+        [0, { [_hQ]: _pnm }],
+        [0, { [_hQ]: _uI }],
+        [0, { [_hH]: _xarp }],
+        [0, { [_hH]: _xaebo }],
+        [0, { [_hH]: _xasseca }],
+        [() => SSECustomerKey, { [_hH]: _xasseck }],
+        [0, { [_hH]: _xasseckM }]
       ]
     ];
     var LocationInfo = [3, n04, _LI, 0, [_Ty, _N], [0, 0]];
@@ -65302,17 +60427,7 @@ var require_dist_cjs71 = __commonJS({
       _MAO,
       0,
       [_P2, _T2, _APAc],
-      [
-        0,
-        [
-          () => TagSet,
-          {
-            [_xN]: _Ta2,
-            [_xF]: 1
-          }
-        ],
-        0
-      ]
+      [0, [() => TagSet, { [_xN]: _Ta2, [_xF]: 1 }], 0]
     ];
     var MetricsConfiguration = [3, n04, _MCe, 0, [_I, _F], [0, [() => MetricsFilter, 0]]];
     var MultipartUpload = [
@@ -65325,52 +60440,13 @@ var require_dist_cjs71 = __commonJS({
     ];
     var NoncurrentVersionExpiration = [3, n04, _NVE, 0, [_ND, _NNV], [1, 1]];
     var NoncurrentVersionTransition = [3, n04, _NVTo, 0, [_ND, _SC, _NNV], [1, 0, 1]];
-    var NoSuchBucket = [
-      -3,
-      n04,
-      _NSB,
-      {
-        [_e4]: _c4,
-        [_hE4]: 404
-      },
-      [],
-      []
-    ];
+    var NoSuchBucket = [-3, n04, _NSB, { [_e4]: _c4, [_hE4]: 404 }, [], []];
     schema.TypeRegistry.for(n04).registerError(NoSuchBucket, NoSuchBucket$1);
-    var NoSuchKey2 = [
-      -3,
-      n04,
-      _NSK,
-      {
-        [_e4]: _c4,
-        [_hE4]: 404
-      },
-      [],
-      []
-    ];
+    var NoSuchKey2 = [-3, n04, _NSK, { [_e4]: _c4, [_hE4]: 404 }, [], []];
     schema.TypeRegistry.for(n04).registerError(NoSuchKey2, NoSuchKey$1);
-    var NoSuchUpload = [
-      -3,
-      n04,
-      _NSU,
-      {
-        [_e4]: _c4,
-        [_hE4]: 404
-      },
-      [],
-      []
-    ];
+    var NoSuchUpload = [-3, n04, _NSU, { [_e4]: _c4, [_hE4]: 404 }, [], []];
     schema.TypeRegistry.for(n04).registerError(NoSuchUpload, NoSuchUpload$1);
-    var NotFound = [
-      -3,
-      n04,
-      _NF,
-      {
-        [_e4]: _c4
-      },
-      [],
-      []
-    ];
+    var NotFound = [-3, n04, _NF, { [_e4]: _c4 }, [], []];
     schema.TypeRegistry.for(n04).registerError(NotFound, NotFound$1);
     var NotificationConfiguration = [
       3,
@@ -65379,27 +60455,9 @@ var require_dist_cjs71 = __commonJS({
       0,
       [_TCo, _QCu, _LFCa, _EBC],
       [
-        [
-          () => TopicConfigurationList,
-          {
-            [_xN]: _TCop,
-            [_xF]: 1
-          }
-        ],
-        [
-          () => QueueConfigurationList,
-          {
-            [_xN]: _QCue,
-            [_xF]: 1
-          }
-        ],
-        [
-          () => LambdaFunctionConfigurationList,
-          {
-            [_xN]: _CFC,
-            [_xF]: 1
-          }
-        ],
+        [() => TopicConfigurationList, { [_xN]: _TCop, [_xF]: 1 }],
+        [() => QueueConfigurationList, { [_xN]: _QCue, [_xF]: 1 }],
+        [() => LambdaFunctionConfigurationList, { [_xN]: _CFC, [_xF]: 1 }],
         () => EventBridgeConfiguration
       ]
     ];
@@ -65409,14 +60467,7 @@ var require_dist_cjs71 = __commonJS({
       _NCF,
       0,
       [_K2],
-      [
-        [
-          () => S3KeyFilter,
-          {
-            [_xN]: _SKe
-          }
-        ]
-      ]
+      [[() => S3KeyFilter, { [_xN]: _SKe }]]
     ];
     var _Object = [
       3,
@@ -65424,51 +60475,16 @@ var require_dist_cjs71 = __commonJS({
       _Obj,
       0,
       [_K2, _LM, _ETa, _CA2, _CT2, _Si, _SC, _O, _RSe],
-      [
-        0,
-        4,
-        0,
-        [
-          64 | 0,
-          {
-            [_xF]: 1
-          }
-        ],
-        0,
-        1,
-        0,
-        () => Owner,
-        () => RestoreStatus
-      ]
+      [0, 4, 0, [64 | 0, { [_xF]: 1 }], 0, 1, 0, () => Owner, () => RestoreStatus]
     ];
-    var ObjectAlreadyInActiveTierError = [
-      -3,
-      n04,
-      _OAIATE,
-      {
-        [_e4]: _c4,
-        [_hE4]: 403
-      },
-      [],
-      []
-    ];
+    var ObjectAlreadyInActiveTierError = [-3, n04, _OAIATE, { [_e4]: _c4, [_hE4]: 403 }, [], []];
     schema.TypeRegistry.for(n04).registerError(ObjectAlreadyInActiveTierError, ObjectAlreadyInActiveTierError$1);
     var ObjectIdentifier = [3, n04, _OI, 0, [_K2, _VI, _ETa, _LMT, _Si], [0, 0, 0, 6, 1]];
     var ObjectLockConfiguration = [3, n04, _OLC, 0, [_OLE, _Ru], [0, () => ObjectLockRule]];
     var ObjectLockLegalHold = [3, n04, _OLLH, 0, [_S], [0]];
     var ObjectLockRetention = [3, n04, _OLR, 0, [_Mo, _RUD], [0, 5]];
     var ObjectLockRule = [3, n04, _OLRb, 0, [_DRe], [() => DefaultRetention]];
-    var ObjectNotInActiveTierError = [
-      -3,
-      n04,
-      _ONIATE,
-      {
-        [_e4]: _c4,
-        [_hE4]: 403
-      },
-      [],
-      []
-    ];
+    var ObjectNotInActiveTierError = [-3, n04, _ONIATE, { [_e4]: _c4, [_hE4]: 403 }, [], []];
     schema.TypeRegistry.for(n04).registerError(ObjectNotInActiveTierError, ObjectNotInActiveTierError$1);
     var ObjectPart = [
       3,
@@ -65484,24 +60500,7 @@ var require_dist_cjs71 = __commonJS({
       _OV,
       0,
       [_ETa, _CA2, _CT2, _Si, _SC, _K2, _VI, _IL, _LM, _O, _RSe],
-      [
-        0,
-        [
-          64 | 0,
-          {
-            [_xF]: 1
-          }
-        ],
-        0,
-        1,
-        0,
-        0,
-        0,
-        2,
-        4,
-        () => Owner,
-        () => RestoreStatus
-      ]
+      [0, [64 | 0, { [_xF]: 1 }], 0, 1, 0, 0, 0, 2, 4, () => Owner, () => RestoreStatus]
     ];
     var OutputLocation = [3, n04, _OL, 0, [_S_], [[() => S3Location, 0]]];
     var OutputSerialization = [
@@ -65519,15 +60518,7 @@ var require_dist_cjs71 = __commonJS({
       _OC,
       0,
       [_R],
-      [
-        [
-          () => OwnershipControlsRules,
-          {
-            [_xN]: _Ru,
-            [_xF]: 1
-          }
-        ]
-      ]
+      [[() => OwnershipControlsRules, { [_xN]: _Ru, [_xF]: 1 }]]
     ];
     var OwnershipControlsRule = [3, n04, _OCR, 0, [_OO], [0]];
     var ParquetInput = [3, n04, _PI2, 0, [], []];
@@ -65539,47 +60530,10 @@ var require_dist_cjs71 = __commonJS({
       [_PN, _LM, _ETa, _Si, _CCRC, _CCRCC, _CCRCNVME, _CSHA, _CSHAh],
       [1, 4, 0, 1, 0, 0, 0, 0, 0]
     ];
-    var PartitionedPrefix = [
-      3,
-      n04,
-      _PP,
-      {
-        [_xN]: _PP
-      },
-      [_PDS],
-      [0]
-    ];
-    var PolicyStatus = [
-      3,
-      n04,
-      _PS,
-      0,
-      [_IP],
-      [
-        [
-          2,
-          {
-            [_xN]: _IP
-          }
-        ]
-      ]
-    ];
+    var PartitionedPrefix = [3, n04, _PP, { [_xN]: _PP }, [_PDS], [0]];
+    var PolicyStatus = [3, n04, _PS, 0, [_IP], [[2, { [_xN]: _IP }]]];
     var Progress = [3, n04, _Pr2, 0, [_BS, _BP, _BRy], [1, 1, 1]];
-    var ProgressEvent = [
-      3,
-      n04,
-      _PE,
-      0,
-      [_Det],
-      [
-        [
-          () => Progress,
-          {
-            [_eP]: 1
-          }
-        ]
-      ]
-    ];
+    var ProgressEvent = [3, n04, _PE, 0, [_Det], [[() => Progress, { [_eP]: 1 }]]];
     var PublicAccessBlockConfiguration = [
       3,
       n04,
@@ -65587,30 +60541,10 @@ var require_dist_cjs71 = __commonJS({
       0,
       [_BPA, _IPA, _BPP, _RPB],
       [
-        [
-          2,
-          {
-            [_xN]: _BPA
-          }
-        ],
-        [
-          2,
-          {
-            [_xN]: _IPA
-          }
-        ],
-        [
-          2,
-          {
-            [_xN]: _BPP
-          }
-        ],
-        [
-          2,
-          {
-            [_xN]: _RPB
-          }
-        ]
+        [2, { [_xN]: _BPA }],
+        [2, { [_xN]: _IPA }],
+        [2, { [_xN]: _BPP }],
+        [2, { [_xN]: _RPB }]
       ]
     ];
     var PutBucketAbacRequest = [
@@ -65621,31 +60555,10 @@ var require_dist_cjs71 = __commonJS({
       [_B, _CMD, _CA2, _EBO, _AS],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _CM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ],
-        [
-          () => AbacStatus,
-          {
-            [_xN]: _AS,
-            [_hP]: 1
-          }
-        ]
+        [0, { [_hH]: _CM }],
+        [0, { [_hH]: _xasca }],
+        [0, { [_hH]: _xaebo }],
+        [() => AbacStatus, { [_xN]: _AS, [_hP]: 1 }]
       ]
     ];
     var PutBucketAccelerateConfigurationRequest = [
@@ -65656,25 +60569,9 @@ var require_dist_cjs71 = __commonJS({
       [_B, _AC, _EBO, _CA2],
       [
         [0, 1],
-        [
-          () => AccelerateConfiguration,
-          {
-            [_xN]: _AC,
-            [_hP]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ]
+        [() => AccelerateConfiguration, { [_xN]: _AC, [_hP]: 1 }],
+        [0, { [_hH]: _xaebo }],
+        [0, { [_hH]: _xasca }]
       ]
     ];
     var PutBucketAclRequest = [
@@ -65684,68 +60581,17 @@ var require_dist_cjs71 = __commonJS({
       0,
       [_ACL_, _ACP, _B, _CMD, _CA2, _GFC, _GR, _GRACP, _GW, _GWACP, _EBO],
       [
-        [
-          0,
-          {
-            [_hH]: _xaa
-          }
-        ],
-        [
-          () => AccessControlPolicy,
-          {
-            [_xN]: _ACP,
-            [_hP]: 1
-          }
-        ],
+        [0, { [_hH]: _xaa }],
+        [() => AccessControlPolicy, { [_xN]: _ACP, [_hP]: 1 }],
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _CM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xagfc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xagr
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xagra
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xagw
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xagwa
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _CM }],
+        [0, { [_hH]: _xasca }],
+        [0, { [_hH]: _xagfc }],
+        [0, { [_hH]: _xagr }],
+        [0, { [_hH]: _xagra }],
+        [0, { [_hH]: _xagw }],
+        [0, { [_hH]: _xagwa }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var PutBucketAnalyticsConfigurationRequest = [
@@ -65756,25 +60602,9 @@ var require_dist_cjs71 = __commonJS({
       [_B, _I, _ACn, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _i
-          }
-        ],
-        [
-          () => AnalyticsConfiguration,
-          {
-            [_xN]: _ACn,
-            [_hP]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hQ]: _i }],
+        [() => AnalyticsConfiguration, { [_xN]: _ACn, [_hP]: 1 }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var PutBucketCorsRequest = [
@@ -65785,31 +60615,10 @@ var require_dist_cjs71 = __commonJS({
       [_B, _CORSC, _CMD, _CA2, _EBO],
       [
         [0, 1],
-        [
-          () => CORSConfiguration,
-          {
-            [_xN]: _CORSC,
-            [_hP]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [() => CORSConfiguration, { [_xN]: _CORSC, [_hP]: 1 }],
+        [0, { [_hH]: _CM }],
+        [0, { [_hH]: _xasca }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var PutBucketEncryptionRequest = [
@@ -65820,31 +60629,10 @@ var require_dist_cjs71 = __commonJS({
       [_B, _CMD, _CA2, _SSEC, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _CM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ],
-        [
-          () => ServerSideEncryptionConfiguration,
-          {
-            [_xN]: _SSEC,
-            [_hP]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _CM }],
+        [0, { [_hH]: _xasca }],
+        [() => ServerSideEncryptionConfiguration, { [_xN]: _SSEC, [_hP]: 1 }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var PutBucketIntelligentTieringConfigurationRequest = [
@@ -65855,25 +60643,9 @@ var require_dist_cjs71 = __commonJS({
       [_B, _I, _EBO, _ITC],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _i
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ],
-        [
-          () => IntelligentTieringConfiguration,
-          {
-            [_xN]: _ITC,
-            [_hP]: 1
-          }
-        ]
+        [0, { [_hQ]: _i }],
+        [0, { [_hH]: _xaebo }],
+        [() => IntelligentTieringConfiguration, { [_xN]: _ITC, [_hP]: 1 }]
       ]
     ];
     var PutBucketInventoryConfigurationRequest = [
@@ -65884,25 +60656,9 @@ var require_dist_cjs71 = __commonJS({
       [_B, _I, _IC, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _i
-          }
-        ],
-        [
-          () => InventoryConfiguration,
-          {
-            [_xN]: _IC,
-            [_hP]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hQ]: _i }],
+        [() => InventoryConfiguration, { [_xN]: _IC, [_hP]: 1 }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var PutBucketLifecycleConfigurationOutput = [
@@ -65911,14 +60667,7 @@ var require_dist_cjs71 = __commonJS({
       _PBLCO,
       0,
       [_TDMOS],
-      [
-        [
-          0,
-          {
-            [_hH]: _xatdmos
-          }
-        ]
-      ]
+      [[0, { [_hH]: _xatdmos }]]
     ];
     var PutBucketLifecycleConfigurationRequest = [
       3,
@@ -65928,31 +60677,10 @@ var require_dist_cjs71 = __commonJS({
       [_B, _CA2, _LCi, _EBO, _TDMOS],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ],
-        [
-          () => BucketLifecycleConfiguration,
-          {
-            [_xN]: _LCi,
-            [_hP]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xatdmos
-          }
-        ]
+        [0, { [_hH]: _xasca }],
+        [() => BucketLifecycleConfiguration, { [_xN]: _LCi, [_hP]: 1 }],
+        [0, { [_hH]: _xaebo }],
+        [0, { [_hH]: _xatdmos }]
       ]
     ];
     var PutBucketLoggingRequest = [
@@ -65963,31 +60691,10 @@ var require_dist_cjs71 = __commonJS({
       [_B, _BLS, _CMD, _CA2, _EBO],
       [
         [0, 1],
-        [
-          () => BucketLoggingStatus,
-          {
-            [_xN]: _BLS,
-            [_hP]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [() => BucketLoggingStatus, { [_xN]: _BLS, [_hP]: 1 }],
+        [0, { [_hH]: _CM }],
+        [0, { [_hH]: _xasca }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var PutBucketMetricsConfigurationRequest = [
@@ -65998,25 +60705,9 @@ var require_dist_cjs71 = __commonJS({
       [_B, _I, _MCe, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _i
-          }
-        ],
-        [
-          () => MetricsConfiguration,
-          {
-            [_xN]: _MCe,
-            [_hP]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hQ]: _i }],
+        [() => MetricsConfiguration, { [_xN]: _MCe, [_hP]: 1 }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var PutBucketNotificationConfigurationRequest = [
@@ -66027,25 +60718,9 @@ var require_dist_cjs71 = __commonJS({
       [_B, _NC, _EBO, _SDV],
       [
         [0, 1],
-        [
-          () => NotificationConfiguration,
-          {
-            [_xN]: _NC,
-            [_hP]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ],
-        [
-          2,
-          {
-            [_hH]: _xasdv
-          }
-        ]
+        [() => NotificationConfiguration, { [_xN]: _NC, [_hP]: 1 }],
+        [0, { [_hH]: _xaebo }],
+        [2, { [_hH]: _xasdv }]
       ]
     ];
     var PutBucketOwnershipControlsRequest = [
@@ -66056,31 +60731,10 @@ var require_dist_cjs71 = __commonJS({
       [_B, _CMD, _EBO, _OC, _CA2],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _CM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ],
-        [
-          () => OwnershipControls,
-          {
-            [_xN]: _OC,
-            [_hP]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ]
+        [0, { [_hH]: _CM }],
+        [0, { [_hH]: _xaebo }],
+        [() => OwnershipControls, { [_xN]: _OC, [_hP]: 1 }],
+        [0, { [_hH]: _xasca }]
       ]
     ];
     var PutBucketPolicyRequest = [
@@ -66091,31 +60745,11 @@ var require_dist_cjs71 = __commonJS({
       [_B, _CMD, _CA2, _CRSBA, _Po, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _CM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ],
-        [
-          2,
-          {
-            [_hH]: _xacrsba
-          }
-        ],
+        [0, { [_hH]: _CM }],
+        [0, { [_hH]: _xasca }],
+        [2, { [_hH]: _xacrsba }],
         [0, 16],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var PutBucketReplicationRequest = [
@@ -66126,37 +60760,11 @@ var require_dist_cjs71 = __commonJS({
       [_B, _CMD, _CA2, _RCe, _To, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _CM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ],
-        [
-          () => ReplicationConfiguration,
-          {
-            [_xN]: _RCe,
-            [_hP]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xabolt
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _CM }],
+        [0, { [_hH]: _xasca }],
+        [() => ReplicationConfiguration, { [_xN]: _RCe, [_hP]: 1 }],
+        [0, { [_hH]: _xabolt }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var PutBucketRequestPaymentRequest = [
@@ -66167,31 +60775,10 @@ var require_dist_cjs71 = __commonJS({
       [_B, _CMD, _CA2, _RPC, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _CM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ],
-        [
-          () => RequestPaymentConfiguration,
-          {
-            [_xN]: _RPC,
-            [_hP]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _CM }],
+        [0, { [_hH]: _xasca }],
+        [() => RequestPaymentConfiguration, { [_xN]: _RPC, [_hP]: 1 }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var PutBucketTaggingRequest = [
@@ -66202,31 +60789,10 @@ var require_dist_cjs71 = __commonJS({
       [_B, _CMD, _CA2, _Tag, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _CM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ],
-        [
-          () => Tagging,
-          {
-            [_xN]: _Tag,
-            [_hP]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _CM }],
+        [0, { [_hH]: _xasca }],
+        [() => Tagging, { [_xN]: _Tag, [_hP]: 1 }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var PutBucketVersioningRequest = [
@@ -66237,37 +60803,11 @@ var require_dist_cjs71 = __commonJS({
       [_B, _CMD, _CA2, _MFA, _VC, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _CM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xam_
-          }
-        ],
-        [
-          () => VersioningConfiguration,
-          {
-            [_xN]: _VC,
-            [_hP]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _CM }],
+        [0, { [_hH]: _xasca }],
+        [0, { [_hH]: _xam_ }],
+        [() => VersioningConfiguration, { [_xN]: _VC, [_hP]: 1 }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var PutBucketWebsiteRequest = [
@@ -66278,48 +60818,13 @@ var require_dist_cjs71 = __commonJS({
       [_B, _CMD, _CA2, _WC, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _CM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ],
-        [
-          () => WebsiteConfiguration,
-          {
-            [_xN]: _WC,
-            [_hP]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _CM }],
+        [0, { [_hH]: _xasca }],
+        [() => WebsiteConfiguration, { [_xN]: _WC, [_hP]: 1 }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
-    var PutObjectAclOutput = [
-      3,
-      n04,
-      _POAO,
-      0,
-      [_RC],
-      [
-        [
-          0,
-          {
-            [_hH]: _xarc
-          }
-        ]
-      ]
-    ];
+    var PutObjectAclOutput = [3, n04, _POAO, 0, [_RC], [[0, { [_hH]: _xarc }]]];
     var PutObjectAclRequest = [
       3,
       n04,
@@ -66327,98 +60832,23 @@ var require_dist_cjs71 = __commonJS({
       0,
       [_ACL_, _ACP, _B, _CMD, _CA2, _GFC, _GR, _GRACP, _GW, _GWACP, _K2, _RP, _VI, _EBO],
       [
-        [
-          0,
-          {
-            [_hH]: _xaa
-          }
-        ],
-        [
-          () => AccessControlPolicy,
-          {
-            [_xN]: _ACP,
-            [_hP]: 1
-          }
-        ],
+        [0, { [_hH]: _xaa }],
+        [() => AccessControlPolicy, { [_xN]: _ACP, [_hP]: 1 }],
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _CM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xagfc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xagr
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xagra
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xagw
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xagwa
-          }
-        ],
+        [0, { [_hH]: _CM }],
+        [0, { [_hH]: _xasca }],
+        [0, { [_hH]: _xagfc }],
+        [0, { [_hH]: _xagr }],
+        [0, { [_hH]: _xagra }],
+        [0, { [_hH]: _xagw }],
+        [0, { [_hH]: _xagwa }],
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _vI
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xarp }],
+        [0, { [_hQ]: _vI }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
-    var PutObjectLegalHoldOutput = [
-      3,
-      n04,
-      _POLHO,
-      0,
-      [_RC],
-      [
-        [
-          0,
-          {
-            [_hH]: _xarc
-          }
-        ]
-      ]
-    ];
+    var PutObjectLegalHoldOutput = [3, n04, _POLHO, 0, [_RC], [[0, { [_hH]: _xarc }]]];
     var PutObjectLegalHoldRequest = [
       3,
       n04,
@@ -66428,60 +60858,15 @@ var require_dist_cjs71 = __commonJS({
       [
         [0, 1],
         [0, 1],
-        [
-          () => ObjectLockLegalHold,
-          {
-            [_xN]: _LH,
-            [_hP]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _vI
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [() => ObjectLockLegalHold, { [_xN]: _LH, [_hP]: 1 }],
+        [0, { [_hH]: _xarp }],
+        [0, { [_hQ]: _vI }],
+        [0, { [_hH]: _CM }],
+        [0, { [_hH]: _xasca }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
-    var PutObjectLockConfigurationOutput = [
-      3,
-      n04,
-      _POLCO,
-      0,
-      [_RC],
-      [
-        [
-          0,
-          {
-            [_hH]: _xarc
-          }
-        ]
-      ]
-    ];
+    var PutObjectLockConfigurationOutput = [3, n04, _POLCO, 0, [_RC], [[0, { [_hH]: _xarc }]]];
     var PutObjectLockConfigurationRequest = [
       3,
       n04,
@@ -66490,43 +60875,12 @@ var require_dist_cjs71 = __commonJS({
       [_B, _OLC, _RP, _To, _CMD, _CA2, _EBO],
       [
         [0, 1],
-        [
-          () => ObjectLockConfiguration,
-          {
-            [_xN]: _OLC,
-            [_hP]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xabolt
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [() => ObjectLockConfiguration, { [_xN]: _OLC, [_hP]: 1 }],
+        [0, { [_hH]: _xarp }],
+        [0, { [_hH]: _xabolt }],
+        [0, { [_hH]: _CM }],
+        [0, { [_hH]: _xasca }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var PutObjectOutput = [
@@ -66554,108 +60908,23 @@ var require_dist_cjs71 = __commonJS({
         _RC
       ],
       [
-        [
-          0,
-          {
-            [_hH]: _xae
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _ETa
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacc_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacc__
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacs
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacs_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xact
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasse
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xavi
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseca
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseckM
-          }
-        ],
-        [
-          () => SSEKMSKeyId,
-          {
-            [_hH]: _xasseakki
-          }
-        ],
-        [
-          () => SSEKMSEncryptionContext,
-          {
-            [_hH]: _xassec
-          }
-        ],
-        [
-          2,
-          {
-            [_hH]: _xassebke
-          }
-        ],
-        [
-          1,
-          {
-            [_hH]: _xaos
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarc
-          }
-        ]
+        [0, { [_hH]: _xae }],
+        [0, { [_hH]: _ETa }],
+        [0, { [_hH]: _xacc }],
+        [0, { [_hH]: _xacc_ }],
+        [0, { [_hH]: _xacc__ }],
+        [0, { [_hH]: _xacs }],
+        [0, { [_hH]: _xacs_ }],
+        [0, { [_hH]: _xact }],
+        [0, { [_hH]: _xasse }],
+        [0, { [_hH]: _xavi }],
+        [0, { [_hH]: _xasseca }],
+        [0, { [_hH]: _xasseckM }],
+        [() => SSEKMSKeyId, { [_hH]: _xasseakki }],
+        [() => SSEKMSEncryptionContext, { [_hH]: _xassec }],
+        [2, { [_hH]: _xassebke }],
+        [1, { [_hH]: _xaos }],
+        [0, { [_hH]: _xarc }]
       ]
     ];
     var PutObjectRequest = [
@@ -66707,254 +60976,50 @@ var require_dist_cjs71 = __commonJS({
         _EBO
       ],
       [
-        [
-          0,
-          {
-            [_hH]: _xaa
-          }
-        ],
+        [0, { [_hH]: _xaa }],
         [() => StreamingBlob, 16],
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _CC_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CD_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CE_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CL_
-          }
-        ],
-        [
-          1,
-          {
-            [_hH]: _CL__
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CT_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacc_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacc__
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacs
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacs_
-          }
-        ],
-        [
-          4,
-          {
-            [_hH]: _Ex
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _IM_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _INM_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xagfc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xagr
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xagra
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xagwa
-          }
-        ],
+        [0, { [_hH]: _CC_ }],
+        [0, { [_hH]: _CD_ }],
+        [0, { [_hH]: _CE_ }],
+        [0, { [_hH]: _CL_ }],
+        [1, { [_hH]: _CL__ }],
+        [0, { [_hH]: _CM }],
+        [0, { [_hH]: _CT_ }],
+        [0, { [_hH]: _xasca }],
+        [0, { [_hH]: _xacc }],
+        [0, { [_hH]: _xacc_ }],
+        [0, { [_hH]: _xacc__ }],
+        [0, { [_hH]: _xacs }],
+        [0, { [_hH]: _xacs_ }],
+        [4, { [_hH]: _Ex }],
+        [0, { [_hH]: _IM_ }],
+        [0, { [_hH]: _INM_ }],
+        [0, { [_hH]: _xagfc }],
+        [0, { [_hH]: _xagr }],
+        [0, { [_hH]: _xagra }],
+        [0, { [_hH]: _xagwa }],
         [0, 1],
-        [
-          1,
-          {
-            [_hH]: _xawob
-          }
-        ],
-        [
-          128 | 0,
-          {
-            [_hPH]: _xam
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasse
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xawrl
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseca
-          }
-        ],
-        [
-          () => SSECustomerKey,
-          {
-            [_hH]: _xasseck
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseckM
-          }
-        ],
-        [
-          () => SSEKMSKeyId,
-          {
-            [_hH]: _xasseakki
-          }
-        ],
-        [
-          () => SSEKMSEncryptionContext,
-          {
-            [_hH]: _xassec
-          }
-        ],
-        [
-          2,
-          {
-            [_hH]: _xassebke
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xat
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaolm
-          }
-        ],
-        [
-          5,
-          {
-            [_hH]: _xaolrud
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaollh
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [1, { [_hH]: _xawob }],
+        [128 | 0, { [_hPH]: _xam }],
+        [0, { [_hH]: _xasse }],
+        [0, { [_hH]: _xasc }],
+        [0, { [_hH]: _xawrl }],
+        [0, { [_hH]: _xasseca }],
+        [() => SSECustomerKey, { [_hH]: _xasseck }],
+        [0, { [_hH]: _xasseckM }],
+        [() => SSEKMSKeyId, { [_hH]: _xasseakki }],
+        [() => SSEKMSEncryptionContext, { [_hH]: _xassec }],
+        [2, { [_hH]: _xassebke }],
+        [0, { [_hH]: _xarp }],
+        [0, { [_hH]: _xat }],
+        [0, { [_hH]: _xaolm }],
+        [5, { [_hH]: _xaolrud }],
+        [0, { [_hH]: _xaollh }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
-    var PutObjectRetentionOutput = [
-      3,
-      n04,
-      _PORO,
-      0,
-      [_RC],
-      [
-        [
-          0,
-          {
-            [_hH]: _xarc
-          }
-        ]
-      ]
-    ];
+    var PutObjectRetentionOutput = [3, n04, _PORO, 0, [_RC], [[0, { [_hH]: _xarc }]]];
     var PutObjectRetentionRequest = [
       3,
       n04,
@@ -66964,66 +61029,16 @@ var require_dist_cjs71 = __commonJS({
       [
         [0, 1],
         [0, 1],
-        [
-          () => ObjectLockRetention,
-          {
-            [_xN]: _Ret,
-            [_hP]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _vI
-          }
-        ],
-        [
-          2,
-          {
-            [_hH]: _xabgr
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [() => ObjectLockRetention, { [_xN]: _Ret, [_hP]: 1 }],
+        [0, { [_hH]: _xarp }],
+        [0, { [_hQ]: _vI }],
+        [2, { [_hH]: _xabgr }],
+        [0, { [_hH]: _CM }],
+        [0, { [_hH]: _xasca }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
-    var PutObjectTaggingOutput = [
-      3,
-      n04,
-      _POTO,
-      0,
-      [_VI],
-      [
-        [
-          0,
-          {
-            [_hH]: _xavi
-          }
-        ]
-      ]
-    ];
+    var PutObjectTaggingOutput = [3, n04, _POTO, 0, [_VI], [[0, { [_hH]: _xavi }]]];
     var PutObjectTaggingRequest = [
       3,
       n04,
@@ -67033,43 +61048,12 @@ var require_dist_cjs71 = __commonJS({
       [
         [0, 1],
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _vI
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ],
-        [
-          () => Tagging,
-          {
-            [_xN]: _Tag,
-            [_hP]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ]
+        [0, { [_hQ]: _vI }],
+        [0, { [_hH]: _CM }],
+        [0, { [_hH]: _xasca }],
+        [() => Tagging, { [_xN]: _Tag, [_hP]: 1 }],
+        [0, { [_hH]: _xaebo }],
+        [0, { [_hH]: _xarp }]
       ]
     ];
     var PutPublicAccessBlockRequest = [
@@ -67080,31 +61064,10 @@ var require_dist_cjs71 = __commonJS({
       [_B, _CMD, _CA2, _PABC, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _CM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ],
-        [
-          () => PublicAccessBlockConfiguration,
-          {
-            [_xN]: _PABC,
-            [_hP]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _CM }],
+        [0, { [_hH]: _xasca }],
+        [() => PublicAccessBlockConfiguration, { [_xN]: _PABC, [_hP]: 1 }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var QueueConfiguration = [
@@ -67113,40 +61076,10 @@ var require_dist_cjs71 = __commonJS({
       _QCue,
       0,
       [_I, _QA, _Ev, _F],
-      [
-        0,
-        [
-          0,
-          {
-            [_xN]: _Qu
-          }
-        ],
-        [
-          64 | 0,
-          {
-            [_xN]: _Eve,
-            [_xF]: 1
-          }
-        ],
-        [() => NotificationConfigurationFilter, 0]
-      ]
+      [0, [0, { [_xN]: _Qu }], [64 | 0, { [_xN]: _Eve, [_xF]: 1 }], [() => NotificationConfigurationFilter, 0]]
     ];
     var RecordExpiration = [3, n04, _REe, 0, [_E2, _D], [0, 1]];
-    var RecordsEvent = [
-      3,
-      n04,
-      _REec,
-      0,
-      [_Payl],
-      [
-        [
-          21,
-          {
-            [_eP]: 1
-          }
-        ]
-      ]
-    ];
+    var RecordsEvent = [3, n04, _REec, 0, [_Payl], [[21, { [_eP]: 1 }]]];
     var Redirect = [3, n04, _Red, 0, [_HN, _HRC, _Pro, _RKPW, _RKW], [0, 0, 0, 0, 0]];
     var RedirectAllRequestsTo = [3, n04, _RART, 0, [_HN, _Pro], [0, 0]];
     var RenameObjectOutput = [3, n04, _ROO, 0, [], []];
@@ -67159,67 +61092,16 @@ var require_dist_cjs71 = __commonJS({
       [
         [0, 1],
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xars_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _IM_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _INM_
-          }
-        ],
-        [
-          4,
-          {
-            [_hH]: _IMS_
-          }
-        ],
-        [
-          4,
-          {
-            [_hH]: _IUS_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarsim
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarsinm
-          }
-        ],
-        [
-          6,
-          {
-            [_hH]: _xarsims
-          }
-        ],
-        [
-          6,
-          {
-            [_hH]: _xarsius
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xact_,
-            [_iT3]: 1
-          }
-        ]
+        [0, { [_hH]: _xars_ }],
+        [0, { [_hH]: _IM_ }],
+        [0, { [_hH]: _INM_ }],
+        [4, { [_hH]: _IMS_ }],
+        [4, { [_hH]: _IUS_ }],
+        [0, { [_hH]: _xarsim }],
+        [0, { [_hH]: _xarsinm }],
+        [6, { [_hH]: _xarsims }],
+        [6, { [_hH]: _xarsius }],
+        [0, { [_hH]: _xact_, [_iT3]: 1 }]
       ]
     ];
     var ReplicaModifications = [3, n04, _RM, 0, [_S], [0]];
@@ -67229,16 +61111,7 @@ var require_dist_cjs71 = __commonJS({
       _RCe,
       0,
       [_Ro, _R],
-      [
-        0,
-        [
-          () => ReplicationRules,
-          {
-            [_xN]: _Ru,
-            [_xF]: 1
-          }
-        ]
-      ]
+      [0, [() => ReplicationRules, { [_xN]: _Ru, [_xF]: 1 }]]
     ];
     var ReplicationRule = [
       3,
@@ -67264,16 +61137,7 @@ var require_dist_cjs71 = __commonJS({
       _RRAO,
       0,
       [_P2, _T2],
-      [
-        0,
-        [
-          () => TagSet,
-          {
-            [_xN]: _Ta2,
-            [_xF]: 1
-          }
-        ]
-      ]
+      [0, [() => TagSet, { [_xN]: _Ta2, [_xF]: 1 }]]
     ];
     var ReplicationRuleFilter = [
       3,
@@ -67294,18 +61158,8 @@ var require_dist_cjs71 = __commonJS({
       0,
       [_RC, _ROP],
       [
-        [
-          0,
-          {
-            [_hH]: _xarc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarop
-          }
-        ]
+        [0, { [_hH]: _xarc }],
+        [0, { [_hH]: _xarop }]
       ]
     ];
     var RestoreObjectRequest = [
@@ -67317,37 +61171,11 @@ var require_dist_cjs71 = __commonJS({
       [
         [0, 1],
         [0, 1],
-        [
-          0,
-          {
-            [_hQ]: _vI
-          }
-        ],
-        [
-          () => RestoreRequest,
-          {
-            [_hP]: 1,
-            [_xN]: _RRes
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hQ]: _vI }],
+        [() => RestoreRequest, { [_hP]: 1, [_xN]: _RRes }],
+        [0, { [_hH]: _xarp }],
+        [0, { [_hH]: _xasca }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var RestoreRequest = [
@@ -67366,15 +61194,7 @@ var require_dist_cjs71 = __commonJS({
       _SKF,
       0,
       [_FRi],
-      [
-        [
-          () => FilterRuleList,
-          {
-            [_xN]: _FR,
-            [_xF]: 1
-          }
-        ]
-      ]
+      [[() => FilterRuleList, { [_xN]: _FR, [_xF]: 1 }]]
     ];
     var S3Location = [
       3,
@@ -67404,36 +61224,16 @@ var require_dist_cjs71 = __commonJS({
       [
         [0, 1],
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xasseca
-          }
-        ],
-        [
-          () => SSECustomerKey,
-          {
-            [_hH]: _xasseck
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseckM
-          }
-        ],
+        [0, { [_hH]: _xasseca }],
+        [() => SSECustomerKey, { [_hH]: _xasseck }],
+        [0, { [_hH]: _xasseckM }],
         0,
         0,
         () => RequestProgress,
         () => InputSerialization,
         () => OutputSerialization,
         () => ScanRange,
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var SelectParameters = [
@@ -67458,15 +61258,7 @@ var require_dist_cjs71 = __commonJS({
       _SSEC,
       0,
       [_R],
-      [
-        [
-          () => ServerSideEncryptionRules,
-          {
-            [_xN]: _Ru,
-            [_xF]: 1
-          }
-        ]
-      ]
+      [[() => ServerSideEncryptionRules, { [_xN]: _Ru, [_xF]: 1 }]]
     ];
     var ServerSideEncryptionRule = [
       3,
@@ -67483,42 +61275,13 @@ var require_dist_cjs71 = __commonJS({
       0,
       [_AKI2, _SAK2, _ST2, _E2],
       [
-        [
-          0,
-          {
-            [_xN]: _AKI2
-          }
-        ],
-        [
-          () => SessionCredentialValue,
-          {
-            [_xN]: _SAK2
-          }
-        ],
-        [
-          () => SessionCredentialValue,
-          {
-            [_xN]: _ST2
-          }
-        ],
-        [
-          4,
-          {
-            [_xN]: _E2
-          }
-        ]
+        [0, { [_xN]: _AKI2 }],
+        [() => SessionCredentialValue, { [_xN]: _SAK2 }],
+        [() => SessionCredentialValue, { [_xN]: _ST2 }],
+        [4, { [_xN]: _E2 }]
       ]
     ];
-    var SimplePrefix = [
-      3,
-      n04,
-      _SPi,
-      {
-        [_xN]: _SPi
-      },
-      [],
-      []
-    ];
+    var SimplePrefix = [3, n04, _SPi, { [_xN]: _SPi }, [], []];
     var SourceSelectionCriteria = [
       3,
       n04,
@@ -67527,43 +61290,11 @@ var require_dist_cjs71 = __commonJS({
       [_SKEO, _RM],
       [() => SseKmsEncryptedObjects, () => ReplicaModifications]
     ];
-    var SSEKMS = [
-      3,
-      n04,
-      _SSEKMS,
-      {
-        [_xN]: _SK
-      },
-      [_KI],
-      [[() => SSEKMSKeyId, 0]]
-    ];
+    var SSEKMS = [3, n04, _SSEKMS, { [_xN]: _SK }, [_KI], [[() => SSEKMSKeyId, 0]]];
     var SseKmsEncryptedObjects = [3, n04, _SKEO, 0, [_S], [0]];
-    var SSES3 = [
-      3,
-      n04,
-      _SSES,
-      {
-        [_xN]: _SS
-      },
-      [],
-      []
-    ];
+    var SSES3 = [3, n04, _SSES, { [_xN]: _SS }, [], []];
     var Stats = [3, n04, _Sta, 0, [_BS, _BP, _BRy], [1, 1, 1]];
-    var StatsEvent = [
-      3,
-      n04,
-      _SE,
-      0,
-      [_Det],
-      [
-        [
-          () => Stats,
-          {
-            [_eP]: 1
-          }
-        ]
-      ]
-    ];
+    var StatsEvent = [3, n04, _SE, 0, [_Det], [[() => Stats, { [_eP]: 1 }]]];
     var StorageClassAnalysis = [
       3,
       n04,
@@ -67588,15 +61319,7 @@ var require_dist_cjs71 = __commonJS({
       _TGa,
       0,
       [_Gra, _Pe],
-      [
-        [
-          () => Grantee,
-          {
-            [_xNm]: [_x, _hi]
-          }
-        ],
-        0
-      ]
+      [[() => Grantee, { [_xNm]: [_x, _hi] }], 0]
     ];
     var TargetObjectKeyFormat = [
       3,
@@ -67605,32 +61328,12 @@ var require_dist_cjs71 = __commonJS({
       0,
       [_SPi, _PP],
       [
-        [
-          () => SimplePrefix,
-          {
-            [_xN]: _SPi
-          }
-        ],
-        [
-          () => PartitionedPrefix,
-          {
-            [_xN]: _PP
-          }
-        ]
+        [() => SimplePrefix, { [_xN]: _SPi }],
+        [() => PartitionedPrefix, { [_xN]: _PP }]
       ]
     ];
     var Tiering = [3, n04, _Tier, 0, [_D, _AT3], [1, 0]];
-    var TooManyParts = [
-      -3,
-      n04,
-      _TMP,
-      {
-        [_e4]: _c4,
-        [_hE4]: 400
-      },
-      [],
-      []
-    ];
+    var TooManyParts = [-3, n04, _TMP, { [_e4]: _c4, [_hE4]: 400 }, [], []];
     schema.TypeRegistry.for(n04).registerError(TooManyParts, TooManyParts$1);
     var TopicConfiguration = [
       3,
@@ -67638,23 +61341,7 @@ var require_dist_cjs71 = __commonJS({
       _TCop,
       0,
       [_I, _TAo, _Ev, _F],
-      [
-        0,
-        [
-          0,
-          {
-            [_xN]: _Top
-          }
-        ],
-        [
-          64 | 0,
-          {
-            [_xN]: _Eve,
-            [_xF]: 1
-          }
-        ],
-        [() => NotificationConfigurationFilter, 0]
-      ]
+      [0, [0, { [_xN]: _Top }], [64 | 0, { [_xN]: _Eve, [_xF]: 1 }], [() => NotificationConfigurationFilter, 0]]
     ];
     var Transition = [3, n04, _Tra, 0, [_Da, _D, _SC], [5, 1, 0]];
     var UpdateBucketMetadataInventoryTableConfigurationRequest = [
@@ -67665,31 +61352,10 @@ var require_dist_cjs71 = __commonJS({
       [_B, _CMD, _CA2, _ITCn, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _CM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ],
-        [
-          () => InventoryTableConfigurationUpdates,
-          {
-            [_xN]: _ITCn,
-            [_hP]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _CM }],
+        [0, { [_hH]: _xasca }],
+        [() => InventoryTableConfigurationUpdates, { [_xN]: _ITCn, [_hP]: 1 }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var UpdateBucketMetadataJournalTableConfigurationRequest = [
@@ -67700,31 +61366,10 @@ var require_dist_cjs71 = __commonJS({
       [_B, _CMD, _CA2, _JTC, _EBO],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _CM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ],
-        [
-          () => JournalTableConfigurationUpdates,
-          {
-            [_xN]: _JTC,
-            [_hP]: 1
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [0, { [_hH]: _CM }],
+        [0, { [_hH]: _xasca }],
+        [() => JournalTableConfigurationUpdates, { [_xN]: _JTC, [_hP]: 1 }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
     var UploadPartCopyOutput = [
@@ -67734,49 +61379,14 @@ var require_dist_cjs71 = __commonJS({
       0,
       [_CSVI, _CPR, _SSE, _SSECA, _SSECKMD, _SSEKMSKI, _BKE, _RC],
       [
-        [
-          0,
-          {
-            [_hH]: _xacsvi
-          }
-        ],
+        [0, { [_hH]: _xacsvi }],
         [() => CopyPartResult, 16],
-        [
-          0,
-          {
-            [_hH]: _xasse
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseca
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseckM
-          }
-        ],
-        [
-          () => SSEKMSKeyId,
-          {
-            [_hH]: _xasseakki
-          }
-        ],
-        [
-          2,
-          {
-            [_hH]: _xassebke
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarc
-          }
-        ]
+        [0, { [_hH]: _xasse }],
+        [0, { [_hH]: _xasseca }],
+        [0, { [_hH]: _xasseckM }],
+        [() => SSEKMSKeyId, { [_hH]: _xasseakki }],
+        [2, { [_hH]: _xassebke }],
+        [0, { [_hH]: _xarc }]
       ]
     ];
     var UploadPartCopyRequest = [
@@ -67807,109 +61417,24 @@ var require_dist_cjs71 = __commonJS({
       ],
       [
         [0, 1],
-        [
-          0,
-          {
-            [_hH]: _xacs__
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacsim
-          }
-        ],
-        [
-          4,
-          {
-            [_hH]: _xacsims
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacsinm
-          }
-        ],
-        [
-          4,
-          {
-            [_hH]: _xacsius
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacsr
-          }
-        ],
+        [0, { [_hH]: _xacs__ }],
+        [0, { [_hH]: _xacsim }],
+        [4, { [_hH]: _xacsims }],
+        [0, { [_hH]: _xacsinm }],
+        [4, { [_hH]: _xacsius }],
+        [0, { [_hH]: _xacsr }],
         [0, 1],
-        [
-          1,
-          {
-            [_hQ]: _pN
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _uI
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseca
-          }
-        ],
-        [
-          () => SSECustomerKey,
-          {
-            [_hH]: _xasseck
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseckM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacssseca
-          }
-        ],
-        [
-          () => CopySourceSSECustomerKey,
-          {
-            [_hH]: _xacssseck
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacssseckM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasebo
-          }
-        ]
+        [1, { [_hQ]: _pN }],
+        [0, { [_hQ]: _uI }],
+        [0, { [_hH]: _xasseca }],
+        [() => SSECustomerKey, { [_hH]: _xasseck }],
+        [0, { [_hH]: _xasseckM }],
+        [0, { [_hH]: _xacssseca }],
+        [() => CopySourceSSECustomerKey, { [_hH]: _xacssseck }],
+        [0, { [_hH]: _xacssseckM }],
+        [0, { [_hH]: _xarp }],
+        [0, { [_hH]: _xaebo }],
+        [0, { [_hH]: _xasebo }]
       ]
     ];
     var UploadPartOutput = [
@@ -67919,78 +61444,18 @@ var require_dist_cjs71 = __commonJS({
       0,
       [_SSE, _ETa, _CCRC, _CCRCC, _CCRCNVME, _CSHA, _CSHAh, _SSECA, _SSECKMD, _SSEKMSKI, _BKE, _RC],
       [
-        [
-          0,
-          {
-            [_hH]: _xasse
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _ETa
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacc_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacc__
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacs
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacs_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseca
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseckM
-          }
-        ],
-        [
-          () => SSEKMSKeyId,
-          {
-            [_hH]: _xasseakki
-          }
-        ],
-        [
-          2,
-          {
-            [_hH]: _xassebke
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarc
-          }
-        ]
+        [0, { [_hH]: _xasse }],
+        [0, { [_hH]: _ETa }],
+        [0, { [_hH]: _xacc }],
+        [0, { [_hH]: _xacc_ }],
+        [0, { [_hH]: _xacc__ }],
+        [0, { [_hH]: _xacs }],
+        [0, { [_hH]: _xacs_ }],
+        [0, { [_hH]: _xasseca }],
+        [0, { [_hH]: _xasseckM }],
+        [() => SSEKMSKeyId, { [_hH]: _xasseakki }],
+        [2, { [_hH]: _xassebke }],
+        [0, { [_hH]: _xarc }]
       ]
     ];
     var UploadPartRequest = [
@@ -68021,115 +61486,25 @@ var require_dist_cjs71 = __commonJS({
       [
         [() => StreamingBlob, 16],
         [0, 1],
-        [
-          1,
-          {
-            [_hH]: _CL__
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _CM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasca
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacc_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacc__
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacs
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xacs_
-          }
-        ],
+        [1, { [_hH]: _CL__ }],
+        [0, { [_hH]: _CM }],
+        [0, { [_hH]: _xasca }],
+        [0, { [_hH]: _xacc }],
+        [0, { [_hH]: _xacc_ }],
+        [0, { [_hH]: _xacc__ }],
+        [0, { [_hH]: _xacs }],
+        [0, { [_hH]: _xacs_ }],
         [0, 1],
-        [
-          1,
-          {
-            [_hQ]: _pN
-          }
-        ],
-        [
-          0,
-          {
-            [_hQ]: _uI
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseca
-          }
-        ],
-        [
-          () => SSECustomerKey,
-          {
-            [_hH]: _xasseck
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xasseckM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xarp
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xaebo
-          }
-        ]
+        [1, { [_hQ]: _pN }],
+        [0, { [_hQ]: _uI }],
+        [0, { [_hH]: _xasseca }],
+        [() => SSECustomerKey, { [_hH]: _xasseck }],
+        [0, { [_hH]: _xasseckM }],
+        [0, { [_hH]: _xarp }],
+        [0, { [_hH]: _xaebo }]
       ]
     ];
-    var VersioningConfiguration = [
-      3,
-      n04,
-      _VC,
-      0,
-      [_MFAD, _S],
-      [
-        [
-          0,
-          {
-            [_xN]: _MDf
-          }
-        ],
-        0
-      ]
-    ];
+    var VersioningConfiguration = [3, n04, _VC, 0, [_MFAD, _S], [[0, { [_xN]: _MDf }], 0]];
     var WebsiteConfiguration = [
       3,
       n04,
@@ -68187,297 +61562,63 @@ var require_dist_cjs71 = __commonJS({
         _BKE
       ],
       [
-        [
-          0,
-          {
-            [_hL]: 1,
-            [_hH]: _xarr
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xart
-          }
-        ],
+        [0, { [_hL]: 1, [_hH]: _xarr }],
+        [0, { [_hH]: _xart }],
         [() => StreamingBlob, 16],
-        [
-          1,
-          {
-            [_hH]: _xafs
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xafec
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xafem
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xafhar
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xafhCC
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xafhCD
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xafhCE
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xafhCL
-          }
-        ],
-        [
-          1,
-          {
-            [_hH]: _CL__
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xafhCR
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xafhCT
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xafhxacc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xafhxacc_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xafhxacc__
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xafhxacs
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xafhxacs_
-          }
-        ],
-        [
-          2,
-          {
-            [_hH]: _xafhxadm
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xafhE
-          }
-        ],
-        [
-          4,
-          {
-            [_hH]: _xafhE_
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xafhxae
-          }
-        ],
-        [
-          4,
-          {
-            [_hH]: _xafhLM
-          }
-        ],
-        [
-          1,
-          {
-            [_hH]: _xafhxamm
-          }
-        ],
-        [
-          128 | 0,
-          {
-            [_hPH]: _xam
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xafhxaolm
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xafhxaollh
-          }
-        ],
-        [
-          5,
-          {
-            [_hH]: _xafhxaolrud
-          }
-        ],
-        [
-          1,
-          {
-            [_hH]: _xafhxampc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xafhxars
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xafhxarc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xafhxar
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xafhxasse
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xafhxasseca
-          }
-        ],
-        [
-          () => SSEKMSKeyId,
-          {
-            [_hH]: _xafhxasseakki
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xafhxasseckM
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xafhxasc
-          }
-        ],
-        [
-          1,
-          {
-            [_hH]: _xafhxatc
-          }
-        ],
-        [
-          0,
-          {
-            [_hH]: _xafhxavi
-          }
-        ],
-        [
-          2,
-          {
-            [_hH]: _xafhxassebke
-          }
-        ]
+        [1, { [_hH]: _xafs }],
+        [0, { [_hH]: _xafec }],
+        [0, { [_hH]: _xafem }],
+        [0, { [_hH]: _xafhar }],
+        [0, { [_hH]: _xafhCC }],
+        [0, { [_hH]: _xafhCD }],
+        [0, { [_hH]: _xafhCE }],
+        [0, { [_hH]: _xafhCL }],
+        [1, { [_hH]: _CL__ }],
+        [0, { [_hH]: _xafhCR }],
+        [0, { [_hH]: _xafhCT }],
+        [0, { [_hH]: _xafhxacc }],
+        [0, { [_hH]: _xafhxacc_ }],
+        [0, { [_hH]: _xafhxacc__ }],
+        [0, { [_hH]: _xafhxacs }],
+        [0, { [_hH]: _xafhxacs_ }],
+        [2, { [_hH]: _xafhxadm }],
+        [0, { [_hH]: _xafhE }],
+        [4, { [_hH]: _xafhE_ }],
+        [0, { [_hH]: _xafhxae }],
+        [4, { [_hH]: _xafhLM }],
+        [1, { [_hH]: _xafhxamm }],
+        [128 | 0, { [_hPH]: _xam }],
+        [0, { [_hH]: _xafhxaolm }],
+        [0, { [_hH]: _xafhxaollh }],
+        [5, { [_hH]: _xafhxaolrud }],
+        [1, { [_hH]: _xafhxampc }],
+        [0, { [_hH]: _xafhxars }],
+        [0, { [_hH]: _xafhxarc }],
+        [0, { [_hH]: _xafhxar }],
+        [0, { [_hH]: _xafhxasse }],
+        [0, { [_hH]: _xafhxasseca }],
+        [() => SSEKMSKeyId, { [_hH]: _xafhxasseakki }],
+        [0, { [_hH]: _xafhxasseckM }],
+        [0, { [_hH]: _xafhxasc }],
+        [1, { [_hH]: _xafhxatc }],
+        [0, { [_hH]: _xafhxavi }],
+        [2, { [_hH]: _xafhxassebke }]
       ]
     ];
     var __Unit = "unit";
     var S3ServiceException = [-3, _sm3, "S3ServiceException", 0, [], []];
     schema.TypeRegistry.for(_sm3).registerError(S3ServiceException, S3ServiceException$1);
     var AnalyticsConfigurationList = [1, n04, _ACLn, 0, [() => AnalyticsConfiguration, 0]];
-    var Buckets = [
-      1,
-      n04,
-      _Bu,
-      0,
-      [
-        () => Bucket,
-        {
-          [_xN]: _B
-        }
-      ]
-    ];
+    var Buckets = [1, n04, _Bu, 0, [() => Bucket, { [_xN]: _B }]];
     var CommonPrefixList = [1, n04, _CPL, 0, () => CommonPrefix];
     var CompletedPartList = [1, n04, _CPLo, 0, () => CompletedPart];
     var CORSRules = [1, n04, _CORSR, 0, [() => CORSRule, 0]];
     var DeletedObjects = [1, n04, _DOe, 0, () => DeletedObject];
     var DeleteMarkers = [1, n04, _DMe, 0, () => DeleteMarkerEntry];
-    var EncryptionTypeList = [
-      1,
-      n04,
-      _ETL,
-      0,
-      [
-        0,
-        {
-          [_xN]: _ET
-        }
-      ]
-    ];
+    var EncryptionTypeList = [1, n04, _ETL, 0, [0, { [_xN]: _ET }]];
     var Errors = [1, n04, _Er, 0, () => _Error];
     var FilterRuleList = [1, n04, _FRL, 0, () => FilterRule];
-    var Grants = [
-      1,
-      n04,
-      _G,
-      0,
-      [
-        () => Grant,
-        {
-          [_xN]: _Gr
-        }
-      ]
-    ];
+    var Grants = [1, n04, _G, 0, [() => Grant, { [_xN]: _Gr }]];
     var IntelligentTieringConfigurationList = [
       1,
       n04,
@@ -68486,18 +61627,7 @@ var require_dist_cjs71 = __commonJS({
       [() => IntelligentTieringConfiguration, 0]
     ];
     var InventoryConfigurationList = [1, n04, _ICL, 0, [() => InventoryConfiguration, 0]];
-    var InventoryOptionalFields = [
-      1,
-      n04,
-      _IOF,
-      0,
-      [
-        0,
-        {
-          [_xN]: _Fi
-        }
-      ]
-    ];
+    var InventoryOptionalFields = [1, n04, _IOF, 0, [0, { [_xN]: _Fi }]];
     var LambdaFunctionConfigurationList = [
       1,
       n04,
@@ -68517,58 +61647,14 @@ var require_dist_cjs71 = __commonJS({
     var PartsList = [1, n04, _PL, 0, () => ObjectPart];
     var QueueConfigurationList = [1, n04, _QCL, 0, [() => QueueConfiguration, 0]];
     var ReplicationRules = [1, n04, _RRep, 0, [() => ReplicationRule, 0]];
-    var RoutingRules = [
-      1,
-      n04,
-      _RR,
-      0,
-      [
-        () => RoutingRule,
-        {
-          [_xN]: _RRo
-        }
-      ]
-    ];
+    var RoutingRules = [1, n04, _RR, 0, [() => RoutingRule, { [_xN]: _RRo }]];
     var ServerSideEncryptionRules = [1, n04, _SSERe, 0, [() => ServerSideEncryptionRule, 0]];
-    var TagSet = [
-      1,
-      n04,
-      _TS,
-      0,
-      [
-        () => Tag3,
-        {
-          [_xN]: _Ta2
-        }
-      ]
-    ];
-    var TargetGrants = [
-      1,
-      n04,
-      _TG,
-      0,
-      [
-        () => TargetGrant,
-        {
-          [_xN]: _Gr
-        }
-      ]
-    ];
+    var TagSet = [1, n04, _TS, 0, [() => Tag3, { [_xN]: _Ta2 }]];
+    var TargetGrants = [1, n04, _TG, 0, [() => TargetGrant, { [_xN]: _Gr }]];
     var TieringList = [1, n04, _TL, 0, () => Tiering];
     var TopicConfigurationList = [1, n04, _TCL, 0, [() => TopicConfiguration, 0]];
     var TransitionList = [1, n04, _TLr, 0, () => Transition];
-    var UserMetadata = [
-      1,
-      n04,
-      _UM,
-      0,
-      [
-        () => MetadataEntry,
-        {
-          [_xN]: _ME
-        }
-      ]
-    ];
+    var UserMetadata = [1, n04, _UM, 0, [() => MetadataEntry, { [_xN]: _ME }]];
     var AnalyticsFilter = [
       3,
       n04,
@@ -68589,9 +61675,7 @@ var require_dist_cjs71 = __commonJS({
       3,
       n04,
       _SOCES,
-      {
-        [_s4]: 1
-      },
+      { [_s4]: 1 },
       [_Rec, _Sta, _Pr2, _Cont, _End],
       [[() => RecordsEvent, 0], [() => StatsEvent, 0], [() => ProgressEvent, 0], () => ContinuationEvent, () => EndEvent]
     ];
@@ -68599,9 +61683,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _AMU,
-      {
-        [_h3]: ["DELETE", "/{Key+}?x-id=AbortMultipartUpload", 204]
-      },
+      { [_h3]: ["DELETE", "/{Key+}?x-id=AbortMultipartUpload", 204] },
       () => AbortMultipartUploadRequest,
       () => AbortMultipartUploadOutput
     ];
@@ -68609,9 +61691,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _CMUo,
-      {
-        [_h3]: ["POST", "/{Key+}", 200]
-      },
+      { [_h3]: ["POST", "/{Key+}", 200] },
       () => CompleteMultipartUploadRequest,
       () => CompleteMultipartUploadOutput
     ];
@@ -68619,9 +61699,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _CO,
-      {
-        [_h3]: ["PUT", "/{Key+}?x-id=CopyObject", 200]
-      },
+      { [_h3]: ["PUT", "/{Key+}?x-id=CopyObject", 200] },
       () => CopyObjectRequest,
       () => CopyObjectOutput
     ];
@@ -68629,9 +61707,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _CB,
-      {
-        [_h3]: ["PUT", "/", 200]
-      },
+      { [_h3]: ["PUT", "/", 200] },
       () => CreateBucketRequest,
       () => CreateBucketOutput
     ];
@@ -68639,9 +61715,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _CBMC,
-      {
-        [_h3]: ["POST", "/?metadataConfiguration", 200]
-      },
+      { [_h3]: ["POST", "/?metadataConfiguration", 200] },
       () => CreateBucketMetadataConfigurationRequest,
       () => __Unit
     ];
@@ -68649,9 +61723,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _CBMTC,
-      {
-        [_h3]: ["POST", "/?metadataTable", 200]
-      },
+      { [_h3]: ["POST", "/?metadataTable", 200] },
       () => CreateBucketMetadataTableConfigurationRequest,
       () => __Unit
     ];
@@ -68659,9 +61731,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _CMUr,
-      {
-        [_h3]: ["POST", "/{Key+}?uploads", 200]
-      },
+      { [_h3]: ["POST", "/{Key+}?uploads", 200] },
       () => CreateMultipartUploadRequest,
       () => CreateMultipartUploadOutput
     ];
@@ -68669,9 +61739,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _CSr,
-      {
-        [_h3]: ["GET", "/?session", 200]
-      },
+      { [_h3]: ["GET", "/?session", 200] },
       () => CreateSessionRequest,
       () => CreateSessionOutput
     ];
@@ -68679,9 +61747,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _DB,
-      {
-        [_h3]: ["DELETE", "/", 204]
-      },
+      { [_h3]: ["DELETE", "/", 204] },
       () => DeleteBucketRequest,
       () => __Unit
     ];
@@ -68689,9 +61755,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _DBAC,
-      {
-        [_h3]: ["DELETE", "/?analytics", 204]
-      },
+      { [_h3]: ["DELETE", "/?analytics", 204] },
       () => DeleteBucketAnalyticsConfigurationRequest,
       () => __Unit
     ];
@@ -68699,9 +61763,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _DBC,
-      {
-        [_h3]: ["DELETE", "/?cors", 204]
-      },
+      { [_h3]: ["DELETE", "/?cors", 204] },
       () => DeleteBucketCorsRequest,
       () => __Unit
     ];
@@ -68709,9 +61771,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _DBE,
-      {
-        [_h3]: ["DELETE", "/?encryption", 204]
-      },
+      { [_h3]: ["DELETE", "/?encryption", 204] },
       () => DeleteBucketEncryptionRequest,
       () => __Unit
     ];
@@ -68719,9 +61779,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _DBITC,
-      {
-        [_h3]: ["DELETE", "/?intelligent-tiering", 204]
-      },
+      { [_h3]: ["DELETE", "/?intelligent-tiering", 204] },
       () => DeleteBucketIntelligentTieringConfigurationRequest,
       () => __Unit
     ];
@@ -68729,9 +61787,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _DBIC,
-      {
-        [_h3]: ["DELETE", "/?inventory", 204]
-      },
+      { [_h3]: ["DELETE", "/?inventory", 204] },
       () => DeleteBucketInventoryConfigurationRequest,
       () => __Unit
     ];
@@ -68739,9 +61795,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _DBL,
-      {
-        [_h3]: ["DELETE", "/?lifecycle", 204]
-      },
+      { [_h3]: ["DELETE", "/?lifecycle", 204] },
       () => DeleteBucketLifecycleRequest,
       () => __Unit
     ];
@@ -68749,9 +61803,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _DBMC,
-      {
-        [_h3]: ["DELETE", "/?metadataConfiguration", 204]
-      },
+      { [_h3]: ["DELETE", "/?metadataConfiguration", 204] },
       () => DeleteBucketMetadataConfigurationRequest,
       () => __Unit
     ];
@@ -68759,9 +61811,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _DBMTC,
-      {
-        [_h3]: ["DELETE", "/?metadataTable", 204]
-      },
+      { [_h3]: ["DELETE", "/?metadataTable", 204] },
       () => DeleteBucketMetadataTableConfigurationRequest,
       () => __Unit
     ];
@@ -68769,9 +61819,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _DBMCe,
-      {
-        [_h3]: ["DELETE", "/?metrics", 204]
-      },
+      { [_h3]: ["DELETE", "/?metrics", 204] },
       () => DeleteBucketMetricsConfigurationRequest,
       () => __Unit
     ];
@@ -68779,9 +61827,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _DBOC,
-      {
-        [_h3]: ["DELETE", "/?ownershipControls", 204]
-      },
+      { [_h3]: ["DELETE", "/?ownershipControls", 204] },
       () => DeleteBucketOwnershipControlsRequest,
       () => __Unit
     ];
@@ -68789,9 +61835,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _DBP,
-      {
-        [_h3]: ["DELETE", "/?policy", 204]
-      },
+      { [_h3]: ["DELETE", "/?policy", 204] },
       () => DeleteBucketPolicyRequest,
       () => __Unit
     ];
@@ -68799,9 +61843,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _DBRe,
-      {
-        [_h3]: ["DELETE", "/?replication", 204]
-      },
+      { [_h3]: ["DELETE", "/?replication", 204] },
       () => DeleteBucketReplicationRequest,
       () => __Unit
     ];
@@ -68809,9 +61851,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _DBT,
-      {
-        [_h3]: ["DELETE", "/?tagging", 204]
-      },
+      { [_h3]: ["DELETE", "/?tagging", 204] },
       () => DeleteBucketTaggingRequest,
       () => __Unit
     ];
@@ -68819,9 +61859,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _DBW,
-      {
-        [_h3]: ["DELETE", "/?website", 204]
-      },
+      { [_h3]: ["DELETE", "/?website", 204] },
       () => DeleteBucketWebsiteRequest,
       () => __Unit
     ];
@@ -68829,9 +61867,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _DOel,
-      {
-        [_h3]: ["DELETE", "/{Key+}?x-id=DeleteObject", 204]
-      },
+      { [_h3]: ["DELETE", "/{Key+}?x-id=DeleteObject", 204] },
       () => DeleteObjectRequest,
       () => DeleteObjectOutput
     ];
@@ -68839,9 +61875,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _DOele,
-      {
-        [_h3]: ["POST", "/?delete", 200]
-      },
+      { [_h3]: ["POST", "/?delete", 200] },
       () => DeleteObjectsRequest,
       () => DeleteObjectsOutput
     ];
@@ -68849,9 +61883,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _DOT,
-      {
-        [_h3]: ["DELETE", "/{Key+}?tagging", 204]
-      },
+      { [_h3]: ["DELETE", "/{Key+}?tagging", 204] },
       () => DeleteObjectTaggingRequest,
       () => DeleteObjectTaggingOutput
     ];
@@ -68859,9 +61891,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _DPAB,
-      {
-        [_h3]: ["DELETE", "/?publicAccessBlock", 204]
-      },
+      { [_h3]: ["DELETE", "/?publicAccessBlock", 204] },
       () => DeletePublicAccessBlockRequest,
       () => __Unit
     ];
@@ -68869,9 +61899,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GBA,
-      {
-        [_h3]: ["GET", "/?abac", 200]
-      },
+      { [_h3]: ["GET", "/?abac", 200] },
       () => GetBucketAbacRequest,
       () => GetBucketAbacOutput
     ];
@@ -68879,9 +61907,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GBAC,
-      {
-        [_h3]: ["GET", "/?accelerate", 200]
-      },
+      { [_h3]: ["GET", "/?accelerate", 200] },
       () => GetBucketAccelerateConfigurationRequest,
       () => GetBucketAccelerateConfigurationOutput
     ];
@@ -68889,9 +61915,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GBAe,
-      {
-        [_h3]: ["GET", "/?acl", 200]
-      },
+      { [_h3]: ["GET", "/?acl", 200] },
       () => GetBucketAclRequest,
       () => GetBucketAclOutput
     ];
@@ -68899,9 +61923,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GBACe,
-      {
-        [_h3]: ["GET", "/?analytics&x-id=GetBucketAnalyticsConfiguration", 200]
-      },
+      { [_h3]: ["GET", "/?analytics&x-id=GetBucketAnalyticsConfiguration", 200] },
       () => GetBucketAnalyticsConfigurationRequest,
       () => GetBucketAnalyticsConfigurationOutput
     ];
@@ -68909,9 +61931,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GBC,
-      {
-        [_h3]: ["GET", "/?cors", 200]
-      },
+      { [_h3]: ["GET", "/?cors", 200] },
       () => GetBucketCorsRequest,
       () => GetBucketCorsOutput
     ];
@@ -68919,9 +61939,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GBE,
-      {
-        [_h3]: ["GET", "/?encryption", 200]
-      },
+      { [_h3]: ["GET", "/?encryption", 200] },
       () => GetBucketEncryptionRequest,
       () => GetBucketEncryptionOutput
     ];
@@ -68929,9 +61947,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GBITC,
-      {
-        [_h3]: ["GET", "/?intelligent-tiering&x-id=GetBucketIntelligentTieringConfiguration", 200]
-      },
+      { [_h3]: ["GET", "/?intelligent-tiering&x-id=GetBucketIntelligentTieringConfiguration", 200] },
       () => GetBucketIntelligentTieringConfigurationRequest,
       () => GetBucketIntelligentTieringConfigurationOutput
     ];
@@ -68939,9 +61955,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GBIC,
-      {
-        [_h3]: ["GET", "/?inventory&x-id=GetBucketInventoryConfiguration", 200]
-      },
+      { [_h3]: ["GET", "/?inventory&x-id=GetBucketInventoryConfiguration", 200] },
       () => GetBucketInventoryConfigurationRequest,
       () => GetBucketInventoryConfigurationOutput
     ];
@@ -68949,9 +61963,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GBLC,
-      {
-        [_h3]: ["GET", "/?lifecycle", 200]
-      },
+      { [_h3]: ["GET", "/?lifecycle", 200] },
       () => GetBucketLifecycleConfigurationRequest,
       () => GetBucketLifecycleConfigurationOutput
     ];
@@ -68959,9 +61971,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GBL,
-      {
-        [_h3]: ["GET", "/?location", 200]
-      },
+      { [_h3]: ["GET", "/?location", 200] },
       () => GetBucketLocationRequest,
       () => GetBucketLocationOutput
     ];
@@ -68969,9 +61979,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GBLe,
-      {
-        [_h3]: ["GET", "/?logging", 200]
-      },
+      { [_h3]: ["GET", "/?logging", 200] },
       () => GetBucketLoggingRequest,
       () => GetBucketLoggingOutput
     ];
@@ -68979,9 +61987,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GBMC,
-      {
-        [_h3]: ["GET", "/?metadataConfiguration", 200]
-      },
+      { [_h3]: ["GET", "/?metadataConfiguration", 200] },
       () => GetBucketMetadataConfigurationRequest,
       () => GetBucketMetadataConfigurationOutput
     ];
@@ -68989,9 +61995,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GBMTC,
-      {
-        [_h3]: ["GET", "/?metadataTable", 200]
-      },
+      { [_h3]: ["GET", "/?metadataTable", 200] },
       () => GetBucketMetadataTableConfigurationRequest,
       () => GetBucketMetadataTableConfigurationOutput
     ];
@@ -68999,9 +62003,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GBMCe,
-      {
-        [_h3]: ["GET", "/?metrics&x-id=GetBucketMetricsConfiguration", 200]
-      },
+      { [_h3]: ["GET", "/?metrics&x-id=GetBucketMetricsConfiguration", 200] },
       () => GetBucketMetricsConfigurationRequest,
       () => GetBucketMetricsConfigurationOutput
     ];
@@ -69009,9 +62011,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GBNC,
-      {
-        [_h3]: ["GET", "/?notification", 200]
-      },
+      { [_h3]: ["GET", "/?notification", 200] },
       () => GetBucketNotificationConfigurationRequest,
       () => NotificationConfiguration
     ];
@@ -69019,9 +62019,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GBOC,
-      {
-        [_h3]: ["GET", "/?ownershipControls", 200]
-      },
+      { [_h3]: ["GET", "/?ownershipControls", 200] },
       () => GetBucketOwnershipControlsRequest,
       () => GetBucketOwnershipControlsOutput
     ];
@@ -69029,9 +62027,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GBP,
-      {
-        [_h3]: ["GET", "/?policy", 200]
-      },
+      { [_h3]: ["GET", "/?policy", 200] },
       () => GetBucketPolicyRequest,
       () => GetBucketPolicyOutput
     ];
@@ -69039,9 +62035,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GBPS,
-      {
-        [_h3]: ["GET", "/?policyStatus", 200]
-      },
+      { [_h3]: ["GET", "/?policyStatus", 200] },
       () => GetBucketPolicyStatusRequest,
       () => GetBucketPolicyStatusOutput
     ];
@@ -69049,9 +62043,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GBR,
-      {
-        [_h3]: ["GET", "/?replication", 200]
-      },
+      { [_h3]: ["GET", "/?replication", 200] },
       () => GetBucketReplicationRequest,
       () => GetBucketReplicationOutput
     ];
@@ -69059,9 +62051,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GBRP,
-      {
-        [_h3]: ["GET", "/?requestPayment", 200]
-      },
+      { [_h3]: ["GET", "/?requestPayment", 200] },
       () => GetBucketRequestPaymentRequest,
       () => GetBucketRequestPaymentOutput
     ];
@@ -69069,9 +62059,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GBT,
-      {
-        [_h3]: ["GET", "/?tagging", 200]
-      },
+      { [_h3]: ["GET", "/?tagging", 200] },
       () => GetBucketTaggingRequest,
       () => GetBucketTaggingOutput
     ];
@@ -69079,9 +62067,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GBV,
-      {
-        [_h3]: ["GET", "/?versioning", 200]
-      },
+      { [_h3]: ["GET", "/?versioning", 200] },
       () => GetBucketVersioningRequest,
       () => GetBucketVersioningOutput
     ];
@@ -69089,9 +62075,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GBW,
-      {
-        [_h3]: ["GET", "/?website", 200]
-      },
+      { [_h3]: ["GET", "/?website", 200] },
       () => GetBucketWebsiteRequest,
       () => GetBucketWebsiteOutput
     ];
@@ -69099,9 +62083,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GO,
-      {
-        [_h3]: ["GET", "/{Key+}?x-id=GetObject", 200]
-      },
+      { [_h3]: ["GET", "/{Key+}?x-id=GetObject", 200] },
       () => GetObjectRequest,
       () => GetObjectOutput
     ];
@@ -69109,9 +62091,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GOA,
-      {
-        [_h3]: ["GET", "/{Key+}?acl", 200]
-      },
+      { [_h3]: ["GET", "/{Key+}?acl", 200] },
       () => GetObjectAclRequest,
       () => GetObjectAclOutput
     ];
@@ -69119,9 +62099,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GOAe,
-      {
-        [_h3]: ["GET", "/{Key+}?attributes", 200]
-      },
+      { [_h3]: ["GET", "/{Key+}?attributes", 200] },
       () => GetObjectAttributesRequest,
       () => GetObjectAttributesOutput
     ];
@@ -69129,9 +62107,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GOLH,
-      {
-        [_h3]: ["GET", "/{Key+}?legal-hold", 200]
-      },
+      { [_h3]: ["GET", "/{Key+}?legal-hold", 200] },
       () => GetObjectLegalHoldRequest,
       () => GetObjectLegalHoldOutput
     ];
@@ -69139,9 +62115,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GOLC,
-      {
-        [_h3]: ["GET", "/?object-lock", 200]
-      },
+      { [_h3]: ["GET", "/?object-lock", 200] },
       () => GetObjectLockConfigurationRequest,
       () => GetObjectLockConfigurationOutput
     ];
@@ -69149,9 +62123,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GORe,
-      {
-        [_h3]: ["GET", "/{Key+}?retention", 200]
-      },
+      { [_h3]: ["GET", "/{Key+}?retention", 200] },
       () => GetObjectRetentionRequest,
       () => GetObjectRetentionOutput
     ];
@@ -69159,9 +62131,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GOT,
-      {
-        [_h3]: ["GET", "/{Key+}?tagging", 200]
-      },
+      { [_h3]: ["GET", "/{Key+}?tagging", 200] },
       () => GetObjectTaggingRequest,
       () => GetObjectTaggingOutput
     ];
@@ -69169,9 +62139,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GOTe,
-      {
-        [_h3]: ["GET", "/{Key+}?torrent", 200]
-      },
+      { [_h3]: ["GET", "/{Key+}?torrent", 200] },
       () => GetObjectTorrentRequest,
       () => GetObjectTorrentOutput
     ];
@@ -69179,9 +62147,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _GPAB,
-      {
-        [_h3]: ["GET", "/?publicAccessBlock", 200]
-      },
+      { [_h3]: ["GET", "/?publicAccessBlock", 200] },
       () => GetPublicAccessBlockRequest,
       () => GetPublicAccessBlockOutput
     ];
@@ -69189,9 +62155,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _HB,
-      {
-        [_h3]: ["HEAD", "/", 200]
-      },
+      { [_h3]: ["HEAD", "/", 200] },
       () => HeadBucketRequest,
       () => HeadBucketOutput
     ];
@@ -69199,9 +62163,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _HO,
-      {
-        [_h3]: ["HEAD", "/{Key+}", 200]
-      },
+      { [_h3]: ["HEAD", "/{Key+}", 200] },
       () => HeadObjectRequest,
       () => HeadObjectOutput
     ];
@@ -69209,9 +62171,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _LBAC,
-      {
-        [_h3]: ["GET", "/?analytics&x-id=ListBucketAnalyticsConfigurations", 200]
-      },
+      { [_h3]: ["GET", "/?analytics&x-id=ListBucketAnalyticsConfigurations", 200] },
       () => ListBucketAnalyticsConfigurationsRequest,
       () => ListBucketAnalyticsConfigurationsOutput
     ];
@@ -69219,9 +62179,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _LBITC,
-      {
-        [_h3]: ["GET", "/?intelligent-tiering&x-id=ListBucketIntelligentTieringConfigurations", 200]
-      },
+      { [_h3]: ["GET", "/?intelligent-tiering&x-id=ListBucketIntelligentTieringConfigurations", 200] },
       () => ListBucketIntelligentTieringConfigurationsRequest,
       () => ListBucketIntelligentTieringConfigurationsOutput
     ];
@@ -69229,9 +62187,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _LBIC,
-      {
-        [_h3]: ["GET", "/?inventory&x-id=ListBucketInventoryConfigurations", 200]
-      },
+      { [_h3]: ["GET", "/?inventory&x-id=ListBucketInventoryConfigurations", 200] },
       () => ListBucketInventoryConfigurationsRequest,
       () => ListBucketInventoryConfigurationsOutput
     ];
@@ -69239,9 +62195,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _LBMC,
-      {
-        [_h3]: ["GET", "/?metrics&x-id=ListBucketMetricsConfigurations", 200]
-      },
+      { [_h3]: ["GET", "/?metrics&x-id=ListBucketMetricsConfigurations", 200] },
       () => ListBucketMetricsConfigurationsRequest,
       () => ListBucketMetricsConfigurationsOutput
     ];
@@ -69249,9 +62203,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _LB,
-      {
-        [_h3]: ["GET", "/?x-id=ListBuckets", 200]
-      },
+      { [_h3]: ["GET", "/?x-id=ListBuckets", 200] },
       () => ListBucketsRequest,
       () => ListBucketsOutput
     ];
@@ -69259,9 +62211,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _LDB,
-      {
-        [_h3]: ["GET", "/?x-id=ListDirectoryBuckets", 200]
-      },
+      { [_h3]: ["GET", "/?x-id=ListDirectoryBuckets", 200] },
       () => ListDirectoryBucketsRequest,
       () => ListDirectoryBucketsOutput
     ];
@@ -69269,9 +62219,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _LMU,
-      {
-        [_h3]: ["GET", "/?uploads", 200]
-      },
+      { [_h3]: ["GET", "/?uploads", 200] },
       () => ListMultipartUploadsRequest,
       () => ListMultipartUploadsOutput
     ];
@@ -69279,9 +62227,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _LO,
-      {
-        [_h3]: ["GET", "/", 200]
-      },
+      { [_h3]: ["GET", "/", 200] },
       () => ListObjectsRequest,
       () => ListObjectsOutput
     ];
@@ -69289,9 +62235,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _LOV,
-      {
-        [_h3]: ["GET", "/?list-type=2", 200]
-      },
+      { [_h3]: ["GET", "/?list-type=2", 200] },
       () => ListObjectsV2Request,
       () => ListObjectsV2Output
     ];
@@ -69299,9 +62243,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _LOVi,
-      {
-        [_h3]: ["GET", "/?versions", 200]
-      },
+      { [_h3]: ["GET", "/?versions", 200] },
       () => ListObjectVersionsRequest,
       () => ListObjectVersionsOutput
     ];
@@ -69309,9 +62251,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _LP,
-      {
-        [_h3]: ["GET", "/{Key+}?x-id=ListParts", 200]
-      },
+      { [_h3]: ["GET", "/{Key+}?x-id=ListParts", 200] },
       () => ListPartsRequest,
       () => ListPartsOutput
     ];
@@ -69319,9 +62259,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _PBA,
-      {
-        [_h3]: ["PUT", "/?abac", 200]
-      },
+      { [_h3]: ["PUT", "/?abac", 200] },
       () => PutBucketAbacRequest,
       () => __Unit
     ];
@@ -69329,9 +62267,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _PBAC,
-      {
-        [_h3]: ["PUT", "/?accelerate", 200]
-      },
+      { [_h3]: ["PUT", "/?accelerate", 200] },
       () => PutBucketAccelerateConfigurationRequest,
       () => __Unit
     ];
@@ -69339,9 +62275,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _PBAu,
-      {
-        [_h3]: ["PUT", "/?acl", 200]
-      },
+      { [_h3]: ["PUT", "/?acl", 200] },
       () => PutBucketAclRequest,
       () => __Unit
     ];
@@ -69349,9 +62283,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _PBACu,
-      {
-        [_h3]: ["PUT", "/?analytics", 200]
-      },
+      { [_h3]: ["PUT", "/?analytics", 200] },
       () => PutBucketAnalyticsConfigurationRequest,
       () => __Unit
     ];
@@ -69359,9 +62291,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _PBC,
-      {
-        [_h3]: ["PUT", "/?cors", 200]
-      },
+      { [_h3]: ["PUT", "/?cors", 200] },
       () => PutBucketCorsRequest,
       () => __Unit
     ];
@@ -69369,9 +62299,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _PBE,
-      {
-        [_h3]: ["PUT", "/?encryption", 200]
-      },
+      { [_h3]: ["PUT", "/?encryption", 200] },
       () => PutBucketEncryptionRequest,
       () => __Unit
     ];
@@ -69379,9 +62307,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _PBITC,
-      {
-        [_h3]: ["PUT", "/?intelligent-tiering", 200]
-      },
+      { [_h3]: ["PUT", "/?intelligent-tiering", 200] },
       () => PutBucketIntelligentTieringConfigurationRequest,
       () => __Unit
     ];
@@ -69389,9 +62315,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _PBIC,
-      {
-        [_h3]: ["PUT", "/?inventory", 200]
-      },
+      { [_h3]: ["PUT", "/?inventory", 200] },
       () => PutBucketInventoryConfigurationRequest,
       () => __Unit
     ];
@@ -69399,9 +62323,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _PBLC,
-      {
-        [_h3]: ["PUT", "/?lifecycle", 200]
-      },
+      { [_h3]: ["PUT", "/?lifecycle", 200] },
       () => PutBucketLifecycleConfigurationRequest,
       () => PutBucketLifecycleConfigurationOutput
     ];
@@ -69409,9 +62331,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _PBL,
-      {
-        [_h3]: ["PUT", "/?logging", 200]
-      },
+      { [_h3]: ["PUT", "/?logging", 200] },
       () => PutBucketLoggingRequest,
       () => __Unit
     ];
@@ -69419,9 +62339,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _PBMC,
-      {
-        [_h3]: ["PUT", "/?metrics", 200]
-      },
+      { [_h3]: ["PUT", "/?metrics", 200] },
       () => PutBucketMetricsConfigurationRequest,
       () => __Unit
     ];
@@ -69429,9 +62347,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _PBNC,
-      {
-        [_h3]: ["PUT", "/?notification", 200]
-      },
+      { [_h3]: ["PUT", "/?notification", 200] },
       () => PutBucketNotificationConfigurationRequest,
       () => __Unit
     ];
@@ -69439,9 +62355,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _PBOC,
-      {
-        [_h3]: ["PUT", "/?ownershipControls", 200]
-      },
+      { [_h3]: ["PUT", "/?ownershipControls", 200] },
       () => PutBucketOwnershipControlsRequest,
       () => __Unit
     ];
@@ -69449,9 +62363,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _PBP,
-      {
-        [_h3]: ["PUT", "/?policy", 200]
-      },
+      { [_h3]: ["PUT", "/?policy", 200] },
       () => PutBucketPolicyRequest,
       () => __Unit
     ];
@@ -69459,9 +62371,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _PBR,
-      {
-        [_h3]: ["PUT", "/?replication", 200]
-      },
+      { [_h3]: ["PUT", "/?replication", 200] },
       () => PutBucketReplicationRequest,
       () => __Unit
     ];
@@ -69469,9 +62379,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _PBRP,
-      {
-        [_h3]: ["PUT", "/?requestPayment", 200]
-      },
+      { [_h3]: ["PUT", "/?requestPayment", 200] },
       () => PutBucketRequestPaymentRequest,
       () => __Unit
     ];
@@ -69479,9 +62387,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _PBT,
-      {
-        [_h3]: ["PUT", "/?tagging", 200]
-      },
+      { [_h3]: ["PUT", "/?tagging", 200] },
       () => PutBucketTaggingRequest,
       () => __Unit
     ];
@@ -69489,9 +62395,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _PBV,
-      {
-        [_h3]: ["PUT", "/?versioning", 200]
-      },
+      { [_h3]: ["PUT", "/?versioning", 200] },
       () => PutBucketVersioningRequest,
       () => __Unit
     ];
@@ -69499,9 +62403,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _PBW,
-      {
-        [_h3]: ["PUT", "/?website", 200]
-      },
+      { [_h3]: ["PUT", "/?website", 200] },
       () => PutBucketWebsiteRequest,
       () => __Unit
     ];
@@ -69509,9 +62411,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _PO,
-      {
-        [_h3]: ["PUT", "/{Key+}?x-id=PutObject", 200]
-      },
+      { [_h3]: ["PUT", "/{Key+}?x-id=PutObject", 200] },
       () => PutObjectRequest,
       () => PutObjectOutput
     ];
@@ -69519,9 +62419,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _POA,
-      {
-        [_h3]: ["PUT", "/{Key+}?acl", 200]
-      },
+      { [_h3]: ["PUT", "/{Key+}?acl", 200] },
       () => PutObjectAclRequest,
       () => PutObjectAclOutput
     ];
@@ -69529,9 +62427,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _POLH,
-      {
-        [_h3]: ["PUT", "/{Key+}?legal-hold", 200]
-      },
+      { [_h3]: ["PUT", "/{Key+}?legal-hold", 200] },
       () => PutObjectLegalHoldRequest,
       () => PutObjectLegalHoldOutput
     ];
@@ -69539,9 +62435,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _POLC,
-      {
-        [_h3]: ["PUT", "/?object-lock", 200]
-      },
+      { [_h3]: ["PUT", "/?object-lock", 200] },
       () => PutObjectLockConfigurationRequest,
       () => PutObjectLockConfigurationOutput
     ];
@@ -69549,9 +62443,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _PORu,
-      {
-        [_h3]: ["PUT", "/{Key+}?retention", 200]
-      },
+      { [_h3]: ["PUT", "/{Key+}?retention", 200] },
       () => PutObjectRetentionRequest,
       () => PutObjectRetentionOutput
     ];
@@ -69559,9 +62451,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _POT,
-      {
-        [_h3]: ["PUT", "/{Key+}?tagging", 200]
-      },
+      { [_h3]: ["PUT", "/{Key+}?tagging", 200] },
       () => PutObjectTaggingRequest,
       () => PutObjectTaggingOutput
     ];
@@ -69569,9 +62459,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _PPAB,
-      {
-        [_h3]: ["PUT", "/?publicAccessBlock", 200]
-      },
+      { [_h3]: ["PUT", "/?publicAccessBlock", 200] },
       () => PutPublicAccessBlockRequest,
       () => __Unit
     ];
@@ -69579,9 +62467,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _RO,
-      {
-        [_h3]: ["PUT", "/{Key+}?renameObject", 200]
-      },
+      { [_h3]: ["PUT", "/{Key+}?renameObject", 200] },
       () => RenameObjectRequest,
       () => RenameObjectOutput
     ];
@@ -69589,9 +62475,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _ROe,
-      {
-        [_h3]: ["POST", "/{Key+}?restore", 200]
-      },
+      { [_h3]: ["POST", "/{Key+}?restore", 200] },
       () => RestoreObjectRequest,
       () => RestoreObjectOutput
     ];
@@ -69599,9 +62483,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _SOC,
-      {
-        [_h3]: ["POST", "/{Key+}?select&select-type=2", 200]
-      },
+      { [_h3]: ["POST", "/{Key+}?select&select-type=2", 200] },
       () => SelectObjectContentRequest,
       () => SelectObjectContentOutput
     ];
@@ -69609,9 +62491,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _UBMITC,
-      {
-        [_h3]: ["PUT", "/?metadataInventoryTable", 200]
-      },
+      { [_h3]: ["PUT", "/?metadataInventoryTable", 200] },
       () => UpdateBucketMetadataInventoryTableConfigurationRequest,
       () => __Unit
     ];
@@ -69619,9 +62499,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _UBMJTC,
-      {
-        [_h3]: ["PUT", "/?metadataJournalTable", 200]
-      },
+      { [_h3]: ["PUT", "/?metadataJournalTable", 200] },
       () => UpdateBucketMetadataJournalTableConfigurationRequest,
       () => __Unit
     ];
@@ -69629,9 +62507,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _UP,
-      {
-        [_h3]: ["PUT", "/{Key+}?x-id=UploadPart", 200]
-      },
+      { [_h3]: ["PUT", "/{Key+}?x-id=UploadPart", 200] },
       () => UploadPartRequest,
       () => UploadPartOutput
     ];
@@ -69639,9 +62515,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _UPC,
-      {
-        [_h3]: ["PUT", "/{Key+}?x-id=UploadPartCopy", 200]
-      },
+      { [_h3]: ["PUT", "/{Key+}?x-id=UploadPartCopy", 200] },
       () => UploadPartCopyRequest,
       () => UploadPartCopyOutput
     ];
@@ -69649,10 +62523,7 @@ var require_dist_cjs71 = __commonJS({
       9,
       n04,
       _WGOR,
-      {
-        [_en]: ["{RequestRoute}."],
-        [_h3]: ["POST", "/WriteGetObjectResponse", 200]
-      },
+      { [_en]: ["{RequestRoute}."], [_h3]: ["POST", "/WriteGetObjectResponse", 200] },
       () => WriteGetObjectResponseRequest,
       () => __Unit
     ];
@@ -71624,1975 +64495,6 @@ var require_dist_cjs71 = __commonJS({
   }
 });
 
-// lib/json-store/repositories/characters.repository.ts
-var CharactersRepository;
-var init_characters_repository = __esm({
-  "lib/json-store/repositories/characters.repository.ts"() {
-    "use strict";
-    init_base_repository();
-    init_types();
-    init_logger();
-    CharactersRepository = class extends BaseRepository {
-      constructor(jsonStore) {
-        super(jsonStore, CharacterSchema);
-      }
-      /**
-       * Find a character by ID
-       */
-      async findById(id) {
-        try {
-          const filePath = `characters/${id}.json`;
-          const data2 = await this.jsonStore.readJson(filePath);
-          return this.validate(data2);
-        } catch (error2) {
-          return null;
-        }
-      }
-      /**
-       * Find all characters (requires scanning directory)
-       */
-      async findAll() {
-        const characters = [];
-        try {
-          const files = await this.jsonStore.listDir("characters");
-          for (const file of files) {
-            if (file.endsWith(".json")) {
-              const id = file.replace(".json", "");
-              const character = await this.findById(id);
-              if (character) {
-                characters.push(character);
-              }
-            }
-          }
-        } catch (error2) {
-          logger.error("Error listing characters:", {}, error2 instanceof Error ? error2 : new Error(String(error2)));
-        }
-        return characters;
-      }
-      /**
-       * Find characters by user ID
-       */
-      async findByUserId(userId) {
-        const characters = await this.findAll();
-        return characters.filter((c4) => c4.userId === userId);
-      }
-      /**
-       * Find characters with a specific tag
-       */
-      async findByTag(tagId) {
-        const characters = await this.findAll();
-        return characters.filter((c4) => c4.tags.includes(tagId));
-      }
-      /**
-       * Create a new character
-       */
-      async create(data2) {
-        const id = this.generateId();
-        const now = this.getCurrentTimestamp();
-        const character = {
-          ...data2,
-          id,
-          createdAt: now,
-          updatedAt: now
-        };
-        const validated = this.validate(character);
-        const filePath = `characters/${id}.json`;
-        await this.jsonStore.writeJson(filePath, validated);
-        return validated;
-      }
-      /**
-       * Update a character
-       */
-      async update(id, data2) {
-        const existing = await this.findById(id);
-        if (!existing) {
-          return null;
-        }
-        const now = this.getCurrentTimestamp();
-        const updated = {
-          ...existing,
-          ...data2,
-          id: existing.id,
-          // Preserve ID
-          createdAt: existing.createdAt,
-          // Preserve creation timestamp
-          updatedAt: now
-        };
-        const validated = this.validate(updated);
-        const filePath = `characters/${id}.json`;
-        await this.jsonStore.writeJson(filePath, validated);
-        return validated;
-      }
-      /**
-       * Delete a character
-       */
-      async delete(id) {
-        const filePath = `characters/${id}.json`;
-        try {
-          await this.jsonStore.deleteFile(filePath);
-          return true;
-        } catch (error2) {
-          logger.error(`Failed to delete character ${id}:`, {}, error2 instanceof Error ? error2 : new Error(String(error2)));
-          return false;
-        }
-      }
-      /**
-       * Add a tag to a character
-       */
-      async addTag(characterId, tagId) {
-        const character = await this.findById(characterId);
-        if (!character) {
-          return null;
-        }
-        if (!character.tags.includes(tagId)) {
-          character.tags.push(tagId);
-          return await this.update(characterId, { tags: character.tags });
-        }
-        return character;
-      }
-      /**
-       * Remove a tag from a character
-       */
-      async removeTag(characterId, tagId) {
-        const character = await this.findById(characterId);
-        if (!character) {
-          return null;
-        }
-        character.tags = character.tags.filter((id) => id !== tagId);
-        return await this.update(characterId, { tags: character.tags });
-      }
-      /**
-       * Add a persona link to a character
-       */
-      async addPersona(characterId, personaId, isDefault = false) {
-        const character = await this.findById(characterId);
-        if (!character) {
-          return null;
-        }
-        const existing = character.personaLinks.find((link) => link.personaId === personaId);
-        if (!existing) {
-          character.personaLinks.push({ personaId, isDefault });
-          return await this.update(characterId, { personaLinks: character.personaLinks });
-        }
-        return character;
-      }
-      /**
-       * Remove a persona link from a character
-       */
-      async removePersona(characterId, personaId) {
-        const character = await this.findById(characterId);
-        if (!character) {
-          return null;
-        }
-        character.personaLinks = character.personaLinks.filter((link) => link.personaId !== personaId);
-        return await this.update(characterId, { personaLinks: character.personaLinks });
-      }
-      /**
-       * Set favorite status
-       */
-      async setFavorite(characterId, isFavorite) {
-        return await this.update(characterId, { isFavorite });
-      }
-      // ============================================================================
-      // PHYSICAL DESCRIPTIONS
-      // ============================================================================
-      /**
-       * Add a physical description to a character
-       */
-      async addDescription(characterId, data2) {
-        const character = await this.findById(characterId);
-        if (!character) {
-          return null;
-        }
-        const now = this.getCurrentTimestamp();
-        const description = {
-          ...data2,
-          id: this.generateId(),
-          createdAt: now,
-          updatedAt: now
-        };
-        character.physicalDescriptions = character.physicalDescriptions || [];
-        character.physicalDescriptions.push(description);
-        await this.update(characterId, { physicalDescriptions: character.physicalDescriptions });
-        return description;
-      }
-      /**
-       * Update a physical description
-       */
-      async updateDescription(characterId, descriptionId, data2) {
-        const character = await this.findById(characterId);
-        if (!character) {
-          return null;
-        }
-        const descriptions = character.physicalDescriptions || [];
-        const index = descriptions.findIndex((d4) => d4.id === descriptionId);
-        if (index === -1) {
-          return null;
-        }
-        const now = this.getCurrentTimestamp();
-        const updated = {
-          ...descriptions[index],
-          ...data2,
-          id: descriptions[index].id,
-          createdAt: descriptions[index].createdAt,
-          updatedAt: now
-        };
-        descriptions[index] = updated;
-        await this.update(characterId, { physicalDescriptions: descriptions });
-        return updated;
-      }
-      /**
-       * Remove a physical description from a character
-       */
-      async removeDescription(characterId, descriptionId) {
-        const character = await this.findById(characterId);
-        if (!character) {
-          return false;
-        }
-        const descriptions = character.physicalDescriptions || [];
-        const filtered = descriptions.filter((d4) => d4.id !== descriptionId);
-        if (filtered.length === descriptions.length) {
-          return false;
-        }
-        await this.update(characterId, { physicalDescriptions: filtered });
-        return true;
-      }
-      /**
-       * Get a single physical description by ID
-       */
-      async getDescription(characterId, descriptionId) {
-        const character = await this.findById(characterId);
-        if (!character) {
-          return null;
-        }
-        const descriptions = character.physicalDescriptions || [];
-        return descriptions.find((d4) => d4.id === descriptionId) || null;
-      }
-      /**
-       * Get all physical descriptions for a character
-       */
-      async getDescriptions(characterId) {
-        const character = await this.findById(characterId);
-        if (!character) {
-          return [];
-        }
-        return character.physicalDescriptions || [];
-      }
-    };
-  }
-});
-
-// lib/json-store/repositories/personas.repository.ts
-var PersonasRepository;
-var init_personas_repository = __esm({
-  "lib/json-store/repositories/personas.repository.ts"() {
-    "use strict";
-    init_base_repository();
-    init_types();
-    init_logger();
-    PersonasRepository = class extends BaseRepository {
-      constructor(jsonStore) {
-        super(jsonStore, PersonaSchema);
-      }
-      /**
-       * Find a persona by ID
-       */
-      async findById(id) {
-        try {
-          const filePath = `personas/${id}.json`;
-          const data2 = await this.jsonStore.readJson(filePath);
-          return this.validate(data2);
-        } catch (error2) {
-          return null;
-        }
-      }
-      /**
-       * Find all personas (requires scanning directory)
-       */
-      async findAll() {
-        const personas = [];
-        try {
-          const files = await this.jsonStore.listDir("personas");
-          for (const file of files) {
-            if (file.endsWith(".json")) {
-              const id = file.replace(".json", "");
-              const persona = await this.findById(id);
-              if (persona) {
-                personas.push(persona);
-              }
-            }
-          }
-        } catch (error2) {
-          logger.error("Error listing personas:", {}, error2);
-        }
-        return personas;
-      }
-      /**
-       * Find personas by user ID
-       */
-      async findByUserId(userId) {
-        const personas = await this.findAll();
-        return personas.filter((p4) => p4.userId === userId);
-      }
-      /**
-       * Find personas with a specific tag
-       */
-      async findByTag(tagId) {
-        const personas = await this.findAll();
-        return personas.filter((p4) => p4.tags.includes(tagId));
-      }
-      /**
-       * Create a new persona
-       */
-      async create(data2) {
-        const id = this.generateId();
-        const now = this.getCurrentTimestamp();
-        const persona = {
-          ...data2,
-          id,
-          createdAt: now,
-          updatedAt: now
-        };
-        const validated = this.validate(persona);
-        const filePath = `personas/${id}.json`;
-        await this.jsonStore.writeJson(filePath, validated);
-        return validated;
-      }
-      /**
-       * Update a persona
-       */
-      async update(id, data2) {
-        const existing = await this.findById(id);
-        if (!existing) {
-          return null;
-        }
-        const now = this.getCurrentTimestamp();
-        const updated = {
-          ...existing,
-          ...data2,
-          id: existing.id,
-          // Preserve ID
-          createdAt: existing.createdAt,
-          // Preserve creation timestamp
-          updatedAt: now
-        };
-        const validated = this.validate(updated);
-        const filePath = `personas/${id}.json`;
-        await this.jsonStore.writeJson(filePath, validated);
-        return validated;
-      }
-      /**
-       * Delete a persona
-       */
-      async delete(id) {
-        const filePath = `personas/${id}.json`;
-        try {
-          await this.jsonStore.deleteFile(filePath);
-          return true;
-        } catch (error2) {
-          logger.error(`Failed to delete persona ${id}:`, {}, error2);
-          return false;
-        }
-      }
-      /**
-       * Add a tag to a persona
-       */
-      async addTag(personaId, tagId) {
-        const persona = await this.findById(personaId);
-        if (!persona) {
-          return null;
-        }
-        if (!persona.tags.includes(tagId)) {
-          persona.tags.push(tagId);
-          return await this.update(personaId, { tags: persona.tags });
-        }
-        return persona;
-      }
-      /**
-       * Remove a tag from a persona
-       */
-      async removeTag(personaId, tagId) {
-        const persona = await this.findById(personaId);
-        if (!persona) {
-          return null;
-        }
-        persona.tags = persona.tags.filter((id) => id !== tagId);
-        return await this.update(personaId, { tags: persona.tags });
-      }
-      /**
-       * Add a character link to a persona
-       */
-      async addCharacterLink(personaId, characterId) {
-        const persona = await this.findById(personaId);
-        if (!persona) {
-          return null;
-        }
-        if (!persona.characterLinks.includes(characterId)) {
-          persona.characterLinks.push(characterId);
-          return await this.update(personaId, { characterLinks: persona.characterLinks });
-        }
-        return persona;
-      }
-      /**
-       * Remove a character link from a persona
-       */
-      async removeCharacterLink(personaId, characterId) {
-        const persona = await this.findById(personaId);
-        if (!persona) {
-          return null;
-        }
-        persona.characterLinks = persona.characterLinks.filter((id) => id !== characterId);
-        return await this.update(personaId, { characterLinks: persona.characterLinks });
-      }
-      // ============================================================================
-      // PHYSICAL DESCRIPTIONS
-      // ============================================================================
-      /**
-       * Add a physical description to a persona
-       */
-      async addDescription(personaId, data2) {
-        const persona = await this.findById(personaId);
-        if (!persona) {
-          return null;
-        }
-        const now = this.getCurrentTimestamp();
-        const description = {
-          ...data2,
-          id: this.generateId(),
-          createdAt: now,
-          updatedAt: now
-        };
-        persona.physicalDescriptions = persona.physicalDescriptions || [];
-        persona.physicalDescriptions.push(description);
-        await this.update(personaId, { physicalDescriptions: persona.physicalDescriptions });
-        return description;
-      }
-      /**
-       * Update a physical description
-       */
-      async updateDescription(personaId, descriptionId, data2) {
-        const persona = await this.findById(personaId);
-        if (!persona) {
-          return null;
-        }
-        const descriptions = persona.physicalDescriptions || [];
-        const index = descriptions.findIndex((d4) => d4.id === descriptionId);
-        if (index === -1) {
-          return null;
-        }
-        const now = this.getCurrentTimestamp();
-        const updated = {
-          ...descriptions[index],
-          ...data2,
-          id: descriptions[index].id,
-          createdAt: descriptions[index].createdAt,
-          updatedAt: now
-        };
-        descriptions[index] = updated;
-        await this.update(personaId, { physicalDescriptions: descriptions });
-        return updated;
-      }
-      /**
-       * Remove a physical description from a persona
-       */
-      async removeDescription(personaId, descriptionId) {
-        const persona = await this.findById(personaId);
-        if (!persona) {
-          return false;
-        }
-        const descriptions = persona.physicalDescriptions || [];
-        const filtered = descriptions.filter((d4) => d4.id !== descriptionId);
-        if (filtered.length === descriptions.length) {
-          return false;
-        }
-        await this.update(personaId, { physicalDescriptions: filtered });
-        return true;
-      }
-      /**
-       * Get a single physical description by ID
-       */
-      async getDescription(personaId, descriptionId) {
-        const persona = await this.findById(personaId);
-        if (!persona) {
-          return null;
-        }
-        const descriptions = persona.physicalDescriptions || [];
-        return descriptions.find((d4) => d4.id === descriptionId) || null;
-      }
-      /**
-       * Get all physical descriptions for a persona
-       */
-      async getDescriptions(personaId) {
-        const persona = await this.findById(personaId);
-        if (!persona) {
-          return [];
-        }
-        return persona.physicalDescriptions || [];
-      }
-    };
-  }
-});
-
-// lib/json-store/repositories/chats.repository.ts
-var ChatsRepository;
-var init_chats_repository = __esm({
-  "lib/json-store/repositories/chats.repository.ts"() {
-    "use strict";
-    init_base_repository();
-    init_types();
-    init_logger();
-    ChatsRepository = class extends BaseRepository {
-      constructor(jsonStore) {
-        super(jsonStore, ChatMetadataBaseSchema);
-      }
-      /**
-       * Get the chats index file path
-       */
-      getIndexPath() {
-        return "chats/index.jsonl";
-      }
-      /**
-       * Get the chat messages file path
-       */
-      getChatPath(chatId) {
-        return `chats/${chatId}.jsonl`;
-      }
-      /**
-       * Migrate legacy chat format to new participant-based format
-       */
-      migrateFromLegacy(rawData) {
-        if ("characterId" in rawData && !("participants" in rawData)) {
-          const legacyResult = ChatMetadataLegacySchema.safeParse(rawData);
-          if (legacyResult.success) {
-            const legacy = legacyResult.data;
-            const now = this.getCurrentTimestamp();
-            const participants = [];
-            participants.push({
-              id: this.generateId(),
-              type: "CHARACTER",
-              characterId: legacy.characterId,
-              personaId: null,
-              connectionProfileId: legacy.connectionProfileId,
-              imageProfileId: legacy.imageProfileId || null,
-              systemPromptOverride: null,
-              displayOrder: 0,
-              isActive: true,
-              createdAt: now,
-              updatedAt: now
-            });
-            if (legacy.personaId) {
-              participants.push({
-                id: this.generateId(),
-                type: "PERSONA",
-                characterId: null,
-                personaId: legacy.personaId,
-                connectionProfileId: null,
-                imageProfileId: null,
-                systemPromptOverride: null,
-                displayOrder: 1,
-                isActive: true,
-                createdAt: now,
-                updatedAt: now
-              });
-            }
-            return {
-              id: legacy.id,
-              userId: legacy.userId,
-              participants,
-              title: legacy.title,
-              contextSummary: legacy.contextSummary,
-              sillyTavernMetadata: legacy.sillyTavernMetadata,
-              tags: legacy.tags,
-              messageCount: legacy.messageCount,
-              lastMessageAt: legacy.lastMessageAt,
-              lastRenameCheckInterchange: 0,
-              createdAt: legacy.createdAt,
-              updatedAt: legacy.updatedAt
-            };
-          }
-        }
-        return this.validate(rawData);
-      }
-      /**
-       * Read all chat metadata from JSONL index, migrating legacy entries
-       */
-      async readAllMetadata() {
-        try {
-          const entries = await this.jsonStore.readJsonl(this.getIndexPath());
-          return entries.map((entry) => this.migrateFromLegacy(entry));
-        } catch (error2) {
-          return [];
-        }
-      }
-      /**
-       * Find a chat by ID
-       */
-      async findById(id) {
-        const chats = await this.readAllMetadata();
-        return chats.find((chat) => chat.id === id) || null;
-      }
-      /**
-       * Find all chats
-       */
-      async findAll() {
-        return await this.readAllMetadata();
-      }
-      /**
-       * Find chats by user ID
-       */
-      async findByUserId(userId) {
-        const chats = await this.readAllMetadata();
-        return chats.filter((chat) => chat.userId === userId);
-      }
-      /**
-       * Find chats that include a specific character as a participant
-       */
-      async findByCharacterId(characterId) {
-        const chats = await this.readAllMetadata();
-        return chats.filter(
-          (chat) => chat.participants.some((p4) => p4.type === "CHARACTER" && p4.characterId === characterId)
-        );
-      }
-      /**
-       * Find chats that include a specific persona as a participant
-       */
-      async findByPersonaId(personaId) {
-        const chats = await this.readAllMetadata();
-        return chats.filter(
-          (chat) => chat.participants.some((p4) => p4.type === "PERSONA" && p4.personaId === personaId)
-        );
-      }
-      /**
-       * Find chats with a specific tag
-       */
-      async findByTag(tagId) {
-        const chats = await this.readAllMetadata();
-        return chats.filter((chat) => chat.tags.includes(tagId));
-      }
-      /**
-       * Create a new chat
-       */
-      async create(data2) {
-        const id = this.generateId();
-        const now = this.getCurrentTimestamp();
-        const chat = {
-          ...data2,
-          id,
-          createdAt: now,
-          updatedAt: now
-        };
-        const validated = this.validate(chat);
-        await this.jsonStore.appendJsonl(this.getIndexPath(), [validated]);
-        await this.jsonStore.writeRaw(this.getChatPath(id), "");
-        return validated;
-      }
-      /**
-       * Update chat metadata
-       */
-      async update(id, data2) {
-        const chats = await this.readAllMetadata();
-        const index = chats.findIndex((chat) => chat.id === id);
-        if (index === -1) {
-          return null;
-        }
-        const existing = chats[index];
-        const now = this.getCurrentTimestamp();
-        const updated = {
-          ...existing,
-          ...data2,
-          id: existing.id,
-          // Preserve ID
-          createdAt: existing.createdAt,
-          // Preserve creation timestamp
-          updatedAt: now
-        };
-        const validated = this.validate(updated);
-        chats[index] = validated;
-        await this.jsonStore.writeJsonl(this.getIndexPath(), chats);
-        return validated;
-      }
-      /**
-       * Delete a chat (removes both metadata and messages)
-       */
-      async delete(id) {
-        const chats = await this.readAllMetadata();
-        const initialLength = chats.length;
-        const filtered = chats.filter((chat) => chat.id !== id);
-        if (filtered.length === initialLength) {
-          return false;
-        }
-        await this.jsonStore.writeJsonl(this.getIndexPath(), filtered);
-        try {
-          await this.jsonStore.deleteFile(this.getChatPath(id));
-        } catch (error2) {
-          logger.warn(`Failed to delete chat messages file for ${id}:`, { error: error2 instanceof Error ? error2.message : String(error2) });
-        }
-        return true;
-      }
-      /**
-       * Add a tag to a chat
-       */
-      async addTag(chatId, tagId) {
-        const chat = await this.findById(chatId);
-        if (!chat) {
-          return null;
-        }
-        if (!chat.tags.includes(tagId)) {
-          chat.tags.push(tagId);
-          return await this.update(chatId, { tags: chat.tags });
-        }
-        return chat;
-      }
-      /**
-       * Remove a tag from a chat
-       */
-      async removeTag(chatId, tagId) {
-        const chat = await this.findById(chatId);
-        if (!chat) {
-          return null;
-        }
-        chat.tags = chat.tags.filter((tid) => tid !== tagId);
-        return await this.update(chatId, { tags: chat.tags });
-      }
-      // ============================================================================
-      // PARTICIPANT OPERATIONS
-      // ============================================================================
-      /**
-       * Add a participant to a chat
-       */
-      async addParticipant(chatId, participant) {
-        const chat = await this.findById(chatId);
-        if (!chat) {
-          return null;
-        }
-        const now = this.getCurrentTimestamp();
-        const newParticipant = {
-          ...participant,
-          id: this.generateId(),
-          createdAt: now,
-          updatedAt: now
-        };
-        ChatParticipantBaseSchema.parse(newParticipant);
-        const participants = [...chat.participants, newParticipant];
-        return await this.update(chatId, { participants });
-      }
-      /**
-       * Update a participant in a chat
-       */
-      async updateParticipant(chatId, participantId, data2) {
-        const chat = await this.findById(chatId);
-        if (!chat) {
-          return null;
-        }
-        const participantIndex = chat.participants.findIndex((p4) => p4.id === participantId);
-        if (participantIndex === -1) {
-          return null;
-        }
-        const now = this.getCurrentTimestamp();
-        const existingParticipant = chat.participants[participantIndex];
-        const updatedParticipant = {
-          ...existingParticipant,
-          ...data2,
-          id: existingParticipant.id,
-          createdAt: existingParticipant.createdAt,
-          updatedAt: now
-        };
-        ChatParticipantBaseSchema.parse(updatedParticipant);
-        const participants = [...chat.participants];
-        participants[participantIndex] = updatedParticipant;
-        return await this.update(chatId, { participants });
-      }
-      /**
-       * Remove a participant from a chat
-       */
-      async removeParticipant(chatId, participantId) {
-        const chat = await this.findById(chatId);
-        if (!chat) {
-          return null;
-        }
-        const participants = chat.participants.filter((p4) => p4.id !== participantId);
-        if (participants.length === 0) {
-          throw new Error("Cannot remove the last participant from a chat");
-        }
-        return await this.update(chatId, { participants });
-      }
-      /**
-       * Get all character participants from a chat
-       */
-      getCharacterParticipants(chat) {
-        return chat.participants.filter((p4) => p4.type === "CHARACTER");
-      }
-      /**
-       * Get all persona participants from a chat
-       */
-      getPersonaParticipants(chat) {
-        return chat.participants.filter((p4) => p4.type === "PERSONA");
-      }
-      /**
-       * Get active participants only
-       */
-      getActiveParticipants(chat) {
-        return chat.participants.filter((p4) => p4.isActive);
-      }
-      // ============================================================================
-      // MESSAGE OPERATIONS
-      // ============================================================================
-      /**
-       * Get all messages for a chat
-       */
-      async getMessages(chatId) {
-        try {
-          const messages = await this.jsonStore.readJsonl(this.getChatPath(chatId));
-          return messages.map((msg) => ChatEventSchema.parse(msg));
-        } catch (error2) {
-          return [];
-        }
-      }
-      /**
-       * Add a message to a chat
-       */
-      async addMessage(chatId, message) {
-        const validated = ChatEventSchema.parse(message);
-        await this.jsonStore.appendJsonl(this.getChatPath(chatId), [validated]);
-        const chat = await this.findById(chatId);
-        if (chat) {
-          const messages = await this.getMessages(chatId);
-          await this.update(chatId, {
-            messageCount: messages.length,
-            lastMessageAt: this.getCurrentTimestamp()
-          });
-        }
-        return validated;
-      }
-      /**
-       * Add multiple messages to a chat
-       */
-      async addMessages(chatId, messages) {
-        const validated = messages.map((msg) => ChatEventSchema.parse(msg));
-        await this.jsonStore.appendJsonl(this.getChatPath(chatId), validated);
-        const chat = await this.findById(chatId);
-        if (chat) {
-          const allMessages = await this.getMessages(chatId);
-          await this.update(chatId, {
-            messageCount: allMessages.length,
-            lastMessageAt: this.getCurrentTimestamp()
-          });
-        }
-        return validated;
-      }
-      /**
-       * Update a specific message in a chat
-       */
-      async updateMessage(chatId, messageId, updates) {
-        try {
-          const messages = await this.getMessages(chatId);
-          const messageIndex = messages.findIndex((m4) => m4.id === messageId);
-          if (messageIndex === -1) {
-            return null;
-          }
-          const updatedMessage = { ...messages[messageIndex], ...updates };
-          const validated = ChatEventSchema.parse(updatedMessage);
-          messages[messageIndex] = validated;
-          await this.jsonStore.writeJsonl(this.getChatPath(chatId), messages);
-          return validated;
-        } catch (error2) {
-          logger.error(`Failed to update message ${messageId} in chat ${chatId}:`, {}, error2 instanceof Error ? error2 : new Error(String(error2)));
-          return null;
-        }
-      }
-      /**
-       * Get message count for a chat
-       */
-      async getMessageCount(chatId) {
-        const messages = await this.getMessages(chatId);
-        return messages.length;
-      }
-      /**
-       * Clear all messages from a chat (for testing)
-       */
-      async clearMessages(chatId) {
-        try {
-          await this.jsonStore.deleteFile(this.getChatPath(chatId));
-          await this.jsonStore.writeJsonl(this.getChatPath(chatId), []);
-          const chat = await this.findById(chatId);
-          if (chat) {
-            await this.update(chatId, {
-              messageCount: 0,
-              lastMessageAt: null
-            });
-          }
-          return true;
-        } catch (error2) {
-          logger.error(`Failed to clear messages for chat ${chatId}:`, {}, error2 instanceof Error ? error2 : new Error(String(error2)));
-          return false;
-        }
-      }
-      // ============================================================================
-      // MIGRATION UTILITIES
-      // ============================================================================
-      /**
-       * Migrate all chats from legacy format to new participant-based format.
-       * This reads all chats, converts them, and writes them back.
-       * Safe to run multiple times - already migrated chats are unchanged.
-       */
-      async migrateAllToParticipants() {
-        try {
-          const rawEntries = await this.jsonStore.readJsonl(this.getIndexPath());
-          let migratedCount = 0;
-          const migratedChats = rawEntries.map((entry) => {
-            if ("characterId" in entry && !("participants" in entry)) {
-              migratedCount++;
-            }
-            return this.migrateFromLegacy(entry);
-          });
-          if (migratedCount > 0) {
-            await this.jsonStore.writeJsonl(this.getIndexPath(), migratedChats);
-          }
-          return { migrated: migratedCount, total: rawEntries.length };
-        } catch (error2) {
-          logger.error("Failed to migrate chats:", {}, error2 instanceof Error ? error2 : new Error(String(error2)));
-          return { migrated: 0, total: 0 };
-        }
-      }
-    };
-  }
-});
-
-// lib/json-store/repositories/tags.repository.ts
-var TagsRepository;
-var init_tags_repository = __esm({
-  "lib/json-store/repositories/tags.repository.ts"() {
-    "use strict";
-    init_base_repository();
-    init_types();
-    TagsRepository = class extends BaseRepository {
-      constructor(jsonStore) {
-        super(jsonStore, TagSchema);
-      }
-      /**
-       * Get the tags file path
-       */
-      getFilePath() {
-        return "tags/tags.json";
-      }
-      /**
-       * Read tags file with default structure
-       */
-      async readTagsFile() {
-        try {
-          const filePath = this.getFilePath();
-          const data2 = await this.jsonStore.readJson(filePath);
-          return TagsFileSchema.parse(data2);
-        } catch (error2) {
-          return {
-            version: 1,
-            tags: [],
-            createdAt: this.getCurrentTimestamp(),
-            updatedAt: this.getCurrentTimestamp()
-          };
-        }
-      }
-      /**
-       * Write tags file with validation
-       */
-      async writeTagsFile(data2) {
-        const validated = TagsFileSchema.parse({
-          ...data2,
-          updatedAt: this.getCurrentTimestamp()
-        });
-        await this.jsonStore.writeJson(this.getFilePath(), validated);
-      }
-      /**
-       * Find a tag by ID
-       */
-      async findById(id) {
-        const tagsFile = await this.readTagsFile();
-        return tagsFile.tags.find((tag2) => tag2.id === id) || null;
-      }
-      /**
-       * Find all tags
-       */
-      async findAll() {
-        const tagsFile = await this.readTagsFile();
-        return tagsFile.tags;
-      }
-      /**
-       * Find tags by user ID
-       */
-      async findByUserId(userId) {
-        const tagsFile = await this.readTagsFile();
-        return tagsFile.tags.filter((tag2) => tag2.userId === userId);
-      }
-      /**
-       * Find tag by name (case-insensitive)
-       */
-      async findByName(userId, name) {
-        const tagsFile = await this.readTagsFile();
-        const nameLower = name.toLowerCase();
-        return tagsFile.tags.find(
-          (tag2) => tag2.userId === userId && tag2.nameLower === nameLower
-        ) || null;
-      }
-      /**
-       * Create a new tag
-       */
-      async create(data2) {
-        const id = this.generateId();
-        const now = this.getCurrentTimestamp();
-        const tag2 = {
-          ...data2,
-          quickHide: typeof data2.quickHide === "boolean" ? data2.quickHide : false,
-          id,
-          createdAt: now,
-          updatedAt: now
-        };
-        const validated = this.validate(tag2);
-        const tagsFile = await this.readTagsFile();
-        tagsFile.tags.push(validated);
-        await this.writeTagsFile(tagsFile);
-        this.jsonStore.clearCache();
-        return validated;
-      }
-      /**
-       * Update a tag
-       */
-      async update(id, data2) {
-        const tagsFile = await this.readTagsFile();
-        const index = tagsFile.tags.findIndex((tag2) => tag2.id === id);
-        if (index === -1) {
-          return null;
-        }
-        const existing = tagsFile.tags[index];
-        const now = this.getCurrentTimestamp();
-        const updated = {
-          ...existing,
-          ...data2,
-          id: existing.id,
-          // Preserve ID
-          createdAt: existing.createdAt,
-          // Preserve creation timestamp
-          updatedAt: now
-        };
-        const validated = this.validate(updated);
-        tagsFile.tags[index] = validated;
-        await this.writeTagsFile(tagsFile);
-        this.jsonStore.clearCache();
-        return validated;
-      }
-      /**
-       * Delete a tag
-       */
-      async delete(id) {
-        const tagsFile = await this.readTagsFile();
-        const initialLength = tagsFile.tags.length;
-        tagsFile.tags = tagsFile.tags.filter((tag2) => tag2.id !== id);
-        if (tagsFile.tags.length === initialLength) {
-          return false;
-        }
-        await this.writeTagsFile(tagsFile);
-        this.jsonStore.clearCache();
-        return true;
-      }
-    };
-  }
-});
-
-// lib/json-store/repositories/users.repository.ts
-var UsersRepository;
-var init_users_repository = __esm({
-  "lib/json-store/repositories/users.repository.ts"() {
-    "use strict";
-    init_base_repository();
-    init_logger();
-    init_types();
-    UsersRepository = class extends BaseRepository {
-      constructor(jsonStore) {
-        super(jsonStore, UserSchema);
-      }
-      /**
-       * Get the general settings file path
-       */
-      getFilePath() {
-        return "settings/general.json";
-      }
-      /**
-       * Read general settings file with default structure
-       */
-      async readGeneralSettings() {
-        try {
-          const filePath = this.getFilePath();
-          const data2 = await this.jsonStore.readJson(filePath);
-          return GeneralSettingsSchema.parse(data2);
-        } catch (error2) {
-          throw new Error("General settings file not found or invalid");
-        }
-      }
-      /**
-       * Write general settings file with validation
-       */
-      async writeGeneralSettings(data2) {
-        const validated = GeneralSettingsSchema.parse({
-          ...data2,
-          updatedAt: this.getCurrentTimestamp()
-        });
-        await this.jsonStore.writeJson(this.getFilePath(), validated);
-      }
-      /**
-       * Find user by ID (single-user assumption: returns the configured user)
-       */
-      async findById(id) {
-        try {
-          const settings = await this.readGeneralSettings();
-          return settings.user.id === id ? settings.user : null;
-        } catch (error2) {
-          return null;
-        }
-      }
-      /**
-       * Find user by email
-       */
-      async findByEmail(email) {
-        try {
-          const settings = await this.readGeneralSettings();
-          return settings.user.email === email ? settings.user : null;
-        } catch (error2) {
-          return null;
-        }
-      }
-      /**
-       * Get current user (single-user system)
-       */
-      async getCurrentUser() {
-        try {
-          const settings = await this.readGeneralSettings();
-          return settings.user;
-        } catch (error2) {
-          return null;
-        }
-      }
-      /**
-       * Find all users (returns array with single user for compatibility)
-       */
-      async findAll() {
-        const user = await this.getCurrentUser();
-        return user ? [user] : [];
-      }
-      /**
-       * Create a new user (overwrites existing in single-user system)
-       */
-      async create(data2) {
-        const id = this.generateId();
-        const now = this.getCurrentTimestamp();
-        const user = {
-          ...data2,
-          id,
-          createdAt: now,
-          updatedAt: now
-        };
-        const validated = this.validate(user);
-        let settings;
-        try {
-          settings = await this.readGeneralSettings();
-          settings.user = validated;
-        } catch {
-          settings = {
-            version: 1,
-            user: validated,
-            chatSettings: {
-              id: this.generateId(),
-              userId: id,
-              avatarDisplayMode: "ALWAYS",
-              avatarDisplayStyle: "CIRCULAR",
-              tagStyles: {},
-              cheapLLMSettings: {
-                strategy: "PROVIDER_CHEAPEST",
-                fallbackToLocal: true,
-                embeddingProvider: "OPENAI"
-              },
-              createdAt: now,
-              updatedAt: now
-            },
-            createdAt: now,
-            updatedAt: now
-          };
-        }
-        await this.writeGeneralSettings(settings);
-        return validated;
-      }
-      /**
-       * Update user
-       */
-      async update(id, data2) {
-        const settings = await this.readGeneralSettings();
-        if (settings.user.id !== id) {
-          return null;
-        }
-        const now = this.getCurrentTimestamp();
-        const updated = {
-          ...settings.user,
-          ...data2,
-          id: settings.user.id,
-          // Preserve ID
-          createdAt: settings.user.createdAt,
-          // Preserve creation timestamp
-          updatedAt: now
-        };
-        const validated = this.validate(updated);
-        settings.user = validated;
-        await this.writeGeneralSettings(settings);
-        return validated;
-      }
-      /**
-       * Delete user (not supported in single-user system)
-       */
-      async delete(id) {
-        logger.warn("User deletion not supported in single-user system", { context: "UsersRepository.delete", userId: id });
-        return false;
-      }
-      /**
-       * Get chat settings for user
-       */
-      async getChatSettings(userId) {
-        try {
-          const settings = await this.readGeneralSettings();
-          return settings.user.id === userId ? settings.chatSettings : null;
-        } catch (error2) {
-          return null;
-        }
-      }
-      /**
-       * Update chat settings
-       */
-      async updateChatSettings(userId, data2) {
-        const settings = await this.readGeneralSettings();
-        if (settings.user.id !== userId) {
-          return null;
-        }
-        const now = this.getCurrentTimestamp();
-        const updated = {
-          ...settings.chatSettings,
-          ...data2,
-          id: settings.chatSettings.id,
-          // Preserve ID
-          userId: settings.chatSettings.userId,
-          // Preserve user ID
-          createdAt: settings.chatSettings.createdAt,
-          // Preserve creation timestamp
-          updatedAt: now
-        };
-        const validated = ChatSettingsSchema.parse(updated);
-        settings.chatSettings = validated;
-        await this.writeGeneralSettings(settings);
-        return validated;
-      }
-    };
-  }
-});
-
-// lib/json-store/repositories/files.repository.ts
-var FilesRepository;
-var init_files_repository = __esm({
-  "lib/json-store/repositories/files.repository.ts"() {
-    "use strict";
-    init_base_repository();
-    init_types();
-    FilesRepository = class extends BaseRepository {
-      constructor(jsonStore) {
-        super(jsonStore, FileEntrySchema);
-      }
-      /**
-       * Get the files index file path
-       */
-      getIndexPath() {
-        return "files/files.jsonl";
-      }
-      /**
-       * Read all file entries from JSONL index
-       */
-      async readAllEntries() {
-        try {
-          const entries = await this.jsonStore.readJsonl(this.getIndexPath());
-          return entries.map((entry) => this.validate(entry));
-        } catch (error2) {
-          return [];
-        }
-      }
-      /**
-       * Find a file entry by ID
-       */
-      async findById(id) {
-        const entries = await this.readAllEntries();
-        return entries.find((entry) => entry.id === id) || null;
-      }
-      /**
-       * Find all file entries
-       */
-      async findAll() {
-        return await this.readAllEntries();
-      }
-      /**
-       * Find entries by SHA256 hash
-       * Returns array for consistency with MongoDB (allows handling of hash collisions)
-       */
-      async findBySha256(sha256) {
-        const entries = await this.readAllEntries();
-        return entries.filter((entry) => entry.sha256 === sha256);
-      }
-      /**
-       * Find entries by category
-       */
-      async findByCategory(category) {
-        const entries = await this.readAllEntries();
-        return entries.filter((entry) => entry.category === category);
-      }
-      /**
-       * Find entries by source
-       */
-      async findBySource(source) {
-        const entries = await this.readAllEntries();
-        return entries.filter((entry) => entry.source === source);
-      }
-      /**
-       * Find entries linked to a specific entity
-       */
-      async findByLinkedTo(entityId) {
-        const entries = await this.readAllEntries();
-        return entries.filter((entry) => entry.linkedTo.includes(entityId));
-      }
-      /**
-       * Find entries with a specific tag
-       */
-      async findByTag(tagId) {
-        const entries = await this.readAllEntries();
-        return entries.filter((entry) => entry.tags.includes(tagId));
-      }
-      /**
-       * Create a new file entry
-       */
-      async create(data2) {
-        const id = this.generateId();
-        const now = this.getCurrentTimestamp();
-        const entry = {
-          ...data2,
-          id,
-          createdAt: now,
-          updatedAt: now
-        };
-        const validated = this.validate(entry);
-        await this.jsonStore.appendJsonl(this.getIndexPath(), [validated]);
-        return validated;
-      }
-      /**
-       * Update a file entry (requires reading and rewriting the entire file)
-       */
-      async update(id, data2) {
-        const entries = await this.readAllEntries();
-        const index = entries.findIndex((entry) => entry.id === id);
-        if (index === -1) {
-          return null;
-        }
-        const existing = entries[index];
-        const now = this.getCurrentTimestamp();
-        const updated = {
-          ...existing,
-          ...data2,
-          id: existing.id,
-          // Preserve ID
-          sha256: existing.sha256,
-          // Preserve hash
-          createdAt: existing.createdAt,
-          // Preserve creation timestamp
-          updatedAt: now
-        };
-        const validated = this.validate(updated);
-        entries[index] = validated;
-        await this.jsonStore.writeJsonl(this.getIndexPath(), entries);
-        return validated;
-      }
-      /**
-       * Delete a file entry (by ID)
-       */
-      async delete(id) {
-        const entries = await this.readAllEntries();
-        const initialLength = entries.length;
-        const filtered = entries.filter((entry) => entry.id !== id);
-        if (filtered.length === initialLength) {
-          return false;
-        }
-        await this.jsonStore.writeJsonl(this.getIndexPath(), filtered);
-        return true;
-      }
-      /**
-       * Add a link to a file entry
-       */
-      async addLink(fileId, entityId) {
-        const entry = await this.findById(fileId);
-        if (!entry) {
-          return null;
-        }
-        if (!entry.linkedTo.includes(entityId)) {
-          const updatedLinkedTo = [...entry.linkedTo, entityId];
-          return await this.update(fileId, { linkedTo: updatedLinkedTo });
-        }
-        return entry;
-      }
-      /**
-       * Remove a link from a file entry
-       */
-      async removeLink(fileId, entityId) {
-        const entry = await this.findById(fileId);
-        if (!entry) {
-          return null;
-        }
-        const updatedLinkedTo = entry.linkedTo.filter((id) => id !== entityId);
-        return await this.update(fileId, { linkedTo: updatedLinkedTo });
-      }
-      /**
-       * Add a tag to a file entry
-       */
-      async addTag(fileId, tagId) {
-        const entry = await this.findById(fileId);
-        if (!entry) {
-          return null;
-        }
-        if (!entry.tags.includes(tagId)) {
-          const updatedTags = [...entry.tags, tagId];
-          return await this.update(fileId, { tags: updatedTags });
-        }
-        return entry;
-      }
-      /**
-       * Remove a tag from a file entry
-       */
-      async removeTag(fileId, tagId) {
-        const entry = await this.findById(fileId);
-        if (!entry) {
-          return null;
-        }
-        const updatedTags = entry.tags.filter((id) => id !== tagId);
-        return await this.update(fileId, { tags: updatedTags });
-      }
-    };
-  }
-});
-
-// lib/json-store/repositories/memories.repository.ts
-var MemoriesRepository;
-var init_memories_repository = __esm({
-  "lib/json-store/repositories/memories.repository.ts"() {
-    "use strict";
-    init_base_repository();
-    init_types();
-    MemoriesRepository = class extends BaseRepository {
-      constructor(jsonStore) {
-        super(jsonStore, MemorySchema);
-      }
-      /**
-       * Get the memories file path for a character
-       */
-      getFilePath(characterId) {
-        return `memories/by-character/${characterId}.json`;
-      }
-      /**
-       * Read memories file for a character with default structure
-       */
-      async readMemoriesFile(characterId) {
-        try {
-          const filePath = this.getFilePath(characterId);
-          const data2 = await this.jsonStore.readJson(filePath);
-          return MemoriesFileSchema.parse(data2);
-        } catch (error2) {
-          return {
-            version: 1,
-            memories: [],
-            createdAt: this.getCurrentTimestamp(),
-            updatedAt: this.getCurrentTimestamp()
-          };
-        }
-      }
-      /**
-       * Write memories file with validation
-       */
-      async writeMemoriesFile(characterId, data2) {
-        const validated = MemoriesFileSchema.parse({
-          ...data2,
-          updatedAt: this.getCurrentTimestamp()
-        });
-        await this.jsonStore.writeJson(this.getFilePath(characterId), validated);
-      }
-      /**
-       * Find a memory by ID
-       * Note: This requires scanning all character memory files since we don't have a global index
-       */
-      async findById(id) {
-        const characterDirs = await this.listCharacterIds();
-        for (const characterId of characterDirs) {
-          const memoriesFile = await this.readMemoriesFile(characterId);
-          const memory = memoriesFile.memories.find((m4) => m4.id === id);
-          if (memory) {
-            return memory;
-          }
-        }
-        return null;
-      }
-      /**
-       * Find a memory by ID within a specific character's memories
-       */
-      async findByIdForCharacter(characterId, memoryId) {
-        const memoriesFile = await this.readMemoriesFile(characterId);
-        return memoriesFile.memories.find((m4) => m4.id === memoryId) || null;
-      }
-      /**
-       * Find all memories across all characters
-       */
-      async findAll() {
-        const characterDirs = await this.listCharacterIds();
-        const allMemories = [];
-        for (const characterId of characterDirs) {
-          const memoriesFile = await this.readMemoriesFile(characterId);
-          allMemories.push(...memoriesFile.memories);
-        }
-        return allMemories;
-      }
-      /**
-       * Find all memories for a specific character
-       */
-      async findByCharacterId(characterId) {
-        const memoriesFile = await this.readMemoriesFile(characterId);
-        return memoriesFile.memories;
-      }
-      /**
-       * Find memories by keywords (text-based search)
-       */
-      async findByKeywords(characterId, keywords) {
-        const memoriesFile = await this.readMemoriesFile(characterId);
-        const keywordsLower = keywords.map((k4) => k4.toLowerCase());
-        return memoriesFile.memories.filter((memory) => {
-          const memoryKeywordsLower = memory.keywords.map((k4) => k4.toLowerCase());
-          return keywordsLower.some(
-            (keyword) => memoryKeywordsLower.some((mk) => mk.includes(keyword))
-          );
-        });
-      }
-      /**
-       * Search memories by content (simple text search)
-       */
-      async searchByContent(characterId, query) {
-        const memoriesFile = await this.readMemoriesFile(characterId);
-        const queryLower = query.toLowerCase();
-        return memoriesFile.memories.filter(
-          (memory) => memory.content.toLowerCase().includes(queryLower) || memory.summary.toLowerCase().includes(queryLower) || memory.keywords.some((k4) => k4.toLowerCase().includes(queryLower))
-        );
-      }
-      /**
-       * Create a new memory
-       */
-      async create(data2) {
-        const id = this.generateId();
-        const now = this.getCurrentTimestamp();
-        const memory = {
-          ...data2,
-          id,
-          createdAt: now,
-          updatedAt: now
-        };
-        const validated = this.validate(memory);
-        const memoriesFile = await this.readMemoriesFile(data2.characterId);
-        memoriesFile.memories.push(validated);
-        await this.writeMemoriesFile(data2.characterId, memoriesFile);
-        return validated;
-      }
-      /**
-       * Update a memory
-       */
-      async update(id, data2) {
-        const characterId = data2.characterId;
-        if (!characterId) {
-          const existingMemory = await this.findById(id);
-          if (!existingMemory) {
-            return null;
-          }
-          return this.updateForCharacter(existingMemory.characterId, id, data2);
-        }
-        return this.updateForCharacter(characterId, id, data2);
-      }
-      /**
-       * Update a memory within a specific character's memories
-       */
-      async updateForCharacter(characterId, memoryId, data2) {
-        const memoriesFile = await this.readMemoriesFile(characterId);
-        const index = memoriesFile.memories.findIndex((m4) => m4.id === memoryId);
-        if (index === -1) {
-          return null;
-        }
-        const existing = memoriesFile.memories[index];
-        const now = this.getCurrentTimestamp();
-        const updated = {
-          ...existing,
-          ...data2,
-          id: existing.id,
-          // Preserve ID
-          characterId: existing.characterId,
-          // Preserve characterId
-          createdAt: existing.createdAt,
-          // Preserve creation timestamp
-          updatedAt: now
-        };
-        const validated = this.validate(updated);
-        memoriesFile.memories[index] = validated;
-        await this.writeMemoriesFile(characterId, memoriesFile);
-        return validated;
-      }
-      /**
-       * Delete a memory
-       */
-      async delete(id) {
-        const memory = await this.findById(id);
-        if (!memory) {
-          return false;
-        }
-        return this.deleteForCharacter(memory.characterId, id);
-      }
-      /**
-       * Delete a memory from a specific character
-       */
-      async deleteForCharacter(characterId, memoryId) {
-        const memoriesFile = await this.readMemoriesFile(characterId);
-        const initialLength = memoriesFile.memories.length;
-        memoriesFile.memories = memoriesFile.memories.filter((m4) => m4.id !== memoryId);
-        if (memoriesFile.memories.length === initialLength) {
-          return false;
-        }
-        await this.writeMemoriesFile(characterId, memoriesFile);
-        return true;
-      }
-      /**
-       * Bulk delete memories
-       */
-      async bulkDelete(characterId, memoryIds) {
-        const memoriesFile = await this.readMemoriesFile(characterId);
-        const initialLength = memoriesFile.memories.length;
-        memoriesFile.memories = memoriesFile.memories.filter((m4) => !memoryIds.includes(m4.id));
-        const deletedCount = initialLength - memoriesFile.memories.length;
-        if (deletedCount > 0) {
-          await this.writeMemoriesFile(characterId, memoriesFile);
-        }
-        return deletedCount;
-      }
-      /**
-       * Update last accessed time for a memory
-       */
-      async updateAccessTime(characterId, memoryId) {
-        const result = await this.updateForCharacter(characterId, memoryId, {
-          lastAccessedAt: this.getCurrentTimestamp()
-        });
-        return result !== null;
-      }
-      /**
-       * Get memory count for a character
-       */
-      async countByCharacterId(characterId) {
-        const memoriesFile = await this.readMemoriesFile(characterId);
-        return memoriesFile.memories.length;
-      }
-      /**
-       * List all character IDs that have memories
-       */
-      async listCharacterIds() {
-        try {
-          const files = await this.jsonStore.listDir("memories/by-character");
-          return files.filter((f4) => f4.endsWith(".json")).map((f4) => f4.replace(".json", ""));
-        } catch (error2) {
-          return [];
-        }
-      }
-      /**
-       * Find memories by importance threshold
-       */
-      async findByImportance(characterId, minImportance) {
-        const memoriesFile = await this.readMemoriesFile(characterId);
-        return memoriesFile.memories.filter((m4) => m4.importance >= minImportance);
-      }
-      /**
-       * Find memories by source type
-       */
-      async findBySource(characterId, source) {
-        const memoriesFile = await this.readMemoriesFile(characterId);
-        return memoriesFile.memories.filter((m4) => m4.source === source);
-      }
-      /**
-       * Get most recent memories for a character
-       */
-      async findRecent(characterId, limit = 10) {
-        const memoriesFile = await this.readMemoriesFile(characterId);
-        return memoriesFile.memories.sort((a4, b4) => new Date(b4.createdAt).getTime() - new Date(a4.createdAt).getTime()).slice(0, limit);
-      }
-      /**
-       * Get most important memories for a character
-       */
-      async findMostImportant(characterId, limit = 10) {
-        const memoriesFile = await this.readMemoriesFile(characterId);
-        return memoriesFile.memories.sort((a4, b4) => b4.importance - a4.importance).slice(0, limit);
-      }
-    };
-  }
-});
-
-// lib/json-store/repositories/images.repository.ts
-var ImagesRepository;
-var init_images_repository = __esm({
-  "lib/json-store/repositories/images.repository.ts"() {
-    "use strict";
-    init_base_repository();
-    init_types();
-    ImagesRepository = class extends BaseRepository {
-      constructor(jsonStore) {
-        super(jsonStore, BinaryIndexEntrySchema);
-      }
-      /**
-       * Get the binaries index file path
-       */
-      getIndexPath() {
-        return "binaries/index.jsonl";
-      }
-      /**
-       * Read all binary entries from JSONL index
-       */
-      async readAllEntries() {
-        try {
-          const entries = await this.jsonStore.readJsonl(this.getIndexPath());
-          return entries.map((entry) => this.validate(entry));
-        } catch (error2) {
-          return [];
-        }
-      }
-      /**
-       * Find a binary entry by ID
-       */
-      async findById(id) {
-        const entries = await this.readAllEntries();
-        return entries.find((entry) => entry.id === id) || null;
-      }
-      /**
-       * Find all binary entries
-       */
-      async findAll() {
-        return await this.readAllEntries();
-      }
-      /**
-       * Find entries by user ID
-       */
-      async findByUserId(userId) {
-        const entries = await this.readAllEntries();
-        return entries.filter((entry) => entry.userId === userId);
-      }
-      /**
-       * Find entries by type
-       */
-      async findByType(type) {
-        const entries = await this.readAllEntries();
-        return entries.filter((entry) => entry.type === type);
-      }
-      /**
-       * Find entries by chat ID
-       */
-      async findByChatId(chatId) {
-        const entries = await this.readAllEntries();
-        return entries.filter((entry) => entry.chatId === chatId);
-      }
-      /**
-       * Find entries by message ID
-       */
-      async findByMessageId(messageId) {
-        const entries = await this.readAllEntries();
-        return entries.filter((entry) => entry.messageId === messageId);
-      }
-      /**
-       * Find entries with a specific tag
-       */
-      async findByTag(tagId) {
-        const entries = await this.readAllEntries();
-        return entries.filter((entry) => entry.tags.includes(tagId));
-      }
-      /**
-       * Find entries by SHA256 hash
-       */
-      async findBySha256(sha256) {
-        const entries = await this.readAllEntries();
-        return entries.find((entry) => entry.sha256 === sha256) || null;
-      }
-      /**
-       * Create a new binary entry
-       */
-      async create(data2) {
-        const id = this.generateId();
-        const now = this.getCurrentTimestamp();
-        const entry = {
-          ...data2,
-          id,
-          createdAt: now,
-          updatedAt: now
-        };
-        const validated = this.validate(entry);
-        await this.jsonStore.appendJsonl(this.getIndexPath(), [validated]);
-        return validated;
-      }
-      /**
-       * Update a binary entry (requires reading and rewriting the entire file)
-       */
-      async update(id, data2) {
-        const entries = await this.readAllEntries();
-        const index = entries.findIndex((entry) => entry.id === id);
-        if (index === -1) {
-          return null;
-        }
-        const existing = entries[index];
-        const now = this.getCurrentTimestamp();
-        const updated = {
-          ...existing,
-          ...data2,
-          id: existing.id,
-          // Preserve ID
-          createdAt: existing.createdAt,
-          // Preserve creation timestamp
-          updatedAt: now
-        };
-        const validated = this.validate(updated);
-        entries[index] = validated;
-        await this.jsonStore.writeJsonl(this.getIndexPath(), entries);
-        return validated;
-      }
-      /**
-       * Delete a binary entry (by ID)
-       */
-      async delete(id) {
-        const entries = await this.readAllEntries();
-        const initialLength = entries.length;
-        const filtered = entries.filter((entry) => entry.id !== id);
-        if (filtered.length === initialLength) {
-          return false;
-        }
-        await this.jsonStore.writeJsonl(this.getIndexPath(), filtered);
-        return true;
-      }
-      /**
-       * Delete a binary entry by SHA256 hash
-       */
-      async deleteBySha256(sha256) {
-        const entries = await this.readAllEntries();
-        const initialLength = entries.length;
-        const filtered = entries.filter((entry) => entry.sha256 !== sha256);
-        if (filtered.length === initialLength) {
-          return false;
-        }
-        await this.jsonStore.writeJsonl(this.getIndexPath(), filtered);
-        return true;
-      }
-      /**
-       * Add a tag to a binary entry
-       */
-      async addTag(entryId, tagId) {
-        const entry = await this.findById(entryId);
-        if (!entry) {
-          return null;
-        }
-        if (!entry.tags.includes(tagId)) {
-          entry.tags.push(tagId);
-          return await this.update(entryId, { tags: entry.tags });
-        }
-        return entry;
-      }
-      /**
-       * Remove a tag from a binary entry
-       */
-      async removeTag(entryId, tagId) {
-        const entry = await this.findById(entryId);
-        if (!entry) {
-          return null;
-        }
-        entry.tags = entry.tags.filter((id) => id !== tagId);
-        return await this.update(entryId, { tags: entry.tags });
-      }
-    };
-  }
-});
-
-// lib/json-store/repositories/index.ts
-var repositories_exports = {};
-__export(repositories_exports, {
-  BaseRepository: () => BaseRepository,
-  CharactersRepository: () => CharactersRepository,
-  ChatsRepository: () => ChatsRepository,
-  ConnectionProfilesRepository: () => ConnectionProfilesRepository,
-  EmbeddingProfilesRepository: () => EmbeddingProfilesRepository,
-  FilesRepository: () => FilesRepository,
-  ImageProfilesRepository: () => ImageProfilesRepository,
-  ImagesRepository: () => ImagesRepository,
-  MemoriesRepository: () => MemoriesRepository,
-  PersonasRepository: () => PersonasRepository,
-  TagsRepository: () => TagsRepository,
-  UsersRepository: () => UsersRepository,
-  createRepositories: () => createRepositories,
-  getRepositories: () => getRepositories,
-  resetRepositories: () => resetRepositories
-});
-function createRepositories(jsonStore) {
-  const filesRepo = new FilesRepository(jsonStore);
-  return {
-    characters: new CharactersRepository(jsonStore),
-    personas: new PersonasRepository(jsonStore),
-    chats: new ChatsRepository(jsonStore),
-    tags: new TagsRepository(jsonStore),
-    users: new UsersRepository(jsonStore),
-    connections: new ConnectionProfilesRepository(jsonStore),
-    images: filesRepo,
-    files: filesRepo,
-    imageProfiles: new ImageProfilesRepository(jsonStore),
-    embeddingProfiles: new EmbeddingProfilesRepository(jsonStore),
-    memories: new MemoriesRepository(jsonStore)
-  };
-}
-function getRepositories(config) {
-  if (!repositoryContainer) {
-    const jsonStore = getJsonStore(config);
-    repositoryContainer = createRepositories(jsonStore);
-  }
-  return repositoryContainer;
-}
-function resetRepositories() {
-  repositoryContainer = null;
-}
-var repositoryContainer;
-var init_repositories = __esm({
-  "lib/json-store/repositories/index.ts"() {
-    "use strict";
-    init_json_store();
-    init_characters_repository();
-    init_personas_repository();
-    init_chats_repository();
-    init_tags_repository();
-    init_users_repository();
-    init_connection_profiles_repository();
-    init_files_repository();
-    init_image_profiles_repository();
-    init_embedding_profiles_repository();
-    init_memories_repository();
-    init_base_repository();
-    init_characters_repository();
-    init_personas_repository();
-    init_chats_repository();
-    init_tags_repository();
-    init_users_repository();
-    init_connection_profiles_repository();
-    init_images_repository();
-    init_files_repository();
-    init_image_profiles_repository();
-    init_embedding_profiles_repository();
-    init_memories_repository();
-    repositoryContainer = null;
-  }
-});
-
 // plugins/dist/qtap-plugin-upgrade/index.ts
 var index_exports = {};
 __export(index_exports, {
@@ -73818,9 +64720,1417 @@ async function getPendingMigrations(migrations2) {
   return pending;
 }
 
+// lib/json-store/core/json-store.ts
+init_logger();
+var fs3 = __toESM(require("fs"));
+var path2 = __toESM(require("path"));
+var import_util = require("util");
+var crypto2 = __toESM(require("crypto"));
+var mkdir2 = (0, import_util.promisify)(fs3.mkdir);
+var readFile2 = (0, import_util.promisify)(fs3.readFile);
+var writeFile2 = (0, import_util.promisify)(fs3.writeFile);
+var appendFile2 = (0, import_util.promisify)(fs3.appendFile);
+var rename2 = (0, import_util.promisify)(fs3.rename);
+var unlink2 = (0, import_util.promisify)(fs3.unlink);
+var readdir2 = (0, import_util.promisify)(fs3.readdir);
+var stat2 = (0, import_util.promisify)(fs3.stat);
+var JsonStore = class {
+  constructor(config = {}) {
+    this.locks = /* @__PURE__ */ new Map();
+    this.cache = /* @__PURE__ */ new Map();
+    this.dataDir = config.dataDir || process.env.DATA_DIR || "./data";
+    this.enableCache = config.enableCache ?? true;
+    this.lockTimeout = config.lockTimeout ?? 5e3;
+    this.fsyncInterval = config.fsyncInterval ?? 10;
+    if (!fs3.existsSync(this.dataDir)) {
+      fs3.mkdirSync(this.dataDir, { recursive: true });
+    }
+  }
+  /**
+   * Get the configured data directory path
+   */
+  getDataDir() {
+    return this.dataDir;
+  }
+  /**
+   * Resolve a relative path within data directory
+   */
+  resolvePath(...segments) {
+    return path2.join(this.dataDir, ...segments);
+  }
+  /**
+   * Ensure a directory exists
+   */
+  async ensureDir(dirPath) {
+    await mkdir2(dirPath, { recursive: true });
+  }
+  /**
+   * Acquire a lock for a file path
+   */
+  async acquireLock(filePath) {
+    const lockPath = `${filePath}.lock`;
+    const lockDir = path2.dirname(lockPath);
+    const startTime = Date.now();
+    await this.ensureDir(lockDir);
+    while (true) {
+      try {
+        const fd = fs3.openSync(lockPath, fs3.constants.O_CREAT | fs3.constants.O_EXCL | fs3.constants.O_WRONLY);
+        fs3.closeSync(fd);
+        return;
+      } catch (error2) {
+        if (error2.code !== "EEXIST") {
+          throw error2;
+        }
+        try {
+          const stats = await stat2(lockPath);
+          if (Date.now() - stats.mtimeMs > 3e4) {
+            await unlink2(lockPath);
+            continue;
+          }
+        } catch {
+          continue;
+        }
+        if (Date.now() - startTime > this.lockTimeout) {
+          throw new Error(`Failed to acquire lock for ${filePath} within ${this.lockTimeout}ms`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+    }
+  }
+  /**
+   * Release a lock for a file path
+   */
+  async releaseLock(filePath) {
+    const lockPath = `${filePath}.lock`;
+    try {
+      await unlink2(lockPath);
+    } catch (error2) {
+      if (error2.code !== "ENOENT") {
+        logger.error(`Failed to release lock for ${filePath}`, { context: { filePath } }, error2 instanceof Error ? error2 : void 0);
+      }
+    }
+  }
+  /**
+   * Read JSON file with caching
+   */
+  async readJson(filePath) {
+    const fullPath = this.resolvePath(filePath);
+    const cacheKey = fullPath;
+    if (this.enableCache && this.cache.has(cacheKey)) {
+      return this.cache.get(cacheKey);
+    }
+    try {
+      const content = await readFile2(fullPath, "utf-8");
+      const data2 = JSON.parse(content);
+      if (this.enableCache) {
+        this.cache.set(cacheKey, data2);
+      }
+      return data2;
+    } catch (error2) {
+      if (error2.code === "ENOENT") {
+        throw new Error(`File not found: ${filePath}`);
+      }
+      throw new Error(`Failed to read JSON from ${filePath}: ${error2.message}`);
+    }
+  }
+  /**
+   * Write JSON file atomically with locking
+   */
+  async writeJson(filePath, data2) {
+    const fullPath = this.resolvePath(filePath);
+    const dir = path2.dirname(fullPath);
+    await this.ensureDir(dir);
+    await this.acquireLock(fullPath);
+    try {
+      const tempPath = `${fullPath}.tmp.${crypto2.randomBytes(4).toString("hex")}`;
+      const content = JSON.stringify(data2, null, 2);
+      await writeFile2(tempPath, content, "utf-8");
+      await rename2(tempPath, fullPath);
+      if (this.enableCache) {
+        this.cache.delete(fullPath);
+      }
+    } finally {
+      await this.releaseLock(fullPath);
+    }
+  }
+  /**
+   * Read JSONL file line by line
+   */
+  async readJsonl(filePath) {
+    const fullPath = this.resolvePath(filePath);
+    try {
+      const content = await readFile2(fullPath, "utf-8");
+      const lines = content.trim().split("\n").filter((line) => line.length > 0);
+      return lines.map((line) => JSON.parse(line));
+    } catch (error2) {
+      if (error2.code === "ENOENT") {
+        return [];
+      }
+      throw new Error(`Failed to read JSONL from ${filePath}: ${error2.message}`);
+    }
+  }
+  /**
+   * Write raw content to file atomically with locking (for pre-formatted JSONL)
+   */
+  async writeRaw(filePath, content) {
+    const fullPath = this.resolvePath(filePath);
+    const dir = path2.dirname(fullPath);
+    await this.ensureDir(dir);
+    await this.acquireLock(fullPath);
+    try {
+      const tempPath = `${fullPath}.tmp.${crypto2.randomBytes(4).toString("hex")}`;
+      await writeFile2(tempPath, content, "utf-8");
+      await rename2(tempPath, fullPath);
+      if (this.enableCache) {
+        this.cache.delete(fullPath);
+      }
+    } finally {
+      await this.releaseLock(fullPath);
+    }
+  }
+  /**
+   * Write JSONL file atomically (full rewrite for updates/deletes)
+   */
+  async writeJsonl(filePath, items) {
+    const content = items.length > 0 ? items.map((item) => JSON.stringify(item)).join("\n") + "\n" : "";
+    await this.writeRaw(filePath, content);
+  }
+  /**
+   * Append to JSONL file (line-delimited JSON)
+   */
+  async appendJsonl(filePath, items) {
+    const fullPath = this.resolvePath(filePath);
+    const dir = path2.dirname(fullPath);
+    await this.ensureDir(dir);
+    await this.acquireLock(fullPath);
+    try {
+      const lines = items.map((item) => JSON.stringify(item)).join("\n") + "\n";
+      if (fs3.existsSync(fullPath)) {
+        await appendFile2(fullPath, lines, "utf-8");
+      } else {
+        await writeFile2(fullPath, lines, "utf-8");
+      }
+      if (this.enableCache) {
+        this.cache.delete(fullPath);
+      }
+    } finally {
+      await this.releaseLock(fullPath);
+    }
+  }
+  /**
+   * Get file size in bytes
+   */
+  async getFileSize(filePath) {
+    const fullPath = this.resolvePath(filePath);
+    try {
+      const stats = await stat2(fullPath);
+      return stats.size;
+    } catch (error2) {
+      if (error2.code === "ENOENT") {
+        return 0;
+      }
+      throw error2;
+    }
+  }
+  /**
+   * Check if file exists
+   */
+  exists(filePath) {
+    const fullPath = this.resolvePath(filePath);
+    return fs3.existsSync(fullPath);
+  }
+  /**
+   * List files in a directory
+   */
+  async listDir(dirPath) {
+    const fullPath = this.resolvePath(dirPath);
+    try {
+      return await readdir2(fullPath);
+    } catch (error2) {
+      if (error2.code === "ENOENT") {
+        return [];
+      }
+      throw error2;
+    }
+  }
+  /**
+   * Delete a file
+   */
+  async deleteFile(filePath) {
+    const fullPath = this.resolvePath(filePath);
+    try {
+      await unlink2(fullPath);
+      if (this.enableCache) {
+        this.cache.delete(fullPath);
+      }
+    } catch (error2) {
+      if (error2.code !== "ENOENT") {
+        throw error2;
+      }
+    }
+  }
+  /**
+   * Clear in-memory cache
+   */
+  clearCache() {
+    this.cache.clear();
+  }
+  /**
+   * Get cache stats
+   */
+  getCacheStats() {
+    return {
+      size: this.cache.size,
+      enabled: this.enableCache
+    };
+  }
+};
+
+// lib/json-store/repositories/base.repository.ts
+var BaseRepository = class {
+  constructor(jsonStore, schema) {
+    this.jsonStore = jsonStore;
+    this.schema = schema;
+  }
+  /**
+   * Validate data against schema
+   */
+  validate(data2) {
+    return this.schema.parse(data2);
+  }
+  /**
+   * Safely validate without throwing
+   */
+  validateSafe(data2) {
+    try {
+      const validated = this.validate(data2);
+      return { success: true, data: validated };
+    } catch (error2) {
+      return { success: false, error: error2.message };
+    }
+  }
+  /**
+   * Generate UUID v4
+   */
+  generateId() {
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c4) {
+      const r4 = Math.random() * 16 | 0;
+      const v4 = c4 === "x" ? r4 : r4 & 3 | 8;
+      return v4.toString(16);
+    });
+  }
+  /**
+   * Get current ISO timestamp
+   */
+  getCurrentTimestamp() {
+    return (/* @__PURE__ */ new Date()).toISOString();
+  }
+};
+
+// lib/json-store/schemas/types.ts
+var import_zod5 = require("zod");
+
+// lib/json-store/schemas/plugin-manifest.ts
+var import_zod4 = require("zod");
+var PluginCapabilityEnum = import_zod4.z.enum([
+  "CHAT_COMMANDS",
+  // Provides custom chat commands
+  "MESSAGE_PROCESSORS",
+  // Processes/transforms messages
+  "UI_COMPONENTS",
+  // Provides React components
+  "DATA_STORAGE",
+  // Adds database tables/storage
+  "API_ROUTES",
+  // Adds new API endpoints
+  "AUTH_METHODS",
+  // Provides authentication methods
+  "WEBHOOKS",
+  // Handles webhooks
+  "BACKGROUND_TASKS",
+  // Runs background jobs
+  "CUSTOM_MODELS",
+  // Adds new data models
+  "FILE_HANDLERS",
+  // Handles file operations
+  "NOTIFICATIONS",
+  // Provides notification system
+  "BACKEND_INTEGRATIONS",
+  // Integrates with external services
+  "LLM_PROVIDER",
+  // Provides LLM integration
+  "IMAGE_PROVIDER",
+  // Provides image generation
+  "EMBEDDING_PROVIDER",
+  // Provides embedding generation
+  "THEME",
+  // Provides UI theme
+  "DATABASE_BACKEND",
+  // Replaces/augments database
+  "FILE_BACKEND",
+  // Replaces/augments file storage
+  "UPGRADE_MIGRATION"
+  // Provides version upgrade migrations (runs early in startup)
+]);
+var FrontendFrameworkEnum = import_zod4.z.enum([
+  "REACT",
+  "PREACT",
+  "VUE",
+  "SVELTE",
+  "NONE"
+]);
+var CSSFrameworkEnum = import_zod4.z.enum([
+  "TAILWIND",
+  "BOOTSTRAP",
+  "MATERIAL_UI",
+  "CSS_MODULES",
+  "STYLED_COMPONENTS",
+  "NONE"
+]);
+var PluginAuthorSchema = import_zod4.z.object({
+  name: import_zod4.z.string().min(1).max(100),
+  email: import_zod4.z.string().email().optional(),
+  url: import_zod4.z.string().url().optional()
+});
+var CompatibilitySchema = import_zod4.z.object({
+  /** Minimum Quilltap version (semver) */
+  quilltapVersion: import_zod4.z.string().regex(/^>=?\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?$/),
+  /** Maximum Quilltap version (optional) */
+  quilltapMaxVersion: import_zod4.z.string().regex(/^<=?\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?$/).optional(),
+  /** Minimum Node.js version */
+  nodeVersion: import_zod4.z.string().regex(/^>=?\d+\.\d+\.\d+$/).optional()
+});
+var FunctionalitySchema = import_zod4.z.object({
+  /** @deprecated Use capabilities array instead */
+  providesChatCommands: import_zod4.z.boolean().default(false).optional(),
+  /** @deprecated Use capabilities array instead */
+  providesMessageProcessors: import_zod4.z.boolean().default(false).optional(),
+  /** @deprecated Use capabilities array instead */
+  providesUIComponents: import_zod4.z.boolean().default(false).optional(),
+  /** @deprecated Use capabilities array instead */
+  providesDataStorage: import_zod4.z.boolean().default(false).optional(),
+  /** @deprecated Use capabilities array instead */
+  providesAPIRoutes: import_zod4.z.boolean().default(false).optional(),
+  /** @deprecated Use capabilities array instead */
+  providesAuthenticationMethods: import_zod4.z.boolean().default(false).optional(),
+  /** @deprecated Use capabilities array instead */
+  providesWebhooks: import_zod4.z.boolean().default(false).optional(),
+  /** @deprecated Use capabilities array instead */
+  providesBackgroundTasks: import_zod4.z.boolean().default(false).optional(),
+  /** @deprecated Use capabilities array instead */
+  providesCustomModels: import_zod4.z.boolean().default(false).optional(),
+  /** @deprecated Use capabilities array instead */
+  providesFileHandlers: import_zod4.z.boolean().default(false).optional(),
+  /** @deprecated Use capabilities array instead */
+  providesNotifications: import_zod4.z.boolean().default(false).optional(),
+  /** @deprecated Use capabilities array instead */
+  providesBackendIntegrations: import_zod4.z.boolean().default(false).optional()
+});
+var HookConfigSchema = import_zod4.z.object({
+  /** Hook identifier */
+  name: import_zod4.z.string().min(1).max(100),
+  /** Hook handler file path (relative to plugin root) */
+  handler: import_zod4.z.string(),
+  /** Priority (lower = runs first) */
+  priority: import_zod4.z.number().int().min(0).max(100).default(50),
+  /** Whether the hook is enabled */
+  enabled: import_zod4.z.boolean().default(true)
+});
+var APIRouteSchema = import_zod4.z.object({
+  /** Route path (e.g., "/api/plugin/my-route") */
+  path: import_zod4.z.string().regex(/^\/api\//),
+  /** HTTP methods supported */
+  methods: import_zod4.z.array(import_zod4.z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"])).min(1),
+  /** Handler file path (relative to plugin root) */
+  handler: import_zod4.z.string(),
+  /** Whether authentication is required */
+  requiresAuth: import_zod4.z.boolean().default(true),
+  /** Description of what the route does */
+  description: import_zod4.z.string().optional()
+});
+var UIComponentSchema = import_zod4.z.object({
+  /** Component identifier (used for registration) */
+  id: import_zod4.z.string().regex(/^[a-z][a-z0-9-]*$/),
+  /** Human-readable name */
+  name: import_zod4.z.string().min(1).max(100),
+  /** Component file path (relative to plugin root) */
+  path: import_zod4.z.string(),
+  /** Where the component can be used */
+  slots: import_zod4.z.array(import_zod4.z.string()).optional(),
+  /** Props schema (JSON Schema) */
+  propsSchema: import_zod4.z.record(import_zod4.z.unknown()).optional()
+});
+var DatabaseModelSchema = import_zod4.z.object({
+  /** Model name */
+  name: import_zod4.z.string().regex(/^[A-Z][a-zA-Z0-9]*$/),
+  /** Schema file path (Zod schema, relative to plugin root) */
+  schemaPath: import_zod4.z.string(),
+  /** Collection/table name */
+  collectionName: import_zod4.z.string().regex(/^[a-z][a-z0-9-_]*$/),
+  /** Description */
+  description: import_zod4.z.string().optional()
+});
+var PermissionsSchema = import_zod4.z.object({
+  /** File system access paths (relative to data directory) */
+  fileSystem: import_zod4.z.array(import_zod4.z.string()).default([]),
+  /** Network access (domains/URLs the plugin needs to access) */
+  network: import_zod4.z.array(import_zod4.z.string()).default([]),
+  /** Environment variables the plugin needs */
+  environment: import_zod4.z.array(import_zod4.z.string()).default([]),
+  /** Whether the plugin needs database access */
+  database: import_zod4.z.boolean().default(false),
+  /** Whether the plugin needs user data access */
+  userData: import_zod4.z.boolean().default(false)
+});
+var ConfigSchemaSchema = import_zod4.z.object({
+  /** Configuration key */
+  key: import_zod4.z.string().regex(/^[a-z][a-zA-Z0-9]*$/),
+  /** Display label */
+  label: import_zod4.z.string().min(1).max(100),
+  /** Input type */
+  type: import_zod4.z.enum(["text", "number", "boolean", "select", "textarea", "password", "url", "email"]),
+  /** Default value */
+  default: import_zod4.z.unknown().optional(),
+  /** Whether the field is required */
+  required: import_zod4.z.boolean().default(false),
+  /** Help text */
+  description: import_zod4.z.string().optional(),
+  /** Options for select type */
+  options: import_zod4.z.array(import_zod4.z.object({
+    label: import_zod4.z.string(),
+    value: import_zod4.z.unknown()
+  })).optional(),
+  /** Validation pattern (regex) */
+  pattern: import_zod4.z.string().optional(),
+  /** Minimum value (for number type) */
+  min: import_zod4.z.number().optional(),
+  /** Maximum value (for number type) */
+  max: import_zod4.z.number().optional()
+});
+var ProviderConfigSchema = import_zod4.z.object({
+  /** Internal identifier for the provider (e.g., 'OPENAI', 'ANTHROPIC') */
+  providerName: import_zod4.z.string().regex(/^[A-Z][A-Z0-9_]*$/),
+  /** Human-readable display name (e.g., 'OpenAI', 'Anthropic') */
+  displayName: import_zod4.z.string().min(1).max(100),
+  /** Short description of the provider */
+  description: import_zod4.z.string().min(1).max(500),
+  /** 2-4 character abbreviation for use in icons/badges (e.g., 'OAI', 'ANT') */
+  abbreviation: import_zod4.z.string().min(2).max(4).regex(/^[A-Z0-9]+$/),
+  /** Color configuration using Tailwind CSS classes */
+  colors: import_zod4.z.object({
+    /** Background color class (e.g., 'bg-blue-500') */
+    bg: import_zod4.z.string().min(1),
+    /** Text color class (e.g., 'text-white') */
+    text: import_zod4.z.string().min(1),
+    /** Icon color class (e.g., 'text-blue-600') */
+    icon: import_zod4.z.string().min(1)
+  }),
+  /** Whether the provider requires an API key */
+  requiresApiKey: import_zod4.z.boolean().default(true),
+  /** Whether the provider requires a custom base URL */
+  requiresBaseUrl: import_zod4.z.boolean().default(false),
+  /** Custom label for the API key field (defaults to 'API Key') */
+  apiKeyLabel: import_zod4.z.string().min(1).max(100).optional(),
+  /** Custom label for the base URL field (defaults to 'Base URL') */
+  baseUrlLabel: import_zod4.z.string().min(1).max(100).optional(),
+  /** Default base URL for the provider (if customizable) */
+  baseUrlDefault: import_zod4.z.string().url().optional(),
+  /** Capabilities supported by this provider */
+  capabilities: import_zod4.z.object({
+    /** Supports chat/completion endpoints */
+    chat: import_zod4.z.boolean().default(true).optional(),
+    /** Supports image generation */
+    imageGeneration: import_zod4.z.boolean().default(false).optional(),
+    /** Supports embeddings */
+    embeddings: import_zod4.z.boolean().default(false).optional(),
+    /** Supports web search */
+    webSearch: import_zod4.z.boolean().default(false).optional()
+  }).optional(),
+  /** File attachment support configuration */
+  attachmentSupport: import_zod4.z.object({
+    /** Whether attachments are supported */
+    supported: import_zod4.z.boolean().default(false),
+    /** List of supported MIME types (e.g., ['image/jpeg', 'application/pdf']) */
+    mimeTypes: import_zod4.z.array(import_zod4.z.string()).default([]),
+    /** Description of attachment support */
+    description: import_zod4.z.string().optional()
+  }).optional()
+});
+var AuthProviderConfigSchema = import_zod4.z.object({
+  /** Internal identifier for the provider (e.g., 'google', 'github') */
+  providerId: import_zod4.z.string().regex(/^[a-z][a-z0-9-]*$/),
+  /** Human-readable display name (e.g., 'Google', 'GitHub') */
+  displayName: import_zod4.z.string().min(1).max(100),
+  /** Environment variables required for this provider */
+  requiredEnvVars: import_zod4.z.array(import_zod4.z.string()).min(1),
+  /** Optional environment variables */
+  optionalEnvVars: import_zod4.z.array(import_zod4.z.string()).optional(),
+  /** Button background color (Tailwind classes) */
+  buttonColor: import_zod4.z.string().optional(),
+  /** Button text color (Tailwind classes) */
+  buttonTextColor: import_zod4.z.string().optional(),
+  /** Icon name or identifier */
+  icon: import_zod4.z.string().optional()
+});
+var PluginManifestSchema = import_zod4.z.object({
+  // ===== JSON SCHEMA REFERENCE =====
+  /** JSON Schema reference (for IDE support) */
+  $schema: import_zod4.z.string().optional(),
+  // ===== BASIC METADATA =====
+  /** Plugin package name (must start with 'qtap-plugin-') */
+  name: import_zod4.z.string().regex(/^qtap-plugin-[a-z0-9-]+$/),
+  /** Display title */
+  title: import_zod4.z.string().min(1).max(100),
+  /** Plugin description */
+  description: import_zod4.z.string().min(1).max(500),
+  /** Semantic version */
+  version: import_zod4.z.string().regex(/^\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?(\+[a-zA-Z0-9.-]+)?$/),
+  /** Author information */
+  author: import_zod4.z.union([import_zod4.z.string(), PluginAuthorSchema]),
+  /** License (SPDX identifier) */
+  license: import_zod4.z.string().default("MIT"),
+  /** Main entry point (JavaScript/TypeScript file) */
+  main: import_zod4.z.string().default("index.js"),
+  /** Homepage URL */
+  homepage: import_zod4.z.string().url().optional(),
+  /** Repository URL */
+  repository: import_zod4.z.union([
+    import_zod4.z.string().url(),
+    import_zod4.z.object({
+      type: import_zod4.z.string(),
+      url: import_zod4.z.string().url()
+    })
+  ]).optional(),
+  /** Bug tracker URL */
+  bugs: import_zod4.z.union([
+    import_zod4.z.string().url(),
+    import_zod4.z.object({
+      url: import_zod4.z.string().url(),
+      email: import_zod4.z.string().email().optional()
+    })
+  ]).optional(),
+  // ===== COMPATIBILITY =====
+  /** Version compatibility requirements */
+  compatibility: CompatibilitySchema,
+  /** Dependencies (other plugins required) */
+  requires: import_zod4.z.record(import_zod4.z.string()).optional(),
+  /** Peer dependencies */
+  peerDependencies: import_zod4.z.record(import_zod4.z.string()).optional(),
+  // ===== CAPABILITIES =====
+  /** Modern capability flags (preferred over functionality object) */
+  capabilities: import_zod4.z.array(PluginCapabilityEnum).default([]),
+  /** @deprecated Legacy functionality flags */
+  functionality: FunctionalitySchema.optional(),
+  // ===== TECHNICAL DETAILS =====
+  /** Frontend framework used */
+  frontend: FrontendFrameworkEnum.default("REACT").optional(),
+  /** CSS framework used */
+  styling: CSSFrameworkEnum.default("TAILWIND").optional(),
+  /** TypeScript support */
+  typescript: import_zod4.z.boolean().default(true).optional(),
+  // ===== HOOKS & EXTENSIONS =====
+  /** Hook registrations */
+  hooks: import_zod4.z.array(HookConfigSchema).default([]).optional(),
+  /** API routes provided */
+  apiRoutes: import_zod4.z.array(APIRouteSchema).default([]).optional(),
+  /** UI components provided */
+  components: import_zod4.z.array(UIComponentSchema).default([]).optional(),
+  /** Database models/tables */
+  models: import_zod4.z.array(DatabaseModelSchema).default([]).optional(),
+  // ===== CONFIGURATION =====
+  /** Configuration schema for the plugin */
+  configSchema: import_zod4.z.array(ConfigSchemaSchema).default([]).optional(),
+  /** Default configuration values */
+  defaultConfig: import_zod4.z.record(import_zod4.z.unknown()).default({}).optional(),
+  /** Provider configuration (for LLM/service provider plugins) */
+  providerConfig: ProviderConfigSchema.optional(),
+  /** Auth provider configuration (for authentication provider plugins) */
+  authProviderConfig: AuthProviderConfigSchema.optional(),
+  // ===== SECURITY & PERMISSIONS =====
+  /** Permissions required by the plugin */
+  permissions: PermissionsSchema.default({}).optional(),
+  /** Whether the plugin is sandboxed */
+  sandboxed: import_zod4.z.boolean().default(true).optional(),
+  // ===== METADATA =====
+  /** Keywords for search/discovery */
+  keywords: import_zod4.z.array(import_zod4.z.string()).default([]),
+  /** Icon file path (relative to plugin root) */
+  icon: import_zod4.z.string().optional(),
+  /** Screenshots (URLs or file paths) */
+  screenshots: import_zod4.z.array(import_zod4.z.string()).default([]).optional(),
+  /** Plugin category */
+  category: import_zod4.z.enum([
+    "PROVIDER",
+    "THEME",
+    "INTEGRATION",
+    "UTILITY",
+    "ENHANCEMENT",
+    "DATABASE",
+    "STORAGE",
+    "AUTHENTICATION",
+    "OTHER"
+  ]).default("OTHER").optional(),
+  /** Whether the plugin is enabled by default */
+  enabledByDefault: import_zod4.z.boolean().default(false).optional(),
+  /** Plugin status */
+  status: import_zod4.z.enum(["STABLE", "BETA", "ALPHA", "DEPRECATED"]).default("STABLE").optional()
+}).strict();
+
+// lib/json-store/schemas/types.ts
+var ProviderEnum = import_zod5.z.string().min(1, "Provider is required");
+var ImageProviderEnum = import_zod5.z.string().min(1, "Image provider is required");
+var EmbeddingProfileProviderEnum = import_zod5.z.enum(["OPENAI", "OLLAMA"]);
+var RoleEnum = import_zod5.z.enum(["SYSTEM", "USER", "ASSISTANT", "TOOL"]);
+var ImageTagTypeEnum = import_zod5.z.enum(["CHARACTER", "PERSONA", "CHAT", "THEME"]);
+var AvatarDisplayModeEnum = import_zod5.z.enum(["ALWAYS", "GROUP_ONLY", "NEVER"]);
+var UUIDSchema = import_zod5.z.string().uuid();
+var TimestampSchema = import_zod5.z.string().datetime().or(import_zod5.z.date()).transform((d4) => {
+  if (d4 instanceof Date) return d4.toISOString();
+  return d4;
+});
+var JsonSchema = import_zod5.z.record(import_zod5.z.unknown());
+var EncryptedFieldSchema = import_zod5.z.object({
+  ciphertext: import_zod5.z.string(),
+  iv: import_zod5.z.string(),
+  authTag: import_zod5.z.string()
+});
+var TOTPSecretSchema = EncryptedFieldSchema.extend({
+  enabled: import_zod5.z.boolean().default(false),
+  verifiedAt: TimestampSchema.nullable().optional()
+});
+var BackupCodesSchema = import_zod5.z.object({
+  ciphertext: import_zod5.z.string(),
+  iv: import_zod5.z.string(),
+  authTag: import_zod5.z.string(),
+  createdAt: TimestampSchema
+});
+var UserSchema = import_zod5.z.object({
+  id: UUIDSchema,
+  email: import_zod5.z.string().email(),
+  name: import_zod5.z.string().nullable().optional(),
+  image: import_zod5.z.string().nullable().optional(),
+  emailVerified: TimestampSchema.nullable().optional(),
+  // Password authentication
+  passwordHash: import_zod5.z.string().nullable().optional(),
+  // TOTP 2FA
+  totp: TOTPSecretSchema.optional(),
+  backupCodes: BackupCodesSchema.optional(),
+  // Timestamps
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+});
+var HexColorSchema = import_zod5.z.string().regex(/^#(?:[0-9a-fA-F]{3}){1,2}$/);
+var TagVisualStyleSchema = import_zod5.z.object({
+  emoji: import_zod5.z.string().max(8).optional().nullable(),
+  foregroundColor: HexColorSchema.default("#1f2937"),
+  backgroundColor: HexColorSchema.default("#e5e7eb"),
+  emojiOnly: import_zod5.z.boolean().default(false),
+  bold: import_zod5.z.boolean().default(false),
+  italic: import_zod5.z.boolean().default(false),
+  strikethrough: import_zod5.z.boolean().default(false)
+});
+var TagStyleMapSchema = import_zod5.z.record(TagVisualStyleSchema).default({});
+var CheapLLMStrategyEnum = import_zod5.z.enum(["USER_DEFINED", "PROVIDER_CHEAPEST", "LOCAL_FIRST"]);
+var EmbeddingProviderEnum = import_zod5.z.enum(["SAME_PROVIDER", "OPENAI", "LOCAL"]);
+var CheapLLMSettingsSchema = import_zod5.z.object({
+  /** Strategy for selecting the cheap LLM provider */
+  strategy: CheapLLMStrategyEnum.default("PROVIDER_CHEAPEST"),
+  /** If USER_DEFINED, which connection profile to use */
+  userDefinedProfileId: UUIDSchema.nullable().optional(),
+  /** Global default cheap LLM profile - always use this if set */
+  defaultCheapProfileId: UUIDSchema.nullable().optional(),
+  /** Whether to fall back to local models if available */
+  fallbackToLocal: import_zod5.z.boolean().default(true),
+  /** Provider for generating embeddings */
+  embeddingProvider: EmbeddingProviderEnum.default("OPENAI"),
+  /** Embedding profile ID to use for text embeddings */
+  embeddingProfileId: UUIDSchema.nullable().optional()
+});
+var ChatSettingsSchema = import_zod5.z.object({
+  id: UUIDSchema,
+  userId: UUIDSchema,
+  avatarDisplayMode: AvatarDisplayModeEnum.default("ALWAYS"),
+  avatarDisplayStyle: import_zod5.z.string().default("CIRCULAR"),
+  tagStyles: TagStyleMapSchema,
+  /** Cheap LLM settings for memory extraction and summarization */
+  cheapLLMSettings: CheapLLMSettingsSchema.default({
+    strategy: "PROVIDER_CHEAPEST",
+    fallbackToLocal: true,
+    embeddingProvider: "OPENAI"
+  }),
+  /** Profile ID to use for image description fallback (when provider doesn't support images) */
+  imageDescriptionProfileId: UUIDSchema.nullable().optional(),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+});
+var AccountSchema = import_zod5.z.object({
+  id: UUIDSchema,
+  userId: UUIDSchema,
+  type: import_zod5.z.string(),
+  provider: import_zod5.z.string(),
+  providerAccountId: import_zod5.z.string(),
+  refresh_token: import_zod5.z.string().nullable().optional(),
+  access_token: import_zod5.z.string().nullable().optional(),
+  expires_at: import_zod5.z.number().nullable().optional(),
+  token_type: import_zod5.z.string().nullable().optional(),
+  scope: import_zod5.z.string().nullable().optional(),
+  id_token: import_zod5.z.string().nullable().optional(),
+  session_state: import_zod5.z.string().nullable().optional()
+});
+var SessionSchema = import_zod5.z.object({
+  id: UUIDSchema,
+  sessionToken: import_zod5.z.string(),
+  userId: UUIDSchema,
+  expires: TimestampSchema
+});
+var VerificationTokenSchema = import_zod5.z.object({
+  identifier: import_zod5.z.string(),
+  token: import_zod5.z.string(),
+  expires: TimestampSchema
+});
+var ApiKeySchema = import_zod5.z.object({
+  id: UUIDSchema,
+  label: import_zod5.z.string(),
+  provider: ProviderEnum,
+  ciphertext: import_zod5.z.string(),
+  iv: import_zod5.z.string(),
+  authTag: import_zod5.z.string(),
+  isActive: import_zod5.z.boolean().default(true),
+  lastUsed: TimestampSchema.nullable().optional(),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+});
+var ConnectionProfileSchema = import_zod5.z.object({
+  id: UUIDSchema,
+  userId: UUIDSchema,
+  name: import_zod5.z.string(),
+  provider: ProviderEnum,
+  apiKeyId: UUIDSchema.nullable().optional(),
+  baseUrl: import_zod5.z.string().nullable().optional(),
+  modelName: import_zod5.z.string(),
+  parameters: JsonSchema.default({}),
+  isDefault: import_zod5.z.boolean().default(false),
+  /** Whether this profile is suitable for use as a "cheap" LLM (low-cost tasks) */
+  isCheap: import_zod5.z.boolean().default(false),
+  /** Whether web search is allowed for this profile (only if provider supports it) */
+  allowWebSearch: import_zod5.z.boolean().default(false),
+  tags: import_zod5.z.array(UUIDSchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+});
+var PhysicalDescriptionSchema = import_zod5.z.object({
+  id: UUIDSchema,
+  name: import_zod5.z.string().min(1),
+  shortPrompt: import_zod5.z.string().max(350).nullable().optional(),
+  mediumPrompt: import_zod5.z.string().max(500).nullable().optional(),
+  longPrompt: import_zod5.z.string().max(750).nullable().optional(),
+  completePrompt: import_zod5.z.string().max(1e3).nullable().optional(),
+  fullDescription: import_zod5.z.string().nullable().optional(),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+});
+var CharacterSchema = import_zod5.z.object({
+  id: UUIDSchema,
+  userId: UUIDSchema,
+  name: import_zod5.z.string(),
+  title: import_zod5.z.string().nullable().optional(),
+  description: import_zod5.z.string().nullable().optional(),
+  personality: import_zod5.z.string().nullable().optional(),
+  scenario: import_zod5.z.string().nullable().optional(),
+  firstMessage: import_zod5.z.string().nullable().optional(),
+  exampleDialogues: import_zod5.z.string().nullable().optional(),
+  systemPrompt: import_zod5.z.string().nullable().optional(),
+  avatarUrl: import_zod5.z.string().nullable().optional(),
+  defaultImageId: UUIDSchema.nullable().optional(),
+  defaultConnectionProfileId: UUIDSchema.nullable().optional(),
+  sillyTavernData: JsonSchema.nullable().optional(),
+  isFavorite: import_zod5.z.boolean().default(false),
+  // Relationships
+  personaLinks: import_zod5.z.array(import_zod5.z.object({
+    personaId: UUIDSchema,
+    isDefault: import_zod5.z.boolean()
+  })).default([]),
+  tags: import_zod5.z.array(UUIDSchema).default([]),
+  avatarOverrides: import_zod5.z.array(import_zod5.z.object({
+    chatId: UUIDSchema,
+    imageId: UUIDSchema
+  })).default([]),
+  physicalDescriptions: import_zod5.z.array(PhysicalDescriptionSchema).default([]),
+  // Timestamps
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+});
+var PersonaSchema = import_zod5.z.object({
+  id: UUIDSchema,
+  userId: UUIDSchema,
+  name: import_zod5.z.string(),
+  title: import_zod5.z.string().nullable().optional(),
+  description: import_zod5.z.string(),
+  personalityTraits: import_zod5.z.string().nullable().optional(),
+  avatarUrl: import_zod5.z.string().nullable().optional(),
+  defaultImageId: UUIDSchema.nullable().optional(),
+  sillyTavernData: JsonSchema.nullable().optional(),
+  // Relationships
+  characterLinks: import_zod5.z.array(UUIDSchema).default([]),
+  tags: import_zod5.z.array(UUIDSchema).default([]),
+  physicalDescriptions: import_zod5.z.array(PhysicalDescriptionSchema).default([]),
+  // Timestamps
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+});
+var MessageEventSchema = import_zod5.z.object({
+  type: import_zod5.z.literal("message"),
+  id: UUIDSchema,
+  role: RoleEnum,
+  content: import_zod5.z.string(),
+  rawResponse: JsonSchema.nullable().optional(),
+  tokenCount: import_zod5.z.number().nullable().optional(),
+  swipeGroupId: import_zod5.z.string().nullable().optional(),
+  swipeIndex: import_zod5.z.number().nullable().optional(),
+  attachments: import_zod5.z.array(UUIDSchema).default([]),
+  createdAt: TimestampSchema,
+  // Debug: Memory extraction logs (Sprint 6)
+  debugMemoryLogs: import_zod5.z.array(import_zod5.z.string()).optional()
+});
+var ContextSummaryEventSchema = import_zod5.z.object({
+  type: import_zod5.z.literal("context-summary"),
+  id: UUIDSchema,
+  context: import_zod5.z.string(),
+  createdAt: TimestampSchema
+});
+var ChatEventSchema = import_zod5.z.union([
+  MessageEventSchema,
+  ContextSummaryEventSchema
+]);
+var ParticipantTypeEnum = import_zod5.z.enum(["CHARACTER", "PERSONA"]);
+var ChatParticipantSchema = import_zod5.z.object({
+  id: UUIDSchema,
+  // Participant type and identity
+  type: ParticipantTypeEnum,
+  characterId: UUIDSchema.nullable().optional(),
+  // Set when type is CHARACTER
+  personaId: UUIDSchema.nullable().optional(),
+  // Set when type is PERSONA
+  // LLM configuration (for AI characters only)
+  connectionProfileId: UUIDSchema.nullable().optional(),
+  // Required for CHARACTER, null for PERSONA
+  imageProfileId: UUIDSchema.nullable().optional(),
+  // Image generation profile
+  // Per-chat customization
+  systemPromptOverride: import_zod5.z.string().nullable().optional(),
+  // Custom scenario/context for this chat
+  // Display and state
+  displayOrder: import_zod5.z.number().default(0),
+  // For ordering in UI
+  isActive: import_zod5.z.boolean().default(true),
+  // Temporarily disable without removing
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+}).refine(
+  (data2) => {
+    if (data2.type === "CHARACTER") {
+      return data2.characterId != null;
+    }
+    if (data2.type === "PERSONA") {
+      return data2.personaId != null;
+    }
+    return false;
+  },
+  { message: "CHARACTER participants must have characterId, PERSONA participants must have personaId" }
+).refine(
+  (data2) => {
+    if (data2.type === "CHARACTER") {
+      return data2.connectionProfileId != null;
+    }
+    return true;
+  },
+  { message: "CHARACTER participants must have a connectionProfileId" }
+);
+var ChatParticipantBaseSchema = import_zod5.z.object({
+  id: UUIDSchema,
+  type: ParticipantTypeEnum,
+  characterId: UUIDSchema.nullable().optional(),
+  personaId: UUIDSchema.nullable().optional(),
+  connectionProfileId: UUIDSchema.nullable().optional(),
+  imageProfileId: UUIDSchema.nullable().optional(),
+  systemPromptOverride: import_zod5.z.string().nullable().optional(),
+  displayOrder: import_zod5.z.number().default(0),
+  isActive: import_zod5.z.boolean().default(true),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+});
+var ChatMetadataSchema = import_zod5.z.object({
+  id: UUIDSchema,
+  userId: UUIDSchema,
+  // Participants array (replaces characterId, personaId, connectionProfileId, imageProfileId)
+  participants: import_zod5.z.array(ChatParticipantBaseSchema).default([]),
+  title: import_zod5.z.string(),
+  contextSummary: import_zod5.z.string().nullable().optional(),
+  sillyTavernMetadata: JsonSchema.nullable().optional(),
+  tags: import_zod5.z.array(UUIDSchema).default([]),
+  messageCount: import_zod5.z.number().default(0),
+  lastMessageAt: TimestampSchema.nullable().optional(),
+  lastRenameCheckInterchange: import_zod5.z.number().default(0),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+}).refine(
+  (data2) => data2.participants.length > 0,
+  { message: "Chat must have at least one participant" }
+);
+var ChatMetadataBaseSchema = import_zod5.z.object({
+  id: UUIDSchema,
+  userId: UUIDSchema,
+  participants: import_zod5.z.array(ChatParticipantBaseSchema).default([]),
+  title: import_zod5.z.string(),
+  contextSummary: import_zod5.z.string().nullable().optional(),
+  sillyTavernMetadata: JsonSchema.nullable().optional(),
+  tags: import_zod5.z.array(UUIDSchema).default([]),
+  messageCount: import_zod5.z.number().default(0),
+  lastMessageAt: TimestampSchema.nullable().optional(),
+  lastRenameCheckInterchange: import_zod5.z.number().default(0),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+});
+var ChatMetadataLegacySchema = import_zod5.z.object({
+  id: UUIDSchema,
+  userId: UUIDSchema,
+  characterId: UUIDSchema,
+  personaId: UUIDSchema.nullable().optional(),
+  connectionProfileId: UUIDSchema,
+  imageProfileId: UUIDSchema.nullable().optional(),
+  title: import_zod5.z.string(),
+  contextSummary: import_zod5.z.string().nullable().optional(),
+  sillyTavernMetadata: JsonSchema.nullable().optional(),
+  tags: import_zod5.z.array(UUIDSchema).default([]),
+  messageCount: import_zod5.z.number().default(0),
+  lastMessageAt: TimestampSchema.nullable().optional(),
+  lastRenameCheckInterchange: import_zod5.z.number().default(0),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+});
+var BinaryIndexEntrySchema = import_zod5.z.object({
+  id: UUIDSchema,
+  sha256: import_zod5.z.string().length(64),
+  type: import_zod5.z.enum(["image", "chat_file", "avatar"]),
+  userId: UUIDSchema,
+  filename: import_zod5.z.string(),
+  relativePath: import_zod5.z.string(),
+  mimeType: import_zod5.z.string(),
+  size: import_zod5.z.number(),
+  width: import_zod5.z.number().nullable().optional(),
+  height: import_zod5.z.number().nullable().optional(),
+  source: import_zod5.z.enum(["upload", "import", "generated"]).default("upload"),
+  generationPrompt: import_zod5.z.string().nullable().optional(),
+  generationModel: import_zod5.z.string().nullable().optional(),
+  chatId: UUIDSchema.nullable().optional(),
+  characterId: UUIDSchema.nullable().optional(),
+  // For avatar overrides
+  messageId: UUIDSchema.nullable().optional(),
+  tags: import_zod5.z.array(UUIDSchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+});
+var FileSourceEnum = import_zod5.z.enum(["UPLOADED", "GENERATED", "IMPORTED", "SYSTEM"]);
+var FileCategoryEnum = import_zod5.z.enum(["IMAGE", "DOCUMENT", "AVATAR", "ATTACHMENT", "EXPORT"]);
+var FileEntrySchema = import_zod5.z.object({
+  // Identity & Storage
+  id: UUIDSchema,
+  // File UUID (also the base filename in storage)
+  userId: UUIDSchema,
+  // Owner of the file
+  sha256: import_zod5.z.string().length(64),
+  // Content hash for deduplication
+  originalFilename: import_zod5.z.string(),
+  // Original filename from upload/generation
+  mimeType: import_zod5.z.string(),
+  // Specific MIME type
+  size: import_zod5.z.number(),
+  // File size in bytes
+  // Image metadata (if applicable)
+  width: import_zod5.z.number().nullable().optional(),
+  height: import_zod5.z.number().nullable().optional(),
+  // Linking - array of IDs this file is associated with
+  linkedTo: import_zod5.z.array(UUIDSchema).default([]),
+  // messageId, chatId, characterId, personaId, etc.
+  // Classification
+  source: FileSourceEnum,
+  // Where the file came from
+  category: FileCategoryEnum,
+  // What type of file it is
+  // Generation metadata (for AI-generated files)
+  generationPrompt: import_zod5.z.string().nullable().optional(),
+  generationModel: import_zod5.z.string().nullable().optional(),
+  generationRevisedPrompt: import_zod5.z.string().nullable().optional(),
+  description: import_zod5.z.string().nullable().optional(),
+  // AI description or user-provided description
+  // Tags
+  tags: import_zod5.z.array(UUIDSchema).default([]),
+  // S3 storage reference (Phase 3: MongoDB + S3 migration)
+  s3Key: import_zod5.z.string().nullable().optional(),
+  // Full S3 object key
+  s3Bucket: import_zod5.z.string().nullable().optional(),
+  // S3 bucket name
+  // Timestamps
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+});
+var TagSchema = import_zod5.z.object({
+  id: UUIDSchema,
+  userId: UUIDSchema,
+  name: import_zod5.z.string(),
+  nameLower: import_zod5.z.string(),
+  quickHide: import_zod5.z.boolean().default(false),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+});
+var ImageProfileSchema = import_zod5.z.object({
+  id: UUIDSchema,
+  userId: UUIDSchema,
+  name: import_zod5.z.string(),
+  provider: ImageProviderEnum,
+  apiKeyId: UUIDSchema.nullable().optional(),
+  baseUrl: import_zod5.z.string().nullable().optional(),
+  modelName: import_zod5.z.string(),
+  parameters: JsonSchema.default({}),
+  isDefault: import_zod5.z.boolean().default(false),
+  tags: import_zod5.z.array(UUIDSchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+});
+var GeneralSettingsSchema = import_zod5.z.object({
+  version: import_zod5.z.number().default(1),
+  user: UserSchema,
+  chatSettings: ChatSettingsSchema,
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+});
+var ConnectionProfilesFileSchema = import_zod5.z.object({
+  version: import_zod5.z.number().default(1),
+  apiKeys: import_zod5.z.array(ApiKeySchema).default([]),
+  llmProfiles: import_zod5.z.array(ConnectionProfileSchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+});
+var AuthAccountsSchema = import_zod5.z.object({
+  version: import_zod5.z.number().default(1),
+  accounts: import_zod5.z.array(AccountSchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+});
+var TagsFileSchema = import_zod5.z.object({
+  version: import_zod5.z.number().default(1),
+  tags: import_zod5.z.array(TagSchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+});
+var ImageProfilesFileSchema = import_zod5.z.object({
+  version: import_zod5.z.number().default(1),
+  profiles: import_zod5.z.array(ImageProfileSchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+});
+var EmbeddingProfileSchema = import_zod5.z.object({
+  id: UUIDSchema,
+  userId: UUIDSchema,
+  name: import_zod5.z.string(),
+  provider: EmbeddingProfileProviderEnum,
+  apiKeyId: UUIDSchema.nullable().optional(),
+  baseUrl: import_zod5.z.string().nullable().optional(),
+  modelName: import_zod5.z.string(),
+  /** Embedding dimension size (provider-specific) */
+  dimensions: import_zod5.z.number().nullable().optional(),
+  isDefault: import_zod5.z.boolean().default(false),
+  tags: import_zod5.z.array(UUIDSchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+});
+var EmbeddingProfilesFileSchema = import_zod5.z.object({
+  version: import_zod5.z.number().default(1),
+  profiles: import_zod5.z.array(EmbeddingProfileSchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+});
+var MemorySourceEnum = import_zod5.z.enum(["AUTO", "MANUAL"]);
+var MemorySchema = import_zod5.z.object({
+  id: UUIDSchema,
+  characterId: UUIDSchema,
+  personaId: UUIDSchema.nullable().optional(),
+  // Optional: specific persona interaction
+  chatId: UUIDSchema.nullable().optional(),
+  // Optional: source chat reference
+  content: import_zod5.z.string(),
+  // The actual memory content
+  summary: import_zod5.z.string(),
+  // Distilled version for context injection
+  keywords: import_zod5.z.array(import_zod5.z.string()).default([]),
+  // For text-based search
+  tags: import_zod5.z.array(UUIDSchema).default([]),
+  // Derived from character/persona/chat tags
+  importance: import_zod5.z.number().min(0).max(1).default(0.5),
+  // 0-1 scale for prioritization
+  embedding: import_zod5.z.array(import_zod5.z.number()).nullable().optional(),
+  // Vector embedding for semantic search
+  source: MemorySourceEnum.default("MANUAL"),
+  // How it was created
+  sourceMessageId: UUIDSchema.nullable().optional(),
+  // If auto-created, which message triggered it
+  lastAccessedAt: TimestampSchema.nullable().optional(),
+  // For housekeeping decisions
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+});
+var MemoriesFileSchema = import_zod5.z.object({
+  version: import_zod5.z.number().default(1),
+  memories: import_zod5.z.array(MemorySchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema
+});
+
+// lib/json-store/repositories/connection-profiles.repository.ts
+var ConnectionProfilesRepository = class extends BaseRepository {
+  constructor(jsonStore) {
+    super(jsonStore, ConnectionProfileSchema);
+  }
+  /**
+   * Get the connection profiles file path
+   */
+  getFilePath() {
+    return "settings/connection-profiles.json";
+  }
+  /**
+   * Read connection profiles file with default structure
+   */
+  async readProfilesFile() {
+    try {
+      const filePath = this.getFilePath();
+      const data2 = await this.jsonStore.readJson(filePath);
+      return ConnectionProfilesFileSchema.parse(data2);
+    } catch (error2) {
+      return {
+        version: 1,
+        apiKeys: [],
+        llmProfiles: [],
+        createdAt: this.getCurrentTimestamp(),
+        updatedAt: this.getCurrentTimestamp()
+      };
+    }
+  }
+  /**
+   * Write connection profiles file with validation
+   */
+  async writeProfilesFile(data2) {
+    const validated = ConnectionProfilesFileSchema.parse({
+      ...data2,
+      updatedAt: this.getCurrentTimestamp()
+    });
+    await this.jsonStore.writeJson(this.getFilePath(), validated);
+  }
+  /**
+   * Find a connection profile by ID
+   */
+  async findById(id) {
+    const file = await this.readProfilesFile();
+    return file.llmProfiles.find((profile) => profile.id === id) || null;
+  }
+  /**
+   * Find all connection profiles
+   */
+  async findAll() {
+    const file = await this.readProfilesFile();
+    return file.llmProfiles;
+  }
+  /**
+   * Find connection profiles by user ID
+   */
+  async findByUserId(userId) {
+    const file = await this.readProfilesFile();
+    return file.llmProfiles.filter((profile) => profile.userId === userId);
+  }
+  /**
+   * Find connection profiles with a specific tag
+   */
+  async findByTag(tagId) {
+    const file = await this.readProfilesFile();
+    return file.llmProfiles.filter((profile) => profile.tags.includes(tagId));
+  }
+  /**
+   * Find default connection profile for user
+   */
+  async findDefault(userId) {
+    const file = await this.readProfilesFile();
+    return file.llmProfiles.find(
+      (profile) => profile.userId === userId && profile.isDefault
+    ) || null;
+  }
+  /**
+   * Create a new connection profile
+   */
+  async create(data2) {
+    const id = this.generateId();
+    const now = this.getCurrentTimestamp();
+    const profile = {
+      ...data2,
+      id,
+      createdAt: now,
+      updatedAt: now
+    };
+    const validated = this.validate(profile);
+    const file = await this.readProfilesFile();
+    file.llmProfiles.push(validated);
+    await this.writeProfilesFile(file);
+    this.jsonStore.clearCache();
+    return validated;
+  }
+  /**
+   * Update a connection profile
+   */
+  async update(id, data2) {
+    const file = await this.readProfilesFile();
+    const index = file.llmProfiles.findIndex((profile) => profile.id === id);
+    if (index === -1) {
+      return null;
+    }
+    const existing = file.llmProfiles[index];
+    const now = this.getCurrentTimestamp();
+    const updated = {
+      ...existing,
+      ...data2,
+      id: existing.id,
+      // Preserve ID
+      createdAt: existing.createdAt,
+      // Preserve creation timestamp
+      updatedAt: now
+    };
+    const validated = this.validate(updated);
+    file.llmProfiles[index] = validated;
+    await this.writeProfilesFile(file);
+    this.jsonStore.clearCache();
+    return validated;
+  }
+  /**
+   * Delete a connection profile
+   */
+  async delete(id) {
+    const file = await this.readProfilesFile();
+    const initialLength = file.llmProfiles.length;
+    file.llmProfiles = file.llmProfiles.filter((profile) => profile.id !== id);
+    if (file.llmProfiles.length === initialLength) {
+      return false;
+    }
+    await this.writeProfilesFile(file);
+    this.jsonStore.clearCache();
+    return true;
+  }
+  /**
+   * Add a tag to a connection profile
+   */
+  async addTag(profileId, tagId) {
+    const profile = await this.findById(profileId);
+    if (!profile) {
+      return null;
+    }
+    if (!profile.tags.includes(tagId)) {
+      profile.tags.push(tagId);
+      return await this.update(profileId, { tags: profile.tags });
+    }
+    return profile;
+  }
+  /**
+   * Remove a tag from a connection profile
+   */
+  async removeTag(profileId, tagId) {
+    const profile = await this.findById(profileId);
+    if (!profile) {
+      return null;
+    }
+    profile.tags = profile.tags.filter((id) => id !== tagId);
+    return await this.update(profileId, { tags: profile.tags });
+  }
+  // ============================================================================
+  // API KEY OPERATIONS
+  // ============================================================================
+  /**
+   * Get all API keys
+   */
+  async getAllApiKeys() {
+    const file = await this.readProfilesFile();
+    return file.apiKeys;
+  }
+  /**
+   * Find API key by ID
+   */
+  async findApiKeyById(id) {
+    const file = await this.readProfilesFile();
+    return file.apiKeys.find((key) => key.id === id) || null;
+  }
+  /**
+   * Create a new API key
+   */
+  async createApiKey(data2) {
+    const id = this.generateId();
+    const now = this.getCurrentTimestamp();
+    const apiKey = {
+      ...data2,
+      id,
+      createdAt: now,
+      updatedAt: now
+    };
+    const validated = ApiKeySchema.parse(apiKey);
+    const file = await this.readProfilesFile();
+    file.apiKeys.push(validated);
+    await this.writeProfilesFile(file);
+    this.jsonStore.clearCache();
+    return validated;
+  }
+  /**
+   * Update an API key
+   */
+  async updateApiKey(id, data2) {
+    const file = await this.readProfilesFile();
+    const index = file.apiKeys.findIndex((key) => key.id === id);
+    if (index === -1) {
+      return null;
+    }
+    const existing = file.apiKeys[index];
+    const now = this.getCurrentTimestamp();
+    const updated = {
+      ...existing,
+      ...data2,
+      id: existing.id,
+      // Preserve ID
+      createdAt: existing.createdAt,
+      // Preserve creation timestamp
+      updatedAt: now
+    };
+    const validated = ApiKeySchema.parse(updated);
+    file.apiKeys[index] = validated;
+    await this.writeProfilesFile(file);
+    this.jsonStore.clearCache();
+    return validated;
+  }
+  /**
+   * Delete an API key
+   */
+  async deleteApiKey(id) {
+    const file = await this.readProfilesFile();
+    const initialLength = file.apiKeys.length;
+    file.apiKeys = file.apiKeys.filter((key) => key.id !== id);
+    if (file.apiKeys.length === initialLength) {
+      return false;
+    }
+    await this.writeProfilesFile(file);
+    this.jsonStore.clearCache();
+    return true;
+  }
+  /**
+   * Update API key last used timestamp
+   */
+  async recordApiKeyUsage(id) {
+    return await this.updateApiKey(id, { lastUsed: this.getCurrentTimestamp() });
+  }
+};
+
 // plugins/dist/qtap-plugin-upgrade/migrations/convert-openrouter-profiles.ts
-init_json_store();
-init_connection_profiles_repository();
 init_logger();
 function isOpenRouterEndpoint(baseUrl) {
   if (!baseUrl) return false;
@@ -73921,11 +66231,379 @@ var convertOpenRouterProfilesMigration = {
   }
 };
 
-// plugins/dist/qtap-plugin-upgrade/migrations/enable-provider-plugins.ts
-init_json_store();
-init_connection_profiles_repository();
-init_image_profiles_repository();
-init_embedding_profiles_repository();
+// lib/json-store/repositories/image-profiles.repository.ts
+var ImageProfilesRepository = class extends BaseRepository {
+  constructor(jsonStore) {
+    super(jsonStore, ImageProfileSchema);
+  }
+  /**
+   * Get the image profiles file path
+   */
+  getFilePath() {
+    return "settings/image-profiles.json";
+  }
+  /**
+   * Read image profiles file with default structure
+   */
+  async readProfilesFile() {
+    try {
+      const filePath = this.getFilePath();
+      const data2 = await this.jsonStore.readJson(filePath);
+      return ImageProfilesFileSchema.parse(data2);
+    } catch (error2) {
+      return {
+        version: 1,
+        profiles: [],
+        createdAt: this.getCurrentTimestamp(),
+        updatedAt: this.getCurrentTimestamp()
+      };
+    }
+  }
+  /**
+   * Write image profiles file with validation
+   */
+  async writeProfilesFile(data2) {
+    const validated = ImageProfilesFileSchema.parse({
+      ...data2,
+      updatedAt: this.getCurrentTimestamp()
+    });
+    await this.jsonStore.writeJson(this.getFilePath(), validated);
+  }
+  /**
+   * Find an image profile by ID
+   */
+  async findById(id) {
+    const file = await this.readProfilesFile();
+    return file.profiles.find((profile) => profile.id === id) || null;
+  }
+  /**
+   * Find all image profiles
+   */
+  async findAll() {
+    const file = await this.readProfilesFile();
+    return file.profiles;
+  }
+  /**
+   * Find image profiles by user ID
+   */
+  async findByUserId(userId) {
+    const file = await this.readProfilesFile();
+    return file.profiles.filter((profile) => profile.userId === userId);
+  }
+  /**
+   * Find image profiles with a specific tag
+   */
+  async findByTag(tagId) {
+    const file = await this.readProfilesFile();
+    return file.profiles.filter((profile) => profile.tags.includes(tagId));
+  }
+  /**
+   * Find default image profile for user
+   */
+  async findDefault(userId) {
+    const file = await this.readProfilesFile();
+    return file.profiles.find(
+      (profile) => profile.userId === userId && profile.isDefault
+    ) || null;
+  }
+  /**
+   * Find image profile by name for user
+   */
+  async findByName(userId, name) {
+    const file = await this.readProfilesFile();
+    return file.profiles.find(
+      (profile) => profile.userId === userId && profile.name === name
+    ) || null;
+  }
+  /**
+   * Create a new image profile
+   */
+  async create(data2) {
+    const id = this.generateId();
+    const now = this.getCurrentTimestamp();
+    const profile = {
+      ...data2,
+      id,
+      createdAt: now,
+      updatedAt: now
+    };
+    const validated = this.validate(profile);
+    const file = await this.readProfilesFile();
+    file.profiles.push(validated);
+    await this.writeProfilesFile(file);
+    return validated;
+  }
+  /**
+   * Update an image profile
+   */
+  async update(id, data2) {
+    const file = await this.readProfilesFile();
+    const index = file.profiles.findIndex((profile) => profile.id === id);
+    if (index === -1) {
+      return null;
+    }
+    const existing = file.profiles[index];
+    const now = this.getCurrentTimestamp();
+    const updated = {
+      ...existing,
+      ...data2,
+      id: existing.id,
+      // Preserve ID
+      createdAt: existing.createdAt,
+      // Preserve creation timestamp
+      updatedAt: now
+    };
+    const validated = this.validate(updated);
+    file.profiles[index] = validated;
+    await this.writeProfilesFile(file);
+    return validated;
+  }
+  /**
+   * Delete an image profile
+   */
+  async delete(id) {
+    const file = await this.readProfilesFile();
+    const initialLength = file.profiles.length;
+    file.profiles = file.profiles.filter((profile) => profile.id !== id);
+    if (file.profiles.length === initialLength) {
+      return false;
+    }
+    await this.writeProfilesFile(file);
+    return true;
+  }
+  /**
+   * Add a tag to an image profile
+   */
+  async addTag(profileId, tagId) {
+    const profile = await this.findById(profileId);
+    if (!profile) {
+      return null;
+    }
+    if (!profile.tags.includes(tagId)) {
+      profile.tags.push(tagId);
+      return await this.update(profileId, { tags: profile.tags });
+    }
+    return profile;
+  }
+  /**
+   * Remove a tag from an image profile
+   */
+  async removeTag(profileId, tagId) {
+    const profile = await this.findById(profileId);
+    if (!profile) {
+      return null;
+    }
+    profile.tags = profile.tags.filter((id) => id !== tagId);
+    return await this.update(profileId, { tags: profile.tags });
+  }
+  /**
+   * Unset default flag on all profiles for a user
+   */
+  async unsetAllDefaults(userId) {
+    const file = await this.readProfilesFile();
+    let changed = false;
+    for (let i4 = 0; i4 < file.profiles.length; i4++) {
+      if (file.profiles[i4].userId === userId && file.profiles[i4].isDefault) {
+        file.profiles[i4] = {
+          ...file.profiles[i4],
+          isDefault: false,
+          updatedAt: this.getCurrentTimestamp()
+        };
+        changed = true;
+      }
+    }
+    if (changed) {
+      await this.writeProfilesFile(file);
+    }
+  }
+};
+
+// lib/json-store/repositories/embedding-profiles.repository.ts
+var EmbeddingProfilesRepository = class extends BaseRepository {
+  constructor(jsonStore) {
+    super(jsonStore, EmbeddingProfileSchema);
+  }
+  /**
+   * Get the embedding profiles file path
+   */
+  getFilePath() {
+    return "settings/embedding-profiles.json";
+  }
+  /**
+   * Read embedding profiles file with default structure
+   */
+  async readProfilesFile() {
+    try {
+      const filePath = this.getFilePath();
+      const data2 = await this.jsonStore.readJson(filePath);
+      return EmbeddingProfilesFileSchema.parse(data2);
+    } catch (error2) {
+      return {
+        version: 1,
+        profiles: [],
+        createdAt: this.getCurrentTimestamp(),
+        updatedAt: this.getCurrentTimestamp()
+      };
+    }
+  }
+  /**
+   * Write embedding profiles file with validation
+   */
+  async writeProfilesFile(data2) {
+    const validated = EmbeddingProfilesFileSchema.parse({
+      ...data2,
+      updatedAt: this.getCurrentTimestamp()
+    });
+    await this.jsonStore.writeJson(this.getFilePath(), validated);
+  }
+  /**
+   * Find an embedding profile by ID
+   */
+  async findById(id) {
+    const file = await this.readProfilesFile();
+    return file.profiles.find((profile) => profile.id === id) || null;
+  }
+  /**
+   * Find all embedding profiles
+   */
+  async findAll() {
+    const file = await this.readProfilesFile();
+    return file.profiles;
+  }
+  /**
+   * Find embedding profiles by user ID
+   */
+  async findByUserId(userId) {
+    const file = await this.readProfilesFile();
+    return file.profiles.filter((profile) => profile.userId === userId);
+  }
+  /**
+   * Find embedding profiles with a specific tag
+   */
+  async findByTag(tagId) {
+    const file = await this.readProfilesFile();
+    return file.profiles.filter((profile) => profile.tags.includes(tagId));
+  }
+  /**
+   * Find default embedding profile for user
+   */
+  async findDefault(userId) {
+    const file = await this.readProfilesFile();
+    return file.profiles.find(
+      (profile) => profile.userId === userId && profile.isDefault
+    ) || null;
+  }
+  /**
+   * Find embedding profile by name for user
+   */
+  async findByName(userId, name) {
+    const file = await this.readProfilesFile();
+    return file.profiles.find(
+      (profile) => profile.userId === userId && profile.name === name
+    ) || null;
+  }
+  /**
+   * Create a new embedding profile
+   */
+  async create(data2) {
+    const id = this.generateId();
+    const now = this.getCurrentTimestamp();
+    const profile = {
+      ...data2,
+      id,
+      createdAt: now,
+      updatedAt: now
+    };
+    const validated = this.validate(profile);
+    const file = await this.readProfilesFile();
+    file.profiles.push(validated);
+    await this.writeProfilesFile(file);
+    return validated;
+  }
+  /**
+   * Update an embedding profile
+   */
+  async update(id, data2) {
+    const file = await this.readProfilesFile();
+    const index = file.profiles.findIndex((profile) => profile.id === id);
+    if (index === -1) {
+      return null;
+    }
+    const existing = file.profiles[index];
+    const now = this.getCurrentTimestamp();
+    const updated = {
+      ...existing,
+      ...data2,
+      id: existing.id,
+      // Preserve ID
+      createdAt: existing.createdAt,
+      // Preserve creation timestamp
+      updatedAt: now
+    };
+    const validated = this.validate(updated);
+    file.profiles[index] = validated;
+    await this.writeProfilesFile(file);
+    return validated;
+  }
+  /**
+   * Delete an embedding profile
+   */
+  async delete(id) {
+    const file = await this.readProfilesFile();
+    const initialLength = file.profiles.length;
+    file.profiles = file.profiles.filter((profile) => profile.id !== id);
+    if (file.profiles.length === initialLength) {
+      return false;
+    }
+    await this.writeProfilesFile(file);
+    return true;
+  }
+  /**
+   * Add a tag to an embedding profile
+   */
+  async addTag(profileId, tagId) {
+    const profile = await this.findById(profileId);
+    if (!profile) {
+      return null;
+    }
+    if (!profile.tags.includes(tagId)) {
+      profile.tags.push(tagId);
+      return await this.update(profileId, { tags: profile.tags });
+    }
+    return profile;
+  }
+  /**
+   * Remove a tag from an embedding profile
+   */
+  async removeTag(profileId, tagId) {
+    const profile = await this.findById(profileId);
+    if (!profile) {
+      return null;
+    }
+    profile.tags = profile.tags.filter((id) => id !== tagId);
+    return await this.update(profileId, { tags: profile.tags });
+  }
+  /**
+   * Unset default flag on all profiles for a user
+   */
+  async unsetAllDefaults(userId) {
+    const file = await this.readProfilesFile();
+    let changed = false;
+    for (let i4 = 0; i4 < file.profiles.length; i4++) {
+      if (file.profiles[i4].userId === userId && file.profiles[i4].isDefault) {
+        file.profiles[i4] = {
+          ...file.profiles[i4],
+          isDefault: false,
+          updatedAt: this.getCurrentTimestamp()
+        };
+        changed = true;
+      }
+    }
+    if (changed) {
+      await this.writeProfilesFile(file);
+    }
+  }
+};
 
 // lib/plugins/registry.ts
 init_logger();
@@ -74527,8 +67205,8 @@ function validateS3Config() {
   } catch (error2) {
     if (error2 instanceof import_zod6.z.ZodError) {
       const validationErrors = error2.errors.map((err) => {
-        const path4 = err.path.join(".");
-        return `${path4}: ${err.message}`;
+        const path5 = err.path.join(".");
+        return `${path5}: ${err.message}`;
       });
       errors.push(...validationErrors);
       logger_inst.warn("S3 configuration validation failed with Zod schema", {
@@ -74783,21 +67461,3138 @@ var validateS3ConfigMigration = {
   }
 };
 
+// plugins/dist/qtap-plugin-upgrade/lib/json-store/core/json-store.ts
+var fs4 = __toESM(require("fs"));
+var path3 = __toESM(require("path"));
+var import_util2 = require("util");
+var crypto3 = __toESM(require("crypto"));
+var mkdir4 = (0, import_util2.promisify)(fs4.mkdir);
+var readFile4 = (0, import_util2.promisify)(fs4.readFile);
+var writeFile4 = (0, import_util2.promisify)(fs4.writeFile);
+var appendFile4 = (0, import_util2.promisify)(fs4.appendFile);
+var rename4 = (0, import_util2.promisify)(fs4.rename);
+var unlink4 = (0, import_util2.promisify)(fs4.unlink);
+var readdir4 = (0, import_util2.promisify)(fs4.readdir);
+var stat4 = (0, import_util2.promisify)(fs4.stat);
+var JsonStore2 = class {
+  constructor(config = {}) {
+    this.locks = /* @__PURE__ */ new Map();
+    this.cache = /* @__PURE__ */ new Map();
+    this.dataDir = config.dataDir || process.env.DATA_DIR || "./data";
+    this.enableCache = config.enableCache ?? true;
+    this.lockTimeout = config.lockTimeout ?? 5e3;
+    this.fsyncInterval = config.fsyncInterval ?? 10;
+    if (!fs4.existsSync(this.dataDir)) {
+      fs4.mkdirSync(this.dataDir, { recursive: true });
+    }
+  }
+  /**
+   * Get the configured data directory path
+   */
+  getDataDir() {
+    return this.dataDir;
+  }
+  /**
+   * Resolve a relative path within data directory
+   */
+  resolvePath(...segments) {
+    return path3.join(this.dataDir, ...segments);
+  }
+  /**
+   * Ensure a directory exists
+   */
+  async ensureDir(dirPath) {
+    await mkdir4(dirPath, { recursive: true });
+  }
+  /**
+   * Acquire a lock for a file path
+   */
+  async acquireLock(filePath) {
+    const lockPath = `${filePath}.lock`;
+    const lockDir = path3.dirname(lockPath);
+    const startTime = Date.now();
+    await this.ensureDir(lockDir);
+    while (true) {
+      try {
+        const fd = fs4.openSync(lockPath, fs4.constants.O_CREAT | fs4.constants.O_EXCL | fs4.constants.O_WRONLY);
+        fs4.closeSync(fd);
+        return;
+      } catch (error2) {
+        if (error2.code !== "EEXIST") {
+          throw error2;
+        }
+        try {
+          const stats = await stat4(lockPath);
+          if (Date.now() - stats.mtimeMs > 3e4) {
+            await unlink4(lockPath);
+            continue;
+          }
+        } catch {
+          continue;
+        }
+        if (Date.now() - startTime > this.lockTimeout) {
+          throw new Error(`Failed to acquire lock for ${filePath} within ${this.lockTimeout}ms`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+    }
+  }
+  /**
+   * Release a lock for a file path
+   */
+  async releaseLock(filePath) {
+    const lockPath = `${filePath}.lock`;
+    try {
+      await unlink4(lockPath);
+    } catch (error2) {
+      if (error2.code !== "ENOENT") {
+        console.error(`Failed to release lock for ${filePath}:`, error2);
+      }
+    }
+  }
+  /**
+   * Read JSON file with caching
+   */
+  async readJson(filePath) {
+    const fullPath = this.resolvePath(filePath);
+    const cacheKey = fullPath;
+    if (this.enableCache && this.cache.has(cacheKey)) {
+      return this.cache.get(cacheKey);
+    }
+    try {
+      const content = await readFile4(fullPath, "utf-8");
+      const data2 = JSON.parse(content);
+      if (this.enableCache) {
+        this.cache.set(cacheKey, data2);
+      }
+      return data2;
+    } catch (error2) {
+      if (error2.code === "ENOENT") {
+        throw new Error(`File not found: ${filePath}`);
+      }
+      throw new Error(`Failed to read JSON from ${filePath}: ${error2.message}`);
+    }
+  }
+  /**
+   * Write JSON file atomically with locking
+   */
+  async writeJson(filePath, data2) {
+    const fullPath = this.resolvePath(filePath);
+    const dir = path3.dirname(fullPath);
+    await this.ensureDir(dir);
+    await this.acquireLock(fullPath);
+    try {
+      const tempPath = `${fullPath}.tmp.${crypto3.randomBytes(4).toString("hex")}`;
+      const content = JSON.stringify(data2, null, 2);
+      await writeFile4(tempPath, content, "utf-8");
+      await rename4(tempPath, fullPath);
+      if (this.enableCache) {
+        this.cache.delete(fullPath);
+      }
+    } finally {
+      await this.releaseLock(fullPath);
+    }
+  }
+  /**
+   * Read JSONL file line by line
+   */
+  async readJsonl(filePath) {
+    const fullPath = this.resolvePath(filePath);
+    try {
+      const content = await readFile4(fullPath, "utf-8");
+      const lines = content.trim().split("\n").filter((line) => line.length > 0);
+      return lines.map((line) => JSON.parse(line));
+    } catch (error2) {
+      if (error2.code === "ENOENT") {
+        return [];
+      }
+      throw new Error(`Failed to read JSONL from ${filePath}: ${error2.message}`);
+    }
+  }
+  /**
+   * Write raw content to file atomically with locking (for pre-formatted JSONL)
+   */
+  async writeRaw(filePath, content) {
+    const fullPath = this.resolvePath(filePath);
+    const dir = path3.dirname(fullPath);
+    await this.ensureDir(dir);
+    await this.acquireLock(fullPath);
+    try {
+      const tempPath = `${fullPath}.tmp.${crypto3.randomBytes(4).toString("hex")}`;
+      await writeFile4(tempPath, content, "utf-8");
+      await rename4(tempPath, fullPath);
+      if (this.enableCache) {
+        this.cache.delete(fullPath);
+      }
+    } finally {
+      await this.releaseLock(fullPath);
+    }
+  }
+  /**
+   * Write JSONL file atomically (full rewrite for updates/deletes)
+   */
+  async writeJsonl(filePath, items) {
+    const content = items.length > 0 ? items.map((item) => JSON.stringify(item)).join("\n") + "\n" : "";
+    await this.writeRaw(filePath, content);
+  }
+  /**
+   * Append to JSONL file (line-delimited JSON)
+   */
+  async appendJsonl(filePath, items) {
+    const fullPath = this.resolvePath(filePath);
+    const dir = path3.dirname(fullPath);
+    await this.ensureDir(dir);
+    await this.acquireLock(fullPath);
+    try {
+      const lines = items.map((item) => JSON.stringify(item)).join("\n") + "\n";
+      if (fs4.existsSync(fullPath)) {
+        await appendFile4(fullPath, lines, "utf-8");
+      } else {
+        await writeFile4(fullPath, lines, "utf-8");
+      }
+      if (this.enableCache) {
+        this.cache.delete(fullPath);
+      }
+    } finally {
+      await this.releaseLock(fullPath);
+    }
+  }
+  /**
+   * Get file size in bytes
+   */
+  async getFileSize(filePath) {
+    const fullPath = this.resolvePath(filePath);
+    try {
+      const stats = await stat4(fullPath);
+      return stats.size;
+    } catch (error2) {
+      if (error2.code === "ENOENT") {
+        return 0;
+      }
+      throw error2;
+    }
+  }
+  /**
+   * Check if file exists
+   */
+  exists(filePath) {
+    const fullPath = this.resolvePath(filePath);
+    return fs4.existsSync(fullPath);
+  }
+  /**
+   * List files in a directory
+   */
+  async listDir(dirPath) {
+    const fullPath = this.resolvePath(dirPath);
+    try {
+      return await readdir4(fullPath);
+    } catch (error2) {
+      if (error2.code === "ENOENT") {
+        return [];
+      }
+      throw error2;
+    }
+  }
+  /**
+   * Delete a file
+   */
+  async deleteFile(filePath) {
+    const fullPath = this.resolvePath(filePath);
+    try {
+      await unlink4(fullPath);
+      if (this.enableCache) {
+        this.cache.delete(fullPath);
+      }
+    } catch (error2) {
+      if (error2.code !== "ENOENT") {
+        throw error2;
+      }
+    }
+  }
+  /**
+   * Clear in-memory cache
+   */
+  clearCache() {
+    this.cache.clear();
+  }
+  /**
+   * Get cache stats
+   */
+  getCacheStats() {
+    return {
+      size: this.cache.size,
+      enabled: this.enableCache
+    };
+  }
+};
+var instance2 = null;
+function getJsonStore(config) {
+  if (!instance2) {
+    instance2 = new JsonStore2(config);
+  }
+  return instance2;
+}
+
+// plugins/dist/qtap-plugin-upgrade/lib/json-store/repositories/base.repository.ts
+var BaseRepository2 = class {
+  constructor(jsonStore, schema) {
+    this.jsonStore = jsonStore;
+    this.schema = schema;
+  }
+  /**
+   * Validate data against schema
+   */
+  validate(data2) {
+    return this.schema.parse(data2);
+  }
+  /**
+   * Safely validate without throwing
+   */
+  validateSafe(data2) {
+    try {
+      const validated = this.validate(data2);
+      return { success: true, data: validated };
+    } catch (error2) {
+      return { success: false, error: error2.message };
+    }
+  }
+  /**
+   * Generate UUID v4
+   */
+  generateId() {
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c4) {
+      const r4 = Math.random() * 16 | 0;
+      const v4 = c4 === "x" ? r4 : r4 & 3 | 8;
+      return v4.toString(16);
+    });
+  }
+  /**
+   * Get current ISO timestamp
+   */
+  getCurrentTimestamp() {
+    return (/* @__PURE__ */ new Date()).toISOString();
+  }
+};
+
+// plugins/dist/qtap-plugin-upgrade/lib/json-store/schemas/types.ts
+var import_zod7 = require("zod");
+var ProviderEnum2 = import_zod7.z.string().min(1, "Provider is required");
+var ImageProviderEnum2 = import_zod7.z.string().min(1, "Image provider is required");
+var EmbeddingProfileProviderEnum2 = import_zod7.z.enum(["OPENAI", "OLLAMA"]);
+var RoleEnum2 = import_zod7.z.enum(["SYSTEM", "USER", "ASSISTANT", "TOOL"]);
+var ImageTagTypeEnum2 = import_zod7.z.enum(["CHARACTER", "PERSONA", "CHAT", "THEME"]);
+var AvatarDisplayModeEnum2 = import_zod7.z.enum(["ALWAYS", "GROUP_ONLY", "NEVER"]);
+var UUIDSchema2 = import_zod7.z.string().uuid();
+var TimestampSchema2 = import_zod7.z.string().datetime().or(import_zod7.z.date()).transform((d4) => {
+  if (d4 instanceof Date) return d4.toISOString();
+  return d4;
+});
+var JsonSchema2 = import_zod7.z.record(import_zod7.z.unknown());
+var EncryptedFieldSchema2 = import_zod7.z.object({
+  ciphertext: import_zod7.z.string(),
+  iv: import_zod7.z.string(),
+  authTag: import_zod7.z.string()
+});
+var TOTPSecretSchema2 = EncryptedFieldSchema2.extend({
+  enabled: import_zod7.z.boolean().default(false),
+  verifiedAt: TimestampSchema2.nullable().optional()
+});
+var BackupCodesSchema2 = import_zod7.z.object({
+  ciphertext: import_zod7.z.string(),
+  iv: import_zod7.z.string(),
+  authTag: import_zod7.z.string(),
+  createdAt: TimestampSchema2
+});
+var UserSchema2 = import_zod7.z.object({
+  id: UUIDSchema2,
+  email: import_zod7.z.string().email(),
+  name: import_zod7.z.string().nullable().optional(),
+  image: import_zod7.z.string().nullable().optional(),
+  emailVerified: TimestampSchema2.nullable().optional(),
+  // Password authentication
+  passwordHash: import_zod7.z.string().nullable().optional(),
+  // TOTP 2FA
+  totp: TOTPSecretSchema2.optional(),
+  backupCodes: BackupCodesSchema2.optional(),
+  // Timestamps
+  createdAt: TimestampSchema2,
+  updatedAt: TimestampSchema2
+});
+var HexColorSchema2 = import_zod7.z.string().regex(/^#(?:[0-9a-fA-F]{3}){1,2}$/);
+var TagVisualStyleSchema2 = import_zod7.z.object({
+  emoji: import_zod7.z.string().max(8).optional().nullable(),
+  foregroundColor: HexColorSchema2.default("#1f2937"),
+  backgroundColor: HexColorSchema2.default("#e5e7eb"),
+  emojiOnly: import_zod7.z.boolean().default(false),
+  bold: import_zod7.z.boolean().default(false),
+  italic: import_zod7.z.boolean().default(false),
+  strikethrough: import_zod7.z.boolean().default(false)
+});
+var TagStyleMapSchema2 = import_zod7.z.record(TagVisualStyleSchema2).default({});
+var CheapLLMStrategyEnum2 = import_zod7.z.enum(["USER_DEFINED", "PROVIDER_CHEAPEST", "LOCAL_FIRST"]);
+var EmbeddingProviderEnum2 = import_zod7.z.enum(["SAME_PROVIDER", "OPENAI", "LOCAL"]);
+var CheapLLMSettingsSchema2 = import_zod7.z.object({
+  /** Strategy for selecting the cheap LLM provider */
+  strategy: CheapLLMStrategyEnum2.default("PROVIDER_CHEAPEST"),
+  /** If USER_DEFINED, which connection profile to use */
+  userDefinedProfileId: UUIDSchema2.nullable().optional(),
+  /** Global default cheap LLM profile - always use this if set */
+  defaultCheapProfileId: UUIDSchema2.nullable().optional(),
+  /** Whether to fall back to local models if available */
+  fallbackToLocal: import_zod7.z.boolean().default(true),
+  /** Provider for generating embeddings */
+  embeddingProvider: EmbeddingProviderEnum2.default("OPENAI"),
+  /** Embedding profile ID to use for text embeddings */
+  embeddingProfileId: UUIDSchema2.nullable().optional()
+});
+var ChatSettingsSchema2 = import_zod7.z.object({
+  id: UUIDSchema2,
+  userId: UUIDSchema2,
+  avatarDisplayMode: AvatarDisplayModeEnum2.default("ALWAYS"),
+  avatarDisplayStyle: import_zod7.z.string().default("CIRCULAR"),
+  tagStyles: TagStyleMapSchema2,
+  /** Cheap LLM settings for memory extraction and summarization */
+  cheapLLMSettings: CheapLLMSettingsSchema2.default({
+    strategy: "PROVIDER_CHEAPEST",
+    fallbackToLocal: true,
+    embeddingProvider: "OPENAI"
+  }),
+  /** Profile ID to use for image description fallback (when provider doesn't support images) */
+  imageDescriptionProfileId: UUIDSchema2.nullable().optional(),
+  createdAt: TimestampSchema2,
+  updatedAt: TimestampSchema2
+});
+var AccountSchema2 = import_zod7.z.object({
+  id: UUIDSchema2,
+  userId: UUIDSchema2,
+  type: import_zod7.z.string(),
+  provider: import_zod7.z.string(),
+  providerAccountId: import_zod7.z.string(),
+  refresh_token: import_zod7.z.string().nullable().optional(),
+  access_token: import_zod7.z.string().nullable().optional(),
+  expires_at: import_zod7.z.number().nullable().optional(),
+  token_type: import_zod7.z.string().nullable().optional(),
+  scope: import_zod7.z.string().nullable().optional(),
+  id_token: import_zod7.z.string().nullable().optional(),
+  session_state: import_zod7.z.string().nullable().optional()
+});
+var SessionSchema2 = import_zod7.z.object({
+  id: UUIDSchema2,
+  sessionToken: import_zod7.z.string(),
+  userId: UUIDSchema2,
+  expires: TimestampSchema2
+});
+var VerificationTokenSchema2 = import_zod7.z.object({
+  identifier: import_zod7.z.string(),
+  token: import_zod7.z.string(),
+  expires: TimestampSchema2
+});
+var ApiKeySchema2 = import_zod7.z.object({
+  id: UUIDSchema2,
+  label: import_zod7.z.string(),
+  provider: ProviderEnum2,
+  ciphertext: import_zod7.z.string(),
+  iv: import_zod7.z.string(),
+  authTag: import_zod7.z.string(),
+  isActive: import_zod7.z.boolean().default(true),
+  lastUsed: TimestampSchema2.nullable().optional(),
+  createdAt: TimestampSchema2,
+  updatedAt: TimestampSchema2
+});
+var ConnectionProfileSchema2 = import_zod7.z.object({
+  id: UUIDSchema2,
+  userId: UUIDSchema2,
+  name: import_zod7.z.string(),
+  provider: ProviderEnum2,
+  apiKeyId: UUIDSchema2.nullable().optional(),
+  baseUrl: import_zod7.z.string().nullable().optional(),
+  modelName: import_zod7.z.string(),
+  parameters: JsonSchema2.default({}),
+  isDefault: import_zod7.z.boolean().default(false),
+  /** Whether this profile is suitable for use as a "cheap" LLM (low-cost tasks) */
+  isCheap: import_zod7.z.boolean().default(false),
+  /** Whether web search is allowed for this profile (only if provider supports it) */
+  allowWebSearch: import_zod7.z.boolean().default(false),
+  tags: import_zod7.z.array(UUIDSchema2).default([]),
+  createdAt: TimestampSchema2,
+  updatedAt: TimestampSchema2
+});
+var PhysicalDescriptionSchema2 = import_zod7.z.object({
+  id: UUIDSchema2,
+  name: import_zod7.z.string().min(1),
+  shortPrompt: import_zod7.z.string().max(350).nullable().optional(),
+  mediumPrompt: import_zod7.z.string().max(500).nullable().optional(),
+  longPrompt: import_zod7.z.string().max(750).nullable().optional(),
+  completePrompt: import_zod7.z.string().max(1e3).nullable().optional(),
+  fullDescription: import_zod7.z.string().nullable().optional(),
+  createdAt: TimestampSchema2,
+  updatedAt: TimestampSchema2
+});
+var CharacterSchema2 = import_zod7.z.object({
+  id: UUIDSchema2,
+  userId: UUIDSchema2,
+  name: import_zod7.z.string(),
+  title: import_zod7.z.string().nullable().optional(),
+  description: import_zod7.z.string().nullable().optional(),
+  personality: import_zod7.z.string().nullable().optional(),
+  scenario: import_zod7.z.string().nullable().optional(),
+  firstMessage: import_zod7.z.string().nullable().optional(),
+  exampleDialogues: import_zod7.z.string().nullable().optional(),
+  systemPrompt: import_zod7.z.string().nullable().optional(),
+  avatarUrl: import_zod7.z.string().nullable().optional(),
+  defaultImageId: UUIDSchema2.nullable().optional(),
+  defaultConnectionProfileId: UUIDSchema2.nullable().optional(),
+  sillyTavernData: JsonSchema2.nullable().optional(),
+  isFavorite: import_zod7.z.boolean().default(false),
+  // Relationships
+  personaLinks: import_zod7.z.array(import_zod7.z.object({
+    personaId: UUIDSchema2,
+    isDefault: import_zod7.z.boolean()
+  })).default([]),
+  tags: import_zod7.z.array(UUIDSchema2).default([]),
+  avatarOverrides: import_zod7.z.array(import_zod7.z.object({
+    chatId: UUIDSchema2,
+    imageId: UUIDSchema2
+  })).default([]),
+  physicalDescriptions: import_zod7.z.array(PhysicalDescriptionSchema2).default([]),
+  // Timestamps
+  createdAt: TimestampSchema2,
+  updatedAt: TimestampSchema2
+});
+var PersonaSchema2 = import_zod7.z.object({
+  id: UUIDSchema2,
+  userId: UUIDSchema2,
+  name: import_zod7.z.string(),
+  title: import_zod7.z.string().nullable().optional(),
+  description: import_zod7.z.string(),
+  personalityTraits: import_zod7.z.string().nullable().optional(),
+  avatarUrl: import_zod7.z.string().nullable().optional(),
+  defaultImageId: UUIDSchema2.nullable().optional(),
+  sillyTavernData: JsonSchema2.nullable().optional(),
+  // Relationships
+  characterLinks: import_zod7.z.array(UUIDSchema2).default([]),
+  tags: import_zod7.z.array(UUIDSchema2).default([]),
+  physicalDescriptions: import_zod7.z.array(PhysicalDescriptionSchema2).default([]),
+  // Timestamps
+  createdAt: TimestampSchema2,
+  updatedAt: TimestampSchema2
+});
+var MessageEventSchema2 = import_zod7.z.object({
+  type: import_zod7.z.literal("message"),
+  id: UUIDSchema2,
+  role: RoleEnum2,
+  content: import_zod7.z.string(),
+  rawResponse: JsonSchema2.nullable().optional(),
+  tokenCount: import_zod7.z.number().nullable().optional(),
+  swipeGroupId: import_zod7.z.string().nullable().optional(),
+  swipeIndex: import_zod7.z.number().nullable().optional(),
+  attachments: import_zod7.z.array(UUIDSchema2).default([]),
+  createdAt: TimestampSchema2,
+  // Debug: Memory extraction logs (Sprint 6)
+  debugMemoryLogs: import_zod7.z.array(import_zod7.z.string()).optional()
+});
+var ContextSummaryEventSchema2 = import_zod7.z.object({
+  type: import_zod7.z.literal("context-summary"),
+  id: UUIDSchema2,
+  context: import_zod7.z.string(),
+  createdAt: TimestampSchema2
+});
+var ChatEventSchema2 = import_zod7.z.union([
+  MessageEventSchema2,
+  ContextSummaryEventSchema2
+]);
+var ParticipantTypeEnum2 = import_zod7.z.enum(["CHARACTER", "PERSONA"]);
+var ChatParticipantSchema2 = import_zod7.z.object({
+  id: UUIDSchema2,
+  // Participant type and identity
+  type: ParticipantTypeEnum2,
+  characterId: UUIDSchema2.nullable().optional(),
+  // Set when type is CHARACTER
+  personaId: UUIDSchema2.nullable().optional(),
+  // Set when type is PERSONA
+  // LLM configuration (for AI characters only)
+  connectionProfileId: UUIDSchema2.nullable().optional(),
+  // Required for CHARACTER, null for PERSONA
+  imageProfileId: UUIDSchema2.nullable().optional(),
+  // Image generation profile
+  // Per-chat customization
+  systemPromptOverride: import_zod7.z.string().nullable().optional(),
+  // Custom scenario/context for this chat
+  // Display and state
+  displayOrder: import_zod7.z.number().default(0),
+  // For ordering in UI
+  isActive: import_zod7.z.boolean().default(true),
+  // Temporarily disable without removing
+  createdAt: TimestampSchema2,
+  updatedAt: TimestampSchema2
+}).refine(
+  (data2) => {
+    if (data2.type === "CHARACTER") {
+      return data2.characterId != null;
+    }
+    if (data2.type === "PERSONA") {
+      return data2.personaId != null;
+    }
+    return false;
+  },
+  { message: "CHARACTER participants must have characterId, PERSONA participants must have personaId" }
+).refine(
+  (data2) => {
+    if (data2.type === "CHARACTER") {
+      return data2.connectionProfileId != null;
+    }
+    return true;
+  },
+  { message: "CHARACTER participants must have a connectionProfileId" }
+);
+var ChatParticipantBaseSchema2 = import_zod7.z.object({
+  id: UUIDSchema2,
+  type: ParticipantTypeEnum2,
+  characterId: UUIDSchema2.nullable().optional(),
+  personaId: UUIDSchema2.nullable().optional(),
+  connectionProfileId: UUIDSchema2.nullable().optional(),
+  imageProfileId: UUIDSchema2.nullable().optional(),
+  systemPromptOverride: import_zod7.z.string().nullable().optional(),
+  displayOrder: import_zod7.z.number().default(0),
+  isActive: import_zod7.z.boolean().default(true),
+  createdAt: TimestampSchema2,
+  updatedAt: TimestampSchema2
+});
+var ChatMetadataSchema2 = import_zod7.z.object({
+  id: UUIDSchema2,
+  userId: UUIDSchema2,
+  // Participants array (replaces characterId, personaId, connectionProfileId, imageProfileId)
+  participants: import_zod7.z.array(ChatParticipantBaseSchema2).default([]),
+  title: import_zod7.z.string(),
+  contextSummary: import_zod7.z.string().nullable().optional(),
+  sillyTavernMetadata: JsonSchema2.nullable().optional(),
+  tags: import_zod7.z.array(UUIDSchema2).default([]),
+  messageCount: import_zod7.z.number().default(0),
+  lastMessageAt: TimestampSchema2.nullable().optional(),
+  lastRenameCheckInterchange: import_zod7.z.number().default(0),
+  createdAt: TimestampSchema2,
+  updatedAt: TimestampSchema2
+}).refine(
+  (data2) => data2.participants.length > 0,
+  { message: "Chat must have at least one participant" }
+);
+var ChatMetadataBaseSchema2 = import_zod7.z.object({
+  id: UUIDSchema2,
+  userId: UUIDSchema2,
+  participants: import_zod7.z.array(ChatParticipantBaseSchema2).default([]),
+  title: import_zod7.z.string(),
+  contextSummary: import_zod7.z.string().nullable().optional(),
+  sillyTavernMetadata: JsonSchema2.nullable().optional(),
+  tags: import_zod7.z.array(UUIDSchema2).default([]),
+  messageCount: import_zod7.z.number().default(0),
+  lastMessageAt: TimestampSchema2.nullable().optional(),
+  lastRenameCheckInterchange: import_zod7.z.number().default(0),
+  createdAt: TimestampSchema2,
+  updatedAt: TimestampSchema2
+});
+var ChatMetadataLegacySchema2 = import_zod7.z.object({
+  id: UUIDSchema2,
+  userId: UUIDSchema2,
+  characterId: UUIDSchema2,
+  personaId: UUIDSchema2.nullable().optional(),
+  connectionProfileId: UUIDSchema2,
+  imageProfileId: UUIDSchema2.nullable().optional(),
+  title: import_zod7.z.string(),
+  contextSummary: import_zod7.z.string().nullable().optional(),
+  sillyTavernMetadata: JsonSchema2.nullable().optional(),
+  tags: import_zod7.z.array(UUIDSchema2).default([]),
+  messageCount: import_zod7.z.number().default(0),
+  lastMessageAt: TimestampSchema2.nullable().optional(),
+  lastRenameCheckInterchange: import_zod7.z.number().default(0),
+  createdAt: TimestampSchema2,
+  updatedAt: TimestampSchema2
+});
+var BinaryIndexEntrySchema2 = import_zod7.z.object({
+  id: UUIDSchema2,
+  sha256: import_zod7.z.string().length(64),
+  type: import_zod7.z.enum(["image", "chat_file", "avatar"]),
+  userId: UUIDSchema2,
+  filename: import_zod7.z.string(),
+  relativePath: import_zod7.z.string(),
+  mimeType: import_zod7.z.string(),
+  size: import_zod7.z.number(),
+  width: import_zod7.z.number().nullable().optional(),
+  height: import_zod7.z.number().nullable().optional(),
+  source: import_zod7.z.enum(["upload", "import", "generated"]).default("upload"),
+  generationPrompt: import_zod7.z.string().nullable().optional(),
+  generationModel: import_zod7.z.string().nullable().optional(),
+  chatId: UUIDSchema2.nullable().optional(),
+  characterId: UUIDSchema2.nullable().optional(),
+  // For avatar overrides
+  messageId: UUIDSchema2.nullable().optional(),
+  tags: import_zod7.z.array(UUIDSchema2).default([]),
+  createdAt: TimestampSchema2,
+  updatedAt: TimestampSchema2
+});
+var FileSourceEnum2 = import_zod7.z.enum(["UPLOADED", "GENERATED", "IMPORTED", "SYSTEM"]);
+var FileCategoryEnum2 = import_zod7.z.enum(["IMAGE", "DOCUMENT", "AVATAR", "ATTACHMENT", "EXPORT"]);
+var FileEntrySchema2 = import_zod7.z.object({
+  // Identity & Storage
+  id: UUIDSchema2,
+  // File UUID (also the base filename in storage)
+  userId: UUIDSchema2,
+  // Owner of the file
+  sha256: import_zod7.z.string().length(64),
+  // Content hash for deduplication
+  originalFilename: import_zod7.z.string(),
+  // Original filename from upload/generation
+  mimeType: import_zod7.z.string(),
+  // Specific MIME type
+  size: import_zod7.z.number(),
+  // File size in bytes
+  // Image metadata (if applicable)
+  width: import_zod7.z.number().nullable().optional(),
+  height: import_zod7.z.number().nullable().optional(),
+  // Linking - array of IDs this file is associated with
+  linkedTo: import_zod7.z.array(UUIDSchema2).default([]),
+  // messageId, chatId, characterId, personaId, etc.
+  // Classification
+  source: FileSourceEnum2,
+  // Where the file came from
+  category: FileCategoryEnum2,
+  // What type of file it is
+  // Generation metadata (for AI-generated files)
+  generationPrompt: import_zod7.z.string().nullable().optional(),
+  generationModel: import_zod7.z.string().nullable().optional(),
+  generationRevisedPrompt: import_zod7.z.string().nullable().optional(),
+  description: import_zod7.z.string().nullable().optional(),
+  // AI description or user-provided description
+  // Tags
+  tags: import_zod7.z.array(UUIDSchema2).default([]),
+  // S3 storage reference (Phase 3: MongoDB + S3 migration)
+  s3Key: import_zod7.z.string().nullable().optional(),
+  // Full S3 object key
+  s3Bucket: import_zod7.z.string().nullable().optional(),
+  // S3 bucket name
+  // Timestamps
+  createdAt: TimestampSchema2,
+  updatedAt: TimestampSchema2
+});
+var TagSchema2 = import_zod7.z.object({
+  id: UUIDSchema2,
+  userId: UUIDSchema2,
+  name: import_zod7.z.string(),
+  nameLower: import_zod7.z.string(),
+  quickHide: import_zod7.z.boolean().default(false),
+  createdAt: TimestampSchema2,
+  updatedAt: TimestampSchema2
+});
+var TagsFileSchema2 = import_zod7.z.object({
+  version: import_zod7.z.number().default(1),
+  tags: import_zod7.z.array(TagSchema2).default([]),
+  createdAt: TimestampSchema2,
+  updatedAt: TimestampSchema2
+});
+var ImageProfileSchema2 = import_zod7.z.object({
+  id: UUIDSchema2,
+  userId: UUIDSchema2,
+  name: import_zod7.z.string(),
+  provider: ImageProviderEnum2,
+  apiKeyId: UUIDSchema2.nullable().optional(),
+  baseUrl: import_zod7.z.string().nullable().optional(),
+  modelName: import_zod7.z.string(),
+  parameters: JsonSchema2.default({}),
+  isDefault: import_zod7.z.boolean().default(false),
+  tags: import_zod7.z.array(UUIDSchema2).default([]),
+  createdAt: TimestampSchema2,
+  updatedAt: TimestampSchema2
+});
+var ImageProfilesFileSchema2 = import_zod7.z.object({
+  version: import_zod7.z.number().default(1),
+  profiles: import_zod7.z.array(ImageProfileSchema2).default([]),
+  createdAt: TimestampSchema2,
+  updatedAt: TimestampSchema2
+});
+var EmbeddingProfileSchema2 = import_zod7.z.object({
+  id: UUIDSchema2,
+  userId: UUIDSchema2,
+  name: import_zod7.z.string(),
+  provider: EmbeddingProfileProviderEnum2,
+  apiKeyId: UUIDSchema2.nullable().optional(),
+  baseUrl: import_zod7.z.string().nullable().optional(),
+  modelName: import_zod7.z.string(),
+  /** Embedding dimension size (provider-specific) */
+  dimensions: import_zod7.z.number().nullable().optional(),
+  isDefault: import_zod7.z.boolean().default(false),
+  tags: import_zod7.z.array(UUIDSchema2).default([]),
+  createdAt: TimestampSchema2,
+  updatedAt: TimestampSchema2
+});
+var EmbeddingProfilesFileSchema2 = import_zod7.z.object({
+  version: import_zod7.z.number().default(1),
+  profiles: import_zod7.z.array(EmbeddingProfileSchema2).default([]),
+  createdAt: TimestampSchema2,
+  updatedAt: TimestampSchema2
+});
+var MemorySourceEnum2 = import_zod7.z.enum(["AUTO", "MANUAL"]);
+var MemorySchema2 = import_zod7.z.object({
+  id: UUIDSchema2,
+  characterId: UUIDSchema2,
+  personaId: UUIDSchema2.nullable().optional(),
+  // Optional: specific persona interaction
+  chatId: UUIDSchema2.nullable().optional(),
+  // Optional: source chat reference
+  content: import_zod7.z.string(),
+  // The actual memory content
+  summary: import_zod7.z.string(),
+  // Distilled version for context injection
+  keywords: import_zod7.z.array(import_zod7.z.string()).default([]),
+  // For text-based search
+  tags: import_zod7.z.array(UUIDSchema2).default([]),
+  // Derived from character/persona/chat tags
+  importance: import_zod7.z.number().min(0).max(1).default(0.5),
+  // 0-1 scale for prioritization
+  embedding: import_zod7.z.array(import_zod7.z.number()).nullable().optional(),
+  // Vector embedding for semantic search
+  source: MemorySourceEnum2.default("MANUAL"),
+  // How it was created
+  sourceMessageId: UUIDSchema2.nullable().optional(),
+  // If auto-created, which message triggered it
+  lastAccessedAt: TimestampSchema2.nullable().optional(),
+  // For housekeeping decisions
+  createdAt: TimestampSchema2,
+  updatedAt: TimestampSchema2
+});
+var MemoriesFileSchema2 = import_zod7.z.object({
+  version: import_zod7.z.number().default(1),
+  memories: import_zod7.z.array(MemorySchema2).default([]),
+  createdAt: TimestampSchema2,
+  updatedAt: TimestampSchema2
+});
+var GeneralSettingsSchema2 = import_zod7.z.object({
+  version: import_zod7.z.number().default(1),
+  user: UserSchema2,
+  chatSettings: ChatSettingsSchema2,
+  createdAt: TimestampSchema2,
+  updatedAt: TimestampSchema2
+});
+var ConnectionProfilesFileSchema2 = import_zod7.z.object({
+  version: import_zod7.z.number().default(1),
+  apiKeys: import_zod7.z.array(ApiKeySchema2).default([]),
+  llmProfiles: import_zod7.z.array(ConnectionProfileSchema2).default([]),
+  createdAt: TimestampSchema2,
+  updatedAt: TimestampSchema2
+});
+var AuthAccountsSchema2 = import_zod7.z.object({
+  version: import_zod7.z.number().default(1),
+  accounts: import_zod7.z.array(AccountSchema2).default([]),
+  createdAt: TimestampSchema2,
+  updatedAt: TimestampSchema2
+});
+
+// plugins/dist/qtap-plugin-upgrade/lib/json-store/repositories/characters.repository.ts
+var CharactersRepository = class extends BaseRepository2 {
+  constructor(jsonStore) {
+    super(jsonStore, CharacterSchema2);
+  }
+  /**
+   * Find a character by ID
+   */
+  async findById(id) {
+    try {
+      const filePath = `characters/${id}.json`;
+      const data2 = await this.jsonStore.readJson(filePath);
+      return this.validate(data2);
+    } catch (error2) {
+      return null;
+    }
+  }
+  /**
+   * Find all characters (requires scanning directory)
+   */
+  async findAll() {
+    const characters = [];
+    try {
+      const files = await this.jsonStore.listDir("characters");
+      for (const file of files) {
+        if (file.endsWith(".json")) {
+          const id = file.replace(".json", "");
+          const character = await this.findById(id);
+          if (character) {
+            characters.push(character);
+          }
+        }
+      }
+    } catch (error2) {
+      console.error("Error listing characters:", error2);
+    }
+    return characters;
+  }
+  /**
+   * Find characters by user ID
+   */
+  async findByUserId(userId) {
+    const characters = await this.findAll();
+    return characters.filter((c4) => c4.userId === userId);
+  }
+  /**
+   * Find characters with a specific tag
+   */
+  async findByTag(tagId) {
+    const characters = await this.findAll();
+    return characters.filter((c4) => c4.tags.includes(tagId));
+  }
+  /**
+   * Create a new character
+   */
+  async create(data2) {
+    const id = this.generateId();
+    const now = this.getCurrentTimestamp();
+    const character = {
+      ...data2,
+      id,
+      createdAt: now,
+      updatedAt: now
+    };
+    const validated = this.validate(character);
+    const filePath = `characters/${id}.json`;
+    await this.jsonStore.writeJson(filePath, validated);
+    return validated;
+  }
+  /**
+   * Update a character
+   */
+  async update(id, data2) {
+    const existing = await this.findById(id);
+    if (!existing) {
+      return null;
+    }
+    const now = this.getCurrentTimestamp();
+    const updated = {
+      ...existing,
+      ...data2,
+      id: existing.id,
+      // Preserve ID
+      createdAt: existing.createdAt,
+      // Preserve creation timestamp
+      updatedAt: now
+    };
+    const validated = this.validate(updated);
+    const filePath = `characters/${id}.json`;
+    await this.jsonStore.writeJson(filePath, validated);
+    return validated;
+  }
+  /**
+   * Delete a character
+   */
+  async delete(id) {
+    const filePath = `characters/${id}.json`;
+    try {
+      await this.jsonStore.deleteFile(filePath);
+      return true;
+    } catch (error2) {
+      console.error(`Failed to delete character ${id}:`, error2);
+      return false;
+    }
+  }
+  /**
+   * Add a tag to a character
+   */
+  async addTag(characterId, tagId) {
+    const character = await this.findById(characterId);
+    if (!character) {
+      return null;
+    }
+    if (!character.tags.includes(tagId)) {
+      character.tags.push(tagId);
+      return await this.update(characterId, { tags: character.tags });
+    }
+    return character;
+  }
+  /**
+   * Remove a tag from a character
+   */
+  async removeTag(characterId, tagId) {
+    const character = await this.findById(characterId);
+    if (!character) {
+      return null;
+    }
+    character.tags = character.tags.filter((id) => id !== tagId);
+    return await this.update(characterId, { tags: character.tags });
+  }
+  /**
+   * Add a persona link to a character
+   */
+  async addPersona(characterId, personaId, isDefault = false) {
+    const character = await this.findById(characterId);
+    if (!character) {
+      return null;
+    }
+    const existing = character.personaLinks.find((link) => link.personaId === personaId);
+    if (!existing) {
+      character.personaLinks.push({ personaId, isDefault });
+      return await this.update(characterId, { personaLinks: character.personaLinks });
+    }
+    return character;
+  }
+  /**
+   * Remove a persona link from a character
+   */
+  async removePersona(characterId, personaId) {
+    const character = await this.findById(characterId);
+    if (!character) {
+      return null;
+    }
+    character.personaLinks = character.personaLinks.filter((link) => link.personaId !== personaId);
+    return await this.update(characterId, { personaLinks: character.personaLinks });
+  }
+  /**
+   * Set favorite status
+   */
+  async setFavorite(characterId, isFavorite) {
+    return await this.update(characterId, { isFavorite });
+  }
+  // ============================================================================
+  // PHYSICAL DESCRIPTIONS
+  // ============================================================================
+  /**
+   * Add a physical description to a character
+   */
+  async addDescription(characterId, data2) {
+    const character = await this.findById(characterId);
+    if (!character) {
+      return null;
+    }
+    const now = this.getCurrentTimestamp();
+    const description = {
+      ...data2,
+      id: this.generateId(),
+      createdAt: now,
+      updatedAt: now
+    };
+    character.physicalDescriptions = character.physicalDescriptions || [];
+    character.physicalDescriptions.push(description);
+    await this.update(characterId, { physicalDescriptions: character.physicalDescriptions });
+    return description;
+  }
+  /**
+   * Update a physical description
+   */
+  async updateDescription(characterId, descriptionId, data2) {
+    const character = await this.findById(characterId);
+    if (!character) {
+      return null;
+    }
+    const descriptions = character.physicalDescriptions || [];
+    const index = descriptions.findIndex((d4) => d4.id === descriptionId);
+    if (index === -1) {
+      return null;
+    }
+    const now = this.getCurrentTimestamp();
+    const updated = {
+      ...descriptions[index],
+      ...data2,
+      id: descriptions[index].id,
+      createdAt: descriptions[index].createdAt,
+      updatedAt: now
+    };
+    descriptions[index] = updated;
+    await this.update(characterId, { physicalDescriptions: descriptions });
+    return updated;
+  }
+  /**
+   * Remove a physical description from a character
+   */
+  async removeDescription(characterId, descriptionId) {
+    const character = await this.findById(characterId);
+    if (!character) {
+      return false;
+    }
+    const descriptions = character.physicalDescriptions || [];
+    const filtered = descriptions.filter((d4) => d4.id !== descriptionId);
+    if (filtered.length === descriptions.length) {
+      return false;
+    }
+    await this.update(characterId, { physicalDescriptions: filtered });
+    return true;
+  }
+  /**
+   * Get a single physical description by ID
+   */
+  async getDescription(characterId, descriptionId) {
+    const character = await this.findById(characterId);
+    if (!character) {
+      return null;
+    }
+    const descriptions = character.physicalDescriptions || [];
+    return descriptions.find((d4) => d4.id === descriptionId) || null;
+  }
+  /**
+   * Get all physical descriptions for a character
+   */
+  async getDescriptions(characterId) {
+    const character = await this.findById(characterId);
+    if (!character) {
+      return [];
+    }
+    return character.physicalDescriptions || [];
+  }
+};
+
+// plugins/dist/qtap-plugin-upgrade/lib/json-store/repositories/personas.repository.ts
+var PersonasRepository = class extends BaseRepository2 {
+  constructor(jsonStore) {
+    super(jsonStore, PersonaSchema2);
+  }
+  /**
+   * Find a persona by ID
+   */
+  async findById(id) {
+    try {
+      const filePath = `personas/${id}.json`;
+      const data2 = await this.jsonStore.readJson(filePath);
+      return this.validate(data2);
+    } catch (error2) {
+      return null;
+    }
+  }
+  /**
+   * Find all personas (requires scanning directory)
+   */
+  async findAll() {
+    const personas = [];
+    try {
+      const files = await this.jsonStore.listDir("personas");
+      for (const file of files) {
+        if (file.endsWith(".json")) {
+          const id = file.replace(".json", "");
+          const persona = await this.findById(id);
+          if (persona) {
+            personas.push(persona);
+          }
+        }
+      }
+    } catch (error2) {
+      console.error("Error listing personas:", error2);
+    }
+    return personas;
+  }
+  /**
+   * Find personas by user ID
+   */
+  async findByUserId(userId) {
+    const personas = await this.findAll();
+    return personas.filter((p4) => p4.userId === userId);
+  }
+  /**
+   * Find personas with a specific tag
+   */
+  async findByTag(tagId) {
+    const personas = await this.findAll();
+    return personas.filter((p4) => p4.tags.includes(tagId));
+  }
+  /**
+   * Create a new persona
+   */
+  async create(data2) {
+    const id = this.generateId();
+    const now = this.getCurrentTimestamp();
+    const persona = {
+      ...data2,
+      id,
+      createdAt: now,
+      updatedAt: now
+    };
+    const validated = this.validate(persona);
+    const filePath = `personas/${id}.json`;
+    await this.jsonStore.writeJson(filePath, validated);
+    return validated;
+  }
+  /**
+   * Update a persona
+   */
+  async update(id, data2) {
+    const existing = await this.findById(id);
+    if (!existing) {
+      return null;
+    }
+    const now = this.getCurrentTimestamp();
+    const updated = {
+      ...existing,
+      ...data2,
+      id: existing.id,
+      // Preserve ID
+      createdAt: existing.createdAt,
+      // Preserve creation timestamp
+      updatedAt: now
+    };
+    const validated = this.validate(updated);
+    const filePath = `personas/${id}.json`;
+    await this.jsonStore.writeJson(filePath, validated);
+    return validated;
+  }
+  /**
+   * Delete a persona
+   */
+  async delete(id) {
+    const filePath = `personas/${id}.json`;
+    try {
+      await this.jsonStore.deleteFile(filePath);
+      return true;
+    } catch (error2) {
+      console.error(`Failed to delete persona ${id}:`, error2);
+      return false;
+    }
+  }
+  /**
+   * Add a tag to a persona
+   */
+  async addTag(personaId, tagId) {
+    const persona = await this.findById(personaId);
+    if (!persona) {
+      return null;
+    }
+    if (!persona.tags.includes(tagId)) {
+      persona.tags.push(tagId);
+      return await this.update(personaId, { tags: persona.tags });
+    }
+    return persona;
+  }
+  /**
+   * Remove a tag from a persona
+   */
+  async removeTag(personaId, tagId) {
+    const persona = await this.findById(personaId);
+    if (!persona) {
+      return null;
+    }
+    persona.tags = persona.tags.filter((id) => id !== tagId);
+    return await this.update(personaId, { tags: persona.tags });
+  }
+  /**
+   * Add a character link to a persona
+   */
+  async addCharacterLink(personaId, characterId) {
+    const persona = await this.findById(personaId);
+    if (!persona) {
+      return null;
+    }
+    if (!persona.characterLinks.includes(characterId)) {
+      persona.characterLinks.push(characterId);
+      return await this.update(personaId, { characterLinks: persona.characterLinks });
+    }
+    return persona;
+  }
+  /**
+   * Remove a character link from a persona
+   */
+  async removeCharacterLink(personaId, characterId) {
+    const persona = await this.findById(personaId);
+    if (!persona) {
+      return null;
+    }
+    persona.characterLinks = persona.characterLinks.filter((id) => id !== characterId);
+    return await this.update(personaId, { characterLinks: persona.characterLinks });
+  }
+  // ============================================================================
+  // PHYSICAL DESCRIPTIONS
+  // ============================================================================
+  /**
+   * Add a physical description to a persona
+   */
+  async addDescription(personaId, data2) {
+    const persona = await this.findById(personaId);
+    if (!persona) {
+      return null;
+    }
+    const now = this.getCurrentTimestamp();
+    const description = {
+      ...data2,
+      id: this.generateId(),
+      createdAt: now,
+      updatedAt: now
+    };
+    persona.physicalDescriptions = persona.physicalDescriptions || [];
+    persona.physicalDescriptions.push(description);
+    await this.update(personaId, { physicalDescriptions: persona.physicalDescriptions });
+    return description;
+  }
+  /**
+   * Update a physical description
+   */
+  async updateDescription(personaId, descriptionId, data2) {
+    const persona = await this.findById(personaId);
+    if (!persona) {
+      return null;
+    }
+    const descriptions = persona.physicalDescriptions || [];
+    const index = descriptions.findIndex((d4) => d4.id === descriptionId);
+    if (index === -1) {
+      return null;
+    }
+    const now = this.getCurrentTimestamp();
+    const updated = {
+      ...descriptions[index],
+      ...data2,
+      id: descriptions[index].id,
+      createdAt: descriptions[index].createdAt,
+      updatedAt: now
+    };
+    descriptions[index] = updated;
+    await this.update(personaId, { physicalDescriptions: descriptions });
+    return updated;
+  }
+  /**
+   * Remove a physical description from a persona
+   */
+  async removeDescription(personaId, descriptionId) {
+    const persona = await this.findById(personaId);
+    if (!persona) {
+      return false;
+    }
+    const descriptions = persona.physicalDescriptions || [];
+    const filtered = descriptions.filter((d4) => d4.id !== descriptionId);
+    if (filtered.length === descriptions.length) {
+      return false;
+    }
+    await this.update(personaId, { physicalDescriptions: filtered });
+    return true;
+  }
+  /**
+   * Get a single physical description by ID
+   */
+  async getDescription(personaId, descriptionId) {
+    const persona = await this.findById(personaId);
+    if (!persona) {
+      return null;
+    }
+    const descriptions = persona.physicalDescriptions || [];
+    return descriptions.find((d4) => d4.id === descriptionId) || null;
+  }
+  /**
+   * Get all physical descriptions for a persona
+   */
+  async getDescriptions(personaId) {
+    const persona = await this.findById(personaId);
+    if (!persona) {
+      return [];
+    }
+    return persona.physicalDescriptions || [];
+  }
+};
+
+// plugins/dist/qtap-plugin-upgrade/lib/json-store/repositories/chats.repository.ts
+var ChatsRepository = class extends BaseRepository2 {
+  constructor(jsonStore) {
+    super(jsonStore, ChatMetadataBaseSchema2);
+  }
+  /**
+   * Get the chats index file path
+   */
+  getIndexPath() {
+    return "chats/index.jsonl";
+  }
+  /**
+   * Get the chat messages file path
+   */
+  getChatPath(chatId) {
+    return `chats/${chatId}.jsonl`;
+  }
+  /**
+   * Migrate legacy chat format to new participant-based format
+   */
+  migrateFromLegacy(rawData) {
+    if ("characterId" in rawData && !("participants" in rawData)) {
+      const legacyResult = ChatMetadataLegacySchema2.safeParse(rawData);
+      if (legacyResult.success) {
+        const legacy = legacyResult.data;
+        const now = this.getCurrentTimestamp();
+        const participants = [];
+        participants.push({
+          id: this.generateId(),
+          type: "CHARACTER",
+          characterId: legacy.characterId,
+          personaId: null,
+          connectionProfileId: legacy.connectionProfileId,
+          imageProfileId: legacy.imageProfileId || null,
+          systemPromptOverride: null,
+          displayOrder: 0,
+          isActive: true,
+          createdAt: now,
+          updatedAt: now
+        });
+        if (legacy.personaId) {
+          participants.push({
+            id: this.generateId(),
+            type: "PERSONA",
+            characterId: null,
+            personaId: legacy.personaId,
+            connectionProfileId: null,
+            imageProfileId: null,
+            systemPromptOverride: null,
+            displayOrder: 1,
+            isActive: true,
+            createdAt: now,
+            updatedAt: now
+          });
+        }
+        return {
+          id: legacy.id,
+          userId: legacy.userId,
+          participants,
+          title: legacy.title,
+          contextSummary: legacy.contextSummary,
+          sillyTavernMetadata: legacy.sillyTavernMetadata,
+          tags: legacy.tags,
+          messageCount: legacy.messageCount,
+          lastMessageAt: legacy.lastMessageAt,
+          lastRenameCheckInterchange: 0,
+          createdAt: legacy.createdAt,
+          updatedAt: legacy.updatedAt
+        };
+      }
+    }
+    return this.validate(rawData);
+  }
+  /**
+   * Read all chat metadata from JSONL index, migrating legacy entries
+   */
+  async readAllMetadata() {
+    try {
+      const entries = await this.jsonStore.readJsonl(this.getIndexPath());
+      return entries.map((entry) => this.migrateFromLegacy(entry));
+    } catch (error2) {
+      return [];
+    }
+  }
+  /**
+   * Find a chat by ID
+   */
+  async findById(id) {
+    const chats = await this.readAllMetadata();
+    return chats.find((chat) => chat.id === id) || null;
+  }
+  /**
+   * Find all chats
+   */
+  async findAll() {
+    return await this.readAllMetadata();
+  }
+  /**
+   * Find chats by user ID
+   */
+  async findByUserId(userId) {
+    const chats = await this.readAllMetadata();
+    return chats.filter((chat) => chat.userId === userId);
+  }
+  /**
+   * Find chats that include a specific character as a participant
+   */
+  async findByCharacterId(characterId) {
+    const chats = await this.readAllMetadata();
+    return chats.filter(
+      (chat) => chat.participants.some((p4) => p4.type === "CHARACTER" && p4.characterId === characterId)
+    );
+  }
+  /**
+   * Find chats that include a specific persona as a participant
+   */
+  async findByPersonaId(personaId) {
+    const chats = await this.readAllMetadata();
+    return chats.filter(
+      (chat) => chat.participants.some((p4) => p4.type === "PERSONA" && p4.personaId === personaId)
+    );
+  }
+  /**
+   * Find chats with a specific tag
+   */
+  async findByTag(tagId) {
+    const chats = await this.readAllMetadata();
+    return chats.filter((chat) => chat.tags.includes(tagId));
+  }
+  /**
+   * Create a new chat
+   */
+  async create(data2) {
+    const id = this.generateId();
+    const now = this.getCurrentTimestamp();
+    const chat = {
+      ...data2,
+      id,
+      createdAt: now,
+      updatedAt: now
+    };
+    const validated = this.validate(chat);
+    await this.jsonStore.appendJsonl(this.getIndexPath(), [validated]);
+    await this.jsonStore.writeRaw(this.getChatPath(id), "");
+    return validated;
+  }
+  /**
+   * Update chat metadata
+   */
+  async update(id, data2) {
+    const chats = await this.readAllMetadata();
+    const index = chats.findIndex((chat) => chat.id === id);
+    if (index === -1) {
+      return null;
+    }
+    const existing = chats[index];
+    const now = this.getCurrentTimestamp();
+    const updated = {
+      ...existing,
+      ...data2,
+      id: existing.id,
+      // Preserve ID
+      createdAt: existing.createdAt,
+      // Preserve creation timestamp
+      updatedAt: now
+    };
+    const validated = this.validate(updated);
+    chats[index] = validated;
+    await this.jsonStore.writeJsonl(this.getIndexPath(), chats);
+    return validated;
+  }
+  /**
+   * Delete a chat (removes both metadata and messages)
+   */
+  async delete(id) {
+    const chats = await this.readAllMetadata();
+    const initialLength = chats.length;
+    const filtered = chats.filter((chat) => chat.id !== id);
+    if (filtered.length === initialLength) {
+      return false;
+    }
+    await this.jsonStore.writeJsonl(this.getIndexPath(), filtered);
+    try {
+      await this.jsonStore.deleteFile(this.getChatPath(id));
+    } catch (error2) {
+      console.warn(`Failed to delete chat messages file for ${id}:`, { error: error2 instanceof Error ? error2.message : String(error2) });
+    }
+    return true;
+  }
+  /**
+   * Add a tag to a chat
+   */
+  async addTag(chatId, tagId) {
+    const chat = await this.findById(chatId);
+    if (!chat) {
+      return null;
+    }
+    if (!chat.tags.includes(tagId)) {
+      chat.tags.push(tagId);
+      return await this.update(chatId, { tags: chat.tags });
+    }
+    return chat;
+  }
+  /**
+   * Remove a tag from a chat
+   */
+  async removeTag(chatId, tagId) {
+    const chat = await this.findById(chatId);
+    if (!chat) {
+      return null;
+    }
+    chat.tags = chat.tags.filter((tid) => tid !== tagId);
+    return await this.update(chatId, { tags: chat.tags });
+  }
+  // ============================================================================
+  // PARTICIPANT OPERATIONS
+  // ============================================================================
+  /**
+   * Add a participant to a chat
+   */
+  async addParticipant(chatId, participant) {
+    const chat = await this.findById(chatId);
+    if (!chat) {
+      return null;
+    }
+    const now = this.getCurrentTimestamp();
+    const newParticipant = {
+      ...participant,
+      id: this.generateId(),
+      createdAt: now,
+      updatedAt: now
+    };
+    ChatParticipantBaseSchema2.parse(newParticipant);
+    const participants = [...chat.participants, newParticipant];
+    return await this.update(chatId, { participants });
+  }
+  /**
+   * Update a participant in a chat
+   */
+  async updateParticipant(chatId, participantId, data2) {
+    const chat = await this.findById(chatId);
+    if (!chat) {
+      return null;
+    }
+    const participantIndex = chat.participants.findIndex((p4) => p4.id === participantId);
+    if (participantIndex === -1) {
+      return null;
+    }
+    const now = this.getCurrentTimestamp();
+    const existingParticipant = chat.participants[participantIndex];
+    const updatedParticipant = {
+      ...existingParticipant,
+      ...data2,
+      id: existingParticipant.id,
+      createdAt: existingParticipant.createdAt,
+      updatedAt: now
+    };
+    ChatParticipantBaseSchema2.parse(updatedParticipant);
+    const participants = [...chat.participants];
+    participants[participantIndex] = updatedParticipant;
+    return await this.update(chatId, { participants });
+  }
+  /**
+   * Remove a participant from a chat
+   */
+  async removeParticipant(chatId, participantId) {
+    const chat = await this.findById(chatId);
+    if (!chat) {
+      return null;
+    }
+    const participants = chat.participants.filter((p4) => p4.id !== participantId);
+    if (participants.length === 0) {
+      throw new Error("Cannot remove the last participant from a chat");
+    }
+    return await this.update(chatId, { participants });
+  }
+  /**
+   * Get all character participants from a chat
+   */
+  getCharacterParticipants(chat) {
+    return chat.participants.filter((p4) => p4.type === "CHARACTER");
+  }
+  /**
+   * Get all persona participants from a chat
+   */
+  getPersonaParticipants(chat) {
+    return chat.participants.filter((p4) => p4.type === "PERSONA");
+  }
+  /**
+   * Get active participants only
+   */
+  getActiveParticipants(chat) {
+    return chat.participants.filter((p4) => p4.isActive);
+  }
+  // ============================================================================
+  // MESSAGE OPERATIONS
+  // ============================================================================
+  /**
+   * Get all messages for a chat
+   */
+  async getMessages(chatId) {
+    try {
+      const messages = await this.jsonStore.readJsonl(this.getChatPath(chatId));
+      return messages.map((msg) => ChatEventSchema2.parse(msg));
+    } catch (error2) {
+      return [];
+    }
+  }
+  /**
+   * Add a message to a chat
+   */
+  async addMessage(chatId, message) {
+    const validated = ChatEventSchema2.parse(message);
+    await this.jsonStore.appendJsonl(this.getChatPath(chatId), [validated]);
+    const chat = await this.findById(chatId);
+    if (chat) {
+      const messages = await this.getMessages(chatId);
+      await this.update(chatId, {
+        messageCount: messages.length,
+        lastMessageAt: this.getCurrentTimestamp()
+      });
+    }
+    return validated;
+  }
+  /**
+   * Add multiple messages to a chat
+   */
+  async addMessages(chatId, messages) {
+    const validated = messages.map((msg) => ChatEventSchema2.parse(msg));
+    await this.jsonStore.appendJsonl(this.getChatPath(chatId), validated);
+    const chat = await this.findById(chatId);
+    if (chat) {
+      const allMessages = await this.getMessages(chatId);
+      await this.update(chatId, {
+        messageCount: allMessages.length,
+        lastMessageAt: this.getCurrentTimestamp()
+      });
+    }
+    return validated;
+  }
+  /**
+   * Update a specific message in a chat
+   */
+  async updateMessage(chatId, messageId, updates) {
+    try {
+      const messages = await this.getMessages(chatId);
+      const messageIndex = messages.findIndex((m4) => m4.id === messageId);
+      if (messageIndex === -1) {
+        return null;
+      }
+      const updatedMessage = { ...messages[messageIndex], ...updates };
+      const validated = ChatEventSchema2.parse(updatedMessage);
+      messages[messageIndex] = validated;
+      await this.jsonStore.writeJsonl(this.getChatPath(chatId), messages);
+      return validated;
+    } catch (error2) {
+      console.error(`Failed to update message ${messageId} in chat ${chatId}:`, error2 instanceof Error ? error2 : new Error(String(error2)));
+      return null;
+    }
+  }
+  /**
+   * Get message count for a chat
+   */
+  async getMessageCount(chatId) {
+    const messages = await this.getMessages(chatId);
+    return messages.length;
+  }
+  /**
+   * Clear all messages from a chat (for testing)
+   */
+  async clearMessages(chatId) {
+    try {
+      await this.jsonStore.deleteFile(this.getChatPath(chatId));
+      await this.jsonStore.writeJsonl(this.getChatPath(chatId), []);
+      const chat = await this.findById(chatId);
+      if (chat) {
+        await this.update(chatId, {
+          messageCount: 0,
+          lastMessageAt: null
+        });
+      }
+      return true;
+    } catch (error2) {
+      console.error(`Failed to clear messages for chat ${chatId}:`, error2 instanceof Error ? error2 : new Error(String(error2)));
+      return false;
+    }
+  }
+  // ============================================================================
+  // MIGRATION UTILITIES
+  // ============================================================================
+  /**
+   * Migrate all chats from legacy format to new participant-based format.
+   * This reads all chats, converts them, and writes them back.
+   * Safe to run multiple times - already migrated chats are unchanged.
+   */
+  async migrateAllToParticipants() {
+    try {
+      const rawEntries = await this.jsonStore.readJsonl(this.getIndexPath());
+      let migratedCount = 0;
+      const migratedChats = rawEntries.map((entry) => {
+        if ("characterId" in entry && !("participants" in entry)) {
+          migratedCount++;
+        }
+        return this.migrateFromLegacy(entry);
+      });
+      if (migratedCount > 0) {
+        await this.jsonStore.writeJsonl(this.getIndexPath(), migratedChats);
+      }
+      return { migrated: migratedCount, total: rawEntries.length };
+    } catch (error2) {
+      console.error("Failed to migrate chats:", error2 instanceof Error ? error2 : new Error(String(error2)));
+      return { migrated: 0, total: 0 };
+    }
+  }
+};
+
+// plugins/dist/qtap-plugin-upgrade/lib/json-store/repositories/tags.repository.ts
+var TagsRepository = class extends BaseRepository2 {
+  constructor(jsonStore) {
+    super(jsonStore, TagSchema2);
+  }
+  /**
+   * Get the tags file path
+   */
+  getFilePath() {
+    return "tags/tags.json";
+  }
+  /**
+   * Read tags file with default structure
+   */
+  async readTagsFile() {
+    try {
+      const filePath = this.getFilePath();
+      const data2 = await this.jsonStore.readJson(filePath);
+      return TagsFileSchema2.parse(data2);
+    } catch (error2) {
+      return {
+        version: 1,
+        tags: [],
+        createdAt: this.getCurrentTimestamp(),
+        updatedAt: this.getCurrentTimestamp()
+      };
+    }
+  }
+  /**
+   * Write tags file with validation
+   */
+  async writeTagsFile(data2) {
+    const validated = TagsFileSchema2.parse({
+      ...data2,
+      updatedAt: this.getCurrentTimestamp()
+    });
+    await this.jsonStore.writeJson(this.getFilePath(), validated);
+  }
+  /**
+   * Find a tag by ID
+   */
+  async findById(id) {
+    const tagsFile = await this.readTagsFile();
+    return tagsFile.tags.find((tag2) => tag2.id === id) || null;
+  }
+  /**
+   * Find all tags
+   */
+  async findAll() {
+    const tagsFile = await this.readTagsFile();
+    return tagsFile.tags;
+  }
+  /**
+   * Find tags by user ID
+   */
+  async findByUserId(userId) {
+    const tagsFile = await this.readTagsFile();
+    return tagsFile.tags.filter((tag2) => tag2.userId === userId);
+  }
+  /**
+   * Find tag by name (case-insensitive)
+   */
+  async findByName(userId, name) {
+    const tagsFile = await this.readTagsFile();
+    const nameLower = name.toLowerCase();
+    return tagsFile.tags.find(
+      (tag2) => tag2.userId === userId && tag2.nameLower === nameLower
+    ) || null;
+  }
+  /**
+   * Create a new tag
+   */
+  async create(data2) {
+    const id = this.generateId();
+    const now = this.getCurrentTimestamp();
+    const tag2 = {
+      ...data2,
+      quickHide: typeof data2.quickHide === "boolean" ? data2.quickHide : false,
+      id,
+      createdAt: now,
+      updatedAt: now
+    };
+    const validated = this.validate(tag2);
+    const tagsFile = await this.readTagsFile();
+    tagsFile.tags.push(validated);
+    await this.writeTagsFile(tagsFile);
+    this.jsonStore.clearCache();
+    return validated;
+  }
+  /**
+   * Update a tag
+   */
+  async update(id, data2) {
+    const tagsFile = await this.readTagsFile();
+    const index = tagsFile.tags.findIndex((tag2) => tag2.id === id);
+    if (index === -1) {
+      return null;
+    }
+    const existing = tagsFile.tags[index];
+    const now = this.getCurrentTimestamp();
+    const updated = {
+      ...existing,
+      ...data2,
+      id: existing.id,
+      // Preserve ID
+      createdAt: existing.createdAt,
+      // Preserve creation timestamp
+      updatedAt: now
+    };
+    const validated = this.validate(updated);
+    tagsFile.tags[index] = validated;
+    await this.writeTagsFile(tagsFile);
+    this.jsonStore.clearCache();
+    return validated;
+  }
+  /**
+   * Delete a tag
+   */
+  async delete(id) {
+    const tagsFile = await this.readTagsFile();
+    const initialLength = tagsFile.tags.length;
+    tagsFile.tags = tagsFile.tags.filter((tag2) => tag2.id !== id);
+    if (tagsFile.tags.length === initialLength) {
+      return false;
+    }
+    await this.writeTagsFile(tagsFile);
+    this.jsonStore.clearCache();
+    return true;
+  }
+};
+
+// plugins/dist/qtap-plugin-upgrade/lib/json-store/repositories/users.repository.ts
+var UsersRepository = class extends BaseRepository2 {
+  constructor(jsonStore) {
+    super(jsonStore, UserSchema2);
+  }
+  /**
+   * Get the general settings file path
+   */
+  getFilePath() {
+    return "settings/general.json";
+  }
+  /**
+   * Read general settings file with default structure
+   */
+  async readGeneralSettings() {
+    try {
+      const filePath = this.getFilePath();
+      const data2 = await this.jsonStore.readJson(filePath);
+      return GeneralSettingsSchema2.parse(data2);
+    } catch (error2) {
+      throw new Error("General settings file not found or invalid");
+    }
+  }
+  /**
+   * Write general settings file with validation
+   */
+  async writeGeneralSettings(data2) {
+    const validated = GeneralSettingsSchema2.parse({
+      ...data2,
+      updatedAt: this.getCurrentTimestamp()
+    });
+    await this.jsonStore.writeJson(this.getFilePath(), validated);
+  }
+  /**
+   * Find user by ID (single-user assumption: returns the configured user)
+   */
+  async findById(id) {
+    try {
+      const settings = await this.readGeneralSettings();
+      return settings.user.id === id ? settings.user : null;
+    } catch (error2) {
+      return null;
+    }
+  }
+  /**
+   * Find user by email
+   */
+  async findByEmail(email) {
+    try {
+      const settings = await this.readGeneralSettings();
+      return settings.user.email === email ? settings.user : null;
+    } catch (error2) {
+      return null;
+    }
+  }
+  /**
+   * Get current user (single-user system)
+   */
+  async getCurrentUser() {
+    try {
+      const settings = await this.readGeneralSettings();
+      return settings.user;
+    } catch (error2) {
+      return null;
+    }
+  }
+  /**
+   * Find all users (returns array with single user for compatibility)
+   */
+  async findAll() {
+    const user = await this.getCurrentUser();
+    return user ? [user] : [];
+  }
+  /**
+   * Create a new user (overwrites existing in single-user system)
+   */
+  async create(data2) {
+    const id = this.generateId();
+    const now = this.getCurrentTimestamp();
+    const user = {
+      ...data2,
+      id,
+      createdAt: now,
+      updatedAt: now
+    };
+    const validated = this.validate(user);
+    let settings;
+    try {
+      settings = await this.readGeneralSettings();
+      settings.user = validated;
+    } catch {
+      settings = {
+        version: 1,
+        user: validated,
+        chatSettings: {
+          id: this.generateId(),
+          userId: id,
+          avatarDisplayMode: "ALWAYS",
+          avatarDisplayStyle: "CIRCULAR",
+          tagStyles: {},
+          cheapLLMSettings: {
+            strategy: "PROVIDER_CHEAPEST",
+            fallbackToLocal: true,
+            embeddingProvider: "OPENAI"
+          },
+          createdAt: now,
+          updatedAt: now
+        },
+        createdAt: now,
+        updatedAt: now
+      };
+    }
+    await this.writeGeneralSettings(settings);
+    return validated;
+  }
+  /**
+   * Update user
+   */
+  async update(id, data2) {
+    const settings = await this.readGeneralSettings();
+    if (settings.user.id !== id) {
+      return null;
+    }
+    const now = this.getCurrentTimestamp();
+    const updated = {
+      ...settings.user,
+      ...data2,
+      id: settings.user.id,
+      // Preserve ID
+      createdAt: settings.user.createdAt,
+      // Preserve creation timestamp
+      updatedAt: now
+    };
+    const validated = this.validate(updated);
+    settings.user = validated;
+    await this.writeGeneralSettings(settings);
+    return validated;
+  }
+  /**
+   * Delete user (not supported in single-user system)
+   */
+  async delete(id) {
+    console.warn("User deletion not supported in single-user system", { context: "UsersRepository.delete", userId: id });
+    return false;
+  }
+  /**
+   * Get chat settings for user
+   */
+  async getChatSettings(userId) {
+    try {
+      const settings = await this.readGeneralSettings();
+      return settings.user.id === userId ? settings.chatSettings : null;
+    } catch (error2) {
+      return null;
+    }
+  }
+  /**
+   * Update chat settings
+   */
+  async updateChatSettings(userId, data2) {
+    const settings = await this.readGeneralSettings();
+    if (settings.user.id !== userId) {
+      return null;
+    }
+    const now = this.getCurrentTimestamp();
+    const updated = {
+      ...settings.chatSettings,
+      ...data2,
+      id: settings.chatSettings.id,
+      // Preserve ID
+      userId: settings.chatSettings.userId,
+      // Preserve user ID
+      createdAt: settings.chatSettings.createdAt,
+      // Preserve creation timestamp
+      updatedAt: now
+    };
+    const validated = ChatSettingsSchema2.parse(updated);
+    settings.chatSettings = validated;
+    await this.writeGeneralSettings(settings);
+    return validated;
+  }
+};
+
+// plugins/dist/qtap-plugin-upgrade/lib/json-store/repositories/connection-profiles.repository.ts
+var ConnectionProfilesRepository2 = class extends BaseRepository2 {
+  constructor(jsonStore) {
+    super(jsonStore, ConnectionProfileSchema2);
+  }
+  /**
+   * Get the connection profiles file path
+   */
+  getFilePath() {
+    return "settings/connection-profiles.json";
+  }
+  /**
+   * Read connection profiles file with default structure
+   */
+  async readProfilesFile() {
+    try {
+      const filePath = this.getFilePath();
+      const data2 = await this.jsonStore.readJson(filePath);
+      return ConnectionProfilesFileSchema2.parse(data2);
+    } catch (error2) {
+      return {
+        version: 1,
+        apiKeys: [],
+        llmProfiles: [],
+        createdAt: this.getCurrentTimestamp(),
+        updatedAt: this.getCurrentTimestamp()
+      };
+    }
+  }
+  /**
+   * Write connection profiles file with validation
+   */
+  async writeProfilesFile(data2) {
+    const validated = ConnectionProfilesFileSchema2.parse({
+      ...data2,
+      updatedAt: this.getCurrentTimestamp()
+    });
+    await this.jsonStore.writeJson(this.getFilePath(), validated);
+  }
+  /**
+   * Find a connection profile by ID
+   */
+  async findById(id) {
+    const file = await this.readProfilesFile();
+    return file.llmProfiles.find((profile) => profile.id === id) || null;
+  }
+  /**
+   * Find all connection profiles
+   */
+  async findAll() {
+    const file = await this.readProfilesFile();
+    return file.llmProfiles;
+  }
+  /**
+   * Find connection profiles by user ID
+   */
+  async findByUserId(userId) {
+    const file = await this.readProfilesFile();
+    return file.llmProfiles.filter((profile) => profile.userId === userId);
+  }
+  /**
+   * Find connection profiles with a specific tag
+   */
+  async findByTag(tagId) {
+    const file = await this.readProfilesFile();
+    return file.llmProfiles.filter((profile) => profile.tags.includes(tagId));
+  }
+  /**
+   * Find default connection profile for user
+   */
+  async findDefault(userId) {
+    const file = await this.readProfilesFile();
+    return file.llmProfiles.find(
+      (profile) => profile.userId === userId && profile.isDefault
+    ) || null;
+  }
+  /**
+   * Create a new connection profile
+   */
+  async create(data2) {
+    const id = this.generateId();
+    const now = this.getCurrentTimestamp();
+    const profile = {
+      ...data2,
+      id,
+      createdAt: now,
+      updatedAt: now
+    };
+    const validated = this.validate(profile);
+    const file = await this.readProfilesFile();
+    file.llmProfiles.push(validated);
+    await this.writeProfilesFile(file);
+    this.jsonStore.clearCache();
+    return validated;
+  }
+  /**
+   * Update a connection profile
+   */
+  async update(id, data2) {
+    const file = await this.readProfilesFile();
+    const index = file.llmProfiles.findIndex((profile) => profile.id === id);
+    if (index === -1) {
+      return null;
+    }
+    const existing = file.llmProfiles[index];
+    const now = this.getCurrentTimestamp();
+    const updated = {
+      ...existing,
+      ...data2,
+      id: existing.id,
+      // Preserve ID
+      createdAt: existing.createdAt,
+      // Preserve creation timestamp
+      updatedAt: now
+    };
+    const validated = this.validate(updated);
+    file.llmProfiles[index] = validated;
+    await this.writeProfilesFile(file);
+    this.jsonStore.clearCache();
+    return validated;
+  }
+  /**
+   * Delete a connection profile
+   */
+  async delete(id) {
+    const file = await this.readProfilesFile();
+    const initialLength = file.llmProfiles.length;
+    file.llmProfiles = file.llmProfiles.filter((profile) => profile.id !== id);
+    if (file.llmProfiles.length === initialLength) {
+      return false;
+    }
+    await this.writeProfilesFile(file);
+    this.jsonStore.clearCache();
+    return true;
+  }
+  /**
+   * Add a tag to a connection profile
+   */
+  async addTag(profileId, tagId) {
+    const profile = await this.findById(profileId);
+    if (!profile) {
+      return null;
+    }
+    if (!profile.tags.includes(tagId)) {
+      profile.tags.push(tagId);
+      return await this.update(profileId, { tags: profile.tags });
+    }
+    return profile;
+  }
+  /**
+   * Remove a tag from a connection profile
+   */
+  async removeTag(profileId, tagId) {
+    const profile = await this.findById(profileId);
+    if (!profile) {
+      return null;
+    }
+    profile.tags = profile.tags.filter((id) => id !== tagId);
+    return await this.update(profileId, { tags: profile.tags });
+  }
+  // ============================================================================
+  // API KEY OPERATIONS
+  // ============================================================================
+  /**
+   * Get all API keys
+   */
+  async getAllApiKeys() {
+    const file = await this.readProfilesFile();
+    return file.apiKeys;
+  }
+  /**
+   * Find API key by ID
+   */
+  async findApiKeyById(id) {
+    const file = await this.readProfilesFile();
+    return file.apiKeys.find((key) => key.id === id) || null;
+  }
+  /**
+   * Create a new API key
+   */
+  async createApiKey(data2) {
+    const id = this.generateId();
+    const now = this.getCurrentTimestamp();
+    const apiKey = {
+      ...data2,
+      id,
+      createdAt: now,
+      updatedAt: now
+    };
+    const validated = ApiKeySchema2.parse(apiKey);
+    const file = await this.readProfilesFile();
+    file.apiKeys.push(validated);
+    await this.writeProfilesFile(file);
+    this.jsonStore.clearCache();
+    return validated;
+  }
+  /**
+   * Update an API key
+   */
+  async updateApiKey(id, data2) {
+    const file = await this.readProfilesFile();
+    const index = file.apiKeys.findIndex((key) => key.id === id);
+    if (index === -1) {
+      return null;
+    }
+    const existing = file.apiKeys[index];
+    const now = this.getCurrentTimestamp();
+    const updated = {
+      ...existing,
+      ...data2,
+      id: existing.id,
+      // Preserve ID
+      createdAt: existing.createdAt,
+      // Preserve creation timestamp
+      updatedAt: now
+    };
+    const validated = ApiKeySchema2.parse(updated);
+    file.apiKeys[index] = validated;
+    await this.writeProfilesFile(file);
+    this.jsonStore.clearCache();
+    return validated;
+  }
+  /**
+   * Delete an API key
+   */
+  async deleteApiKey(id) {
+    const file = await this.readProfilesFile();
+    const initialLength = file.apiKeys.length;
+    file.apiKeys = file.apiKeys.filter((key) => key.id !== id);
+    if (file.apiKeys.length === initialLength) {
+      return false;
+    }
+    await this.writeProfilesFile(file);
+    this.jsonStore.clearCache();
+    return true;
+  }
+  /**
+   * Update API key last used timestamp
+   */
+  async recordApiKeyUsage(id) {
+    return await this.updateApiKey(id, { lastUsed: this.getCurrentTimestamp() });
+  }
+};
+
+// plugins/dist/qtap-plugin-upgrade/lib/json-store/repositories/files.repository.ts
+var FilesRepository = class extends BaseRepository2 {
+  constructor(jsonStore) {
+    super(jsonStore, FileEntrySchema2);
+  }
+  /**
+   * Get the files index file path
+   */
+  getIndexPath() {
+    return "files/files.jsonl";
+  }
+  /**
+   * Read all file entries from JSONL index
+   */
+  async readAllEntries() {
+    try {
+      const entries = await this.jsonStore.readJsonl(this.getIndexPath());
+      return entries.map((entry) => this.validate(entry));
+    } catch (error2) {
+      return [];
+    }
+  }
+  /**
+   * Find a file entry by ID
+   */
+  async findById(id) {
+    const entries = await this.readAllEntries();
+    return entries.find((entry) => entry.id === id) || null;
+  }
+  /**
+   * Find all file entries
+   */
+  async findAll() {
+    return await this.readAllEntries();
+  }
+  /**
+   * Find entries by SHA256 hash
+   * Returns array for consistency with MongoDB (allows handling of hash collisions)
+   */
+  async findBySha256(sha256) {
+    const entries = await this.readAllEntries();
+    return entries.filter((entry) => entry.sha256 === sha256);
+  }
+  /**
+   * Find entries by category
+   */
+  async findByCategory(category) {
+    const entries = await this.readAllEntries();
+    return entries.filter((entry) => entry.category === category);
+  }
+  /**
+   * Find entries by source
+   */
+  async findBySource(source) {
+    const entries = await this.readAllEntries();
+    return entries.filter((entry) => entry.source === source);
+  }
+  /**
+   * Find entries linked to a specific entity
+   */
+  async findByLinkedTo(entityId) {
+    const entries = await this.readAllEntries();
+    return entries.filter((entry) => entry.linkedTo.includes(entityId));
+  }
+  /**
+   * Find entries with a specific tag
+   */
+  async findByTag(tagId) {
+    const entries = await this.readAllEntries();
+    return entries.filter((entry) => entry.tags.includes(tagId));
+  }
+  /**
+   * Create a new file entry
+   */
+  async create(data2) {
+    const id = this.generateId();
+    const now = this.getCurrentTimestamp();
+    const entry = {
+      ...data2,
+      id,
+      createdAt: now,
+      updatedAt: now
+    };
+    const validated = this.validate(entry);
+    await this.jsonStore.appendJsonl(this.getIndexPath(), [validated]);
+    return validated;
+  }
+  /**
+   * Update a file entry (requires reading and rewriting the entire file)
+   */
+  async update(id, data2) {
+    const entries = await this.readAllEntries();
+    const index = entries.findIndex((entry) => entry.id === id);
+    if (index === -1) {
+      return null;
+    }
+    const existing = entries[index];
+    const now = this.getCurrentTimestamp();
+    const updated = {
+      ...existing,
+      ...data2,
+      id: existing.id,
+      // Preserve ID
+      sha256: existing.sha256,
+      // Preserve hash
+      createdAt: existing.createdAt,
+      // Preserve creation timestamp
+      updatedAt: now
+    };
+    const validated = this.validate(updated);
+    entries[index] = validated;
+    await this.jsonStore.writeJsonl(this.getIndexPath(), entries);
+    return validated;
+  }
+  /**
+   * Delete a file entry (by ID)
+   */
+  async delete(id) {
+    const entries = await this.readAllEntries();
+    const initialLength = entries.length;
+    const filtered = entries.filter((entry) => entry.id !== id);
+    if (filtered.length === initialLength) {
+      return false;
+    }
+    await this.jsonStore.writeJsonl(this.getIndexPath(), filtered);
+    return true;
+  }
+  /**
+   * Add a link to a file entry
+   */
+  async addLink(fileId, entityId) {
+    const entry = await this.findById(fileId);
+    if (!entry) {
+      return null;
+    }
+    if (!entry.linkedTo.includes(entityId)) {
+      const updatedLinkedTo = [...entry.linkedTo, entityId];
+      return await this.update(fileId, { linkedTo: updatedLinkedTo });
+    }
+    return entry;
+  }
+  /**
+   * Remove a link from a file entry
+   */
+  async removeLink(fileId, entityId) {
+    const entry = await this.findById(fileId);
+    if (!entry) {
+      return null;
+    }
+    const updatedLinkedTo = entry.linkedTo.filter((id) => id !== entityId);
+    return await this.update(fileId, { linkedTo: updatedLinkedTo });
+  }
+  /**
+   * Add a tag to a file entry
+   */
+  async addTag(fileId, tagId) {
+    const entry = await this.findById(fileId);
+    if (!entry) {
+      return null;
+    }
+    if (!entry.tags.includes(tagId)) {
+      const updatedTags = [...entry.tags, tagId];
+      return await this.update(fileId, { tags: updatedTags });
+    }
+    return entry;
+  }
+  /**
+   * Remove a tag from a file entry
+   */
+  async removeTag(fileId, tagId) {
+    const entry = await this.findById(fileId);
+    if (!entry) {
+      return null;
+    }
+    const updatedTags = entry.tags.filter((id) => id !== tagId);
+    return await this.update(fileId, { tags: updatedTags });
+  }
+};
+
+// plugins/dist/qtap-plugin-upgrade/lib/json-store/repositories/image-profiles.repository.ts
+var ImageProfilesRepository2 = class extends BaseRepository2 {
+  constructor(jsonStore) {
+    super(jsonStore, ImageProfileSchema2);
+  }
+  /**
+   * Get the image profiles file path
+   */
+  getFilePath() {
+    return "settings/image-profiles.json";
+  }
+  /**
+   * Read image profiles file with default structure
+   */
+  async readProfilesFile() {
+    try {
+      const filePath = this.getFilePath();
+      const data2 = await this.jsonStore.readJson(filePath);
+      return ImageProfilesFileSchema2.parse(data2);
+    } catch (error2) {
+      return {
+        version: 1,
+        profiles: [],
+        createdAt: this.getCurrentTimestamp(),
+        updatedAt: this.getCurrentTimestamp()
+      };
+    }
+  }
+  /**
+   * Write image profiles file with validation
+   */
+  async writeProfilesFile(data2) {
+    const validated = ImageProfilesFileSchema2.parse({
+      ...data2,
+      updatedAt: this.getCurrentTimestamp()
+    });
+    await this.jsonStore.writeJson(this.getFilePath(), validated);
+  }
+  /**
+   * Find an image profile by ID
+   */
+  async findById(id) {
+    const file = await this.readProfilesFile();
+    return file.profiles.find((profile) => profile.id === id) || null;
+  }
+  /**
+   * Find all image profiles
+   */
+  async findAll() {
+    const file = await this.readProfilesFile();
+    return file.profiles;
+  }
+  /**
+   * Find image profiles by user ID
+   */
+  async findByUserId(userId) {
+    const file = await this.readProfilesFile();
+    return file.profiles.filter((profile) => profile.userId === userId);
+  }
+  /**
+   * Find image profiles with a specific tag
+   */
+  async findByTag(tagId) {
+    const file = await this.readProfilesFile();
+    return file.profiles.filter((profile) => profile.tags.includes(tagId));
+  }
+  /**
+   * Find default image profile for user
+   */
+  async findDefault(userId) {
+    const file = await this.readProfilesFile();
+    return file.profiles.find(
+      (profile) => profile.userId === userId && profile.isDefault
+    ) || null;
+  }
+  /**
+   * Find image profile by name for user
+   */
+  async findByName(userId, name) {
+    const file = await this.readProfilesFile();
+    return file.profiles.find(
+      (profile) => profile.userId === userId && profile.name === name
+    ) || null;
+  }
+  /**
+   * Create a new image profile
+   */
+  async create(data2) {
+    const id = this.generateId();
+    const now = this.getCurrentTimestamp();
+    const profile = {
+      ...data2,
+      id,
+      createdAt: now,
+      updatedAt: now
+    };
+    const validated = this.validate(profile);
+    const file = await this.readProfilesFile();
+    file.profiles.push(validated);
+    await this.writeProfilesFile(file);
+    return validated;
+  }
+  /**
+   * Update an image profile
+   */
+  async update(id, data2) {
+    const file = await this.readProfilesFile();
+    const index = file.profiles.findIndex((profile) => profile.id === id);
+    if (index === -1) {
+      return null;
+    }
+    const existing = file.profiles[index];
+    const now = this.getCurrentTimestamp();
+    const updated = {
+      ...existing,
+      ...data2,
+      id: existing.id,
+      // Preserve ID
+      createdAt: existing.createdAt,
+      // Preserve creation timestamp
+      updatedAt: now
+    };
+    const validated = this.validate(updated);
+    file.profiles[index] = validated;
+    await this.writeProfilesFile(file);
+    return validated;
+  }
+  /**
+   * Delete an image profile
+   */
+  async delete(id) {
+    const file = await this.readProfilesFile();
+    const initialLength = file.profiles.length;
+    file.profiles = file.profiles.filter((profile) => profile.id !== id);
+    if (file.profiles.length === initialLength) {
+      return false;
+    }
+    await this.writeProfilesFile(file);
+    return true;
+  }
+  /**
+   * Add a tag to an image profile
+   */
+  async addTag(profileId, tagId) {
+    const profile = await this.findById(profileId);
+    if (!profile) {
+      return null;
+    }
+    if (!profile.tags.includes(tagId)) {
+      profile.tags.push(tagId);
+      return await this.update(profileId, { tags: profile.tags });
+    }
+    return profile;
+  }
+  /**
+   * Remove a tag from an image profile
+   */
+  async removeTag(profileId, tagId) {
+    const profile = await this.findById(profileId);
+    if (!profile) {
+      return null;
+    }
+    profile.tags = profile.tags.filter((id) => id !== tagId);
+    return await this.update(profileId, { tags: profile.tags });
+  }
+  /**
+   * Unset default flag on all profiles for a user
+   */
+  async unsetAllDefaults(userId) {
+    const file = await this.readProfilesFile();
+    let changed = false;
+    for (let i4 = 0; i4 < file.profiles.length; i4++) {
+      if (file.profiles[i4].userId === userId && file.profiles[i4].isDefault) {
+        file.profiles[i4] = {
+          ...file.profiles[i4],
+          isDefault: false,
+          updatedAt: this.getCurrentTimestamp()
+        };
+        changed = true;
+      }
+    }
+    if (changed) {
+      await this.writeProfilesFile(file);
+    }
+  }
+};
+
+// plugins/dist/qtap-plugin-upgrade/lib/json-store/repositories/embedding-profiles.repository.ts
+var EmbeddingProfilesRepository2 = class extends BaseRepository2 {
+  constructor(jsonStore) {
+    super(jsonStore, EmbeddingProfileSchema2);
+  }
+  /**
+   * Get the embedding profiles file path
+   */
+  getFilePath() {
+    return "settings/embedding-profiles.json";
+  }
+  /**
+   * Read embedding profiles file with default structure
+   */
+  async readProfilesFile() {
+    try {
+      const filePath = this.getFilePath();
+      const data2 = await this.jsonStore.readJson(filePath);
+      return EmbeddingProfilesFileSchema2.parse(data2);
+    } catch (error2) {
+      return {
+        version: 1,
+        profiles: [],
+        createdAt: this.getCurrentTimestamp(),
+        updatedAt: this.getCurrentTimestamp()
+      };
+    }
+  }
+  /**
+   * Write embedding profiles file with validation
+   */
+  async writeProfilesFile(data2) {
+    const validated = EmbeddingProfilesFileSchema2.parse({
+      ...data2,
+      updatedAt: this.getCurrentTimestamp()
+    });
+    await this.jsonStore.writeJson(this.getFilePath(), validated);
+  }
+  /**
+   * Find an embedding profile by ID
+   */
+  async findById(id) {
+    const file = await this.readProfilesFile();
+    return file.profiles.find((profile) => profile.id === id) || null;
+  }
+  /**
+   * Find all embedding profiles
+   */
+  async findAll() {
+    const file = await this.readProfilesFile();
+    return file.profiles;
+  }
+  /**
+   * Find embedding profiles by user ID
+   */
+  async findByUserId(userId) {
+    const file = await this.readProfilesFile();
+    return file.profiles.filter((profile) => profile.userId === userId);
+  }
+  /**
+   * Find embedding profiles with a specific tag
+   */
+  async findByTag(tagId) {
+    const file = await this.readProfilesFile();
+    return file.profiles.filter((profile) => profile.tags.includes(tagId));
+  }
+  /**
+   * Find default embedding profile for user
+   */
+  async findDefault(userId) {
+    const file = await this.readProfilesFile();
+    return file.profiles.find(
+      (profile) => profile.userId === userId && profile.isDefault
+    ) || null;
+  }
+  /**
+   * Find embedding profile by name for user
+   */
+  async findByName(userId, name) {
+    const file = await this.readProfilesFile();
+    return file.profiles.find(
+      (profile) => profile.userId === userId && profile.name === name
+    ) || null;
+  }
+  /**
+   * Create a new embedding profile
+   */
+  async create(data2) {
+    const id = this.generateId();
+    const now = this.getCurrentTimestamp();
+    const profile = {
+      ...data2,
+      id,
+      createdAt: now,
+      updatedAt: now
+    };
+    const validated = this.validate(profile);
+    const file = await this.readProfilesFile();
+    file.profiles.push(validated);
+    await this.writeProfilesFile(file);
+    return validated;
+  }
+  /**
+   * Update an embedding profile
+   */
+  async update(id, data2) {
+    const file = await this.readProfilesFile();
+    const index = file.profiles.findIndex((profile) => profile.id === id);
+    if (index === -1) {
+      return null;
+    }
+    const existing = file.profiles[index];
+    const now = this.getCurrentTimestamp();
+    const updated = {
+      ...existing,
+      ...data2,
+      id: existing.id,
+      // Preserve ID
+      createdAt: existing.createdAt,
+      // Preserve creation timestamp
+      updatedAt: now
+    };
+    const validated = this.validate(updated);
+    file.profiles[index] = validated;
+    await this.writeProfilesFile(file);
+    return validated;
+  }
+  /**
+   * Delete an embedding profile
+   */
+  async delete(id) {
+    const file = await this.readProfilesFile();
+    const initialLength = file.profiles.length;
+    file.profiles = file.profiles.filter((profile) => profile.id !== id);
+    if (file.profiles.length === initialLength) {
+      return false;
+    }
+    await this.writeProfilesFile(file);
+    return true;
+  }
+  /**
+   * Add a tag to an embedding profile
+   */
+  async addTag(profileId, tagId) {
+    const profile = await this.findById(profileId);
+    if (!profile) {
+      return null;
+    }
+    if (!profile.tags.includes(tagId)) {
+      profile.tags.push(tagId);
+      return await this.update(profileId, { tags: profile.tags });
+    }
+    return profile;
+  }
+  /**
+   * Remove a tag from an embedding profile
+   */
+  async removeTag(profileId, tagId) {
+    const profile = await this.findById(profileId);
+    if (!profile) {
+      return null;
+    }
+    profile.tags = profile.tags.filter((id) => id !== tagId);
+    return await this.update(profileId, { tags: profile.tags });
+  }
+  /**
+   * Unset default flag on all profiles for a user
+   */
+  async unsetAllDefaults(userId) {
+    const file = await this.readProfilesFile();
+    let changed = false;
+    for (let i4 = 0; i4 < file.profiles.length; i4++) {
+      if (file.profiles[i4].userId === userId && file.profiles[i4].isDefault) {
+        file.profiles[i4] = {
+          ...file.profiles[i4],
+          isDefault: false,
+          updatedAt: this.getCurrentTimestamp()
+        };
+        changed = true;
+      }
+    }
+    if (changed) {
+      await this.writeProfilesFile(file);
+    }
+  }
+};
+
+// plugins/dist/qtap-plugin-upgrade/lib/json-store/repositories/memories.repository.ts
+var MemoriesRepository = class extends BaseRepository2 {
+  constructor(jsonStore) {
+    super(jsonStore, MemorySchema2);
+  }
+  /**
+   * Get the memories file path for a character
+   */
+  getFilePath(characterId) {
+    return `memories/by-character/${characterId}.json`;
+  }
+  /**
+   * Read memories file for a character with default structure
+   */
+  async readMemoriesFile(characterId) {
+    try {
+      const filePath = this.getFilePath(characterId);
+      const data2 = await this.jsonStore.readJson(filePath);
+      return MemoriesFileSchema2.parse(data2);
+    } catch (error2) {
+      return {
+        version: 1,
+        memories: [],
+        createdAt: this.getCurrentTimestamp(),
+        updatedAt: this.getCurrentTimestamp()
+      };
+    }
+  }
+  /**
+   * Write memories file with validation
+   */
+  async writeMemoriesFile(characterId, data2) {
+    const validated = MemoriesFileSchema2.parse({
+      ...data2,
+      updatedAt: this.getCurrentTimestamp()
+    });
+    await this.jsonStore.writeJson(this.getFilePath(characterId), validated);
+  }
+  /**
+   * Find a memory by ID
+   * Note: This requires scanning all character memory files since we don't have a global index
+   */
+  async findById(id) {
+    const characterDirs = await this.listCharacterIds();
+    for (const characterId of characterDirs) {
+      const memoriesFile = await this.readMemoriesFile(characterId);
+      const memory = memoriesFile.memories.find((m4) => m4.id === id);
+      if (memory) {
+        return memory;
+      }
+    }
+    return null;
+  }
+  /**
+   * Find a memory by ID within a specific character's memories
+   */
+  async findByIdForCharacter(characterId, memoryId) {
+    const memoriesFile = await this.readMemoriesFile(characterId);
+    return memoriesFile.memories.find((m4) => m4.id === memoryId) || null;
+  }
+  /**
+   * Find all memories across all characters
+   */
+  async findAll() {
+    const characterDirs = await this.listCharacterIds();
+    const allMemories = [];
+    for (const characterId of characterDirs) {
+      const memoriesFile = await this.readMemoriesFile(characterId);
+      allMemories.push(...memoriesFile.memories);
+    }
+    return allMemories;
+  }
+  /**
+   * Find all memories for a specific character
+   */
+  async findByCharacterId(characterId) {
+    const memoriesFile = await this.readMemoriesFile(characterId);
+    return memoriesFile.memories;
+  }
+  /**
+   * Find memories by keywords (text-based search)
+   */
+  async findByKeywords(characterId, keywords) {
+    const memoriesFile = await this.readMemoriesFile(characterId);
+    const keywordsLower = keywords.map((k4) => k4.toLowerCase());
+    return memoriesFile.memories.filter((memory) => {
+      const memoryKeywordsLower = memory.keywords.map((k4) => k4.toLowerCase());
+      return keywordsLower.some(
+        (keyword) => memoryKeywordsLower.some((mk) => mk.includes(keyword))
+      );
+    });
+  }
+  /**
+   * Search memories by content (simple text search)
+   */
+  async searchByContent(characterId, query) {
+    const memoriesFile = await this.readMemoriesFile(characterId);
+    const queryLower = query.toLowerCase();
+    return memoriesFile.memories.filter(
+      (memory) => memory.content.toLowerCase().includes(queryLower) || memory.summary.toLowerCase().includes(queryLower) || memory.keywords.some((k4) => k4.toLowerCase().includes(queryLower))
+    );
+  }
+  /**
+   * Create a new memory
+   */
+  async create(data2) {
+    const id = this.generateId();
+    const now = this.getCurrentTimestamp();
+    const memory = {
+      ...data2,
+      id,
+      createdAt: now,
+      updatedAt: now
+    };
+    const validated = this.validate(memory);
+    const memoriesFile = await this.readMemoriesFile(data2.characterId);
+    memoriesFile.memories.push(validated);
+    await this.writeMemoriesFile(data2.characterId, memoriesFile);
+    return validated;
+  }
+  /**
+   * Update a memory
+   */
+  async update(id, data2) {
+    const characterId = data2.characterId;
+    if (!characterId) {
+      const existingMemory = await this.findById(id);
+      if (!existingMemory) {
+        return null;
+      }
+      return this.updateForCharacter(existingMemory.characterId, id, data2);
+    }
+    return this.updateForCharacter(characterId, id, data2);
+  }
+  /**
+   * Update a memory within a specific character's memories
+   */
+  async updateForCharacter(characterId, memoryId, data2) {
+    const memoriesFile = await this.readMemoriesFile(characterId);
+    const index = memoriesFile.memories.findIndex((m4) => m4.id === memoryId);
+    if (index === -1) {
+      return null;
+    }
+    const existing = memoriesFile.memories[index];
+    const now = this.getCurrentTimestamp();
+    const updated = {
+      ...existing,
+      ...data2,
+      id: existing.id,
+      // Preserve ID
+      characterId: existing.characterId,
+      // Preserve characterId
+      createdAt: existing.createdAt,
+      // Preserve creation timestamp
+      updatedAt: now
+    };
+    const validated = this.validate(updated);
+    memoriesFile.memories[index] = validated;
+    await this.writeMemoriesFile(characterId, memoriesFile);
+    return validated;
+  }
+  /**
+   * Delete a memory
+   */
+  async delete(id) {
+    const memory = await this.findById(id);
+    if (!memory) {
+      return false;
+    }
+    return this.deleteForCharacter(memory.characterId, id);
+  }
+  /**
+   * Delete a memory from a specific character
+   */
+  async deleteForCharacter(characterId, memoryId) {
+    const memoriesFile = await this.readMemoriesFile(characterId);
+    const initialLength = memoriesFile.memories.length;
+    memoriesFile.memories = memoriesFile.memories.filter((m4) => m4.id !== memoryId);
+    if (memoriesFile.memories.length === initialLength) {
+      return false;
+    }
+    await this.writeMemoriesFile(characterId, memoriesFile);
+    return true;
+  }
+  /**
+   * Bulk delete memories
+   */
+  async bulkDelete(characterId, memoryIds) {
+    const memoriesFile = await this.readMemoriesFile(characterId);
+    const initialLength = memoriesFile.memories.length;
+    memoriesFile.memories = memoriesFile.memories.filter((m4) => !memoryIds.includes(m4.id));
+    const deletedCount = initialLength - memoriesFile.memories.length;
+    if (deletedCount > 0) {
+      await this.writeMemoriesFile(characterId, memoriesFile);
+    }
+    return deletedCount;
+  }
+  /**
+   * Update last accessed time for a memory
+   */
+  async updateAccessTime(characterId, memoryId) {
+    const result = await this.updateForCharacter(characterId, memoryId, {
+      lastAccessedAt: this.getCurrentTimestamp()
+    });
+    return result !== null;
+  }
+  /**
+   * Get memory count for a character
+   */
+  async countByCharacterId(characterId) {
+    const memoriesFile = await this.readMemoriesFile(characterId);
+    return memoriesFile.memories.length;
+  }
+  /**
+   * List all character IDs that have memories
+   */
+  async listCharacterIds() {
+    try {
+      const files = await this.jsonStore.listDir("memories/by-character");
+      return files.filter((f4) => f4.endsWith(".json")).map((f4) => f4.replace(".json", ""));
+    } catch (error2) {
+      return [];
+    }
+  }
+  /**
+   * Find memories by importance threshold
+   */
+  async findByImportance(characterId, minImportance) {
+    const memoriesFile = await this.readMemoriesFile(characterId);
+    return memoriesFile.memories.filter((m4) => m4.importance >= minImportance);
+  }
+  /**
+   * Find memories by source type
+   */
+  async findBySource(characterId, source) {
+    const memoriesFile = await this.readMemoriesFile(characterId);
+    return memoriesFile.memories.filter((m4) => m4.source === source);
+  }
+  /**
+   * Get most recent memories for a character
+   */
+  async findRecent(characterId, limit = 10) {
+    const memoriesFile = await this.readMemoriesFile(characterId);
+    return memoriesFile.memories.sort((a4, b4) => new Date(b4.createdAt).getTime() - new Date(a4.createdAt).getTime()).slice(0, limit);
+  }
+  /**
+   * Get most important memories for a character
+   */
+  async findMostImportant(characterId, limit = 10) {
+    const memoriesFile = await this.readMemoriesFile(characterId);
+    return memoriesFile.memories.sort((a4, b4) => b4.importance - a4.importance).slice(0, limit);
+  }
+};
+
+// plugins/dist/qtap-plugin-upgrade/lib/json-store/repositories/index.ts
+function createRepositories(jsonStore) {
+  const filesRepo = new FilesRepository(jsonStore);
+  return {
+    characters: new CharactersRepository(jsonStore),
+    personas: new PersonasRepository(jsonStore),
+    chats: new ChatsRepository(jsonStore),
+    tags: new TagsRepository(jsonStore),
+    users: new UsersRepository(jsonStore),
+    connections: new ConnectionProfilesRepository2(jsonStore),
+    images: filesRepo,
+    files: filesRepo,
+    imageProfiles: new ImageProfilesRepository2(jsonStore),
+    embeddingProfiles: new EmbeddingProfilesRepository2(jsonStore),
+    memories: new MemoriesRepository(jsonStore)
+  };
+}
+var repositoryContainer = null;
+function getRepositories(config) {
+  if (!repositoryContainer) {
+    const jsonStore = getJsonStore(config);
+    repositoryContainer = createRepositories(jsonStore);
+  }
+  return repositoryContainer;
+}
+
 // plugins/dist/qtap-plugin-upgrade/migrations/migrate-json-to-mongodb.ts
-init_logger();
 function isMongoDBBackendEnabled() {
   const backend = process.env.DATA_BACKEND || "";
   return backend === "mongodb" || backend === "dual";
 }
 async function getJsonRepos() {
   try {
-    const { getRepositories: getJsonRepos2 } = await Promise.resolve().then(() => (init_repositories(), repositories_exports));
-    return getJsonRepos2();
+    return getRepositories();
   } catch (error2) {
-    logger.error("Failed to import JSON repositories", {
-      context: "migration.migrate-json-to-mongodb",
-      error: error2 instanceof Error ? error2.message : String(error2)
-    });
+    console.error("[migration.migrate-json-to-mongodb] Failed to get JSON repositories:", error2);
     throw error2;
   }
 }
@@ -74811,8 +70606,7 @@ async function isMongoDBAccessible() {
     await db.admin().ping();
     return true;
   } catch (error2) {
-    logger.warn("MongoDB is not accessible", {
-      context: "migration.migrate-json-to-mongodb",
+    console.warn("[migration.migrate-json-to-mongodb] MongoDB is not accessible", {
       error: error2 instanceof Error ? error2.message : String(error2)
     });
     return false;
@@ -74820,18 +70614,14 @@ async function isMongoDBAccessible() {
 }
 async function getNextAuthUserId() {
   try {
-    const { getJsonStore: getJsonStore2 } = await Promise.resolve().then(() => (init_json_store(), json_store_exports));
-    const jsonStore = getJsonStore2();
+    const jsonStore = getJsonStore();
     const accounts = await jsonStore.readJson("auth/accounts.json");
     if (accounts && accounts.length > 0) {
       return accounts[0].userId || null;
     }
     return null;
   } catch (error2) {
-    logger.warn("Could not read NextAuth accounts", {
-      context: "migration.migrate-json-to-mongodb",
-      error: error2 instanceof Error ? error2.message : String(error2)
-    });
+    console.warn("[migration.migrate-json-to-mongodb] Could not read NextAuth accounts:", error2);
     return null;
   }
 }
@@ -74841,9 +70631,7 @@ async function hasDataToMigrate() {
     const db = await getMongoDatabase2();
     const hasJsonData = (await jsonRepos.tags.findAll()).length > 0 || (await jsonRepos.users.findAll()).length > 0 || (await jsonRepos.connections.findAll()).length > 0 || (await jsonRepos.imageProfiles.findAll()).length > 0 || (await jsonRepos.embeddingProfiles.findAll()).length > 0 || (await jsonRepos.personas.findAll()).length > 0 || (await jsonRepos.characters.findAll()).length > 0 || (await jsonRepos.memories.findAll()).length > 0 || (await jsonRepos.chats.findAll()).length > 0;
     if (!hasJsonData) {
-      logger.debug("No data found in JSON store to migrate", {
-        context: "migration.migrate-json-to-mongodb"
-      });
+      console.log("[migration.migrate-json-to-mongodb] No data found in JSON store to migrate");
       return false;
     }
     const mongoTags = await db.collection("tags").countDocuments();
@@ -74852,8 +70640,7 @@ async function hasDataToMigrate() {
     const mongoChats = await db.collection("chats").countDocuments();
     const mongoHasData = mongoTags > 0 || mongoUsers > 0 || mongoConnections > 0 || mongoChats > 0;
     if (mongoHasData) {
-      logger.warn("MongoDB already contains data, skipping migration", {
-        context: "migration.migrate-json-to-mongodb",
+      console.warn("[migration.migrate-json-to-mongodb] MongoDB already contains data, skipping migration", {
         mongoTags,
         mongoUsers,
         mongoConnections,
@@ -74863,8 +70650,7 @@ async function hasDataToMigrate() {
     }
     return true;
   } catch (error2) {
-    logger.error("Error checking for data to migrate", {
-      context: "migration.migrate-json-to-mongodb",
+    console.error("[migration.migrate-json-to-mongodb] Error checking for data to migrate", {
       error: error2 instanceof Error ? error2.message : String(error2)
     });
     return false;
@@ -74884,21 +70670,16 @@ var migrateJsonToMongoDBMigration = {
   introducedInVersion: "2.0.0",
   dependsOn: ["validate-mongodb-config-v1"],
   async shouldRun() {
-    logger.debug("Checking if JSON to MongoDB migration should run", {
-      context: "migration.migrate-json-to-mongodb"
-    });
+    console.log("[migration.migrate-json-to-mongodb] Checking if JSON to MongoDB migration should run");
     if (!isMongoDBBackendEnabled()) {
-      logger.debug("MongoDB backend not enabled, skipping migration", {
-        context: "migration.migrate-json-to-mongodb",
+      console.log("[migration.migrate-json-to-mongodb] MongoDB backend not enabled, skipping migration", {
         dataBackend: process.env.DATA_BACKEND
       });
       return false;
     }
     const mongoAccessible = await isMongoDBAccessible();
     if (!mongoAccessible) {
-      logger.warn("MongoDB is not accessible, deferring migration", {
-        context: "migration.migrate-json-to-mongodb"
-      });
+      console.warn("[migration.migrate-json-to-mongodb] MongoDB is not accessible, deferring migration");
       return false;
     }
     return await hasDataToMigrate();
@@ -74907,23 +70688,20 @@ var migrateJsonToMongoDBMigration = {
     const startTime = Date.now();
     let totalItemsMigrated = 0;
     const allErrors = [];
-    logger.info("Starting JSON to MongoDB migration", {
-      context: "migration.migrate-json-to-mongodb"
-    });
+    console.log("[migration.migrate-json-to-mongodb] Starting JSON to MongoDB migration");
     try {
       const jsonRepos = await getJsonRepos();
       const db = await getMongoDatabase2();
       const nextAuthUserId = await getNextAuthUserId();
       const jsonUsers = await jsonRepos.users.findAll();
       const jsonUserId = jsonUsers.length > 0 ? jsonUsers[0].id : null;
-      logger.info("User ID mapping", {
-        context: "migration.migrate-json-to-mongodb",
+      console.log("[migration.migrate-json-to-mongodb] User ID mapping", {
         jsonUserId,
         nextAuthUserId,
         willMap: !!(jsonUserId && nextAuthUserId && jsonUserId !== nextAuthUserId)
       });
       const shouldMapUserId = jsonUserId && nextAuthUserId && jsonUserId !== nextAuthUserId;
-      logger.info("Migrating tags...", { context: "migration.migrate-json-to-mongodb" });
+      console.log("[migration.migrate-json-to-mongodb] Migrating tags...");
       const tags = await jsonRepos.tags.findAll();
       if (tags.length > 0) {
         const tagsToInsert = tags.map((tag2) => {
@@ -74932,9 +70710,9 @@ var migrateJsonToMongoDBMigration = {
         });
         await db.collection("tags").insertMany(tagsToInsert);
         totalItemsMigrated += tags.length;
-        logger.info(`Migrated ${tags.length} tags`, { context: "migration.migrate-json-to-mongodb" });
+        console.log(`[migration.migrate-json-to-mongodb] Migrated ${tags.length} tags`);
       }
-      logger.info("Migrating users...", { context: "migration.migrate-json-to-mongodb" });
+      console.log("[migration.migrate-json-to-mongodb] Migrating users...");
       if (jsonUsers.length > 0) {
         for (const user of jsonUsers) {
           const mappedUser = {
@@ -74945,9 +70723,9 @@ var migrateJsonToMongoDBMigration = {
           await db.collection("users").insertOne(mappedUser);
           totalItemsMigrated++;
         }
-        logger.info(`Migrated ${jsonUsers.length} users`, { context: "migration.migrate-json-to-mongodb" });
+        console.log(`[migration.migrate-json-to-mongodb] Migrated ${jsonUsers.length} users`);
       }
-      logger.info("Migrating chat settings...", { context: "migration.migrate-json-to-mongodb" });
+      console.log("[migration.migrate-json-to-mongodb] Migrating chat settings...");
       try {
         if (jsonUsers.length > 0) {
           const chatSettings = await jsonRepos.users.getChatSettings(jsonUsers[0].id);
@@ -74955,16 +70733,15 @@ var migrateJsonToMongoDBMigration = {
             const mappedSettings = shouldMapUserId ? mapUserId(chatSettings, jsonUserId, nextAuthUserId) : chatSettings;
             await db.collection("chat_settings").insertOne(mappedSettings);
             totalItemsMigrated++;
-            logger.info("Migrated chat settings", { context: "migration.migrate-json-to-mongodb" });
+            console.log("[migration.migrate-json-to-mongodb] Migrated chat settings");
           }
         }
       } catch (error2) {
-        logger.warn("Could not migrate chat settings", {
-          context: "migration.migrate-json-to-mongodb",
+        console.warn("[migration.migrate-json-to-mongodb] Could not migrate chat settings", {
           error: error2 instanceof Error ? error2.message : String(error2)
         });
       }
-      logger.info("Migrating API keys...", { context: "migration.migrate-json-to-mongodb" });
+      console.log("[migration.migrate-json-to-mongodb] Migrating API keys...");
       const apiKeys = await jsonRepos.connections.getAllApiKeys();
       if (apiKeys.length > 0) {
         const apiKeysToInsert = apiKeys.map((apiKey) => ({
@@ -74974,9 +70751,9 @@ var migrateJsonToMongoDBMigration = {
         }));
         await db.collection("api_keys").insertMany(apiKeysToInsert);
         totalItemsMigrated += apiKeys.length;
-        logger.info(`Migrated ${apiKeys.length} API keys`, { context: "migration.migrate-json-to-mongodb" });
+        console.log(`[migration.migrate-json-to-mongodb] Migrated ${apiKeys.length} API keys`);
       }
-      logger.info("Migrating connection profiles...", { context: "migration.migrate-json-to-mongodb" });
+      console.log("[migration.migrate-json-to-mongodb] Migrating connection profiles...");
       const connections = await jsonRepos.connections.findAll();
       if (connections.length > 0) {
         const connectionsToInsert = connections.map((conn) => {
@@ -74985,9 +70762,9 @@ var migrateJsonToMongoDBMigration = {
         });
         await db.collection("connection_profiles").insertMany(connectionsToInsert);
         totalItemsMigrated += connections.length;
-        logger.info(`Migrated ${connections.length} connection profiles`, { context: "migration.migrate-json-to-mongodb" });
+        console.log(`[migration.migrate-json-to-mongodb] Migrated ${connections.length} connection profiles`);
       }
-      logger.info("Migrating image profiles...", { context: "migration.migrate-json-to-mongodb" });
+      console.log("[migration.migrate-json-to-mongodb] Migrating image profiles...");
       const imageProfiles = await jsonRepos.imageProfiles.findAll();
       if (imageProfiles.length > 0) {
         const imageProfilesToInsert = imageProfiles.map((profile) => {
@@ -74996,9 +70773,9 @@ var migrateJsonToMongoDBMigration = {
         });
         await db.collection("image_profiles").insertMany(imageProfilesToInsert);
         totalItemsMigrated += imageProfiles.length;
-        logger.info(`Migrated ${imageProfiles.length} image profiles`, { context: "migration.migrate-json-to-mongodb" });
+        console.log(`[migration.migrate-json-to-mongodb] Migrated ${imageProfiles.length} image profiles`);
       }
-      logger.info("Migrating embedding profiles...", { context: "migration.migrate-json-to-mongodb" });
+      console.log("[migration.migrate-json-to-mongodb] Migrating embedding profiles...");
       const embeddingProfiles = await jsonRepos.embeddingProfiles.findAll();
       if (embeddingProfiles.length > 0) {
         const embeddingProfilesToInsert = embeddingProfiles.map((profile) => {
@@ -75007,9 +70784,9 @@ var migrateJsonToMongoDBMigration = {
         });
         await db.collection("embedding_profiles").insertMany(embeddingProfilesToInsert);
         totalItemsMigrated += embeddingProfiles.length;
-        logger.info(`Migrated ${embeddingProfiles.length} embedding profiles`, { context: "migration.migrate-json-to-mongodb" });
+        console.log(`[migration.migrate-json-to-mongodb] Migrated ${embeddingProfiles.length} embedding profiles`);
       }
-      logger.info("Migrating personas...", { context: "migration.migrate-json-to-mongodb" });
+      console.log("[migration.migrate-json-to-mongodb] Migrating personas...");
       const personas = await jsonRepos.personas.findAll();
       if (personas.length > 0) {
         const personasToInsert = personas.map((persona) => {
@@ -75018,9 +70795,9 @@ var migrateJsonToMongoDBMigration = {
         });
         await db.collection("personas").insertMany(personasToInsert);
         totalItemsMigrated += personas.length;
-        logger.info(`Migrated ${personas.length} personas`, { context: "migration.migrate-json-to-mongodb" });
+        console.log(`[migration.migrate-json-to-mongodb] Migrated ${personas.length} personas`);
       }
-      logger.info("Migrating characters...", { context: "migration.migrate-json-to-mongodb" });
+      console.log("[migration.migrate-json-to-mongodb] Migrating characters...");
       const characters = await jsonRepos.characters.findAll();
       if (characters.length > 0) {
         const charactersToInsert = characters.map((character) => {
@@ -75029,16 +70806,16 @@ var migrateJsonToMongoDBMigration = {
         });
         await db.collection("characters").insertMany(charactersToInsert);
         totalItemsMigrated += characters.length;
-        logger.info(`Migrated ${characters.length} characters`, { context: "migration.migrate-json-to-mongodb" });
+        console.log(`[migration.migrate-json-to-mongodb] Migrated ${characters.length} characters`);
       }
-      logger.info("Migrating memories...", { context: "migration.migrate-json-to-mongodb" });
+      console.log("[migration.migrate-json-to-mongodb] Migrating memories...");
       const memories = await jsonRepos.memories.findAll();
       if (memories.length > 0) {
         await db.collection("memories").insertMany(memories);
         totalItemsMigrated += memories.length;
-        logger.info(`Migrated ${memories.length} memories`, { context: "migration.migrate-json-to-mongodb" });
+        console.log(`[migration.migrate-json-to-mongodb] Migrated ${memories.length} memories`);
       }
-      logger.info("Migrating chats...", { context: "migration.migrate-json-to-mongodb" });
+      console.log("[migration.migrate-json-to-mongodb] Migrating chats...");
       const chats = await jsonRepos.chats.findAll();
       if (chats.length > 0) {
         const chatsToInsert = chats.map((chat) => {
@@ -75059,8 +70836,7 @@ var migrateJsonToMongoDBMigration = {
               messagesMigrated += messages.length;
             }
           } catch (error2) {
-            logger.warn(`Could not migrate messages for chat ${chat.id}`, {
-              context: "migration.migrate-json-to-mongodb",
+            console.warn(`[migration.migrate-json-to-mongodb] Could not migrate messages for chat ${chat.id}`, {
               error: error2 instanceof Error ? error2.message : String(error2)
             });
             allErrors.push({
@@ -75070,11 +70846,9 @@ var migrateJsonToMongoDBMigration = {
             });
           }
         }
-        logger.info(`Migrated ${chats.length} chats with ${messagesMigrated} messages`, {
-          context: "migration.migrate-json-to-mongodb"
-        });
+        console.log(`[migration.migrate-json-to-mongodb] Migrated ${chats.length} chats with ${messagesMigrated} messages`);
       }
-      logger.info("Migrating files/images...", { context: "migration.migrate-json-to-mongodb" });
+      console.log("[migration.migrate-json-to-mongodb] Migrating files/images...");
       try {
         const files = await jsonRepos.files.findAll();
         if (files.length > 0) {
@@ -75084,26 +70858,25 @@ var migrateJsonToMongoDBMigration = {
           });
           await db.collection("files").insertMany(filesToInsert);
           totalItemsMigrated += files.length;
-          logger.info(`Migrated ${files.length} files`, { context: "migration.migrate-json-to-mongodb" });
+          console.log(`[migration.migrate-json-to-mongodb] Migrated ${files.length} files`);
         }
       } catch (error2) {
-        logger.warn("Could not migrate files", {
-          context: "migration.migrate-json-to-mongodb",
+        console.warn("[migration.migrate-json-to-mongodb] Could not migrate files", {
           error: error2 instanceof Error ? error2.message : String(error2)
         });
       }
-      logger.info("Migrating vector indices...", { context: "migration.migrate-json-to-mongodb" });
+      console.log("[migration.migrate-json-to-mongodb] Migrating vector indices...");
       try {
-        const fs6 = await import("fs/promises");
-        const path4 = await import("path");
-        const vectorIndicesPath = path4.join(process.cwd(), "data", "vector-indices");
+        const fs7 = await import("fs/promises");
+        const path5 = await import("path");
+        const vectorIndicesPath = path5.join(process.cwd(), "data", "vector-indices");
         try {
-          const files = await fs6.readdir(vectorIndicesPath);
+          const files = await fs7.readdir(vectorIndicesPath);
           const jsonFiles = files.filter((f4) => f4.endsWith(".json"));
           if (jsonFiles.length > 0) {
             for (const file of jsonFiles) {
               try {
-                const content = await fs6.readFile(path4.join(vectorIndicesPath, file), "utf-8");
+                const content = await fs7.readFile(path5.join(vectorIndicesPath, file), "utf-8");
                 const vectorIndex = JSON.parse(content);
                 if (!vectorIndex.id) {
                   vectorIndex.id = vectorIndex.characterId;
@@ -75115,33 +70888,31 @@ var migrateJsonToMongoDBMigration = {
                 );
                 totalItemsMigrated += 1;
               } catch (fileError) {
-                logger.warn(`Could not migrate vector index ${file}`, {
-                  context: "migration.migrate-json-to-mongodb",
+                console.warn(`[migration.migrate-json-to-mongodb] Could not migrate vector index ${file}`, {
                   error: fileError instanceof Error ? fileError.message : String(fileError)
                 });
               }
             }
-            logger.info(`Migrated ${jsonFiles.length} vector indices`, { context: "migration.migrate-json-to-mongodb" });
+            console.log(`[migration.migrate-json-to-mongodb] Migrated ${jsonFiles.length} vector indices`);
           }
         } catch (dirError) {
           if (dirError.code !== "ENOENT") {
             throw dirError;
           }
-          logger.debug("No vector-indices directory found, skipping", { context: "migration.migrate-json-to-mongodb" });
+          console.log("[migration.migrate-json-to-mongodb] No vector-indices directory found, skipping");
         }
       } catch (error2) {
-        logger.warn("Could not migrate vector indices", {
-          context: "migration.migrate-json-to-mongodb",
+        console.warn("[migration.migrate-json-to-mongodb] Could not migrate vector indices", {
           error: error2 instanceof Error ? error2.message : String(error2)
         });
       }
-      logger.info("Migrating migration state...", { context: "migration.migrate-json-to-mongodb" });
+      console.log("[migration.migrate-json-to-mongodb] Migrating migration state...");
       try {
-        const fs6 = await import("fs/promises");
-        const path4 = await import("path");
-        const migrationsFilePath = path4.join(process.cwd(), "data", "settings", "migrations.json");
+        const fs7 = await import("fs/promises");
+        const path5 = await import("path");
+        const migrationsFilePath = path5.join(process.cwd(), "data", "settings", "migrations.json");
         try {
-          const content = await fs6.readFile(migrationsFilePath, "utf-8");
+          const content = await fs7.readFile(migrationsFilePath, "utf-8");
           const migrationState = JSON.parse(content);
           await db.collection("migrations_state").updateOne(
             { _id: "migration_state" },
@@ -75155,23 +70926,21 @@ var migrateJsonToMongoDBMigration = {
             { upsert: true }
           );
           totalItemsMigrated += 1;
-          logger.info("Migrated migration state to MongoDB", { context: "migration.migrate-json-to-mongodb" });
+          console.log("[migration.migrate-json-to-mongodb] Migrated migration state to MongoDB");
         } catch (fileError) {
           if (fileError.code !== "ENOENT") {
             throw fileError;
           }
-          logger.debug("No migrations.json file found, skipping", { context: "migration.migrate-json-to-mongodb" });
+          console.log("[migration.migrate-json-to-mongodb] No migrations.json file found, skipping");
         }
       } catch (error2) {
-        logger.warn("Could not migrate migration state", {
-          context: "migration.migrate-json-to-mongodb",
+        console.warn("[migration.migrate-json-to-mongodb] Could not migrate migration state", {
           error: error2 instanceof Error ? error2.message : String(error2)
         });
       }
       const durationMs = Date.now() - startTime;
       const success = allErrors.length === 0;
-      logger.info("Completed JSON to MongoDB migration", {
-        context: "migration.migrate-json-to-mongodb",
+      console.log("[migration.migrate-json-to-mongodb] Completed JSON to MongoDB migration", {
         success,
         itemsMigrated: totalItemsMigrated,
         errorsCount: allErrors.length,
@@ -75188,8 +70957,7 @@ var migrateJsonToMongoDBMigration = {
         timestamp: (/* @__PURE__ */ new Date()).toISOString()
       };
     } catch (error2) {
-      logger.error("Fatal error during migration", {
-        context: "migration.migrate-json-to-mongodb",
+      console.error("[migration.migrate-json-to-mongodb] Fatal error during migration", {
         error: error2 instanceof Error ? error2.message : String(error2)
       });
       const durationMs = Date.now() - startTime;
@@ -75207,15 +70975,13 @@ var migrateJsonToMongoDBMigration = {
 };
 
 // plugins/dist/qtap-plugin-upgrade/migrations/migrate-files-to-s3.ts
-var fs5 = __toESM(require("fs/promises"));
-var path3 = __toESM(require("path"));
-init_logger();
+var fs6 = __toESM(require("fs/promises"));
+var path4 = __toESM(require("path"));
 
 // lib/file-manager/index.ts
 var import_fs2 = require("fs");
 var import_path2 = require("path");
 var import_crypto = require("crypto");
-init_types();
 var FILES_DIR = "public/data/files";
 var STORAGE_DIR = (0, import_path2.join)(FILES_DIR, "storage");
 var INDEX_FILE = (0, import_path2.join)(FILES_DIR, "files.jsonl");
@@ -75442,9 +71208,9 @@ async function uploadFile(key, body, contentType, metadata) {
 // plugins/dist/qtap-plugin-upgrade/migrations/migrate-files-to-s3.ts
 async function checkLocalStorageExists() {
   try {
-    const storagePath = path3.join(process.cwd(), "public/data/files/storage");
-    const stat4 = await fs5.stat(storagePath);
-    return stat4.isDirectory();
+    const storagePath = path4.join(process.cwd(), "public/data/files/storage");
+    const stat6 = await fs6.stat(storagePath);
+    return stat6.isDirectory();
   } catch {
     return false;
   }
@@ -75465,69 +71231,60 @@ var migrateFilesToS3Migration = {
   async shouldRun() {
     const s3Config = validateS3Config();
     if (s3Config.mode === "disabled") {
-      logger.debug("S3 is disabled, skipping file migration", {
-        context: "migration.migrate-files-to-s3"
-      });
+      console.log("[migration.migrate-files-to-s3] S3 is disabled, skipping file migration");
       return false;
     }
     if (!s3Config.isConfigured) {
-      logger.debug("S3 is not properly configured, skipping file migration", {
-        context: "migration.migrate-files-to-s3",
+      console.log("[migration.migrate-files-to-s3] S3 is not properly configured, skipping file migration", {
         errors: s3Config.errors
       });
       return false;
     }
     const localStorageExists = await checkLocalStorageExists();
     if (!localStorageExists) {
-      logger.debug("Local storage directory does not exist, skipping file migration", {
-        context: "migration.migrate-files-to-s3"
-      });
+      console.log("[migration.migrate-files-to-s3] Local storage directory does not exist, skipping file migration");
       return false;
     }
     const filesToMigrate = await countFilesToMigrate();
     if (filesToMigrate === 0) {
-      logger.debug("No files need migration (all already have s3Key)", {
-        context: "migration.migrate-files-to-s3"
-      });
+      console.log("[migration.migrate-files-to-s3] No files need migration (all already have s3Key)");
       return false;
     }
-    logger.debug("Files need migration to S3", {
-      context: "migration.migrate-files-to-s3",
+    console.log("[migration.migrate-files-to-s3] Files need migration to S3", {
       count: filesToMigrate
     });
     return true;
   },
   async run() {
     const startTime = Date.now();
-    const migratedLogger = logger.child({ context: "migration.migrate-files-to-s3" });
     let uploaded = 0;
     let skippedMissing = 0;
     const errors = [];
     try {
       const s3Config = validateS3Config();
       const bucket = getS3Bucket();
-      migratedLogger.info("Starting file migration to S3", {
+      console.log("[migration.migrate-files-to-s3] Starting file migration to S3", {
         bucket,
         s3Mode: s3Config.mode
       });
       const files = await getAllFiles();
       const filesToMigrate = files.filter((entry) => !entry.s3Key);
-      migratedLogger.debug("Found files to migrate", {
+      console.log("[migration.migrate-files-to-s3] Found files to migrate", {
         total: files.length,
         toMigrate: filesToMigrate.length
       });
       for (const entry of filesToMigrate) {
         try {
-          const ext = path3.extname(entry.originalFilename);
-          const localFilePath = path3.join(
+          const ext = path4.extname(entry.originalFilename);
+          const localFilePath = path4.join(
             process.cwd(),
             "public/data/files/storage",
             `${entry.id}${ext}`
           );
           let fileBuffer;
           try {
-            fileBuffer = await fs5.readFile(localFilePath);
-            migratedLogger.debug("Read file from local storage", {
+            fileBuffer = await fs6.readFile(localFilePath);
+            console.log("[migration.migrate-files-to-s3] Read file from local storage", {
               fileId: entry.id,
               filename: entry.originalFilename,
               size: fileBuffer.length
@@ -75536,19 +71293,19 @@ var migrateFilesToS3Migration = {
             const errorMessage = readError instanceof Error ? readError.message : "Unknown error";
             const isMissingFile = errorMessage.includes("ENOENT");
             if (isMissingFile) {
-              migratedLogger.warn("File missing from local storage, removing orphaned metadata entry", {
+              console.warn("[migration.migrate-files-to-s3] File missing from local storage, removing orphaned metadata entry", {
                 fileId: entry.id,
                 filename: entry.originalFilename
               });
               try {
                 await deleteFile(entry.id);
                 skippedMissing++;
-                migratedLogger.info("Removed orphaned file metadata entry", {
+                console.log("[migration.migrate-files-to-s3] Removed orphaned file metadata entry", {
                   fileId: entry.id,
                   filename: entry.originalFilename
                 });
               } catch (deleteError) {
-                migratedLogger.warn("Failed to remove orphaned metadata entry", {
+                console.warn("[migration.migrate-files-to-s3] Failed to remove orphaned metadata entry", {
                   fileId: entry.id,
                   error: deleteError instanceof Error ? deleteError.message : "Unknown error"
                 });
@@ -75566,7 +71323,7 @@ var migrateFilesToS3Migration = {
                 error: `Failed to read file: ${errorMessage}`,
                 isWarning: false
               });
-              migratedLogger.warn("Failed to read file from local storage", {
+              console.warn("[migration.migrate-files-to-s3] Failed to read file from local storage", {
                 fileId: entry.id,
                 filename: entry.originalFilename,
                 error: errorMessage
@@ -75582,7 +71339,7 @@ var migrateFilesToS3Migration = {
           );
           try {
             await uploadFile(s3Key, fileBuffer, entry.mimeType);
-            migratedLogger.debug("Uploaded file to S3", {
+            console.log("[migration.migrate-files-to-s3] Uploaded file to S3", {
               fileId: entry.id,
               filename: entry.originalFilename,
               s3Key,
@@ -75596,7 +71353,7 @@ var migrateFilesToS3Migration = {
               error: `Failed to upload to S3: ${errorMessage}`,
               isWarning: false
             });
-            migratedLogger.warn("Failed to upload file to S3", {
+            console.warn("[migration.migrate-files-to-s3] Failed to upload file to S3", {
               fileId: entry.id,
               filename: entry.originalFilename,
               s3Key,
@@ -75611,7 +71368,7 @@ var migrateFilesToS3Migration = {
               updatedAt: (/* @__PURE__ */ new Date()).toISOString()
             });
             uploaded++;
-            migratedLogger.debug("Updated file entry with S3 reference", {
+            console.log("[migration.migrate-files-to-s3] Updated file entry with S3 reference", {
               fileId: entry.id,
               s3Key,
               bucket
@@ -75624,7 +71381,7 @@ var migrateFilesToS3Migration = {
               error: `Failed to update file entry: ${errorMessage}`,
               isWarning: false
             });
-            migratedLogger.warn("Failed to update file entry with S3 reference", {
+            console.warn("[migration.migrate-files-to-s3] Failed to update file entry with S3 reference", {
               fileId: entry.id,
               error: errorMessage
             });
@@ -75639,15 +71396,13 @@ var migrateFilesToS3Migration = {
             error: `Unexpected error: ${errorMessage}`,
             isWarning: false
           });
-          migratedLogger.error("Unexpected error during file migration", {
+          console.error("[migration.migrate-files-to-s3] Unexpected error during file migration", {
             fileId: entry.id
           }, error2 instanceof Error ? error2 : void 0);
         }
       }
     } catch (error2) {
-      migratedLogger.error("Failed to initialize file migration", {
-        context: "migration.migrate-files-to-s3"
-      }, error2 instanceof Error ? error2 : void 0);
+      console.error("[migration.migrate-files-to-s3] Failed to initialize file migration", error2 instanceof Error ? error2 : void 0);
       return {
         id: "migrate-files-to-s3-v1",
         success: false,
@@ -75663,19 +71418,19 @@ var migrateFilesToS3Migration = {
     const success = blockingErrors.length === 0;
     const durationMs = Date.now() - startTime;
     if (success && warnings.length === 0) {
-      migratedLogger.info("File migration to S3 completed successfully", {
+      console.log("[migration.migrate-files-to-s3] File migration to S3 completed successfully", {
         filesUploaded: uploaded,
         durationMs
       });
     } else if (success) {
-      migratedLogger.info("File migration to S3 completed with warnings", {
+      console.log("[migration.migrate-files-to-s3] File migration to S3 completed with warnings", {
         filesUploaded: uploaded,
         skippedMissing,
         warningCount: warnings.length,
         durationMs
       });
     } else {
-      migratedLogger.warn("File migration to S3 completed with errors", {
+      console.warn("[migration.migrate-files-to-s3] File migration to S3 completed with errors", {
         filesUploaded: uploaded,
         skippedMissing,
         errorCount: blockingErrors.length,
