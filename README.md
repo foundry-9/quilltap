@@ -3,7 +3,7 @@
 AI-powered roleplay chat platform with multi-provider LLM support and full SillyTavern compatibility.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.8.5--dev.17-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-1.8.5--dev.18-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -521,7 +521,7 @@ Copyright (c) 2025 Foundry-9
     - New routes
     - Moved LLM providers to plugins
   - Moved images to the file handling system so that they are no longer a separately maintained thing
-- **1.8:** Pluggable Authentication, no-auth
+- **1.8:** Pluggable Authentication, no-auth, MongoDB/S3 conversion from local files
   - Fix quick-hide persistence and update issue
   - Convert Google OAuth to plugin (`qtap-plugin-auth-google`)
   - Create auth provider plugin interface and registry
@@ -537,7 +537,20 @@ Copyright (c) 2025 Foundry-9
   - Add tool call capture and normalization in Ollama provider
   - Add /api/providers endpoint for dynamic provider configurations
   - Update connection profiles UI to fetch provider requirements dynamically
-  - versioning change (dev commits no longer bump release versions)
+  - Versioning change (dev commits no longer bump release versions)
+  - Migrate to MongoDB repository pattern with S3 storage support
+  - Fix S3-served avatar and image display across dashboard, chats, personas, and characters
+  - Switch from Next.js Image to native img tags for API-served images (compatibility with dynamic routes)
+  - Fix URL construction bugs (double-slash issues) in avatar/image paths
+  - Add graceful handling of orphaned file metadata entries
+  - Auto-cleanup orphaned file references (avatars, defaultImageId)
+  - Fix deduplication to verify file existence in S3/local storage
+  - Proxy files through API for HTTP S3 endpoints to avoid mixed content SSL errors
+  - Add MongoDB repositories for migrations and vector indices
+  - Update test mocks to use new repository factory pattern
+  - Add utility scripts: debug-files, fix-file-userids, fix-sha256-in-mongodb, reset-file-tags
+  - Improve S3 migration error handling (warnings vs blocking errors)
+  - Enhanced auth adapter with improved MongoDB integration
 
 ## Roadmap
 
