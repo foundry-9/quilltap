@@ -2,7 +2,7 @@
 
 ## Overview
 
-Quilltap is now deployed as a **single containerized application** with no external database required. All data is stored in JSON files within the `data/` directory, making deployment faster, simpler, and more portable.
+Quilltap requires **MongoDB** for data storage and **S3-compatible storage** for files. For development, you can use Docker Compose with embedded MongoDB and MinIO services. For production, you can use MongoDB Atlas and AWS S3, or self-host both services.
 
 ## Table of Contents
 
@@ -22,15 +22,27 @@ Quilltap is now deployed as a **single containerized application** with no exter
 ### Server Requirements
 
 - **Operating System**: Ubuntu 20.04+ or Debian 11+ (recommended)
-- **RAM**: Minimum 1GB, recommended 2GB+
-- **Storage**: Minimum 20GB SSD (for data growth)
-- **CPU**: 1+ core (2+ recommended)
+- **RAM**: Minimum 2GB, recommended 4GB+ (MongoDB requires additional memory)
+- **Storage**: Minimum 20GB SSD (MongoDB data can grow significantly)
+- **CPU**: 2+ cores recommended
 - **Network**: Public IP address with ports 80 and 443 accessible
 
 ### Domain Requirements
 
 - Domain name pointing to your server's IP address
 - DNS A record configured (allow 24-48 hours for propagation)
+
+### Database & Storage Requirements
+
+For self-hosted deployments:
+
+- MongoDB 7+ running locally or in Docker
+- MinIO or compatible S3 service
+
+For cloud/production deployments:
+
+- MongoDB Atlas (free tier available)
+- AWS S3, Google Cloud Storage, or other S3-compatible service
 
 ### Required Software
 
@@ -122,12 +134,28 @@ nano .env.production
 NEXTAUTH_URL="https://yourdomain.com"
 NEXTAUTH_SECRET="$(openssl rand -base64 32)"
 
-# Google OAuth (get from https://console.cloud.google.com/)
+# Google OAuth (get from https://console.cloud.google.com/) - optional
 GOOGLE_CLIENT_ID="your-google-client-id"
 GOOGLE_CLIENT_SECRET="your-google-client-secret"
 
 # Encryption (CRITICAL: back this up securely!)
 ENCRYPTION_MASTER_PEPPER="$(openssl rand -base64 32)"
+
+# MongoDB (REQUIRED)
+MONGODB_URI="mongodb://localhost:27017"
+MONGODB_DATABASE="quilltap"
+
+# S3 Storage (REQUIRED)
+# For embedded MinIO (development):
+S3_MODE="embedded"
+
+# For external S3 (production):
+# S3_MODE="external"
+# S3_ENDPOINT="https://s3.amazonaws.com"  # or your MinIO endpoint
+# S3_REGION="us-east-1"
+# S3_ACCESS_KEY="your-access-key"
+# S3_SECRET_KEY="your-secret-key"
+# S3_BUCKET="quilltap-files"
 
 # SSL
 DOMAIN="yourdomain.com"
@@ -220,16 +248,30 @@ docker compose -f docker-compose.prod.yml restart nginx
 |----------|-------------|---------|
 | `NEXTAUTH_URL` | Your production domain | `https://yourdomain.com` |
 | `NEXTAUTH_SECRET` | Secret for NextAuth (32+ chars) | `$(openssl rand -base64 32)` |
-| `GOOGLE_CLIENT_ID` | From Google Cloud Console | `xxxxx.apps.googleusercontent.com` |
-| `GOOGLE_CLIENT_SECRET` | From Google Cloud Console | `xxxxx-xxxxx` |
 | `ENCRYPTION_MASTER_PEPPER` | Master encryption key (32+ chars) | `$(openssl rand -base64 32)` |
+| `MONGODB_URI` | MongoDB connection string | `mongodb://localhost:27017` |
+| `MONGODB_DATABASE` | MongoDB database name | `quilltap` |
 | `DOMAIN` | Your domain for SSL | `yourdomain.com` |
 | `SSL_EMAIL` | Email for SSL renewal notifications | `admin@yourdomain.com` |
+
+### S3 Storage (Required)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `S3_MODE` | Storage mode (`embedded` or `external`) | `embedded` |
+| `S3_ENDPOINT` | S3 endpoint URL (for external mode) | - |
+| `S3_REGION` | S3 region | `us-east-1` |
+| `S3_ACCESS_KEY` | S3 access key (for external mode) | - |
+| `S3_SECRET_KEY` | S3 secret key (for external mode) | - |
+| `S3_BUCKET` | S3 bucket name | `quilltap-files` |
 
 ### Optional
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `GOOGLE_CLIENT_ID` | From Google Cloud Console (for OAuth) | - |
+| `GOOGLE_CLIENT_SECRET` | From Google Cloud Console (for OAuth) | - |
+| `AUTH_DISABLED` | Disable authentication entirely | `false` |
 | `LOG_LEVEL` | Logging level | `info` |
 | `NODE_ENV` | Environment | `production` |
 
@@ -242,39 +284,57 @@ docker compose -f docker-compose.prod.yml restart nginx
 
 ## Data Management
 
-All application data is stored in the `data/` directory:
+All application data is stored in MongoDB and S3-compatible storage:
 
-```
-data/
-├── characters/              # Character definitions
-├── personas/               # User personas
-├── chats/                 # Conversations and messages
-├── auth/                  # Authentication (sessions, accounts)
-├── settings/              # Application settings
-├── image-profiles/        # Image configurations
-└── binaries/              # User uploaded images
-```
+### MongoDB Collections
 
-### Disk Usage Monitoring
+- `users` - User accounts and authentication
+- `characters` - Character definitions
+- `personas` - User personas
+- `chats` - Chat metadata and messages
+- `files` - File metadata (actual files in S3)
+- `tags` - Tag definitions
+- `memories` - Character memory data
+- `connectionProfiles` - LLM connection configurations
+- `embeddingProfiles` - Embedding provider configurations
+- `imageProfiles` - Image generation configurations
+
+### S3 Storage Structure
+
+Files are stored in S3 with the following structure:
+
+- `users/{userId}/files/` - User-uploaded files
+- `users/{userId}/images/` - Generated and uploaded images
+
+### Storage Monitoring
+
+For MongoDB:
 
 ```bash
-# Check data directory size
-du -sh ~/quilltap/data/
+# Check database size
+mongosh quilltap --eval "db.stats()"
 
-# Monitor in real-time
-watch -n 5 'du -sh ~/quilltap/data/'
+# Check collection sizes
+mongosh quilltap --eval "db.getCollectionNames().forEach(c => print(c + ': ' + db[c].stats().size))"
+```
 
-# List largest subdirectories
-du -sh ~/quilltap/data/*
+For S3/MinIO:
+
+```bash
+# Using AWS CLI
+aws s3 ls s3://quilltap-files --recursive --summarize
+
+# Using MinIO client
+mc du myminio/quilltap-files
 ```
 
 ### Storage Recommendations
 
-- **Small deployment (< 100 users)**: 5-10 GB
-- **Medium deployment (100-1000 users)**: 20-50 GB
-- **Large deployment (1000+ users)**: 100+ GB
+- **Small deployment (< 100 users)**: 10-20 GB (MongoDB) + 10-50 GB (S3)
+- **Medium deployment (100-1000 users)**: 50-100 GB (MongoDB) + 100-500 GB (S3)
+- **Large deployment (1000+ users)**: 200+ GB (MongoDB) + 1+ TB (S3)
 
-Adjust server storage and monitoring accordingly.
+Consider using MongoDB Atlas and AWS S3 for easier scaling.
 
 ## Monitoring
 
@@ -330,15 +390,20 @@ docker compose -f docker-compose.prod.yml \
 # /home/quilltap/backup-quilltap.sh
 
 BACKUP_DIR="/home/quilltap/backups"
-DATA_DIR="/home/quilltap/quilltap/data"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+MONGODB_URI="mongodb://localhost:27017/quilltap"
 
 # Create backup directory
 mkdir -p "$BACKUP_DIR"
 
-# Backup data
-tar -czf "$BACKUP_DIR/quilltap_$TIMESTAMP.tar.gz" \
-  -C "$DATA_DIR/.." data/
+# Backup MongoDB
+mongodump --uri="$MONGODB_URI" --out="$BACKUP_DIR/mongo_$TIMESTAMP"
+tar -czf "$BACKUP_DIR/quilltap_mongo_$TIMESTAMP.tar.gz" \
+  -C "$BACKUP_DIR" "mongo_$TIMESTAMP"
+rm -rf "$BACKUP_DIR/mongo_$TIMESTAMP"
+
+# Backup S3 files (if using MinIO locally)
+# mc mirror myminio/quilltap-files "$BACKUP_DIR/s3_$TIMESTAMP"
 
 # Keep only last 7 days
 find "$BACKUP_DIR" -name "quilltap_*.tar.gz" -mtime +7 -delete
@@ -380,8 +445,8 @@ gsutil cp "$BACKUP_FILE" gs://my-backups/quilltap/
 # List recent backups
 ls -lh ~/backups/quilltap_*.tar.gz | tail -10
 
-# Verify backup integrity
-tar -tzf ~/backups/quilltap_20250120_120000.tar.gz | head
+# Verify MongoDB backup integrity
+tar -tzf ~/backups/quilltap_mongo_20250120_120000.tar.gz | head
 
 # Check backup size
 du -h ~/backups/quilltap_*.tar.gz
@@ -451,11 +516,17 @@ docker compose -f docker-compose.prod.yml logs app
 # Common issues:
 # - Port 3000 already in use
 # - ENCRYPTION_MASTER_PEPPER not set
-# - data/ directory not writable
+# - MongoDB not accessible
+# - S3/MinIO not accessible
 # - .env.production missing required variables
 
+# Check MongoDB connection
+mongosh --eval "db.runCommand('ping')"
+
+# Check MinIO health (if using embedded)
+curl -f http://localhost:9000/minio/health/ready
+
 # Fix permissions
-chmod 755 data/
 chmod 600 .env.production
 
 # Restart
@@ -493,18 +564,17 @@ du -sh data/* | sort -h
 ### Data Not Persisting
 
 ```bash
-# Verify data directory exists
-ls -la data/
+# Check MongoDB connection
+mongosh quilltap --eval "db.users.countDocuments()"
 
-# Check file permissions
-chmod 755 data/
+# Check S3 connection
+aws s3 ls s3://quilltap-files/ --endpoint-url http://localhost:9000
 
-# Verify volume mount in docker-compose.prod.yml
-docker inspect quilltap-app | grep -A 5 Mounts
+# For MinIO, check bucket exists
+mc ls myminio/quilltap-files
 
-# Check if container can write
-docker compose -f docker-compose.prod.yml exec app \
-  ls -la /app/data/
+# Check application logs for connection errors
+docker compose -f docker-compose.prod.yml logs app | grep -i error
 ```
 
 ### Cannot Connect to Domain
@@ -532,12 +602,14 @@ Before going live, verify:
 
 - [ ] SSL certificate is valid (`curl -v https://yourdomain.com`)
 - [ ] All environment variables are set correctly
-- [ ] Data directory is backed up
+- [ ] MongoDB is accessible and has proper authentication
+- [ ] S3/MinIO is accessible and bucket exists
+- [ ] MongoDB backup is scheduled
+- [ ] S3 backup/replication is configured
 - [ ] Monitoring/alerts are configured
-- [ ] Backup script is scheduled
 - [ ] Encryption key is securely backed up
 - [ ] Firewall rules are configured
-- [ ] Google OAuth redirect URI is correct
+- [ ] Google OAuth redirect URI is correct (if using OAuth)
 - [ ] Application health check is working
 - [ ] Logs are being monitored
 
@@ -590,4 +662,4 @@ No additional tuning usually needed.
 - [ ] NEXTAUTH_SECRET is strong (32+ characters)
 - [ ] No Quilltap sensitive files in version control
 
-That's it! Your Quilltap instance is now running securely in production with zero external dependencies.
+That's it! Your Quilltap instance is now running securely in production with MongoDB and S3-compatible storage.

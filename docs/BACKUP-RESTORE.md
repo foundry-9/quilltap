@@ -2,34 +2,35 @@
 
 ## Overview
 
-Quilltap stores all application data in JSON files within the `data/` directory. This guide covers backing up and restoring your Quilltap data safely.
+Quilltap stores application data in **MongoDB** and files in **S3-compatible storage**. This guide covers backing up and restoring your Quilltap data safely.
 
 ## Data Structure
 
-The `data/` directory contains:
+### MongoDB Collections
 
-```
-data/
-├── characters/              # Character definitions
-├── personas/               # User personas
-├── chats/                 # Chat conversations and messages
-├── auth/                  # Authentication data
-│   ├── accounts.json       # OAuth account information
-│   ├── sessions.jsonl      # Active sessions (append-only)
-│   └── verification-tokens.jsonl  # Email verification tokens
-├── tags/                  # Character and chat tags
-├── image-profiles/        # Image profile configurations
-├── settings/              # Application settings
-│   ├── general.json
-│   └── connection-profiles.json  # LLM connection configurations
-└── binaries/              # Image files
-    └── [user-id]/         # User-specific images
-```
+- `users` - User accounts and authentication data
+- `characters` - Character definitions and metadata
+- `personas` - User persona definitions
+- `chats` - Chat metadata and message history
+- `files` - File metadata (actual files stored in S3)
+- `tags` - Tag definitions
+- `memories` - Character memory data
+- `connectionProfiles` - LLM connection configurations
+- `embeddingProfiles` - Embedding provider configurations
+- `imageProfiles` - Image generation configurations
 
-**Important Files:**
-- `data/auth/sessions.jsonl` - Contains active session tokens
-- `data/auth/accounts.json` - OAuth account mappings
-- `ENCRYPTION_MASTER_PEPPER` in `.env` - Master encryption key
+### S3 Storage
+
+Files are stored in S3-compatible storage:
+
+- `users/{userId}/files/` - User-uploaded files
+- `users/{userId}/images/` - Generated and uploaded images
+
+**Important:**
+
+- `ENCRYPTION_MASTER_PEPPER` in `.env` - Master encryption key (required to decrypt API keys)
+- MongoDB connection string and credentials
+- S3 credentials and bucket configuration
 
 ## Regular Backups
 
@@ -38,14 +39,26 @@ data/
 For production environments, set up automated daily backups using cron:
 
 ```bash
-# Create backup script: backup-quilltap.sh
 #!/bin/bash
+# Create backup script: backup-quilltap.sh
 BACKUP_DIR="/backups/quilltap"
-mkdir -p "$BACKUP_DIR"
+MONGODB_URI="mongodb://localhost:27017/quilltap"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-tar -czf "$BACKUP_DIR/quilltap_$TIMESTAMP.tar.gz" \
-  -C /path/to/quilltap data/ \
-  --exclude=data/binaries/cache
+
+mkdir -p "$BACKUP_DIR"
+
+# Backup MongoDB
+mongodump --uri="$MONGODB_URI" --out="$BACKUP_DIR/mongo_$TIMESTAMP"
+tar -czf "$BACKUP_DIR/quilltap_mongo_$TIMESTAMP.tar.gz" \
+  -C "$BACKUP_DIR" "mongo_$TIMESTAMP"
+rm -rf "$BACKUP_DIR/mongo_$TIMESTAMP"
+
+# Backup S3 files (using MinIO client)
+# mc mirror myminio/quilltap-files "$BACKUP_DIR/s3_$TIMESTAMP"
+# tar -czf "$BACKUP_DIR/quilltap_s3_$TIMESTAMP.tar.gz" \
+#   -C "$BACKUP_DIR" "s3_$TIMESTAMP"
+# rm -rf "$BACKUP_DIR/s3_$TIMESTAMP"
+
 # Keep only last 7 days of backups
 find "$BACKUP_DIR" -name "quilltap_*.tar.gz" -mtime +7 -delete
 ```
@@ -59,35 +72,34 @@ crontab -e
 
 ### Manual Backups
 
-**Local Development:**
+**MongoDB Backup:**
 
 ```bash
-# Backup data directory
-cp -r data/ data-backup-$(date +%Y%m%d-%H%M%S)/
+# Backup MongoDB database
+mongodump --uri="mongodb://localhost:27017/quilltap" --out=backup-$(date +%Y%m%d)
 
 # Or create a compressed archive
-tar -czf quilltap-backup-$(date +%Y%m%d).tar.gz data/
+mongodump --uri="mongodb://localhost:27017/quilltap" --archive=quilltap-$(date +%Y%m%d).gz --gzip
+```
+
+**S3/MinIO Backup:**
+
+```bash
+# Using MinIO client
+mc mirror myminio/quilltap-files ./s3-backup-$(date +%Y%m%d)/
+
+# Using AWS CLI
+aws s3 sync s3://quilltap-files ./s3-backup-$(date +%Y%m%d)/ --endpoint-url http://localhost:9000
 ```
 
 **Docker Environment:**
 
 ```bash
-# Backup data from running container
-docker-compose exec app tar -czf - data/ > quilltap-backup-$(date +%Y%m%d).tar.gz
+# Backup MongoDB from Docker container
+docker exec quilltap-mongo mongodump --out=/backup
+docker cp quilltap-mongo:/backup ./mongo-backup-$(date +%Y%m%d)/
 
-# Or copy data directory directly
-docker cp quilltap-app:/app/data ./quilltap-data-backup-$(date +%Y%m%d)/
-```
-
-**Using Docker Volumes:**
-
-```bash
-# If data is in a named volume
-docker run --rm -v quilltap_data:/data -v $(pwd):/backup \
-  alpine tar -czf /backup/quilltap-backup.tar.gz -C /data .
-
-# List available volumes
-docker volume ls | grep quilltap
+# For MinIO, use mc or aws cli as shown above
 ```
 
 ## Backup Best Practices
@@ -95,6 +107,7 @@ docker volume ls | grep quilltap
 ### Before Major Operations
 
 Always backup before:
+
 - Upgrading to a new version
 - Making configuration changes
 - Running production deployments
@@ -105,15 +118,17 @@ Always backup before:
 Store backups in multiple locations:
 
 ```bash
-# Local backup
-cp -r data/ data-backup/
+# Local MongoDB backup
+mongodump --uri="mongodb://localhost:27017/quilltap" --archive=quilltap-mongo.gz --gzip
 
 # Network backup (NAS/Network share)
-cp -r data/ /mnt/nas/quilltap-backups/
+cp quilltap-mongo.gz /mnt/nas/quilltap-backups/
 
-# Cloud backup
-aws s3 cp data-backup.tar.gz s3://my-backup-bucket/quilltap/
-# Or use Backblaze, Google Cloud Storage, etc.
+# Cloud backup for MongoDB dump
+aws s3 cp quilltap-mongo.gz s3://my-backup-bucket/quilltap/
+
+# For S3 files, sync to another bucket
+aws s3 sync s3://quilltap-files s3://my-backup-bucket/quilltap-files/
 ```
 
 ### Encryption & Security
@@ -121,19 +136,19 @@ aws s3 cp data-backup.tar.gz s3://my-backup-bucket/quilltap/
 **Protect your backups:**
 
 ```bash
-# Encrypt backup with GPG
-tar -czf - data/ | gpg --symmetric --cipher-algo AES256 -o quilltap-backup.tar.gz.gpg
+# Encrypt MongoDB backup with GPG
+gpg --symmetric --cipher-algo AES256 -o quilltap-mongo.gz.gpg quilltap-mongo.gz
 
 # Encrypt with OpenSSL
-tar -czf - data/ | openssl enc -aes-256-cbc -out quilltap-backup.tar.gz.enc
+openssl enc -aes-256-cbc -in quilltap-mongo.gz -out quilltap-mongo.gz.enc
 
 # Verify backup integrity
-sha256sum quilltap-backup.tar.gz > quilltap-backup.tar.gz.sha256
+sha256sum quilltap-mongo.gz > quilltap-mongo.gz.sha256
 ```
 
 ## Restore Procedures
 
-### From Local Backup
+### From MongoDB Backup
 
 **Stop the application first:**
 
@@ -143,18 +158,24 @@ docker-compose down
 # Kill the npm dev process
 ```
 
-**Restore the data:**
+**Restore MongoDB:**
 
 ```bash
-# Extract backup
-tar -xzf quilltap-backup-20250120.tar.gz
+# From directory backup
+mongorestore --uri="mongodb://localhost:27017/quilltap" --drop backup-YYYYMMDD/quilltap
 
-# Or copy from backup directory
-rm -rf data/
-cp -r data-backup/ data/
+# From compressed archive
+mongorestore --uri="mongodb://localhost:27017/quilltap" --archive=quilltap-mongo.gz --gzip --drop
+```
 
-# Fix permissions
-chmod -R 755 data/
+**Restore S3 files:**
+
+```bash
+# Using MinIO client
+mc mirror ./s3-backup-YYYYMMDD/ myminio/quilltap-files
+
+# Using AWS CLI
+aws s3 sync ./s3-backup-YYYYMMDD/ s3://quilltap-files/ --endpoint-url http://localhost:9000
 ```
 
 **Restart the application:**
@@ -165,15 +186,15 @@ docker-compose up -d
 npm run dev
 ```
 
-### From Docker Volume
+### From Docker Container Backup
 
 ```bash
 # Stop container
 docker-compose down
 
-# Extract volume backup
-docker run --rm -v quilltap_data:/data -v $(pwd):/backup \
-  alpine tar -xzf /backup/quilltap-backup.tar.gz -C /data --strip-components=1
+# Restore MongoDB
+docker cp ./mongo-backup-YYYYMMDD/ quilltap-mongo:/backup
+docker exec quilltap-mongo mongorestore --drop /backup
 
 # Restart
 docker-compose up -d
@@ -182,25 +203,27 @@ docker-compose up -d
 ### From Encrypted Backup
 
 ```bash
-# Decrypt and extract (GPG)
-gpg -d quilltap-backup.tar.gz.gpg | tar -xz
+# Decrypt (GPG)
+gpg -d quilltap-mongo.gz.gpg > quilltap-mongo.gz
 
-# Decrypt and extract (OpenSSL)
-openssl enc -d -aes-256-cbc -in quilltap-backup.tar.gz.enc | tar -xz
+# Decrypt (OpenSSL)
+openssl enc -d -aes-256-cbc -in quilltap-mongo.gz.enc -out quilltap-mongo.gz
+
+# Then restore
+mongorestore --uri="mongodb://localhost:27017/quilltap" --archive=quilltap-mongo.gz --gzip --drop
 ```
 
 ### From Cloud Storage
 
 ```bash
-# Download from S3
-aws s3 cp s3://my-backup-bucket/quilltap/quilltap-backup.tar.gz .
+# Download MongoDB backup from S3
+aws s3 cp s3://my-backup-bucket/quilltap/quilltap-mongo.gz .
 
-# Extract
-tar -xzf quilltap-backup.tar.gz
+# Restore MongoDB
+mongorestore --uri="mongodb://localhost:27017/quilltap" --archive=quilltap-mongo.gz --gzip --drop
 
-# Or use cloud restore directly
-docker-compose down
-aws s3 cp s3://my-backup-bucket/quilltap/quilltap-backup.tar.gz - | tar -xz
+# Sync S3 files back
+aws s3 sync s3://my-backup-bucket/quilltap-files/ s3://quilltap-files/
 ```
 
 ## Verification
@@ -208,31 +231,33 @@ aws s3 cp s3://my-backup-bucket/quilltap/quilltap-backup.tar.gz - | tar -xz
 ### Check Backup Integrity
 
 ```bash
-# Verify archive is not corrupted
-tar -tzf quilltap-backup.tar.gz | head
+# Verify MongoDB archive is not corrupted
+tar -tzf quilltap-mongo.tar.gz | head
 
-# Count files in backup
-tar -tzf quilltap-backup.tar.gz | wc -l
+# For gzipped mongodump
+gunzip -t quilltap-mongo.gz
 
 # Verify checksum
-sha256sum -c quilltap-backup.tar.gz.sha256
+sha256sum -c quilltap-mongo.gz.sha256
 ```
 
 ### Test Restore (Optional Environment)
 
-Before restoring to production:
+Before restoring to production, test on a separate MongoDB instance:
 
 ```bash
-# Extract to temporary location
-mkdir /tmp/quilltap-test
-tar -xzf quilltap-backup.tar.gz -C /tmp/quilltap-test
+# Start a test MongoDB container
+docker run -d --name mongo-test -p 27018:27017 mongo:7
 
-# Verify file counts match original
-du -sh /tmp/quilltap-test/data/
-du -sh /path/to/quilltap/data/
+# Restore to test instance
+mongorestore --uri="mongodb://localhost:27018/quilltap-test" --archive=quilltap-mongo.gz --gzip
 
-# Check encryption can be read
-find /tmp/quilltap-test/data -name "*.json" | head | xargs grep -l "ciphertext"
+# Verify data
+mongosh "mongodb://localhost:27018/quilltap-test" --eval "db.users.countDocuments()"
+mongosh "mongodb://localhost:27018/quilltap-test" --eval "db.characters.countDocuments()"
+
+# Clean up
+docker stop mongo-test && docker rm mongo-test
 ```
 
 ## Recovery Scenarios
@@ -255,16 +280,16 @@ echo $ENCRYPTION_MASTER_PEPPER > /secure/location/encryption-pepper.txt
 chmod 600 /secure/location/encryption-pepper.txt
 ```
 
-### Corrupted Session Files
+### Corrupted MongoDB Data
 
-Sessions are stored in `data/auth/sessions.jsonl`. If corrupted:
+If MongoDB data is corrupted:
 
 ```bash
-# Backup corrupted file
-cp data/auth/sessions.jsonl data/auth/sessions.jsonl.corrupted
+# Check MongoDB status
+mongosh quilltap --eval "db.runCommand('validate')"
 
-# Create empty sessions file
-echo "" > data/auth/sessions.jsonl
+# If corrupted, restore from backup
+mongorestore --uri="mongodb://localhost:27017/quilltap" --archive=quilltap-mongo.gz --gzip --drop
 
 # Users will need to log back in
 docker-compose restart app
@@ -272,15 +297,27 @@ docker-compose restart app
 
 ### Partial Data Loss
 
-If specific files are corrupted:
+If specific collections are corrupted:
 
 ```bash
-# Check for corrupted JSON
-find data/ -name "*.json" -exec python3 -m json.tool {} \; 2>&1 | grep -B2 "Expecting"
+# Check collection integrity
+mongosh quilltap --eval "db.characters.validate()"
 
-# Restore just that directory from backup
-tar -xzf quilltap-backup.tar.gz data/characters/ -C /tmp/restore/
-cp -r /tmp/restore/data/characters/* data/characters/
+# Restore just that collection from backup (requires directory backup)
+mongorestore --uri="mongodb://localhost:27017/quilltap" \
+  --nsInclude="quilltap.characters" --drop backup-YYYYMMDD/quilltap
+```
+
+### Lost S3 Files
+
+If S3 files are lost but metadata exists in MongoDB:
+
+```bash
+# The application handles missing files gracefully
+# Users can re-upload avatars and files as needed
+
+# Or restore from S3 backup
+aws s3 sync s3://my-backup-bucket/quilltap-files/ s3://quilltap-files/
 ```
 
 ## Monitoring Backups
@@ -304,33 +341,21 @@ fi
 SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
 echo "Backup size: $SIZE"
 
-# Verify archive
-if tar -tzf "$BACKUP_FILE" > /dev/null 2>&1; then
+# Verify gzip integrity
+if gunzip -t "$BACKUP_FILE" 2>/dev/null; then
   echo "✓ Archive integrity verified"
 else
   echo "✗ Archive corrupted"
   exit 1
 fi
 
-# Count files
-COUNT=$(tar -tzf "$BACKUP_FILE" | wc -l)
-echo "Files in backup: $COUNT"
-
-# Check for expected directories
-for DIR in characters personas chats auth settings binaries; do
-  if tar -tzf "$BACKUP_FILE" | grep -q "data/$DIR/"; then
-    echo "✓ Directory present: $DIR"
-  else
-    echo "⚠ Directory missing: $DIR"
-  fi
-done
-
 echo "Validation complete"
 ```
 
 Usage:
+
 ```bash
-bash backup-validate.sh quilltap-backup.tar.gz
+bash backup-validate.sh quilltap-mongo.gz
 ```
 
 ### Alert on Missing Backups
@@ -341,7 +366,7 @@ bash backup-validate.sh quilltap-backup.tar.gz
 BACKUP_DIR="/backups/quilltap"
 MAX_AGE_DAYS=2
 
-LATEST=$(ls -t "$BACKUP_DIR"/quilltap_*.tar.gz 2>/dev/null | head -1)
+LATEST=$(ls -t "$BACKUP_DIR"/quilltap_mongo_*.gz 2>/dev/null | head -1)
 
 if [ -z "$LATEST" ]; then
   echo "ERROR: No backups found in $BACKUP_DIR"
@@ -367,9 +392,9 @@ echo "Latest backup is current: $AGE days old"
 ### Recovery Time Objective (RTO): 30 minutes
 
 1. **Detection** (5 min): Monitor alerts, confirm data loss
-2. **Access Backup** (5 min): Retrieve latest backup from secure location
-3. **Preparation** (10 min): Verify backup integrity, prepare restore location
-4. **Restore** (5 min): Extract backup and verify permissions
+2. **Access Backup** (5 min): Retrieve latest MongoDB and S3 backups from secure location
+3. **Preparation** (10 min): Verify backup integrity, prepare MongoDB and S3
+4. **Restore** (5 min): Restore MongoDB and S3 data
 5. **Verification** (5 min): Check application starts and data is correct
 
 ### Recovery Point Objective (RPO): 24 hours
@@ -381,36 +406,44 @@ echo "Latest backup is current: $AGE days old"
 ### Step-by-Step Recovery
 
 1. **Verify you have the backup:**
+
    ```bash
-   ls -lh /backups/quilltap/quilltap_*.tar.gz | tail -3
+   ls -lh /backups/quilltap/quilltap_mongo_*.gz | tail -3
    ```
 
 2. **Stop the application:**
+
    ```bash
    docker-compose down
    ```
 
-3. **Backup current corrupted data (for forensics):**
-   ```bash
-   mv data/ data-corrupted-$(date +%s)/
-   ```
+3. **Restore encryption key (if needed):**
 
-4. **Extract backup:**
-   ```bash
-   tar -xzf /backups/quilltap/quilltap_LATEST.tar.gz
-   ```
-
-5. **Restore encryption key (if needed):**
    ```bash
    export ENCRYPTION_MASTER_PEPPER=$(cat /secure/location/encryption-pepper.txt)
    ```
 
+4. **Restore MongoDB:**
+
+   ```bash
+   mongorestore --uri="mongodb://localhost:27017/quilltap" \
+     --archive=/backups/quilltap/quilltap_mongo_LATEST.gz --gzip --drop
+   ```
+
+5. **Restore S3 files (if backed up):**
+
+   ```bash
+   aws s3 sync /backups/quilltap/s3_LATEST/ s3://quilltap-files/
+   ```
+
 6. **Start application:**
+
    ```bash
    docker-compose up -d
    ```
 
 7. **Verify:**
+
    ```bash
    docker-compose logs -f app
    curl http://localhost:3000/api/health
@@ -428,8 +461,8 @@ echo "Latest backup is current: $AGE days old"
 # Implement retention policy
 BACKUP_DIR="/backups/quilltap"
 
-# Delete backups older than 7 days
-find "$BACKUP_DIR" -name "quilltap_*.tar.gz" -mtime +7 -delete
+# Delete MongoDB backups older than 7 days
+find "$BACKUP_DIR" -name "quilltap_mongo_*.gz" -mtime +7 -delete
 
 # Verify deletion
 ls -lh "$BACKUP_DIR"
@@ -440,7 +473,7 @@ ls -lh "$BACKUP_DIR"
 ```bash
 # Log all backup operations
 echo "$(date): Backup started" >> $BACKUP_DIR/backup.log
-tar -czf "$BACKUP_FILE" data/ >> $BACKUP_DIR/backup.log 2>&1
+mongodump --uri="$MONGODB_URI" --archive="$BACKUP_FILE" --gzip >> $BACKUP_DIR/backup.log 2>&1
 echo "$(date): Backup completed. Size: $(du -h $BACKUP_FILE)" >> $BACKUP_DIR/backup.log
 ```
 
@@ -449,36 +482,37 @@ echo "$(date): Backup completed. Size: $(du -h $BACKUP_FILE)" >> $BACKUP_DIR/bac
 ### Backup is Too Large
 
 ```bash
-# Exclude non-essential directories
-tar --exclude='data/binaries/cache' -czf backup.tar.gz data/
+# Exclude specific collections from backup
+mongodump --uri="$MONGODB_URI" --excludeCollection=logs --archive=backup.gz --gzip
 
-# Or compress more aggressively
-tar -czf --auto-compress backup.tar backup.tar data/
+# Use compression
+mongodump --uri="$MONGODB_URI" --archive=backup.gz --gzip
 ```
 
 ### Restore Takes Too Long
 
 ```bash
-# For large backups, monitor progress
-pv -i 0.5 quilltap-backup.tar.gz | tar -xz
+# For large backups, use multiple collections in parallel
+mongorestore --uri="$MONGODB_URI" --numParallelCollections=4 --archive=backup.gz --gzip
 
-# Or use parallel extraction
-tar -xzf quilltap-backup.tar.gz --checkpoint=.100
+# Monitor restore progress
+mongosh quilltap --eval "db.currentOp()"
 ```
 
 ### Verification Failures
 
 ```bash
-# Check file permissions
-ls -la data/auth/
-chmod 755 data/auth/
+# Check MongoDB connection
+mongosh quilltap --eval "db.runCommand('ping')"
 
-# Verify JSON syntax
-python3 -c "import json; json.load(open('data/settings/general.json'))"
+# Verify collection counts
+mongosh quilltap --eval "db.getCollectionNames().forEach(c => print(c + ': ' + db[c].countDocuments()))"
+
+# Check S3 connectivity
+aws s3 ls s3://quilltap-files/ --endpoint-url http://localhost:9000
 ```
 
 ## Further Reading
 
 - [Data Management](../README.md#data-management)
 - [Deployment Guide](DEPLOYMENT.md)
-- [Phase 6: Cleanup & Documentation](../docs/PHASE-6-CLEANUP.md)

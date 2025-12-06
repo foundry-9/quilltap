@@ -1,6 +1,50 @@
 version: '3.8'
 
+# Basic development setup with MongoDB and MinIO
+# For a more complete setup, use docker-compose.dev-mongo.yml
+
 services:
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: mongosh --eval 'db.runCommand("ping").ok' --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  createbuckets:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      mc mb --ignore-existing myminio/quilltap-files;
+      exit 0;
+      "
+
   app:
     build:
       context: .
@@ -11,11 +55,27 @@ services:
     environment:
       - NODE_ENV=development
       - NEXTAUTH_URL=https://localhost:3000
+      - MONGODB_URI=mongodb://mongo:27017/quilltap
+      - MONGODB_DATABASE=quilltap
+      - S3_MODE=external
+      - S3_ENDPOINT=http://minio:9000
+      - S3_ACCESS_KEY=minioadmin
+      - S3_SECRET_KEY=minioadmin
+      - S3_BUCKET=quilltap-files
+      - S3_FORCE_PATH_STYLE=true
     env_file:
       - .env.local
+    depends_on:
+      mongo:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     volumes:
       - .:/app
-      - ./data:/app/data
       - /app/node_modules
       - /app/.next
     command: npm run devssl
+
+volumes:
+  mongo-data:
+  minio-data:

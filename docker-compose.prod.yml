@@ -28,6 +28,52 @@ services:
     networks:
       - quilltap-network
 
+  mongo:
+    image: mongo:7
+    container_name: quilltap-mongo
+    volumes:
+      - mongo-data:/data/db
+    restart: unless-stopped
+    networks:
+      - quilltap-network
+    healthcheck:
+      test: mongosh --eval 'db.runCommand("ping").ok' --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio
+    container_name: quilltap-minio
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    environment:
+      - MINIO_ROOT_USER=${S3_ACCESS_KEY:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${S3_SECRET_KEY:-minioadmin}
+    restart: unless-stopped
+    networks:
+      - quilltap-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  createbuckets:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 $${MINIO_ROOT_USER:-minioadmin} $${MINIO_ROOT_PASSWORD:-minioadmin};
+      mc mb --ignore-existing myminio/$${S3_BUCKET:-quilltap-files};
+      exit 0;
+      "
+    networks:
+      - quilltap-network
+
   app:
     build:
       context: .
@@ -43,6 +89,21 @@ services:
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - ENCRYPTION_MASTER_PEPPER=${ENCRYPTION_MASTER_PEPPER}
+      # MongoDB configuration
+      - MONGODB_URI=mongodb://mongo:27017/quilltap
+      - MONGODB_DATABASE=quilltap
+      # S3 configuration (embedded MinIO)
+      - S3_MODE=external
+      - S3_ENDPOINT=http://minio:9000
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-minioadmin}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:-minioadmin}
+      - S3_BUCKET=${S3_BUCKET:-quilltap-files}
+      - S3_FORCE_PATH_STYLE=true
+    depends_on:
+      mongo:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - quilltap-network
@@ -53,6 +114,9 @@ services:
       retries: 3
       start_period: 40s
 
+volumes:
+  mongo-data:
+  minio-data:
 
 networks:
   quilltap-network:
