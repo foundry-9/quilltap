@@ -100,22 +100,23 @@ plugins/dist/qtap-plugin-upgrade/lib/json-store/
     └── types.ts
 ```
 
-### Phase 2: Update Environment Configuration
+### Phase 2: Update Environment Configuration ✅ COMPLETED
 
 #### 2.1 Change Defaults in `lib/env.ts`
 
-- [ ] Change `DATA_BACKEND` default from `'json'` to `'mongodb'`
-- [ ] Change `S3_MODE` default from `'disabled'` to error if not explicitly set (require configuration)
-- [ ] Remove `'dual'` option from `DATA_BACKEND` enum
-- [ ] Add validation that requires MongoDB URI when `DATA_BACKEND` is not explicitly set
-- [ ] Add validation that requires S3 configuration when `S3_MODE` is not `'disabled'`
+- [x] Change `DATA_BACKEND` default from `'json'` to `'mongodb'`
+- [x] Change `S3_MODE` default from `'disabled'` to `'embedded'` (embedded MinIO is the new default)
+- [x] Remove `'dual'` option from `DATA_BACKEND` enum
+- [x] Add validation that requires MongoDB URI when `DATA_BACKEND` is `'mongodb'`
+- [x] Add validation that requires S3 configuration (endpoint, access key, secret key) when `S3_MODE` is `'external'`
+- [x] Added deprecation notes for `'json'` DATA_BACKEND and `'disabled'` S3_MODE options
 
 #### 2.2 Update `.env.example`
 
-- [ ] Add required MongoDB configuration as mandatory
-- [ ] Add required S3 configuration as mandatory
-- [ ] Remove `DATA_BACKEND=json` examples
-- [ ] Document that local storage is deprecated
+- [x] Add required MongoDB configuration as mandatory (MONGODB_URI, MONGODB_DATABASE)
+- [x] Add required S3 configuration section with clear documentation
+- [x] Remove `DATA_BACKEND=json` examples and document deprecation
+- [x] Document that local storage is deprecated with migration instructions
 
 ### Phase 3: Remove JSON Backend from Repository Factory
 
