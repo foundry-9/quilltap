@@ -9,15 +9,10 @@
  * - Per-character vector indices for isolation and efficient loading
  * - In-memory search with persistence (suitable for <1000 memories per character)
  * - Cosine similarity for text embedding comparison
- * - MongoDB is the required backend (JSON file storage is deprecated)
- *
- * Note: FileCharacterVectorStore is retained for backwards compatibility and
- * potential migration use cases, but the VectorStoreManager only uses MongoDB.
+ * - MongoDB is the required backend
  */
 
 import { cosineSimilarity } from './embedding-service'
-import * as fs from 'fs/promises'
-import * as path from 'path'
 import { getMongoVectorIndicesRepository } from '@/lib/mongodb/repositories/vector-indices.repository'
 import { logger } from '@/lib/logger'
 
@@ -62,18 +57,6 @@ export interface VectorSearchResult {
 }
 
 /**
- * Persisted vector index file structure
- */
-interface VectorIndexFile {
-  version: number
-  characterId: string
-  dimensions: number
-  entries: VectorEntry[]
-  createdAt: string
-  updatedAt: string
-}
-
-/**
  * Interface for vector store implementations
  */
 export interface ICharacterVectorStore {
@@ -91,221 +74,10 @@ export interface ICharacterVectorStore {
 }
 
 /**
- * File-based vector store for a single character (JSON persistence)
- */
-export class FileCharacterVectorStore implements ICharacterVectorStore {
-  private entries: Map<string, VectorEntry> = new Map()
-  private dimensions: number | null = null
-  private dirty: boolean = false
-
-  constructor(
-    private readonly characterId: string,
-    private readonly storagePath: string
-  ) {}
-
-  /**
-   * Get the file path for this character's vector index
-   */
-  private getFilePath(): string {
-    return path.join(this.storagePath, `${this.characterId}.json`)
-  }
-
-  /**
-   * Load the vector index from disk
-   */
-  async load(): Promise<void> {
-    try {
-      const content = await fs.readFile(this.getFilePath(), 'utf-8')
-      const data: VectorIndexFile = JSON.parse(content)
-
-      this.entries.clear()
-      for (const entry of data.entries) {
-        this.entries.set(entry.id, entry)
-      }
-      this.dimensions = data.dimensions
-      this.dirty = false
-    } catch (error) {
-      // File doesn't exist yet - start fresh
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        this.entries.clear()
-        this.dimensions = null
-        this.dirty = false
-        return
-      }
-      throw error
-    }
-  }
-
-  /**
-   * Save the vector index to disk
-   */
-  async save(): Promise<void> {
-    if (!this.dirty && this.entries.size === 0) {
-      return // Nothing to save
-    }
-
-    // Ensure directory exists
-    await fs.mkdir(path.dirname(this.getFilePath()), { recursive: true })
-
-    const now = new Date().toISOString()
-    const data: VectorIndexFile = {
-      version: 1,
-      characterId: this.characterId,
-      dimensions: this.dimensions || 0,
-      entries: Array.from(this.entries.values()),
-      createdAt: now,
-      updatedAt: now,
-    }
-
-    await fs.writeFile(this.getFilePath(), JSON.stringify(data, null, 2))
-    this.dirty = false
-  }
-
-  /**
-   * Add a vector to the store
-   */
-  async addVector(
-    id: string,
-    embedding: number[],
-    metadata: VectorMetadata
-  ): Promise<void> {
-    // Validate dimensions
-    if (this.dimensions !== null && embedding.length !== this.dimensions) {
-      throw new Error(
-        `Vector dimension mismatch: expected ${this.dimensions}, got ${embedding.length}`
-      )
-    }
-
-    if (this.dimensions === null) {
-      this.dimensions = embedding.length
-    }
-
-    const entry: VectorEntry = {
-      id,
-      embedding,
-      metadata,
-      createdAt: new Date().toISOString(),
-    }
-
-    this.entries.set(id, entry)
-    this.dirty = true
-  }
-
-  /**
-   * Remove a vector from the store
-   */
-  async removeVector(id: string): Promise<boolean> {
-    const deleted = this.entries.delete(id)
-    if (deleted) {
-      this.dirty = true
-    }
-    return deleted
-  }
-
-  /**
-   * Update a vector's embedding
-   */
-  async updateVector(id: string, embedding: number[]): Promise<boolean> {
-    const entry = this.entries.get(id)
-    if (!entry) {
-      return false
-    }
-
-    if (embedding.length !== this.dimensions) {
-      throw new Error(
-        `Vector dimension mismatch: expected ${this.dimensions}, got ${embedding.length}`
-      )
-    }
-
-    entry.embedding = embedding
-    this.dirty = true
-    return true
-  }
-
-  /**
-   * Check if a vector exists
-   */
-  hasVector(id: string): boolean {
-    return this.entries.has(id)
-  }
-
-  /**
-   * Get the number of vectors stored
-   */
-  get size(): number {
-    return this.entries.size
-  }
-
-  /**
-   * Get the embedding dimensions
-   */
-  getDimensions(): number | null {
-    return this.dimensions
-  }
-
-  /**
-   * Search for similar vectors using cosine similarity
-   */
-  search(
-    queryEmbedding: number[],
-    limit: number = 10,
-    filter?: (metadata: VectorMetadata) => boolean
-  ): VectorSearchResult[] {
-    if (this.entries.size === 0) {
-      return []
-    }
-
-    // Validate query dimensions
-    if (this.dimensions !== null && queryEmbedding.length !== this.dimensions) {
-      throw new Error(
-        `Query vector dimension mismatch: expected ${this.dimensions}, got ${queryEmbedding.length}`
-      )
-    }
-
-    const results: VectorSearchResult[] = []
-
-    for (const entry of this.entries.values()) {
-      // Apply filter if provided
-      if (filter && !filter(entry.metadata)) {
-        continue
-      }
-
-      const score = cosineSimilarity(queryEmbedding, entry.embedding)
-      results.push({
-        id: entry.id,
-        score,
-        metadata: entry.metadata,
-      })
-    }
-
-    // Sort by score (descending) and limit
-    return results
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit)
-  }
-
-  /**
-   * Get all entries (for debugging/export)
-   */
-  getAllEntries(): VectorEntry[] {
-    return Array.from(this.entries.values())
-  }
-
-  /**
-   * Clear all entries
-   */
-  clear(): void {
-    this.entries.clear()
-    this.dimensions = null
-    this.dirty = true
-  }
-}
-
-/**
  * MongoDB-backed vector store for a single character
  * Uses in-memory storage with MongoDB persistence
  */
-export class MongoCharacterVectorStore implements ICharacterVectorStore {
+export class CharacterVectorStore implements ICharacterVectorStore {
   private entries: Map<string, VectorEntry> = new Map()
   private dimensions: number | null = null
   private dirty: boolean = false
@@ -319,7 +91,7 @@ export class MongoCharacterVectorStore implements ICharacterVectorStore {
   async load(): Promise<void> {
     try {
       logger.debug('Loading vector index from MongoDB', {
-        context: 'MongoCharacterVectorStore.load',
+        context: 'CharacterVectorStore.load',
         characterId: this.characterId,
       })
 
@@ -339,13 +111,13 @@ export class MongoCharacterVectorStore implements ICharacterVectorStore {
       this.dirty = false
 
       logger.debug('Vector index loaded from MongoDB', {
-        context: 'MongoCharacterVectorStore.load',
+        context: 'CharacterVectorStore.load',
         characterId: this.characterId,
         entryCount: this.entries.size,
       })
     } catch (error) {
       logger.error('Error loading vector index from MongoDB', {
-        context: 'MongoCharacterVectorStore.load',
+        context: 'CharacterVectorStore.load',
         characterId: this.characterId,
         error: error instanceof Error ? error.message : String(error),
       })
@@ -366,7 +138,7 @@ export class MongoCharacterVectorStore implements ICharacterVectorStore {
 
     try {
       logger.debug('Saving vector index to MongoDB', {
-        context: 'MongoCharacterVectorStore.save',
+        context: 'CharacterVectorStore.save',
         characterId: this.characterId,
         entryCount: this.entries.size,
       })
@@ -386,12 +158,12 @@ export class MongoCharacterVectorStore implements ICharacterVectorStore {
       this.dirty = false
 
       logger.debug('Vector index saved to MongoDB', {
-        context: 'MongoCharacterVectorStore.save',
+        context: 'CharacterVectorStore.save',
         characterId: this.characterId,
       })
     } catch (error) {
       logger.error('Error saving vector index to MongoDB', {
-        context: 'MongoCharacterVectorStore.save',
+        context: 'CharacterVectorStore.save',
         characterId: this.characterId,
         error: error instanceof Error ? error.message : String(error),
       })
@@ -539,13 +311,10 @@ export class MongoCharacterVectorStore implements ICharacterVectorStore {
   }
 }
 
-// Alias for backwards compatibility
-export { FileCharacterVectorStore as CharacterVectorStore }
-
 /**
  * Global vector store manager
  * Handles loading and caching of per-character vector stores
- * Uses MongoDB backend exclusively (JSON file storage is deprecated)
+ * Uses MongoDB backend exclusively
  */
 export class VectorStoreManager {
   private stores: Map<string, ICharacterVectorStore> = new Map()
@@ -564,7 +333,7 @@ export class VectorStoreManager {
     let store = this.stores.get(characterId)
 
     if (!store) {
-      store = new MongoCharacterVectorStore(characterId)
+      store = new CharacterVectorStore(characterId)
       await store.load()
       this.stores.set(characterId, store)
     }

@@ -132,7 +132,7 @@ plugins/dist/qtap-plugin-upgrade/lib/json-store/
 #### 3.2 Remove `isMongoDBEnabled()` Checks
 
 - [x] Updated `lib/auth.ts` - removed JSON store imports and backend switching, now always uses MongoDB auth adapter
-- [x] Updated `lib/embedding/vector-store.ts` - VectorStoreManager now only uses MongoCharacterVectorStore
+- [x] Updated `lib/embedding/vector-store.ts` - Removed FileCharacterVectorStore entirely, renamed MongoCharacterVectorStore to CharacterVectorStore, removed fs/path imports
 - [x] Updated `lib/data-backend.ts` - now returns 'mongodb' and documents MongoDB as the only backend
 - [x] Updated `lib/repositories/index.ts` - removed `getJsonRepositories` export
 - [x] Removed JSON cache clearing code from `app/api/profiles/route.ts`
