@@ -10,41 +10,25 @@ import { NextAuthOptions } from "next-auth";
 import { Adapter } from "next-auth/adapters";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { verifyPassword } from "@/lib/auth/password";
-import { JsonStoreAdapter } from "@/lib/json-store/auth-adapter";
-import { getJsonStore } from "@/lib/json-store/core/json-store";
-import { UsersRepository } from "@/lib/json-store/repositories/users.repository";
 import { isAuthDisabled } from "@/lib/auth/config";
 import { logger } from "@/lib/logger";
 import { buildNextAuthProviders, getConfiguredAuthProviders } from "@/lib/plugins/auth-provider-registry";
 import { initializePlugins, isPluginSystemInitialized } from "@/lib/startup/plugin-initialization";
-import { getDataBackend } from "@/lib/repositories/factory";
 import { getMongoDBAuthAdapter } from "@/lib/mongodb/auth-adapter";
+import { getRepositories } from "@/lib/repositories/factory";
 
 // ============================================================================
 // LAZY-LOADED SINGLETONS
 // ============================================================================
 
-let usersRepo: UsersRepository | null = null;
 let adapter: Adapter | null = null;
-
-function getUsersRepository(): UsersRepository {
-  usersRepo ??= new UsersRepository(getJsonStore());
-  return usersRepo;
-}
 
 function getAdapter(): Adapter {
   if (adapter) return adapter;
 
-  const backend = getDataBackend();
-  logger.debug('Selecting auth adapter', { context: 'getAdapter', backend });
-
-  if (backend === 'mongodb') {
-    adapter = getMongoDBAuthAdapter();
-    logger.info('Using MongoDB auth adapter', { context: 'getAdapter' });
-  } else {
-    adapter = JsonStoreAdapter(getJsonStore());
-    logger.info('Using JSON store auth adapter', { context: 'getAdapter' });
-  }
+  logger.debug('Selecting auth adapter', { context: 'getAdapter', backend: 'mongodb' });
+  adapter = getMongoDBAuthAdapter();
+  logger.info('Using MongoDB auth adapter', { context: 'getAdapter' });
 
   return adapter;
 }
@@ -66,8 +50,8 @@ function buildCredentialsProvider() {
         throw new Error('Email and password required')
       }
 
-      // Find user
-      const user = await getUsersRepository().findByEmail(credentials.email)
+      // Find user from MongoDB
+      const user = await getRepositories().users.findByEmail(credentials.email)
 
       if (!user?.passwordHash) {
         throw new Error('Invalid email or password')

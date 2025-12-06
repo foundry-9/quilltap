@@ -2,21 +2,22 @@
  * Vector Store
  * Sprint 4: Vector Database Integration
  *
- * In-memory vector store with persistence for semantic search.
- * Supports both file-based (JSON) and MongoDB backends.
+ * In-memory vector store with MongoDB persistence for semantic search.
  * Uses cosine similarity for nearest neighbor search.
  *
  * Design decisions:
  * - Per-character vector indices for isolation and efficient loading
  * - In-memory search with persistence (suitable for <1000 memories per character)
  * - Cosine similarity for text embedding comparison
- * - Backend selection based on DATA_BACKEND environment variable
+ * - MongoDB is the required backend (JSON file storage is deprecated)
+ *
+ * Note: FileCharacterVectorStore is retained for backwards compatibility and
+ * potential migration use cases, but the VectorStoreManager only uses MongoDB.
  */
 
 import { cosineSimilarity } from './embedding-service'
 import * as fs from 'fs/promises'
 import * as path from 'path'
-import { getDataBackend } from '@/lib/repositories/factory'
 import { getMongoVectorIndicesRepository } from '@/lib/mongodb/repositories/vector-indices.repository'
 import { logger } from '@/lib/logger'
 
@@ -544,21 +545,15 @@ export { FileCharacterVectorStore as CharacterVectorStore }
 /**
  * Global vector store manager
  * Handles loading and caching of per-character vector stores
- * Automatically selects file or MongoDB backend based on DATA_BACKEND
+ * Uses MongoDB backend exclusively (JSON file storage is deprecated)
  */
 export class VectorStoreManager {
   private stores: Map<string, ICharacterVectorStore> = new Map()
-  private readonly storagePath: string
-  private readonly backend: 'json' | 'mongodb'
 
-  constructor(storagePath?: string) {
-    // Default to data/vector-indices/ in the project root
-    this.storagePath = storagePath || path.join(process.cwd(), 'data', 'vector-indices')
-    this.backend = getDataBackend()
+  constructor() {
     logger.debug('VectorStoreManager initialized', {
       context: 'VectorStoreManager',
-      backend: this.backend,
-      storagePath: this.storagePath,
+      backend: 'mongodb',
     })
   }
 
@@ -569,11 +564,7 @@ export class VectorStoreManager {
     let store = this.stores.get(characterId)
 
     if (!store) {
-      if (this.backend === 'mongodb') {
-        store = new MongoCharacterVectorStore(characterId)
-      } else {
-        store = new FileCharacterVectorStore(characterId, this.storagePath)
-      }
+      store = new MongoCharacterVectorStore(characterId)
       await store.load()
       this.stores.set(characterId, store)
     }
@@ -617,21 +608,8 @@ export class VectorStoreManager {
   async deleteStore(characterId: string): Promise<boolean> {
     this.stores.delete(characterId)
 
-    if (this.backend === 'mongodb') {
-      const repo = getMongoVectorIndicesRepository()
-      return repo.delete(characterId)
-    } else {
-      const filePath = path.join(this.storagePath, `${characterId}.json`)
-      try {
-        await fs.unlink(filePath)
-        return true
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-          return false
-        }
-        throw error
-      }
-    }
+    const repo = getMongoVectorIndicesRepository()
+    return repo.delete(characterId)
   }
 
   /**

@@ -1,25 +1,27 @@
 /**
  * Data Backend Configuration
  *
- * The application now exclusively uses JSON store for data persistence.
- * This file is retained for historical reference.
+ * The application now exclusively uses MongoDB for data persistence.
+ * JSON file storage has been deprecated.
+ *
+ * For migration from JSON to MongoDB, use the qtap-plugin-upgrade migration plugin.
  */
 
 import { logger } from '@/lib/logger'
 
-export type DataBackend = 'json';
+export type DataBackend = 'mongodb';
 
 /**
- * Get the currently configured data backend (always JSON)
+ * Get the currently configured data backend (always MongoDB)
  */
 export function getDataBackend(): DataBackend {
-  return 'json';
+  return 'mongodb';
 }
 
 /**
- * Check if we should use JSON store (always true)
+ * Check if we should use MongoDB (always true)
  */
-export function shouldUseJsonStore(): boolean {
+export function shouldUseMongoDB(): boolean {
   return true;
 }
 
@@ -27,5 +29,5 @@ export function shouldUseJsonStore(): boolean {
  * Log backend configuration
  */
 export function logBackendConfig(): void {
-  logger.info('Data backend configuration', { context: { backend: 'JSON' } });
+  logger.info('Data backend configuration', { context: { backend: 'MongoDB' } });
 }

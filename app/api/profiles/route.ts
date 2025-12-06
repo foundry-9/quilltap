@@ -43,11 +43,6 @@ export async function GET(req: NextRequest) {
 
     const repos = getRepositories()
 
-    // Clear cache before fetching to ensure fresh data (only for JSON backend)
-    if ('jsonStore' in repos.connections && typeof repos.connections['jsonStore']?.clearCache === 'function') {
-      repos.connections['jsonStore'].clearCache()
-    }
-
     // Get all connection profiles for user
     let profiles = await repos.connections.findByUserId(session.user.id)
 

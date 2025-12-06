@@ -2,15 +2,16 @@
  * Repositories Module
  *
  * Central export point for all repository functionality.
- * Provides factory functions for accessing repositories with support
- * for multiple data backends (JSON, MongoDB, or dual-write).
+ * Provides factory functions for accessing MongoDB repositories.
+ *
+ * Note: JSON file storage has been deprecated. For migration from JSON to MongoDB,
+ * use the qtap-plugin-upgrade migration plugin.
  */
 
 export {
   getDataBackend,
   isMongoDBEnabled,
   getRepositories,
-  getJsonRepositories,
   resetRepositories,
   type RepositoryContainer,
 } from './factory';

@@ -74,6 +74,36 @@ export class MemoriesRepository extends MongoBaseRepository<Memory> {
   }
 
   /**
+   * Find a specific memory by ID for a character
+   * @param characterId The character ID
+   * @param memoryId The memory ID
+   * @returns Promise<Memory | null> The memory if found and belongs to character, null otherwise
+   */
+  async findByIdForCharacter(characterId: string, memoryId: string): Promise<Memory | null> {
+    logger.debug('Finding memory by ID for character', { characterId, memoryId });
+    try {
+      const collection = await this.getCollection();
+      const result = await collection.findOne({ id: memoryId, characterId });
+
+      if (!result) {
+        logger.debug('Memory not found for character', { characterId, memoryId });
+        return null;
+      }
+
+      const validated = this.validate(result);
+      logger.debug('Memory found and validated', { characterId, memoryId });
+      return validated;
+    } catch (error) {
+      logger.error('Error finding memory by ID for character', {
+        characterId,
+        memoryId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
+  }
+
+  /**
    * Find all memories for a specific character
    * @param characterId The character ID
    * @returns Promise<Memory[]> Array of memories for the character

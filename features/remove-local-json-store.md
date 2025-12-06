@@ -118,21 +118,25 @@ plugins/dist/qtap-plugin-upgrade/lib/json-store/
 - [x] Remove `DATA_BACKEND=json` examples and document deprecation
 - [x] Document that local storage is deprecated with migration instructions
 
-### Phase 3: Remove JSON Backend from Repository Factory
+### Phase 3: Remove JSON Backend from Repository Factory ✅ COMPLETED
 
 #### 3.1 Update `lib/repositories/factory.ts`
 
-- [ ] Remove import of `@/lib/json-store/repositories`
-- [ ] Remove `getJsonRepositories()` function
-- [ ] Remove backend switching logic - always use MongoDB
-- [ ] Simplify `getRepositories()` to only return MongoDB repositories
-- [ ] Remove `getDataBackend()` function or make it always return `'mongodb'`
+- [x] Remove import of `@/lib/json-store/repositories`
+- [x] Remove `getJsonRepositories()` function
+- [x] Remove backend switching logic - always use MongoDB
+- [x] Simplify `getRepositories()` to only return MongoDB repositories
+- [x] Make `getDataBackend()` always return `'mongodb'` (kept for backwards compatibility with deprecation note)
+- [x] Make `isMongoDBEnabled()` always return `true` (kept for backwards compatibility with deprecation note)
 
 #### 3.2 Remove `isMongoDBEnabled()` Checks
 
-- [ ] Search for all uses of `isMongoDBEnabled()` in the codebase
-- [ ] Remove conditional logic - assume MongoDB is always enabled
-- [ ] Update any code paths that had JSON fallbacks
+- [x] Updated `lib/auth.ts` - removed JSON store imports and backend switching, now always uses MongoDB auth adapter
+- [x] Updated `lib/embedding/vector-store.ts` - VectorStoreManager now only uses MongoCharacterVectorStore
+- [x] Updated `lib/data-backend.ts` - now returns 'mongodb' and documents MongoDB as the only backend
+- [x] Updated `lib/repositories/index.ts` - removed `getJsonRepositories` export
+- [x] Removed JSON cache clearing code from `app/api/profiles/route.ts`
+- [x] Added missing `findByIdForCharacter` method to MongoDB MemoriesRepository
 
 ### Phase 4: Remove Local File Storage Support
 
