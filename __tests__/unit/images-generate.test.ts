@@ -33,10 +33,7 @@ function createMockRequest(body: any) {
 
 const VALID_UUID = '550e8400-e29b-41d4-a716-446655440000'
 
-// NOTE: Tests temporarily skipped due to Jest mock configuration issues
-// with @/lib/repositories/factory module after migrating to MongoDB support.
-// TODO: Fix Jest mock setup for repository factory module
-describe.skip('POST /api/images/generate', () => {
+describe('POST /api/images/generate', () => {
   let mockConnectionsRepo: any
   let mockImagesRepo: any
   let consoleErrorSpy: jest.SpiedFunction<typeof console.error>
@@ -71,13 +68,14 @@ describe.skip('POST /api/images/generate', () => {
     mockGetRepositories.mockReturnValue({
       connections: mockConnectionsRepo,
       images: mockImagesRepo,
+      files: mockImagesRepo, // files repo is used for file storage operations
       characters: {},
       personas: {},
       chats: {},
       tags: {},
       users: {},
       imageProfiles: {},
-    })
+    } as any)
   })
 
   afterEach(() => {
@@ -250,7 +248,7 @@ describe.skip('POST /api/images/generate', () => {
     // Verify new Phase 4 fields are set correctly
     expect(mockImagesRepo.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        source: 'generated',
+        source: 'GENERATED',
         generationPrompt: 'a beautiful landscape',
         generationModel: 'dall-e-3',
       })

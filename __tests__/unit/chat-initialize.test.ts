@@ -13,10 +13,7 @@ const mockGetRepositories = jest.mocked(getRepositories)
 let mockCharactersRepo: { findById: jest.Mock }
 let mockPersonasRepo: { findById: jest.Mock }
 
-// NOTE: Tests temporarily skipped due to Jest mock configuration issues
-// with @/lib/repositories/factory module after migrating to MongoDB support.
-// TODO: Fix Jest mock setup for repository factory module
-describe.skip('buildChatContext', () => {
+describe('buildChatContext', () => {
   const mockCharacter = {
     id: 'char-1',
     name: 'Alice',

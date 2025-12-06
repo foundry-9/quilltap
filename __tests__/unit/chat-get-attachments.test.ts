@@ -37,10 +37,7 @@ interface MockRepositories {
   tags: any
 }
 
-// NOTE: Tests temporarily skipped due to Jest mock configuration issues
-// with @/lib/repositories/factory module after migrating to MongoDB support.
-// TODO: Fix Jest mock setup for repository factory module
-describe.skip('Chat GET API - Attachment Resolution', () => {
+describe('Chat GET API - Attachment Resolution', () => {
   let mockRepos: MockRepositories
 
   const mockUser = {

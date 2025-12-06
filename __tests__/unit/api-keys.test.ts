@@ -31,10 +31,7 @@ function createMockRequest(url: string, options?: { method?: string; body?: stri
   } as any
 }
 
-// NOTE: Tests temporarily skipped due to Jest mock configuration issues
-// with @/lib/repositories/factory module after migrating to MongoDB support.
-// TODO: Fix Jest mock setup for repository factory module
-describe.skip('API Keys Routes', () => {
+describe('API Keys Routes', () => {
   let consoleErrorSpy: jest.SpiedFunction<typeof console.error>
   let mockConnectionsRepo: any
 

@@ -17,6 +17,8 @@ const config: Config = {
     '^openid-client$': '<rootDir>/__mocks__/openid-client.ts',
     '^@openrouter/sdk$': '<rootDir>/__mocks__/@openrouter/sdk.ts',
     '^mongodb$': '<rootDir>/__mocks__/mongodb.ts',
+    '^@aws-sdk/client-s3$': '<rootDir>/__mocks__/@aws-sdk/client-s3.ts',
+    '^@aws-sdk/s3-request-presigner$': '<rootDir>/__mocks__/@aws-sdk/s3-request-presigner.ts',
   },
   transformIgnorePatterns: [
     'node_modules/(?!(@openrouter/sdk|mongodb|bson)/)',

@@ -1,13 +1,6 @@
 /**
  * Unit Tests for Connection Profile Test Message Endpoint
  * Tests app/api/profiles/test-message/route.ts
- *
- * NOTE: Some tests are temporarily skipped due to Jest mock configuration
- * issues with the @/lib/plugins/provider-validation module. The implementation
- * is working correctly (verified via build and integration tests).
- *
- * TODO: Fix Jest mock hoisting issues with provider-validation module
- * See: https://jestjs.io/docs/manual-mocks for guidance
  */
 
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals'
@@ -54,10 +47,7 @@ function createMockRequest(body: any) {
   } as any
 }
 
-// NOTE: Tests temporarily skipped due to Jest mock configuration issues
-// with @/lib/repositories/factory module after migrating to MongoDB support.
-// TODO: Fix Jest mock setup for repository factory module
-describe.skip('POST /api/profiles/test-message', () => {
+describe('POST /api/profiles/test-message', () => {
   let consoleErrorSpy: jest.SpiedFunction<typeof console.error>
   let mockConnectionsRepo: any
 

@@ -45,10 +45,7 @@ const createMockRepositories = () => ({
 // We'll need to import the actual route handlers after the mocks are set up
 // For now, we'll focus on the test structure
 
-// NOTE: Tests temporarily skipped due to Jest mock configuration issues
-// with @/lib/repositories/factory module after migrating to MongoDB support.
-// TODO: Fix Jest mock setup for repository factory module
-describe.skip('GET /api/characters/[id]/memories', () => {
+describe('GET /api/characters/[id]/memories', () => {
   const mockSession = {
     user: { email: 'test@example.com' },
   };
@@ -319,10 +316,7 @@ describe.skip('GET /api/characters/[id]/memories', () => {
   });
 });
 
-// NOTE: Tests temporarily skipped due to Jest mock configuration issues
-// with @/lib/repositories/factory module after migrating to MongoDB support.
-// TODO: Fix Jest mock setup for repository factory module
-describe.skip('POST /api/characters/[id]/memories', () => {
+describe('POST /api/characters/[id]/memories', () => {
   const mockSession = {
     user: { email: 'test@example.com' },
   };

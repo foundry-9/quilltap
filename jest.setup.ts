@@ -154,6 +154,38 @@ jest.mock('@/lib/repositories/factory', () => ({
   resetRepositories: jest.fn(),
 }))
 
+// Mock S3 operations - used by cascade-delete and other modules
+jest.mock('@/lib/s3/operations', () => ({
+  uploadFile: jest.fn().mockResolvedValue(undefined),
+  downloadFile: jest.fn().mockResolvedValue(Buffer.from('mock file content')),
+  deleteFile: jest.fn().mockResolvedValue(undefined),
+  fileExists: jest.fn().mockResolvedValue(true),
+  getPresignedUrl: jest.fn().mockResolvedValue('https://mock-s3.com/presigned-url'),
+  getPresignedUploadUrl: jest.fn().mockResolvedValue('https://mock-s3.com/presigned-upload-url'),
+  getPublicUrl: jest.fn().mockResolvedValue('https://mock-s3.com/public-url'),
+  getFileMetadata: jest.fn().mockResolvedValue({ size: 1024, contentType: 'image/jpeg', lastModified: new Date() }),
+  listFiles: jest.fn().mockResolvedValue([]),
+}))
+
+// Mock S3 client module
+jest.mock('@/lib/s3/client', () => ({
+  getS3Client: jest.fn().mockReturnValue({}),
+  getS3Bucket: jest.fn().mockReturnValue('mock-bucket'),
+}))
+
+// Mock vector store for embedding operations
+jest.mock('@/lib/embedding/vector-store', () => ({
+  getVectorStoreManager: jest.fn().mockReturnValue({
+    deleteStore: jest.fn().mockResolvedValue(undefined),
+    getStore: jest.fn().mockResolvedValue(null),
+  }),
+  CharacterVectorStore: jest.fn().mockImplementation(() => ({
+    addMemory: jest.fn().mockResolvedValue(undefined),
+    searchSimilar: jest.fn().mockResolvedValue([]),
+    deleteMemory: jest.fn().mockResolvedValue(undefined),
+  })),
+}))
+
 global.fetch = jest.fn(() =>
   Promise.resolve({
     json: () => Promise.resolve({}),

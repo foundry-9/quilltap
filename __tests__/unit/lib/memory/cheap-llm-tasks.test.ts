@@ -70,10 +70,7 @@ const localSelection: CheapLLMSelection = {
 
 const testUserId = 'test-user-id'
 
-// NOTE: Tests temporarily skipped due to Jest mock configuration issues
-// with @/lib/repositories/factory module after migrating to MongoDB support.
-// TODO: Fix Jest mock setup for repository factory module
-describe.skip('Cheap LLM Tasks Service', () => {
+describe('Cheap LLM Tasks Service', () => {
   beforeEach(() => {
     jest.clearAllMocks()
 
