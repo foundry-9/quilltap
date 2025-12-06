@@ -21,6 +21,7 @@ This plan outlines the removal of all local JSON file storage and local filesyst
 ### Files Using JSON-Store
 
 #### Core JSON-Store Implementation (`lib/json-store/`)
+
 - `core/json-store.ts` - Core file I/O service
 - `repositories/*.ts` - All entity repositories (characters, personas, chats, tags, users, connections, files, imageProfiles, embeddingProfiles, memories)
 - `auth-adapter.ts` - NextAuth adapter for JSON backend
@@ -28,14 +29,17 @@ This plan outlines the removal of all local JSON file storage and local filesyst
 - `migrations/migrate-to-user-dirs.ts` - Legacy user directory migration
 
 #### Repository Factory (`lib/repositories/factory.ts`)
+
 - Switches between JSON and MongoDB backends based on `DATA_BACKEND`
 - Provides `getJsonRepositories()` for direct JSON access (used by migrations)
 
 #### File Manager (`lib/file-manager/index.ts`)
+
 - Contains local file read/write operations
 - Checks `s3Key` to decide between local vs S3 storage
 
 #### API Routes Using Local Storage
+
 - `app/api/files/[id]/route.ts` - File serving with local fallback
 - `app/api/images/[id]/route.ts` - Image serving
 - `app/api/characters/[id]/avatar/route.ts`
@@ -44,6 +48,7 @@ This plan outlines the removal of all local JSON file storage and local filesyst
 - Multiple other routes with same pattern
 
 ### Migration Plugin (Already Exists)
+
 - `plugins/dist/qtap-plugin-upgrade/migrations/migrate-json-to-mongodb.ts`
 - `plugins/dist/qtap-plugin-upgrade/migrations/migrate-files-to-s3.ts`
 
@@ -54,6 +59,7 @@ This plan outlines the removal of all local JSON file storage and local filesyst
 ### Phase 1: Move JSON-Store Support into Migration Plugin ✅ COMPLETED
 
 #### 1.1 Copy JSON-Store Core to Migration Plugin
+
 - [x] Create `plugins/dist/qtap-plugin-upgrade/lib/json-store/` directory
 - [x] Copy `lib/json-store/core/json-store.ts` to plugin (self-contained version)
 - [x] Copy `lib/json-store/repositories/*.ts` to plugin (all 12 repository files)
@@ -63,12 +69,14 @@ This plan outlines the removal of all local JSON file storage and local filesyst
 - [x] Update imports in copied files to be self-contained (removed all @/lib/logger dependencies)
 
 #### 1.2 Update Migration Scripts
+
 - [x] Update `migrate-json-to-mongodb.ts` to use local json-store copy instead of `@/lib/json-store`
 - [x] Update `migrate-files-to-s3.ts` to remove logger dependency (already uses main codebase for S3/file-manager)
 - [x] Verified build compiles without errors
 
 **Files created in plugin (17 total):**
-```
+
+```text
 plugins/dist/qtap-plugin-upgrade/lib/json-store/
 ├── auth-adapter.ts
 ├── user-data-path.ts
@@ -95,6 +103,7 @@ plugins/dist/qtap-plugin-upgrade/lib/json-store/
 ### Phase 2: Update Environment Configuration
 
 #### 2.1 Change Defaults in `lib/env.ts`
+
 - [ ] Change `DATA_BACKEND` default from `'json'` to `'mongodb'`
 - [ ] Change `S3_MODE` default from `'disabled'` to error if not explicitly set (require configuration)
 - [ ] Remove `'dual'` option from `DATA_BACKEND` enum
@@ -102,6 +111,7 @@ plugins/dist/qtap-plugin-upgrade/lib/json-store/
 - [ ] Add validation that requires S3 configuration when `S3_MODE` is not `'disabled'`
 
 #### 2.2 Update `.env.example`
+
 - [ ] Add required MongoDB configuration as mandatory
 - [ ] Add required S3 configuration as mandatory
 - [ ] Remove `DATA_BACKEND=json` examples
@@ -110,6 +120,7 @@ plugins/dist/qtap-plugin-upgrade/lib/json-store/
 ### Phase 3: Remove JSON Backend from Repository Factory
 
 #### 3.1 Update `lib/repositories/factory.ts`
+
 - [ ] Remove import of `@/lib/json-store/repositories`
 - [ ] Remove `getJsonRepositories()` function
 - [ ] Remove backend switching logic - always use MongoDB
@@ -117,6 +128,7 @@ plugins/dist/qtap-plugin-upgrade/lib/json-store/
 - [ ] Remove `getDataBackend()` function or make it always return `'mongodb'`
 
 #### 3.2 Remove `isMongoDBEnabled()` Checks
+
 - [ ] Search for all uses of `isMongoDBEnabled()` in the codebase
 - [ ] Remove conditional logic - assume MongoDB is always enabled
 - [ ] Update any code paths that had JSON fallbacks
@@ -124,18 +136,22 @@ plugins/dist/qtap-plugin-upgrade/lib/json-store/
 ### Phase 4: Remove Local File Storage Support
 
 #### 4.1 Update `lib/file-manager/index.ts`
+
 - [ ] Remove local file read functions (`readFile` from fs)
 - [ ] Remove local file write functions
 - [ ] Remove local storage directory creation
 - [ ] Make all operations go through S3
 
 #### 4.2 Update `lib/s3/config.ts`
+
 - [ ] Make S3 configuration required (not optional)
 - [ ] Add startup validation that fails if S3 is not configured
 - [ ] Remove `disabled` option from S3_MODE enum (or make it throw during startup)
 
 #### 4.3 Update API Routes
+
 Files to update (remove local file fallback logic):
+
 - [ ] `app/api/files/[id]/route.ts`
 - [ ] `app/api/images/[id]/route.ts`
 - [ ] `app/api/characters/[id]/avatar/route.ts`
@@ -144,16 +160,19 @@ Files to update (remove local file fallback logic):
 - [ ] Any other routes serving files
 
 #### 4.4 Update Image Utilities
+
 - [ ] `lib/images-v2.ts` - Remove local file path generation
 - [ ] `lib/chat-files-v2.ts` - Remove local file operations
 
 ### Phase 5: Delete Obsolete Code
 
 #### 5.1 Remove JSON-Store Library
+
 - [ ] Delete `lib/json-store/` directory entirely
 - [ ] Remove any imports of `@/lib/json-store` from main codebase
 
 #### 5.2 Clean Up Related Files
+
 - [ ] Remove `public/data/` directory references in code
 - [ ] Update `.gitignore` to remove local data directory ignores (if appropriate)
 - [ ] Remove local file path utilities that are no longer needed
@@ -161,6 +180,7 @@ Files to update (remove local file fallback logic):
 ### Phase 6: Update Documentation
 
 #### 6.1 Update README.md
+
 - [ ] Remove references to JSON file storage
 - [ ] Document MongoDB as the required data backend
 - [ ] Document S3 as the required file storage backend
@@ -169,9 +189,11 @@ Files to update (remove local file fallback logic):
 - [ ] Update "Data Management" section
 
 #### 6.2 Update CLAUDE.md (if needed)
+
 - [ ] Note that MongoDB and S3 are now required
 
 #### 6.3 Update Deployment Docs
+
 - [ ] `docs/DEPLOYMENT.md` - Add MongoDB and S3 setup requirements
 - [ ] `docs/BACKUP-RESTORE.md` - Update for MongoDB/S3 backup procedures
 - [ ] Update Docker Compose files if needed
@@ -179,12 +201,14 @@ Files to update (remove local file fallback logic):
 ### Phase 7: Testing
 
 #### 7.1 Update Tests
+
 - [ ] Update test mocks to use MongoDB by default
 - [ ] Remove JSON-store related test utilities
 - [ ] Update integration tests for S3-only file serving
 - [ ] Add tests for migration plugin's JSON reading capability
 
 #### 7.2 Migration Testing
+
 - [ ] Test migration from JSON to MongoDB works with new plugin structure
 - [ ] Test migration from local files to S3 works
 - [ ] Test that fresh installs without JSON data work correctly
@@ -193,13 +217,15 @@ Files to update (remove local file fallback logic):
 
 ## Files to Modify (Summary)
 
-### Files to DELETE from main codebase:
-```
+### Files to DELETE from main codebase
+
+```text
 lib/json-store/                          # Entire directory
 ```
 
-### Files to MODIFY:
-```
+### Files to MODIFY
+
+```text
 # Core Configuration
 lib/env.ts                               # Change defaults, remove json option
 lib/repositories/factory.ts              # Remove JSON backend support
@@ -241,8 +267,9 @@ README.md                                # Update documentation
 .env.example                             # Update with required vars
 ```
 
-### Files to CREATE in migration plugin:
-```
+### Files to CREATE in migration plugin
+
+```text
 plugins/dist/qtap-plugin-upgrade/lib/json-store/
   core/json-store.ts                     # Copy from lib/json-store
   repositories/base.repository.ts
@@ -267,11 +294,13 @@ plugins/dist/qtap-plugin-upgrade/lib/json-store/
 
 ## Risk Assessment
 
-### High Risk Items:
+### High Risk Items
+
 1. **Breaking existing deployments** - Users with JSON-only setups will need to migrate before upgrading
 2. **Data loss potential** - Must ensure migration is run before removing JSON support
 
-### Mitigation:
+### Mitigation
+
 1. Add clear upgrade documentation
 2. Add startup check that detects JSON data and warns/errors if MongoDB migration hasn't run
 3. Consider a transition release that supports both but warns about deprecation
