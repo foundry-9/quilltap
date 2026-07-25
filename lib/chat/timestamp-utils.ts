@@ -80,6 +80,56 @@ function getDatePartsInTimezone(date: Date, timezone?: string): DatePartsInTimez
 }
 
 /**
+ * Matches a zone-less ("naive") wall-clock timestamp, the shape an <input type="datetime-local">
+ * produces: "1550-07-25T10:15", optionally with seconds. A trailing "Z" or "+05:30" makes the
+ * string absolute and disqualifies it here.
+ */
+const NAIVE_TIMESTAMP_PATTERN = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/
+
+/**
+ * Interpret a timestamp string as a wall-clock reading in a target timezone.
+ *
+ * `new Date("1550-07-25T10:15")` resolves a zone-less string against the *server's* timezone,
+ * which then gets re-rendered in the story's timezone — so a base of 10:15 set for
+ * Europe/Istanbul surfaced as 6:01 PM on an America/Chicago host (the two LMT offsets of 1550
+ * differing by ~7h46m). The fictional base is a clock reading in the story's own timezone, so
+ * that is where it must be anchored.
+ *
+ * Strings carrying an explicit zone (…Z, …+05:30) are already absolute and pass through untouched.
+ *
+ * Resolution is iterative because the offset depends on the very instant being solved for
+ * (DST, and pre-standardisation LMT offsets that carry seconds). It converges in one step for
+ * fixed offsets and two across a DST boundary; three is slack.
+ *
+ * @param value - Timestamp string, zone-less or absolute
+ * @param timezone - IANA timezone name. When undefined, falls back to system-local parsing.
+ */
+export function parseTimestampInTimezone(value: string, timezone?: string): Date {
+  const match = NAIVE_TIMESTAMP_PATTERN.exec(value.trim())
+  if (!match || !timezone) return new Date(value)
+
+  const [, year, month, day, hours, minutes, seconds] = match
+  const target = Date.UTC(
+    Number(year), Number(month) - 1, Number(day),
+    Number(hours), Number(minutes), seconds ? Number(seconds) : 0
+  )
+
+  let instant = target
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const shownAs = getDatePartsInTimezone(new Date(instant), timezone)
+    const shown = Date.UTC(
+      shownAs.year, shownAs.month, shownAs.day,
+      shownAs.hours, shownAs.minutes, shownAs.seconds
+    )
+    const drift = target - shown
+    if (drift === 0) break
+    instant += drift
+  }
+
+  return new Date(instant)
+}
+
+/**
  * Compute the UTC offset string (e.g., "+05:30" or "-04:00") for a Date in a given timezone.
  * Uses Intl to find what the local time is, then computes the difference from UTC.
  */
@@ -305,8 +355,12 @@ export function calculateCurrentTimestamp(config: TimestampConfig, timezone?: st
   let isFictional = false
 
   if (config.useFictionalTime && config.fictionalBaseTimestamp) {
-    // Calculate fictional time based on elapsed real time
-    const fictionalBase = new Date(config.fictionalBaseTimestamp)
+    // Calculate fictional time based on elapsed real time. The base is a clock reading in the
+    // story's own timezone, not the server's — see parseTimestampInTimezone.
+    const fictionalBase = parseTimestampInTimezone(config.fictionalBaseTimestamp, timezone)
+    // Without an anchor there is nothing to measure elapsed time against, so the clock would
+    // report the base instant forever. Writers stamp fictionalBaseRealTime (see
+    // ensureFictionalBaseRealTime); this fallback only covers rows that predate that.
     const realBase = config.fictionalBaseRealTime
       ? new Date(config.fictionalBaseRealTime)
       : new Date()
@@ -389,21 +443,35 @@ export function formatTimestampForSystemPrompt(
 }
 
 /**
- * Create a new timestamp configuration with fictional time set to now.
- * Sets the fictional base timestamp and records when it was set.
+ * Anchor a fictional clock to real time, so it can actually advance.
  *
- * @param baseConfig - Base configuration to extend
- * @param fictionalTimestamp - The fictional timestamp to use
- * @returns New configuration with fictional time initialized
+ * Story time runs 1:1 with the wall clock, measured from `fictionalBaseRealTime`. Nothing
+ * populated that field for a long stretch, so `calculateCurrentTimestamp` fell back to "now",
+ * measured zero elapsed time, and re-reported the configured base on every single turn — the
+ * clock read the same instant forever.
+ *
+ * Every path that persists a fictional-time config must run it through here first. Existing
+ * anchors are left alone: re-stamping a live chat would reset its clock back to the base.
+ *
+ * Salon- and character-level *defaults* are deliberately not anchored — a default saved months
+ * ago carries no meaningful anchor. Chat creation is where a config becomes a running clock, so
+ * that is where the stamp is applied (inherited defaults included).
+ *
+ * @param config - Configuration about to be persisted
+ * @param anchor - Real-world instant the clock starts from (defaults to now). Pass a chat's
+ *   createdAt when retro-fitting an existing chat.
+ * @returns The config, with fictionalBaseRealTime filled in when it is needed and missing
  */
-export function initializeFictionalTime(
-  baseConfig: TimestampConfig,
-  fictionalTimestamp: string
-): TimestampConfig {
+export function ensureFictionalBaseRealTime<T extends TimestampConfig | null | undefined>(
+  config: T,
+  anchor?: Date
+): T {
+  if (!config) return config
+  if (!config.useFictionalTime || !config.fictionalBaseTimestamp) return config
+  if (config.fictionalBaseRealTime) return config
+
   return {
-    ...baseConfig,
-    useFictionalTime: true,
-    fictionalBaseTimestamp: fictionalTimestamp,
-    fictionalBaseRealTime: new Date().toISOString(),
+    ...config,
+    fictionalBaseRealTime: (anchor ?? new Date()).toISOString(),
   }
 }

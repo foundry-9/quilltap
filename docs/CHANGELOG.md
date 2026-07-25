@@ -4,6 +4,22 @@
 
 ### 4.8-dev
 
+#### Fictional story clocks were frozen, and read the base in the wrong timezone
+
+Two bugs in `lib/chat/timestamp-utils.ts`, both visible as the Host announcing the same in-story moment on every turn.
+
+**The clock never advanced.** Fictional time runs 1:1 with the wall clock, measured from `timestampConfig.fictionalBaseRealTime`. Nothing ever wrote that field — its only writer, `initializeFictionalTime`, had no callers outside its own unit test. `calculateCurrentTimestamp` fell back to `new Date()`, measured ~0ms elapsed, and re-reported the configured base instant forever. Every fictional-time chat ever created was affected.
+
+- `ensureFictionalBaseRealTime(config, anchor?)` replaces the uncalled `initializeFictionalTime`. It stamps the anchor only when the clock is fictional, has a base, and is not already anchored — re-stamping a live chat would reset it to the base.
+- `POST /api/v1/chats` runs the resolved config through it. Chat creation is where a config stops being a default and starts being a running clock; Salon- and character-level defaults are deliberately left unanchored, since a default saved months ago carries no meaningful anchor.
+- Migration `anchor-fictional-clock-base-v1` backfills existing chats from each chat's own `createdAt` — the instant its base was chosen, so story time resumes where 1:1 tracking from chat creation would have put it rather than lurching. Only touches rows with fictional time on, a base set, and no anchor; unparseable configs are skipped rather than rewritten.
+
+**The base was read in the server's timezone.** `fictionalBaseTimestamp` is a zone-less `datetime-local` string, so `new Date("1550-07-25T10:15")` resolved it against the server's zone before rendering it in the story's. A base of 10:15 set for `Europe/Istanbul` displayed as 6:01 PM on an `America/Chicago` host — the two 1550 LMT offsets differing by ~7h46m. New `parseTimestampInTimezone(value, timezone)` anchors zone-less strings as wall-clock readings in the target zone, resolving iteratively because the offset depends on the instant being solved for (DST, and pre-standardisation LMT offsets carrying seconds). Strings with an explicit zone (`…Z`, `…+05:30`) pass through untouched.
+
+Known limitation, pre-existing and left alone: `CalculatedTimestamp.isoValue` truncates the UTC offset to whole minutes, so it is off by up to 59s for pre-standardisation timezones. Display formatting is unaffected.
+
+Both misleading strings in `TimestampConfigCard` are corrected — the card promised the clock "advances with each message" and would "advance based on message activity", neither of which it has ever done.
+
 #### Lint: the project-name misspelling rule now checks identifiers and comments
 
 `quilltap/no-quilltap-misspelling` only visited string literals and template chunks, so a misspelled *identifier* was invisible to it. It now also visits identifiers, private identifiers, JSX names, JSX text, and comments. `eslint-quilltap-plugin.js` is exempted from its own rule in `eslint.config.mjs` — the implementation has to spell the forbidden word in order to match it — which replaces the two inline disable comments that no longer covered enough of the file.

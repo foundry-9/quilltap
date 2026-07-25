@@ -359,6 +359,8 @@ import { quantizeEmbeddingsMigration } from './quantize-embeddings';
 import { addCustomToolsFieldMigration } from './add-custom-tools-field';
 // Episodic recall overhaul: occurredAt/narrativeTime/entities/kind on memories + chats.timelineMode
 import { addEpisodicMemoryFieldsMigration } from './add-episodic-memory-fields';
+// Story clock: backfill timestampConfig.fictionalBaseRealTime so fictional clocks advance
+import { anchorFictionalClockBaseMigration } from './anchor-fictional-clock-base';
 
 /**
  * All available migrations.
@@ -715,6 +717,8 @@ export const migrations: Migration[] = [
   addCustomToolsFieldMigration,
   // Episodic recall overhaul: occurredAt/narrativeTime/entities/kind on memories + chats.timelineMode
   addEpisodicMemoryFieldsMigration,
+  // Story clock: backfill timestampConfig.fictionalBaseRealTime so fictional clocks advance
+  anchorFictionalClockBaseMigration,
 ];
 
 export {
@@ -1052,5 +1056,7 @@ export {
   addCustomToolsFieldMigration,
   // Episodic recall overhaul: occurredAt/narrativeTime/entities/kind on memories + chats.timelineMode
   addEpisodicMemoryFieldsMigration,
+  // Story clock: backfill timestampConfig.fictionalBaseRealTime so fictional clocks advance
+  anchorFictionalClockBaseMigration,
 };
 

@@ -17,6 +17,7 @@ import { generateGreetingMessage } from '@/lib/chat/initial-greeting';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { resolveProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service';
 import { buildFirstMessageContext } from '@/lib/chat/first-message-context';
+import { ensureFictionalBaseRealTime } from '@/lib/chat/timestamp-utils';
 import { buildRecentConversationsBlock, calculateRecentConversationsLimit } from '@/lib/memory/memory-recap';
 import { getModelContextLimit } from '@/lib/llm/model-context-data';
 import { logger } from '@/lib/logger';
@@ -1112,8 +1113,12 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     }
   }
 
-  // Resolve timestamp config with fallback chain: request > character default > global default
-  const resolvedTimestampConfig = validatedData.timestampConfig || primaryCharacter?.defaultTimestampConfig || chatSettings?.defaultTimestampConfig || null;
+  // Resolve timestamp config with fallback chain: request > character default > global default.
+  // Anchor a fictional clock to now as it lands on the chat — this is the moment the config stops
+  // being a default and starts being a running clock, and without the anchor it never advances.
+  const resolvedTimestampConfig = ensureFictionalBaseRealTime(
+    validatedData.timestampConfig || primaryCharacter?.defaultTimestampConfig || chatSettings?.defaultTimestampConfig || null
+  );
 
   // Resolve image profile: request > project default > character default > null
   const chatImageProfileId = validatedData.imageProfileId || projectDefaultImageProfileId || buildResult.firstImageProfileId || null;

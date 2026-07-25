@@ -476,6 +476,10 @@ The timezone resolution follows a courteous chain of precedence: per-chat settin
 
 For those engaged in period dramas or interstellar adventures, toggle "Use fictional time" to inject a made-up timestamp that advances in real time from a base you specify. The timezone setting still applies to how the fictional time is formatted.
 
+The base timestamp is read as a clock face in the chat's own timezone — set 10:15 for a tale in Constantinople and your characters will be told it is a quarter past ten there, regardless of what hour it happens to be in the room where the server sits. From that moment the fictional clock keeps step with the real one, minute for minute: an hour of your conversation is an hour of theirs. The clock is wound when the chat is created, so a chat begun this morning and resumed this evening will find that the afternoon has passed in the story as surely as it did outside your window.
+
+A caution for the impatient: because the fictional clock is anchored at the chat's creation, it cannot be re-wound afterwards. Should you wish to begin a tale at a different hour, begin a new chat.
+
 ### Data Retention
 
 Sets how many days a chat may sit with nobody actually speaking in it (Staff announcements don't count) before Quilltap's nightly housekeeping tidies away its regenerable working data — compression caches, pre-rendered pages, model scratch-work, superseded generated images, and semantic-search embeddings. The conversation itself is never touched, keyword search keeps working, and a tidied chat re-indexes itself for semantic search the moment you reopen it.
