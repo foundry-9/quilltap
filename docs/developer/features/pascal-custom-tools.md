@@ -388,7 +388,11 @@ The Pascal bubble renders the outcome with a state accent. Add semantic utilitie
 
 - `qt-pascal-result` (container), `qt-pascal-result--success`, `qt-pascal-result--partial` (warning treatment), `qt-pascal-result--failure` (danger treatment), `qt-pascal-result--info`.
 
+The same family is applied to the announcement bar/chip above the outcome (`AnnouncementChip.tsx`, `MessageRow.tsx`, via `getAnnouncementAccentClasses`), where it needs compound `.qt-chat-system-bar.qt-pascal-result*` / `.qt-chat-announcement-chip.qt-pascal-result*` selectors to outrank those wrappers' `border`/`padding` shorthands. The bar's importance dot is likewise replaced by `.qt-chat-announcement-dot-outcome-<state>` (solid `--qt-alert-*-fg`, since the `-border` tints are too thin at 8px).
+
 Per the standing rule, propagate additions to the stylebook and `packages/theme-storybook` (which triggers the packages hard-stop: bump version, then **stop and ask the human to `npm publish`**), and check the six bundled themes render the four states legibly. Keep the additions minimal — accent border/badge, not a new layout system.
+
+**Done in 4.8-dev** (`@quilltap/theme-storybook` 1.0.50): the storybook carries the `qt-pascal-result` family, the Staff-announcement bar/chip classes and their tokens, and a **Pascal Roll Outcomes** story showing all four states. Bundled themes need no work — the accent rides the `--qt-alert-*` families, which all six already define.
 
 ## Settings
 

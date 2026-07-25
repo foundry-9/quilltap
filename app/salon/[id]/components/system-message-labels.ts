@@ -188,6 +188,45 @@ export function getSystemKindDisplayLabel(
   return KIND_DISPLAY_OVERRIDES[raw] ?? raw.replace(/-/g, ' ')
 }
 
+/** The semantic states an author may assign to a custom tool's outcome row. */
+export type PascalOutcomeState = 'success' | 'partial' | 'failure' | 'info'
+
+const PASCAL_OUTCOME_STATES: ReadonlySet<string> = new Set<PascalOutcomeState>([
+  'success',
+  'partial',
+  'failure',
+  'info',
+])
+
+/**
+ * The outcome state a Pascal roll landed on, or null for every other Staff
+ * message. Keys off the roll record rather than the kind, so any future Pascal
+ * announcement that carries a `pascalMeta` accents itself the same way; a row
+ * with no record (or a state this build doesn't know) falls back to the
+ * importance colouring.
+ */
+export function getAnnouncementOutcomeState(
+  message: Pick<Message, 'systemSender' | 'pascalMeta'>,
+): PascalOutcomeState | null {
+  if (message.systemSender !== 'pascal') return null
+  const state = message.pascalMeta?.state
+  if (!state || !PASCAL_OUTCOME_STATES.has(state)) return null
+  return state
+}
+
+/**
+ * Accent classes for the announcement bar/chip wrapper of a Pascal roll — the
+ * same `qt-pascal-result` family the Workbench's outcome rows and the Proving
+ * Bench's miniature wear, so a success reads as a success wherever it appears.
+ * Empty for every other Staff message, which keeps its plain bar.
+ */
+export function getAnnouncementAccentClasses(
+  message: Pick<Message, 'systemSender' | 'pascalMeta'>,
+): string {
+  const state = getAnnouncementOutcomeState(message)
+  return state ? `qt-pascal-result qt-pascal-result--${state}` : ''
+}
+
 export type AnnouncementImportance = 'high' | 'medium' | 'low'
 
 /**
@@ -283,7 +322,10 @@ const IMPORTANCE_TABLE: Record<NonNullable<Message['systemSender']>, Record<stri
   suparna: { 'mail-delivery': 'high', '*': 'high' },
   // A roll outcome is binding on the scene — the table dealt it, and nobody in
   // the room may argue with it. Pascal's results render as their own full row
-  // (never a collapsed chip), so this tier is largely a defensive fallback.
+  // (never a collapsed chip), so this tier is largely a defensive fallback —
+  // and doubly so for the dot, which a roll record overrides with the outcome's
+  // own state (see getAnnouncementOutcomeState): a success has no business
+  // wearing the red dot that "high" would give it.
   pascal: { 'custom-tool-result': 'high', 'custom-tool-error': 'high', '*': 'high' },
 }
 

@@ -210,7 +210,7 @@ A word on length: by default the answer is kept to eight thousand characters. If
 
 Two practicalities. First, the consult costs one cheap-model call per run — real money on a metered provider, though of the smallest denomination, and rather more of it if you set a generous `maxOutput` and the oracle uses the room. Second, the models *playing* in your scene are told only that the tool consults an oracle; the prompt itself is never shown to them, and `revealOdds: false` hides the branching along with everything else. Quilltap insists, and refuses to load a tool that ends any other way. The reason is that a table with a gap in it is a table that will one day produce a roll matching nothing at all, at the worst possible moment, in front of everybody. Requiring a catch-all at the end makes that impossible rather than merely unlikely. For the same reason, a `true` anywhere *except* the end is refused too — everything below it could never be reached, which is never what anyone meant.
 
-`state` is one of `success`, `partial`, `failure`, or `info`. It tints Pascal's announcement accordingly. You never write any styling yourself.
+`state` is one of `success`, `partial`, `failure`, or `info`. It tints Pascal's announcement accordingly — the bar above the outcome carries the same coloured edge and the same coloured mark beside Pascal's name, so a reader scrolling past a long scene can tell how a roll went without stopping to read it. The four states wear the same colours here as they do on the outcome rows in Pascal's Workbench and in the proving bench's preview. You never write any styling yourself.
 
 ### Putting things in the message
 

@@ -378,6 +378,70 @@
   }
 
   /**
+   * Outcome dot for a Pascal roll announcement. A roll has a verdict of its own
+   * — success / partial / failure / info — and that verdict, not a generic
+   * importance tier, is what the reader is looking for. Filled with the solid
+   * --qt-alert-*-fg (the -border tints are alpha-thin and vanish at 8px);
+   * the bar's leading accent below uses the -border tints, as the Workbench and
+   * Proving Bench do.
+   */
+  .qt-chat-announcement-dot-outcome-success {
+    background: var(--qt-alert-success-fg);
+  }
+
+  .qt-chat-announcement-dot-outcome-partial {
+    background: var(--qt-alert-warning-fg);
+  }
+
+  .qt-chat-announcement-dot-outcome-failure {
+    background: var(--qt-alert-error-fg);
+  }
+
+  .qt-chat-announcement-dot-outcome-info {
+    background: var(--qt-alert-info-fg);
+  }
+
+  /**
+   * The bar/chip of a Pascal roll wears the same .qt-pascal-result accent as the
+   * Workbench's outcome rows and the Proving Bench's miniature, so one outcome
+   * reads identically wherever it is shown.
+   *
+   * These compound selectors only restate that accent: .qt-pascal-result is
+   * declared earlier in this file, and both wrappers set a `border` SHORTHAND
+   * (which resets border-left-color) at equal specificity, so the plain family
+   * would lose on source order. Nothing new is styled here — change the accent
+   * itself at .qt-pascal-result.
+   */
+  .qt-chat-system-bar.qt-pascal-result,
+  .qt-chat-announcement-chip.qt-pascal-result {
+    border-left-width: 3px;
+    border-left-color: var(--qt-alert-info-border);
+    /* Matches .qt-pascal-result's own padding-left, which the wrappers' `padding`
+       shorthand would otherwise win on source order. */
+    padding-left: 0.75rem;
+  }
+
+  .qt-chat-system-bar.qt-pascal-result--success,
+  .qt-chat-announcement-chip.qt-pascal-result--success {
+    border-left-color: var(--qt-alert-success-border);
+  }
+
+  .qt-chat-system-bar.qt-pascal-result--partial,
+  .qt-chat-announcement-chip.qt-pascal-result--partial {
+    border-left-color: var(--qt-alert-warning-border);
+  }
+
+  .qt-chat-system-bar.qt-pascal-result--failure,
+  .qt-chat-announcement-chip.qt-pascal-result--failure {
+    border-left-color: var(--qt-alert-error-border);
+  }
+
+  .qt-chat-system-bar.qt-pascal-result--info,
+  .qt-chat-announcement-chip.qt-pascal-result--info {
+    border-left-color: var(--qt-alert-info-border);
+  }
+
+  /**
    * The Courier — manual / clipboard transport placeholder bubble.
    * Stands in for an assistant message that is awaiting a pasted reply
    * from an external LLM. Wider than a normal message, with a stacked

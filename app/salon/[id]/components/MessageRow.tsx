@@ -7,7 +7,11 @@ import ToolMessage from '@/components/chat/ToolMessage'
 import { DangerFlagBadge } from '@/components/chat/DangerFlagBadge'
 import { DangerContentWrapper } from '@/components/chat/DangerContentWrapper'
 import { TerminalEmbed } from '@/components/terminal/TerminalEmbed'
-import { getSystemSenderDisplayName, getSystemKindDisplayLabel } from './system-message-labels'
+import {
+  getSystemSenderDisplayName,
+  getSystemKindDisplayLabel,
+  getAnnouncementAccentClasses,
+} from './system-message-labels'
 import { AnnouncementChip, AnnouncementBarContents } from './AnnouncementChip'
 import { CourierBubble } from './CourierBubble'
 import { buildInterleavedLayout, resolveReasoningSegments } from '../intersperse-reasoning'
@@ -273,11 +277,13 @@ function MessageRowInner({
         {message.systemSender && !isEditing && onToggleSystemMessageExpanded && (() => {
           const senderName = getSystemSenderDisplayName(message.systemSender)
           const kindLabel = getSystemKindDisplayLabel(message)
+          // A Pascal roll wears its outcome state on the bar's leading edge.
+          const accent = getAnnouncementAccentClasses(message)
           return (
             <button
               type="button"
               onClick={() => onToggleSystemMessageExpanded(message.id)}
-              className="qt-chat-system-bar qt-chat-system-bar-expanded"
+              className={`qt-chat-system-bar qt-chat-system-bar-expanded${accent ? ` ${accent}` : ''}`}
               aria-expanded={true}
               aria-label={`Collapse ${senderName}${kindLabel ? ` ${kindLabel}` : ''} message`}
             >

@@ -7,6 +7,8 @@ import {
   getSystemSenderDisplayName,
   getSystemKindDisplayLabel,
   getAnnouncementImportance,
+  getAnnouncementOutcomeState,
+  getAnnouncementAccentClasses,
 } from './system-message-labels'
 import type { Message } from '../types'
 
@@ -16,6 +18,10 @@ import type { Message } from '../types'
  * Rendered both inside packed collapsed chips ({@link AnnouncementChip}) and at
  * the top of an expanded announcement (MessageRow's expanded header), so the
  * dot/sender/kind/time line stays defined in exactly one place.
+ *
+ * A Pascal roll outcome swaps the importance dot for the outcome's own state —
+ * the reader wants to know whether the table dealt a success or a failure, not
+ * that Pascal is generically important.
  */
 export const AnnouncementBarContents = memo(function AnnouncementBarContents({
   message,
@@ -27,14 +33,18 @@ export const AnnouncementBarContents = memo(function AnnouncementBarContents({
 }) {
   const senderName = getSystemSenderDisplayName(message.systemSender)
   const kindLabel = getSystemKindDisplayLabel(message)
+  const outcomeState = getAnnouncementOutcomeState(message)
   const importance = getAnnouncementImportance(message)
+  const dotModifier = outcomeState
+    ? `qt-chat-announcement-dot-outcome-${outcomeState}`
+    : `qt-chat-announcement-dot-${importance}`
   return (
     <>
-      <span
-        className={`qt-chat-announcement-dot qt-chat-announcement-dot-${importance}`}
-        aria-hidden="true"
-      />
+      <span className={`qt-chat-announcement-dot ${dotModifier}`} aria-hidden="true" />
       <span className="qt-chat-system-bar-sender">{senderName}</span>
+      {/* The state is carried by colour alone in the bar; name it for readers
+          who can't see the accent (and for anyone skimming with a screen reader). */}
+      {outcomeState && <span className="sr-only">{outcomeState}</span>}
       {kindLabel && <span className="qt-chat-system-bar-kind">{kindLabel}</span>}
       <span className="qt-chat-system-bar-time">{formatMessageTime(message.createdAt)}</span>
       <Icon
@@ -60,13 +70,14 @@ export const AnnouncementChip = memo(function AnnouncementChip({
 }) {
   const senderName = getSystemSenderDisplayName(message.systemSender)
   const kindLabel = getSystemKindDisplayLabel(message)
+  const accent = getAnnouncementAccentClasses(message)
   return (
     <button
       type="button"
       id={`message-${message.id}`}
       data-message-id={message.id}
       onClick={() => onToggleExpanded(message.id)}
-      className="qt-chat-announcement-chip"
+      className={`qt-chat-announcement-chip${accent ? ` ${accent}` : ''}`}
       aria-expanded={false}
       aria-label={`Expand ${senderName}${kindLabel ? ` ${kindLabel}` : ''} message`}
     >

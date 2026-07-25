@@ -282,6 +282,88 @@ export const Chat: React.FC = () => {
         </div>
       </section>
 
+      {/* Staff Announcements */}
+      <section style={{ marginBottom: '2rem' }}>
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
+          Staff Announcements
+        </h3>
+        <p style={{ color: 'var(--color-muted-foreground)', marginBottom: '1rem' }}>
+          Messages authored by a personified feature rather than a character. Each collapses to a one-line
+          bar; a run of consecutive ones packs into a row of content-width chips. The leading dot carries an
+          importance tier &mdash; filled for high and medium, hollow for low &mdash; so the eye lands on the
+          file changes and arrivals and skims past the time calls.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '32rem' }}>
+          <button type="button" className="qt-chat-system-bar">
+            <span className="qt-chat-announcement-dot qt-chat-announcement-dot-high" aria-hidden="true" />
+            <span className="qt-chat-system-bar-sender">The Librarian</span>
+            <span className="qt-chat-system-bar-kind">edited by character</span>
+            <span className="qt-chat-system-bar-time">4:12 PM</span>
+            <span className="qt-chat-system-bar-chevron" aria-hidden="true">&rsaquo;</span>
+          </button>
+
+          <div className="qt-chat-announcement-group" style={{ width: '100%', margin: 0 }}>
+            <button type="button" className="qt-chat-announcement-chip">
+              <span className="qt-chat-announcement-dot qt-chat-announcement-dot-high" aria-hidden="true" />
+              <span className="qt-chat-system-bar-sender">The Host</span>
+              <span className="qt-chat-system-bar-kind">status change</span>
+              <span className="qt-chat-system-bar-time">4:13 PM</span>
+              <span className="qt-chat-system-bar-chevron" aria-hidden="true">&rsaquo;</span>
+            </button>
+            <button type="button" className="qt-chat-announcement-chip">
+              <span className="qt-chat-announcement-dot qt-chat-announcement-dot-medium" aria-hidden="true" />
+              <span className="qt-chat-system-bar-sender">The Lantern</span>
+              <span className="qt-chat-system-bar-kind">background</span>
+              <span className="qt-chat-system-bar-time">4:14 PM</span>
+              <span className="qt-chat-system-bar-chevron" aria-hidden="true">&rsaquo;</span>
+            </button>
+            <button type="button" className="qt-chat-announcement-chip">
+              <span className="qt-chat-announcement-dot qt-chat-announcement-dot-low" aria-hidden="true" />
+              <span className="qt-chat-system-bar-sender">Prospero</span>
+              <span className="qt-chat-system-bar-kind">project information</span>
+              <span className="qt-chat-system-bar-time">4:14 PM</span>
+              <span className="qt-chat-system-bar-chevron" aria-hidden="true">&rsaquo;</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Pascal Roll Outcomes */}
+      <section style={{ marginBottom: '2rem' }}>
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
+          Pascal Roll Outcomes
+        </h3>
+        <p style={{ color: 'var(--color-muted-foreground)', marginBottom: '1rem' }}>
+          The outcome of a custom tool (pseudo-tool) roll, announced by Pascal the Croupier. The tool&apos;s
+          author assigns each outcome a semantic state &mdash; success, partial, failure, info &mdash; and the
+          accent follows it, on the bubble and on the announcement bar above it alike. The bar swaps its
+          importance dot for the outcome&apos;s own state, since a success has no business wearing the red dot a
+          high tier would give it. Built on the <code>--qt-alert-*</code> families: the alpha-thin
+          <code> -border</code> tints for the leading edge, the solid <code>-fg</code> for the dot.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '32rem' }}>
+          {([
+            ['success', 'Pick the Lock', 'The lock clicks open.'],
+            ['partial', 'Pick the Lock', 'The lock is giving way, but not yet.'],
+            ['failure', 'Pick the Lock', 'Still locked, and the corridor is no longer empty.'],
+            ['info', 'Scan Hawking Radiation', 'The detector reads 41 µK.'],
+          ] as const).map(([state, tool, message]) => (
+            <div key={state}>
+              <button type="button" className={`qt-chat-system-bar qt-chat-system-bar-expanded qt-pascal-result qt-pascal-result--${state}`}>
+                <span className={`qt-chat-announcement-dot qt-chat-announcement-dot-outcome-${state}`} aria-hidden="true" />
+                <span className="qt-chat-system-bar-sender">Pascal</span>
+                <span className="qt-chat-system-bar-kind">{tool}</span>
+                <span className="qt-chat-system-bar-time">4:15 PM</span>
+                <span className="qt-chat-system-bar-chevron" aria-hidden="true">&and;</span>
+              </button>
+              <div className={`qt-chat-message-body qt-chat-message-assistant qt-pascal-result qt-pascal-result--${state}`}>
+                <p>🎲 <strong>{tool}</strong> &mdash; {message}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* Wardrobe Action Notices */}
       <section style={{ marginBottom: '2rem' }}>
         <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>

@@ -4,6 +4,16 @@
 
 ### 4.8-dev
 
+#### Pascal's announcement bar carries the outcome's state
+
+A roll's `state` (`success` / `partial` / `failure` / `info`) tinted the outcome bubble but not the bar above it, which showed the generic importance dot — and Pascal's importance tier is `high`, so a successful roll wore the same red dot as a deleted file.
+
+- The bar (and, defensively, a collapsed chip) now takes the `qt-pascal-result` / `qt-pascal-result--<state>` accent already used by the Workbench's outcome rows and the proving bench's preview, so one outcome reads the same wherever it is shown.
+- The importance dot is replaced by a state dot filled with the solid `--qt-alert-*-fg` token; the alpha-thin `-border` tints used for the leading edge disappear at 8px. The state is also announced as visually-hidden text, so it is not carried by colour alone.
+- Keyed off the presence of a usable `pascalMeta.state`, not the `systemKind`: a roll record predating the field, or a state a future build introduces, falls back to the importance dot. Prospero's `custom-tool-error` chip carries no roll record and is untouched.
+- New in `_chat.css`: four `.qt-chat-announcement-dot-outcome-*` classes, plus compound `.qt-chat-system-bar.qt-pascal-result*` / `.qt-chat-announcement-chip.qt-pascal-result*` selectors that restate the existing accent at a specificity the wrappers' `border`/`padding` shorthands can't overwrite. No new tokens; bundled themes need no change.
+- **`@quilltap/theme-storybook` 1.0.49 → 1.0.50.** Its `qt-components.css` had no Staff-announcement block at all, so mirroring the accent meant filling the pre-existing hole first: the `--qt-chat-system-bar-*` and `--qt-chat-announcement-dot-*` tokens (light and dark), the `.qt-chat-system-bar*` / `.qt-chat-announcement-*` classes, and then the new outcome dots and compound accents. `Chat.tsx` gains two showcase sections — **Staff Announcements** (bar, packed chip row, three importance dots) and **Pascal Roll Outcomes** (all four states, bar and bubble together), the latter being the first time the storybook showed `qt-pascal-result` at all.
+
 #### Custom tools can be gated on the invoking character's metadata
 
 Outcome tables could already branch on `when.metadata`. A definition can now decide whether a character is offered the tool at all, via two new optional top-level keys — at most one per file.
