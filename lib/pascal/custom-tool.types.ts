@@ -357,6 +357,54 @@ export type LlmComparator = z.infer<typeof LlmComparatorSchema>;
 const MetadataKeySchema = z.string().min(1);
 
 /**
+ * A comparator in an availability gate. The same eight keys as everywhere else,
+ * but every operand is a LITERAL.
+ *
+ * A gate is evaluated before a run exists: there are no resolved parameters to
+ * point a `$param` at, and no run whose state cascade a `$state` reference could
+ * be resolved against. Rejecting those forms at load time is the honest move —
+ * silently tolerating one would leave an author with a gate that reads as though
+ * it consults the caller's input when nothing of the sort can have happened yet.
+ */
+export const GateComparatorSchema = z
+  .strictObject({
+    gt: z.number().finite().optional(),
+    gte: z.number().finite().optional(),
+    lt: z.number().finite().optional(),
+    lte: z.number().finite().optional(),
+    eq: z.union([z.number().finite(), z.string(), z.boolean()]).optional(),
+    neq: z.union([z.number().finite(), z.string(), z.boolean()]).optional(),
+    contains: z.string().min(1, 'the substring to look for must not be empty').optional(),
+    ncontains: z.string().min(1, 'the substring to look for must not be empty').optional(),
+  })
+  .refine(hasComparator, AT_LEAST_ONE_WIDE);
+
+export type GateComparator = z.infer<typeof GateComparatorSchema>;
+
+/**
+ * An availability gate: whether this invoker is offered the tool at all.
+ *
+ * Keyed by metadata key, AND-composed, and fail-soft in exactly the way an
+ * outcome's `metadata` test is — a key the character lacks does not match. The
+ * subject is `metadata` and only `metadata` because a gate is answered BEFORE
+ * the deal: there is no roll to test, no parameters (nobody has called
+ * anything), and no consult. `metadata` is what a character carries into the
+ * room, so it is the one thing that can be asked about before they sit down.
+ *
+ * The subject lives under its own key rather than at the top of the object so a
+ * later build can add a second one without re-shaping every file already
+ * written.
+ */
+export const ToolGateSchema = z.strictObject({
+  metadata: z
+    .record(MetadataKeySchema, GateComparatorSchema)
+    .refine((tests) => Object.keys(tests).length > 0, { message: 'must test at least one metadata key' })
+    .describe("Test the invoking character's metadata.json, keyed by metadata key. All tests must hold."),
+});
+
+export type ToolGate = z.infer<typeof ToolGateSchema>;
+
+/**
  * An outcome test. Either the literal `true` (catch-all) or an object naming
  * one or more subjects, ALL of which must hold.
  *
@@ -516,6 +564,12 @@ export const QtapCustomToolSchema = z
       .max(MAX_DESCRIPTION_LENGTH)
       .describe('What the tool does IN THE FICTION — how the model decides to reach for it.'),
     disabled: z.boolean().optional().describe('true suppresses this name at this tier and below.'),
+    availableWhen: ToolGateSchema.optional().describe(
+      'Offer this tool ONLY to an invoker whose metadata satisfies every test here. At most one of availableWhen/withheldWhen.'
+    ),
+    withheldWhen: ToolGateSchema.optional().describe(
+      'Withhold this tool from an invoker whose metadata satisfies every test here. At most one of availableWhen/withheldWhen.'
+    ),
     revealOdds: z
       .boolean()
       .optional()
@@ -540,6 +594,7 @@ export const QtapCustomToolSchema = z
   .superRefine((tool, ctx) => {
     validateOutcomeOrdering(tool.outcomes, ctx);
     validateReferences(tool, ctx);
+    validateGates(tool, ctx);
   });
 
 export type QtapCustomTool = z.infer<typeof QtapCustomToolSchema>;
@@ -596,6 +651,32 @@ function validateOutcomeOrdering(outcomes: CustomToolOutcome[], ctx: z.Refinemen
       });
     }
   });
+}
+
+/**
+ * Rule: a definition gates one way or the other, never both.
+ *
+ * The two clauses are not complements — `withheldWhen` and a negated
+ * `availableWhen` differ precisely on the character who lacks the key, which is
+ * the whole reason both exist — so a file carrying both is asking two questions
+ * whose interaction its author almost certainly has not thought through. It is
+ * also the shape the Workbench's single "who may reach for it" control cannot
+ * represent, and a form that silently drops half a file is worse than a
+ * rejection that says which half.
+ */
+function validateGates(
+  tool: { availableWhen?: ToolGate; withheldWhen?: ToolGate },
+  ctx: z.RefinementCtx
+): void {
+  if (tool.availableWhen && tool.withheldWhen) {
+    ctx.addIssue({
+      code: 'custom',
+      message:
+        'declares both availableWhen and withheldWhen — a definition gates one way or the other. ' +
+        'Fold the second test into the first, remembering that a key the character lacks never matches.',
+      path: ['withheldWhen'],
+    });
+  }
 }
 
 /** The value types a subject or an operand can carry, with `integer` folded in. */
@@ -887,6 +968,8 @@ const KNOWN_TOP_LEVEL_KEYS = new Set([
   'title',
   'description',
   'disabled',
+  'availableWhen',
+  'withheldWhen',
   'revealOdds',
   'defaultVisibility',
   'parameters',

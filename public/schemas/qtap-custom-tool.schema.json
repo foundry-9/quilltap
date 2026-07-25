@@ -32,6 +32,14 @@
       "type": "boolean",
       "description": "true suppresses a tool of this name at this tier and every tier below it. Use to switch off an inherited tool for one character or project."
     },
+    "availableWhen": {
+      "$ref": "#/$defs/ToolGate",
+      "description": "Availability gate: offer this tool ONLY to an invoker whose metadata.json satisfies every test here — { \"availableWhen\": { \"metadata\": { \"toolAbilities\": { \"contains\": \"programmable\" } } } }. Tested before the deal, so a withheld tool is never listed to the model and never appears in the composer popup. A key the character lacks does not match, so a character with no fact sheet at all fails every availableWhen. A definition gated out this way makes no claim on its name — a farther tier may still supply an ungated tool of the same name, which is how a character-vault variant and a General-store fallback coexist. At most one of availableWhen/withheldWhen (enforced when the file loads)."
+    },
+    "withheldWhen": {
+      "$ref": "#/$defs/ToolGate",
+      "description": "Availability gate: withhold this tool from an invoker whose metadata.json satisfies every test here. The mirror of availableWhen, and NOT its complement — a key the character lacks does not match, so a character with no fact sheet satisfies no withheldWhen and is offered the tool. At most one of availableWhen/withheldWhen (enforced when the file loads)."
+    },
     "revealOdds": {
       "type": "boolean",
       "default": true,
@@ -193,6 +201,51 @@
     }
   },
   "$defs": {
+    "ToolGate": {
+      "type": "object",
+      "required": ["metadata"],
+      "additionalProperties": false,
+      "description": "An availability test, answered BEFORE any run exists. Its only subject is the invoking character's metadata.json: there is no roll to test, no parameters (nobody has called anything yet), and no consult, which is also why a gate's operands are literals rather than $param/$state references. Every test must hold (they AND together), and each is fail-soft exactly as an outcome's metadata test is.",
+      "properties": {
+        "metadata": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Tests against the invoking character's metadata.json, keyed by metadata key. Keys are the user's own, so any non-empty string is allowed.",
+          "additionalProperties": { "$ref": "#/$defs/GateComparator" },
+          "propertyNames": { "minLength": 1 }
+        }
+      }
+    },
+    "GateComparator": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "description": "Comparisons against one metadata key in an availability gate. Shape-identical to MetadataComparator, and fail-soft in the same way, except that every operand must be a literal — a gate is answered before there are parameters or state to reference.",
+      "properties": {
+        "gt": { "type": "number", "description": "Greater than. Does not match unless the key holds a number." },
+        "gte": { "type": "number", "description": "Greater than or equal to. Does not match unless the key holds a number." },
+        "lt": { "type": "number", "description": "Less than. Does not match unless the key holds a number." },
+        "lte": { "type": "number", "description": "Less than or equal to. Does not match unless the key holds a number." },
+        "eq": {
+          "description": "Equal to. Does not match unless the key exists and holds a matching primitive.",
+          "oneOf": [{ "type": "number" }, { "type": "string" }, { "type": "boolean" }]
+        },
+        "neq": {
+          "description": "Not equal to. Does not match when the key is absent — absence is not inequality.",
+          "oneOf": [{ "type": "number" }, { "type": "string" }, { "type": "boolean" }]
+        },
+        "contains": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Contains this substring (case-sensitive). Does not match unless the key holds a string."
+        },
+        "ncontains": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Does not contain this substring (case-sensitive). Does not match unless the key holds a string — as with neq, absence is not a miss."
+        }
+      }
+    },
     "NumberOperand": {
       "description": "A number to compare against: a literal, a { \"$param\": \"name\" } reference to a declared numeric parameter, or a { \"$state\": \"path\", \"fallback\": <number> } reference. The reference form is how an opposed check is written — { \"gte\": { \"$param\": \"difficulty\" } } tests against a number the caller supplied rather than one fixed when the file was written.",
       "$ref": "#/$defs/NumberOrParamRef"

@@ -54,7 +54,8 @@ export interface ToolVocabulary {
   params: string[];
   /**
    * Keys of the invoking character's `metadata.json` this tool reads — from
-   * `when.metadata` tests and from `{{metadata.key}}` placeholders. Sorted.
+   * `when.metadata` tests, from its availability gate, and from
+   * `{{metadata.key}}` placeholders. Sorted.
    */
   metadata: string[];
   /**
@@ -103,6 +104,15 @@ export function collectToolVocabulary(
       for (const key of Object.keys(outcome.when.metadata ?? {})) found.metadata.add(key);
     }
     collectPlaceholders(outcome.message, declared, found);
+  }
+
+  // The availability gate reads the same fact sheet, and naming its keys stays
+  // on the right side of the odds line: that a tool consults `toolAbilities` is
+  // vocabulary; that it is withheld unless `toolAbilities` contains
+  // "programmable" is not, and is not said here. A gated-out tool never reaches
+  // a roster listing at all, so this only ever describes one the reader has.
+  for (const gate of [definition.availableWhen, definition.withheldWhen]) {
+    for (const key of Object.keys(gate?.metadata ?? {})) found.metadata.add(key);
   }
 
   if (definition.llm) collectPlaceholders(definition.llm.prompt, declared, found);

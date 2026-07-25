@@ -37,6 +37,7 @@ import {
   type LlmInvoker,
   type LlmSubject,
 } from '@/lib/pascal/custom-tools';
+import { evaluateToolGate, hasToolGate } from '@/lib/pascal/tool-gate';
 import { buildCustomToolLlmInvoker } from '@/lib/pascal/llm-consult';
 import { buildCustomToolLibrary, listCustomToolDestinations } from '@/lib/pascal/workbench';
 import { CharacterVaultUnavailableError } from '@/lib/database/repositories/vault-overlay/schema';
@@ -201,7 +202,16 @@ async function handlePreview(req: NextRequest, ctx: RequestContext): Promise<Nex
       state: body.value.state ?? {},
       ...(llmInvoke ? { llmInvoke } : {}),
     });
-    return successResponse(result);
+    // The bench always deals — a gate decides whether a character is OFFERED a
+    // tool, not whether the author may test one they are holding. The verdict
+    // rides along so the bench can say "and this character would never have
+    // been dealt it", which a roll alone could never reveal.
+    return successResponse({
+      ...result,
+      ...(hasToolGate(definition.value)
+        ? { gate: evaluateToolGate(definition.value, metadata.value) }
+        : {}),
+    });
   } catch (error) {
     if (error instanceof CustomToolRunError) {
       logger.debug('Workbench preview refused', { context: HANDLER, tool: definition.value.name, reason: error.message });

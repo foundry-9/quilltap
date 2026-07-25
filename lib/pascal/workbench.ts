@@ -33,6 +33,8 @@ export interface CustomToolLibraryEntry {
   title: string;
   description: string;
   disabled: boolean;
+  /** Which availability clause this tool declares, if any. */
+  gate: 'available' | 'withheld' | null;
   defaultVisibility: Visibility;
   rollForm: 'range' | 'dice';
   /** Whether the tool consults an LLM mid-run. */
@@ -183,6 +185,7 @@ export async function buildCustomToolLibrary(): Promise<CustomToolLibraryRespons
     title: displayTitle(entry.definition),
     description: entry.definition.description,
     disabled: entry.definition.disabled ?? false,
+    gate: entry.definition.availableWhen ? 'available' : entry.definition.withheldWhen ? 'withheld' : null,
     defaultVisibility: entry.definition.defaultVisibility ?? 'public',
     rollForm: typeof entry.definition.roll === 'string' ? 'dice' : 'range',
     llm: entry.definition.llm !== undefined,

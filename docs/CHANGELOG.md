@@ -4,6 +4,27 @@
 
 ### 4.8-dev
 
+#### Custom tools can be gated on the invoking character's metadata
+
+Outcome tables could already branch on `when.metadata`. A definition can now decide whether a character is offered the tool at all, via two new optional top-level keys — at most one per file.
+
+```json
+"availableWhen": { "metadata": { "toolAbilities": { "contains": "programmable" } } }
+```
+
+- **`availableWhen`** offers the tool only to an invoker whose `metadata.json` passes every test; **`withheldWhen`** withholds it from one that passes. Tests are written exactly as an outcome's `metadata` clause, and AND together.
+- **Metadata is the only subject, and operands must be literals.** A gate is evaluated before the roll, so there are no resolved parameters and no consult; `$param` and `$state` operands are load-time rejections here.
+- **Enforced at roster resolution**, so a withheld tool is absent from the `run_custom` description, absent from `GET /api/v1/chats/[id]/custom-tools`, and unrunnable by name through either entrance.
+- **Fail-soft, so the two clauses are not complements.** A key the character lacks never matches: an empty fact sheet fails every `availableWhen` and satisfies no `withheldWhen`. `withheldWhen: {x: {eq: true}}` and `availableWhen: {x: {neq: true}}` differ precisely on the character with no `x`.
+- **A gated-out definition does not claim its name** — not even as a `disabled` tombstone — so a farther tier may still supply one. A character-vault variant gated to qualifying characters plus a General-store fallback is now a working arrangement. The gate is evaluated before `disabled` for this reason.
+- Declaring both clauses is rejected at load: they are not complements, and the Workbench's single control cannot represent both.
+
+New modules: `lib/pascal/tool-gate.ts` (the evaluator, client-safe) and `lib/pascal/metadata-match.ts` — the fail-soft comparison table, now shared by the outcome evaluator and the gate rather than implemented twice. `RosterContext` gains `metadata`; all three callers pass the sheet they already hold, and a caller that doesn't triggers a lazy vault read only when a gated definition actually turns up.
+
+**Pascal's Workbench** gains a **Who may reach for it** section at the top of the recipe (Anyone / Only show if… / Do not show if…), a `gated` badge in the library, and a proving-bench line reporting whether the loaded fact sheet would have been dealt the tool — computed live for a hand-typed sheet, returned with the roll for a character's real one. The bench still deals either way: a gate decides who is offered a tool, not whether its author may test one.
+
+`collectToolVocabulary` now reports a gate's metadata keys alongside the table's, so the run dialog names what a tool reads without naming what opens the door.
+
 #### The composer's custom-tools popup is now a two-phase dialog
 
 The wand button in the composer gutter opened a 288px-wide upward popover with every tool's parameter form nested inside an accordion. Filling one out was cramped, and any click outside dismissed it. It now opens a cancellable modal (`components/chat/CustomToolRunDialog.tsx`).

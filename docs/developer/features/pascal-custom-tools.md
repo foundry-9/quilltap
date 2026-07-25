@@ -38,6 +38,10 @@ Zod schema `QtapCustomToolSchema` in `lib/pascal/custom-tool.types.ts`, plus a p
                                                // Roleplay-facing, not mechanical ("Attempt to pick the lock,"
                                                // not "rolls 0–1 against thresholds"). Max 500 chars.
   "disabled": false,                     // optional. true = suppress this name at this tier and below.
+  "availableWhen": {                     // optional (4.8). Availability gate — see "Availability gates" below.
+    "metadata": { "toolAbilities": { "contains": "programmable" } }
+  },
+  "withheldWhen": { … },                 // optional (4.8). The mirror. At most one of the two per file.
   "revealOdds": true,                    // optional, default true. false = model sees name/description/parameters only, never the roll spec or outcome table.
   "defaultVisibility": "public",         // optional: "public" | "whisper". Default "public".
   "parameters": {                        // optional. Keyed by param name (same identifier rules as `name`). Max 8 params.
@@ -221,6 +225,18 @@ The roster for a chat is resolved through the existing five-tier pool (`characte
 - `"disabled": true` at a nearer tier suppresses the inherited tool of that name entirely.
 - A collision **within the same tier** (two mounts at the same tier both defining `unlock`) resolves deterministically by mount-point id (lexicographic), with a warning logged and an info badge in the UI popup.
 - **Perspective:** resolution is computed per invoker. When character X calls `run_custom`, X's character-tier mounts are the "character" tier. For the human user's composer popup, the roster is the union across all participants' perspectives: tools identical for everyone appear once; a tool whose definition differs per character (character-tier shadowing) appears once per variant, labeled with the character's name, and running it executes that character's variant.
+### Availability gates — `availableWhen` / `withheldWhen` (4.8)
+
+A tier decides *which* definition of a name an invoker gets. A gate decides whether they are offered one at all. Both clauses are optional, at most one may appear in a file (enforced at load, since they are not complements and the Workbench's single control cannot represent both), and a definition declaring neither is offered to everyone — which is every file written before 4.8.
+
+- **Subject: `metadata`, and only `metadata`.** The gate is answered *before* the deal, so there is no roll, no resolved parameters, and no consult to test. Operands are therefore literals: `$param` and `$state` are load-time rejections here, because neither has anything to refer to yet.
+- **Semantics are the outcome table's, verbatim.** `lib/pascal/metadata-match.ts` holds the one fail-soft comparison table; `matchesMetadataComparator` (roll time) and `evaluateToolGate` (roster time) are both thin wrappers over it, differing only in operand resolution and logging. A second copy of those rules would drift the moment either side gained a comparator.
+- **Fail-soft cuts opposite ways, which is why both clauses exist.** A key the character lacks never matches, so an empty sheet fails every `availableWhen` (fail-closed) and satisfies no `withheldWhen` (fail-open). `withheldWhen: {x: {eq: true}}` is therefore *not* `availableWhen: {x: {neq: true}}` — they differ precisely on the character with no `x`.
+- **A gated-out definition makes no claim on its name** — not even a tombstone — so a farther tier may still deal one. That is the useful arrangement: a character's vault holds the variant written for characters like them, the General store holds the plain fallback. Contrast `disabled`, which stays absolute. The gate is evaluated *before* `disabled` for this reason: a gated tombstone only tombstones for the characters it names.
+- **Enforcement is at roster resolution**, so a withheld tool is absent from the `run_custom` description, absent from `GET /api/v1/chats/[id]/custom-tools`, and unrunnable by name through either entrance (both re-resolve the roster before executing).
+- **The invoker's sheet** rides on `RosterContext.metadata`; every caller already holds it (the popup hydrates perspectives, the turn resolves a responding character). Absent, the roster fetches it — but lazily, and only if a gated definition actually turns up, so an ungated roster pays nothing. A vault that cannot be read degrades to `{}`, which is the same fail-closed/fail-open reading as an empty sheet.
+- **Vocabulary, not odds:** `collectToolVocabulary` reports a gate's metadata keys alongside the table's, so the run dialog says a tool reads `toolAbilities` — never what value opens the door. A gated-out tool never reaches a listing at all.
+
 ### Roster freshness — resolved per call, never cached across turns
 
 The roster is **re-resolved at every assembly point**, so it can never go stale:

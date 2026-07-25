@@ -154,6 +154,10 @@ async function resolveForPerspective(
     characterMountPointId: perspective.characterMountPointId,
     characterIds: allCharacterIds,
     projectId,
+    // Availability gates are answered against this character's own sheet — the
+    // same sheet the roster already resolves their vault tier through, and
+    // already in hand from `loadPerspectives`.
+    metadata: perspective.metadata,
   });
 }
 

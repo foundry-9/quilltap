@@ -215,6 +215,18 @@ export function WorkbenchLibrary({ onOpen, onCreate, onDuplicate }: Readonly<Wor
             disabled
           </span>
         )}
+        {tool.gate && (
+          <span
+            className="qt-badge qt-badge-warning"
+            title={
+              tool.gate === 'available'
+                ? 'Only offered to a character whose metadata passes this tool’s “only show if” test'
+                : 'Withheld from a character whose metadata passes this tool’s “do not show if” test'
+            }
+          >
+            gated
+          </span>
+        )}
         {tool.defaultVisibility === 'whisper' && (
           <span className="qt-badge qt-badge-secondary" title="Results whisper by default">
             whisper

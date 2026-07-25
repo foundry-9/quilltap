@@ -172,6 +172,32 @@ describe('collectToolVocabulary', () => {
       state: [],
     })
   })
+
+  it('collects the metadata keys an availability gate reads', () => {
+    // A gate reads the same fact sheet, and naming its keys stays on the right
+    // side of the odds line: which key, never which value opens the door.
+    expect(
+      collectToolVocabulary(define({ availableWhen: { metadata: { toolAbilities: { contains: 'programmable' } } } }))
+        .metadata
+    ).toEqual(['toolAbilities'])
+
+    expect(
+      collectToolVocabulary(define({ withheldWhen: { metadata: { novice: { eq: true } } } })).metadata
+    ).toEqual(['novice'])
+  })
+
+  it('merges gate keys with the ones the table tests, without duplicating', () => {
+    const vocabulary = collectToolVocabulary(
+      define({
+        availableWhen: { metadata: { rank: { gte: 3 } } },
+        outcomes: [
+          { when: { metadata: { rank: { gte: 5 }, luck: { eq: true } } }, message: 'a', state: 'success' },
+          { when: true, message: 'b', state: 'info' },
+        ],
+      })
+    )
+    expect(vocabulary.metadata).toEqual(['luck', 'rank'])
+  })
 })
 
 describe('isEmptyVocabulary', () => {

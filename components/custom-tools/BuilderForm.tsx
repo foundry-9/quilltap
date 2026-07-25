@@ -42,6 +42,7 @@ import {
   type NumberOrParamValue,
   type ToolDraft,
 } from '@/lib/pascal/tool-draft'
+import { GateSection } from './GateSection'
 import { NumberOrParamField } from './NumberOrParamField'
 
 interface BuilderFormProps {
@@ -307,6 +308,9 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
           </label>
         </div>
       </section>
+
+      {/* Availability gate */}
+      <GateSection draft={draft} issues={issues} onChange={onChange} disabled={disabled} />
 
       {/* Parameters */}
       <section className="qt-card p-4 space-y-3">

@@ -26,6 +26,7 @@ import {
   type DraftOutcome,
   type ToolDraft,
 } from '@/lib/pascal/tool-draft'
+import { COMPARATOR_LABELS } from './comparator-labels'
 
 interface OutcomesSectionProps {
   draft: ToolDraft
@@ -34,17 +35,6 @@ interface OutcomesSectionProps {
   /** Outcome id to flash after a bench roll lands on it. */
   flashOutcomeId?: string | null
   disabled?: boolean
-}
-
-const COMPARATOR_LABELS: Record<ComparatorKey, string> = {
-  gt: '>',
-  gte: '≥',
-  lt: '<',
-  lte: '≤',
-  eq: '=',
-  neq: '≠',
-  contains: 'contains',
-  ncontains: "doesn't contain",
 }
 
 const STATE_OPTIONS: Array<{ state: OutcomeState; label: string; badge: string }> = [

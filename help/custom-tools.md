@@ -278,6 +278,43 @@ The name is then suppressed at that tier and every tier beyond it.
 
 If two stores at the *same* distance both define a name, Quilltap picks one deterministically and notes the fact — but this is a coin-toss you did not intend to write, and is worth tidying up.
 
+## Who may reach for it at all
+
+A tier decides *which* `unlock` a character gets. Sometimes the question is prior to that: whether this character has any business being offered the tool in the first place. An automaton with a programming port may reprogram things; the parlourmaid, whatever her other gifts, may not, and she should not be handed the option and left to discover it politely refuses her.
+
+Two optional keys settle it, and only one of them may appear in a file:
+
+```json
+{
+  "name": "reprogram",
+  "description": "Rewrite the instructions of a mechanism you can reach.",
+  "availableWhen": { "metadata": { "toolAbilities": { "contains": "programmable" } } },
+  "outcomes": [ … ]
+}
+```
+
+- **`availableWhen`** — offer this tool *only* to a character whose fact sheet passes every test in it.
+- **`withheldWhen`** — the mirror: keep it *from* a character whose sheet passes every test in it.
+
+The tests are written exactly as an outcome's `metadata` clause is, and several of them AND together. What is different is *when* they are asked: before the deal, before there is a roll or a parameter or an oracle's answer to speak of. That is why the subject can only ever be `metadata` — a character's fact sheet is the one thing they carry into the room — and why the values compared against must be plain literals rather than `{ "$param": … }` or `{ "$state": … }` references. There is nothing yet for those to refer to.
+
+**A withheld tool is not merely greyed out. It is not there.** The model is never told it exists, the composer's run dialog does not list it, and `run_custom` will not run it if the model asks for it by name. There is nothing to be tempted by, which is the humane arrangement: a tool a character can see and cannot use is an invitation to spend a turn being refused.
+
+**A key the character lacks never matches** — the same fail-soft rule the outcome table follows. Read through the gate, this cuts opposite ways for the two clauses, which is precisely why both exist:
+
+| The character's sheet | `availableWhen` | `withheldWhen` |
+| --- | --- | --- |
+| passes the test | offered | withheld |
+| fails the test | withheld | offered |
+| has no such key at all | withheld | offered |
+| has no sheet whatever | withheld | offered |
+
+So `availableWhen` is the cautious key — a stranger with no fact sheet gets nothing — and `withheldWhen` is the permissive one, which excludes only those you have positively identified.
+
+**A gated-out tool does not claim its name**, and this is quietly the most useful thing about the arrangement. Should a character's own vault hold a clever `unlock` gated to picklock-carrying characters, and Quilltap General hold a plain one gated to nobody, then the picklock carries the clever version and everyone else falls through to the plain one — same name, same call, different contrivance. Contrast `disabled`, which suppresses a name outright at its tier and beyond. (You may combine them, and it reads as it says: a `disabled` definition with a `withheldWhen` is a tombstone that only tombstones for the characters it names.)
+
+You need not write any of this by hand. Pascal's Workbench puts it at the top of the recipe as **Who may reach for it** — *Anyone*, *Only show if…*, or *Do not show if…* — and its proving bench will tell you whether the fact sheet on the bench would have been dealt the tool at all.
+
 ## Rolling in secret
 
 Some rolls should not be public knowledge. Set `"defaultVisibility": "whisper"` and Pascal will whisper the outcome to the character who rolled, and to nobody else — the other characters' contexts simply do not contain it. A character may also whisper a single roll by asking privately, and you may tick **Roll privately** in the run dialog, which hides the outcome from every character at once.

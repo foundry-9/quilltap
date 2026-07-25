@@ -37,8 +37,10 @@ import {
   type OutcomeState,
   type ParamComparator,
   type ParameterType,
+  type GateComparator,
   type QtapCustomTool,
   type StateRef,
+  type ToolGate,
   type Visibility,
   type WhenObject,
 } from './custom-tool.types';
@@ -138,11 +140,39 @@ export interface DraftOutcome {
   message: string;
 }
 
+/**
+ * How the availability gate is posed. `none` emits neither key — the tool is
+ * offered to everyone, which is what every file written before the gate existed
+ * says by saying nothing.
+ */
+export type GateMode = 'none' | 'available' | 'withheld';
+
+/**
+ * One test in the availability gate. Deliberately narrower than
+ * {@link DraftCondition}: the subject is always a metadata key, and the operand
+ * is always a literal, because a gate is answered before there are parameters
+ * or state to reference.
+ */
+export interface DraftGateCondition {
+  id: string;
+  /** The metadata key this test reads. */
+  key: string;
+  comparator: ComparatorKey;
+  operand:
+    | { kind: 'number'; text: string }
+    | { kind: 'string'; text: string }
+    | { kind: 'boolean'; value: boolean };
+}
+
 export interface ToolDraft {
   name: string;
   title: string;
   description: string;
   disabled: boolean;
+  /** Which availability clause the tool declares, if any. */
+  gateMode: GateMode;
+  /** The gate's tests. Kept while `gateMode` is 'none', like the roll fields. */
+  gateConditions: DraftGateCondition[];
   revealOdds: boolean;
   defaultVisibility: Visibility;
   parameters: DraftParameter[];
@@ -193,6 +223,8 @@ export function newDraft(): ToolDraft {
     title: '',
     description: '',
     disabled: false,
+    gateMode: 'none',
+    gateConditions: [],
     revealOdds: true,
     defaultVisibility: 'public',
     parameters: [],
@@ -296,6 +328,67 @@ export function conditionsFromWhen(when: WhenObject): DraftCondition[] {
   return conditions;
 }
 
+/**
+ * Flatten an availability gate into chips. Key order inside one comparator
+ * follows {@link COMPARATOR_KEYS}; metadata keys follow the object's own order.
+ */
+export function gateConditionsFromGate(gate: ToolGate): DraftGateCondition[] {
+  const conditions: DraftGateCondition[] = [];
+
+  for (const [key, comparator] of Object.entries(gate.metadata)) {
+    for (const comparatorKey of COMPARATOR_KEYS) {
+      const operand = (comparator as Record<string, unknown>)[comparatorKey];
+      if (operand === undefined) continue;
+      conditions.push({
+        id: nextDraftId('gate'),
+        key,
+        comparator: comparatorKey,
+        operand:
+          typeof operand === 'number'
+            ? { kind: 'number', text: numberText(operand) }
+            : typeof operand === 'boolean'
+              ? { kind: 'boolean', value: operand }
+              : { kind: 'string', text: String(operand) },
+      });
+    }
+  }
+
+  return conditions;
+}
+
+/**
+ * Reassemble gate chips into a `ToolGate` — the inverse of
+ * {@link gateConditionsFromGate}. Chips on the same key merge into one
+ * comparator object; incomplete chips (blank key, unparseable number) are
+ * skipped, which is safe because {@link validateDraft} blocks save while any
+ * exist.
+ */
+export function gateFromConditions(conditions: DraftGateCondition[]): ToolGate | undefined {
+  const metadata: Record<string, Record<string, unknown>> = {};
+
+  for (const condition of conditions) {
+    const key = condition.key.trim();
+    if (!key) continue;
+
+    let operand: number | string | boolean;
+    if (condition.operand.kind === 'number') {
+      const n = parseNumberText(condition.operand.text);
+      if (!Number.isFinite(n)) continue;
+      operand = n;
+    } else if (condition.operand.kind === 'boolean') {
+      operand = condition.operand.value;
+    } else {
+      if (condition.operand.text === '' && CONTAINMENT_COMPARATORS.has(condition.comparator)) continue;
+      operand = condition.operand.text;
+    }
+
+    metadata[key] = metadata[key] ?? {};
+    metadata[key][condition.comparator] = operand;
+  }
+
+  return Object.keys(metadata).length > 0 ? ({ metadata } as ToolGate) : undefined;
+}
+
 function outcomeToDraft(outcome: CustomToolOutcome): DraftOutcome {
   return {
     id: nextDraftId('outcome'),
@@ -341,11 +434,17 @@ export function draftFromDefinition(raw: unknown): ToolDraft | null {
   const isDice = typeof definition.roll === 'string';
   const range = typeof definition.roll === 'object' && definition.roll !== null ? definition.roll : undefined;
 
+  // At most one clause can be present — the schema rejects a file carrying both
+  // — so the mode is simply whichever one is.
+  const gate = definition.availableWhen ?? definition.withheldWhen;
+
   return {
     name: definition.name,
     title: definition.title ?? '',
     description: definition.description,
     disabled: definition.disabled ?? false,
+    gateMode: definition.availableWhen ? 'available' : definition.withheldWhen ? 'withheld' : 'none',
+    gateConditions: gate ? gateConditionsFromGate(gate) : [],
     revealOdds: definition.revealOdds ?? true,
     defaultVisibility: definition.defaultVisibility ?? 'public',
     parameters: Object.entries(definition.parameters ?? {}).map(([name, spec]) => parameterToDraft(name, spec)),
@@ -383,6 +482,8 @@ const KNOWN_KEY_ORDER = [
   'title',
   'description',
   'disabled',
+  'availableWhen',
+  'withheldWhen',
   'revealOdds',
   'defaultVisibility',
   'parameters',
@@ -545,6 +646,10 @@ export function definitionFromDraft(draft: ToolDraft): Record<string, unknown> {
   if (draft.title.trim() !== '') doc.title = draft.title;
   doc.description = draft.description;
   if (draft.disabled) doc.disabled = true;
+  if (draft.gateMode !== 'none') {
+    const gate = gateFromConditions(draft.gateConditions);
+    if (gate) doc[draft.gateMode === 'available' ? 'availableWhen' : 'withheldWhen'] = gate;
+  }
   if (!draft.revealOdds) doc.revealOdds = false;
   if (draft.defaultVisibility !== 'public') doc.defaultVisibility = draft.defaultVisibility;
 
@@ -601,6 +706,7 @@ export interface DraftIssue {
   /** Where in the form the issue lives, for anchoring UI state. */
   where:
     | { section: 'identity'; field: 'name' | 'title' | 'description' }
+    | { section: 'gate'; conditionId?: string }
     | { section: 'options' }
     | { section: 'parameter'; id: string; field: 'name' | 'default' | 'min' | 'max' }
     | { section: 'roll'; field?: 'dice' | 'min' | 'max' | 'multiplier' | 'offset' }
@@ -841,6 +947,58 @@ function validateCondition(
   }
 }
 
+/**
+ * The availability gate's own audit.
+ *
+ * Every rule here is one the loader would enforce anyway; what the form adds is
+ * saying so beside the chip rather than in a rejection badge after the write.
+ * Note what is deliberately NOT checked: whether a character anywhere actually
+ * carries the key. Metadata keys are undeclared by nature, and a gate written
+ * for a sheet the author has not filled in yet is an ordinary state of affairs.
+ */
+function validateGate(draft: ToolDraft, issues: DraftIssue[]): void {
+  if (draft.gateMode === 'none') return;
+
+  const usable = draft.gateConditions.filter((condition) => condition.key.trim() !== '');
+  if (usable.length === 0) {
+    issues.push(
+      err(
+        { section: 'gate' },
+        'the gate must test something — add a condition, or set the tool back to “anyone may reach for it”'
+      )
+    );
+  }
+
+  const seenSlots = new Set<string>();
+  for (const condition of draft.gateConditions) {
+    const where: DraftIssue['where'] = { section: 'gate', conditionId: condition.id };
+
+    if (condition.key.trim() === '') {
+      issues.push(err(where, 'a gate condition needs a metadata key'));
+      continue;
+    }
+
+    const slot = `${condition.key}:${condition.comparator}`;
+    if (seenSlots.has(slot)) {
+      issues.push(err(where, 'the gate can test this key with this comparator only once'));
+    }
+    seenSlots.add(slot);
+
+    const operand = condition.operand;
+    if (ORDERING_COMPARATORS.has(condition.comparator) && operand.kind !== 'number') {
+      issues.push(err(where, `${condition.comparator} can only order numbers`));
+    } else if (CONTAINMENT_COMPARATORS.has(condition.comparator)) {
+      if (operand.kind !== 'string') {
+        issues.push(err(where, `${condition.comparator} needs text to look for`));
+      } else if (operand.text === '') {
+        issues.push(err(where, 'the substring to look for must not be empty'));
+      }
+    } else if (operand.kind === 'number' && !Number.isFinite(parseNumberText(operand.text))) {
+      issues.push(err(where, 'the comparison needs a number'));
+    }
+  }
+}
+
 function subjectValueType(
   subject: ConditionSubject,
   paramByName: Map<string, DraftParameter>
@@ -905,6 +1063,9 @@ export function validateDraft(draft: ToolDraft): DraftIssue[] {
   } else if (draft.description.length > MAX_DESCRIPTION_LENGTH) {
     issues.push(err({ section: 'identity', field: 'description' }, `description is over ${MAX_DESCRIPTION_LENGTH} characters`));
   }
+
+  // Availability gate.
+  validateGate(draft, issues);
 
   // Parameters.
   if (draft.parameters.length > MAX_PARAMETERS) {

@@ -61,6 +61,8 @@ import {
   type Visibility,
   type When,
 } from './custom-tool.types';
+import { isPrimitive, metadataComparatorHolds } from './metadata-match';
+import { evaluateToolGate, hasToolGate } from './tool-gate';
 
 /**
  * The persistent-state view a run resolves `$state` references against — the
@@ -132,6 +134,14 @@ export interface RosterContext {
   /** Every character in the chat — their vaults form the 'participant' tier. */
   characterIds?: string[];
   projectId?: string | null;
+  /**
+   * The invoking character's hydrated fact sheet, which availability gates are
+   * answered against. Optional: a caller that already holds it (every one of
+   * them does — the popup hydrates perspectives, the turn resolves a responding
+   * character) passes it to spare a read, and one that doesn't leaves the
+   * roster to fetch it, but only if some definition turns out to be gated.
+   */
+  metadata?: Record<string, unknown> | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -322,6 +332,31 @@ function orderedMounts(pool: TieredMountPool): Array<{ tier: MountTier; mountPoi
 }
 
 /**
+ * The invoking character's fact sheet, for the availability gates.
+ *
+ * Fail-soft to `{}`: a vault that cannot be read is not a reason to abandon the
+ * whole roster, and an empty sheet has a defined meaning at the gate (nothing
+ * qualifies, nothing is disqualified — see `lib/pascal/tool-gate.ts`).
+ */
+async function loadInvokerMetadata(ctx: RosterContext): Promise<Record<string, unknown>> {
+  if (ctx.metadata) return ctx.metadata;
+  if (!ctx.characterId) return {};
+
+  try {
+    const character = await getRepositories().characters.findById(ctx.characterId);
+    return character?.metadata ?? {};
+  } catch (error) {
+    logger.debug('Custom-tool gates: the invoker’s fact sheet could not be read, treating it as empty', {
+      context: CONTEXT,
+      chatId: ctx.chatId,
+      characterId: ctx.characterId,
+      error: getErrorMessage(error),
+    });
+    return {};
+  }
+}
+
+/**
  * Resolve the roster for one invoker.
  *
  * Iterates tier buckets explicitly rather than flattening the pool: flattening
@@ -346,6 +381,14 @@ export async function resolveCustomToolRoster(ctx: RosterContext): Promise<Custo
   /** Names switched off by a nearer tier. They must stay off further out. */
   const suppressed = new Set<string>();
 
+  // Fetched at most once, and only if a gated definition actually turns up:
+  // most rosters carry none, and none of them should pay for a vault read.
+  let sheet: Promise<Record<string, unknown>> | null = null;
+  const invokerMetadata = (): Promise<Record<string, unknown>> => {
+    sheet ??= loadInvokerMetadata(ctx);
+    return sheet;
+  };
+
   for (const { tier, mountPointId } of orderedMounts(pool)) {
     const { found, errors: mountErrors } = await loadToolsFromMount(mountPointId, tier);
     errors.push(...mountErrors);
@@ -356,6 +399,29 @@ export async function resolveCustomToolRoster(ctx: RosterContext): Promise<Custo
       // Nearest tier wins. Once a name is decided — by a live definition or by
       // a `disabled` tombstone — farther tiers cannot revive it.
       if (tools.has(name) || suppressed.has(name)) continue;
+
+      // The availability gate, and it runs BEFORE `disabled` on purpose. A
+      // gated-out definition makes no claim on the name at all — not even a
+      // tombstone — so a farther tier may still deal one. That is the useful
+      // arrangement: a character's own vault holds the variant written for
+      // characters like them, and the General store holds the plain one
+      // everybody else gets. `disabled`, by contrast, stays absolute; a gated
+      // tombstone ("suppress this name for novices") is simply both keys at
+      // once, and reads exactly as it says.
+      if (hasToolGate(entry.definition)) {
+        const verdict = evaluateToolGate(entry.definition, await invokerMetadata());
+        if (!verdict.available) {
+          logger.debug('Custom tool withheld by its availability gate', {
+            context: CONTEXT,
+            name,
+            tier,
+            mountPointId,
+            characterId: ctx.characterId ?? null,
+            withheldBy: verdict.withheldBy,
+          });
+          continue;
+        }
+      }
 
       if (entry.definition.disabled) {
         suppressed.add(name);
@@ -816,22 +882,14 @@ function matchesComparator(
   return true;
 }
 
-/** True for the value types a comparator can actually compare. */
-function isPrimitive(value: unknown): value is number | string | boolean {
-  return typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean';
-}
-
 /**
  * Evaluate one comparator against one metadata key — the fail-soft twin of
  * {@link matchesComparator}.
  *
- * Everything `matchesComparator` treats as a regression worth throwing over is,
- * here, an ordinary fact about a character: the key may not exist, or may hold
- * a list, or may hold a string where the table wanted a number. Metadata keys
- * are undeclared by nature — no load-time check could have caught any of it —
- * so each of those simply fails to match, the row is passed over, and the
- * table's mandatory catch-all does what the author wrote it to do. Throwing
- * would punish an author whose table is working exactly as designed.
+ * The semantics live in {@link metadataComparatorHolds}, shared verbatim with
+ * the availability gate so the two can never drift; what this wrapper adds is
+ * the two things the shared table cannot know about — how to resolve a
+ * `$param`/`$state` operand, and where to log a declined row.
  *
  * `$param` operands still throw if they don't resolve: those ARE load-validated,
  * so a failure there is a regression rather than a fact about the character.
@@ -844,69 +902,23 @@ function matchesMetadataComparator(
   params: ResolvedParams,
   state: CustomToolState
 ): boolean {
-  const decline = (reason: string): false => {
-    logger.debug('Custom tool metadata test did not match', {
-      context: CONTEXT,
-      tool: toolName,
-      key,
-      reason,
-    });
-    return false;
-  };
-
-  if (!(key in metadata)) return decline('the character has no such metadata key');
-
-  const subject = metadata[key];
-  if (!isPrimitive(subject)) {
-    return decline(
-      `the key holds ${subject === null ? 'null' : Array.isArray(subject) ? 'an array' : 'an object'}, which cannot be compared`
-    );
-  }
-
-  const label = `metadata "${key}"`;
-  const operandFor = (comparatorKey: keyof MetadataComparator): number | string | boolean =>
-    resolveOperand(
-      toolName,
-      comparator[comparatorKey] as number | string | boolean | ParamRef | StateRef,
-      params,
-      `${label} ${comparatorKey}`,
-      state
-    );
-
-  for (const comparatorKey of ['gt', 'gte', 'lt', 'lte'] as const) {
-    if (comparator[comparatorKey] === undefined) continue;
-    const operand = operandFor(comparatorKey);
-    if (typeof subject !== 'number' || typeof operand !== 'number') {
-      return decline(`${comparatorKey} orders ${JSON.stringify(subject)}, and only numbers can be ordered`);
-    }
-    const held =
-      comparatorKey === 'gt'
-        ? subject > operand
-        : comparatorKey === 'gte'
-          ? subject >= operand
-          : comparatorKey === 'lt'
-            ? subject < operand
-            : subject <= operand;
-    if (!held) return false;
-  }
-
-  if (comparator.eq !== undefined && subject !== operandFor('eq')) return false;
-  if (comparator.neq !== undefined && subject === operandFor('neq')) return false;
-
-  // Containment follows the same fail-soft rule as ordering: a key holding
-  // anything but a string cannot be searched, so the row declines — including
-  // under ncontains, where (as with neq) absence-of-a-string is not a miss.
-  for (const comparatorKey of ['contains', 'ncontains'] as const) {
-    if (comparator[comparatorKey] === undefined) continue;
-    const operand = operandFor(comparatorKey);
-    if (typeof subject !== 'string' || typeof operand !== 'string') {
-      return decline(`${comparatorKey} searches ${JSON.stringify(subject)}, and only a string can contain a substring`);
-    }
-    const held = subject.includes(operand);
-    if (comparatorKey === 'contains' ? !held : held) return false;
-  }
-
-  return true;
+  return metadataComparatorHolds(comparator, key, metadata, {
+    resolveOperand: (comparatorKey) =>
+      resolveOperand(
+        toolName,
+        comparator[comparatorKey] as number | string | boolean | ParamRef | StateRef,
+        params,
+        `metadata "${key}" ${comparatorKey}`,
+        state
+      ),
+    onDecline: (reason) =>
+      logger.debug('Custom tool metadata test did not match', {
+        context: CONTEXT,
+        tool: toolName,
+        key,
+        reason,
+      }),
+  });
 }
 
 /**

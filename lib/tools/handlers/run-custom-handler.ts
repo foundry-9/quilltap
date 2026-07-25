@@ -112,6 +112,29 @@ export async function executeRunCustomTool(
   const { tool: toolName, parameters, private: isPrivate } = parsed;
 
 
+  // The rolling character's fact sheet, read BEFORE the roster: availability
+  // gates are answered against it, so a tool the sheet disqualifies is never
+  // even listed. `findById` hydrates the vault, and throws
+  // CharacterVaultUnavailableError when that vault is broken — which lands on
+  // the same Prospero error bubble as any other refused run, since neither a
+  // gate nor a table that consults metadata can honestly be dealt without it.
+  let metadata: Record<string, unknown> = {};
+  if (context.characterId) {
+    try {
+      const character = await getRepositories().characters.findById(context.characterId);
+      metadata = character?.metadata ?? {};
+    } catch (error) {
+      return reportFailure(
+        context,
+        toolName,
+        `the rolling character's vault could not be read: ${getErrorMessage(error)}`,
+        // No definition in hand yet, so its `defaultVisibility` is unknowable:
+        // only an explicit `private: true` can whisper this one.
+        isPrivate === true
+      );
+    }
+  }
+
   // Resolved fresh: a definition added or edited mid-chat is live on this call.
   const roster = await resolveCustomToolRoster({
     userId: context.userId,
@@ -120,6 +143,7 @@ export async function executeRunCustomTool(
     characterMountPointId: context.characterMountPointId ?? null,
     characterIds: context.characterIds,
     projectId: context.projectId ?? null,
+    metadata,
   });
 
   const entry: DiscoveredCustomTool | undefined = roster.tools.get(toolName);
@@ -139,27 +163,6 @@ export async function executeRunCustomTool(
         : `No custom tool named "${toolName}". This scene has none.`,
       toolName
     );
-  }
-
-  // The rolling character's fact sheet, so outcome tables can branch on what
-  // THIS character carries. `findById` hydrates the vault, and throws
-  // CharacterVaultUnavailableError when that vault is broken — which lands on
-  // the same Prospero error bubble as any other refused run, since a table that
-  // consults metadata cannot honestly be dealt without it.
-  let metadata: Record<string, unknown> = {};
-  if (context.characterId) {
-    try {
-      const character = await getRepositories().characters.findById(context.characterId);
-      metadata = character?.metadata ?? {};
-    } catch (error) {
-      const whisper = isPrivate ?? entry.definition.defaultVisibility === 'whisper';
-      return reportFailure(
-        context,
-        toolName,
-        `the rolling character's vault could not be read: ${getErrorMessage(error)}`,
-        whisper
-      );
-    }
   }
 
   // The merged state cascade (chat → project → group → general) the run's

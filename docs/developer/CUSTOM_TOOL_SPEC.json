@@ -4,6 +4,7 @@
   "title": "Force the Lock",
   "description": "Attempt to force a lock, quietly or otherwise. Reference specimen: exercises every key the custom-tool format understands. Copy it to Tools/force-the-lock.tool.json in any document store, then cut it down to what you actually need — every key here except name, description and outcomes is optional. `title` is what Pascal announces and what the popup lists; omit it and the name is title-cased instead, as CUSTOM_TOOL_SPEC_DICE.json does. The model never sees it — it calls the tool by `name`.",
   "disabled": false,
+  "withheldWhen": { "metadata": { "specimenOptOut": { "eq": true } } },
   "revealOdds": true,
   "defaultVisibility": "public",
   "parameters": {

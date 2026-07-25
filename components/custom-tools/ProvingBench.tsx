@@ -17,7 +17,8 @@ import { apiFetch, ApiFetchError } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { displayTitle, isStateRef } from '@/lib/pascal/custom-tool.types'
 import type { CustomToolAuditResult, CustomToolRunResult } from '@/lib/pascal/custom-tools'
-import { definitionFromDraft, type ToolDraft } from '@/lib/pascal/tool-draft'
+import { evaluateToolGate, type ToolGateVerdict } from '@/lib/pascal/tool-gate'
+import { definitionFromDraft, gateFromConditions, type ToolDraft } from '@/lib/pascal/tool-draft'
 import {
   CustomToolParamsForm,
   coerceParamValues,
@@ -51,6 +52,14 @@ type FactSheet =
  * hands must not mean ten thousand LLM calls.
  */
 type BenchOracle = { mode: 'scripted'; answer: string } | { mode: 'fail' } | { mode: 'live' }
+
+/**
+ * A bench roll, plus the gate verdict the server computed alongside it. The
+ * bench always deals — a gate decides whether a character is OFFERED a tool,
+ * not whether its author may test one they are holding — so the verdict rides
+ * beside the roll rather than replacing it.
+ */
+type BenchRoll = CustomToolRunResult & { gate?: ToolGateVerdict }
 
 function extractErrorMessage(err: unknown): string {
   if (err instanceof ApiFetchError) {
@@ -86,7 +95,7 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
   const [sheet, setSheet] = useState<FactSheet>({ mode: 'manual', text: '{}' })
   const [mockStateText, setMockStateText] = useState('{}')
   const [oracle, setOracle] = useState<BenchOracle>({ mode: 'scripted', answer: '' })
-  const [rolls, setRolls] = useState<CustomToolRunResult[]>([])
+  const [rolls, setRolls] = useState<BenchRoll[]>([])
   const [audit, setAudit] = useState<CustomToolAuditResult | null>(null)
 
   // Merge declared defaults under whatever the user has touched, so a fresh
@@ -97,6 +106,18 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
   )
 
   const testsMetadata = draft.outcomes.some((o) => o.conditions.some((c) => c.subject.kind === 'metadata'))
+
+  /**
+   * The draft's availability gate, in the shape {@link evaluateToolGate} takes.
+   * Null while the tool is ungated or the gate is still half-typed — the form
+   * is already complaining about the latter, and the bench need not join in.
+   */
+  const draftGate = useMemo(() => {
+    if (draft.gateMode === 'none') return null
+    const gate = gateFromConditions(draft.gateConditions)
+    if (!gate) return null
+    return draft.gateMode === 'available' ? { availableWhen: gate } : { withheldWhen: gate }
+  }, [draft.gateMode, draft.gateConditions])
 
   const manualSheetError = useMemo(() => {
     if (sheet.mode !== 'manual') return null
@@ -183,7 +204,7 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
 
   const rollMutation = useMutation({
     mutationFn: () =>
-      apiFetch<CustomToolRunResult>('/api/v1/custom-tools?action=preview', {
+      apiFetch<BenchRoll>('/api/v1/custom-tools?action=preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -326,6 +347,19 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
               No fact sheet supplied — metadata tests will all decline, exactly as for an unattributed manual roll.
             </p>
           )}
+
+        {draftGate && (
+          <GateVerdictLine
+            /* A hand-typed sheet is right here, so the verdict is live. A
+               character's real sheet lives on the server, so that one comes
+               back with a roll — the bench never guesses at a vault. */
+            verdict={
+              sheet.mode === 'manual' && manualSheetError === null
+                ? evaluateToolGate(draftGate, benchMetadata() as Record<string, unknown>)
+                : (rolls[0]?.gate ?? null)
+            }
+          />
+        )}
       </section>
 
       {/* Card 2¾ — Mock state, for $state references */}
@@ -483,6 +517,34 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
         </pre>
       </section>
     </div>
+  )
+}
+
+/**
+ * Whether this sheet would be dealt the tool at all — the one thing a roll can
+ * never show, since the bench deals to whoever asks.
+ */
+function GateVerdictLine({ verdict }: Readonly<{ verdict: ToolGateVerdict | null }>) {
+  if (!verdict) {
+    return (
+      <p className="text-xs qt-text-secondary">
+        This tool is gated. Roll once to learn whether this character would be offered it.
+      </p>
+    )
+  }
+
+  if (verdict.available) {
+    return <p className="text-xs qt-text-secondary">✓ This sheet would be offered the tool.</p>
+  }
+
+  return (
+    <p className="text-xs qt-text-destructive">
+      ✕ This sheet would never be offered the tool —{' '}
+      {verdict.withheldBy === 'availableWhen'
+        ? 'it does not pass every “only show if” test.'
+        : 'it passes the “do not show if” test.'}{' '}
+      The roll below is the bench indulging you.
+    </p>
   )
 }
 

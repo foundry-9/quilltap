@@ -84,6 +84,15 @@ All form controls use existing `qt-*` semantic classes (`qt-input`, `qt-select`,
 - **Description** (required, ≤500): textarea with counter. Helper text: "What the tool does *in the fiction* — this is how a model decides to reach for it."
 - **Options** row: `disabled` checkbox ("tombstone: suppresses this name at this tier and every farther one"), `revealOdds` checkbox (default on; off = "the house does not show the odds — models see only name, description, parameters"), `defaultVisibility` public/whisper toggle.
 
+### 4.1a Availability section — "Who may reach for it" (added 4.8)
+
+`components/custom-tools/GateSection.tsx`, rendered between identity and parameters — the gate is answered before any of the machinery below it, and reads that way.
+
+- A three-way mode radio maps 1:1 onto the format's clauses: **Anyone** (emit neither key), **Only show if…** (`availableWhen`), **Do not show if…** (`withheldWhen`). The format permits at most one clause per file, which is what lets one control represent it; a hand-written file carrying both fails `QtapCustomToolSchema` and lands in repair mode rather than being silently halved.
+- Conditions are a thinner chip than the outcome table's: the subject is always a metadata key and the operand is always a literal, because a gate has no parameters or state to reference. eq/neq get the same number/text/true-false type picker a metadata subject gets in the table, for the same reason (the stored type is unknowable at authoring time).
+- `draft.gateConditions` survives a mode change, like the roll form's unused half — turning "only if" into "not if" is the commonest edit there is.
+- Draft rules live in `validateGate` (`lib/pascal/tool-draft.ts`); the chip ⇄ JSON bijection is `gateConditionsFromGate` / `gateFromConditions`.
+
 ### 4.2 Parameters section
 
 Up to `MAX_PARAMETERS` (8) rows, each a card:

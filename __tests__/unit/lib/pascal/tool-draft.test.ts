@@ -581,3 +581,143 @@ describe('the llm block in the draft', () => {
     expect(renamed.llmPrompt).toBe('What of the {{params.portent}}?')
   })
 })
+
+describe('the availability gate in the draft', () => {
+  const GATED_TOOL = {
+    name: 'reprogram',
+    description: 'Rewrite the thing’s instructions.',
+    availableWhen: {
+      metadata: {
+        toolAbilities: { contains: 'programmable' },
+        rank: { gte: 3 },
+        cleared: { eq: true },
+      },
+    },
+    outcomes: [{ when: true, message: 'It obliges.', state: 'success' }],
+  }
+
+  it('round-trips an availableWhen gate', () => {
+    expectRoundTrip(GATED_TOOL)
+  })
+
+  it('round-trips a withheldWhen gate', () => {
+    const { availableWhen, ...rest } = GATED_TOOL
+    expectRoundTrip({ ...rest, withheldWhen: availableWhen })
+  })
+
+  it('loads the clause into the mode, and the tests into chips', () => {
+    const draft = draftFromDefinition(GATED_TOOL)!
+    expect(draft.gateMode).toBe('available')
+    expect(draft.gateConditions.map((c) => [c.key, c.comparator, c.operand])).toEqual([
+      ['toolAbilities', 'contains', { kind: 'string', text: 'programmable' }],
+      ['rank', 'gte', { kind: 'number', text: '3' }],
+      ['cleared', 'eq', { kind: 'boolean', value: true }],
+    ])
+  })
+
+  it('emits neither key while the mode is none, whatever chips linger', () => {
+    const draft = draftFromDefinition(GATED_TOOL)!
+    draft.gateMode = 'none'
+    const emitted = definitionFromDraft(draft)
+    expect(emitted.availableWhen).toBeUndefined()
+    expect(emitted.withheldWhen).toBeUndefined()
+    // The chips survive the flip, so switching back costs nothing.
+    expect(draft.gateConditions).toHaveLength(3)
+  })
+
+  it('flips the clause without disturbing the tests', () => {
+    const draft = draftFromDefinition(GATED_TOOL)!
+    draft.gateMode = 'withheld'
+    const emitted = definitionFromDraft(draft)
+    expect(emitted.availableWhen).toBeUndefined()
+    expect(emitted.withheldWhen).toEqual(GATED_TOOL.availableWhen)
+  })
+
+  it('emits an ungated tool with no gate keys at all', () => {
+    const emitted = definitionFromDraft(draftFromDefinition({ ...GATED_TOOL, availableWhen: undefined })!)
+    expect('availableWhen' in emitted).toBe(false)
+    expect('withheldWhen' in emitted).toBe(false)
+  })
+
+  it('refuses a definition carrying both clauses — the form models one', () => {
+    expect(
+      draftFromDefinition({
+        ...GATED_TOOL,
+        withheldWhen: { metadata: { novice: { eq: true } } },
+      })
+    ).toBeNull()
+  })
+
+  describe('validateDraft', () => {
+    const gated = (): ReturnType<typeof newDraft> => {
+      const draft = newDraft()
+      draft.name = 'reprogram'
+      draft.description = 'd'
+      draft.outcomes = [draft.outcomes[1]]
+      draft.gateMode = 'available'
+      return draft
+    }
+
+    const gateErrors = (draft: ReturnType<typeof newDraft>): string[] =>
+      validateDraft(draft)
+        .filter((i) => i.severity === 'error' && i.where.section === 'gate')
+        .map((i) => i.message)
+
+    it('blocks a gate that tests nothing', () => {
+      expect(gateErrors(gated()).some((m) => m.includes('must test something'))).toBe(true)
+    })
+
+    it('blocks a condition with no metadata key', () => {
+      const draft = gated()
+      draft.gateConditions = [{ id: 'g1', key: '  ', comparator: 'eq', operand: { kind: 'boolean', value: true } }]
+      expect(gateErrors(draft).some((m) => m.includes('needs a metadata key'))).toBe(true)
+    })
+
+    it('blocks ordering against text, and containment against a number', () => {
+      const draft = gated()
+      draft.gateConditions = [
+        { id: 'g1', key: 'rank', comparator: 'gte', operand: { kind: 'string', text: 'senior' } },
+        { id: 'g2', key: 'abilities', comparator: 'contains', operand: { kind: 'number', text: '7' } },
+      ]
+      const errors = gateErrors(draft)
+      expect(errors.some((m) => m.includes('can only order numbers'))).toBe(true)
+      expect(errors.some((m) => m.includes('needs text to look for'))).toBe(true)
+    })
+
+    it('blocks an empty substring and an unparseable number', () => {
+      const draft = gated()
+      draft.gateConditions = [
+        { id: 'g1', key: 'abilities', comparator: 'contains', operand: { kind: 'string', text: '' } },
+        { id: 'g2', key: 'rank', comparator: 'eq', operand: { kind: 'number', text: '' } },
+      ]
+      const errors = gateErrors(draft)
+      expect(errors.some((m) => m.includes('must not be empty'))).toBe(true)
+      expect(errors.some((m) => m.includes('needs a number'))).toBe(true)
+    })
+
+    it('blocks the same key tested twice with the same comparator', () => {
+      const draft = gated()
+      draft.gateConditions = [
+        { id: 'g1', key: 'rank', comparator: 'gte', operand: { kind: 'number', text: '3' } },
+        { id: 'g2', key: 'rank', comparator: 'gte', operand: { kind: 'number', text: '5' } },
+      ]
+      expect(gateErrors(draft).some((m) => m.includes('only once'))).toBe(true)
+    })
+
+    it('says nothing about a gate the author has switched off', () => {
+      const draft = gated()
+      draft.gateMode = 'none'
+      draft.gateConditions = [{ id: 'g1', key: '', comparator: 'eq', operand: { kind: 'boolean', value: true } }]
+      expect(gateErrors(draft)).toEqual([])
+    })
+
+    it('passes a complete gate', () => {
+      const draft = gated()
+      draft.gateConditions = [
+        { id: 'g1', key: 'toolAbilities', comparator: 'contains', operand: { kind: 'string', text: 'programmable' } },
+      ]
+      expect(gateErrors(draft)).toEqual([])
+      expect(QtapCustomToolSchema.safeParse(definitionFromDraft(draft)).success).toBe(true)
+    })
+  })
+})
