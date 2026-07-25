@@ -1114,11 +1114,12 @@
   }
 
   /**
-   * Container for a dropdown in the gutter (RNG, custom tools) - needed for
-   * proper positioning of the upward-opening popover.
+   * Container for a dropdown in the gutter (RNG) - needed for proper
+   * positioning of the upward-opening popover. Custom tools no longer needs
+   * one: it opens a modal dialog rather than a popover, so its button sits in
+   * the grid unwrapped like the rest.
    */
-  .qt-composer-gutter-rng,
-  .qt-composer-gutter-dropdown {
+  .qt-composer-gutter-rng {
     @apply relative;
   }
 

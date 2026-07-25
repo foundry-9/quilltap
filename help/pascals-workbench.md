@@ -8,7 +8,7 @@ url: /custom-tools
 
 A [custom tool](custom-tools.md) is a modest JSON document, and hand-writing JSON is a fine occupation for a certain sort of evening — but the format is strict, and one misspelled comparator will see your contrivance slide off the table with nothing but an apologetic badge to mark its passing. **Pascal's Workbench** is the fitting room: a visual editor where contrivances are built, inspected, proved against ten thousand imaginary evenings, and filed wherever they ought to live — with never an invalid file written, because the form simply cannot produce one.
 
-Find it in the left rail, from **Settings → Chat → Custom tools**, from the composer's custom-tools popup (the little wrench beside each listed tool, and *New contrivance…* at the foot), or from any `Tools/*.tool.json` file's row in the Scriptorium.
+Find it in the left rail, from **Settings → Chat → Custom tools**, from the composer's custom-tools dialog (the little wrench beside each listed tool, and *New contrivance…* at its foot), or from any `Tools/*.tool.json` file's row in the Scriptorium.
 
 ## The library
 
@@ -35,7 +35,7 @@ The editor is a form column beside a proving bench. Everything in the form corre
 
 The right-hand panel is where a contrivance earns its place at the table. Everything it does runs **server-side through the very same machinery a live chat uses** — the bench cannot drift from the real thing, and it posts nothing to any chat.
 
-- **Test roll.** Set the parameters (the same form the composer popup uses), roll, and see a faithful miniature of Pascal's bubble — plus a debug line the real bubble never shows: the raw draw, the final value, *which row of your cascade won* (the row flashes in the form — this is the moment the cascade clicks), and any fact-sheet keys the winning row consulted.
+- **Test roll.** Set the parameters (the same form the composer's run dialog uses), roll, and see a faithful miniature of Pascal's bubble — plus a debug line the real bubble never shows: the raw draw, the final value, *which row of your cascade won* (the row flashes in the form — this is the moment the cascade clicks), and any fact-sheet keys the winning row consulted.
 - **The fact sheet.** Metadata-gated rows need somebody's sheet to read. Lend the bench one: **pick a character** (their real `metadata.json`, hydrated fresh — the honest "what would happen if Imogen rolled this") or **hand-type a sheet** as a JSON object, for testing keys no character carries yet. Supply nothing and every metadata test declines, exactly as for an unattributed manual roll — the bench says so rather than letting you wonder.
 - **The oracle.** When the tool consults one, a card lets you **script its answer**, script a **silence** (the run shows your error line — the one path every such table must survive), or — for single rolls only — **ask it live**, spending one real cheap-model call to hear what the actual oracle says. The debug line beneath a test roll reports what the consult returned, and why, when it failed.
 - **The audit.** *Deal a thousand hands* runs ten thousand draws with the current parameters and fact sheet and charts what share each outcome took. The audit never asks the oracle live — ten thousand hands must not mean ten thousand paid consults — so it deals against your scripted answer, or silence. A row that never fired is flagged — with the honest caveat that reachability depends on the parameters, the sheet, and the scripted answer you supplied: a metadata-gated row showing nought under an empty sheet is working as designed, not broken.
@@ -71,6 +71,6 @@ Characters with help tools enabled can navigate directly to the Workbench:
 
 ## Related
 
-- **[Custom Tools — Pascal's Table](custom-tools.md)** — the file format itself, tiers and shadowing, whispered rolls, and the composer popup. Hand-authoring remains fully supported; the Workbench is sugar.
+- **[Custom Tools — Pascal's Table](custom-tools.md)** — the file format itself, tiers and shadowing, whispered rolls, and the composer's run dialog. Hand-authoring remains fully supported; the Workbench is sugar.
 - **[The character fact sheet](character-editing.md)** — the `metadata.json` that metadata conditions read.
 - **The Scriptorium** — the document stores your `Tools/` folders live in.

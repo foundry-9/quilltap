@@ -3,7 +3,7 @@
 import { useRef } from 'react'
 import { Icon } from '@/components/ui/icon'
 import RngDropdown, { type RngPendingResult } from './RngDropdown'
-import CustomToolsDropdown from './CustomToolsDropdown'
+import CustomToolsButton from './CustomToolsButton'
 
 interface ComposerGutterToolsProps {
   /** Callback to trigger file attachment dialog */
@@ -139,17 +139,15 @@ export function ComposerGutterTools({
         />
       </div>
 
-      {/* Row 4, Col 1: Custom tools (Pascal) with dropdown — only when the
+      {/* Row 4, Col 1: Custom tools (Pascal) — opens a dialog; only when the
           chat actually resolves a roster */}
       {customToolsAvailable && (
-        <div className="qt-composer-gutter-dropdown">
-          <CustomToolsDropdown
-            chatId={chatId}
-            disabled={disabled}
-            onRan={onCustomToolRan}
-            variant="gutter"
-          />
-        </div>
+        <CustomToolsButton
+          chatId={chatId}
+          disabled={disabled}
+          onRan={onCustomToolRan}
+          variant="gutter"
+        />
       )}
     </div>
   )

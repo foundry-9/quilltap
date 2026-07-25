@@ -31,6 +31,12 @@
  * The roll spec and the outcome table are never in the payload. The house does
  * not show the odds — the popup offers `definitionPath` and `mountName` instead,
  * so a user curious about their own tool can go read the file they wrote.
+ *
+ * What IS in the payload, since v4.9, is each tool's `references`: the metadata
+ * keys and state paths it quotes, and whether it rolls dice or consults an
+ * oracle. That is vocabulary, not odds — "this tool reads `hasAnsibleAccess`",
+ * never "it succeeds when `hasAnsibleAccess` is true". See
+ * `lib/pascal/tool-vocabulary.ts` for where that line is drawn.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -48,6 +54,7 @@ import {
   type DiscoveredCustomTool,
 } from '@/lib/pascal/custom-tools';
 import { displayTitle } from '@/lib/pascal/custom-tool.types';
+import { collectToolVocabulary, type ToolVocabulary } from '@/lib/pascal/tool-vocabulary';
 import { resolveStateCascade } from '@/lib/state/state-cascade';
 import { buildCustomToolLlmInvoker } from '@/lib/pascal/llm-consult';
 import { buildPascalResultContent, postPascalResult } from '@/lib/services/pascal/writer';
@@ -63,6 +70,8 @@ interface CustomToolListing {
   title: string;
   description: string;
   parameters: NonNullable<DiscoveredCustomTool['definition']['parameters']> | Record<string, never>;
+  /** What this tool quotes beyond its parameters — vocabulary, never odds. */
+  references: ToolVocabulary;
   defaultVisibility: 'public' | 'whisper';
   sourceTier: DiscoveredCustomTool['tier'];
   /** Set only when this tool resolves differently per character. */
@@ -229,6 +238,15 @@ async function handleList(
 
   const errors = [...errorsByKey.values()];
 
+  logger.debug('Custom-tool roster resolved for the operator', {
+    context: HANDLER,
+    chatId: id,
+    perspectives: perspectives.length,
+    tools: tools.length,
+    errors: errors.length,
+    droppedForCap: droppedForCap.size,
+  });
+
   return successResponse({
     tools,
     errors,
@@ -246,6 +264,7 @@ function buildListing(
     title: displayTitle(entry.definition),
     description: entry.definition.description,
     parameters: entry.definition.parameters ?? {},
+    references: collectToolVocabulary(entry.definition),
     defaultVisibility: entry.definition.defaultVisibility ?? 'public',
     sourceTier: entry.tier,
     ...(characterLabel ? { characterLabel } : {}),

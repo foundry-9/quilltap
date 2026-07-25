@@ -2396,15 +2396,17 @@ Queue a story background regeneration job.
 
 ### Custom Tools (Pascal the Croupier)
 
-The operator's surface for user-authored pseudo-tools (`Tools/*.tool.json` in any document store). Characters reach for the same definitions via the `run_custom` LLM tool; these endpoints are the composer popup's route in.
+The operator's surface for user-authored pseudo-tools (`Tools/*.tool.json` in any document store). Characters reach for the same definitions via the `run_custom` LLM tool; these endpoints are the composer run dialog's route in.
 
-The roster is resolved **fresh on every request** — never cached — so a definition the user just edited is live on the next popup open.
+The roster is resolved **fresh on every request** — never cached — so a definition the user just edited is live on the next time the dialog opens.
 
-**The roll spec and outcome table are never returned.** The popup does not show the odds; `definitionPath` + `mountName` let the UI link to the user's own file instead.
+**The roll spec and outcome table are never returned.** The dialog does not show the odds; `definitionPath` + `mountName` let the UI link to the user's own file instead.
+
+**`references` is vocabulary, not odds.** Each listing carries what its definition actually *quotes* — derived by `collectToolVocabulary` in `lib/pascal/tool-vocabulary.ts`. Every field is an **occurrence**, not an availability: `dice` is true only if some rendered string writes `{{dice}}`, not merely because the roll is dice; `params` lists only the declared parameters some message or prompt quotes back. Sources are outcome messages, the `llm` prompt, `when.metadata` keys, and `$state` references anywhere in the definition. It names what a tool reads and says; it never says what the tool concludes from it.
 
 #### `GET /api/v1/chats/[id]/custom-tools`
 
-List the roster for the popup. Because a character-tier store shadows farther tiers, the roster is resolved once per character participant and merged: a tool that resolves identically for everyone is listed once with no `characterLabel`; a tool whose definition differs per character is listed once **per variant**, each labelled with that character's name. `asCharacterId` records whose perspective produced the entry and is replayed by the run action.
+List the roster for the run dialog. Because a character-tier store shadows farther tiers, the roster is resolved once per character participant and merged: a tool that resolves identically for everyone is listed once with no `characterLabel`; a tool whose definition differs per character is listed once **per variant**, each labelled with that character's name. `asCharacterId` records whose perspective produced the entry and is replayed by the run action.
 
 **Response**: `200 OK`
 
@@ -2416,6 +2418,15 @@ List the roster for the popup. Because a character-tier store shadows farther ti
       "description": "Try the lock with whatever is to hand.",
       "parameters": {
         "bonus": { "type": "integer", "default": 0, "description": "Anything helping the attempt.", "min": -5, "max": 5 }
+      },
+      "references": {
+        "value": true,
+        "roll": true,
+        "dice": true,
+        "llm": false,
+        "params": ["bonus"],
+        "metadata": ["hasAnsibleAccess"],
+        "state": ["player.health"]
       },
       "defaultVisibility": "public",
       "sourceTier": "character",
@@ -2439,7 +2450,7 @@ List the roster for the popup. Because a character-tier store shadows farther ti
 }
 ```
 
-`characterLabel` is present only on variant rows. `droppedForCap` is present only when the roster hit its size cap. `sourceTier` is one of `character`, `participant`, `group`, `project`, `global`.
+`characterLabel` is present only on variant rows. `droppedForCap` is present only when the roster hit its size cap. `sourceTier` is one of `character`, `participant`, `group`, `project`, `global`. `references` is always present, all-false with empty lists for a tool that quotes nothing.
 
 #### `POST /api/v1/chats/[id]/custom-tools?action=run`
 

@@ -280,7 +280,7 @@ If two stores at the *same* distance both define a name, Quilltap picks one dete
 
 ## Rolling in secret
 
-Some rolls should not be public knowledge. Set `"defaultVisibility": "whisper"` and Pascal will whisper the outcome to the character who rolled, and to nobody else — the other characters' contexts simply do not contain it. A character may also whisper a single roll by asking privately, and you may tick **Roll privately** in the popup, which hides the outcome from every character at once.
+Some rolls should not be public knowledge. Set `"defaultVisibility": "whisper"` and Pascal will whisper the outcome to the character who rolled, and to nobody else — the other characters' contexts simply do not contain it. A character may also whisper a single roll by asking privately, and you may tick **Roll privately** in the run dialog, which hides the outcome from every character at once.
 
 **You always see it.** Whoever the whisper is for, it renders for you. This establishment has one proprietor, and there is nothing to be gained by keeping you in the dark about your own dice.
 
@@ -296,7 +296,21 @@ If the odds must genuinely be secret, put the file in a store the character cann
 
 ## Rolling one yourself
 
-When a scene has any custom tools, a button appears in the composer's left-hand gutter. It lists what's available, with a small form for any parameters (already filled in with their defaults), a **Roll privately** tick, and a Run button.
+When a scene has any custom tools, a button appears in the composer's left-hand gutter. It opens a proper dialog — one you may dismiss with Escape, with the backdrop, or with **Cancel**, and which does not close itself the moment your attention wanders.
+
+It arrives in two acts. First the table: every tool available to this scene, with its description and the file it came from, and a search box once there are more than a handful. Choose one and the dialog's contents give way to that tool's own form — its parameters laid out with their descriptions and their declared bounds, a **Roll privately** tick, and a Run button. **Choose another tool** takes you back to the table, as often as you like.
+
+It remembers. Close the dialog and reopen it, and you are back on the tool you last used, with the figures you last set still in their boxes. This is deliberate: the same roll is usually wanted twice, and re-typing it is a tax on the second one.
+
+### What a tool can quote
+
+At the foot of the dialog is **What this tool can quote** — the placeholders *this particular tool* actually uses when Pascal writes the outcome.
+
+The emphasis is on *actually*. Nothing is listed because the format allows it: a tool that rolls dice but never writes `{{dice}}` is not offered `{{dice}}`, and a parameter you are filling in appears here only if some message or prompt quotes it back. What you get is one entry for each of `{{value}}`, `{{roll}}`, `{{dice}}`, and `{{llm}}` the tool genuinely writes, one per parameter it genuinely quotes, and — the useful part — one for every metadata key and state path the definition genuinely reads, named. If a table branches on `hasAnsibleAccess`, the dialog says so, and you need not go opening files to find out what the thing wants to know about your character. A tool that quotes nothing gets no panel at all.
+
+**These are the author's to place, not yours to type.** The placeholders belong to the tool's own outcome messages and oracle prompt, which are written on Pascal's Workbench. What you type into the form above is sent exactly as written — braces and all — so `{{metadata.rank}}` in a parameter box is the literal text `{{metadata.rank}}`, not a substitution waiting to happen.
+
+The wrench beside any tool opens it on the Workbench, should reading the file settle the question faster than reading about it.
 
 Rolling this way posts one thing: the outcome, exactly as it would have appeared had a character rolled it themselves. Pascal is a croupier and not a raconteur — he lays out the result and says nothing else about it.
 
@@ -308,7 +322,7 @@ Should a tool be defined differently for different characters, you'll see each v
 
 ## When something is wrong with a file
 
-A tool that cannot be loaded is simply left out of the roster, and appears in the popup with a badge explaining why. It is never half-loaded and never guessed at. Common causes: the JSON doesn't parse; the last outcome isn't `true`; a `$param` names a parameter that doesn't exist, or one that isn't a number; an outcome asks after a parameter you never declared, or asks whether a string is greater than a number; the dice notation has a typo; two files in the same store claim the same name.
+A tool that cannot be loaded is simply left out of the roster, and appears under **Would not read** at the foot of the run dialog's table, with a badge explaining why (click it to open the file on the Workbench in repair mode). It is never half-loaded and never guessed at. Common causes: the JSON doesn't parse; the last outcome isn't `true`; a `$param` names a parameter that doesn't exist, or one that isn't a number; an outcome asks after a parameter you never declared, or asks whether a string is greater than a number; the dice notation has a typo; two files in the same store claim the same name.
 
 Misspelled keys are refused too, rather than ignored. A `when` containing `gt3` is not a `when` with an eccentric extra key in it; it is a comparison you meant to make and didn't, and had Quilltap shrugged and loaded the file, that outcome would have sat in your table for months looking like a branch that simply never comes up.
 

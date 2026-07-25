@@ -4,6 +4,19 @@
 
 ### 4.8-dev
 
+#### The composer's custom-tools popup is now a two-phase dialog
+
+The wand button in the composer gutter opened a 288px-wide upward popover with every tool's parameter form nested inside an accordion. Filling one out was cramped, and any click outside dismissed it. It now opens a cancellable modal (`components/chat/CustomToolRunDialog.tsx`).
+
+- **Two phases.** Phase one lists the roster — description, source store and path, a wrench to open the file on Pascal's Workbench, and a search box once there are more than six tools. Selecting a tool replaces the dialog body with that tool's form; "Choose another tool" returns to the list.
+- **What it remembers is unchanged in kind and wider in scope.** Parameter values and the privacy toggle are still held per tool for as long as the composer stays mounted; the selected tool is now remembered too, so reopening lands on the last tool used with its values intact. The selection is *derived* from the roster rather than stored, so a tool that is renamed, disabled, or shadowed between opens drops the dialog back to the picker instead of stranding it.
+- **New reference panel: "What this tool can quote."** Lists the placeholders the selected tool *actually uses* — every row is an occurrence in the definition's own outcome messages or oracle prompt, not merely something the format permits. A dice-form tool that never writes `{{dice}}` isn't offered it; a declared parameter appears only if some message quotes it back; a tool that quotes nothing gets no panel. It states explicitly that these belong to the definition's own messages and are *not* substituted into what the operator types, which is sent verbatim.
+- `GET /api/v1/chats/[id]/custom-tools` listings gain `references: { value, roll, dice, llm, params, metadata, state }`, derived by the new `collectToolVocabulary` (`lib/pascal/tool-vocabulary.ts`) from outcome messages, the `llm` prompt, `when.metadata` keys, and `$state` references anywhere in the definition. This is vocabulary, not odds: it names what a tool reads and says, never what it concludes. Roll specs and outcome tables remain withheld.
+- `CustomToolParamsForm` gains `layout="stacked"` — label, description, and declared bounds on their own lines. String parameters render as an auto-growing textarea (fits its content from one line to 224px, then scrolls) rather than a single-line input: nothing in the definition format declares an expected length, so the field sizes itself instead of guessing. Numbers keep a narrow number input. The default `inline` layout is unchanged, so the Workbench's proving bench is untouched.
+- Section panels in the dialog are explicit padded cards. They had been `border-t qt-border`, and since `.qt-border` sets all four sides that rendered as a box with no internal padding — text flush against the frame.
+- Panel order is form → **Roll privately** → reference panel: the privacy toggle is the last decision about the run, and the panel below it is reading matter rather than a control.
+- `CustomToolsDropdown.tsx` is replaced by `CustomToolsButton.tsx` (button + dialog). The now-unused `.qt-composer-gutter-dropdown` positioning class is removed from `_chat.css`.
+
 #### Fictional story clocks were frozen, and read the base in the wrong timezone
 
 Two bugs in `lib/chat/timestamp-utils.ts`, both visible as the Host announcing the same in-story moment on every turn.

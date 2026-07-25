@@ -17,11 +17,11 @@ jest.mock('@/components/chat/RngDropdown', () => ({
   default: () => <div data-testid="rng-dropdown" />,
 }))
 
-// Likewise CustomToolsDropdown: it needs a QueryClient and fetches its roster.
-// Here we only care whether the gutter gives it a slot at all.
-jest.mock('@/components/chat/CustomToolsDropdown', () => ({
+// Likewise CustomToolsButton: its dialog needs a QueryClient and fetches a
+// roster. Here we only care whether the gutter gives it a slot at all.
+jest.mock('@/components/chat/CustomToolsButton', () => ({
   __esModule: true,
-  default: () => <div data-testid="custom-tools-dropdown" />,
+  default: () => <div data-testid="custom-tools-button" />,
 }))
 
 function renderTools(overrides: Partial<React.ComponentProps<typeof ComposerGutterTools>> = {}) {
@@ -57,13 +57,13 @@ describe('ComposerGutterTools — Compose Mail button', () => {
 })
 
 describe('ComposerGutterTools — custom tools slot', () => {
-  it('omits the custom tools dropdown when no roster resolved', () => {
+  it('omits the custom tools button when no roster resolved', () => {
     renderTools()
-    expect(screen.queryByTestId('custom-tools-dropdown')).toBeNull()
+    expect(screen.queryByTestId('custom-tools-button')).toBeNull()
   })
 
-  it('renders the custom tools dropdown when a roster is available', () => {
+  it('renders the custom tools button when a roster is available', () => {
     renderTools({ customToolsAvailable: true })
-    expect(screen.getByTestId('custom-tools-dropdown')).toBeTruthy()
+    expect(screen.getByTestId('custom-tools-button')).toBeTruthy()
   })
 })
