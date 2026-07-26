@@ -280,8 +280,14 @@ export async function assembleExportFromStream(
         }
         accum.received[chunk.index] = chunk.dataBase64;
 
-        // If this was the last chunk, finalize the blob.
-        const allReceived = accum.received.every((v) => typeof v === 'string');
+        // If this was the last chunk, finalize the blob. Count the arrivals
+        // against chunkCount rather than asking `every` — the accumulator is a
+        // pre-sized sparse array, and `every` skips holes, so it answers true
+        // the moment the first chunk lands however many are still outstanding.
+        // That truncated any blob over BLOB_CHUNK_BYTES and left the follow-on
+        // chunks with no accumulator to join.
+        const allReceived =
+          accum.received.filter((v) => typeof v === 'string').length === accum.chunkCount;
         if (allReceived) {
           blobs.push({
             ...accum.meta,

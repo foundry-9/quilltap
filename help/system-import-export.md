@@ -224,7 +224,7 @@ When using the "Create New" conflict strategy, all internal references are autom
 
 - First line is an envelope carrying the manifest (`{"format":"qtap-ndjson","version":1,"manifest":{...}}`)
 - Each subsequent line is a single tagged record — one character, one memory, one message, and so on — so nothing in the pipeline has to hold the whole export in memory at once
-- Large binary blobs (document-store attachments) are split across multiple chunk lines and stitched back together on import
+- Large binary blobs (document-store attachments) are split across multiple chunk lines and stitched back together on import. (Time was, the reader declared a large attachment complete the instant its *first* parcel arrived — the remainder was left standing on the platform, and the import ended in a bewildered complaint about a chunk with no blob to belong to. Anything under 3 MB travelled as a single parcel and so came through unharmed; anything larger did not. The reader now waits for every parcel before it signs for the delivery.)
 - A trailing footer line carries authoritative record counts
 - Relationships stored as references that are remapped on import
 - Because every line is independently valid JSON, a `.qtap` file can be browsed or grepped with any text tool
@@ -248,6 +248,8 @@ When using the "Create New" conflict strategy, all internal references are autom
 
 - Verify file is a valid `.qtap` file (either streaming NDJSON or a legacy monolithic JSON export)
 - Check that file hasn't been corrupted (a truncated NDJSON file will report a specific line number)
+- An export that fails with **"doc_mount_blob_chunk received without preceding doc_mount_blob"** was written by a build predating this fix and read by one predating it too; the file itself is sound. Import it again on a current build and its large attachments will arrive whole
+- A genuinely truncated export now says so plainly — *"NDJSON export truncated"*, naming the attachments that never finished arriving — rather than complaining about an orphaned chunk
 - Very old exports above ~450 MB that used the monolithic JSON format are too large to import on modern runtimes — re-export them from a newer Quilltap build first
 - Try changing conflict resolution strategy
 - Contact support if error persists

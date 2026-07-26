@@ -4,8 +4,8 @@
  * Streams `.qtap` exports one record per line so the pipeline never holds
  * the whole payload in a single V8 string. Each entity is emitted as soon
  * as it's loaded from its repository, and large blob bytes are split into
- * ~4 MB base64 chunks so even a multi-gigabyte document store exports
- * without hitting string-length ceilings.
+ * 3 MB chunks (~4 MB once base64-encoded) so even a multi-gigabyte document
+ * store exports without hitting string-length ceilings.
  */
 
 import { logger as baseLogger } from '@/lib/logger';
@@ -34,6 +34,11 @@ const APP_VERSION = packageJson.version;
  * Raw bytes per blob chunk. 3 MB raw → ~4 MB base64 per line, comfortably
  * below the 128 MB per-line safety cap on the reader side and well clear of
  * V8's ~512 MB string ceiling.
+ *
+ * Must stay a multiple of 3: each chunk is base64-encoded *separately* and the
+ * reader rejoins the encoded strings, so only the final chunk may carry
+ * padding. Any other size would splice `=` characters into the middle of the
+ * joined payload and corrupt every multi-chunk blob.
  */
 const BLOB_CHUNK_BYTES = 3 * 1024 * 1024;
 

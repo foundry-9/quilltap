@@ -4,6 +4,19 @@
 
 ### 4.8-dev
 
+#### Import can read its own export of a document-store blob over 3 MB
+
+Importing a `.qtap` export that carried a document-store attachment larger than `BLOB_CHUNK_BYTES` (3 MB) failed with `doc_mount_blob_chunk received without preceding doc_mount_blob`. The export was written by Quilltap itself and reported no error.
+
+- The chunk accumulator in `lib/import/quilltap-import-stream.ts` is a pre-sized sparse array (`new Array(chunkCount)`), and the completion test used `Array.prototype.every`, which skips holes and therefore returned `true` as soon as the first chunk landed. The importer joined what it had — holes render as `''`, so the blob was silently truncated — pushed the result, and deleted the accumulator. The next chunk then arrived with nothing to join and threw.
+- The completion test now counts arrivals against `chunkCount` instead. A genuinely short stream reaches the end-of-stream truncation error that already existed at the bottom of the function and was unreachable because of this bug; it names the blobs and the chunks received vs. expected.
+- Blobs at or under 3 MB are a single chunk and were never affected.
+- Reader-side only. The writer is untouched and its bytes do not change, so archives stay readable in both directions.
+- `BLOB_CHUNK_BYTES` gains a comment recording why it must stay a multiple of 3: chunks are base64-encoded separately and rejoined encoded, so only the last may carry padding. The writer's module header said "~4 MB chunks" where it meant 3 MB raw; corrected.
+- New: `__tests__/unit/lib/import/quilltap-import-stream-blobs.test.ts` (7 cases — multi-chunk reassembly, interleaved blobs, truncation reporting, and the two throws that must still fire).
+
+Found by the same quilltap-v5 differential pass as the restore fix above; its `system_import_equivalence` case stops diverging and the `throw_ndjson_truncated_blob` entry comes off the expected-divergence list.
+
 #### Restore actually restores files and document stores
 
 Three defects in the restore path, all on the data-loss side, all fixed together — any one left standing keeps the others unobservable.

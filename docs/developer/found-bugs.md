@@ -3,6 +3,8 @@
 **Last Updated**: 2026-07-26
 **Codebase**: Quilltap v4.8.0-dev (HEAD `20430561`)
 **Provenance**: the quilltap-v5 native port's differential harness
+**Status**: **all four fixed in v4** — see [Status](#status) for the sites and
+the v5 follow-up owed.
 
 ---
 
@@ -330,15 +332,82 @@ superset of what v4 reads, having taken this fix on its own side.
 
 ## Status
 
-| # | Bug | Fixed in v4? | v5 status |
-|---|---|---|---|
-| 1 | Mount points / file links rejected | **No** | Diverges — restores them correctly |
-| 2 | `backupFormat === 2` gate | **No** | Diverges — gate is `>= 2` |
-| 3 | Files phase ordering | **No** | Diverges — files run after 22a |
-| 4 | Sparse-array blob finalization | **No** | Diverges — reader waits for every chunk |
+| # | Bug | Fixed in v4? | Fix site | v5 status |
+|---|---|---|---|---|
+| 1 | Mount points / file links rejected | **Yes** (2026-07-26) | `lib/backup/restore/mount-index-coercion.ts`, applied at `restore.ts` 22a / 22d | Converged — v4 now restores them too |
+| 2 | `backupFormat === 2` gate | **Yes** (2026-07-26) | `lib/backup/restore/archive.ts:333` | Converged — gate is `>= 2` on both sides |
+| 3 | Files phase ordering | **Yes** (2026-07-26) | `lib/backup/restore/restore.ts` — step 5 moved to 22a-bis | Converged — files run after 22a on both sides |
+| 4 | Sparse-array blob finalization | **Yes** (2026-07-26) | `lib/import/quilltap-import-stream.ts:284` | Converged — both readers wait for every chunk |
 
-All four were ruled deliberate divergences on the v5 side (2026-07-24 and
+All four had been ruled deliberate divergences on the v5 side (2026-07-24 and
 2026-07-25) rather than being reproduced bug-for-bug, on the grounds that they
 sit on the data-loss path. The v5 rulings are recorded in that repo's
 `docs/developer/porting/status-log.md` under "Ruling — the sparse-array blob
 divergence" and "Ruling — the two v4 restore bugs".
+
+### Decisions taken while fixing
+
+- **Bug 1 was fixed on the restore side only**, per the recommendation above.
+  The backup side is untouched, so archive bytes do not change and the v5
+  oracle's *backup* fixtures do not move. The coercion tolerates already-correct
+  input (parse only when the value is a string, coerce only when it is a
+  number), so a later backup-side normalisation can land without a second
+  change here.
+- **Bug 3 renumbers by insertion, not renumbering.** The moved block is
+  labelled `22a-bis` and step 5 keeps a placeholder comment explaining the
+  deferral — the same idiom step 19 already uses for wardrobe items deferred to
+  22f-bis. Renumbering twenty-odd comments would have buried an ordering-only
+  change in noise.
+- **No sibling `backupFormat ===` comparisons exist**; the audit Bug 2 asks for
+  turned up only the two lines it names.
+- **Regression tests added**:
+  `__tests__/unit/lib/backup/mount-index-coercion.test.ts`,
+  `__tests__/unit/lib/backup/restore-archive-file-lookup.test.ts`,
+  `__tests__/unit/lib/import/quilltap-import-stream-blobs.test.ts`. The last
+  was checked against the pre-fix code: five of its seven cases fail there.
+
+### Known residue from Bug 3's placement (not a regression; follow-up)
+
+Immediately after 22a is the right slot, and it is worth writing down *why*,
+because two nearby slots are worse:
+
+- **After 22c** (doc-store file rows) the replay's `findOrCreateByContent`
+  would match the archived content row by sha and hard-link to it, so 22f's
+  `INSERT INTO doc_mount_blobs` would then violate `UNIQUE(fileId)` and the
+  archived blob row would be refused.
+- **After 22d** the same, plus the replay would have to unique-suffix around
+  every archived link.
+
+At 22a the doc-store has mount points and nothing else, so the replay builds an
+independent set of file/link/blob rows that cannot collide with the archived
+ones. What remains is narrow and warning-shaped:
+
+- Restoring a **second-generation archive** — one taken from an instance that
+  was itself restored — replays project-less files into the Quilltap Uploads
+  mount at `restored/<name>`, which is exactly where the archived link rows for
+  those files already live. The replay gets there first (22a-bis), so 22b's
+  archived `restored` folder row and 22d's archived link rows collide with it
+  and are logged as warnings. Content is present either way; the archived link
+  *ids* are what get lost.
+- First-generation archives are unaffected: the archived paths are `chat/`,
+  `images/`, etc., and `restored/` is free.
+- Project-bound files never collide at all — `projects.create` provisions a
+  *fresh* official store and discards the archived `officialMountPointId`, so
+  the replay and the archived rows land in different mount points. (That
+  duplication predates this fix and is orthogonal to it.)
+
+Fixing this properly means teaching the replay to recognise that the archive
+already carries the store rows for a file and skip re-ingesting it, rather than
+reshuffling phase order. Out of scope here.
+
+### Owed to the v5 side
+
+The two tripwires named above will now fire. Both are the tripwire working:
+retire the divergence entries and let the cases become plain equalities.
+
+| v4 fix | v5 tripwire | Action |
+|---|---|---|
+| Bugs 1–3 | `crates/quilltap-harness/tests/system_restore_state.rs` → `assert_divergences` | Re-rule the divergence as converged |
+| Bug 4 | `crates/quilltap-harness/tests/system_import_equivalence.rs` → `EXPECTED_DIVERGENCES` | Remove the `throw_ndjson_truncated_blob` case |
+
+The oracle baseline moves once, at the commit that carries these fixes.
