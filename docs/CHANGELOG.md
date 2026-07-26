@@ -4,6 +4,18 @@
 
 ### 4.8-dev
 
+#### Docs: 4.8.0 release notes cover the work that landed after they were drafted
+
+`docs/releases/4.8.0.md` was written on 2026-07-20; nineteen commits landed after it. One passage had become factually wrong and several user-visible features were missing.
+
+- **Corrected:** the math section stated that single-dollar math is deliberately disabled, which the single-`$` promotion fix reversed. It now describes the marker test, the currency carve-out, and the bare-symbol rule.
+- **Corrected:** "Upgrading from 4.7" enumerates migrations by name and was missing `add-episodic-memory-fields-v1` and `anchor-fictional-clock-base-v1`. Both are now documented with what they backfill.
+- **Added:** the episodic recall overhaul (event time, narrative time, entities, episodic vs. semantic, the fold-time episode pass and dated Timeline, retrospective retrieval, recall-on-reference, the `search`/`read_conversation` additions, the anti-destruction policy changes, `recall-replay`) as a new subsection. The existing "Recalls More Aptly" subsection covers only the ranking rework and was the sole memory coverage.
+- **Added:** the Story's Clock timeline switch plus the frozen fictional-clock and timezone fixes; Pascal's `availableWhen` / `withheldWhen` tool gating and the Workbench's gate control; the two-phase composer run dialog and the state-tinted roll announcement; per-character Starting Outfit defaults, `canChooseOutfit`, the full picker roster and the Play As restriction; the themeable thinking indicator with Madman's Box's small caps and button fix; the Self-Dressing / Outfit Creation persistence fix under Selected Fixes.
+- **Framing:** the thesis paragraph now names four bodies of work with memory as the third; the frontmatter description, the closing paragraph, and the memory section header were updated to match.
+
+`pubDate` and the sign-off date are left at 2026-07-20 — that is a release-timing decision. Not written up: the lint-rule tightening, debug-log prune, dead-code sweep, DRY refactors, docs-freshness passes, Workbench backdrop theming, and the `.qtap` ephemeral-state strip (all internal or release hygiene), and the workspace deep-link commit (the notes already promised that behavior; the commit made it true). Docs-only; no code changed.
+
 #### Pascal's announcement bar carries the outcome's state
 
 A roll's `state` (`success` / `partial` / `failure` / `info`) tinted the outcome bubble but not the bar above it, which showed the generic importance dot — and Pascal's importance tier is `high`, so a successful roll wore the same red dot as a deleted file.
