@@ -576,6 +576,29 @@ ls -lh /path/to/quilltap.db
 docker logs -f quilltap
 ```
 
+### Logical Restore Completed but Stores or Files Are Missing
+
+Fixed in 4.8. Restores performed on earlier builds could report success while
+silently dropping every document store, every store file link, and every user
+file — most visibly when restoring into a fresh or freshly-wiped instance. The
+archives themselves are correct: re-run the restore on 4.8 or later and the
+same archive comes back whole.
+
+To confirm a restore landed:
+
+```bash
+# Stores and links live in the mount-index database
+npx quilltap db --mount-points "SELECT COUNT(*) FROM doc_mount_points;"
+npx quilltap db --mount-points "SELECT COUNT(*) FROM doc_mount_file_links;"
+
+# User file rows in the main database
+npx quilltap db "SELECT COUNT(*) FROM files;"
+```
+
+A restored archive that held document stores must come back with non-zero
+counts in all three. Zeros in the first two are the signature of the
+pre-4.8 defect.
+
 ### Verification Failures
 
 ```bash

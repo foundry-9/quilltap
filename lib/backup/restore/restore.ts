@@ -26,6 +26,7 @@ import { UuidRemapper } from '../uuid-remapper';
 import { parseBackupZip, getFileFromExtractedBackup, cleanupDir } from './archive';
 import { deleteUserData } from './delete-service';
 import { remapBackupData } from './uuid-remap';
+import { coerceDocMountPointRow, coerceDocMountFileLinkRow } from './mount-index-coercion';
 
 const moduleLogger = logger.child({ module: 'backup:restore-service' });
 
@@ -125,74 +126,17 @@ export async function restore(
       }
     }
 
-    // 5. Files (read from extracted dir on disk, upload to storage)
-    // In new-account mode, file IDs are remapped but on-disk filenames use original IDs.
-    // Use parsedData.files (original) for disk lookup, data.files (remapped) for DB records.
+    // 5. Files — DEFERRED to step 22a-bis (after doc-store mounts exist).
+    // Every user file now lands in a document store: project-bound files go
+    // through the project-store bridge, project-less files through the Quilltap
+    // Uploads bridge. Neither target can resolve at this point in the restore —
+    // projects arrive at 13, and the mount-point rows (including the Quilltap
+    // Uploads mount, which `deleteUserData` truncates in replace mode while
+    // deliberately leaving its `instance_settings` pointer dangling) arrive at
+    // 22a. Restoring here worked only when the target instance happened to
+    // already hold those stores; into a fresh or wiped instance — the
+    // disaster-recovery case — not one byte landed.
     let filesRestored = 0;
-    for (let i = 0; i < data.files.length; i++) {
-      const file = data.files[i];
-      const originalFile = parsedData.files[i]; // original IDs for disk lookup
-      try {
-        const fileBuffer = await getFileFromExtractedBackup(rootPath, originalFile, data.manifest?.backupFormat);
-        if (fileBuffer) {
-          // Project-bound files restore into the project mount (via FSM →
-          // project-store-bridge). Project-less files land in the Quilltap
-          // Uploads mount under restored/, not the catch-all _general/.
-          let restoredStorageKey: string;
-          let restoredMimeType: string;
-          let restoredSize: number;
-          if (file.projectId) {
-            const uploadResult = await fileStorageManager.uploadFile({
-              filename: file.originalFilename,
-              content: fileBuffer,
-              contentType: file.mimeType,
-              projectId: file.projectId,
-              folderPath: file.folderPath || '/',
-            });
-            restoredStorageKey = uploadResult.storageKey;
-            restoredMimeType = uploadResult.storedMimeType;
-            restoredSize = uploadResult.sizeBytes;
-          } else {
-            const written = await writeUserUploadToMountStore({
-              filename: file.originalFilename,
-              content: fileBuffer,
-              contentType: file.mimeType,
-              subfolder: 'restored',
-            });
-            restoredStorageKey = written.storageKey;
-            restoredMimeType = written.storedMimeType;
-            restoredSize = written.sizeBytes;
-          }
-
-          // Create file metadata with storage key. The bridges may transcode
-          // bytes (bitmaps → WebP), so we record the post-bridge mime/size
-          // rather than what the backup row claimed — a backup made before
-          // this fix may carry the pre-transcode lie, and re-writing it would
-          // re-introduce the "media_type X but bytes are Y" error.
-          // Strip auto-generated and legacy fields from backup data
-          const { userId, createdAt, updatedAt, storageKey, ...fileData } = file as typeof file & Record<string, unknown>;
-          // Remove legacy fields that may exist in older backups
-          delete (fileData as Record<string, unknown>).s3Key;
-          delete (fileData as Record<string, unknown>).s3Bucket;
-          delete (fileData as Record<string, unknown>).mountPointId;
-          await repos.files.create(
-            {
-              ...fileData,
-              mimeType: restoredMimeType,
-              size: restoredSize,
-              storageKey: restoredStorageKey,
-            },
-            { id: file.id }
-          );
-          filesRestored++;
-        } else {
-          warnings.push(`File not found in backup: ${file.originalFilename}`);
-        }
-      } catch (error) {
-        warnings.push(`Failed to restore file "${file.originalFilename}": ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore file', { fileId: file.id, error });
-      }
-    }
 
     // 6. Characters
     for (const character of data.characters) {
@@ -427,16 +371,91 @@ export async function restore(
     // Format-3 entities (depend on the entities created above)
     // ========================================================================
 
-    // 22a. Document store mount points
+    // 22a. Document store mount points. The archive carries these rows as the
+    // raw `SELECT *` gave them up — pattern arrays as JSON text, `enabled` as
+    // INTEGER 0/1 — so coerce back to domain shape or every row is rejected by
+    // the repository schema and the stores come back unreachable.
     let docMountPointsRestored = 0;
     for (const mp of data.docMountPoints || []) {
       try {
-        const { id, createdAt, updatedAt, ...mpData } = mp;
+        const { id, createdAt, updatedAt, ...mpData } = coerceDocMountPointRow(mp);
         await globalRepos.docMountPoints.create(mpData, { id: mp.id });
         docMountPointsRestored++;
       } catch (error) {
         warnings.push(`Failed to restore document store "${mp.name}": ${error instanceof Error ? error.message : String(error)}`);
         moduleLogger.warn('Failed to restore doc mount point', { mountPointId: mp.id, error });
+      }
+    }
+
+    // 22a-bis. Files (deferred from step 5). The mount points now exist, so
+    // both bridges resolve: projects (13) own their official stores and the
+    // Quilltap Uploads mount is back under the id its `instance_settings`
+    // pointer still names. Read from the extracted dir on disk, write through
+    // the bridge, then record the row.
+    // In new-account mode, file IDs are remapped but on-disk filenames use original IDs.
+    // Use parsedData.files (original) for disk lookup, data.files (remapped) for DB records.
+    for (let i = 0; i < data.files.length; i++) {
+      const file = data.files[i];
+      const originalFile = parsedData.files[i]; // original IDs for disk lookup
+      try {
+        const fileBuffer = await getFileFromExtractedBackup(rootPath, originalFile, data.manifest?.backupFormat);
+        if (fileBuffer) {
+          // Project-bound files restore into the project mount (via FSM →
+          // project-store-bridge). Project-less files land in the Quilltap
+          // Uploads mount under restored/, not the catch-all _general/.
+          let restoredStorageKey: string;
+          let restoredMimeType: string;
+          let restoredSize: number;
+          if (file.projectId) {
+            const uploadResult = await fileStorageManager.uploadFile({
+              filename: file.originalFilename,
+              content: fileBuffer,
+              contentType: file.mimeType,
+              projectId: file.projectId,
+              folderPath: file.folderPath || '/',
+            });
+            restoredStorageKey = uploadResult.storageKey;
+            restoredMimeType = uploadResult.storedMimeType;
+            restoredSize = uploadResult.sizeBytes;
+          } else {
+            const written = await writeUserUploadToMountStore({
+              filename: file.originalFilename,
+              content: fileBuffer,
+              contentType: file.mimeType,
+              subfolder: 'restored',
+            });
+            restoredStorageKey = written.storageKey;
+            restoredMimeType = written.storedMimeType;
+            restoredSize = written.sizeBytes;
+          }
+
+          // Create file metadata with storage key. The bridges may transcode
+          // bytes (bitmaps → WebP), so we record the post-bridge mime/size
+          // rather than what the backup row claimed — a backup made before
+          // this fix may carry the pre-transcode lie, and re-writing it would
+          // re-introduce the "media_type X but bytes are Y" error.
+          // Strip auto-generated and legacy fields from backup data
+          const { userId, createdAt, updatedAt, storageKey, ...fileData } = file as typeof file & Record<string, unknown>;
+          // Remove legacy fields that may exist in older backups
+          delete (fileData as Record<string, unknown>).s3Key;
+          delete (fileData as Record<string, unknown>).s3Bucket;
+          delete (fileData as Record<string, unknown>).mountPointId;
+          await repos.files.create(
+            {
+              ...fileData,
+              mimeType: restoredMimeType,
+              size: restoredSize,
+              storageKey: restoredStorageKey,
+            },
+            { id: file.id }
+          );
+          filesRestored++;
+        } else {
+          warnings.push(`File not found in backup: ${file.originalFilename}`);
+        }
+      } catch (error) {
+        warnings.push(`Failed to restore file "${file.originalFilename}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore file', { fileId: file.id, error });
       }
     }
 
@@ -470,11 +489,13 @@ export async function restore(
       }
     }
 
-    // 22d. Document store file links (hard links to file content).
+    // 22d. Document store file links (hard links to file content). Same
+    // storage-type coercion as 22a — the three policy flags arrive as
+    // INTEGER 0/1 and the schema demands booleans.
     let docMountFileLinksRestored = 0;
     for (const link of data.docMountFileLinks || []) {
       try {
-        const { id, createdAt, updatedAt, ...linkData } = link;
+        const { id, createdAt, updatedAt, ...linkData } = coerceDocMountFileLinkRow(link);
         await globalRepos.docMountFileLinks.create(linkData, { id: link.id });
         docMountFileLinksRestored++;
       } catch (error) {

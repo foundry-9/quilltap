@@ -190,6 +190,14 @@ Certain data is intentionally excluded from backups:
 - Consider archiving old files you don't need
 - Backups are compressed but can still be large with many images
 
+**Files or document stores missing after restore**
+
+- Three faults conspired here, and all three are now mended. Your archives are not at fault — the contents were always packed correctly; it was the unpacking that went astray, and an archive taken before the fix restores perfectly well on a current build.
+  - Every document store and every link within it was refused on the way back in, on a technicality of bookkeeping, and the restore reported a cheerful success regardless. The result was a house full of furniture with every door bricked over: character vaults, project stores and group stores all present in the archive and none of them reachable.
+  - The unpacker looked for your uploaded files under a filing scheme three revisions out of date, and so found none of them.
+  - And it looked for them *before* it had rebuilt the stores those files must be placed into — which mattered enormously when restoring into a fresh or freshly-wiped instance, that being precisely the calamity a restore is kept for. Restoring over a populated instance had concealed the whole business, the stores happening to be there already.
+- If you restored on an earlier build and found your vaults unreachable or your uploads absent, restore that same archive again on this one.
+
 **API keys missing after restore**
 
 - API keys are not backed up for security reasons

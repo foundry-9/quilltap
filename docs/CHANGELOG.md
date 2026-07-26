@@ -4,6 +4,17 @@
 
 ### 4.8-dev
 
+#### Restore actually restores files and document stores
+
+Three defects in the restore path, all on the data-loss side, all fixed together — any one left standing keeps the others unobservable.
+
+- **Mount points and file links were rejected wholesale.** `dumpMountIndexTable` (`lib/backup/backup-service.ts`) is a raw `SELECT *`, so the archive carries SQLite storage types: `includePatterns`/`excludePatterns` as JSON text and `enabled`/`allowEmbed`/`allowCharacterRead`/`allowCharacterWrite` as INTEGER 0/1. The repository schemas demand `string[]` and `boolean`, so every `doc_mount_points` and `doc_mount_file_links` row was refused. Failures were per-row warnings and the restore still reported success; the damage showed up later as unreachable character vaults, project stores and group stores. Fixed on the **restore** side (new `lib/backup/restore/mount-index-coercion.ts`, applied at steps 22a and 22d) so archives users already hold are repaired — a backup-side fix would leave every existing archive unrestorable. The coercion tolerates already-correct input: JSON parsed only when the value is a string, booleans coerced only when the value is a number.
+- **The file lookup gated on `backupFormat === 2`.** The storageKey layout landed in format 2 and modern manifests declare 4, so every archive newer than the one that test was written for fell through to the pre-format-2 layout it does not use, and no file was found. The gate is a floor (`>= 2`) now, and the `triedPaths` diagnostic derives from the same predicate rather than restating it. No other `backupFormat ===` comparisons exist in the tree.
+- **The files phase ran before anything could receive the bytes.** Files were step 5 of the dependency-ordered list. At that point a project-bound file has no project store (projects restore at 13) and a project-less file has no Quilltap Uploads mount (`deleteUserData` truncates `doc_mount_points`; the `instance_settings` pointer survives and dangles until 22a). The block now runs as step 22a-bis, immediately after the mount points are back. Ordering only — no write behavior changed, and the block's internals are byte-identical. The order was correct for an in-place restore over a populated instance, which is why this survived; it failed exactly on the fresh or wiped target that restore exists for.
+- New: `__tests__/unit/lib/backup/mount-index-coercion.test.ts` and `__tests__/unit/lib/backup/restore-archive-file-lookup.test.ts`.
+
+Found by the quilltap-v5 native port's differential harness, which runs every ported unit against v4's real `lib/` code. The v5 side asserts these divergences in both directions, so its `system_restore_state` differential will now report the upstream fix and needs its divergence entry retired. Plan, fix sites, and a known residual case for second-generation archives: `docs/developer/found-bugs.md`.
+
 #### Docs: 4.8.0 release notes cover the work that landed after they were drafted
 
 `docs/releases/4.8.0.md` was written on 2026-07-20; nineteen commits landed after it. One passage had become factually wrong and several user-visible features were missing.
