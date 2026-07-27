@@ -22,9 +22,14 @@
  * the farther tiers — two characters in one room can hold different definitions
  * of the same tool name. The popup is the human's, and the human has no vault,
  * so GET resolves once per character participant and merges: a tool that
- * resolves identically for everyone is listed once, unlabelled; a tool that
- * differs is listed once per variant, each tagged with the character whose
- * perspective produced it. `asCharacterId` carries that choice back to POST.
+ * resolves identically for everyone is listed once; a tool that differs is
+ * listed once per variant, each tagged with the character whose perspective
+ * produced it. `asCharacterId` carries that choice back to POST.
+ *
+ * Even the single-variant row must name somebody, because POST consults that
+ * character's fact sheet and groups. It names the operator's own played
+ * character whenever one is a candidate — see `preferOperator`, and the
+ * `characterLabel` it earns when none is.
  *
  * ## What is withheld
  *
@@ -46,6 +51,7 @@ import { withActionDispatch } from '@/lib/api/middleware/actions';
 import { badRequest, notFound, successResponse } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
+import { isParticipantPresent, type ParticipantStatus } from '@/lib/schemas/types';
 import {
   resolveCustomToolRoster,
   executeCustomTool,
@@ -74,7 +80,11 @@ interface CustomToolListing {
   references: ToolVocabulary;
   defaultVisibility: 'public' | 'whisper';
   sourceTier: DiscoveredCustomTool['tier'];
-  /** Set only when this tool resolves differently per character. */
+  /**
+   * Whose version this is, when that is not obvious: set on a per-character
+   * variant, and on a shared tool that had to fall back off the operator's own
+   * character. Absent means "runs as you", or a room with nobody else in it.
+   */
   characterLabel?: string;
   /** Whose perspective produced this variant — POST replays it. */
   asCharacterId: string;
@@ -166,6 +176,60 @@ function variantKey(entry: DiscoveredCustomTool): string {
   return `${entry.mountPointId}::${entry.definitionPath}`;
 }
 
+/**
+ * The characters the operator is playing, in the order to prefer them: the one
+ * they are currently typing as first, then their remaining user-controlled
+ * participants in stored order.
+ *
+ * A removed participant is not a candidate — the operator is not playing them
+ * any more, whatever the roster still resolves through them.
+ */
+function operatorCharacterIds(
+  participants: Array<{
+    id: string;
+    type: string;
+    characterId: string;
+    controlledBy?: string;
+    status?: ParticipantStatus;
+  }>,
+  activeTypingParticipantId: string | null | undefined,
+): string[] {
+  const own = participants.filter(
+    (p) =>
+      p.type === 'CHARACTER' &&
+      p.controlledBy === 'user' &&
+      isParticipantPresent(p.status ?? 'active'),
+  );
+  const active = own.find((p) => p.id === activeTypingParticipantId);
+  const ordered = active ? [active, ...own.filter((p) => p !== active)] : own;
+  return ordered.map((p) => p.characterId);
+}
+
+/**
+ * Choose whose perspective an otherwise-arbitrary choice is made from.
+ *
+ * When every character resolves a tool to the same file the perspective decides
+ * nothing about *which* deal is dealt — but it still decides whose fact sheet
+ * the `when.metadata` tests read and whose groups a `$state` reference resolves
+ * through. "Arbitrary" must therefore not mean "whoever happens to be first"
+ * while one of the candidates is the person actually pressing the button.
+ *
+ * Falls back to stored order, and says so, when none of the operator's own
+ * characters is a candidate: an all-LLM room, or a tool whose availability gate
+ * their character did not pass.
+ */
+function preferOperator<T>(
+  candidates: T[],
+  characterIdOf: (candidate: T) => string,
+  operatorIds: string[],
+): { chosen: T; isOperator: boolean } {
+  for (const characterId of operatorIds) {
+    const hit = candidates.find((candidate) => characterIdOf(candidate) === characterId);
+    if (hit) return { chosen: hit, isOperator: true };
+  }
+  return { chosen: candidates[0], isOperator: false };
+}
+
 
 // ---------------------------------------------------------------------------
 // GET — the roster
@@ -190,6 +254,7 @@ async function handleList(
 
   const allCharacterIds = perspectives.map((p) => p.characterId);
   const projectId = chat.projectId ?? null;
+  const operatorIds = operatorCharacterIds(chat.participants, chat.activeTypingParticipantId);
 
   // One roster per character. Errors are unioned by (mount, path) so the same
   // broken file seen from four perspectives earns one badge, not four.
@@ -217,10 +282,22 @@ async function handleList(
     const distinct = new Set(sightings.map((s) => variantKey(s.entry)));
 
     if (distinct.size === 1) {
-      // Everyone resolves the same file: one unlabelled row. The perspective is
-      // arbitrary but must still be recorded — POST needs someone to run as.
-      const { perspective, entry } = sightings[0];
-      tools.push(buildListing(entry, perspective, undefined));
+      // Everyone resolves the same file: one row. The perspective picks no
+      // variant here, but it is still whose sheet a run consults, so it goes to
+      // the operator's own played character rather than to whoever the
+      // participants array happens to lead with.
+      const { chosen, isOperator } = preferOperator(
+        sightings,
+        (s) => s.perspective.characterId,
+        operatorIds,
+      );
+      // Unlabelled when it runs as the operator themselves, or when the room
+      // holds one character and there is nothing to disambiguate. Otherwise the
+      // row names the character it will run as: a run that borrows somebody
+      // else's secrets should say whose before the operator commits to it.
+      const label =
+        isOperator || perspectives.length === 1 ? undefined : chosen.perspective.characterName;
+      tools.push(buildListing(chosen.entry, chosen.perspective, label));
       continue;
     }
 
@@ -307,9 +384,17 @@ async function handleRun(
     return badRequest('This chat has no character whose perspective a custom tool could be run from');
   }
 
+  // A run that names nobody still has to resolve the roster through someone's
+  // vault tier, so it uses the same preference GET does. It consults no fact
+  // sheet either way (see the metadata note below) — this only decides which
+  // definition of a shadowed name gets dealt.
   const perspective = body.asCharacterId
     ? perspectives.find((p) => p.characterId === body.asCharacterId)
-    : perspectives[0];
+    : preferOperator(
+        perspectives,
+        (p) => p.characterId,
+        operatorCharacterIds(chat.participants, chat.activeTypingParticipantId),
+      ).chosen;
   if (!perspective) {
     return badRequest(`No character participant with id ${body.asCharacterId} is in this chat`);
   }

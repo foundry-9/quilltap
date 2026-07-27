@@ -4,6 +4,19 @@
 
 ### 4.8-dev
 
+#### A custom tool run from the composer rolls as your own character
+
+Running a shared or global custom tool from the composer's Custom Tools button tested the **first participant's** fact sheet, not the character the operator is playing. In a chat created leading with an LLM character, a metadata-gated table therefore dealt someone else's branch — plausibly, with a well-formed result and no error. The only record of what was consulted was `pascalMeta.metadataTested`, which no screen shows.
+
+- `handleList` in `app/api/v1/chats/[id]/custom-tools/route.ts` emits one row for a tool every participant resolves to the same file, and has to record a perspective on it because POST reads that character's fact sheet for `when.metadata` and their groups for `$state`. It took `sightings[0]` — `loadPerspectives` walks `chat.participants` in stored array order and did not prefer the operator's own `controlledBy: 'user'` character.
+- New `preferOperator` picks the operator's own played character instead: the one named by `activeTypingParticipantId` first, then their remaining user-controlled participants in stored order. Removed participants are not candidates.
+- When none of the operator's characters is a candidate — an all-LLM room, or a tool whose `availableWhen`/`withheldWhen` gate their character did not pass — the row falls back to stored order as before, but is now **labelled** with the character it will run as, using the same `characterLabel` the per-variant listing already uses. Silently succeeding as whoever passes a gate you failed was the sharpest edge of this bug. A one-character room stays unlabelled; there is nothing to disambiguate.
+- POST's `asCharacterId`-less fallback uses the same preference. It consults no fact sheet either way (that path deliberately rolls against `{}`), so this only decides which definition of a shadowed name gets dealt.
+- Unaffected, and deliberately unchanged: a character rolling mid-turn via `run_custom`, which reads `context.characterId`; and a tool that resolves differently per character, which still lists one labelled row per variant and runs as the character on its label.
+- New: `__tests__/unit/app/api/v1/chats/custom-tools-perspective.test.ts` (10 cases). Checked against the pre-fix code: six of them fail there.
+
+Found by a quilltap-v5 dogfood walk rather than by its differential harness — the harness could not have found it, because v5 ports the same logic line for line and both sides agree. v5 records it as finding #30 and must take the same change in the same round. Detail: `docs/developer/found-bugs.md`.
+
 #### Import can read its own export of a document-store blob over 3 MB
 
 Importing a `.qtap` export that carried a document-store attachment larger than `BLOB_CHUNK_BYTES` (3 MB) failed with `doc_mount_blob_chunk received without preceding doc_mount_blob`. The export was written by Quilltap itself and reported no error.

@@ -2406,7 +2406,9 @@ The roster is resolved **fresh on every request** — never cached — so a defi
 
 #### `GET /api/v1/chats/[id]/custom-tools`
 
-List the roster for the run dialog. Because a character-tier store shadows farther tiers, the roster is resolved once per character participant and merged: a tool that resolves identically for everyone is listed once with no `characterLabel`; a tool whose definition differs per character is listed once **per variant**, each labelled with that character's name. `asCharacterId` records whose perspective produced the entry and is replayed by the run action.
+List the roster for the run dialog. Because a character-tier store shadows farther tiers, the roster is resolved once per character participant and merged: a tool that resolves identically for everyone is listed once; a tool whose definition differs per character is listed once **per variant**, each labelled with that character's name. `asCharacterId` records whose perspective produced the entry and is replayed by the run action.
+
+**Whose perspective the single-variant row records.** It decides no variant, but the run action reads that character's fact sheet for `when.metadata` and their groups for `$state`, so it is not arbitrary: it is the operator's own played character — the participant named by `activeTypingParticipantId`, else the first present `controlledBy: 'user'` participant. When none of theirs is a candidate (an all-LLM chat, or an `availableWhen`/`withheldWhen` gate their character did not pass) it falls back to participant order **and carries a `characterLabel`**, so the caller can see whose sheet the run will consult.
 
 **Response**: `200 OK`
 
@@ -2450,11 +2452,11 @@ List the roster for the run dialog. Because a character-tier store shadows farth
 }
 ```
 
-`characterLabel` is present only on variant rows. `droppedForCap` is present only when the roster hit its size cap. `sourceTier` is one of `character`, `participant`, `group`, `project`, `global`. `references` is always present, all-false with empty lists for a tool that quotes nothing.
+`characterLabel` is present on variant rows, and on a single-variant row that fell back off the operator's own character (above). `droppedForCap` is present only when the roster hit its size cap. `sourceTier` is one of `character`, `participant`, `group`, `project`, `global`. `references` is always present, all-false with empty lists for a tool that quotes nothing.
 
 #### `POST /api/v1/chats/[id]/custom-tools?action=run`
 
-Run one tool at the operator's behest. Posts two messages: a **USER**-role invocation (so the model attributes the roll to the operator) followed by Pascal's outcome (`systemSender: 'pascal'`, `systemKind: 'custom-tool-result'`). Both share the run's visibility.
+Run one tool at the operator's behest. Posts **one** message: Pascal's outcome (`systemSender: 'pascal'`, `systemKind: 'custom-tool-result'`), identical to the one a character's own roll produces. The transcript does not record that the operator reached for the tool, nor what figures they set — a companion USER-role invocation line used to publish exactly that, and was removed.
 
 A failed run posts **no Pascal message** — the failure is announced by Prospero (`systemKind: 'custom-tool-error'`) and returns `400`.
 
@@ -2469,13 +2471,13 @@ A failed run posts **no Pascal message** — the failure is announced by Prosper
 }
 ```
 
-`parameters` and `asCharacterId` are optional/nullable; omitting `asCharacterId` resolves from the first character participant's perspective. `private: true` whispers both messages to the operator alone — no character sees them.
+`parameters` and `asCharacterId` are optional/nullable. Omitting `asCharacterId` resolves the roster from the operator's own character where there is one (the same preference `GET` uses), falling back to participant order — but the run then consults **no** fact sheet and **no** group state: metadata is `{}` and the `$state` group tier is skipped, rather than borrowing an arbitrary participant's. `private: true` whispers the outcome to the operator alone — no character sees it.
 
 **Response**: `200 OK`
 
 ```json
 {
-  "messages": [ { "role": "USER", "content": "*I ran `unlock` (bonus: 2).*" }, { "role": "ASSISTANT", "systemSender": "pascal" } ],
+  "messages": [ { "role": "ASSISTANT", "systemSender": "pascal" } ],
   "result": {
     "tool": "unlock",
     "value": 14,
