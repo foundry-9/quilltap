@@ -445,7 +445,7 @@ var require_package = __commonJS({
   "node_modules/gaxios/package.json"(exports2, module2) {
     module2.exports = {
       name: "gaxios",
-      version: "7.3.0",
+      version: "7.2.0",
       description: "A simple common HTTP client specifically for Google APIs and services.",
       main: "build/cjs/src/index.js",
       types: "build/cjs/src/index.d.ts",
@@ -1382,9 +1382,9 @@ var require_browser = __commonJS({
   }
 });
 
-// ../../../../../../node_modules/has-flag/index.js
+// ../../../node_modules/has-flag/index.js
 var require_has_flag = __commonJS({
-  "../../../../../../node_modules/has-flag/index.js"(exports2, module2) {
+  "../../../node_modules/has-flag/index.js"(exports2, module2) {
     "use strict";
     module2.exports = (flag, argv = process.argv) => {
       const prefix = flag.startsWith("-") ? "" : flag.length === 1 ? "-" : "--";
@@ -1395,9 +1395,9 @@ var require_has_flag = __commonJS({
   }
 });
 
-// ../../../../../../node_modules/supports-color/index.js
+// ../../../node_modules/supports-color/index.js
 var require_supports_color = __commonJS({
-  "../../../../../../node_modules/supports-color/index.js"(exports2, module2) {
+  "../../../node_modules/supports-color/index.js"(exports2, module2) {
     "use strict";
     var os = require("os");
     var tty = require("tty");
@@ -12261,7 +12261,7 @@ var require_package2 = __commonJS({
   "node_modules/google-auth-library/package.json"(exports2, module2) {
     module2.exports = {
       name: "google-auth-library",
-      version: "10.9.1",
+      version: "10.9.0",
       author: "Google Inc.",
       description: "Google APIs Authentication Client Library for Node.js",
       engines: {
@@ -17902,7 +17902,7 @@ var require_googleauth = __commonJS({
           return null;
         }
         try {
-          return await this._getApplicationCredentialsFromFilePath(credentialsPath, options);
+          return this._getApplicationCredentialsFromFilePath(credentialsPath, options);
         } catch (e2) {
           if (e2 instanceof Error) {
             e2.message = `Unable to read the credential file specified by the GOOGLE_APPLICATION_CREDENTIALS environment variable: ${e2.message}`;
@@ -17916,24 +17916,22 @@ var require_googleauth = __commonJS({
        * @api private
        */
       async _tryGetApplicationCredentialsFromWellKnownFile(options) {
-        let configDir = process.env["CLOUDSDK_CONFIG"];
-        if (!configDir) {
-          if (this._isWindows()) {
-            if (process.env["APPDATA"]) {
-              configDir = path3.join(process.env["APPDATA"], "gcloud");
-            }
-          } else {
-            const home = process.env["HOME"];
-            if (home) {
-              configDir = path3.join(home, ".config", "gcloud");
-            }
+        let location = null;
+        if (this._isWindows()) {
+          location = process.env["APPDATA"];
+        } else {
+          const home = process.env["HOME"];
+          if (home) {
+            location = path3.join(home, ".config");
           }
         }
-        if (!configDir) {
-          return null;
+        if (location) {
+          location = path3.join(location, "gcloud", "application_default_credentials.json");
+          if (!fs3.existsSync(location)) {
+            location = null;
+          }
         }
-        const location = path3.join(configDir, "application_default_credentials.json");
-        if (!fs3.existsSync(location)) {
+        if (!location) {
           return null;
         }
         const client = await this._getApplicationCredentialsFromFilePath(location, options);
@@ -40548,7 +40546,7 @@ function getApiKeyFromEnv() {
   return envGoogleApiKey || envGeminiApiKey || void 0;
 }
 
-// ../../../../../../node_modules/openai/internal/tslib.mjs
+// ../../../node_modules/openai/internal/tslib.mjs
 function __classPrivateFieldSet(receiver, state, value, kind, f3) {
   if (kind === "m")
     throw new TypeError("Private method is not writable");
@@ -40566,7 +40564,7 @@ function __classPrivateFieldGet(receiver, state, kind, f3) {
   return kind === "m" ? f3 : kind === "a" ? f3.call(receiver) : f3 ? f3.value : state.get(receiver);
 }
 
-// ../../../../../../node_modules/openai/internal/utils/uuid.mjs
+// ../../../node_modules/openai/internal/utils/uuid.mjs
 var uuid42 = function() {
   const { crypto: crypto2 } = globalThis;
   if (crypto2?.randomUUID) {
@@ -40578,7 +40576,7 @@ var uuid42 = function() {
   return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (+c ^ randomByte() & 15 >> +c / 4).toString(16));
 };
 
-// ../../../../../../node_modules/openai/internal/errors.mjs
+// ../../../node_modules/openai/internal/errors.mjs
 function isAbortError2(err) {
   return typeof err === "object" && err !== null && // Spec-compliant fetch implementations
   ("name" in err && err.name === "AbortError" || // Expo fetch
@@ -40609,7 +40607,7 @@ var castToError2 = (err) => {
   return new Error(err);
 };
 
-// ../../../../../../node_modules/openai/core/error.mjs
+// ../../../node_modules/openai/core/error.mjs
 var OpenAIError = class extends Error {
 };
 var APIError2 = class _APIError extends OpenAIError {
@@ -40743,7 +40741,7 @@ var SubjectTokenProviderError = class extends OpenAIError {
   }
 };
 
-// ../../../../../../node_modules/openai/internal/utils/values.mjs
+// ../../../node_modules/openai/internal/utils/values.mjs
 var startsWithSchemeRegexp2 = /^[a-z][a-z0-9+.-]*:/i;
 var isAbsoluteURL2 = (url) => {
   return startsWithSchemeRegexp2.test(url);
@@ -40786,13 +40784,13 @@ var safeJSON2 = (text) => {
   }
 };
 
-// ../../../../../../node_modules/openai/internal/utils/sleep.mjs
+// ../../../node_modules/openai/internal/utils/sleep.mjs
 var sleep2 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// ../../../../../../node_modules/openai/version.mjs
+// ../../../node_modules/openai/version.mjs
 var VERSION2 = "6.48.0";
 
-// ../../../../../../node_modules/openai/internal/detect-platform.mjs
+// ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
   return (
     // @ts-ignore
@@ -40926,7 +40924,7 @@ var getPlatformHeaders = () => {
   return _platformHeaders ?? (_platformHeaders = getPlatformProperties());
 };
 
-// ../../../../../../node_modules/openai/internal/shims.mjs
+// ../../../node_modules/openai/internal/shims.mjs
 function getDefaultFetch2() {
   if (typeof fetch !== "undefined") {
     return fetch;
@@ -40998,7 +40996,7 @@ async function CancelReadableStream2(stream) {
   await cancelPromise;
 }
 
-// ../../../../../../node_modules/openai/internal/request-options.mjs
+// ../../../node_modules/openai/internal/request-options.mjs
 var FallbackEncoder2 = ({ headers, body }) => {
   return {
     bodyHeaders: {
@@ -41008,7 +41006,7 @@ var FallbackEncoder2 = ({ headers, body }) => {
   };
 };
 
-// ../../../../../../node_modules/openai/internal/qs/formats.mjs
+// ../../../node_modules/openai/internal/qs/formats.mjs
 var default_format = "RFC3986";
 var default_formatter = (v) => String(v);
 var formatters = {
@@ -41017,7 +41015,7 @@ var formatters = {
 };
 var RFC1738 = "RFC1738";
 
-// ../../../../../../node_modules/openai/internal/qs/utils.mjs
+// ../../../node_modules/openai/internal/qs/utils.mjs
 var has = (obj, key) => (has = Object.hasOwn ?? Function.prototype.call.bind(Object.prototype.hasOwnProperty), has(obj, key));
 var hex_table = /* @__PURE__ */ (() => {
   const array = [];
@@ -41096,7 +41094,7 @@ function maybe_map(val, fn) {
   return fn(val);
 }
 
-// ../../../../../../node_modules/openai/internal/qs/stringify.mjs
+// ../../../node_modules/openai/internal/qs/stringify.mjs
 var array_prefix_generators = {
   brackets(prefix) {
     return String(prefix) + "[]";
@@ -41374,12 +41372,12 @@ function stringify(object, opts = {}) {
   return joined.length > 0 ? prefix + joined : "";
 }
 
-// ../../../../../../node_modules/openai/internal/utils/query.mjs
+// ../../../node_modules/openai/internal/utils/query.mjs
 function stringifyQuery2(query) {
   return stringify(query, { arrayFormat: "brackets" });
 }
 
-// ../../../../../../node_modules/openai/internal/utils/bytes.mjs
+// ../../../node_modules/openai/internal/utils/bytes.mjs
 function concatBytes2(buffers) {
   let length = 0;
   for (const buffer of buffers) {
@@ -41404,7 +41402,7 @@ function decodeUTF82(bytes) {
   return (decodeUTF8_2 ?? (decoder = new globalThis.TextDecoder(), decodeUTF8_2 = decoder.decode.bind(decoder)))(bytes);
 }
 
-// ../../../../../../node_modules/openai/internal/decoders/line.mjs
+// ../../../node_modules/openai/internal/decoders/line.mjs
 var _LineDecoder_buffer;
 var _LineDecoder_carriageReturnIndex;
 var LineDecoder2 = class {
@@ -41481,7 +41479,7 @@ function findDoubleNewlineIndex(buffer) {
   return -1;
 }
 
-// ../../../../../../node_modules/openai/internal/utils/log.mjs
+// ../../../node_modules/openai/internal/utils/log.mjs
 var levelNumbers2 = {
   off: 0,
   error: 200,
@@ -41554,7 +41552,7 @@ var formatRequestDetails2 = (details) => {
   return details;
 };
 
-// ../../../../../../node_modules/openai/core/streaming.mjs
+// ../../../node_modules/openai/core/streaming.mjs
 var _Stream_client;
 var Stream4 = class _Stream {
   constructor(iterator, controller, client) {
@@ -41844,7 +41842,7 @@ function partition2(str2, delimiter) {
   return [str2, "", ""];
 }
 
-// ../../../../../../node_modules/openai/internal/parse.mjs
+// ../../../node_modules/openai/internal/parse.mjs
 async function defaultParseResponse2(client, props) {
   const { response, requestLogID, retryOfRequestLogID, startTime } = props;
   const body = await (async () => {
@@ -41894,7 +41892,7 @@ function addRequestID(value, response) {
   });
 }
 
-// ../../../../../../node_modules/openai/core/api-promise.mjs
+// ../../../node_modules/openai/core/api-promise.mjs
 var _APIPromise_client;
 var APIPromise2 = class _APIPromise extends Promise {
   constructor(client, responsePromise, parseResponse2 = defaultParseResponse2) {
@@ -41957,7 +41955,7 @@ var APIPromise2 = class _APIPromise extends Promise {
 };
 _APIPromise_client = /* @__PURE__ */ new WeakMap();
 
-// ../../../../../../node_modules/openai/core/pagination.mjs
+// ../../../node_modules/openai/core/pagination.mjs
 var _AbstractPage_client;
 var AbstractPage = class {
   constructor(client, response, body, options) {
@@ -42118,7 +42116,7 @@ var NextCursorPage = class extends AbstractPage {
   }
 };
 
-// ../../../../../../node_modules/openai/auth/workload-identity-auth.mjs
+// ../../../node_modules/openai/auth/workload-identity-auth.mjs
 var SUBJECT_TOKEN_TYPES = {
   jwt: "urn:ietf:params:oauth:token-type:jwt",
   id: "urn:ietf:params:oauth:token-type:id_token"
@@ -42210,7 +42208,7 @@ var WorkloadIdentityAuth = class {
   }
 };
 
-// ../../../../../../node_modules/openai/internal/headers.mjs
+// ../../../node_modules/openai/internal/headers.mjs
 var brand_privateNullableHeaders2 = /* @__PURE__ */ Symbol("brand.privateNullableHeaders");
 var httpTokenHeaderName = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 function* iterateHeaders2(headers) {
@@ -42277,7 +42275,7 @@ var buildHeaders2 = (newHeaders) => {
   return { [brand_privateNullableHeaders2]: true, values: targetHeaders, nulls: nullHeaders };
 };
 
-// ../../../../../../node_modules/openai/internal/uploads.mjs
+// ../../../node_modules/openai/internal/uploads.mjs
 var brand_privateStreamingFile = /* @__PURE__ */ Symbol("brand.privateStreamingFile");
 function toStreamingFile(data, name, options) {
   if (!name) {
@@ -42510,7 +42508,7 @@ var addFormValue = async (form, key, value) => {
   }
 };
 
-// ../../../../../../node_modules/openai/internal/to-file.mjs
+// ../../../node_modules/openai/internal/to-file.mjs
 var isBlobLike2 = (value) => value != null && typeof value === "object" && typeof value.size === "number" && typeof value.type === "string" && typeof value.text === "function" && typeof value.slice === "function" && typeof value.arrayBuffer === "function";
 var isFileLike2 = (value) => value != null && typeof value === "object" && typeof value.name === "string" && typeof value.lastModified === "number" && isBlobLike2(value);
 var isResponseLike2 = (value) => value != null && typeof value === "object" && typeof value.url === "string" && typeof value.blob === "function";
@@ -42562,14 +42560,14 @@ function propsForError2(value) {
   return `; props: [${props.map((p) => `"${p}"`).join(", ")}]`;
 }
 
-// ../../../../../../node_modules/openai/core/resource.mjs
+// ../../../node_modules/openai/core/resource.mjs
 var APIResource2 = class {
   constructor(client) {
     this._client = client;
   }
 };
 
-// ../../../../../../node_modules/openai/internal/utils/path.mjs
+// ../../../node_modules/openai/internal/utils/path.mjs
 function encodeURIPath2(str2) {
   return str2.replace(/[^A-Za-z0-9\-._~!$&'()*+,;=:@]+/g, encodeURIComponent);
 }
@@ -42624,7 +42622,7 @@ ${underline}`);
 };
 var path2 = /* @__PURE__ */ createPathTagFunction2(encodeURIPath2);
 
-// ../../../../../../node_modules/openai/resources/chat/completions/messages.mjs
+// ../../../node_modules/openai/resources/chat/completions/messages.mjs
 var Messages = class extends APIResource2 {
   /**
    * Get the messages in a stored chat completion. Only Chat Completions that have
@@ -42645,7 +42643,7 @@ var Messages = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/lib/parser.mjs
+// ../../../node_modules/openai/lib/parser.mjs
 function isChatCompletionFunctionTool(tool) {
   return tool !== void 0 && "function" in tool && tool.function !== void 0;
 }
@@ -42752,7 +42750,7 @@ function validateInputTools(tools) {
   }
 }
 
-// ../../../../../../node_modules/openai/lib/chatCompletionUtils.mjs
+// ../../../node_modules/openai/lib/chatCompletionUtils.mjs
 var isAssistantMessage = (message) => {
   return message?.role === "assistant";
 };
@@ -42760,7 +42758,7 @@ var isToolMessage = (message) => {
   return message?.role === "tool";
 };
 
-// ../../../../../../node_modules/openai/lib/EventStream.mjs
+// ../../../node_modules/openai/lib/EventStream.mjs
 var _EventStream_instances;
 var _EventStream_connectedPromise;
 var _EventStream_resolveConnectedPromise;
@@ -43069,12 +43067,12 @@ _EventStream_connectedPromise = /* @__PURE__ */ new WeakMap(), _EventStream_reso
   return this._emit("error", new OpenAIError(String(error)));
 };
 
-// ../../../../../../node_modules/openai/lib/RunnableFunction.mjs
+// ../../../node_modules/openai/lib/RunnableFunction.mjs
 function isRunnableFunctionWithParse(fn) {
   return typeof fn.parse === "function";
 }
 
-// ../../../../../../node_modules/openai/lib/AbstractChatCompletionRunner.mjs
+// ../../../node_modules/openai/lib/AbstractChatCompletionRunner.mjs
 var _AbstractChatCompletionRunner_instances;
 var _AbstractChatCompletionRunner_getFinalContent;
 var _AbstractChatCompletionRunner_getFinalMessage;
@@ -43379,7 +43377,7 @@ _AbstractChatCompletionRunner_instances = /* @__PURE__ */ new WeakSet(), _Abstra
   return typeof rawContent === "string" ? rawContent : rawContent === void 0 ? "undefined" : JSON.stringify(rawContent);
 };
 
-// ../../../../../../node_modules/openai/lib/ChatCompletionRunner.mjs
+// ../../../node_modules/openai/lib/ChatCompletionRunner.mjs
 var ChatCompletionRunner = class _ChatCompletionRunner extends AbstractChatCompletionRunner {
   static runTools(client, params, options) {
     const runner = new _ChatCompletionRunner();
@@ -43398,7 +43396,7 @@ var ChatCompletionRunner = class _ChatCompletionRunner extends AbstractChatCompl
   }
 };
 
-// ../../../../../../node_modules/openai/_vendor/partial-json-parser/parser.mjs
+// ../../../node_modules/openai/_vendor/partial-json-parser/parser.mjs
 var STR = 1;
 var NUM = 2;
 var ARR = 4;
@@ -43610,7 +43608,7 @@ var _parseJSON = (jsonString, allow) => {
 };
 var partialParse = (input) => parseJSON(input, Allow.ALL ^ Allow.NUM);
 
-// ../../../../../../node_modules/openai/lib/ChatCompletionStream.mjs
+// ../../../node_modules/openai/lib/ChatCompletionStream.mjs
 var _ChatCompletionStream_instances;
 var _ChatCompletionStream_params;
 var _ChatCompletionStream_choiceEventStates;
@@ -44131,7 +44129,7 @@ function assertIsEmpty(obj) {
 function assertNever(_x) {
 }
 
-// ../../../../../../node_modules/openai/lib/ChatCompletionStreamingRunner.mjs
+// ../../../node_modules/openai/lib/ChatCompletionStreamingRunner.mjs
 var ChatCompletionStreamingRunner = class _ChatCompletionStreamingRunner extends ChatCompletionStream {
   static fromReadableStream(stream) {
     const runner = new _ChatCompletionStreamingRunner(null);
@@ -44225,7 +44223,7 @@ var ChatCompletionStreamingRunner = class _ChatCompletionStreamingRunner extends
   }
 };
 
-// ../../../../../../node_modules/openai/resources/chat/completions/completions.mjs
+// ../../../node_modules/openai/resources/chat/completions/completions.mjs
 var Completions = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -44335,7 +44333,7 @@ var Completions = class extends APIResource2 {
 };
 Completions.Messages = Messages;
 
-// ../../../../../../node_modules/openai/resources/chat/chat.mjs
+// ../../../node_modules/openai/resources/chat/chat.mjs
 var Chat2 = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -44344,7 +44342,7 @@ var Chat2 = class extends APIResource2 {
 };
 Chat2.Completions = Completions;
 
-// ../../../../../../node_modules/openai/resources/admin/organization/admin-api-keys.mjs
+// ../../../node_modules/openai/resources/admin/organization/admin-api-keys.mjs
 var AdminAPIKeys = class extends APIResource2 {
   /**
    * Create an organization admin API key
@@ -44418,7 +44416,7 @@ var AdminAPIKeys = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/admin/organization/audit-logs.mjs
+// ../../../node_modules/openai/resources/admin/organization/audit-logs.mjs
 var AuditLogs = class extends APIResource2 {
   /**
    * List user actions and configuration changes within this organization.
@@ -44440,7 +44438,7 @@ var AuditLogs = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/admin/organization/certificates.mjs
+// ../../../node_modules/openai/resources/admin/organization/certificates.mjs
 var Certificates = class extends APIResource2 {
   /**
    * Upload a certificate to the organization. This does **not** automatically
@@ -44577,7 +44575,7 @@ var Certificates = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/admin/organization/data-retention.mjs
+// ../../../node_modules/openai/resources/admin/organization/data-retention.mjs
 var DataRetention = class extends APIResource2 {
   /**
    * Retrieves organization data retention controls.
@@ -44614,7 +44612,7 @@ var DataRetention = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/admin/organization/invites.mjs
+// ../../../node_modules/openai/resources/admin/organization/invites.mjs
 var Invites = class extends APIResource2 {
   /**
    * Create an invite for a user to the organization. The invite must be accepted by
@@ -44690,7 +44688,7 @@ var Invites = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/admin/organization/roles.mjs
+// ../../../node_modules/openai/resources/admin/organization/roles.mjs
 var Roles = class extends APIResource2 {
   /**
    * Creates a custom role for the organization.
@@ -44779,7 +44777,7 @@ var Roles = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/admin/organization/spend-alerts.mjs
+// ../../../node_modules/openai/resources/admin/organization/spend-alerts.mjs
 var SpendAlerts = class extends APIResource2 {
   /**
    * Creates an organization spend alert.
@@ -44882,7 +44880,7 @@ var SpendAlerts = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/admin/organization/usage.mjs
+// ../../../node_modules/openai/resources/admin/organization/usage.mjs
 var Usage = class extends APIResource2 {
   /**
    * Get audio speeches usage details for the organization.
@@ -45084,7 +45082,7 @@ var Usage = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/admin/organization/groups/roles.mjs
+// ../../../node_modules/openai/resources/admin/organization/groups/roles.mjs
 var Roles2 = class extends APIResource2 {
   /**
    * Assigns an organization role to a group within the organization.
@@ -45161,7 +45159,7 @@ var Roles2 = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/admin/organization/groups/users.mjs
+// ../../../node_modules/openai/resources/admin/organization/groups/users.mjs
 var Users = class extends APIResource2 {
   /**
    * Adds a user to a group.
@@ -45238,7 +45236,7 @@ var Users = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/admin/organization/groups/groups.mjs
+// ../../../node_modules/openai/resources/admin/organization/groups/groups.mjs
 var Groups = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -45335,7 +45333,7 @@ var Groups = class extends APIResource2 {
 Groups.Users = Users;
 Groups.Roles = Roles2;
 
-// ../../../../../../node_modules/openai/resources/admin/organization/projects/api-keys.mjs
+// ../../../node_modules/openai/resources/admin/organization/projects/api-keys.mjs
 var APIKeys = class extends APIResource2 {
   /**
    * Retrieves an API key in the project.
@@ -45396,7 +45394,7 @@ var APIKeys = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/admin/organization/projects/certificates.mjs
+// ../../../node_modules/openai/resources/admin/organization/projects/certificates.mjs
 var Certificates2 = class extends APIResource2 {
   /**
    * List certificates for this project.
@@ -45453,7 +45451,7 @@ var Certificates2 = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/admin/organization/projects/data-retention.mjs
+// ../../../node_modules/openai/resources/admin/organization/projects/data-retention.mjs
 var DataRetention2 = class extends APIResource2 {
   /**
    * Retrieves project data retention controls.
@@ -45493,7 +45491,7 @@ var DataRetention2 = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/admin/organization/projects/hosted-tool-permissions.mjs
+// ../../../node_modules/openai/resources/admin/organization/projects/hosted-tool-permissions.mjs
 var HostedToolPermissions = class extends APIResource2 {
   /**
    * Returns hosted tool permissions for a project.
@@ -45532,7 +45530,7 @@ var HostedToolPermissions = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/admin/organization/projects/model-permissions.mjs
+// ../../../node_modules/openai/resources/admin/organization/projects/model-permissions.mjs
 var ModelPermissions = class extends APIResource2 {
   /**
    * Returns model permissions for a project.
@@ -45589,7 +45587,7 @@ var ModelPermissions = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/admin/organization/projects/rate-limits.mjs
+// ../../../node_modules/openai/resources/admin/organization/projects/rate-limits.mjs
 var RateLimits = class extends APIResource2 {
   /**
    * Returns the rate limits per model for a project.
@@ -45629,7 +45627,7 @@ var RateLimits = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/admin/organization/projects/roles.mjs
+// ../../../node_modules/openai/resources/admin/organization/projects/roles.mjs
 var Roles3 = class extends APIResource2 {
   /**
    * Creates a custom role for a project.
@@ -45730,7 +45728,7 @@ var Roles3 = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/admin/organization/projects/spend-alerts.mjs
+// ../../../node_modules/openai/resources/admin/organization/projects/spend-alerts.mjs
 var SpendAlerts2 = class extends APIResource2 {
   /**
    * Creates a project spend alert.
@@ -45844,7 +45842,7 @@ var SpendAlerts2 = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/admin/organization/projects/groups/roles.mjs
+// ../../../node_modules/openai/resources/admin/organization/projects/groups/roles.mjs
 var Roles4 = class extends APIResource2 {
   /**
    * Assigns a project role to a group within a project.
@@ -45924,7 +45922,7 @@ var Roles4 = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/admin/organization/projects/groups/groups.mjs
+// ../../../node_modules/openai/resources/admin/organization/projects/groups/groups.mjs
 var Groups2 = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -46007,7 +46005,7 @@ var Groups2 = class extends APIResource2 {
 };
 Groups2.Roles = Roles4;
 
-// ../../../../../../node_modules/openai/resources/admin/organization/projects/service-accounts/api-keys.mjs
+// ../../../node_modules/openai/resources/admin/organization/projects/service-accounts/api-keys.mjs
 var APIKeys2 = class extends APIResource2 {
   /**
    * Creates an API key for a service account in the project.
@@ -46027,7 +46025,7 @@ var APIKeys2 = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/admin/organization/projects/service-accounts/service-accounts.mjs
+// ../../../node_modules/openai/resources/admin/organization/projects/service-accounts/service-accounts.mjs
 var ServiceAccounts = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -46126,7 +46124,7 @@ var ServiceAccounts = class extends APIResource2 {
 };
 ServiceAccounts.APIKeys = APIKeys2;
 
-// ../../../../../../node_modules/openai/resources/admin/organization/projects/users/roles.mjs
+// ../../../node_modules/openai/resources/admin/organization/projects/users/roles.mjs
 var Roles5 = class extends APIResource2 {
   /**
    * Assigns a project role to a user within a project.
@@ -46206,7 +46204,7 @@ var Roles5 = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/admin/organization/projects/users/users.mjs
+// ../../../node_modules/openai/resources/admin/organization/projects/users/users.mjs
 var Users2 = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -46312,7 +46310,7 @@ var Users2 = class extends APIResource2 {
 };
 Users2.Roles = Roles5;
 
-// ../../../../../../node_modules/openai/resources/admin/organization/projects/projects.mjs
+// ../../../node_modules/openai/resources/admin/organization/projects/projects.mjs
 var Projects = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -46431,7 +46429,7 @@ Projects.DataRetention = DataRetention2;
 Projects.SpendAlerts = SpendAlerts2;
 Projects.Certificates = Certificates2;
 
-// ../../../../../../node_modules/openai/resources/admin/organization/users/roles.mjs
+// ../../../node_modules/openai/resources/admin/organization/users/roles.mjs
 var Roles6 = class extends APIResource2 {
   /**
    * Assigns an organization role to a user within the organization.
@@ -46508,7 +46506,7 @@ var Roles6 = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/admin/organization/users/users.mjs
+// ../../../node_modules/openai/resources/admin/organization/users/users.mjs
 var Users3 = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -46582,7 +46580,7 @@ var Users3 = class extends APIResource2 {
 };
 Users3.Roles = Roles6;
 
-// ../../../../../../node_modules/openai/resources/admin/organization/organization.mjs
+// ../../../node_modules/openai/resources/admin/organization/organization.mjs
 var Organization = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -46611,7 +46609,7 @@ Organization.SpendAlerts = SpendAlerts;
 Organization.Certificates = Certificates;
 Organization.Projects = Projects;
 
-// ../../../../../../node_modules/openai/resources/admin/admin.mjs
+// ../../../node_modules/openai/resources/admin/admin.mjs
 var Admin = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -46620,7 +46618,7 @@ var Admin = class extends APIResource2 {
 };
 Admin.Organization = Organization;
 
-// ../../../../../../node_modules/openai/resources/audio/speech.mjs
+// ../../../node_modules/openai/resources/audio/speech.mjs
 var Speech = class extends APIResource2 {
   /**
    * Generates audio from the input text.
@@ -46650,7 +46648,7 @@ var Speech = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/audio/transcriptions.mjs
+// ../../../node_modules/openai/resources/audio/transcriptions.mjs
 var Transcriptions = class extends APIResource2 {
   create(body, options) {
     return this._client.post("/audio/transcriptions", multipartFormRequestOptions({
@@ -46663,14 +46661,14 @@ var Transcriptions = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/audio/translations.mjs
+// ../../../node_modules/openai/resources/audio/translations.mjs
 var Translations = class extends APIResource2 {
   create(body, options) {
     return this._client.post("/audio/translations", multipartFormRequestOptions({ body, ...options, __metadata: { model: body.model }, __security: { bearerAuth: true } }, this._client));
   }
 };
 
-// ../../../../../../node_modules/openai/resources/audio/audio.mjs
+// ../../../node_modules/openai/resources/audio/audio.mjs
 var Audio = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -46683,7 +46681,7 @@ Audio.Transcriptions = Transcriptions;
 Audio.Translations = Translations;
 Audio.Speech = Speech;
 
-// ../../../../../../node_modules/openai/resources/batches.mjs
+// ../../../node_modules/openai/resources/batches.mjs
 var Batches2 = class extends APIResource2 {
   /**
    * Creates and executes a batch from an uploaded file of requests
@@ -46720,7 +46718,7 @@ var Batches2 = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/beta/assistants.mjs
+// ../../../node_modules/openai/resources/beta/assistants.mjs
 var Assistants = class extends APIResource2 {
   /**
    * Create an assistant with a model and instructions.
@@ -46787,7 +46785,7 @@ var Assistants = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/beta/realtime/sessions.mjs
+// ../../../node_modules/openai/resources/beta/realtime/sessions.mjs
 var Sessions = class extends APIResource2 {
   /**
    * Create an ephemeral API token for use in client-side applications with the
@@ -46814,7 +46812,7 @@ var Sessions = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/beta/realtime/transcription-sessions.mjs
+// ../../../node_modules/openai/resources/beta/realtime/transcription-sessions.mjs
 var TranscriptionSessions = class extends APIResource2 {
   /**
    * Create an ephemeral API token for use in client-side applications with the
@@ -46841,7 +46839,7 @@ var TranscriptionSessions = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/beta/realtime/realtime.mjs
+// ../../../node_modules/openai/resources/beta/realtime/realtime.mjs
 var Realtime = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -46852,7 +46850,7 @@ var Realtime = class extends APIResource2 {
 Realtime.Sessions = Sessions;
 Realtime.TranscriptionSessions = TranscriptionSessions;
 
-// ../../../../../../node_modules/openai/resources/beta/chatkit/sessions.mjs
+// ../../../node_modules/openai/resources/beta/chatkit/sessions.mjs
 var Sessions2 = class extends APIResource2 {
   /**
    * Create a ChatKit session.
@@ -46894,7 +46892,7 @@ var Sessions2 = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/beta/chatkit/threads.mjs
+// ../../../node_modules/openai/resources/beta/chatkit/threads.mjs
 var Threads = class extends APIResource2 {
   /**
    * Retrieve a ChatKit thread by its identifier.
@@ -46971,7 +46969,7 @@ var Threads = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/beta/chatkit/chatkit.mjs
+// ../../../node_modules/openai/resources/beta/chatkit/chatkit.mjs
 var ChatKit = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -46982,7 +46980,7 @@ var ChatKit = class extends APIResource2 {
 ChatKit.Sessions = Sessions2;
 ChatKit.Threads = Threads;
 
-// ../../../../../../node_modules/openai/resources/beta/responses/input-items.mjs
+// ../../../node_modules/openai/resources/beta/responses/input-items.mjs
 var InputItems = class extends APIResource2 {
   /**
    * Returns a list of input items for a given response.
@@ -47011,7 +47009,7 @@ var InputItems = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/beta/responses/input-tokens.mjs
+// ../../../node_modules/openai/resources/beta/responses/input-tokens.mjs
 var InputTokens = class extends APIResource2 {
   /**
    * Returns input token counts of the request.
@@ -47039,7 +47037,7 @@ var InputTokens = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/beta/responses/responses.mjs
+// ../../../node_modules/openai/resources/beta/responses/responses.mjs
 var Responses = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -47148,7 +47146,7 @@ var Responses = class extends APIResource2 {
 Responses.InputItems = InputItems;
 Responses.InputTokens = InputTokens;
 
-// ../../../../../../node_modules/openai/resources/beta/threads/messages.mjs
+// ../../../node_modules/openai/resources/beta/threads/messages.mjs
 var Messages2 = class extends APIResource2 {
   /**
    * Create a message.
@@ -47218,7 +47216,7 @@ var Messages2 = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/beta/threads/runs/steps.mjs
+// ../../../node_modules/openai/resources/beta/threads/runs/steps.mjs
 var Steps = class extends APIResource2 {
   /**
    * Retrieves a run step.
@@ -47250,7 +47248,7 @@ var Steps = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/internal/utils/base64.mjs
+// ../../../node_modules/openai/internal/utils/base64.mjs
 var toFloat32Array = (base64Str) => {
   if (typeof Buffer !== "undefined") {
     const buf = Buffer.from(base64Str, "base64");
@@ -47266,7 +47264,7 @@ var toFloat32Array = (base64Str) => {
   }
 };
 
-// ../../../../../../node_modules/openai/internal/utils/env.mjs
+// ../../../node_modules/openai/internal/utils/env.mjs
 var readEnv2 = (env) => {
   if (typeof globalThis.process !== "undefined") {
     return globalThis.process.env?.[env]?.trim() || void 0;
@@ -47277,7 +47275,7 @@ var readEnv2 = (env) => {
   return void 0;
 };
 
-// ../../../../../../node_modules/openai/lib/AssistantStream.mjs
+// ../../../node_modules/openai/lib/AssistantStream.mjs
 var _AssistantStream_instances;
 var _a2;
 var _AssistantStream_events;
@@ -47797,7 +47795,7 @@ _a2 = AssistantStream, _AssistantStream_addEvent = function _AssistantStream_add
 function assertNever2(_x) {
 }
 
-// ../../../../../../node_modules/openai/resources/beta/threads/runs/runs.mjs
+// ../../../node_modules/openai/resources/beta/threads/runs/runs.mjs
 var Runs = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -47970,7 +47968,7 @@ var Runs = class extends APIResource2 {
 };
 Runs.Steps = Steps;
 
-// ../../../../../../node_modules/openai/resources/beta/threads/threads.mjs
+// ../../../node_modules/openai/resources/beta/threads/threads.mjs
 var Threads2 = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -48056,7 +48054,7 @@ var Threads2 = class extends APIResource2 {
 Threads2.Runs = Runs;
 Threads2.Messages = Messages2;
 
-// ../../../../../../node_modules/openai/resources/beta/beta.mjs
+// ../../../node_modules/openai/resources/beta/beta.mjs
 var Beta = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -48073,7 +48071,7 @@ Beta.ChatKit = ChatKit;
 Beta.Assistants = Assistants;
 Beta.Threads = Threads2;
 
-// ../../../../../../node_modules/openai/resources/completions.mjs
+// ../../../node_modules/openai/resources/completions.mjs
 var Completions2 = class extends APIResource2 {
   create(body, options) {
     return this._client.post("/completions", {
@@ -48085,7 +48083,7 @@ var Completions2 = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/containers/files/content.mjs
+// ../../../node_modules/openai/resources/containers/files/content.mjs
 var Content = class extends APIResource2 {
   /**
    * Retrieve Container File Content
@@ -48101,7 +48099,7 @@ var Content = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/containers/files/files.mjs
+// ../../../node_modules/openai/resources/containers/files/files.mjs
 var Files2 = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -48150,7 +48148,7 @@ var Files2 = class extends APIResource2 {
 };
 Files2.Content = Content;
 
-// ../../../../../../node_modules/openai/resources/containers/containers.mjs
+// ../../../node_modules/openai/resources/containers/containers.mjs
 var Containers = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -48194,7 +48192,7 @@ var Containers = class extends APIResource2 {
 };
 Containers.Files = Files2;
 
-// ../../../../../../node_modules/openai/resources/conversations/items.mjs
+// ../../../node_modules/openai/resources/conversations/items.mjs
 var Items = class extends APIResource2 {
   /**
    * Create items in a conversation with the given ID.
@@ -48237,7 +48235,7 @@ var Items = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/conversations/conversations.mjs
+// ../../../node_modules/openai/resources/conversations/conversations.mjs
 var Conversations = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -48280,7 +48278,7 @@ var Conversations = class extends APIResource2 {
 };
 Conversations.Items = Items;
 
-// ../../../../../../node_modules/openai/resources/embeddings.mjs
+// ../../../node_modules/openai/resources/embeddings.mjs
 var Embeddings = class extends APIResource2 {
   /**
    * Creates an embedding vector representing the input text.
@@ -48324,7 +48322,7 @@ var Embeddings = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/evals/runs/output-items.mjs
+// ../../../node_modules/openai/resources/evals/runs/output-items.mjs
 var OutputItems = class extends APIResource2 {
   /**
    * Get an evaluation run output item by ID.
@@ -48345,7 +48343,7 @@ var OutputItems = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/evals/runs/runs.mjs
+// ../../../node_modules/openai/resources/evals/runs/runs.mjs
 var Runs2 = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -48406,7 +48404,7 @@ var Runs2 = class extends APIResource2 {
 };
 Runs2.OutputItems = OutputItems;
 
-// ../../../../../../node_modules/openai/resources/evals/evals.mjs
+// ../../../node_modules/openai/resources/evals/evals.mjs
 var Evals = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -48454,7 +48452,7 @@ var Evals = class extends APIResource2 {
 };
 Evals.Runs = Runs2;
 
-// ../../../../../../node_modules/openai/resources/files.mjs
+// ../../../node_modules/openai/resources/files.mjs
 var Files3 = class extends APIResource2 {
   /**
    * Upload a file that can be used across various endpoints. Individual files can be
@@ -48541,11 +48539,11 @@ var Files3 = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/fine-tuning/methods.mjs
+// ../../../node_modules/openai/resources/fine-tuning/methods.mjs
 var Methods = class extends APIResource2 {
 };
 
-// ../../../../../../node_modules/openai/resources/fine-tuning/alpha/graders.mjs
+// ../../../node_modules/openai/resources/fine-tuning/alpha/graders.mjs
 var Graders = class extends APIResource2 {
   /**
    * Run a grader.
@@ -48597,7 +48595,7 @@ var Graders = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/fine-tuning/alpha/alpha.mjs
+// ../../../node_modules/openai/resources/fine-tuning/alpha/alpha.mjs
 var Alpha = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -48606,7 +48604,7 @@ var Alpha = class extends APIResource2 {
 };
 Alpha.Graders = Graders;
 
-// ../../../../../../node_modules/openai/resources/fine-tuning/checkpoints/permissions.mjs
+// ../../../node_modules/openai/resources/fine-tuning/checkpoints/permissions.mjs
 var Permissions = class extends APIResource2 {
   /**
    * **NOTE:** Calling this endpoint requires an [admin API key](../admin-api-keys).
@@ -48686,7 +48684,7 @@ var Permissions = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/fine-tuning/checkpoints/checkpoints.mjs
+// ../../../node_modules/openai/resources/fine-tuning/checkpoints/checkpoints.mjs
 var Checkpoints = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -48695,7 +48693,7 @@ var Checkpoints = class extends APIResource2 {
 };
 Checkpoints.Permissions = Permissions;
 
-// ../../../../../../node_modules/openai/resources/fine-tuning/jobs/checkpoints.mjs
+// ../../../node_modules/openai/resources/fine-tuning/jobs/checkpoints.mjs
 var Checkpoints2 = class extends APIResource2 {
   /**
    * List checkpoints for a fine-tuning job.
@@ -48715,7 +48713,7 @@ var Checkpoints2 = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/fine-tuning/jobs/jobs.mjs
+// ../../../node_modules/openai/resources/fine-tuning/jobs/jobs.mjs
 var Jobs = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -48844,7 +48842,7 @@ var Jobs = class extends APIResource2 {
 };
 Jobs.Checkpoints = Checkpoints2;
 
-// ../../../../../../node_modules/openai/resources/fine-tuning/fine-tuning.mjs
+// ../../../node_modules/openai/resources/fine-tuning/fine-tuning.mjs
 var FineTuning = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -48859,11 +48857,11 @@ FineTuning.Jobs = Jobs;
 FineTuning.Checkpoints = Checkpoints;
 FineTuning.Alpha = Alpha;
 
-// ../../../../../../node_modules/openai/resources/graders/grader-models.mjs
+// ../../../node_modules/openai/resources/graders/grader-models.mjs
 var GraderModels = class extends APIResource2 {
 };
 
-// ../../../../../../node_modules/openai/resources/graders/graders.mjs
+// ../../../node_modules/openai/resources/graders/graders.mjs
 var Graders2 = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -48872,7 +48870,7 @@ var Graders2 = class extends APIResource2 {
 };
 Graders2.GraderModels = GraderModels;
 
-// ../../../../../../node_modules/openai/resources/images.mjs
+// ../../../node_modules/openai/resources/images.mjs
 var Images = class extends APIResource2 {
   /**
    * Creates a variation of a given image. This endpoint only supports `dall-e-2`.
@@ -48900,7 +48898,7 @@ var Images = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/models.mjs
+// ../../../node_modules/openai/resources/models.mjs
 var Models2 = class extends APIResource2 {
   /**
    * Retrieves a model instance, providing basic information about the model such as
@@ -48925,7 +48923,7 @@ var Models2 = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/moderations.mjs
+// ../../../node_modules/openai/resources/moderations.mjs
 var Moderations = class extends APIResource2 {
   /**
    * Classifies if text and/or image inputs are potentially harmful. Learn more in
@@ -48936,7 +48934,7 @@ var Moderations = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/realtime/calls.mjs
+// ../../../node_modules/openai/resources/realtime/calls.mjs
 var Calls = class extends APIResource2 {
   /**
    * Accept an incoming SIP call and configure the realtime session that will handle
@@ -49008,7 +49006,7 @@ var Calls = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/realtime/client-secrets.mjs
+// ../../../node_modules/openai/resources/realtime/client-secrets.mjs
 var ClientSecrets = class extends APIResource2 {
   /**
    * Create a Realtime client secret with an associated session configuration.
@@ -49042,7 +49040,7 @@ var ClientSecrets = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/realtime/realtime.mjs
+// ../../../node_modules/openai/resources/realtime/realtime.mjs
 var Realtime2 = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -49053,7 +49051,7 @@ var Realtime2 = class extends APIResource2 {
 Realtime2.ClientSecrets = ClientSecrets;
 Realtime2.Calls = Calls;
 
-// ../../../../../../node_modules/openai/lib/ResponsesParser.mjs
+// ../../../node_modules/openai/lib/ResponsesParser.mjs
 function maybeParseResponse(response, params) {
   if (!params || !hasAutoParseableInput2(params)) {
     const parsed = {
@@ -49182,7 +49180,7 @@ function addOutputText(rsp) {
   rsp.output_text = texts.join("");
 }
 
-// ../../../../../../node_modules/openai/lib/responses/ResponseAccumulator.mjs
+// ../../../node_modules/openai/lib/responses/ResponseAccumulator.mjs
 function accumulateResponse(event, snapshot) {
   if (!snapshot) {
     if (event.type !== "response.created") {
@@ -49571,7 +49569,7 @@ function assertNever3(value) {
   throw new OpenAIError(`Unhandled response stream event: ${JSON.stringify(value)}`);
 }
 
-// ../../../../../../node_modules/openai/lib/responses/ResponseStream.mjs
+// ../../../node_modules/openai/lib/responses/ResponseStream.mjs
 var _ResponseStream_instances;
 var _ResponseStream_params;
 var _ResponseStream_currentResponseSnapshot;
@@ -49765,7 +49763,7 @@ function finalizeResponse(snapshot, params) {
   return maybeParseResponse(snapshot, params);
 }
 
-// ../../../../../../node_modules/openai/resources/responses/input-items.mjs
+// ../../../node_modules/openai/resources/responses/input-items.mjs
 var InputItems2 = class extends APIResource2 {
   /**
    * Returns a list of input items for a given response.
@@ -49785,7 +49783,7 @@ var InputItems2 = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/responses/input-tokens.mjs
+// ../../../node_modules/openai/resources/responses/input-tokens.mjs
 var InputTokens2 = class extends APIResource2 {
   /**
    * Returns input token counts of the request.
@@ -49807,7 +49805,7 @@ var InputTokens2 = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/responses/responses.mjs
+// ../../../node_modules/openai/resources/responses/responses.mjs
 var Responses2 = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -49906,7 +49904,7 @@ var Responses2 = class extends APIResource2 {
 Responses2.InputItems = InputItems2;
 Responses2.InputTokens = InputTokens2;
 
-// ../../../../../../node_modules/openai/resources/skills/content.mjs
+// ../../../node_modules/openai/resources/skills/content.mjs
 var Content2 = class extends APIResource2 {
   /**
    * Download a skill zip bundle by its ID.
@@ -49921,7 +49919,7 @@ var Content2 = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/skills/versions/content.mjs
+// ../../../node_modules/openai/resources/skills/versions/content.mjs
 var Content3 = class extends APIResource2 {
   /**
    * Download a skill version zip bundle.
@@ -49937,7 +49935,7 @@ var Content3 = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/skills/versions/versions.mjs
+// ../../../node_modules/openai/resources/skills/versions/versions.mjs
 var Versions = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -49982,7 +49980,7 @@ var Versions = class extends APIResource2 {
 };
 Versions.Content = Content3;
 
-// ../../../../../../node_modules/openai/resources/skills/skills.mjs
+// ../../../node_modules/openai/resources/skills/skills.mjs
 var Skills = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -50031,7 +50029,7 @@ var Skills = class extends APIResource2 {
 Skills.Content = Content2;
 Skills.Versions = Versions;
 
-// ../../../../../../node_modules/openai/resources/uploads/parts.mjs
+// ../../../node_modules/openai/resources/uploads/parts.mjs
 var Parts = class extends APIResource2 {
   /**
    * Adds a
@@ -50051,7 +50049,7 @@ var Parts = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/uploads/uploads.mjs
+// ../../../node_modules/openai/resources/uploads/uploads.mjs
 var Uploads = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -50121,7 +50119,7 @@ var Uploads = class extends APIResource2 {
 };
 Uploads.Parts = Parts;
 
-// ../../../../../../node_modules/openai/lib/Util.mjs
+// ../../../node_modules/openai/lib/Util.mjs
 var allSettledWithThrow = async (promises) => {
   const results = await Promise.allSettled(promises);
   const rejected = results.filter((result) => result.status === "rejected");
@@ -50140,7 +50138,7 @@ var allSettledWithThrow = async (promises) => {
   return values;
 };
 
-// ../../../../../../node_modules/openai/resources/vector-stores/file-batches.mjs
+// ../../../node_modules/openai/resources/vector-stores/file-batches.mjs
 var FileBatches = class extends APIResource2 {
   /**
    * Create a vector store file batch.
@@ -50265,7 +50263,7 @@ var FileBatches = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/vector-stores/files.mjs
+// ../../../node_modules/openai/resources/vector-stores/files.mjs
 var Files4 = class extends APIResource2 {
   /**
    * Create a vector store file by attaching a
@@ -50406,7 +50404,7 @@ var Files4 = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/vector-stores/vector-stores.mjs
+// ../../../node_modules/openai/resources/vector-stores/vector-stores.mjs
 var VectorStores = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -50483,7 +50481,7 @@ var VectorStores = class extends APIResource2 {
 VectorStores.Files = Files4;
 VectorStores.FileBatches = FileBatches;
 
-// ../../../../../../node_modules/openai/resources/videos.mjs
+// ../../../node_modules/openai/resources/videos.mjs
 var Videos = class extends APIResource2 {
   /**
    * Create a new video generation job from a prompt and optional reference assets.
@@ -50563,7 +50561,7 @@ var Videos = class extends APIResource2 {
   }
 };
 
-// ../../../../../../node_modules/openai/resources/webhooks/webhooks.mjs
+// ../../../node_modules/openai/resources/webhooks/webhooks.mjs
 var _Webhooks_instances;
 var _Webhooks_validateSecret;
 var _Webhooks_getRequiredHeader;
@@ -50642,7 +50640,7 @@ _Webhooks_instances = /* @__PURE__ */ new WeakSet(), _Webhooks_validateSecret = 
   return value;
 };
 
-// ../../../../../../node_modules/openai/internal/provider.mjs
+// ../../../node_modules/openai/internal/provider.mjs
 var providerDefinitionsKey = /* @__PURE__ */ Symbol.for("openai.node.providerDefinitions.v1");
 var providerGlobal = globalThis;
 var existingProviderDefinitions = providerGlobal[providerDefinitionsKey];
@@ -50658,7 +50656,7 @@ function configureProvider(provider) {
   return definition.configure();
 }
 
-// ../../../../../../node_modules/openai/client.mjs
+// ../../../node_modules/openai/client.mjs
 var _OpenAI_instances;
 var _a3;
 var _OpenAI_encoder;
