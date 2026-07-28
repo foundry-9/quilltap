@@ -235,19 +235,43 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
   }
 
   /**
-   * Mark entity as embedded
+   * Mark entity as embedded.
+   *
+   * Upserts: creates the status row when none exists for
+   * (entityType, entityId, profileId). The old find-then-update shape silently
+   * returned null for entities that never got a PENDING row — which, after the
+   * enqueue-time upsert paths were removed (see scheduleEmbedding's removal in
+   * lib/embedding/embedding-job-scheduler.ts and the reindex batch-insert
+   * refactor), was *every* newly-minted entity — so EMBEDDED/FAILED outcomes
+   * were lost without an error. `userId` is required for row creation; the
+   * embedding-generate handler passes `job.userId`.
    */
   async markAsEmbedded(
     entityType: EmbeddableEntityType,
     entityId: string,
-    profileId: string
+    profileId: string,
+    userId: string
   ): Promise<EmbeddingStatus | null> {
     const existing = await this.findByEntity(entityType, entityId, profileId);
-    if (!existing) {
-      return null;
+    if (existing) {
+      return this.update(existing.id, {
+        status: 'EMBEDDED',
+        embeddedAt: this.getCurrentTimestamp(),
+        error: null,
+      });
     }
 
-    return this.update(existing.id, {
+    logger.debug('Creating embedding status row on markAsEmbedded (no existing row)', {
+      context: 'EmbeddingStatusRepository.markAsEmbedded',
+      entityType,
+      entityId,
+      profileId,
+    });
+    return this.create({
+      userId,
+      entityType,
+      entityId,
+      profileId,
       status: 'EMBEDDED',
       embeddedAt: this.getCurrentTimestamp(),
       error: null,
@@ -255,21 +279,41 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
   }
 
   /**
-   * Mark entity as failed
+   * Mark entity as failed.
+   *
+   * Upserts for the same reason as {@link markAsEmbedded} — a permanent
+   * embedding failure must land a FAILED row even when no PENDING row was ever
+   * created, or the startup reconcile re-attempts the same unembeddable entity
+   * on every boot.
    */
   async markAsFailed(
     entityType: EmbeddableEntityType,
     entityId: string,
     profileId: string,
-    error: string
+    error: string,
+    userId: string
   ): Promise<EmbeddingStatus | null> {
     const existing = await this.findByEntity(entityType, entityId, profileId);
-    if (!existing) {
-      return null;
+    if (existing) {
+      return this.update(existing.id, {
+        status: 'FAILED',
+        error,
+      });
     }
 
-    return this.update(existing.id, {
+    logger.debug('Creating embedding status row on markAsFailed (no existing row)', {
+      context: 'EmbeddingStatusRepository.markAsFailed',
+      entityType,
+      entityId,
+      profileId,
+    });
+    return this.create({
+      userId,
+      entityType,
+      entityId,
+      profileId,
       status: 'FAILED',
+      embeddedAt: null,
       error,
     });
   }

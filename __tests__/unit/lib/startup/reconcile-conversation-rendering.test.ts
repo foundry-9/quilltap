@@ -29,8 +29,16 @@ jest.mock('@/lib/embedding/embedding-service', () => ({
 
 // The staleness gate is exercised as a mock: the reconcile must consult it and
 // skip stale (cold-tiered) chats, but its internals belong to the sweep tests.
+// embeddingProfiles.findAll feeds the FAILED-status exclusion's profile bind.
 jest.mock('@/lib/repositories/factory', () => ({
-  getRepositories: jest.fn(() => ({})),
+  getRepositories: jest.fn(() => ({
+    embeddingProfiles: {
+      findAll: jest.fn(async () => [
+        { id: 'profile-old', isDefault: false },
+        { id: 'profile-default', isDefault: true },
+      ]),
+    },
+  })),
 }));
 
 jest.mock('@/lib/background-jobs/maintenance/collapse-stale-chat-assets', () => ({
@@ -95,9 +103,72 @@ describe('reconcileConversationRendering', () => {
 
     expect(result.incompleteChats).toBe(0);
     expect(result.enqueued).toBe(0);
-    // The scan still binds the size cap so oversized chunks are excluded.
-    expect(all).toHaveBeenCalledWith(131072);
+    // The scan binds the size cap (oversized-chunk exclusion) and the default
+    // profile id (permanently-FAILED-chunk exclusion).
+    expect(all).toHaveBeenCalledWith(131072, 'profile-default');
     expect(enqueueConversationRender).not.toHaveBeenCalled();
+  });
+
+  it('excludes chunks with a FAILED embedding_status for the default profile in the scan SQL', async () => {
+    // Regression: the length guard alone counted >8k-token chunks (permanently
+    // unembeddable, marked FAILED by the embedder) as "recoverable", so their
+    // chats re-rendered and re-failed on every boot. The SQL must carry a
+    // NOT EXISTS over embedding_status scoped to the profile a re-embed would
+    // actually use.
+    const { db, prepare } = makeDb([]);
+    getRawDatabase.mockReturnValue(db);
+
+    const { reconcileConversationRendering } = await import(
+      '@/lib/startup/reconcile-conversation-rendering'
+    );
+    await reconcileConversationRendering();
+
+    const sql = (prepare.mock.calls[0] as [string])[0];
+    expect(sql).toContain('NOT EXISTS');
+    expect(sql).toContain('"embedding_status"');
+    expect(sql).toContain(`"status" = 'FAILED'`);
+    expect(sql).toContain(`"entityType" = 'CONVERSATION_CHUNK'`);
+  });
+
+  it('binds a matches-nothing sentinel when no embedding profile exists', async () => {
+    const { getRepositories } = jest.requireMock('@/lib/repositories/factory') as {
+      getRepositories: jest.Mock;
+    };
+    getRepositories.mockReturnValueOnce({
+      embeddingProfiles: { findAll: jest.fn(async () => []) },
+    });
+
+    const { db, all } = makeDb([]);
+    getRawDatabase.mockReturnValue(db);
+
+    const { reconcileConversationRendering } = await import(
+      '@/lib/startup/reconcile-conversation-rendering'
+    );
+    const result = await reconcileConversationRendering();
+
+    expect(result.incompleteChats).toBe(0);
+    expect(all).toHaveBeenCalledWith(131072, '');
+  });
+
+  it('still scans (exclusion disabled) when profile resolution throws', async () => {
+    const { getRepositories } = jest.requireMock('@/lib/repositories/factory') as {
+      getRepositories: jest.Mock;
+    };
+    getRepositories.mockReturnValueOnce({
+      embeddingProfiles: { findAll: jest.fn(async () => { throw new Error('db not ready'); }) },
+    });
+
+    const { db, all } = makeDb([{ chatId: 'chat-a', userId: 'user-1' }]);
+    getRawDatabase.mockReturnValue(db);
+    enqueueConversationRender.mockResolvedValueOnce({ jobId: 'job-a', isNew: true });
+
+    const { reconcileConversationRendering } = await import(
+      '@/lib/startup/reconcile-conversation-rendering'
+    );
+    const result = await reconcileConversationRendering();
+
+    expect(all).toHaveBeenCalledWith(131072, '');
+    expect(result.enqueued).toBe(1);
   });
 
   it('enqueues a render for each incomplete chat and counts new vs reused', async () => {

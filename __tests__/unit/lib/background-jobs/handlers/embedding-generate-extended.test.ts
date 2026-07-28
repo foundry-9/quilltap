@@ -134,7 +134,8 @@ describe('handleEmbeddingGenerate — HELP_DOC entity type', () => {
     expect(repos.embeddingStatus.markAsEmbedded).toHaveBeenCalledWith(
       'HELP_DOC',
       'doc-1',
-      'profile-1'
+      'profile-1',
+      'user-1'
     )
   })
 
@@ -149,7 +150,8 @@ describe('handleEmbeddingGenerate — HELP_DOC entity type', () => {
       'HELP_DOC',
       'missing-doc',
       'profile-1',
-      expect.stringContaining('not found')
+      expect.stringContaining('not found'),
+      'user-1'
     )
   })
 
@@ -168,7 +170,8 @@ describe('handleEmbeddingGenerate — HELP_DOC entity type', () => {
       'HELP_DOC',
       'doc-1',
       'profile-1',
-      'Embedding API unavailable'
+      'Embedding API unavailable',
+      'user-1'
     )
     expect(repos.helpDocs.updateEmbedding).not.toHaveBeenCalled()
   })
@@ -205,7 +208,8 @@ describe('handleEmbeddingGenerate — MOUNT_CHUNK entity type', () => {
     expect(repos.embeddingStatus.markAsEmbedded).toHaveBeenCalledWith(
       'MOUNT_CHUNK',
       'chunk-1',
-      'profile-1'
+      'profile-1',
+      'user-1'
     )
   })
 
@@ -220,7 +224,8 @@ describe('handleEmbeddingGenerate — MOUNT_CHUNK entity type', () => {
       'MOUNT_CHUNK',
       'missing-chunk',
       'profile-1',
-      expect.stringContaining('not found')
+      expect.stringContaining('not found'),
+      'user-1'
     )
   })
 
@@ -241,7 +246,8 @@ describe('handleEmbeddingGenerate — MOUNT_CHUNK entity type', () => {
       'MOUNT_CHUNK',
       'chunk-empty',
       'profile-1',
-      expect.stringContaining('Empty input')
+      expect.stringContaining('Empty input'),
+      'user-1'
     )
     expect(repos.docMountChunks.updateEmbedding).not.toHaveBeenCalled()
   })
@@ -264,7 +270,8 @@ describe('handleEmbeddingGenerate — MOUNT_CHUNK entity type', () => {
       'MOUNT_CHUNK',
       'chunk-1',
       'profile-1',
-      expect.stringContaining('NaN')
+      expect.stringContaining('NaN'),
+      'user-1'
     )
     expect(repos.docMountChunks.updateEmbedding).not.toHaveBeenCalled()
   })
@@ -284,7 +291,8 @@ describe('handleEmbeddingGenerate — MOUNT_CHUNK entity type', () => {
       'MOUNT_CHUNK',
       'chunk-1',
       'profile-1',
-      'Provider timeout'
+      'Provider timeout',
+      'user-1'
     )
     expect(repos.docMountChunks.updateEmbedding).not.toHaveBeenCalled()
   })

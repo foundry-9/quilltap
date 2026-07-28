@@ -64,8 +64,17 @@ const logger = createServiceLogger('Startup:ConversationRenderReconcile');
 
 /**
  * Chats that are not fully rendered + embedded, excluding chunks that can never
- * embed (oversized / empty). The `?` binds {@link EMBEDDING_MAX_CHARS}.
- * `updatedAt` rides along for the staleness gate's no-played-messages fallback.
+ * embed. The first `?` binds {@link EMBEDDING_MAX_CHARS}; the second binds the
+ * current default embedding profile's id (or a sentinel matching nothing when
+ * no profile exists). `updatedAt` rides along for the staleness gate's
+ * no-played-messages fallback.
+ *
+ * The length guard alone is not enough: a chunk can sit under the 131,072-char
+ * transport cap yet exceed the embedding model's token context (e.g. >8,192
+ * tokens ≈ ~31k chars for text-embedding-3-large). Those fail deterministically
+ * — `isPermanentEmbeddingError` marks them FAILED without retry — so any chunk
+ * with a FAILED embedding_status for the profile the re-embed would actually
+ * use is excluded, or its chat would re-render and re-fail on every boot.
  */
 const SELECT_INCOMPLETE_CHATS = `
   SELECT c."id" AS chatId, c."userId" AS userId, c."updatedAt" AS updatedAt
@@ -81,11 +90,19 @@ const SELECT_INCOMPLETE_CHATS = `
     )
   ) OR EXISTS (
     -- (B) At least one recoverable un-embedded interchange chunk
-    --     (non-empty and within the embedder's size cap).
+    --     (non-empty, within the embedder's size cap, and not already
+    --     permanently FAILED for the current default profile).
     SELECT 1 FROM "conversation_chunks" cc
     WHERE cc."chatId" = c."id"
       AND cc."embedding" IS NULL
       AND LENGTH(cc."content") BETWEEN 1 AND ?
+      AND NOT EXISTS (
+        SELECT 1 FROM "embedding_status" es
+        WHERE es."entityType" = 'CONVERSATION_CHUNK'
+          AND es."entityId" = cc."id"
+          AND es."profileId" = ?
+          AND es."status" = 'FAILED'
+      )
   )
 `;
 
@@ -128,9 +145,26 @@ export async function reconcileConversationRendering(): Promise<ConversationRend
     return result;
   }
 
+  // Resolve the profile a re-embed would actually use — same selection the
+  // render handler makes (default, else first). FAILED statuses are only
+  // meaningful per profile: a chunk that failed under one profile may embed
+  // fine under another, so the exclusion is scoped to this id. No profile →
+  // bind a sentinel that matches no rows (the exclusion becomes a no-op).
+  let defaultProfileId = '';
+  try {
+    const profiles = await getRepositories().embeddingProfiles.findAll();
+    defaultProfileId = (profiles.find(p => p.isDefault) || profiles[0])?.id ?? '';
+  } catch (err) {
+    logger.warn('Failed to resolve default embedding profile; FAILED-status exclusion disabled', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
   let rows: IncompleteChatRow[];
   try {
-    rows = db.prepare(SELECT_INCOMPLETE_CHATS).all(EMBEDDING_MAX_CHARS) as IncompleteChatRow[];
+    rows = db
+      .prepare(SELECT_INCOMPLETE_CHATS)
+      .all(EMBEDDING_MAX_CHARS, defaultProfileId) as IncompleteChatRow[];
   } catch (err) {
     logger.warn('Failed to scan for incomplete conversations; skipping reconciliation', {
       error: err instanceof Error ? err.message : String(err),
