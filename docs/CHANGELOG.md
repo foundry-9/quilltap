@@ -4,6 +4,18 @@
 
 ### 4.8-dev
 
+#### Startup no longer re-embeds every cold-tiered chat
+
+Every boot, the startup render/embed reconcile (`lib/startup/reconcile-conversation-rendering.ts`) re-rendered and re-embedded the entire cold tier, and the next daily maintenance sweep threw the vectors away again. The two subsystems disagreed about what NULL means: the stale-chat cache collapse deliberately NULLs `renderedMarkdown` and chunk embeddings for chats with no played message inside the retention window (recovery is on-demand, when the chat is next opened), while the reconcile read exactly that state as pipeline damage. On a measured real instance the loop had embedded 8,762 chunks exactly six times each (worst chunk: 54 times), leaving 85% of `conversation_chunks` unembedded between swings — with the bill going to the paid default embedding profile on every restart, roughly $2 per boot at that instance's size.
+
+- The reconcile now filters its scan through the same shared `isStale` gate and `resolveStaleChatDays()` window the maintenance sweeps use, and skips stale chats: for them, cold is the desired state. A chat whose staleness can't be determined is also skipped — the reopen path (`lib/scriptorium/cold-chunk-reembed.ts`) re-embeds any visited chat regardless, so skipping is recoverable while healing risks the loop.
+- Active chats with genuinely missing embeddings (embedder outage mid-conversation, a killed render job) are still healed at boot exactly as before.
+- `isStale` (`lib/background-jobs/maintenance/collapse-stale-chat-assets.ts`) takes `Pick<ChatMetadata, 'id' | 'updatedAt'>` now — the two fields it reads — so the raw-SQL scan can call it without hydrating full chat rows. No behavior change.
+- The reconcile result and completion log gain a `skippedStale` count.
+- New regression tests in `__tests__/unit/lib/startup/reconcile-conversation-rendering.test.ts`: a stale chat in the scan result is skipped, and a failed staleness check skips rather than heals.
+
+Found by a quilltap-v5 dogfood measurement pass against a copy of real data. Full diagnosis (including why the DEAD-job population and the token-cap hypothesis were ruled out): `docs/developer/found-bugs.md`, Bug 6.
+
 #### A custom tool run from the composer rolls as your own character
 
 Running a shared or global custom tool from the composer's Custom Tools button tested the **first participant's** fact sheet, not the character the operator is playing. In a chat created leading with an LLM character, a metadata-gated table therefore dealt someone else's branch — plausibly, with a well-formed result and no error. The only record of what was consulted was `pascalMeta.metadataTested`, which no screen shows.

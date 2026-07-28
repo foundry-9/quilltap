@@ -33,6 +33,16 @@
  * interchanges await renderer-side sub-chunking. Counting them would keep their
  * chat perpetually "incomplete" and re-render it on every boot for nothing.
  *
+ * STALE chats are EXCLUDED too, via the same shared `isStale` gate the
+ * maintenance sweeps use. The stale-chat cache collapse deliberately
+ * cold-tiers quiet chats into exactly the state this scan reads as damage —
+ * NULL `renderedMarkdown`, NULL chunk embeddings — and expects the Salon
+ * reopen path (`lib/scriptorium/cold-chunk-reembed.ts`) to re-embed on
+ * demand. Before this exclusion the two subsystems fought: every boot
+ * re-rendered and re-embedded the entire cold tier (thousands of paid
+ * embedding calls), and the next sweep cleared it all again. A stale chat is
+ * healed when it is actually reopened or played, not at startup.
+ *
  * Runs in the parent (the sole DB writer), like the other startup self-heals,
  * so the enqueue writes land directly rather than buffering through the job
  * child.
@@ -43,15 +53,22 @@ import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRawDatabase } from '@/lib/database/backends/sqlite/client';
 import { enqueueConversationRender } from '@/lib/background-jobs/queue-service';
 import { EMBEDDING_MAX_CHARS } from '@/lib/embedding/embedding-service';
+import { getRepositories } from '@/lib/repositories/factory';
+import { isStale } from '@/lib/background-jobs/maintenance/collapse-stale-chat-assets';
+import {
+  resolveStaleChatDays,
+  retentionCutoff,
+} from '@/lib/background-jobs/maintenance/retention-constants';
 
 const logger = createServiceLogger('Startup:ConversationRenderReconcile');
 
 /**
  * Chats that are not fully rendered + embedded, excluding chunks that can never
  * embed (oversized / empty). The `?` binds {@link EMBEDDING_MAX_CHARS}.
+ * `updatedAt` rides along for the staleness gate's no-played-messages fallback.
  */
 const SELECT_INCOMPLETE_CHATS = `
-  SELECT c."id" AS chatId, c."userId" AS userId
+  SELECT c."id" AS chatId, c."userId" AS userId, c."updatedAt" AS updatedAt
   FROM "chats" c
   WHERE (
     -- (A) Real messages but never rendered to Markdown.
@@ -81,11 +98,14 @@ export interface ConversationRenderReconcileResult {
   reused: number;
   /** Chats whose enqueue threw (logged, sweep continues). */
   failed: number;
+  /** Incomplete-looking chats skipped because they are stale (cold-tiered). */
+  skippedStale: number;
 }
 
 interface IncompleteChatRow {
   chatId: string;
   userId: string;
+  updatedAt: string | null;
 }
 
 /**
@@ -99,6 +119,7 @@ export async function reconcileConversationRendering(): Promise<ConversationRend
     enqueued: 0,
     reused: 0,
     failed: 0,
+    skippedStale: 0,
   };
 
   const db = getRawDatabase();
@@ -126,7 +147,29 @@ export async function reconcileConversationRendering(): Promise<ConversationRend
     count: rows.length,
   });
 
+  // Staleness gate — same shared predicate and window as the maintenance
+  // sweeps, so a chat the cache collapse cold-tiered is never "healed" here.
+  const repos = getRepositories();
+  const cutoffMs = retentionCutoff(await resolveStaleChatDays()).getTime();
+
   for (const row of rows) {
+    try {
+      if (await isStale({ id: row.chatId, updatedAt: row.updatedAt ?? '' }, cutoffMs, repos)) {
+        result.skippedStale++;
+        continue;
+      }
+    } catch (err) {
+      // Unknown staleness → skip, don't heal. Healing a chat that is actually
+      // cold-tiered re-enters the boot-time mass re-embed loop, while a
+      // skipped chat still has a recovery path: the Salon open path re-embeds
+      // any visited chat regardless of staleness.
+      result.skippedStale++;
+      logger.warn('Staleness check failed during reconciliation; skipping chat', {
+        chatId: row.chatId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      continue;
+    }
     try {
       const { isNew } = await enqueueConversationRender(row.userId, { chatId: row.chatId });
       if (isNew) {
@@ -152,6 +195,7 @@ export async function reconcileConversationRendering(): Promise<ConversationRend
     enqueued: result.enqueued,
     reused: result.reused,
     failed: result.failed,
+    skippedStale: result.skippedStale,
   });
 
   return result;

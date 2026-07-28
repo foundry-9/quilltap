@@ -27,14 +27,32 @@ jest.mock('@/lib/embedding/embedding-service', () => ({
   EMBEDDING_MAX_CHARS: 131072,
 }));
 
+// The staleness gate is exercised as a mock: the reconcile must consult it and
+// skip stale (cold-tiered) chats, but its internals belong to the sweep tests.
+jest.mock('@/lib/repositories/factory', () => ({
+  getRepositories: jest.fn(() => ({})),
+}));
+
+jest.mock('@/lib/background-jobs/maintenance/collapse-stale-chat-assets', () => ({
+  isStale: jest.fn(async () => false),
+}));
+
+jest.mock('@/lib/background-jobs/maintenance/retention-constants', () => ({
+  resolveStaleChatDays: jest.fn(async () => 30),
+  retentionCutoff: jest.fn(() => new Date('2026-01-01T00:00:00.000Z')),
+}));
+
 const { getRawDatabase } = jest.requireMock('@/lib/database/backends/sqlite/client') as {
   getRawDatabase: jest.Mock;
 };
 const { enqueueConversationRender } = jest.requireMock('@/lib/background-jobs/queue-service') as {
   enqueueConversationRender: jest.Mock;
 };
+const { isStale } = jest.requireMock(
+  '@/lib/background-jobs/maintenance/collapse-stale-chat-assets'
+) as { isStale: jest.Mock };
 
-type IncompleteChatRow = { chatId: string; userId: string };
+type IncompleteChatRow = { chatId: string; userId: string; updatedAt?: string | null };
 
 /** Build a fake better-sqlite3 db whose SELECT returns the given rows. */
 function makeDb(rows: IncompleteChatRow[]) {
@@ -56,7 +74,13 @@ describe('reconcileConversationRendering', () => {
     );
     const result = await reconcileConversationRendering();
 
-    expect(result).toEqual({ incompleteChats: 0, enqueued: 0, reused: 0, failed: 0 });
+    expect(result).toEqual({
+      incompleteChats: 0,
+      enqueued: 0,
+      reused: 0,
+      failed: 0,
+      skippedStale: 0,
+    });
     expect(enqueueConversationRender).not.toHaveBeenCalled();
   });
 
@@ -94,7 +118,13 @@ describe('reconcileConversationRendering', () => {
     );
     const result = await reconcileConversationRendering();
 
-    expect(result).toEqual({ incompleteChats: 3, enqueued: 2, reused: 1, failed: 0 });
+    expect(result).toEqual({
+      incompleteChats: 3,
+      enqueued: 2,
+      reused: 1,
+      failed: 0,
+      skippedStale: 0,
+    });
     expect(enqueueConversationRender).toHaveBeenCalledTimes(3);
     expect(enqueueConversationRender).toHaveBeenNthCalledWith(1, 'user-1', { chatId: 'chat-a' });
     expect(enqueueConversationRender).toHaveBeenNthCalledWith(2, 'user-1', { chatId: 'chat-b' });
@@ -117,7 +147,13 @@ describe('reconcileConversationRendering', () => {
     );
     const result = await reconcileConversationRendering();
 
-    expect(result).toEqual({ incompleteChats: 2, enqueued: 1, reused: 0, failed: 1 });
+    expect(result).toEqual({
+      incompleteChats: 2,
+      enqueued: 1,
+      reused: 0,
+      failed: 1,
+      skippedStale: 0,
+    });
     expect(enqueueConversationRender).toHaveBeenCalledTimes(2);
   });
 
@@ -132,7 +168,65 @@ describe('reconcileConversationRendering', () => {
     );
     const result = await reconcileConversationRendering();
 
-    expect(result).toEqual({ incompleteChats: 0, enqueued: 0, reused: 0, failed: 0 });
+    expect(result).toEqual({
+      incompleteChats: 0,
+      enqueued: 0,
+      reused: 0,
+      failed: 0,
+      skippedStale: 0,
+    });
+    expect(enqueueConversationRender).not.toHaveBeenCalled();
+  });
+
+  it('skips stale (cold-tiered) chats instead of re-enqueuing their renders', async () => {
+    // Regression: the maintenance sweep cold-tiers stale chats into NULL
+    // renderedMarkdown + NULL chunk embeddings. The reconcile must NOT read
+    // that deliberate state as damage, or every boot re-embeds the cold tier.
+    const { db } = makeDb([
+      { chatId: 'chat-active', userId: 'user-1', updatedAt: '2026-07-20T00:00:00.000Z' },
+      { chatId: 'chat-cold', userId: 'user-1', updatedAt: '2025-01-01T00:00:00.000Z' },
+    ]);
+    getRawDatabase.mockReturnValue(db);
+
+    isStale.mockImplementation(async (chat: { id: string }) => chat.id === 'chat-cold');
+    enqueueConversationRender.mockResolvedValueOnce({ jobId: 'job-a', isNew: true });
+
+    const { reconcileConversationRendering } = await import(
+      '@/lib/startup/reconcile-conversation-rendering'
+    );
+    const result = await reconcileConversationRendering();
+
+    expect(result).toEqual({
+      incompleteChats: 2,
+      enqueued: 1,
+      reused: 0,
+      failed: 0,
+      skippedStale: 1,
+    });
+    expect(enqueueConversationRender).toHaveBeenCalledTimes(1);
+    expect(enqueueConversationRender).toHaveBeenCalledWith('user-1', { chatId: 'chat-active' });
+
+    isStale.mockImplementation(async () => false);
+  });
+
+  it('skips a chat whose staleness cannot be determined (never risks the re-embed loop)', async () => {
+    const { db } = makeDb([{ chatId: 'chat-a', userId: 'user-1', updatedAt: null }]);
+    getRawDatabase.mockReturnValue(db);
+
+    isStale.mockRejectedValueOnce(new Error('messages table locked'));
+
+    const { reconcileConversationRendering } = await import(
+      '@/lib/startup/reconcile-conversation-rendering'
+    );
+    const result = await reconcileConversationRendering();
+
+    expect(result).toEqual({
+      incompleteChats: 1,
+      enqueued: 0,
+      reused: 0,
+      failed: 0,
+      skippedStale: 1,
+    });
     expect(enqueueConversationRender).not.toHaveBeenCalled();
   });
 });
