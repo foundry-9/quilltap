@@ -93,7 +93,12 @@ describe('collapseStaleChatCaches', () => {
     expect(messagesSql).not.toContain('opaqueContent');
     expect(messagesSql).not.toContain('thoughtSignature');
 
-    expect(conversationChunks.clearEmbeddingsForChat).toHaveBeenCalledWith('chat-stale');
+    // The staleness cutoff rides along so embeddings minted by a reopen
+    // re-embed inside the window survive the sweep (read-only warmth).
+    expect(conversationChunks.clearEmbeddingsForChat).toHaveBeenCalledWith(
+      'chat-stale',
+      isoDaysAgo(30),
+    );
     expect(mockDropInMemory).toHaveBeenCalledWith('chat-stale');
 
     expect(summary.chatsScanned).toBe(2);

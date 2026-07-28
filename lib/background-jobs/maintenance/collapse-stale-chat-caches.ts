@@ -20,7 +20,12 @@
  *
  * It also cold-tiers the chat's `conversation_chunks` embeddings (NULLs the
  * BLOB, keeps `content` for keyword search); the Salon chat-load path
- * re-embeds on demand (`lib/scriptorium/cold-chunk-reembed.ts`).
+ * re-embeds on demand (`lib/scriptorium/cold-chunk-reembed.ts`). Embeddings
+ * are only cleared when their own `updatedAt` predates the staleness cutoff:
+ * a reopen re-embed stamps the rows, so a chat the user merely *reads*
+ * (never playing a message, so it stays "stale") keeps its warmth for a full
+ * retention window from the reopen instead of being re-embedded (paid) on
+ * every open and cleared again by every sweep.
  *
  * NEVER touched: `content` (authoritative display text), `opaqueContent`
  * (real semantic body used in context builds), `thoughtSignature` (provider
@@ -72,6 +77,7 @@ interface RunResultLike {
 async function collapseOneChat(
   chat: ChatMetadata,
   repos: ReturnType<typeof getRepositories>,
+  cutoffIso: string,
 ): Promise<{ chatRows: number; messageRows: number; chunkEmbeddings: number }> {
   // 1. `chats` columns. Raw SQL (not repos.chats.update) so the chat's
   //    updatedAt is NOT bumped — a maintenance pass must never make a stale
@@ -101,7 +107,12 @@ async function collapseOneChat(
   const messageRows = Number(messageResult?.changes ?? 0);
 
   // 3. Cold-tier the chat's conversation-chunk embeddings (keep content).
-  const chunkEmbeddings = await repos.conversationChunks.clearEmbeddingsForChat(chat.id);
+  //    Only embeddings older than the staleness cutoff: rows the reopen path
+  //    re-embedded inside the window are recent warmth, not dead weight.
+  const chunkEmbeddings = await repos.conversationChunks.clearEmbeddingsForChat(
+    chat.id,
+    cutoffIso,
+  );
 
   if (chatRows > 0 || messageRows > 0 || chunkEmbeddings > 0) {
     moduleLogger.info('Collapsed stale chat caches', {
@@ -124,7 +135,9 @@ export async function collapseStaleChatCaches(
   now: number = Date.now(),
 ): Promise<StaleChatCacheCollapseSummary> {
   const repos = getRepositories();
-  const cutoffMs = retentionCutoff(await resolveStaleChatDays(), now).getTime();
+  const cutoff = retentionCutoff(await resolveStaleChatDays(), now);
+  const cutoffMs = cutoff.getTime();
+  const cutoffIso = cutoff.toISOString();
 
   const allChats = await repos.chats.findAll();
   const summary: StaleChatCacheCollapseSummary = {
@@ -140,7 +153,11 @@ export async function collapseStaleChatCaches(
     if (!(await isStale(chat, cutoffMs, repos))) continue;
     summary.staleChats++;
     try {
-      const { chatRows, messageRows, chunkEmbeddings } = await collapseOneChat(chat, repos);
+      const { chatRows, messageRows, chunkEmbeddings } = await collapseOneChat(
+        chat,
+        repos,
+        cutoffIso,
+      );
       if (chatRows > 0 || messageRows > 0 || chunkEmbeddings > 0) {
         summary.chatsCollapsed++;
         summary.chatRowsCleared += chatRows;

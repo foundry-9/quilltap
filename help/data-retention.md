@@ -29,6 +29,8 @@ Never touched, at any age: the messages themselves, attachments, memories, conve
 
 A tidied ("cold") chat remains fully readable, and **keyword search** over it works exactly as before. **Semantic search** — the kind that finds a conversation by meaning, through the Scriptorium or conversation-summary retrieval — will not surface a cold chat until it has been re-indexed. That happens automatically the moment you reopen the chat (Quilltap quietly queues the re-embedding in the background), or you can force the matter for any conversation by clicking its **Scriptorium status badge** on the chat's card in the Salon list, which re-renders and re-embeds the whole affair.
 
+Once rewarmed, the index *stays* warm for a full retention window from your visit: the housekeeping recognizes a freshly re-laid fire and declines to rake it out the same evening, even if nobody has spoken in the room. Merely reading an old conversation therefore keeps it findable by meaning for another N days — no re-embedding bill each time you stop by to reminisce.
+
 ## Configuring the window
 
 1. Open **Settings → Chat Settings → Data Retention**

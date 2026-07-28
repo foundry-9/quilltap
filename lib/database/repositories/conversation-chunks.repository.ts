@@ -233,22 +233,35 @@ export class ConversationChunksRepository extends AbstractBaseRepository<Convers
    * reopened. Idempotent — the `embedding IS NOT NULL` guard makes a second
    * pass a no-op. Returns the number of rows cleared.
    *
+   * `olderThan` (ISO-8601) restricts clearing to embeddings last written
+   * before that moment. The maintenance sweep passes its staleness cutoff
+   * here so an embedding minted by the reopen path (`cold-chunk-reembed`)
+   * survives for a full retention window from the reopen: a chat the user
+   * reads — without playing a message — stays semantically searchable
+   * instead of being re-embedded (paid) on every open and cleared again by
+   * every sweep. The embedding row's own `updatedAt` is the reopen signal;
+   * nothing else writes chunk rows on a stale chat, because renders only
+   * fire on played messages and the boot reconcile skips stale chats.
+   *
    * Raw SQL rather than `_update` so a maintenance pass over a large stale
    * chat is one statement, and so `updatedAt` stamping stays explicit.
    */
-  async clearEmbeddingsForChat(chatId: string): Promise<number> {
+  async clearEmbeddingsForChat(chatId: string, olderThan?: string): Promise<number> {
     return this.safeQuery(
       async () => {
+        const ageGuard = olderThan !== undefined ? ' AND updatedAt < ?' : '';
+        const params: string[] = [new Date().toISOString(), chatId];
+        if (olderThan !== undefined) params.push(olderThan);
         const result = await rawQuery<{ changes: number }>(
           `UPDATE conversation_chunks SET embedding = NULL, updatedAt = ?
-            WHERE chatId = ? AND embedding IS NOT NULL`,
-          [new Date().toISOString(), chatId]
+            WHERE chatId = ? AND embedding IS NOT NULL${ageGuard}`,
+          params
         );
         const cleared = Number(result?.changes ?? 0);
         return cleared;
       },
       'Error clearing chunk embeddings for chat',
-      { chatId },
+      { chatId, olderThan },
       0
     );
   }

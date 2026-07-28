@@ -615,6 +615,21 @@ Genuine mid-conversation gaps keep their safety net: an **active** chat with
 unembedded chunks (embedder outage, killed render) is still healed at boot
 exactly as before.
 
+**Follow-up (same day):** a smaller pendulum remained on the read path. A cold
+chat the user *reads* without playing a message is re-embedded on open by
+`cold-chunk-reembed`, but reading never counts as activity, so the chat stays
+stale and the next sweep discarded the fresh vectors — one paid re-embed per
+read/sweep cycle. Fixed by giving `clearEmbeddingsForChat`
+(`lib/database/repositories/conversation-chunks.repository.ts`) an optional
+`olderThan` cutoff which the sweep binds to its staleness cutoff: the reopen
+re-embed stamps the rows' `updatedAt`, so embeddings younger than the window
+are recognized as deliberate warmth and survive. A chat read once stays
+semantically searchable for a full retention window from the visit; a chat
+unvisited for a window is cold-tiered as designed. No schema change — the
+embedding write timestamp is the signal. Nothing else writes chunk rows on a
+stale chat: renders fire only on played messages, and the boot reconcile now
+skips stale chats (the main fix above).
+
 ### Verification
 
 - Unit: `__tests__/unit/lib/startup/reconcile-conversation-rendering.test.ts`
@@ -651,7 +666,7 @@ same wallet attached.
 | 3 | Files phase ordering | **Yes** (2026-07-26) | `lib/backup/restore/restore.ts` — step 5 moved to 22a-bis | Converged — files run after 22a on both sides |
 | 4 | Sparse-array blob finalization | **Yes** (2026-07-26) | `lib/import/quilltap-import-stream.ts:284` | Converged — both readers wait for every chunk |
 | 5 | Composer run consults the first participant's sheet | **Yes** (2026-07-27) | `app/api/v1/chats/[id]/custom-tools/route.ts` — `operatorCharacterIds` + `preferOperator`, applied at the single-variant listing and at POST's fallback | **Owed** — reproduced faithfully on purpose (finding #30); the mirror change is due in the same round |
-| 6 | Boot reconcile re-embeds the cold tier every restart | **Yes** (2026-07-28) | `lib/startup/reconcile-conversation-rendering.ts` — stale chats skipped via the shared `isStale` gate; `isStale` param narrowed in `lib/background-jobs/maintenance/collapse-stale-chat-assets.ts` | Inherit the fixed semantics when the reconcile is ported — see the entry's note |
+| 6 | Boot reconcile re-embeds the cold tier every restart | **Yes** (2026-07-28) | `lib/startup/reconcile-conversation-rendering.ts` — stale chats skipped via the shared `isStale` gate; `isStale` param narrowed in `lib/background-jobs/maintenance/collapse-stale-chat-assets.ts`; follow-up: `clearEmbeddingsForChat` age guard in `lib/database/repositories/conversation-chunks.repository.ts` + `lib/background-jobs/maintenance/collapse-stale-chat-caches.ts` so reopen re-embeds survive the sweep | Inherit the fixed semantics when the reconcile is ported — see the entry's note |
 
 Bugs 1–4 had been ruled deliberate divergences on the v5 side (2026-07-24 and
 2026-07-25) rather than being reproduced bug-for-bug, on the grounds that they

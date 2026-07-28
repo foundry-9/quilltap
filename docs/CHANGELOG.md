@@ -16,6 +16,8 @@ Every boot, the startup render/embed reconcile (`lib/startup/reconcile-conversat
 
 Found by a quilltap-v5 dogfood measurement pass against a copy of real data. Full diagnosis (including why the DEAD-job population and the token-cap hypothesis were ruled out): `docs/developer/found-bugs.md`, Bug 6.
 
+Follow-up, same family: reading a cold chat without playing a message re-embedded it on open, and the next sweep — still seeing no played activity — discarded those fresh embeddings, re-billing every read/sweep cycle. `clearEmbeddingsForChat` (`lib/database/repositories/conversation-chunks.repository.ts`) now takes an optional `olderThan` cutoff and the sweep passes its staleness cutoff: an embedding written inside the retention window (the reopen re-embed stamps `updatedAt`) survives, so a merely-read chat stays semantically searchable for a full window from the visit and is only cold-tiered again once it has gone unvisited that long. New tests in `__tests__/unit/lib/database/repositories/conversation-chunks-clear-embeddings.test.ts`; `help/data-retention.md` documents the warmth window.
+
 #### A custom tool run from the composer rolls as your own character
 
 Running a shared or global custom tool from the composer's Custom Tools button tested the **first participant's** fact sheet, not the character the operator is playing. In a chat created leading with an LLM character, a metadata-gated table therefore dealt someone else's branch — plausibly, with a well-formed result and no error. The only record of what was consulted was `pascalMeta.metadataTested`, which no screen shows.
