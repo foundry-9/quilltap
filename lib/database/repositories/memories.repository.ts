@@ -1024,6 +1024,31 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
     );
   }
 
+  /**
+   * Find every distinct characterId that owns at least one memory.
+   *
+   * Used by the reindex-all fan-out instead of the characters repository:
+   * `characters.findAll`/`findByUserId` silently DROP characters whose vault
+   * is unavailable, which would leave those characters' memories permanently
+   * un-re-embedded after a profile switch. Memories are the ground truth for
+   * "who needs re-embedding".
+   */
+  async findDistinctCharacterIds(): Promise<string[]> {
+    return this.safeQuery(
+      async () => {
+        const rows = (await rawQuery<Array<{ characterId: string | null }>>(
+          'SELECT DISTINCT characterId FROM memories WHERE characterId IS NOT NULL'
+        )) ?? [];
+        return rows
+          .map((r) => r.characterId)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0);
+      },
+      'Error listing distinct memory characterIds',
+      {},
+      []
+    );
+  }
+
   // ============================================================================
   // SEARCH AND REPLACE OPERATIONS
   // ============================================================================

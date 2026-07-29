@@ -279,6 +279,20 @@ export function float32ToBlobRaw(embedding: ArrayLike<number>): Buffer {
   return Buffer.from(float32.buffer, float32.byteOffset, float32.byteLength);
 }
 
+/**
+ * SQL expression yielding an embedding blob's dimension regardless of its
+ * on-disk format: quantized blobs announce themselves with the magic+version+
+ * dtype prefix and encode dim in their byte length (int8: 11-byte header +
+ * 1 byte/dim; f16: 7-byte header + 2 bytes/dim); anything else is legacy raw
+ * Float32 at 4 bytes/dim. Lives here so SQL-side dimension checks can never
+ * drift from the codec's byte layout above.
+ */
+export const EMBEDDING_DIM_SQL = `CASE
+  WHEN substr(embedding, 1, 3) = X'EB0101' THEN length(embedding) - 11
+  WHEN substr(embedding, 1, 3) = X'EB0102' THEN (length(embedding) - 7) / 2
+  ELSE length(embedding) / 4
+END`;
+
 /** Alias for {@link blobToFloat32} — SQLite-backend spelling. */
 export const blobToEmbedding = blobToFloat32;
 

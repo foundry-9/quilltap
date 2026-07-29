@@ -36,7 +36,7 @@ import { getRawDatabase } from '@/lib/database/backends/sqlite/client'
 import { getMountIndexDatabasePath, getSQLiteDatabasePath } from '@/lib/paths'
 import { invalidateAll as invalidateMountChunkCacheAll } from '@/lib/mount-index/mount-chunk-cache'
 import { getVectorStoreManager } from '@/lib/embedding/vector-store'
-import { blobToFloat32, float32ToBlob } from '@/lib/embedding/float32-conversion'
+import { blobToFloat32, float32ToBlob, EMBEDDING_DIM_SQL } from '@/lib/embedding/float32-conversion'
 import type { EmbeddingProfile } from '@/lib/schemas/types'
 
 const FLUSH_BATCH = 500
@@ -228,20 +228,6 @@ function reapplyTable(
 
   return result
 }
-
-/**
- * SQL expression yielding an embedding blob's dimension regardless of its
- * on-disk format. Quantized blobs announce themselves with the 0xEB 0x01
- * magic+version prefix and encode dim in their byte length (int8: 11-byte
- * header + 1 byte/dim; f16: 7-byte header + 2 bytes/dim); anything else is
- * legacy raw Float32 at 4 bytes/dim. Mirrors
- * `lib/embedding/float32-conversion.ts` — keep in sync with the layout there.
- */
-const EMBEDDING_DIM_SQL = `CASE
-  WHEN substr(embedding, 1, 3) = X'EB0101' THEN length(embedding) - 11
-  WHEN substr(embedding, 1, 3) = X'EB0102' THEN (length(embedding) - 7) / 2
-  ELSE length(embedding) / 4
-END`
 
 /**
  * Inspect every relevant table and return the maximum embedding dimension

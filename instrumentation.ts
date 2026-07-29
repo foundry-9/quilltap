@@ -860,6 +860,33 @@ export async function register() {
       }
 
       // ================================================================
+      // PHASE 3.7: Reconcile embedding dimensions against the default profile
+      // ================================================================
+      // There is one embedding standard per instance — the default profile's
+      // output. This pass deletes non-conforming vector-index entries, snaps
+      // index metadata, converges stale chats to the cold tier, and enqueues
+      // a mismatched-dim reindex for anything that needs re-embedding.
+      // Fire-and-forget: a large backlog must not delay readiness; a no-op
+      // (COUNT-only) on a conforming corpus. Runs every boot because the gap
+      // recurs (killed reindexes, restored backups, provider outages).
+      try {
+        const { reconcileEmbeddingDimensions } = await import(
+          './lib/startup/reconcile-embedding-dimensions'
+        );
+        reconcileEmbeddingDimensions().catch((dimReconcileError) => {
+          logger.warn('Embedding dimension reconciliation failed', {
+            context: 'instrumentation.register',
+            error: dimReconcileError instanceof Error ? dimReconcileError.message : String(dimReconcileError),
+          });
+        });
+      } catch (dimReconcileImportError) {
+        logger.warn('Failed to import embedding dimension reconciliation module', {
+          context: 'instrumentation.register',
+          error: dimReconcileImportError instanceof Error ? dimReconcileImportError.message : String(dimReconcileImportError),
+        });
+      }
+
+      // ================================================================
       // PHASE 4: Mark startup complete
       // ================================================================
       startupState.setPhase('complete');

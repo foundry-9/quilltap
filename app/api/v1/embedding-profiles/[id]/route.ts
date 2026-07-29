@@ -182,15 +182,32 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 
       logger.info('[Embedding Profiles v1] Profile updated', { profileId: id });
 
-      // Check if provider or model changed - need to re-embed all memories
+      // Any change that alters which vectors the default profile produces
+      // forces a full re-embed. There is one embedding standard per instance:
+      // the default profile's output. That includes a DIFFERENT profile
+      // becoming the default (the previous corpus was built by the old
+      // default and is now non-conforming wholesale) — not just provider/
+      // model/dimension edits to an already-default profile.
       const providerChanged = provider !== undefined && provider !== existingProfile.provider;
       const modelChanged = modelName !== undefined && modelName.trim() !== existingProfile.modelName;
+      const dimensionsChanged =
+        dimensions !== undefined && (dimensions ?? null) !== (existingProfile.dimensions ?? null);
+      const becameDefault = isDefault === true && !existingProfile.isDefault;
+      const truncateChanged =
+        truncateToDimensions !== undefined &&
+        (truncateToDimensions ?? null) !== (existingProfile.truncateToDimensions ?? null);
 
-      if ((providerChanged || modelChanged) && updatedProfile.isDefault) {
-        logger.info('[Embedding Profiles v1] Provider/model changed, triggering re-embedding', {
+      const needsFullReindex =
+        updatedProfile.isDefault &&
+        (providerChanged || modelChanged || dimensionsChanged || becameDefault);
+
+      if (needsFullReindex) {
+        logger.info('[Embedding Profiles v1] Default embedding output changed, triggering re-embedding', {
           profileId: id,
           providerChanged,
           modelChanged,
+          dimensionsChanged,
+          becameDefault,
           newProvider: updatedProfile.provider,
           newModel: updatedProfile.modelName,
         });
@@ -211,12 +228,35 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
             profileId: id,
           });
         }
+      } else if (truncateChanged && updatedProfile.isDefault) {
+        // Matryoshka truncation change alone: shrinking is a pure-local
+        // slice+renormalise (no provider calls). Growing can't be done
+        // locally — vectors can't grow — so that needs the full reindex.
+        const oldEffective =
+          existingProfile.truncateToDimensions ?? existingProfile.dimensions ?? null;
+        const newTarget = updatedProfile.truncateToDimensions ?? null;
+        if (newTarget !== null && oldEffective !== null && newTarget <= oldEffective) {
+          logger.info('[Embedding Profiles v1] Truncation narrowed, triggering local re-apply', {
+            profileId: id,
+            oldEffective,
+            newTarget,
+          });
+          await enqueueEmbeddingReapplyProfile(user.id, { profileId: id });
+        } else {
+          logger.info('[Embedding Profiles v1] Truncation widened, triggering full re-embedding', {
+            profileId: id,
+            oldEffective,
+            newTarget,
+          });
+          await invalidateAllEmbeddings(user.id, id);
+          await enqueueEmbeddingReindexAll(user.id, { profileId: id });
+        }
       }
 
       return NextResponse.json({
         ...updatedProfile,
         ...enriched,
-        reembeddingTriggered: (providerChanged || modelChanged) && updatedProfile.isDefault,
+        reembeddingTriggered: needsFullReindex || (truncateChanged && updatedProfile.isDefault),
       });
     } catch (error) {
       logger.error('[Embedding Profiles v1] Error updating profile', { profileId: id }, error instanceof Error ? error : undefined);

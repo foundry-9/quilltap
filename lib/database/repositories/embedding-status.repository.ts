@@ -131,6 +131,34 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
   }
 
   /**
+   * Entity ids of a given type marked FAILED for a profile, as a Set.
+   *
+   * Used by the mismatched-dim reindex scope and the startup dimension
+   * reconcile to exclude deterministically-unembeddable rows (oversize,
+   * over-context, NaN inputs) — without this, every boot would re-enqueue
+   * and re-pay for the same guaranteed failures.
+   */
+  async listFailedEntityIds(
+    entityType: EmbeddableEntityType,
+    profileId: string
+  ): Promise<Set<string>> {
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        const rows = await collection.find({
+          entityType,
+          profileId,
+          status: 'FAILED',
+        });
+        return new Set(rows.map((r) => r.entityId));
+      },
+      'Error listing FAILED embedding-status entity ids',
+      { entityType, profileId },
+      new Set<string>()
+    );
+  }
+
+  /**
    * Find all statuses with a specific status value
    */
   async findByStatus(status: EmbeddingStatusValue): Promise<EmbeddingStatus[]> {

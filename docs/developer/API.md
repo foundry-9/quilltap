@@ -758,7 +758,7 @@ Get a specific embedding profile.
 
 #### `PUT /api/v1/embedding-profiles/[id]`
 
-Update an embedding profile.
+Update an embedding profile. When the update changes what the default profile produces — the profile *becomes* the default, or a default profile's provider/model/dimensions change — all embeddings are invalidated and a full `EMBEDDING_REINDEX_ALL` is enqueued automatically (BUILTIN goes through refit). Changing only `truncateToDimensions` enqueues the local Matryoshka re-apply when narrowing, the full reindex when widening. The response's `reembeddingTriggered` flag reports whether any re-embed was queued.
 
 #### `DELETE /api/v1/embedding-profiles/[id]`
 

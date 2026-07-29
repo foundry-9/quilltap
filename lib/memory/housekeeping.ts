@@ -273,6 +273,8 @@ export async function runHousekeeping(
     try {
       const vectorStore = await getCharacterVectorStore(characterId)
       const entryById = new Map(vectorStore.getAllEntries().map(e => [e.id, e]))
+      const storeDimensions = vectorStore.getDimensions()
+      let nonconformingSkipped = 0
 
       for (let i = 0; i < remainingMemories.length; i++) {
         const memory = remainingMemories[i]
@@ -283,6 +285,14 @@ export async function runHousekeeping(
 
         const entry = entryById.get(memory.id)
         if (!entry) {
+          continue
+        }
+
+        // A stored vector from a previous embedding profile can't be compared
+        // against the index (and would warn on every search call). It's dead
+        // weight until the reindex re-embeds it — skip quietly here.
+        if (storeDimensions !== null && entry.embedding.length !== storeDimensions) {
+          nonconformingSkipped++
           continue
         }
 
@@ -340,6 +350,14 @@ export async function runHousekeeping(
         if ((i + 1) % YIELD_INTERVAL === 0) {
           await yieldTick()
         }
+      }
+
+      if (nonconformingSkipped > 0) {
+        logger.info('[Housekeeping] Skipped non-conforming vectors in merge pass — awaiting re-embed', {
+          characterId,
+          nonconformingSkipped,
+          storeDimensions,
+        })
       }
     } catch (error) {
       logger.warn('[Housekeeping] Failed to run similarity merge pass', { characterId, error: String(error) })

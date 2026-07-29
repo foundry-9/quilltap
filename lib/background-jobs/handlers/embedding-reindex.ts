@@ -6,11 +6,24 @@
  * 1. Help docs (first priority — needed for help search)
  * 2. Character memories
  * 3. Conversation chunks (Scriptorium)
+ * 4. Document mount chunks (Scriptorium document stores)
  *
  * This is triggered after:
  * - TF-IDF vocabulary refit (for BUILTIN provider)
- * - Embedding provider/model change
+ * - Embedding provider/model change, or a different profile becoming default
+ * - The startup dimension reconcile finding non-conforming vectors
  * - Manual reindex from the UI
+ *
+ * STALE (cold-tiered) chats are skipped in the conversation-chunk phase: the
+ * stale-chat sweep deliberately clears their chunk embeddings, and the Salon
+ * reopen path re-embeds on demand with the then-current profile. Re-embedding
+ * them here would pay provider calls for chats nobody is reading, and the next
+ * sweep would clear the result anyway.
+ *
+ * In `mismatched-dim` scope, entities already marked FAILED for this profile
+ * are skipped too — those are deterministic failures (oversize, over-context,
+ * NaN inputs), and re-enqueueing them on every reconcile would re-pay for the
+ * same guaranteed error.
  */
 
 import { BackgroundJob } from '@/lib/schemas/types';
@@ -20,6 +33,11 @@ import type { EmbeddingReindexAllPayload } from '../queue-service';
 import { ensureProcessorRunning } from '../processor';
 import { syncHelpDocs } from '@/lib/help/help-doc-sync';
 import { getVectorStoreManager } from '@/lib/embedding/vector-store';
+import { isStale } from '@/lib/background-jobs/maintenance/collapse-stale-chat-assets';
+import {
+  resolveStaleChatDays,
+  retentionCutoff,
+} from '@/lib/background-jobs/maintenance/retention-constants';
 
 /** Max jobs per batch insert (SQLite variable limit is 999; stay well under). */
 const BATCH_SIZE = 200;
@@ -124,9 +142,22 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
   let helpDocCount = 0;
   let memoryCount = 0;
   let chunkCount = 0;
+  let mountChunkCount = 0;
   let helpDocsSkipped = 0;
   let memoriesSkipped = 0;
   let chunksSkipped = 0;
+  let mountChunksSkipped = 0;
+  let staleChatsSkipped = 0;
+  let failedSkipped = 0;
+
+  // In mismatched-dim scope, deterministically-failed entities are excluded
+  // per entity type. Loaded lazily so 'all' scope pays nothing.
+  const failedIdsFor = async (
+    entityType: 'MEMORY' | 'CONVERSATION_CHUNK' | 'HELP_DOC' | 'MOUNT_CHUNK',
+  ): Promise<Set<string>> =>
+    scope === 'mismatched-dim'
+      ? repos.embeddingStatus.listFailedEntityIds(entityType, payload.profileId)
+      : new Set<string>();
 
   // ============================================================================
   // Phase 1: Help docs (highest priority — embed first)
@@ -154,9 +185,14 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
       await repos.helpDocs.clearAllEmbeddings();
     }
 
+    const failedHelpDocIds = await failedIdsFor('HELP_DOC');
     for (const doc of allHelpDocs) {
       if (scope === 'mismatched-dim' && embeddingMatchesDim(doc.embedding, mismatchedTargetDim!)) {
         helpDocsSkipped++;
+        continue;
+      }
+      if (failedHelpDocIds.has(doc.id)) {
+        failedSkipped++;
         continue;
       }
       jobRecords.push(buildJobRecord(job.userId, {
@@ -177,7 +213,11 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
   // ============================================================================
   // Phase 2: Character memories
   // ============================================================================
-  const characters = await repos.characters.findByUserId(job.userId);
+  // Enumerate character ids from the memories table itself, NOT the characters
+  // repository: `characters.findByUserId` silently drops characters whose
+  // vault is unavailable, and a dropped character's memories would then be
+  // left permanently un-re-embedded. Memories are the ground truth here.
+  const memoryCharacterIds = await repos.memories.findDistinctCharacterIds();
   const vectorStoreManager = getVectorStoreManager();
 
   // Full scope: clear every character's vector index so the dimension
@@ -186,17 +226,22 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
   // overwrite the affected entries in place, and the migration's
   // realignVectorIndicesDimensions pass already nudged the meta dim.
   if (scope === 'all') {
-    for (const character of characters) {
-      await vectorStoreManager.deleteStore(character.id);
+    for (const characterId of memoryCharacterIds) {
+      await vectorStoreManager.deleteStore(characterId);
     }
   }
 
-  for (const character of characters) {
-    const characterMemories = await repos.memories.findByCharacterId(character.id);
+  const failedMemoryIds = await failedIdsFor('MEMORY');
+  for (const characterId of memoryCharacterIds) {
+    const characterMemories = await repos.memories.findByCharacterId(characterId);
 
     for (const memory of characterMemories) {
       if (scope === 'mismatched-dim' && embeddingMatchesDim(memory.embedding, mismatchedTargetDim!)) {
         memoriesSkipped++;
+        continue;
+      }
+      if (failedMemoryIds.has(memory.id)) {
+        failedSkipped++;
         continue;
       }
       jobRecords.push(buildJobRecord(job.userId, {
@@ -214,13 +259,25 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
   // ============================================================================
   try {
     const chats = await repos.chats.findByUserId(job.userId);
+    const staleCutoffMs = retentionCutoff(await resolveStaleChatDays()).getTime();
+    const failedChunkIds = await failedIdsFor('CONVERSATION_CHUNK');
 
     for (const chat of chats) {
+      // Cold-tiered chats are healed on reopen, not here — see module doc.
+      if (await isStale(chat, staleCutoffMs, repos)) {
+        staleChatsSkipped++;
+        continue;
+      }
+
       const chunks = await repos.conversationChunks.findByChatId(chat.id);
 
       for (const chunk of chunks) {
         if (scope === 'mismatched-dim' && embeddingMatchesDim(chunk.embedding, mismatchedTargetDim!)) {
           chunksSkipped++;
+          continue;
+        }
+        if (failedChunkIds.has(chunk.id)) {
+          failedSkipped++;
           continue;
         }
         jobRecords.push(buildJobRecord(job.userId, {
@@ -234,6 +291,42 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
     }
   } catch (error) {
     logger.error('[EmbeddingReindexAll] Failed to process conversation chunks', {
+      context: 'handleEmbeddingReindexAll',
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  // ============================================================================
+  // Phase 4: Document mount chunks (Scriptorium document stores)
+  // ============================================================================
+  // Only enabled mount points: a disabled mount is not searchable, and its
+  // scan pipeline re-embeds when it is re-enabled.
+  try {
+    const mountPoints = await repos.docMountPoints.findEnabled();
+    const failedMountChunkIds = await failedIdsFor('MOUNT_CHUNK');
+
+    for (const mountPoint of mountPoints) {
+      const chunks = await repos.docMountChunks.findByMountPointId(mountPoint.id);
+
+      for (const chunk of chunks) {
+        if (scope === 'mismatched-dim' && embeddingMatchesDim(chunk.embedding, mismatchedTargetDim!)) {
+          mountChunksSkipped++;
+          continue;
+        }
+        if (failedMountChunkIds.has(chunk.id)) {
+          failedSkipped++;
+          continue;
+        }
+        jobRecords.push(buildJobRecord(job.userId, {
+          entityType: 'MOUNT_CHUNK',
+          entityId: chunk.id,
+          profileId: payload.profileId,
+        }));
+        mountChunkCount++;
+      }
+    }
+  } catch (error) {
+    logger.error('[EmbeddingReindexAll] Failed to process document mount chunks', {
       context: 'handleEmbeddingReindexAll',
       error: error instanceof Error ? error.message : String(error),
     });
@@ -266,9 +359,13 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
     helpDocCount,
     memoryCount,
     chunkCount,
+    mountChunkCount,
     helpDocsSkipped,
     memoriesSkipped,
     chunksSkipped,
+    mountChunksSkipped,
+    staleChatsSkipped,
+    failedSkipped,
     totalEnqueued: totalJobs,
   });
 }
