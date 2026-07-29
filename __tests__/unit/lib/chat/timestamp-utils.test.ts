@@ -5,6 +5,7 @@
 
 import {
   calculateCurrentTimestamp,
+  calculateTimestampAt,
   shouldInjectTimestamp,
   formatTimestampForSystemPrompt,
   ensureFictionalBaseRealTime,
@@ -422,6 +423,59 @@ describe('timestamp-utils', () => {
 
       expect(elapsed).toBeGreaterThan(59 * 60_000)
       expect(elapsed).toBeLessThan(61 * 60_000)
+    })
+  })
+
+  describe('calculateTimestampAt', () => {
+    it('should translate a historical real instant onto the fictional clock', () => {
+      const config: TimestampConfig = {
+        mode: 'EVERY_MESSAGE',
+        format: 'ISO8601',
+        useFictionalTime: true,
+        fictionalBaseTimestamp: '1920-05-01T20:00',
+        fictionalBaseRealTime: '2026-01-01T00:00:00.000Z',
+        timezone: 'UTC',
+        autoPrepend: true,
+      }
+
+      const result = calculateTimestampAt(new Date('2026-01-01T00:45:00.000Z'), config, 'UTC')
+
+      expect(result.isFictional).toBe(true)
+      expect(result.isoValue).toBe('1920-05-01T20:45:00+00:00')
+    })
+
+    it('should measure elapsed time from the fallback anchor when the config has none', () => {
+      const config: TimestampConfig = {
+        mode: 'EVERY_MESSAGE',
+        format: 'ISO8601',
+        useFictionalTime: true,
+        fictionalBaseTimestamp: '1920-05-01T20:00',
+        timezone: 'UTC',
+        autoPrepend: true,
+      }
+
+      const result = calculateTimestampAt(
+        new Date('2026-01-01T01:30:00.000Z'),
+        config,
+        'UTC',
+        new Date('2026-01-01T00:00:00.000Z')
+      )
+
+      expect(result.isoValue).toBe('1920-05-01T21:30:00+00:00')
+    })
+
+    it('should return the real instant itself for non-fictional configs', () => {
+      const config: TimestampConfig = {
+        mode: 'EVERY_MESSAGE',
+        format: 'ISO8601',
+        useFictionalTime: false,
+        autoPrepend: true,
+      }
+
+      const result = calculateTimestampAt(new Date('2026-01-01T12:00:00.000Z'), config)
+
+      expect(result.isFictional).toBe(false)
+      expect(result.isoValue).toBe('2026-01-01T12:00:00.000Z')
     })
   })
 

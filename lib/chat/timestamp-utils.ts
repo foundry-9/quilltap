@@ -342,15 +342,26 @@ export function resolveTimezone(
 }
 
 /**
- * Calculate the current timestamp based on configuration.
- * For fictional timestamps, calculates the elapsed time since the base was set
- * and adds it to the fictional base timestamp.
+ * Calculate the chat's clock reading at an arbitrary real-world instant.
+ * For fictional timestamps, the story instant is the fictional base plus the real
+ * time elapsed between the anchor (`fictionalBaseRealTime`) and `realInstant` —
+ * story time runs 1:1 with the wall clock.
  *
+ * @param realInstant - The real-world instant to translate (e.g. a message's createdAt)
  * @param config - Timestamp configuration
  * @param timezone - Optional IANA timezone name (resolved from the fallback chain by the caller)
+ * @param fallbackAnchor - Anchor to measure elapsed time from when the config predates
+ *   `fictionalBaseRealTime` stamping (see ensureFictionalBaseRealTime). Pass the chat's
+ *   createdAt when translating historical messages; defaults to `realInstant` itself,
+ *   which collapses elapsed time to zero — the pre-anchor behaviour of the live clock.
  * @returns Calculated and formatted timestamp
  */
-export function calculateCurrentTimestamp(config: TimestampConfig, timezone?: string): CalculatedTimestamp {
+export function calculateTimestampAt(
+  realInstant: Date,
+  config: TimestampConfig,
+  timezone?: string,
+  fallbackAnchor?: Date
+): CalculatedTimestamp {
   let timestamp: Date
   let isFictional = false
 
@@ -363,14 +374,14 @@ export function calculateCurrentTimestamp(config: TimestampConfig, timezone?: st
     // ensureFictionalBaseRealTime); this fallback only covers rows that predate that.
     const realBase = config.fictionalBaseRealTime
       ? new Date(config.fictionalBaseRealTime)
-      : new Date()
+      : (fallbackAnchor ?? realInstant)
 
-    const elapsedMs = Date.now() - realBase.getTime()
+    const elapsedMs = realInstant.getTime() - realBase.getTime()
     timestamp = new Date(fictionalBase.getTime() + elapsedMs)
     isFictional = true
 
   } else {
-    timestamp = new Date(Date.now())
+    timestamp = realInstant
   }
 
   // Format the timestamp with timezone support
@@ -394,6 +405,19 @@ export function calculateCurrentTimestamp(config: TimestampConfig, timezone?: st
     isoValue,
     isFictional,
   }
+}
+
+/**
+ * Calculate the current timestamp based on configuration.
+ * For fictional timestamps, calculates the elapsed time since the base was set
+ * and adds it to the fictional base timestamp.
+ *
+ * @param config - Timestamp configuration
+ * @param timezone - Optional IANA timezone name (resolved from the fallback chain by the caller)
+ * @returns Calculated and formatted timestamp
+ */
+export function calculateCurrentTimestamp(config: TimestampConfig, timezone?: string): CalculatedTimestamp {
+  return calculateTimestampAt(new Date(Date.now()), config, timezone)
 }
 
 /**

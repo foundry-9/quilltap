@@ -1808,6 +1808,10 @@ Delete a chat (cascades to messages).
 
 Export chat as SillyTavern JSONL format.
 
+#### `GET /api/v1/chats/[id]?action=export-markdown`
+
+Export the chat as a single deterministic Markdown transcript (`text/markdown`, served as an attachment named after the chat title). The readable record of the conversation: the opening scenario, participant and user messages (active swipe only), Pascal roll announcements, Carina/Brahma answers, user-authored announcements, and the Host's continuation/merge notices. Each message renders under a `## Speaker — timestamp` heading, with timestamps on the chat's own clock (fictional time when configured, in the chat's resolved timezone and format). Excludes SYSTEM/TOOL messages, Staff housekeeping chatter, and anything sent to LLMs as prompts.
+
 #### `GET /api/v1/chats/[id]?action=cost`
 
 Get detailed cost breakdown for a chat.

@@ -5,6 +5,7 @@
  * PUT /api/v1/chats/[id] - Update a chat
  * DELETE /api/v1/chats/[id] - Delete a chat
  * GET /api/v1/chats/[id]?action=export - Export chat (SillyTavern JSONL)
+ * GET /api/v1/chats/[id]?action=export-markdown - Export chat as a Markdown transcript
  * GET /api/v1/chats/[id]?action=cost - Get cost breakdown
  * GET /api/v1/chats/[id]?action=get-avatars - Get avatar overrides for chat
  * GET /api/v1/chats/[id]?action=get-state - Get chat state (merged with project)

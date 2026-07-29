@@ -3,6 +3,7 @@
  *
  * GET /api/v1/chats/[id] - Get a specific chat
  * GET /api/v1/chats/[id]?action=export - Export chat (SillyTavern JSONL)
+ * GET /api/v1/chats/[id]?action=export-markdown - Export chat as a Markdown transcript
  * GET /api/v1/chats/[id]?action=cost - Get cost breakdown
  * GET /api/v1/chats/[id]?action=get-avatars - Get avatar overrides for chat
  * GET /api/v1/chats/[id]?action=get-background - Get story background URL
@@ -23,7 +24,7 @@ import { reconcileTerminalSessionsForChat } from '@/lib/terminal/reconcile';
 import { surfaceOperatorMailForChat } from '@/lib/post-office/surface-operator-mail';
 import { maybeEnqueueColdChunkReembed } from '@/lib/scriptorium/cold-chunk-reembed';
 import { BRAHMA_CARINA_ANSWERER_ID } from '@/lib/services/carina/brahma-answerer';
-import { handleGetAvatars, handleGetState, handleGetOutfit, handleGetOutfitSummary, handleGetPhotoAlbums, handleGetGroupStores, handleAccessibleStores, handleGetMailbox } from '../actions';
+import { handleGetAvatars, handleGetState, handleGetOutfit, handleGetOutfitSummary, handleGetPhotoAlbums, handleGetGroupStores, handleAccessibleStores, handleGetMailbox, handleExportMarkdown } from '../actions';
 import {
   getPhotoLinkSummaryBySha256,
   type PhotoLinkSummary,
@@ -124,6 +125,11 @@ export async function handleGet(
       logger.error('[Chats v1] Error exporting chat', { chatId }, error instanceof Error ? error : undefined);
       return serverError('Failed to export chat');
     }
+  }
+
+  // Handle export-markdown action
+  if (action === 'export-markdown') {
+    return handleExportMarkdown(chatId, ctx);
   }
 
   // Handle get-avatars action

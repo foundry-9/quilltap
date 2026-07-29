@@ -22,6 +22,7 @@ import { CopyChatIdButton } from './CopyChatIdButton'
 import { Avatar } from '@/components/ui/Avatar'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { triggerUrlDownload } from '@/lib/download-utils'
 import { getConciergeState, isChatActiveDangerous, type ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
 import { getQueuePosition, computePredictedTurnOrder } from '@/lib/chat/turn-manager'
@@ -1511,6 +1512,12 @@ function OrganizeSection({
     window.location.href = `/api/v1/chats/${chatId}?action=export`
   }
 
+  const handleExportMarkdown = () => {
+    // The server names the file after the chat title via Content-Disposition;
+    // the filename here is only the Electron/anchor fallback.
+    triggerUrlDownload(`/api/v1/chats/${chatId}?action=export-markdown`, 'chat_transcript.md')
+  }
+
   return (
     <div className="qt-chat-sidebar-section qt-chat-sidebar-section-organize flex flex-col gap-2">
       {isAutonomousRoom && onEditEnclaveClick && (
@@ -1583,6 +1590,16 @@ function OrganizeSection({
       >
         <Icon name="download" className="w-4 h-4" />
         <span>Export</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={handleExportMarkdown}
+        className="qt-tool-palette-button"
+        title="Export the conversation as a readable Markdown transcript"
+      >
+        <Icon name="file" className="w-4 h-4" />
+        <span>Export Markdown</span>
       </button>
 
       {chatPhotoCount > 0 && onGalleryClick && (

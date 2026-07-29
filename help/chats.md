@@ -245,6 +245,22 @@ Save chats for backup or sharing:
 3. Choose export format
 4. File downloads to your computer
 
+### Exporting a Markdown Transcript
+
+There comes an evening — there always does — when one wishes to carry the conversation out of the house entirely: to read it by lamplight, hand it to a friend, or file it in whatever commonplace book one keeps beyond these walls. For that there is **Export Markdown**, which produces not a data file for machines but a *transcript for people*: a single Markdown document of who said what, and when.
+
+Open the **Chat Sidebar** on the right, expand the **Organize** drawer, and press **Export Markdown**. The file arrives named after the chat, and contains:
+
+- The chat's title and its opening scenario, set at the head of the document.
+- Every message anyone actually said, each under a heading of the form `## Speaker — timestamp`. Where a message has been regenerated into several variants, only the one showing in the Salon makes the page.
+- Pascal's roll announcements, Carina's answers (Brahma's included, under his own name), and any announcements you inserted yourself — voiced by a Staff member, a character, or a name of your own invention.
+- The Host's notices recording that the conversation continues from another chat, has moved elsewhere, or absorbed a neighbouring thread — so the paper trail survives the change of address.
+- Whispers, marked as such beside the speaker's name.
+
+The timestamps are the chat's *own* clock. A chat running on fictional time is transcribed in fictional time; a chat with a configured timezone keeps it; a chat with neither simply reads the household clock. The Staff's housekeeping chatter — memory whispers, image announcements, the marking of hours — is left out of the record, as are the prompts sent to the models; the transcript is what a reader would want, not what the machinery required.
+
+The same transcript twice is the same file twice, to the letter — nothing in it depends on the moment of export.
+
 ### Continuing a Conversation Elsewhere
 
 Now and again the matter under discussion drifts so far afield that the original setting will simply not bear it. The project no longer fits, the scenario has worn thin, and rather than narrate one's way out of it — like a guest pretending the parlour was always the conservatory — one wishes simply to *change venue*.
