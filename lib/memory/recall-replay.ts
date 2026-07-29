@@ -181,6 +181,10 @@ export async function runRecallReplay(input: RunRecallReplayInput): Promise<Reca
     presentAboutCharacterIds,
     expandRelated: recallSettings.expandRelated,
     recentlyWhisperedIds: recentlyWhisperedIdSet(chat.commonplaceRecallHistory),
+    // Fresh-event boost against the REPLAYED TURN's clock, not wall-clock now —
+    // replaying an old turn must reproduce what recall would have done then.
+    currentChatId: input.chatId,
+    nowMs: Date.parse(clockIso),
   }
 
   // OLD path — episodic signals inert (byte-identical to pre-overhaul recall).
@@ -209,7 +213,9 @@ export async function runRecallReplay(input: RunRecallReplayInput): Promise<Reca
     minImportance: 0.3,
     recallContext: { ...baseCtx, turnRetrospective: retrospective },
     entityAnchors: signals?.entities,
-    occurredWithin: retrospective ? (signals?.timeRange ?? null) : null,
+    // Ungated from the retrospective flag, exactly as the two live consumers
+    // are — the replay is only useful while it mirrors production.
+    occurredWithin: signals?.timeRange ?? null,
     extraProbes: extraProbes.length > 0 ? extraProbes : undefined,
   })
 

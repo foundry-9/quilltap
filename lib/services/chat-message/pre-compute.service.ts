@@ -291,6 +291,11 @@ async function proactiveRecallTask(
     presentAboutCharacterIds,
     expandRelated: recallSettings.expandRelated,
     recentlyWhisperedIds: recentlyWhisperedIdSet(chat.commonplaceRecallHistory),
+    // Fresh-event boost: memories of the last 24/48h keep their footing against
+    // evergreen entries whatever the retrospective classifier decided. The chat
+    // id is the echo guard — this chat's own memories are already in context.
+    currentChatId: chatId,
+    nowMs: Date.now(),
   }
 
   // Retrospective turns: multi-probe (entity string; paraphrase + resolved
@@ -320,7 +325,13 @@ async function proactiveRecallTask(
         // cannot be sliced off by the cosine floor); window + probes only on
         // retrospective turns.
         entityAnchors: signals.entities,
-        occurredWithin: retrospective ? (signals.timeRange ?? null) : null,
+        // A resolved window is useful whether or not the turn reads as
+        // retrospective — the classifier misses same-day references, and
+        // `searchMemoriesSemantic`'s two-stage semantics (hard filter only when
+        // enough hits survive, else the bounded soft boost) make it
+        // starvation-safe. The retrospective flag still gates the temporal
+        // flip, anti-repetition suspension, and the multi-probe block below.
+        occurredWithin: signals.timeRange ?? null,
         extraProbes: extraProbes.length > 0 ? extraProbes : undefined,
       }
     )

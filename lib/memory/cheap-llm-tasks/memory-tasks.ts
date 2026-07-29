@@ -14,7 +14,9 @@ import {
   type TemporalTag,
   type ContextTag,
 } from '@/lib/memory/recall-tags'
+import { resolveDayReference, type DayReferenceResolution } from '@/lib/memory/day-references'
 import { executeCheapLLMTask } from './core-execution'
+import { logger } from '@/lib/logger'
 import { stripCodeFences } from '@/lib/services/ai-import.service'
 import type {
   ChatMessage,
@@ -725,14 +727,15 @@ context — the single dominant subject, one of:
 
 paraphrase — ONE natural-language sentence describing what the characters are currently focused on, written as prose (not a keyword list). This is used to search memories by meaning, so make it specific and self-contained. Example: "They are arguing about whether to trust the stranger who arrived at the inn last night."
 
-retrospective — true ONLY when the conversation is currently referencing past shared events or asking to recall them ("remember when we…", "last week you said…", "that place we visited"). Talking about the present or planning the future is NOT retrospective.
+retrospective — true when the conversation is currently referencing past shared events or asking to recall them, including events from earlier the same day ("remember when we…", "last week you said…", "that place we visited", "the mission today", "how did it go this morning?", "what happened at the pool?"). Talking about how things are right now or planning the future is NOT retrospective.
 
-timeRange — when the turn references a specific past period, resolve it against the TODAY line in the input into absolute ISO dates: {"from": "YYYY-MM-DD", "to": "YYYY-MM-DD"}. "last week" on a Tuesday resolves to the previous calendar week; "in March" to that month. Use null when no time period is referenced or you cannot resolve one. (On a fictional timeline, use null unless real dates are actually stated.)
+timeRange — when the turn references a specific past period, resolve it against the TODAY line in the input into absolute ISO dates: {"from": "YYYY-MM-DD", "to": "YYYY-MM-DD"}. "last week" on a Tuesday resolves to the previous calendar week; "in March" to that month; "today" / "this morning" to the TODAY date itself; "yesterday" to the day before it. Use null when no time period is referenced or you cannot resolve one. (On a fictional timeline, use null unless real dates are actually stated.)
 
 entities — 0-5 proper nouns the turn names or clearly implies: places, people, named things ("Lighthouse Point", "Amy"). Empty array when none.
 
 Respond with a JSON object (3-10 keywords):
 {"keywords": ["keyword1", "keyword phrase 2", "keyword3"], "temporal": "present", "context": "relationships", "paraphrase": "A single sentence describing the current focus.", "retrospective": false, "timeRange": null, "entities": []}
+{"keywords": ["mission report", "soil samples"], "temporal": "past", "context": "information", "paraphrase": "Charlie is asking how today's mission went.", "retrospective": true, "timeRange": {"from": "2026-07-28", "to": "2026-07-28"}, "entities": ["Constantinople"]}
 
 JSON only - no other text.`
 
@@ -1204,6 +1207,67 @@ export interface MemorySearchExtraction {
 }
 
 /**
+ * How many of the most recent messages the deterministic day-reference scanner
+ * reads. Deliberately far tighter than the 20 the prompt sees: an override that
+ * fires on a stale "yesterday" from three topics ago is worse than no override.
+ */
+const DAY_REFERENCE_SCAN_MESSAGES = 4
+
+/** Local `YYYY-MM-DD` stamp (never `toISOString().slice(0,10)`, which is UTC). */
+function localDateStamp(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+/**
+ * Merge a deterministically-resolved day reference into the LLM's parsed
+ * signals (Fix 1 of the day-references + fresh-boost spec).
+ *
+ * - Past-pointing reference → the resolved window OVERRIDES any LLM range and
+ *   forces `retrospective: true`. The override is the point: the model's own
+ *   ranges are UTC-day-biased, and that bias is what made a same-day "the
+ *   mission today" resolve to a window containing none of the mission.
+ * - Future-only reference ("tomorrow") → nothing applied; whatever the model
+ *   said stands, since the lexicon covers less than the model does.
+ * - No reference → the parsed result passes through unchanged.
+ *
+ * Accepted cost: a purely forward-looking "let's go to the pool today" marks
+ * the turn retrospective. The consequences (a temporal flip toward today's
+ * memories, one turn without the anti-repetition penalty) are benign, and
+ * intent heuristics to dodge it would reintroduce exactly the brittleness this
+ * resolver exists to remove.
+ */
+function mergeDayReference(
+  parsed: MemorySearchExtraction,
+  dayReference: DayReferenceResolution | null,
+  chatId: string | undefined,
+  characterId: string | undefined,
+): MemorySearchExtraction {
+  if (!dayReference) return parsed
+
+  if (!dayReference.pastPointing) {
+    logger.debug('[MemorySearchKeywords] Day reference is future-pointing; leaving LLM signals alone', {
+      chatId,
+      characterId,
+      matched: dayReference.matched,
+    })
+    return parsed
+  }
+
+  logger.debug('[MemorySearchKeywords] Deterministic day reference resolved', {
+    chatId,
+    characterId,
+    matched: dayReference.matched,
+    from: dayReference.timeRange.from,
+    to: dayReference.timeRange.to,
+    overrodeLlmTimeRange: !!parsed.timeRange,
+    llmRetrospective: parsed.retrospective === true,
+  })
+
+  return { ...parsed, retrospective: true, timeRange: dayReference.timeRange }
+}
+
+/**
  * Extracts memory search keywords from recent conversation messages, plus a
  * turn-level temporal/context guess.
  *
@@ -1239,11 +1303,34 @@ export async function extractMemorySearchKeywords(
 
   // TODAY line (variable — user content, never the cached system prompt) so
   // the model can resolve "last week" into an absolute timeRange.
+  //
+  // Rendered from the SERVER-LOCAL calendar, not UTC: Quilltap is self-hosted,
+  // so the server's timezone is the user's. A UTC TODAY line tells a user
+  // talking at 21:44 CDT that it is already tomorrow, and every "today" the
+  // model resolves then lands on a day containing none of the memories it
+  // means (see lib/memory/day-references.ts, which does the same math).
   const nowIso = clock?.nowIso ?? new Date().toISOString()
   const nowMs = Date.parse(nowIso)
+  const timelineMode = clock?.timelineMode ?? 'realtime'
   const todayLine = Number.isFinite(nowMs)
-    ? `TODAY: ${nowIso.slice(0, 10)} (${WEEKDAYS[new Date(nowMs).getUTCDay()]}); timeline mode: ${clock?.timelineMode ?? 'realtime'}`
-    : `TODAY: ${nowIso}; timeline mode: ${clock?.timelineMode ?? 'realtime'}`
+    ? `TODAY: ${localDateStamp(new Date(nowMs))} (${WEEKDAYS[new Date(nowMs).getDay()]}); timeline mode: ${timelineMode}`
+    : `TODAY: ${nowIso}; timeline mode: ${timelineMode}`
+
+  // Deterministic day-reference resolution (Fix 1). Scanned over the most
+  // recent messages only — the prompt sees 20, but older context routinely
+  // carries a stale "yesterday" from a previous topic, and a deterministic
+  // override must stay tight to the live turn. Realtime timelines only,
+  // matching the prompt's own rule for fictional clocks.
+  const dayReference =
+    timelineMode === 'realtime' && Number.isFinite(nowMs)
+      ? resolveDayReference(
+          cappedMessages
+            .slice(-DAY_REFERENCE_SCAN_MESSAGES)
+            .map(m => m.content)
+            .join('\n'),
+          new Date(nowMs),
+        )
+      : null
 
   const messages: LLMMessage[] = [
     {
@@ -1323,8 +1410,15 @@ export async function extractMemorySearchKeywords(
                 .slice(0, 5)
             : []
 
-        return { keywords, temporal, context, paraphrase, retrospective, timeRange, entities }
+        return mergeDayReference(
+          { keywords, temporal, context, paraphrase, retrospective, timeRange, entities },
+          dayReference,
+          chatId,
+          characterId,
+        )
       } catch {
+        // Unparsable response — callers bail on empty keywords, so there is
+        // nothing for the deterministic window to ride along with.
         return { keywords: [] }
       }
     },

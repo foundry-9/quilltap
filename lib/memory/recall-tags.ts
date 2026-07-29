@@ -134,6 +134,10 @@ export interface RecallContext {
    * Empty/undefined → no penalty.
    */
   recentlyWhisperedIds?: ReadonlySet<string>
+  /** The current chat's id — the fresh-event boost skips memories extracted from this same chat (echo guard). */
+  currentChatId?: string | null
+  /** Reference clock for the fresh-event boost, ms since epoch. Absent → boost disabled. */
+  nowMs?: number
 }
 
 /**
@@ -180,7 +184,23 @@ export const RECALL_MULTIPLIERS = {
    * when the window-filtered pool was too small — see `searchMemoriesSemantic`).
    */
   occurredWithinWindow: 1.3,
+  /**
+   * Fresh-event boost — the memory's event time (occurredAt ?? createdAt) is
+   * within the last 24h / 48h. The blend's recency term (0.25 weight, 30-day
+   * half-life) distinguishes yesterday from twelve days ago by ~0.05 — far less
+   * than one targeting-tag multiplier — so without this, "what just happened"
+   * holds no ground against evergreen present-tagged memories. Unconditional
+   * (not gated on the retrospective flag) by design: it is the safety net for
+   * every turn the retrospective classifier misses.
+   */
+  freshEvent24h: 1.6,
+  freshEvent48h: 1.35,
 } as const
+
+/** Milliseconds in the two fresh-event bands. */
+const HOUR_MS = 60 * 60 * 1000
+const FRESH_24H_MS = 24 * HOUR_MS
+const FRESH_48H_MS = 48 * HOUR_MS
 
 /** Clamp on the *combined* multiplier so no single memory can explode the ranking. */
 export const MULTIPLIER_CLAMP = { min: 0, max: 4 } as const
@@ -217,6 +237,8 @@ interface MemoryTagView {
   /** ISO event time (episodic spine); write clock stands in when absent. */
   occurredAt?: string | null
   createdAt?: string
+  /** The chat the memory was extracted from — the fresh-event echo guard reads it. */
+  chatId?: string | null
 }
 
 /**
@@ -343,6 +365,49 @@ export function occurredWithinMultiplier(
 }
 
 /**
+ * Fresh-event boost — the memory's event time is within the last 24h/48h.
+ *
+ * Unconditional, unlike {@link occurredWithinMultiplier}: it fires whether or
+ * not the turn was judged retrospective, because it exists precisely for the
+ * turns where that judgement fails. The ranking blend's recency term is too
+ * weak to keep yesterday's events in front of well-tagged evergreen memories,
+ * so a coarse freshness band does the work the blend cannot.
+ *
+ * Echo guard: memories extracted from the CURRENT chat are skipped. They are
+ * already in the transcript the model is reading, and boosting them floods the
+ * handful of whisper slots with restatements of the last few turns.
+ *
+ * No clock, no parsable event time, or an event time in the future → pass
+ * through (never penalize on missing data — house rule).
+ */
+export function freshEventMultiplier(
+  memory: MemoryTagView,
+  nowMs: number | null | undefined,
+  currentChatId: string | null | undefined,
+): RecallMultiplier {
+  if (nowMs === null || nowMs === undefined || !Number.isFinite(nowMs)) {
+    return { multiplier: 1, fired: [] }
+  }
+  if (memory.chatId && currentChatId && memory.chatId === currentChatId) {
+    return { multiplier: 1, fired: [] }
+  }
+  const eventIso = memory.occurredAt ?? memory.createdAt
+  if (!eventIso) return { multiplier: 1, fired: [] }
+  const t = Date.parse(eventIso)
+  if (!Number.isFinite(t)) return { multiplier: 1, fired: [] }
+
+  const age = nowMs - t
+  if (age < 0) return { multiplier: 1, fired: [] }
+  if (age <= FRESH_24H_MS) {
+    return { multiplier: RECALL_MULTIPLIERS.freshEvent24h, fired: ['fresh24↑'] }
+  }
+  if (age <= FRESH_48H_MS) {
+    return { multiplier: RECALL_MULTIPLIERS.freshEvent48h, fired: ['fresh48↑'] }
+  }
+  return { multiplier: 1, fired: [] }
+}
+
+/**
  * Item 3 — context-axis steering.
  *
  * Boost a memory whose own `context` tag matches the turn's guessed dominant
@@ -411,7 +476,9 @@ export function recentlyWhisperedMultiplier(
  * clamped adjustment. Items 1 (scope+project) and 2 (temporal) read the memory's
  * own tags; items 3 (context steering) and 4 (participant boost) compare against
  * the turn-level signals on the {@link RecallContext}, and the anti-repetition
- * penalty reads the recently-whispered set. The product is clamped to
+ * penalty reads the recently-whispered set. The time-window boost and the
+ * unconditional fresh-event boost read the memory's event time against the
+ * turn's window and clock. The product is clamped to
  * {@link MULTIPLIER_CLAMP} so no single memory can dominate the ranking. A
  * cross-project narrow memory under the `exclude` policy short-circuits to
  * `{ exclude: true }`.
@@ -438,6 +505,7 @@ export function combineRecallMultipliers(
   const participant = participantMultiplier(memory, ctx.presentAboutCharacterIds)
   const recent = recentlyWhisperedMultiplier(memory, ctx.recentlyWhisperedIds, retrospective)
   const window = occurredWithinMultiplier(memory, ctx.occurredWithin)
+  const fresh = freshEventMultiplier(memory, ctx.nowMs, ctx.currentChatId)
 
   const product =
     scope.multiplier *
@@ -445,7 +513,8 @@ export function combineRecallMultipliers(
     context.multiplier *
     participant.multiplier *
     recent.multiplier *
-    window.multiplier
+    window.multiplier *
+    fresh.multiplier
   const clamped = Math.max(
     MULTIPLIER_CLAMP.min,
     Math.min(MULTIPLIER_CLAMP.max, product),
@@ -453,7 +522,7 @@ export function combineRecallMultipliers(
 
   return {
     multiplier: clamped,
-    fired: [...scope.fired, ...temporal.fired, ...context.fired, ...participant.fired, ...recent.fired, ...window.fired],
+    fired: [...scope.fired, ...temporal.fired, ...context.fired, ...participant.fired, ...recent.fired, ...window.fired, ...fresh.fired],
     exclude: false,
   }
 }

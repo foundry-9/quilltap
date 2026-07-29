@@ -1232,6 +1232,11 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
           presentAboutCharacterIds,
           expandRelated: recallSettings.expandRelated,
           recentlyWhisperedIds: recentlyWhisperedIdSet(chat.commonplaceRecallHistory),
+          // Fresh-event boost (mirrors the proactive path): recent events keep
+          // their footing against evergreen memories whatever the retrospective
+          // classifier decided; the chat id is the echo guard.
+          currentChatId: chat.id,
+          nowMs: Date.now(),
         }
         // Retrospective multi-probe (mirrors the proactive path).
         const extraProbes: string[] = []
@@ -1257,7 +1262,12 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
             minImportance: minMemoryImportance,
             recallContext,
             entityAnchors: turnRecallSignals?.entities,
-            occurredWithin: fallbackRetro ? (turnRecallSignals?.timeRange ?? null) : null,
+            // Ungated from the retrospective flag: a resolved window is useful
+            // either way, and the two-stage filter in `searchMemoriesSemantic`
+            // (hard filter only when enough hits survive, else the bounded soft
+            // boost) makes it starvation-safe. The flag still gates the
+            // temporal flip, anti-repetition suspension, and the probes above.
+            occurredWithin: turnRecallSignals?.timeRange ?? null,
             extraProbes: extraProbes.length > 0 ? extraProbes : undefined,
           },
         )

@@ -197,6 +197,70 @@ describe('pre-compute.service', () => {
       expect(result.preSearchedMemories).toHaveLength(2)
     })
 
+    it('forwards a resolved time window even when the turn is not retrospective', async () => {
+      // The deterministic day-reference resolver can hand back a window on a
+      // turn the classifier still calls non-retrospective (and vice versa).
+      // The window must ride along regardless — searchMemoriesSemantic's
+      // two-stage filter makes it starvation-safe — while the multi-probe
+      // block stays gated on the flag.
+      const timeRange = { from: '2026-07-28T05:00:00.000Z', to: '2026-07-29T02:44:00.000Z' }
+      ;(mockExtractMemorySearchKeywords as jest.Mock).mockResolvedValue({
+        success: true,
+        result: {
+          keywords: ['mission'],
+          paraphrase: 'Charlie is asking how the mission went.',
+          retrospective: false,
+          timeRange,
+          entities: ['Constantinople'],
+        },
+      })
+      ;(mockSearchMemoriesSemantic as jest.Mock).mockResolvedValue([])
+
+      await runPreContextPreCompute(baseOptions({
+        cheapLLMSelection: baseCheapLLM,
+        existingMessages: [
+          { type: 'message', role: 'ASSISTANT', content: 'past', participantId: 'p-char' } as any,
+          { type: 'message', role: 'USER', content: 'the mission today?', participantId: 'p-user' } as any,
+        ],
+      }))
+
+      expect(mockSearchMemoriesSemantic).toHaveBeenCalledWith(
+        'char-1',
+        'Charlie is asking how the mission went.',
+        expect.objectContaining({
+          occurredWithin: timeRange,
+          extraProbes: undefined,
+          recallContext: expect.objectContaining({
+            turnRetrospective: false,
+            currentChatId: 'chat-1',
+            nowMs: expect.any(Number),
+          }),
+        }),
+      )
+    })
+
+    it('passes null for occurredWithin when no window was resolved', async () => {
+      ;(mockExtractMemorySearchKeywords as jest.Mock).mockResolvedValue({
+        success: true,
+        result: { keywords: ['mission'], retrospective: false, timeRange: null },
+      })
+      ;(mockSearchMemoriesSemantic as jest.Mock).mockResolvedValue([])
+
+      await runPreContextPreCompute(baseOptions({
+        cheapLLMSelection: baseCheapLLM,
+        existingMessages: [
+          { type: 'message', role: 'ASSISTANT', content: 'past', participantId: 'p-char' } as any,
+          { type: 'message', role: 'USER', content: 'q', participantId: 'p-user' } as any,
+        ],
+      }))
+
+      expect(mockSearchMemoriesSemantic).toHaveBeenCalledWith(
+        'char-1',
+        'mission',
+        expect.objectContaining({ occurredWithin: null }),
+      )
+    })
+
     it('routes through the uncensored cheap-LLM selection in dangerous chats', async () => {
       const uncensored = { provider: 'LOCAL', modelName: 'unc' } as any
       ;(mockResolveUncensoredCheapLLMSelection as jest.Mock).mockReturnValue(uncensored)
