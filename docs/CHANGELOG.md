@@ -4,6 +4,35 @@
 
 ### 4.8-dev
 
+#### Test coverage for the eight untested API routes
+
+Continues the release-checklist coverage pass. The `lib/` subset closed in the previous entry; this closes the API-route subset — the eight routes and route actions that the same coverage run found at 0%. All eight now sit at 100% statements and 100% branches, across 131 new tests in 8 new suites. The suite is 559 files / 9,223 tests.
+
+| Route | Test file |
+|---|---|
+| `app/api/v1/chats/[id]/actions/export-markdown.ts` | `__tests__/unit/app/api/v1/chats/[id]/actions/export-markdown.test.ts` |
+| `app/api/v1/chats/[id]/actions/merge.ts` | `__tests__/unit/app/api/v1/chats/[id]/actions/merge.test.ts` |
+| `app/api/v1/chats/[id]/actions/recall-replay.ts` | `__tests__/unit/app/api/v1/chats/[id]/actions/recall-replay.test.ts` |
+| `app/api/v1/chats/[id]/qtap-target/route.ts` | `__tests__/unit/app/api/v1/chats/[id]/qtap-target/route.test.ts` |
+| `app/api/v1/chats/creation-progress/route.ts` | `__tests__/unit/app/api/v1/chats/creation-progress/route.test.ts` |
+| `app/api/v1/documents/route.ts` | `__tests__/unit/app/api/v1/documents/route.test.ts` |
+| `app/api/v1/settings/data-retention/route.ts` | `__tests__/unit/app/api/v1/settings/data-retention/route.test.ts` |
+| `app/api/v1/system/home/route.ts` | `__tests__/unit/app/api/v1/system/home/route.test.ts` |
+
+As before, the tests pin behavior that is easy to break silently rather than smoke-testing the happy path:
+
+- `export-markdown` gathers character names from three sources — participants, custom announcers, and Carina answerers — and must exclude the Brahma sentinel, which is not a real character. Characters dropped by `findByIds` (broken vault) are absent from the name map rather than throwing, and a non-ASCII transcript filename is RFC 5987-encoded.
+- `merge` rejects a self-merge and an explicitly empty allowlist before it touches a repository, and reports "already present" as a 400 no-op — the case where `applyChatMerge` posted no bubbles.
+- `recall-replay` sanitizes its own body: a zero, negative, fractional, or string `turnIndex` is dropped rather than passed through, an oversized `limit` clamps to 100, and the cheap-LLM anchor falls back to the first available profile when the participant's profile is missing or deleted.
+- `qtap-target` builds its resolver context from the chat's project and *deduped* participant character ids, dispatches between mount-backed and on-disk byte sources, and maps both `ENOENT` and `SOURCE_NOT_FOUND` to a 404 rather than a 500.
+- `creation-progress` replays a buffered backlog to a late subscriber, closes immediately when that backlog already ends in `done`/`error`, arms the keep-alive only when the stream stays open, and tears its subscription down on both client abort and consumer cancel. These run against the real in-memory bus.
+- `documents` keeps project-scoped rows out of the standalone picker (they have no project context to resolve against), de-duplicates on scope + mount + path so the same filename in two stores stays two entries, and treats both recent-history writes as best-effort — an open and a rename each still succeed when history tracking throws. Rename runs the real `computeRenameTarget`, so separator, traversal, and empty-title rejections are live.
+- `data-retention` merges the request body over current settings instead of replacing them, so an empty body cannot silently reset the window to the schema default.
+
+`data-retention`, `documents`, `merge`, and `export-markdown` exercise the real Zod schemas rather than stubs, so validation drift surfaces as a test failure.
+
+No production code changed.
+
 #### Test coverage for eight previously untested modules
 
 Release-checklist coverage pass. A coverage run over the 95 source files added since 4.7.0 found 43 at 0% and 3 under 50%. This closes the `lib/` subset — eight modules, from 0%/low to 99.1% statements and 89.1% branches overall. 117 new tests; the suite is 551 files / 9,092 tests.
