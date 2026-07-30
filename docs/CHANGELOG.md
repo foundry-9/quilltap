@@ -4,6 +4,21 @@
 
 ### 4.8-dev
 
+#### A failed properties.json read no longer wipes a project's settings
+
+On a real instance, a project lost `defaultAlertCharactersOfLanternImages`, `color`, `icon`, `defaultImageProfileId`, `defaultRoleplayTemplateId`, `defaultAgentModeEnabled`, `defaultAvatarGenerationEnabled`, and `storyBackgroundsEnabled` from its store. The visible symptom was that the Lantern generated backgrounds for a chat and never announced them: `isLanternImageAlertEnabled` walks chat → project → OFF, the chat's own override was null, and the project default was gone.
+
+Root cause in `lib/database/document-store-overlay.ts` (the engine behind both the project and group stores): `readProperties` caught every error and returned `null`. Its two callers read `null` as "no file yet, seed from the raw row," and after the 4.7 cutover that row carries no property values at all. So a single transient store failure reset the whole settings bag to schema defaults — and because the no-default optionals then serialize to nothing, the damage was invisible in the file and compounded through every later write.
+
+`readProperties` now returns `null` only for a genuinely absent `properties.json` (a `DatabaseStoreError` with code `NOT_FOUND`) and throws the entity's unavailability error when the file exists but is unreadable, malformed, or fails schema validation. It takes an optional entity id so failures name the project or group, and logs at `error` on both refusal paths.
+
+Both callers get the safer behavior:
+
+- `applyWriteOverlay` now propagates instead of writing a defaults-seeded bag, so a partial patch can never flatten the keys it didn't name.
+- `backfillProjectStores` / `backfillGroupStores` route the throw to their existing per-entity catch, so a store they merely failed to read is counted as an error and skipped rather than "healed" by overwriting all four overlay files — the more destructive form of the same bug, since that path also blanks `description.md`, `instructions.md`, and `state.json`.
+
+New tests in `__tests__/unit/lib/projects/project-store-write-overlay.test.ts`: untouched keys survive a single-key patch; unreadable, unparseable, and schema-invalid bodies all throw and write nothing; only a genuine `NOT_FOUND` seeds defaults; store-resident keys are stripped from the DB-bound patch.
+
 #### Read-your-writes detector compares tables, not repositories
 
 The job child's read-your-writes diagnostic warned once per autonomous-room turn about a condition that could not happen: `connections.findApiKeyByIdAndUserId` (a `SELECT` from `api_keys`) read after a buffered `connections.incrementTokenUsage` (a counter bump on `connection_profiles`). The detector's grouping key was the repository object, and the connections repository fronts both tables, so every turn that made more than one provider call logged a false positive — the first call buffers the counter bump, later calls re-resolve an API key.

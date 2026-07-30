@@ -17,6 +17,12 @@
  *     at `error` and DROPS the offending row so one corrupt store can't take
  *     down the whole list. The startup backfill heals it.
  *
+ *   - {@link DocumentStoreOverlay.readProperties} returns `null` ONLY for a
+ *     genuinely absent `properties.json`, and THROWS when the file exists but
+ *     is unreadable or unparseable. Its callers treat `null` as "seed from the
+ *     raw row", and post-cutover that row holds no property values — so a
+ *     lenient read silently resets the settings bag to schema defaults.
+ *
  * Per-mount-point writes are serialized through a promise chain (mirrors the
  * character wardrobe-sync pattern) so concurrent property/state writes can't
  * clobber each other's read-modify-write.
@@ -26,7 +32,11 @@
 
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import { writeDatabaseDocument, readDatabaseDocument } from '@/lib/mount-index/database-store';
+import {
+  writeDatabaseDocument,
+  readDatabaseDocument,
+  DatabaseStoreError,
+} from '@/lib/mount-index/database-store';
 
 /** The minimal shape a store-backed row must expose to the overlay engine. */
 export interface StoreBackedRow {
@@ -71,7 +81,12 @@ export interface DocumentStoreOverlayConfig<T extends StoreBackedRow, P> {
 export interface DocumentStoreOverlay<T extends StoreBackedRow, P> {
   applyOverlay(rows: T[]): Promise<T[]>;
   applyOverlayOne(row: T | null): Promise<T | null>;
-  readProperties(mountPointId: string): Promise<P | null>;
+  /**
+   * `null` means `properties.json` is genuinely absent. A store that exists but
+   * can't be read or parsed throws — never conflate the two, see the
+   * implementation's docblock for why.
+   */
+  readProperties(mountPointId: string, entityId?: string): Promise<P | null>;
   writeManagedFields(mountPointId: string, entity: T): Promise<void>;
   applyWriteOverlay(id: string, patch: Partial<T>): Promise<Partial<T>>;
 }
@@ -231,12 +246,66 @@ export function createDocumentStoreOverlay<T extends StoreBackedRow, P>(
     return hydrateOne(row, byPath);
   }
 
-  async function readProperties(mountPointId: string): Promise<P | null> {
+  /**
+   * Read + validate the property bag.
+   *
+   * Returns `null` **only** when `properties.json` is genuinely absent from the
+   * store. Every other failure — an unreadable mount index, a transient
+   * repository error, malformed JSON, a body the schema rejects — throws the
+   * entity's unavailability error.
+   *
+   * That distinction is load-bearing, not pedantry. Callers read `null` as
+   * "nothing persisted yet, seed from the raw row", and post-cutover the slim
+   * DB row carries no property values at all. Collapsing a *failed* read into
+   * `null` therefore resets the entire settings bag to schema defaults — and
+   * because the no-default optionals then serialize to nothing, the loss is
+   * invisible in the file and compounds through every later write.
+   *
+   * `entityId` is for the error message only; callers that have it should pass
+   * it so a failure names the project/group rather than just its mount point.
+   */
+  async function readProperties(
+    mountPointId: string,
+    entityId = '(unknown)',
+  ): Promise<P | null> {
+    let content: string;
     try {
-      const { content } = await readDatabaseDocument(mountPointId, paths.properties);
+      ({ content } = await readDatabaseDocument(mountPointId, paths.properties));
+    } catch (err) {
+      if (err instanceof DatabaseStoreError && err.code === 'NOT_FOUND') {
+        logger.debug(`${Label} ${paths.properties} absent — caller may seed defaults`, {
+          [idLogKey]: entityId,
+          officialMountPointId: mountPointId,
+        });
+        return null;
+      }
+      const detail = err instanceof Error ? err.message : String(err);
+      logger.error(`${Label} ${paths.properties} unreadable — refusing to treat as absent`, {
+        [idLogKey]: entityId,
+        officialMountPointId: mountPointId,
+        reason: detail,
+      });
+      throw config.createUnavailableError(
+        entityId,
+        mountPointId,
+        `${paths.properties} unreadable: ${detail}`,
+      );
+    }
+
+    try {
       return config.parseProperties(JSON.parse(content));
-    } catch {
-      return null;
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      logger.error(`${Label} ${paths.properties} unparseable — refusing to treat as absent`, {
+        [idLogKey]: entityId,
+        officialMountPointId: mountPointId,
+        reason: detail,
+      });
+      throw config.createUnavailableError(
+        entityId,
+        mountPointId,
+        `${paths.properties} unparseable: ${detail}`,
+      );
     }
   }
 
@@ -306,9 +375,14 @@ export function createDocumentStoreOverlay<T extends StoreBackedRow, P>(
         }
         if (touchedProps.length > 0) {
           // Read-modify-write so a partial patch doesn't blow away unspecified
-          // keys. Seed from the in-memory entity when no file exists yet.
+          // keys. `readProperties` throws rather than returning null when the
+          // file exists but can't be read or parsed, so the seed-from-entity
+          // fallback fires only for a store that has no properties.json at all
+          // — a broken invariant the backfill heals, where there is nothing to
+          // preserve anyway. (Seeding from a raw row on a *failed* read is what
+          // silently reset a project's whole settings bag to defaults.)
           const current =
-            (await readProperties(mountPointId)) ?? config.parseProperties(entity);
+            (await readProperties(mountPointId, id)) ?? config.parseProperties(entity);
           const next = { ...(current as Record<string, unknown>) };
           for (const k of touchedProps) {
             next[k] = p[k];
