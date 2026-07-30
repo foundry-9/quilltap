@@ -285,10 +285,16 @@ class UserScopedMemoriesRepository {
     return memory;
   }
 
-  async create(data: Omit<Memory, 'id' | 'createdAt' | 'updatedAt'>): Promise<Memory> {
+  /**
+   * `options` is forwarded so callers can pin an explicit id — restore relies on
+   * it to re-insert memories under their backed-up ids, which is what keeps
+   * `relatedMemoryIds` edges resolving. This class scopes by character rather
+   * than userId, so it doesn't inherit the generic wrapper's pass-through.
+   */
+  async create(data: Omit<Memory, 'id' | 'createdAt' | 'updatedAt'>, options?: CreateOptions): Promise<Memory> {
     const character = await this.charactersRepo.findById(data.characterId);
     if (!character) throw new Error('Character not found or access denied');
-    return this.baseRepo.create(data);
+    return this.baseRepo.create(data, options);
   }
 
   async update(id: string, data: Partial<Memory>): Promise<Memory | null> {

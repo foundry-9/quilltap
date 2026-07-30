@@ -4,6 +4,18 @@
 
 ### 4.8-dev
 
+#### Restore no longer breaks the memory graph
+
+Release-checklist pass over backup/restore completeness. Backup is schema-driven — `ensureCollection` derives each table's JSON, array, and boolean columns straight from its Zod schema, backup reads entities through the repositories, and restore re-inserts them by spreading whatever the archive held. All 16 columns added this cycle are covered by that pipeline with no per-field work: the six answer-confirmation and Pascal columns on `chat_messages`, the four new `chats` columns, `customTools` and `answerConfirmationSettings` on `chat_settings`, and `occurredAt` / `narrativeTime` / `entities` / `kind` on `memories`. DDL.md documents all of them.
+
+What the pass turned up was older and worse. Memories were the one entity restored without their backed-up id. Characters and chats pass `{ id }` to `create()`; memories did not, so the repository minted a fresh UUID for every restored memory. Memories reference each other through `relatedMemoryIds`, and `uuid-remap` rewrites those edges in lockstep with `id` for new-account restores — so in every restore mode, all of them pointed at memories that no longer existed. The Commonplace Book's graph came back as isolated nodes with no error and no warning.
+
+The root cause was one level down. `UserScopedMemoriesRepository` scopes by character rather than by userId, so it is hand-written instead of extending the generic `UserScopedRepository`, and its `create()` never declared or forwarded the `CreateOptions` argument the generic wrapper passes through. It now does, and restore pins each memory to its backed-up id.
+
+Also confirmed: the only things excluded from a backup are encrypted API keys (they are user-key-encrypted and cannot be restored elsewhere), built-in templates, and previous backup files. `commonplaceRecallHistory` and `commonplaceSceneCache` are dropped from portable `.qtap` exports on purpose as instance-local ephemera — they are still backed up, and `qtap-export.schema.json` is `additionalProperties: false`, so their absence there is required rather than an oversight.
+
+Added `restore-field-fidelity.test.ts`: four round-trip tests pinning all 16 new columns through restore plus the memory-id contract, which is what caught the bug. `npx tsc` clean, `eslint` clean, 560 suites / 9,223 tests pass.
+
 #### OpenAI-Compatible plugin now bundles plugin-utils
 
 Release-checklist pass over plugin self-containment. All 14 distributed plugins were checked for reach-ins to app internals — no `@/lib` imports, no relative paths escaping a plugin directory. Everything comes in through `@quilltap/plugin-types` and `@quilltap/plugin-utils`.

@@ -174,13 +174,19 @@ export async function restore(
     // 9. Memories
     // IDs are preserved during creation, so characterId/aboutCharacterId already point
     // to the correct (preserved) character IDs — no remapping needed.
+    //
+    // The memory's own id is preserved too, and that matters: memories reference
+    // each other through `relatedMemoryIds`, which uuid-remap rewrites in lockstep
+    // with `id` for new-account restores. Letting the repository mint a fresh id
+    // here would leave every one of those edges pointing at a memory that no longer
+    // exists, quietly flattening the Commonplace Book's graph on restore.
     for (const memory of data.memories) {
       try {
         const { id, createdAt, updatedAt, ...memoryData } = memory;
 
         // Strip legacy personaId from old backups (column no longer exists)
         const { personaId: _legacyPersonaId, ...cleanMemoryData } = memoryData as Record<string, unknown>;
-        await repos.memories.create(cleanMemoryData as Parameters<typeof repos.memories.create>[0]);
+        await repos.memories.create(cleanMemoryData as Parameters<typeof repos.memories.create>[0], { id });
       } catch (error) {
         warnings.push(`Failed to restore memory: ${error instanceof Error ? error.message : String(error)}`);
         moduleLogger.warn('Failed to restore memory', { memoryId: memory.id, error });
