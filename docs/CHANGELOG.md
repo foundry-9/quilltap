@@ -4,6 +4,25 @@
 
 ### 4.8-dev
 
+#### Test coverage for eight previously untested modules
+
+Release-checklist coverage pass. A coverage run over the 95 source files added since 4.7.0 found 43 at 0% and 3 under 50%. This closes the `lib/` subset — eight modules, from 0%/low to 99.1% statements and 89.1% branches overall. 117 new tests; the suite is 551 files / 9,092 tests.
+
+| Module | Was | Now | Test file |
+|---|---|---|---|
+| `lib/api/content-disposition.ts` | 33.3% | 100% | `__tests__/unit/lib/api/content-disposition.test.ts` |
+| `lib/config/feature-flags.ts` | 0% | 100% | `__tests__/unit/lib/config/feature-flags.test.ts` |
+| `lib/navigation/workspace-redirect.ts` | 0% | 100% | `__tests__/unit/lib/navigation/workspace-redirect.test.ts` |
+| `lib/services/chat-message/request-helpers.ts` | 0% | 100% | `__tests__/unit/lib/services/chat-message/request-helpers.test.ts` |
+| `lib/pascal/llm-consult.ts` | 47.7% | 100% | `__tests__/unit/lib/pascal/llm-consult.test.ts` |
+| `lib/memory/recall-replay.ts` | 0% | 99.6% | `__tests__/unit/lib/memory/recall-replay.test.ts` |
+| `lib/memory/fold-episode-pass.ts` | 24.6% | 99.1% | `__tests__/unit/lib/memory/fold-episode-pass.test.ts` |
+| `lib/services/home-data.service.ts` | 0% | 97.3% | `__tests__/unit/lib/services/home-data.service.test.ts` |
+
+The tests pin behaviour that is easy to break silently: the workspace flag opts out only on the exact string `'0'` (`'false'` and `''` leave it on); the redirect helper is a true no-op when the flag is off and drops empty params rather than emitting bare keys; `recall-replay` dates a replayed turn from that turn's own clock rather than wall-clock now, runs the old path with every episodic signal inert, and widens the head only for a retrospective turn; `fold-episode-pass` never throws into the fold on any failure path and its fragment linking is union-preserving on both sides; `llm-consult` converts every failure — no profiles, a thrown provider, a hung provider hitting the 60s timeout — into a reason rather than an exception, and reroutes only a dangerous chat; the home dashboard keeps help chats off, blends three activity clocks for project ordering, and sorts characters favourite-then-chat-count-then-name.
+
+No production code changed.
+
 #### Custom-tool definitions load through the canonical mount reader
 
 `readToolFile` in `lib/pascal/custom-tools.ts` hand-rolled its own storage dispatch: `readDatabaseDocument` for database stores, a bare `fs.readFile(path.join(mount.basePath, relativePath))` for everything else. It now calls `readMountFileBytes` (`lib/mount-index/read-file.ts`), the canonical reader that already handles every storage shape — filesystem, Obsidian, database documents, database blobs.
