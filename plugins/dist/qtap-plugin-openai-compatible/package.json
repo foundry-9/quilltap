@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-openai-compatible",
-  "version": "1.0.32",
+  "version": "1.0.33",
   "description": "OpenAI-compatible provider plugin for Quilltap",
   "main": "index.js",
   "types": "index.d.ts",

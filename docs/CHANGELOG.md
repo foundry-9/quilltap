@@ -4,6 +4,22 @@
 
 ### 4.8-dev
 
+#### OpenAI-Compatible plugin now bundles plugin-utils
+
+Release-checklist pass over plugin self-containment. All 14 distributed plugins were checked for reach-ins to app internals — no `@/lib` imports, no relative paths escaping a plugin directory. Everything comes in through `@quilltap/plugin-types` and `@quilltap/plugin-utils`.
+
+One plugin was packaged wrong. `qtap-plugin-openai-compatible` was the only one listing `@quilltap/plugin-utils` in its esbuild `EXTERNAL_PACKAGES`, so its shipped `index.js` emitted bare `require('@quilltap/plugin-utils')` and `require('@quilltap/plugin-utils/tools')`. Those resolved only by walking up to a host `node_modules` — the same packaging failure that broke the externally published Mistral plugin, which fails to load with `Cannot find module '@quilltap/plugin-utils'`.
+
+It matters more for this plugin than most: `provider.ts` is a thin re-export of plugin-utils' canonical `OpenAICompatibleProvider`, so plugin-utils is the implementation, not a helper. It is also a reference example that independent plugin developers copy.
+
+`@quilltap/plugin-utils` is now bundled, matching the other 13. `@quilltap/plugin-types` stays external — it is type-only and stripped at build time. Plugin version 1.0.32 → 1.0.33.
+
+Verified: the rebuilt bundle's only external requires are `fs` and an unreferenced `@quilltap/plugin-types` binding (same as `qtap-plugin-default-system-prompts`), and it loads standalone under `node` with the full export surface intact, including the `parseTextToolCalls` / `stripTextToolMarkers` helpers that previously came from the external `/tools` subpath. `npm run build:plugins` ran 14/14 clean; the other 13 rebuilt byte-identical.
+
+Two other pitfalls were checked and are fine. Every provider plugin that can see prompt-cache hits normalizes usage to exclude them — openai, grok, google, z-ai, openrouter, and deepseek subtract cache reads from `promptTokens`/`totalTokens` while still reporting them in `cacheUsage`; Anthropic correctly does not subtract, because its API reports `input_tokens` separately from `cache_read_input_tokens`; Ollama is local with no remote cache. The Anthropic plugin's model-ID prefix branching for new-generation models is also intact — those models skip `temperature`/`top_p` and use adaptive thinking.
+
+Worth recording for the next pass: all 14 plugins mark `zod` external as "provided by the main app," and openrouter and mcp emit runtime `require('zod/v3')` and similar. Each ships its own `zod` in its plugin `node_modules` and the standalone tarball copies those wholesale, so it resolves today. It is the same class of pattern as the bug above, currently benign and uniform, and was left alone.
+
 #### qt-* utility pass: three classes that were never defined
 
 Release-checklist pass over the `qt-*` theme utilities in components changed since the last checklist run. The raw-Tailwind audit came up clean — new components pair a `qt-*` class with layout-only utilities, which is the established pattern. What it did turn up was three class names that are referenced but have no rule anywhere, in the app CSS or in any bundled theme, so they silently did nothing.
