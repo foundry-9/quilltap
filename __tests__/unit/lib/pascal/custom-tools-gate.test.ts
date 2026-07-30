@@ -22,7 +22,6 @@ jest.mock('@/lib/mount-index/tiered-mount-pool', () => ({
 
 jest.mock('@/lib/mount-index/database-store', () => ({
   listDatabaseFiles: jest.fn(),
-  readDatabaseDocument: jest.fn(),
   DatabaseStoreError: class DatabaseStoreError extends Error {
     code: string
     constructor(message: string, code: string) {
@@ -32,14 +31,19 @@ jest.mock('@/lib/mount-index/database-store', () => ({
   },
 }))
 
+jest.mock('@/lib/mount-index/read-file', () => ({
+  readMountFileBytes: jest.fn(),
+}))
+
 import { getRepositories } from '@/lib/repositories/factory'
 import { resolveTieredMountPool } from '@/lib/mount-index/tiered-mount-pool'
-import { listDatabaseFiles, readDatabaseDocument } from '@/lib/mount-index/database-store'
+import { listDatabaseFiles } from '@/lib/mount-index/database-store'
+import { readMountFileBytes } from '@/lib/mount-index/read-file'
 
 const mockGetRepositories = getRepositories as jest.Mock
 const mockResolvePool = resolveTieredMountPool as jest.Mock
 const mockListDatabaseFiles = listDatabaseFiles as jest.Mock
-const mockReadDatabaseDocument = readDatabaseDocument as jest.Mock
+const mockReadMountFileBytes = readMountFileBytes as jest.Mock
 
 type MountFiles = Record<string, Record<string, unknown>>
 
@@ -73,10 +77,11 @@ function primeMounts(files: MountFiles, characterMetadata?: Record<string, unkno
     }))
   )
 
-  mockReadDatabaseDocument.mockImplementation(async (mountId: string, relativePath: string) => {
+  mockReadMountFileBytes.mockImplementation(async (mountId: string, relativePath: string) => {
     const doc = files[mountId]?.[relativePath]
     if (doc === undefined) throw new Error(`no such file: ${mountId}/${relativePath}`)
-    return { content: typeof doc === 'string' ? doc : JSON.stringify(doc) }
+    const content = typeof doc === 'string' ? doc : JSON.stringify(doc)
+    return { bytes: Buffer.from(content, 'utf-8'), mimeType: 'application/json', fileType: 'json' }
   })
 }
 

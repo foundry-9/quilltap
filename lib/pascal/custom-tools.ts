@@ -28,7 +28,9 @@ import { randomBytes } from 'crypto';
 
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import { listDatabaseFiles, readDatabaseDocument, DatabaseStoreError } from '@/lib/mount-index/database-store';
+import { listDatabaseFiles, DatabaseStoreError } from '@/lib/mount-index/database-store';
+import { readMountFileBytes } from '@/lib/mount-index/read-file';
+import { FileOpError } from '@/lib/mount-index/file-op-error';
 import {
   resolveTieredMountPool,
   type MountTier,
@@ -190,16 +192,20 @@ async function listToolFilesFromDisk(basePath: string): Promise<string[]> {
   }
 }
 
-/** Read one definition's bytes, whichever kind of store holds it. */
+/**
+ * Read one definition's bytes, whichever kind of store holds it.
+ *
+ * Delegates to the canonical mount reader rather than reaching for the disk
+ * itself: that one helper already knows every storage shape (filesystem,
+ * Obsidian, database documents, database blobs) and enforces the mount-boundary
+ * check, so a definition path can never wander outside its own store.
+ */
 async function readToolFile(
-  mount: { id: string; mountType: string; basePath: string },
+  mount: { id: string },
   relativePath: string
 ): Promise<string> {
-  if (mount.mountType === 'database') {
-    const { content } = await readDatabaseDocument(mount.id, relativePath);
-    return content;
-  }
-  return fs.readFile(path.join(mount.basePath, relativePath), 'utf-8');
+  const { bytes } = await readMountFileBytes(mount.id, relativePath);
+  return bytes.toString('utf-8');
 }
 
 /**
@@ -251,6 +257,7 @@ export async function loadToolsFromMount(
       raw = await readToolFile(mount, relativePath);
     } catch (error) {
       // Deleted between list and read — a race, not a defect. Skip quietly.
+      if (error instanceof FileOpError && error.code === 'SOURCE_NOT_FOUND') continue;
       if (error instanceof DatabaseStoreError && error.code === 'NOT_FOUND') continue;
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
       errors.push({ definitionPath: relativePath, mountPointId, mountName, tier, reason: `could not be read: ${getErrorMessage(error)}` });

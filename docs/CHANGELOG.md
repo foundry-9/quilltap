@@ -4,6 +4,16 @@
 
 ### 4.8-dev
 
+#### Custom-tool definitions load through the canonical mount reader
+
+`readToolFile` in `lib/pascal/custom-tools.ts` hand-rolled its own storage dispatch: `readDatabaseDocument` for database stores, a bare `fs.readFile(path.join(mount.basePath, relativePath))` for everything else. It now calls `readMountFileBytes` (`lib/mount-index/read-file.ts`), the canonical reader that already handles every storage shape — filesystem, Obsidian, database documents, database blobs.
+
+Two effects beyond the deduplication: definition reads now go through `resolveFsAbsolute`, so a `.tool.json` path can no longer resolve outside its own store; and blob-stored definitions on database mounts are readable, where the old direct `readDatabaseDocument` call would have missed them. The list side is unchanged — `Tools/` is still enumerated live off disk on purpose, because edits inside a mount don't reliably touch the mount index.
+
+The load loop's "deleted between list and read" race skip now also recognises `FileOpError` with code `SOURCE_NOT_FOUND`, the reader's equivalent of `ENOENT`.
+
+Tests: the three Pascal suites that stubbed `readDatabaseDocument` now stub `readMountFileBytes`, and `custom-tools-discovery.test.ts` gains a filesystem-backed-store case plus a booby-trapped `fs.readFile` that fails loudly if definition reads ever go back to touching the disk directly.
+
 #### A failed properties.json read no longer wipes a project's settings
 
 On a real instance, a project lost `defaultAlertCharactersOfLanternImages`, `color`, `icon`, `defaultImageProfileId`, `defaultRoleplayTemplateId`, `defaultAgentModeEnabled`, `defaultAvatarGenerationEnabled`, and `storyBackgroundsEnabled` from its store. The visible symptom was that the Lantern generated backgrounds for a chat and never announced them: `isLanternImageAlertEnabled` walks chat → project → OFF, the chat's own override was null, and the project default was gone.

@@ -20,7 +20,6 @@ jest.mock('@/lib/mount-index/tiered-mount-pool', () => ({
 
 jest.mock('@/lib/mount-index/database-store', () => ({
   listDatabaseFiles: jest.fn(),
-  readDatabaseDocument: jest.fn(),
   DatabaseStoreError: class DatabaseStoreError extends Error {
     code: string
     constructor(message: string, code: string) {
@@ -30,14 +29,40 @@ jest.mock('@/lib/mount-index/database-store', () => ({
   },
 }))
 
+jest.mock('@/lib/mount-index/read-file', () => ({
+  readMountFileBytes: jest.fn(),
+}))
+
+// Definition *contents* must never come off the disk directly — they go through
+// the canonical mount reader, whatever kind of store holds them. Booby-trap
+// `fs.readFile` so a regression back to raw filesystem access fails loudly
+// instead of quietly working on filesystem mounts and nowhere else. Listing is
+// a different matter: the `Tools/` folder is read live from disk on purpose.
+jest.mock('fs', () => {
+  const actual = jest.requireActual('fs')
+  return {
+    ...actual,
+    promises: {
+      ...actual.promises,
+      readdir: jest.fn(),
+      readFile: jest.fn(async () => {
+        throw new Error('custom-tool definitions must be read via readMountFileBytes, not fs.readFile')
+      }),
+    },
+  }
+})
+
 import { getRepositories } from '@/lib/repositories/factory'
 import { resolveTieredMountPool } from '@/lib/mount-index/tiered-mount-pool'
-import { listDatabaseFiles, readDatabaseDocument } from '@/lib/mount-index/database-store'
+import { listDatabaseFiles } from '@/lib/mount-index/database-store'
+import { readMountFileBytes } from '@/lib/mount-index/read-file'
+import { promises as fsPromises } from 'fs'
 
 const mockGetRepositories = getRepositories as jest.Mock
 const mockResolvePool = resolveTieredMountPool as jest.Mock
 const mockListDatabaseFiles = listDatabaseFiles as jest.Mock
-const mockReadDatabaseDocument = readDatabaseDocument as jest.Mock
+const mockReadMountFileBytes = readMountFileBytes as jest.Mock
+const mockReaddir = fsPromises.readdir as unknown as jest.Mock
 
 /** Files per mount id: `{ mountId: { 'Tools/x.tool.json': <definition json> } }` */
 type MountFiles = Record<string, Record<string, unknown>>
@@ -51,12 +76,18 @@ function tool(name: string, extra: Record<string, unknown> = {}) {
   }
 }
 
-/** Wire the mocks so each mount id is a database store holding the given files. */
-function primeMounts(files: MountFiles) {
+/**
+ * Wire the mocks so each mount id is a store holding the given files.
+ *
+ * Definition bytes always arrive through `readMountFileBytes`, the canonical
+ * mount reader — never through a storage-specific call — which is why a
+ * `filesystem` mount can be primed here with no disk in sight.
+ */
+function primeMounts(files: MountFiles, mountType: 'database' | 'filesystem' = 'database') {
   mockGetRepositories.mockReturnValue({
     docMountPoints: {
       findById: jest.fn(async (id: string) =>
-        files[id] ? { id, name: `store-${id}`, enabled: true, mountType: 'database', basePath: '' } : null
+        files[id] ? { id, name: `store-${id}`, enabled: true, mountType, basePath: `/stores/${id}` } : null
       ),
     },
   })
@@ -69,10 +100,26 @@ function primeMounts(files: MountFiles) {
     }))
   )
 
-  mockReadDatabaseDocument.mockImplementation(async (mountId: string, relativePath: string) => {
+  // Filesystem stores list their `Tools/` folder off the disk; the ids double
+  // as base paths so one readdir mock can serve every mount.
+  mockReaddir.mockImplementation(async (folder: string) => {
+    const mountId = Object.keys(files).find((id) => folder === `/stores/${id}/Tools`)
+    if (!mountId) {
+      const err = new Error(`ENOENT: no such directory ${folder}`) as NodeJS.ErrnoException
+      err.code = 'ENOENT'
+      throw err
+    }
+    return Object.keys(files[mountId]).map((relativePath) => ({
+      name: relativePath.split('/').pop() as string,
+      isFile: () => true,
+    }))
+  })
+
+  mockReadMountFileBytes.mockImplementation(async (mountId: string, relativePath: string) => {
     const doc = files[mountId]?.[relativePath]
     if (doc === undefined) throw new Error(`no such file: ${mountId}/${relativePath}`)
-    return { content: typeof doc === 'string' ? doc : JSON.stringify(doc) }
+    const content = typeof doc === 'string' ? doc : JSON.stringify(doc)
+    return { bytes: Buffer.from(content, 'utf-8'), mimeType: 'application/json', fileType: 'json' }
   })
 }
 
@@ -102,6 +149,19 @@ describe('discovery', () => {
     expect([...roster.tools.keys()]).toEqual(['unlock'])
     expect(roster.tools.get('unlock')!.tier).toBe('project')
     expect(roster.tools.get('unlock')!.definitionPath).toBe('Tools/unlock.tool.json')
+  })
+
+  it('reads a filesystem-backed store through the canonical mount reader', async () => {
+    primePool({ projectMountPointIds: ['m1'] })
+    primeMounts({ m1: { 'Tools/unlock.tool.json': tool('unlock') } }, 'filesystem')
+
+    const roster = await resolveCustomToolRoster(ctx)
+
+    expect([...roster.tools.keys()]).toEqual(['unlock'])
+    // The reader is asked for a mount-relative path, never an absolute one —
+    // the store's boundary check lives inside it, not out here.
+    expect(mockReadMountFileBytes).toHaveBeenCalledWith('m1', 'Tools/unlock.tool.json')
+    expect(fsPromises.readFile).not.toHaveBeenCalled()
   })
 
   it("keys a tool by its `name`, not its filename", async () => {
