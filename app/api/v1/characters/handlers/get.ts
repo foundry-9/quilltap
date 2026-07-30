@@ -8,11 +8,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { enrichWithDefaultImage } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { serverError } from '@/lib/api/responses';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 export async function handleGet(
   req: NextRequest,
-  ctx: AuthenticatedContext
+  ctx: RequestContext
 ): Promise<NextResponse> {
   const { user, repos } = ctx;
 

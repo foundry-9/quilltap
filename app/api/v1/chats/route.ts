@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware';
+import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { buildChatContext, type ChatContext } from '@/lib/chat/initialize';
 import { combineScenarioText } from '@/lib/chat/scenario-text';
@@ -836,7 +836,7 @@ async function autoGenerateFirstMessage(
 /**
  * List chats
  */
-async function handleList(req: NextRequest, context: AuthenticatedContext) {
+async function handleList(req: NextRequest, context: RequestContext) {
   const { user, repos } = context;
 
   try {
@@ -879,7 +879,7 @@ async function handleList(req: NextRequest, context: AuthenticatedContext) {
 /**
  * Check if any dangerous chats exist for the current user
  */
-async function handleHasDangerous(context: AuthenticatedContext) {
+async function handleHasDangerous(context: RequestContext) {
   const { user, repos } = context;
 
   try {
@@ -895,7 +895,7 @@ async function handleHasDangerous(context: AuthenticatedContext) {
 /**
  * Create chat
  */
-async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
+async function handleCreate(req: NextRequest, context: RequestContext) {
   const { user, repos } = context;
 
   const body = await req.json();
@@ -1332,7 +1332,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
 /**
  * Import chat (SillyTavern format)
  */
-async function handleImport(req: NextRequest, context: AuthenticatedContext) {
+async function handleImport(req: NextRequest, context: RequestContext) {
   const { user, repos } = context;
 
   try {
@@ -1419,7 +1419,7 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
 /**
  * GET /api/v1/chats - Action dispatch or list
  */
-export const GET = createAuthenticatedHandler(async (req, context) => {
+export const GET = createContextHandler(async (req, context) => {
   const action = getActionParam(req);
 
   if (!action) {
@@ -1440,7 +1440,7 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
 /**
  * POST /api/v1/chats - Action dispatch or create
  */
-export const POST = createAuthenticatedHandler(async (req, context) => {
+export const POST = createContextHandler(async (req, context) => {
   const action = getActionParam(req);
 
   if (!action) {

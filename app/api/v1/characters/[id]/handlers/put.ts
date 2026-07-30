@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { checkOwnership } from '@/lib/api/middleware';
+import { exists } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { PronounsSchema, PhysicalDescriptionSchema } from '@/lib/schemas/character.types';
@@ -15,7 +15,7 @@ import { TimestampConfigSchema } from '@/lib/schemas/settings.types';
 import type { Character } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, successResponse } from '@/lib/api/responses';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import { writeStoreFile, DEPICTION_GUIDELINES_FILENAME } from '@/lib/image-gen/aesthetic';
 
 const updateCharacterSchema = z.object({
@@ -99,7 +99,7 @@ const updateCharacterSchema = z.object({
 
 export async function handlePut(
   req: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   id: string
 ): Promise<NextResponse> {
   const { user, repos } = ctx;
@@ -110,7 +110,7 @@ export async function handlePut(
   // findById would throw CharacterVaultUnavailableError → 503.
   const existingCharacter = await repos.characters.findByIdRaw(id);
 
-  if (!checkOwnership(existingCharacter, user.id)) {
+  if (!exists(existingCharacter)) {
     return notFound('Character');
   }
 

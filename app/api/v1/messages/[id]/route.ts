@@ -9,7 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler, getActionParam } from '@/lib/api/middleware';
+import { createContextParamsHandler, getActionParam } from '@/lib/api/middleware';
 import { badRequest, notFound, serverError, successResponse, created } from '@/lib/api/responses';
 import { regenerateMessageAsSwipe } from '@/lib/services/chat-message';
 import { deleteMemoriesBySourceMessagesWithVectors, deleteMemoryWithVector } from '@/lib/memory/memory-service';
@@ -83,7 +83,7 @@ async function findMessageInUserChats(
 // GET /api/v1/messages/[id] - Get a specific message
 // =============================================================================
 
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id: messageId }) => {
     try {const result = await findMessageInUserChats(repos, user.id, messageId);
       if (!result) {
@@ -102,7 +102,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 // PUT /api/v1/messages/[id] - Edit a message
 // =============================================================================
 
-export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
+export const PUT = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id: messageId }) => {
     const body = await req.json();
     const { content } = editMessageSchema.parse(body);
@@ -134,7 +134,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 // DELETE /api/v1/messages/[id] - Delete a message
 // =============================================================================
 
-export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+export const DELETE = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id: messageId }) => {
     try {
       // Parse query params for memory handling
@@ -219,7 +219,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
 // POST /api/v1/messages/[id]?action= - Actions
 // =============================================================================
 
-export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+export const POST = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id: messageId }) => {
     const action = getActionParam(req);
 

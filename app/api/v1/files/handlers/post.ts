@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import { badRequest } from '@/lib/api/responses';
 import {
   handleCleanupStale,
@@ -13,7 +13,7 @@ import { FILE_POST_ACTIONS, type FilePostAction } from '../shared';
 
 export async function handlePost(
   request: NextRequest,
-  ctx: AuthenticatedContext
+  ctx: RequestContext
 ): Promise<NextResponse> {
   const action = getActionParam(request);
 

@@ -257,20 +257,3 @@ export function createContextParamsHandler<P extends Record<string, string | str
 export function exists<T>(resource: T | null | undefined): resource is T {
   return resource != null;
 }
-
-// Legacy aliases for backward compatibility during migration
-export const AuthenticatedContext = {} as RequestContext;
-export type AuthenticatedContext = RequestContext;
-export type AuthenticatedHandler<T = NextResponse> = ContextHandler<T>;
-export type AuthenticatedParamsHandler<P = Record<string, string | string[]>, T = NextResponse> = ContextParamsHandler<P, T>;
-export const withAuth = withContext;
-export const withAuthParams = withContextParams;
-export const createAuthenticatedHandler = createContextHandler;
-export const createAuthenticatedParamsHandler = createContextParamsHandler;
-// Existence check, retained for call-site compatibility. Per-user ownership is
-// not enforced here (and global resources like projects no longer carry a
-// `userId` at all), so the constraint is widened to any object.
-export const checkOwnership = <T extends object>(
-  resource: T | null | undefined,
-  _userId: string
-): resource is T => exists(resource);

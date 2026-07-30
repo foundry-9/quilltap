@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware';
+import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
 import { getQueueStats, getActiveCountsByType, enqueueJob, ensureProcessorRunning, getProcessorStatus } from '@/lib/background-jobs';
 import { BackgroundJobTypeEnum } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
@@ -20,7 +20,7 @@ import { badRequest, serverError } from '@/lib/api/responses';
  * - includeJobs: 'true' to include recent jobs
  * - chatId: Filter pending jobs for a specific chat
  */
-export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }: AuthenticatedContext) => {
+export const GET = createContextHandler(async (req: NextRequest, { user, repos }: RequestContext) => {
   try {
     const { searchParams } = req.nextUrl;
     const includeJobs = searchParams.get('includeJobs') === 'true';
@@ -68,7 +68,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
  *   maxAttempts?: number
  * }
  */
-export const POST = createAuthenticatedHandler(async (req: NextRequest, { user }: AuthenticatedContext) => {
+export const POST = createContextHandler(async (req: NextRequest, { user }: RequestContext) => {
   try {
     const body = await req.json();
     const { type, payload, priority, maxAttempts } = body;

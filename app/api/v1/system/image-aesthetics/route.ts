@@ -13,7 +13,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { successResponse, badRequest, serverError } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
@@ -24,7 +24,7 @@ import {
   writeAesthetic,
 } from '@/lib/image-gen/aesthetic';
 
-export const GET = createAuthenticatedHandler(async (req: NextRequest) => {
+export const GET = createContextHandler(async (req: NextRequest) => {
   const kind = parseAestheticKind(req);
   if (!kind) {
     return badRequest('Query param "kind" must be "lantern" or "aurora"');
@@ -38,7 +38,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest) => {
   return successResponse({ content });
 });
 
-export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user }) => {
+export const PUT = createContextHandler(async (req: NextRequest, { user }) => {
   const kind = parseAestheticKind(req);
   if (!kind) {
     return badRequest('Query param "kind" must be "lantern" or "aurora"');

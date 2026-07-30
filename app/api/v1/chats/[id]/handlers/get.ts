@@ -29,7 +29,7 @@ import {
   getPhotoLinkSummaryBySha256,
   type PhotoLinkSummary,
 } from '@/lib/photos/photo-link-summary';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types';
 
 /**
@@ -37,7 +37,7 @@ import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template
  */
 export async function handleGet(
   req: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   chatId: string
 ): Promise<NextResponse> {
   const { user, repos } = ctx;

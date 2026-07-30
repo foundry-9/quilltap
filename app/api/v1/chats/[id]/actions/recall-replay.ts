@@ -16,14 +16,14 @@ import { logger } from '@/lib/logger';
 import { badRequest, successResponse, errorResponse } from '@/lib/api/responses';
 import { runRecallReplay } from '@/lib/memory/recall-replay';
 import { getCheapLLMProvider } from '@/lib/llm/cheap-llm';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import type { ChatMetadata } from '@/lib/schemas/types';
 
 export async function handleRecallReplay(
   req: NextRequest,
   chatId: string,
   chat: ChatMetadata,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
 ): Promise<NextResponse> {
   const { user, repos } = ctx;
 

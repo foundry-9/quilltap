@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { badRequest, serverError, successResponse } from '@/lib/api/responses';
 import {
@@ -11,7 +11,7 @@ import {
 
 export async function handleUploadFile(
   request: NextRequest,
-  ctx: AuthenticatedContext
+  ctx: RequestContext
 ): Promise<NextResponse> {
   try {
     const contentType = request.headers.get('content-type') || '';
@@ -46,7 +46,7 @@ export async function handleUploadFile(
     const targetProjectId = projectId || null;
 
     // Note: No file write permission check here. This endpoint is for user-initiated
-    // uploads (already authenticated via createAuthenticatedHandler). The file write
+    // uploads (already authenticated via createContextHandler). The file write
     // permission system gates AI-initiated writes through the tool executor, not here.
 
     const arrayBuffer = await file.arrayBuffer();

@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { promises as fs } from 'fs'
-import { createAuthenticatedParamsHandler, type AuthenticatedContext } from '@/lib/api/middleware'
+import { createContextParamsHandler, type RequestContext } from '@/lib/api/middleware'
 import { badRequest, notFound, serverError } from '@/lib/api/responses'
 import { logger } from '@/lib/logger'
 import { resolveDocEditPath, type DocEditScope } from '@/lib/doc-edit'
@@ -40,8 +40,8 @@ function getParticipantCharacterIds(chat: unknown): string[] {
   return Array.from(ids)
 }
 
-export const GET = createAuthenticatedParamsHandler<Params>(
-  async (req: NextRequest, ctx: AuthenticatedContext, { id: chatId }) => {
+export const GET = createContextParamsHandler<Params>(
+  async (req: NextRequest, ctx: RequestContext, { id: chatId }) => {
     const parsed = querySchema.safeParse({
       filePath: req.nextUrl.searchParams.get('filePath') ?? undefined,
       scope: req.nextUrl.searchParams.get('scope') ?? undefined,

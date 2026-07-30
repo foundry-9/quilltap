@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import {
   successResponse,
@@ -23,7 +23,7 @@ import { z } from 'zod';
 // GET Handler
 // ============================================================================
 
-export const GET = createAuthenticatedHandler(async (req, context) => {
+export const GET = createContextHandler(async (req, context) => {
   const { searchParams } = req.nextUrl;
   const providerFilter = searchParams.get('provider');
   const hasVisionFilter = searchParams.get('hasVision');
@@ -67,7 +67,7 @@ const getModelsSchema = z.object({
  * POST /api/v1/models
  * Fetch available models from a specific provider
  */
-export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
+export const POST = createContextHandler(async (req, { user, repos }) => {
   const body = await req.json();
   const { provider, apiKeyId, baseUrl } = getModelsSchema.parse(body);
 

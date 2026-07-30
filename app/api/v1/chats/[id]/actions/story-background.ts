@@ -9,7 +9,7 @@ import { logger } from '@/lib/logger';
 import { badRequest, serverError, successResponse } from '@/lib/api/responses';
 import { enqueueStoryBackgroundGeneration } from '@/lib/background-jobs/queue-service';
 import { resolveImageProfileForChat } from '@/lib/image-gen/profile-resolution';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import type { ChatMetadata } from '@/lib/schemas/types';
 
 /**
@@ -19,7 +19,7 @@ import type { ChatMetadata } from '@/lib/schemas/types';
 export async function handleRegenerateBackground(
   chatId: string,
   chat: ChatMetadata,
-  ctx: AuthenticatedContext
+  ctx: RequestContext
 ): Promise<NextResponse> {
   const { user, repos } = ctx;
 

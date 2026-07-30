@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
@@ -45,7 +45,7 @@ const createMountPointSchema = z.object({
 // GET Handler
 // ============================================================================
 
-export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
+export const GET = createContextHandler(async (req: NextRequest, { user, repos }) => {
   try {
 
     const mountPoints = await repos.docMountPoints.findAll();
@@ -149,7 +149,7 @@ async function handleSemanticSearch(req: NextRequest, userId: string) {
   }
 }
 
-export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
+export const POST = createContextHandler(async (req: NextRequest, { user, repos }) => {
   const action = getActionParam(req);
 
   if (action === 'semantic-search') {

@@ -18,8 +18,8 @@
  */
 
 import { NextRequest } from 'next/server';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
-import type { RequestContext } from '@/lib/api/middleware/auth';
+import { createContextHandler } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
 import { successResponse } from '@/lib/api/responses';
 import { ensureGroupOfficialStore } from '@/lib/mount-index/ensure-group-store';
@@ -28,7 +28,7 @@ import {
   listGroupScenarios,
 } from '@/lib/mount-index/group-scenarios';
 
-export const GET = createAuthenticatedHandler(
+export const GET = createContextHandler(
   async (req: NextRequest, { repos }: RequestContext) => {
     const raw = req.nextUrl.searchParams.get('characterIds') ?? '';
     const requestedIds = raw

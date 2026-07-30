@@ -14,13 +14,13 @@
  */
 
 import { NextRequest } from 'next/server';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { successResponse, serverError, validationError } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { stateBodySchema } from '@/lib/api/state-handlers';
 import { readGeneralState, writeGeneralState } from '@/lib/mount-index/general-state';
 
-export const GET = createAuthenticatedHandler(async () => {
+export const GET = createContextHandler(async () => {
   try {
     const state = await readGeneralState();
     return successResponse({ success: true, state });
@@ -30,7 +30,7 @@ export const GET = createAuthenticatedHandler(async () => {
   }
 });
 
-export const PUT = createAuthenticatedHandler(async (req: NextRequest) => {
+export const PUT = createContextHandler(async (req: NextRequest) => {
   try {
     const body = await req.json();
     const parsed = stateBodySchema.safeParse(body);
@@ -49,7 +49,7 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest) => {
   }
 });
 
-export const DELETE = createAuthenticatedHandler(async () => {
+export const DELETE = createContextHandler(async () => {
   try {
     const previousState = await readGeneralState();
     await writeGeneralState({});

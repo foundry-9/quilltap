@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware';
+import { createContextParamsHandler, exists } from '@/lib/api/middleware';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, serverError } from '@/lib/api/responses';
@@ -30,7 +30,7 @@ type UpdateTemplateInput = z.infer<typeof updateTemplateSchema>;
 // GET Handler
 // ============================================================================
 
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }, { id }) => {
     const template = await repos.promptTemplates.findById(id);
 
@@ -50,7 +50,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 // PUT Handler
 // ============================================================================
 
-export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
+export const PUT = createContextParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }, { id }) => {
     const body = await req.json();
     const validatedData = updateTemplateSchema.parse(body);
@@ -108,7 +108,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 // DELETE Handler
 // ============================================================================
 
-export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+export const DELETE = createContextParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }, { id }) => {
     const existingTemplate = await repos.promptTemplates.findById(id);
 

@@ -51,7 +51,7 @@ import {
   handleSendMail,
   handleMergeConversation,
 } from '../actions';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 const CHAT_POST_ACTIONS = [
   'regenerate-title',
@@ -105,7 +105,7 @@ type ChatPostAction = typeof CHAT_POST_ACTIONS[number];
  */
 export async function handlePost(
   req: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   chatId: string
 ): Promise<NextResponse> {
   const { user, repos } = ctx;

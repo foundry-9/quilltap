@@ -14,7 +14,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { checkOwnership, enrichWithDefaultImage } from '@/lib/api/middleware';
+import { exists, enrichWithDefaultImage } from '@/lib/api/middleware';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { resolveCharacterAvatar } from '@/lib/photos/resolve-character-avatar';
 import { z } from 'zod';
@@ -25,7 +25,7 @@ import type { OptimizerProgressEvent } from '@/lib/services/character-optimizer.
 import { generateExternalPrompt } from '@/lib/services/external-prompt-generator.service';
 import { enqueueConversationRender } from '@/lib/background-jobs/queue-service';
 import { runCharacterRename } from '@/lib/services/character-rename.service';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 const avatarSchema = z.object({
   imageId: z.string().nullable(),
@@ -77,8 +77,8 @@ type CharacterPostAction = typeof CHARACTER_POST_ACTIONS[number];
 
 async function handleOptimizeStream(
   req: NextRequest,
-  user: AuthenticatedContext['user'],
-  repos: AuthenticatedContext['repos'],
+  user: RequestContext['user'],
+  repos: RequestContext['repos'],
   characterId: string
 ): Promise<NextResponse> {
   const body = await req.json();
@@ -130,7 +130,7 @@ async function handleOptimizeStream(
 
 export async function handlePost(
   req: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   id: string
 ): Promise<NextResponse> {
   const { user, repos } = ctx;
@@ -138,7 +138,7 @@ export async function handlePost(
 
   // Verify ownership first
   const character = await repos.characters.findById(id);
-  if (!checkOwnership(character, user.id)) {
+  if (!exists(character)) {
     return notFound('Character');
   }
 

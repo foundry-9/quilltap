@@ -5,7 +5,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { createBackup } from '@/lib/backup/backup-service';
 import { storeTemporaryBackup } from '@/lib/backup/temporary-storage';
 import { logger } from '@/lib/logger';
@@ -18,7 +18,7 @@ export const maxDuration = 300; // 5 minutes
 /**
  * POST /api/v1/system/backup - Create a new backup
  */
-export const POST = createAuthenticatedHandler(async (req, { user }) => {
+export const POST = createContextHandler(async (req, { user }) => {
   try {
     logger.info('[System Backup v1] Creating backup', {
       userId: user.id,

@@ -19,7 +19,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { createContextHandler, type AuthenticatedContext } from '@/lib/api/middleware';
+import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
 import { withCollectionActionDispatch } from '@/lib/api/middleware/actions';
 import { successResponse, badRequest, conflict, notFound, serverError, errorResponse } from '@/lib/api/responses';
 import { readFileWithMtime, type DocEditScope } from '@/lib/doc-edit';
@@ -97,7 +97,7 @@ const deleteDocumentSchema = z.object({
  */
 async function handleAccessibleStores(
   _req: NextRequest,
-  { repos }: AuthenticatedContext,
+  { repos }: RequestContext,
 ): Promise<NextResponse> {
   try {
     const stores = await listAllEnabledStores(repos);
@@ -117,7 +117,7 @@ async function handleAccessibleStores(
  */
 async function handleRecentDocuments(
   _req: NextRequest,
-  { repos }: AuthenticatedContext,
+  { repos }: RequestContext,
 ): Promise<NextResponse> {
   try {
     const fetchLimit = Math.max(MAX_RECENT_DOCUMENTS * 5, 50);
@@ -165,7 +165,7 @@ async function handleRecentDocuments(
  */
 async function handleOpenDocument(
   req: NextRequest,
-  { repos }: AuthenticatedContext,
+  { repos }: RequestContext,
 ): Promise<NextResponse> {
   const body = await req.json();
   const data = openDocumentSchema.parse(body);
@@ -227,7 +227,7 @@ async function handleOpenDocument(
 /** Read file content for the standalone editor. */
 async function handleReadDocument(
   req: NextRequest,
-  _ctx: AuthenticatedContext,
+  _ctx: RequestContext,
 ): Promise<NextResponse> {
   const body = await req.json();
   const data = readDocumentSchema.parse(body);
@@ -274,7 +274,7 @@ async function handleReadDocument(
 /** Write file content from the standalone editor (mtime-checked, no Librarian). */
 async function handleWriteDocument(
   req: NextRequest,
-  { repos }: AuthenticatedContext,
+  { repos }: RequestContext,
 ): Promise<NextResponse> {
   const body = await req.json();
   const data = writeDocumentSchema.parse(body);
@@ -314,7 +314,7 @@ async function handleWriteDocument(
  */
 async function handleRenameDocument(
   req: NextRequest,
-  { repos }: AuthenticatedContext,
+  { repos }: RequestContext,
 ): Promise<NextResponse> {
   const body = await req.json();
   const data = renameDocumentSchema.parse(body);
@@ -394,7 +394,7 @@ async function handleRenameDocument(
 /** Delete a standalone document's underlying file. */
 async function handleDeleteDocument(
   req: NextRequest,
-  _ctx: AuthenticatedContext,
+  _ctx: RequestContext,
 ): Promise<NextResponse> {
   const body = await req.json();
   const data = deleteDocumentSchema.parse(body);

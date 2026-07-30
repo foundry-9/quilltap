@@ -9,7 +9,7 @@
  * POST /api/v1/embedding-profiles/[id]?action=reapply - Slice + renormalize stored vectors to match the profile's truncateToDimensions (Matryoshka, no provider call)
  */
 
-import { createAuthenticatedParamsHandler, enrichProfile } from '@/lib/api/middleware';
+import { createContextParamsHandler, enrichProfile } from '@/lib/api/middleware';
 import { withActionDispatch } from '@/lib/api/middleware/actions';
 import { notFound, badRequest, serverError, messageResponse, successResponse, conflict } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
@@ -23,7 +23,7 @@ import {
 /**
  * GET /api/v1/embedding-profiles/[id]
  */
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {
 
@@ -50,7 +50,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 /**
  * PUT /api/v1/embedding-profiles/[id]
  */
-export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
+export const PUT = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {
 
@@ -264,7 +264,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 /**
  * DELETE /api/v1/embedding-profiles/[id]
  */
-export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+export const DELETE = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {
 
@@ -292,7 +292,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
  * POST /api/v1/embedding-profiles/[id]?action=refit - Manually trigger vocabulary refit
  * POST /api/v1/embedding-profiles/[id]?action=reindex - Manually trigger re-embedding
  */
-export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+export const POST = createContextParamsHandler<{ id: string }>(
   withActionDispatch({
     refit: async (req, { user, repos }, { id }) => {
       try {

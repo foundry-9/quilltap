@@ -9,7 +9,7 @@ import { logger } from '@/lib/logger';
 import { badRequest, serverError } from '@/lib/api/responses';
 import { getCheapLLMProvider } from '@/lib/llm/cheap-llm';
 import { titleChat, titleHelpChat, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import { isHelpLikeChatType, type ChatMetadata } from '@/lib/schemas/types';
 
 /**
@@ -18,7 +18,7 @@ import { isHelpLikeChatType, type ChatMetadata } from '@/lib/schemas/types';
 export async function handleRegenerateTitle(
   chatId: string,
   chat: ChatMetadata,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   try {
 

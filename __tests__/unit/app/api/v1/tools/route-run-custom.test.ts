@@ -16,7 +16,7 @@ jest.mock('@/lib/logger', () => ({
 }))
 
 jest.mock('@/lib/api/middleware', () => ({
-  createAuthenticatedHandler: (handler: (req: any, ctx: any) => Promise<any>) => {
+  createContextHandler: (handler: (req: any, ctx: any) => Promise<any>) => {
     return async (req: any) => handler(req, mockCtx)
   },
 }))

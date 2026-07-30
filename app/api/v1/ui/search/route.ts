@@ -17,7 +17,7 @@
  * - hasMore: whether there are more results to load
  */
 
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import {
   badRequest,
@@ -68,7 +68,7 @@ function createSnippet(content: string, query: string, maxLength = 100): string 
 // GET Handler
 // ============================================================================
 
-export const GET = createAuthenticatedHandler(async (req, context) => {
+export const GET = createContextHandler(async (req, context) => {
   try {
     const { searchParams } = req.nextUrl;
     const query = searchParams.get('q')?.trim();

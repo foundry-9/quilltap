@@ -7,8 +7,8 @@
 import path from 'path';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
-import type { RequestContext } from '@/lib/api/middleware/auth';
+import { createContextParamsHandler } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
 import { createDatabaseFolder } from '@/lib/mount-index/database-store';
@@ -35,7 +35,7 @@ function isPathSafe(rel: string): boolean {
   return true;
 }
 
-export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+export const POST = createContextParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     try {
       const body = await req.json().catch(() => ({}));

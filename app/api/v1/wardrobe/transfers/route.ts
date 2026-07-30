@@ -10,7 +10,7 @@
 
 import { randomUUID } from 'crypto'
 import { z } from 'zod'
-import { createAuthenticatedHandler } from '@/lib/api/middleware'
+import { createContextHandler } from '@/lib/api/middleware'
 import { successResponse, badRequest, notFound, serverError } from '@/lib/api/responses'
 import { logger } from '@/lib/logger'
 import { ensureProjectOfficialStore } from '@/lib/mount-index/ensure-project-store'
@@ -233,7 +233,7 @@ async function deleteFromSource(
   return repos.wardrobe.delete(source.item.id, source.characterId)
 }
 
-export const GET = createAuthenticatedHandler(async (_req, { user, repos }) => {
+export const GET = createContextHandler(async (_req, { user, repos }) => {
   try {
     const [allProjects, allGroups, characters] = await Promise.all([
       repos.projects.findAll(),
@@ -266,7 +266,7 @@ export const GET = createAuthenticatedHandler(async (_req, { user, repos }) => {
   }
 })
 
-export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
+export const POST = createContextHandler(async (req, { user, repos }) => {
   try {
     const body = transferRequestSchema.parse(await req.json())
 

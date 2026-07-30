@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware';
+import { createContextParamsHandler, exists } from '@/lib/api/middleware';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, successResponse, badRequest } from '@/lib/api/responses';
@@ -27,10 +27,10 @@ const updateTagSchema = z.object({
 // GET Handler
 // ============================================================================
 
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
+export const GET = createContextParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
   const tag = await repos.tags.findById(id);
 
-  if (!checkOwnership(tag, user.id)) {
+  if (!exists(tag)) {
     return notFound('Tag');
   }
 
@@ -72,10 +72,10 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
 // PUT Handler
 // ============================================================================
 
-export const PUT = createAuthenticatedParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
+export const PUT = createContextParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
   const existingTag = await repos.tags.findById(id);
 
-  if (!checkOwnership(existingTag, user.id)) {
+  if (!exists(existingTag)) {
     return notFound('Tag');
   }
 
@@ -102,10 +102,10 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
 // DELETE Handler
 // ============================================================================
 
-export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
+export const DELETE = createContextParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
   const existingTag = await repos.tags.findById(id);
 
-  if (!checkOwnership(existingTag, user.id)) {
+  if (!exists(existingTag)) {
     return notFound('Tag');
   }
 

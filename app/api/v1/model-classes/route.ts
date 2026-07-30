@@ -4,7 +4,7 @@
  * GET /api/v1/model-classes - List all available model classes
  */
 
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { MODEL_CLASSES } from '@/lib/llm/model-classes';
 import { logger } from '@/lib/logger';
 import { serverError, successResponse } from '@/lib/api/responses';
@@ -17,7 +17,7 @@ export const revalidate = 0;
  * GET /api/v1/model-classes
  * Returns the list of available model class definitions
  */
-export const GET = createAuthenticatedHandler(async () => {
+export const GET = createContextHandler(async () => {
   try {
     return successResponse({
       modelClasses: MODEL_CLASSES,

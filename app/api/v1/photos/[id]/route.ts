@@ -8,7 +8,7 @@
  * or GET /photos).
  */
 
-import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
+import { createContextParamsHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { successResponse, notFound, badRequest, serverError } from '@/lib/api/responses';
 import {
@@ -16,7 +16,7 @@ import {
   removeFromUserGallery,
 } from '@/lib/photos/user-gallery-service';
 
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   async (_req, { user, repos }, { id }) => {
     try {
       if (!id) return badRequest('Missing gallery entry id');
@@ -32,7 +32,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   }
 );
 
-export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+export const DELETE = createContextParamsHandler<{ id: string }>(
   async (_req, { user, repos }, { id }) => {
     try {
       if (!id) return badRequest('Missing gallery entry id');

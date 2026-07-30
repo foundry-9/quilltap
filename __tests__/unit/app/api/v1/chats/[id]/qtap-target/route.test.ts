@@ -19,7 +19,7 @@ jest.mock('@/lib/logger', () => {
 });
 
 jest.mock('@/lib/api/middleware', () => ({
-  createAuthenticatedParamsHandler:
+  createContextParamsHandler:
     (handler: (req: any, ctx: any, params: any) => Promise<any>) =>
     async (req: any, ctx: any, params: any) =>
       handler(req, ctx, params),

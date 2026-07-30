@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { logger } from '@/lib/logger';
 import { getFileAssociations } from '@/lib/files/get-file-associations';
@@ -10,7 +10,7 @@ import { dissociateFileFromAll } from '../shared';
 
 export async function handleDeleteFile(
   request: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   fileId: string
 ): Promise<NextResponse> {
   try {

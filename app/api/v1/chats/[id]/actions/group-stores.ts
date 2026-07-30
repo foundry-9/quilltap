@@ -11,11 +11,11 @@
 import { NextResponse } from 'next/server';
 import { notFound, successResponse } from '@/lib/api/responses';
 import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 export async function handleGetGroupStores(
   chatId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   const chat = await repos.chats.findById(chatId);
   if (!chat) {

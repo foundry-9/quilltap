@@ -6,7 +6,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware';
+import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { successResponse, serverError } from '@/lib/api/responses';
@@ -17,7 +17,7 @@ const logger = createServiceLogger('HelpDocsRoute');
 /**
  * Handle GET /api/v1/help-docs - List all help documents
  */
-async function handleList(_request: NextRequest, _context: AuthenticatedContext) {
+async function handleList(_request: NextRequest, _context: RequestContext) {
   try {
     const helpSearch = getHelpSearch();
     if (!helpSearch.isLoaded()) {
@@ -38,7 +38,7 @@ async function handleList(_request: NextRequest, _context: AuthenticatedContext)
 /**
  * Handle GET /api/v1/help-docs?action=chat-count - Get salon chat count
  */
-async function handleChatCount(_request: NextRequest, context: AuthenticatedContext) {
+async function handleChatCount(_request: NextRequest, context: RequestContext) {
   try {
     const { user, repos } = context;
 
@@ -59,7 +59,7 @@ async function handleChatCount(_request: NextRequest, context: AuthenticatedCont
 /**
  * GET /api/v1/help-docs or /api/v1/help-docs?action=chat-count
  */
-export const GET = createAuthenticatedHandler(async (request: NextRequest, context: AuthenticatedContext) => {
+export const GET = createContextHandler(async (request: NextRequest, context: RequestContext) => {
   const action = getActionParam(request);
 
   if (action === 'chat-count') {

@@ -4,6 +4,22 @@
 
 ### 4.8-dev
 
+#### Finish the context-middleware rename and drop the vestigial auth surface
+
+The `createAuthenticatedHandler` → `createContextHandler` rename was started back in 2.x, but it landed as a set of aliases and the call sites were never moved. 105 routes still used the old names. This finishes it and deletes the shim.
+
+- `createAuthenticatedHandler` → `createContextHandler`, `createAuthenticatedParamsHandler` → `createContextParamsHandler`, `withAuth`/`withAuthParams` → `withContext`/`withContextParams`, and the `AuthenticatedContext` / `AuthenticatedHandler` / `AuthenticatedParamsHandler` types → `RequestContext` / `ContextHandler` / `ContextParamsHandler`. 201 files.
+- `lib/api/middleware/auth.ts` is now `lib/api/middleware/context.ts`. It never did authentication — its own header comment already called it "Request Context Middleware." The legacy alias block at the bottom is gone, so the barrel exports one name per thing.
+- `checkOwnership(entity, user.id)` → `exists(entity)` at 28 call sites. `checkOwnership` already ignored its `userId` argument, so this is a rename, not a behavior change.
+
+That last point had a consequence worth recording. `lib/api/state-handlers.ts` carried a `useOwnershipCheck` config flag whose two branches were `checkOwnership(entity, userId)` and `entity != null` — identical, since the first ignored `userId`. The flag and its three call-site settings are removed and `authorize` is now `requireEntity`.
+
+It also surfaced a test asserting behavior the app never had: the character-wardrobe DELETE suite claimed a character owned by another user 404s. Production never did that — the mock implemented real ownership semantics that `checkOwnership` did not. The test now pins what the route actually does (404 when the character is missing).
+
+Dead single-user exports removed: `getRequiredSession`, `getCurrentUserId`, and `getRequiredUserId` (referenced only by each other and a jest mock), plus `isSingleUser` and the `UNAUTHENTICATED_USER_ID` / `getOrCreateUnauthenticatedUser` / `isUnauthenticatedUser` aliases. `lib/auth/session.ts` drops from 99 lines to 58. The migration script that appeared to use `UNAUTHENTICATED_USER_ID` declares its own local copy.
+
+`/api/v1/session` stays. It reads like an auth endpoint but is really the client's server-readiness probe: `components/providers/session-provider.tsx` drives a 5-second retry loop off its 5xx responses so the UI recovers as soon as startup and pepper-vault setup finish. Removing it means replacing that probe first.
+
 #### Route responses go through the shared helpers
 
 Release-checklist pass over the API endpoint standard. No route moved and no response body changed.

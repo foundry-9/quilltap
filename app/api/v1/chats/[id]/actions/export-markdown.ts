@@ -14,11 +14,11 @@ import { notFound, serverError } from '@/lib/api/responses';
 import { buildContentDisposition } from '@/lib/api/content-disposition';
 import { buildMarkdownTranscript, transcriptFilename } from '@/lib/export/markdown-transcript';
 import { BRAHMA_CARINA_ANSWERER_ID } from '@/lib/services/carina/brahma-answerer';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 export async function handleExportMarkdown(
   chatId: string,
-  ctx: AuthenticatedContext
+  ctx: RequestContext
 ): Promise<NextResponse> {
   const { user, repos } = ctx;
 

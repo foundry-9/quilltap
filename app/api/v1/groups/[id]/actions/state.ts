@@ -7,7 +7,7 @@
  *
  * Groups are instance-global (no per-user ownership), so state mutations reuse
  * the shared handlers with an existence-only check — the chat pattern, NOT the
- * project pattern's `checkOwnership`. Unlike chats, a group has no parent tier
+ * project pattern's `exists`. Unlike chats, a group has no parent tier
  * in the cascade at this endpoint, so `handleGetState` simply returns the
  * group's own state (the cascade merge happens on the chat get-state route).
  */
@@ -15,14 +15,13 @@
 import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { serverError, notFound } from '@/lib/api/responses';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import { createResetStateHandler, createSetStateHandler } from '@/lib/api/state-handlers';
 
 const STATE_CFG = {
   entityName: 'Group',
   idLogKey: 'groupId',
-  selectRepo: (repos: AuthenticatedContext['repos']) => repos.groups,
-  useOwnershipCheck: false,
+  selectRepo: (repos: RequestContext['repos']) => repos.groups,
 } as const;
 
 /**
@@ -30,7 +29,7 @@ const STATE_CFG = {
  */
 export async function handleGetState(
   groupId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   try {
     const group = await repos.groups.findById(groupId);

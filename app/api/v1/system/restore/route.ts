@@ -14,7 +14,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { randomUUID } from 'crypto';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { restore, previewRestore } from '@/lib/backup/restore-service';
 import { logger } from '@/lib/logger';
@@ -243,7 +243,7 @@ async function handleRestore(req: NextRequest, userId: string): Promise<NextResp
 /**
  * POST /api/v1/system/restore
  */
-export const POST = createAuthenticatedHandler(async (req, { user }) => {
+export const POST = createContextHandler(async (req, { user }) => {
   const action = getActionParam(req);
 
   if (action === 'upload') {

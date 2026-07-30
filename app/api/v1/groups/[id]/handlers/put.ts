@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { handlePutDefault, handleSetState } from '../actions';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 /**
  * PUT handler for individual group
@@ -17,7 +17,7 @@ import type { AuthenticatedContext } from '@/lib/api/middleware';
  */
 export async function handlePut(
   req: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   groupId: string
 ): Promise<NextResponse> {
   const action = getActionParam(req);

@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, serverError, successResponse } from '@/lib/api/responses';
 import { resolveAgentModeSetting } from '@/lib/services/chat-message/agent-mode-resolver.service';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 /**
  * Schema for toggle agent mode request
@@ -28,7 +28,7 @@ const toggleAgentModeSchema = z.object({
 export async function handleToggleAgentMode(
   req: NextRequest,
   chatId: string,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const validatedData = toggleAgentModeSchema.parse(body);

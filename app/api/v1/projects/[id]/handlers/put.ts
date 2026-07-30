@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { handlePutDefault, handleSetState, handlePutAesthetic } from '../actions';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 const PROJECT_PUT_ACTIONS = ['set-state', 'aesthetic'] as const;
 type ProjectPutAction = typeof PROJECT_PUT_ACTIONS[number];
@@ -18,7 +18,7 @@ type ProjectPutAction = typeof PROJECT_PUT_ACTIONS[number];
  */
 export async function handlePut(
   req: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   projectId: string
 ): Promise<NextResponse> {
   const action = getActionParam(req);

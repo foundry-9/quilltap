@@ -26,7 +26,7 @@ jest.mock('next/server', () => ({
 }))
 
 jest.mock('@/lib/api/middleware', () => ({
-  checkOwnership: (entity: any, userId: string) => !!entity && entity.userId === userId,
+  exists: (entity: unknown) => entity != null,
 }))
 
 jest.mock('@/lib/api/middleware/actions', () => ({

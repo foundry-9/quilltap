@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware';
+import { createContextParamsHandler, exists } from '@/lib/api/middleware';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { getFilePath } from '@/lib/api/middleware/file-path';
 import { fileStorageManager } from '@/lib/file-storage/manager';
@@ -37,7 +37,7 @@ type ImagePostAction = typeof IMAGE_POST_ACTIONS[number];
 // GET Handler
 // ============================================================================
 
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
+export const GET = createContextParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
   try {
     const image = await repos.files.findById(id);
 
@@ -131,7 +131,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
 // DELETE Handler
 // ============================================================================
 
-export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
+export const DELETE = createContextParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
   try {
     // Check if image exists
     const image = await repos.files.findById(id);
@@ -240,7 +240,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
 // POST Handler - Actions
 // ============================================================================
 
-export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
+export const POST = createContextParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
   const action = getActionParam(req);
 
   // Verify ownership first

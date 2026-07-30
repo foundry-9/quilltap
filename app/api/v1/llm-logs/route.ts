@@ -16,12 +16,12 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { successResponse, badRequest, serverError, notFound } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import type { LLMLogType } from '@/lib/schemas/types';
 
-export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
+export const GET = createContextHandler(async (req, { user, repos }) => {
   try {
     const { searchParams } = req.nextUrl;
     const messageId = searchParams.get('messageId');

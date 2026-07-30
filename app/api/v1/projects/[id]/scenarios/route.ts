@@ -18,8 +18,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
-import type { RequestContext } from '@/lib/api/middleware/auth';
+import { createContextParamsHandler } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware/context';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, serverError, created } from '@/lib/api/responses';
@@ -51,7 +51,7 @@ const createScenarioSchema = z.object({
 // GET — list scenarios
 // ============================================================================
 
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   async (_req: NextRequest, { user, repos }: RequestContext, { id }) => {
     try {
       const project = await repos.projects.findById(id);
@@ -85,7 +85,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 // POST — create a new scenario
 // ============================================================================
 
-export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+export const POST = createContextParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     try {
       const project = await repos.projects.findById(id);

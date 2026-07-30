@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedHandler, AuthenticatedContext, enrichWithApiKey, enrichWithTags } from '@/lib/api/middleware';
+import { createContextHandler, RequestContext, enrichWithApiKey, enrichWithTags } from '@/lib/api/middleware';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { supportsImageGeneration } from '@/lib/llm/image-capable';
 import { createLLMProvider } from '@/lib/llm';
@@ -56,7 +56,7 @@ const testMessageSchema = z.object({
  * GET /api/v1/connection-profiles
  * List all connection profiles for the authenticated user
  */
-export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
+export const GET = createContextHandler(async (req, { user, repos }) => {
   try {
     const { searchParams } = req.nextUrl;
     const sortByCharacter = searchParams.get('sortByCharacter');
@@ -140,7 +140,7 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
 /**
  * Create a new connection profile
  */
-async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
+async function handleCreate(req: NextRequest, context: RequestContext) {
   const { user, repos } = context;
 
   try {
@@ -306,7 +306,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
 /**
  * Test connection settings
  */
-async function handleTestConnection(req: NextRequest, context: AuthenticatedContext) {
+async function handleTestConnection(req: NextRequest, context: RequestContext) {
   const { user, repos } = context;
 
   const body = await req.json();
@@ -372,7 +372,7 @@ async function handleTestConnection(req: NextRequest, context: AuthenticatedCont
 /**
  * Send test message to verify provider functionality
  */
-async function handleTestMessage(req: NextRequest, context: AuthenticatedContext) {
+async function handleTestMessage(req: NextRequest, context: RequestContext) {
   const { user, repos } = context;
 
   const body = await req.json();
@@ -470,7 +470,7 @@ async function handleTestMessage(req: NextRequest, context: AuthenticatedContext
 /**
  * Reorder profiles - bulk update sort indices
  */
-async function handleReorder(req: NextRequest, context: AuthenticatedContext) {
+async function handleReorder(req: NextRequest, context: RequestContext) {
   const { user, repos } = context;
 
   try {
@@ -517,7 +517,7 @@ async function handleReorder(req: NextRequest, context: AuthenticatedContext) {
 /**
  * Reset sort order to default: default first, then non-cheap alphabetically, then cheap alphabetically
  */
-async function handleResetSort(req: NextRequest, context: AuthenticatedContext) {
+async function handleResetSort(req: NextRequest, context: RequestContext) {
   const { user, repos } = context;
 
   try {
@@ -568,7 +568,7 @@ async function handleResetSort(req: NextRequest, context: AuthenticatedContext) 
 /**
  * Auto-configure profile suggestions based on provider and model
  */
-async function handleAutoConfigure(req: NextRequest, context: AuthenticatedContext) {
+async function handleAutoConfigure(req: NextRequest, context: RequestContext) {
   const { user } = context;
 
   try {
@@ -603,7 +603,7 @@ async function handleAutoConfigure(req: NextRequest, context: AuthenticatedConte
 /**
  * POST /api/v1/connection-profiles - Action dispatch or create
  */
-export const POST = createAuthenticatedHandler(async (req, context) => {
+export const POST = createContextHandler(async (req, context) => {
   const action = getActionParam(req);
 
   if (!action || !isValidAction(action, CONNECTION_PROFILE_POST_ACTIONS)) {

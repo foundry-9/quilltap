@@ -10,9 +10,9 @@
  * POST /api/v1/characters?action=reset-builtins - Reset built-in characters
  */
 
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { handleGet, handlePost } from './handlers';
 
-export const GET = createAuthenticatedHandler((req, ctx) => handleGet(req, ctx));
+export const GET = createContextHandler((req, ctx) => handleGet(req, ctx));
 
-export const POST = createAuthenticatedHandler((req, ctx) => handlePost(req, ctx));
+export const POST = createContextHandler((req, ctx) => handlePost(req, ctx));

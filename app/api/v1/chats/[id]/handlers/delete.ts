@@ -10,14 +10,14 @@ import { getActionParam } from '@/lib/api/middleware/actions';
 import { logger } from '@/lib/logger';
 import { notFound, badRequest, serverError } from '@/lib/api/responses';
 import { handleResetState } from '../actions';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 /**
  * DELETE handler for removing a chat
  */
 export async function handleDelete(
   req: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   chatId: string
 ): Promise<NextResponse> {
   const { user, repos } = ctx;

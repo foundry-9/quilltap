@@ -292,9 +292,11 @@ Three `ErrorCode` enum values in `lib/errors.ts` are not currently referenced bu
 
 ### Duplicate Exports (~39)
 
-Knip flags ~39 components/modules that have both named and default exports. This is a common React pattern (named export for testing, default export for lazy loading). Examples include various components across `components/` and renamed legacy exports in auth middleware and the single-user module.
+Knip flags ~39 components/modules that have both named and default exports. This is a common React pattern (named export for testing, default export for lazy loading). Examples include various components across `components/`.
 
-**Status**: Low priority. The named + default pattern is intentional and widely used in the codebase. Legacy aliases (e.g., `withAuth`/`withContext` in auth middleware) may still be needed for backwards compatibility with plugins or older code paths.
+**Status**: Low priority. The named + default pattern is intentional and widely used in the codebase.
+
+The context-middleware and single-user legacy aliases that used to appear here are gone as of 4.8: `lib/api/middleware/auth.ts` is now `context.ts` and exports only the `withContext*` / `createContext*` names plus `exists`, and `lib/auth/single-user.ts` no longer carries the `*Unauthenticated*` aliases.
 
 ### Configuration Hints (2)
 

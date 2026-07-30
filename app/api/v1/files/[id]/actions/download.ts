@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { logger } from '@/lib/logger';
 import { notFound, serverError } from '@/lib/api/responses';
 import { buildContentDisposition } from '../shared';
 
 export async function handleDownloadFile(
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   fileId: string
 ): Promise<NextResponse> {
   try {

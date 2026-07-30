@@ -7,8 +7,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
-import type { RequestContext } from '@/lib/api/middleware/auth';
+import { createContextParamsHandler } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware/context';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { created, notFound, badRequest, serverError, successResponse } from '@/lib/api/responses';
@@ -25,7 +25,7 @@ const linkMountPointSchema = z.object({
 // GET Handler
 // ============================================================================
 
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     try {
 
@@ -61,7 +61,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 // POST Handler
 // ============================================================================
 
-export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+export const POST = createContextParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     try {
 
@@ -101,7 +101,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
 // DELETE Handler
 // ============================================================================
 
-export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+export const DELETE = createContextParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     try {
 

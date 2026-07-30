@@ -6,7 +6,7 @@
  * DELETE /api/v1/characters/[id]/wardrobe/[itemId] - Delete a wardrobe item
  */
 
-import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware';
+import { createContextParamsHandler, exists } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 import { notFound, serverError, successResponse } from '@/lib/api/responses';
@@ -27,12 +27,12 @@ const updateWardrobeItemSchema = z.object({
 });
 
 // GET /api/v1/characters/[id]/wardrobe/[itemId]
-export const GET = createAuthenticatedParamsHandler<{ id: string; itemId: string }>(
+export const GET = createContextParamsHandler<{ id: string; itemId: string }>(
   async (req, { user, repos }, { id, itemId }) => {
     try {
       const character = await repos.characters.findById(id);
 
-      if (!checkOwnership(character, user.id)) {
+      if (!exists(character)) {
         return notFound('Character');
       }
 
@@ -51,11 +51,11 @@ export const GET = createAuthenticatedParamsHandler<{ id: string; itemId: string
 );
 
 // PUT /api/v1/characters/[id]/wardrobe/[itemId]
-export const PUT = createAuthenticatedParamsHandler<{ id: string; itemId: string }>(
+export const PUT = createContextParamsHandler<{ id: string; itemId: string }>(
   async (req, { user, repos }, { id, itemId }) => {
     const character = await repos.characters.findById(id);
 
-    if (!checkOwnership(character, user.id)) {
+    if (!exists(character)) {
       return notFound('Character');
     }
 
@@ -83,12 +83,12 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string; itemId: string
 );
 
 // DELETE /api/v1/characters/[id]/wardrobe/[itemId]
-export const DELETE = createAuthenticatedParamsHandler<{ id: string; itemId: string }>(
+export const DELETE = createContextParamsHandler<{ id: string; itemId: string }>(
   async (req, { user, repos }, { id, itemId }) => {
     try {
       const character = await repos.characters.findById(id);
 
-      if (!checkOwnership(character, user.id)) {
+      if (!exists(character)) {
         return notFound('Character');
       }
 

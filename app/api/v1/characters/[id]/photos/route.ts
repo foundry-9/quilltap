@@ -13,7 +13,7 @@
 
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
+import { createContextParamsHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { successResponse, created, badRequest, notFound, serverError } from '@/lib/api/responses';
 import {
@@ -28,7 +28,7 @@ const listQuerySchema = z.object({
   offset: z.number().int().min(0).optional(),
 });
 
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }, { id }) => {
     try {
       if (!id) return badRequest('Missing character id');
@@ -77,7 +77,7 @@ const saveByIdSchema = z
     { message: 'Provide exactly one of fileId or linkId' }
   );
 
-export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+export const POST = createContextParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }, { id }) => {
     try {
       if (!id) return badRequest('Missing character id');

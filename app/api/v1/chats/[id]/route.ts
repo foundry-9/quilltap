@@ -43,25 +43,25 @@
  * PATCH /api/v1/chats/[id]?action=turn - Persist turn state (lastTurnParticipantId)
  */
 
-import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
+import { createContextParamsHandler } from '@/lib/api/middleware';
 import { handleGet, handlePut, handleDelete, handlePost, handlePatch } from './handlers';
 
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   (req, ctx, { id }) => handleGet(req, ctx, id)
 );
 
-export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
+export const PUT = createContextParamsHandler<{ id: string }>(
   (req, ctx, { id }) => handlePut(req, ctx, id)
 );
 
-export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+export const DELETE = createContextParamsHandler<{ id: string }>(
   (req, ctx, { id }) => handleDelete(req, ctx, id)
 );
 
-export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+export const POST = createContextParamsHandler<{ id: string }>(
   (req, ctx, { id }) => handlePost(req, ctx, id)
 );
 
-export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
+export const PATCH = createContextParamsHandler<{ id: string }>(
   (req, ctx, { id }) => handlePatch(req, ctx, id)
 );

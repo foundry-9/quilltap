@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { badRequest, serverError, successResponse } from '@/lib/api/responses';
 import { triggerAvatarGeneration } from '@/lib/wardrobe/avatar-generation';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import { EquippedSlotsSchema } from '@/lib/schemas/wardrobe.types';
 
 const regenerateAvatarSchema = z.object({
@@ -31,7 +31,7 @@ const regenerateAvatarSchema = z.object({
 export async function handleRegenerateAvatar(
   req: NextRequest,
   chatId: string,
-  ctx: AuthenticatedContext
+  ctx: RequestContext
 ): Promise<NextResponse> {
   const { user, repos } = ctx;
 

@@ -9,7 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedHandler, AuthenticatedContext, enrichWithApiKey, enrichWithTags } from '@/lib/api/middleware';
+import { createContextHandler, RequestContext, enrichWithApiKey, enrichWithTags } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { successResponse, created, notFound, badRequest, serverError } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
@@ -20,7 +20,7 @@ import { providerRegistry } from '@/lib/plugins/provider-registry';
  * GET /api/v1/image-profiles
  * List all image profiles or get available models
  */
-export const GET = createAuthenticatedHandler(async (req, context) => {
+export const GET = createContextHandler(async (req, context) => {
   const { user, repos } = context;
   const action = getActionParam(req);
 
@@ -111,7 +111,7 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
 /**
  * Handle list-models action
  */
-async function handleListModels(req: NextRequest, context: AuthenticatedContext) {
+async function handleListModels(req: NextRequest, context: RequestContext) {
   try {
     const { searchParams } = req.nextUrl;
     const provider = searchParams.get('provider');
@@ -183,7 +183,7 @@ async function handleListModels(req: NextRequest, context: AuthenticatedContext)
  * Handle list-providers action
  * Returns all available image providers from the registry
  */
-async function handleListProviders(req: NextRequest, context: AuthenticatedContext) {
+async function handleListProviders(req: NextRequest, context: RequestContext) {
   try {
 
     // Get all providers with image generation capability
@@ -228,7 +228,7 @@ async function handleListProviders(req: NextRequest, context: AuthenticatedConte
  * Handle validate-key action
  * Validates an API key by attempting to get models from the provider
  */
-async function handleValidateKey(req: NextRequest, context: AuthenticatedContext) {
+async function handleValidateKey(req: NextRequest, context: RequestContext) {
   try {
     const body = await req.json();
     const { provider, apiKeyId } = body;
@@ -284,7 +284,7 @@ async function handleValidateKey(req: NextRequest, context: AuthenticatedContext
  * POST /api/v1/image-profiles - Create a new image profile
  * POST /api/v1/image-profiles?action=validate-key - Validate an API key
  */
-export const POST = createAuthenticatedHandler(async (req, context) => {
+export const POST = createContextHandler(async (req, context) => {
   const { user, repos } = context;
   const action = getActionParam(req);
 

@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 
@@ -28,7 +28,7 @@ type CreateTemplateInput = z.infer<typeof createTemplateSchema>;
 // GET Handler
 // ============================================================================
 
-export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
+export const GET = createContextHandler(async (req: NextRequest, { user, repos }) => {
   const templates = await repos.promptTemplates.findAllForUser(user.id);
   return NextResponse.json({
     templates,
@@ -40,7 +40,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
 // POST Handler
 // ============================================================================
 
-export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
+export const POST = createContextHandler(async (req: NextRequest, { user, repos }) => {
   const body = await req.json();
   const validatedData = createTemplateSchema.parse(body);
   const template = await repos.promptTemplates.create({

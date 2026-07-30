@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { notFound, badRequest, serverError } from '@/lib/api/responses';
 import { mergeConversationSchema } from '../schemas';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import type { ChatMetadata } from '@/lib/schemas/types';
 import { applyChatMerge } from '@/lib/chat/apply-chat-merge';
 
@@ -21,7 +21,7 @@ export async function handleMergeConversation(
   req: NextRequest,
   chatId: string,
   chat: ChatMetadata,
-  { user, repos }: AuthenticatedContext,
+  { user, repos }: RequestContext,
 ): Promise<NextResponse> {
   const body = await req.json();
   const { sourceChatId, characterIds, outfitSelections } = mergeConversationSchema.parse(body);

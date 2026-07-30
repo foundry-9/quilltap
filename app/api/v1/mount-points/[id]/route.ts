@@ -10,9 +10,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
+import { createContextParamsHandler } from '@/lib/api/middleware';
 import { withActionDispatch } from '@/lib/api/middleware/actions';
-import type { RequestContext } from '@/lib/api/middleware/auth';
+import type { RequestContext } from '@/lib/api/middleware/context';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { badRequest, conflict, notFound, serverError, successResponse } from '@/lib/api/responses';
@@ -51,7 +51,7 @@ const updateMountPointSchema = z.object({
 // GET Handler
 // ============================================================================
 
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     try {
 
@@ -85,7 +85,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 // PATCH Handler
 // ============================================================================
 
-export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
+export const PATCH = createContextParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     try {
 
@@ -164,7 +164,7 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
 // DELETE Handler
 // ============================================================================
 
-export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+export const DELETE = createContextParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     try {
 
@@ -775,7 +775,7 @@ async function handleEmbed(
   }
 }
 
-export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+export const POST = createContextParamsHandler<{ id: string }>(
   (req, ctx, { id }) => {
     const dispatch = withActionDispatch<{ id: string }>({
       scan: handleScan,

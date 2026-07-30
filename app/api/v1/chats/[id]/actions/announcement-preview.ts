@@ -15,12 +15,12 @@ import { logger } from '@/lib/logger';
 import { badRequest, notFound } from '@/lib/api/responses';
 import { generateCharacterVoicedAnnouncement } from '@/lib/services/announcer/character-voiced';
 import { insertAnnouncementPreviewSchema } from '../schemas';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 export async function handleAnnouncementPreview(
   req: NextRequest,
   chatId: string,
-  { user, repos }: AuthenticatedContext,
+  { user, repos }: RequestContext,
 ): Promise<NextResponse> {
   const body = await req.json();
   const validated = insertAnnouncementPreviewSchema.parse(body);

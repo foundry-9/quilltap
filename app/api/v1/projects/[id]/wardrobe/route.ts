@@ -18,8 +18,8 @@
 
 import { NextRequest } from 'next/server';
 import { randomUUID } from 'crypto';
-import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
-import type { RequestContext } from '@/lib/api/middleware/auth';
+import { createContextParamsHandler } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, serverError, created, successResponse } from '@/lib/api/responses';
 import { ensureProjectOfficialStore } from '@/lib/mount-index/ensure-project-store';
@@ -35,7 +35,7 @@ import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 // GET — list project wardrobe items
 // ============================================================================
 
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   async (_req: NextRequest, { repos }: RequestContext, { id }) => {
     const project = await repos.projects.findById(id);
     if (!project) return notFound('Project');
@@ -59,7 +59,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 // POST — create a new project wardrobe item
 // ============================================================================
 
-export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+export const POST = createContextParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     const project = await repos.projects.findById(id);
     if (!project) return notFound('Project');

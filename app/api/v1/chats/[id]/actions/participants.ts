@@ -17,7 +17,7 @@ import {
   removeParticipantSchema,
 } from '../schemas';
 import { enrichParticipant, handleAddParticipant, handleParticipantUpdate, handleRemoveParticipant, resolveParticipantCharacterName } from '../helpers';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import type { ChatMetadata } from '@/lib/schemas/types';
 import { isParticipantPresent } from '@/lib/schemas/types';
 import {
@@ -39,7 +39,7 @@ export async function handleImpersonate(
   req: NextRequest,
   chatId: string,
   chat: ChatMetadata,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const { participantId } = impersonateSchema.parse(body);
@@ -77,7 +77,7 @@ export async function handleStopImpersonate(
   req: NextRequest,
   chatId: string,
   chat: ChatMetadata,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const { participantId, newConnectionProfileId } = stopImpersonateSchema.parse(body);
@@ -125,7 +125,7 @@ export async function handleSetActiveSpeaker(
   req: NextRequest,
   chatId: string,
   chat: ChatMetadata,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const { participantId } = setActiveSpeakerSchema.parse(body);
@@ -181,7 +181,7 @@ async function applyOutfitForAddedParticipant(
   characterId: string,
   outfitSelection: OutfitSelection | undefined,
   userId: string,
-  repos: AuthenticatedContext['repos'],
+  repos: RequestContext['repos'],
 ): Promise<void> {
   const selection: OutfitSelection = outfitSelection ?? {
     characterId,
@@ -222,7 +222,7 @@ export async function handleAddParticipantAction(
   req: NextRequest,
   chatId: string,
   chat: ChatMetadata,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const validatedData = addParticipantSchema.parse(body);
@@ -396,7 +396,7 @@ export async function handleAddParticipantAction(
 export async function handleRebuildSystemPromptAction(
   req: NextRequest,
   chatId: string,
-  { repos }: AuthenticatedContext,
+  { repos }: RequestContext,
 ): Promise<NextResponse> {
   const body = await req.json().catch(() => ({}));
   const participantId = typeof body?.participantId === 'string' ? body.participantId : null;
@@ -438,7 +438,7 @@ export async function handleRebuildSystemPromptAction(
 export async function handleUpdateParticipantAction(
   req: NextRequest,
   chatId: string,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   // Support both wrapped ({ updateParticipant: { ... } }) and unwrapped ({ participantId, ... }) formats
@@ -487,7 +487,7 @@ export async function handleRemoveParticipantAction(
   req: NextRequest,
   chatId: string,
   chat: ChatMetadata,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const validatedData = removeParticipantSchema.parse(body);

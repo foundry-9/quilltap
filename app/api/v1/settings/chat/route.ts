@@ -6,7 +6,7 @@
  */
 
 import { NextRequest } from 'next/server'
-import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware'
+import { createContextHandler, type RequestContext } from '@/lib/api/middleware'
 import { successResponse, serverError, badRequest } from '@/lib/api/responses'
 import { logger } from '@/lib/logger'
 import { TagStyleMapSchema, ThemePreferenceSchema } from '@/lib/schemas/common.types'
@@ -264,7 +264,7 @@ async function updateChatSettings(
  * Get chat settings for the authenticated user
  * Returns default settings if none exist
  */
-export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }: AuthenticatedContext) => {
+export const GET = createContextHandler(async (req: NextRequest, { user, repos }: RequestContext) => {
   try {
 
     let chatSettings = await repos.chatSettings.findByUserId(user.id)
@@ -294,7 +294,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
  * PUT /api/v1/settings/chat
  * Update chat settings for the authenticated user
  */
-export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, repos }: AuthenticatedContext) => {
+export const PUT = createContextHandler(async (req: NextRequest, { user, repos }: RequestContext) => {
   try {
     const body = await req.json()
     const {

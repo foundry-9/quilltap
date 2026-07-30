@@ -6,7 +6,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
+import { createContextParamsHandler } from '@/lib/api/middleware';
 import {
   successResponse,
   badRequest,
@@ -20,7 +20,7 @@ import { getRepositories } from '@/lib/database/repositories';
 import { TextReplacementRulePatchSchema } from '@/lib/schemas/text-replacement.types';
 import { TextReplacementRuleConflictError } from '@/lib/database/repositories/text-replacement-rules.repository';
 
-export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
+export const PATCH = createContextParamsHandler<{ id: string }>(
   async (req: NextRequest, _ctx, { id }) => {
     try {
       const body = await req.json();
@@ -57,7 +57,7 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
   },
 );
 
-export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+export const DELETE = createContextParamsHandler<{ id: string }>(
   async (_req: NextRequest, _ctx, { id }) => {
     try {
       const repos = getRepositories();

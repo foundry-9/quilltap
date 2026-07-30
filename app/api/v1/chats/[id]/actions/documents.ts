@@ -21,7 +21,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { successResponse, badRequest, conflict, notFound, serverError, errorResponse } from '@/lib/api/responses';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import { readFileWithMtime, type DocEditScope } from '@/lib/doc-edit';
 import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
 import { DatabaseStoreError } from '@/lib/mount-index/database-store';
@@ -107,7 +107,7 @@ const renameDocumentSchema = z.object({
  * earliest-opened active document (legacy single-pane fallback).
  */
 async function resolveTargetDocument(
-  repos: AuthenticatedContext['repos'],
+  repos: RequestContext['repos'],
   chatId: string,
   chatDocumentId: string | undefined,
 ): Promise<ChatDocument | null> {
@@ -134,7 +134,7 @@ function getParticipantCharacterIds(chat: unknown): string[] {
 
 async function getChatContext(
   chatId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<DocumentAccessContext | null> {
   const chat = await repos.chats.findById(chatId);
   if (!chat) {
@@ -162,7 +162,7 @@ async function getChatContext(
  */
 export async function handleRecentDocuments(
   chatId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   try {
     // This chat's own documents (always shown first, in full) plus a window of
@@ -265,7 +265,7 @@ export interface ProjectLibraryTarget {
  */
 export async function handleAccessibleStores(
   chatId: string,
-  { repos }: AuthenticatedContext,
+  { repos }: RequestContext,
   opts: { all?: boolean } = {}
 ): Promise<NextResponse> {
   try {
@@ -423,7 +423,7 @@ export async function handleAccessibleStores(
  * the legacy route's full-width layout survives a sibling close.
  */
 async function refreshDocumentMode(
-  repos: AuthenticatedContext['repos'],
+  repos: RequestContext['repos'],
   chatId: string,
 ): Promise<void> {
   const open = await repos.chatDocuments.findOpenForChat(chatId);
@@ -444,7 +444,7 @@ async function refreshDocumentMode(
  */
 export async function handleActiveDocument(
   chatId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   try {
     const doc = await repos.chatDocuments.findActiveForChat(chatId);
@@ -474,7 +474,7 @@ export async function handleActiveDocument(
  */
 export async function handleOpenDocuments(
   chatId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   try {
     const docs = await repos.chatDocuments.findOpenForChat(chatId);
@@ -503,7 +503,7 @@ export async function handleOpenDocuments(
 export async function handleOpenDocument(
   req: NextRequest,
   chatId: string,
-  context: AuthenticatedContext
+  context: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const data = openDocumentSchema.parse(body);
@@ -602,7 +602,7 @@ const closeDocumentSchema = z.object({
 export async function handleCloseDocument(
   req: NextRequest,
   chatId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   try {
     const body = await req.json().catch(() => ({}));
@@ -631,7 +631,7 @@ export async function handleCloseDocument(
 export async function handleReadDocument(
   req: NextRequest,
   chatId: string,
-  context: AuthenticatedContext
+  context: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const data = readDocumentSchema.parse(body);
@@ -702,7 +702,7 @@ export async function handleReadDocument(
 export async function handleResolveDocument(
   req: NextRequest,
   chatId: string,
-  context: AuthenticatedContext
+  context: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const data = readDocumentSchema.parse(body);
@@ -747,7 +747,7 @@ export async function handleResolveDocument(
 export async function handleWriteDocument(
   req: NextRequest,
   chatId: string,
-  context: AuthenticatedContext
+  context: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const data = writeDocumentSchema.parse(body);
@@ -814,7 +814,7 @@ export async function handleWriteDocument(
 export async function handleRenameDocument(
   req: NextRequest,
   chatId: string,
-  context: AuthenticatedContext
+  context: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const data = renameDocumentSchema.parse(body);
@@ -958,7 +958,7 @@ export async function handleRenameDocument(
 export async function handleDeleteDocument(
   req: NextRequest,
   chatId: string,
-  context: AuthenticatedContext
+  context: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json().catch(() => ({}));
   const { chatDocumentId } = closeDocumentSchema.parse(body ?? {});

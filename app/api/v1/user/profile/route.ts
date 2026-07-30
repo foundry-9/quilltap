@@ -9,7 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedHandler, AuthenticatedContext } from '@/lib/api/middleware';
+import { createContextHandler, RequestContext } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { getFilePath } from '@/lib/api/middleware/file-path';
 import { themeRegistry } from '@/lib/themes/theme-registry';
@@ -48,7 +48,7 @@ const themePreferenceUpdateSchema = z.object({
 // GET Handler
 // ============================================================================
 
-export const GET = createAuthenticatedHandler(async (req, context) => {
+export const GET = createContextHandler(async (req, context) => {
   const { user, repos } = context;
   const action = getActionParam(req);
 
@@ -106,7 +106,7 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
 // PUT Handler
 // ============================================================================
 
-export const PUT = createAuthenticatedHandler(async (req, context) => {
+export const PUT = createContextHandler(async (req, context) => {
   const { user, repos } = context;
   const action = getActionParam(req);
 
@@ -227,7 +227,7 @@ export const PUT = createAuthenticatedHandler(async (req, context) => {
 // PATCH Handler - Avatar
 // ============================================================================
 
-export const PATCH = createAuthenticatedHandler(async (req, context) => {
+export const PATCH = createContextHandler(async (req, context) => {
   const { user, repos } = context;
   const action = getActionParam(req);
 

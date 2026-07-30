@@ -14,7 +14,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { successResponse, serverError } from '@/lib/api/responses';
 import { toolRegistry } from '@/lib/plugins/tool-registry';
@@ -426,7 +426,7 @@ export interface AvailableTool {
  * GET /api/v1/tools?chatId=xxx
  * List all available LLM tools that can be enabled/disabled per chat
  */
-export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
+export const GET = createContextHandler(async (req: NextRequest, { user, repos }) => {
   try {
     const chatId = req.nextUrl.searchParams.get('chatId');
     const includeSchemas = req.nextUrl.searchParams.get('includeSchemas') === 'true';

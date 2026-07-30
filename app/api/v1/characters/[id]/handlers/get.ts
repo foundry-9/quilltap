@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { checkOwnership, enrichWithDefaultImage, getFilePath } from '@/lib/api/middleware';
+import { exists, enrichWithDefaultImage, getFilePath } from '@/lib/api/middleware';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { getCascadeDeletePreview } from '@/lib/cascade-delete';
 import { exportSTCharacter, createSTCharacterPNG } from '@/lib/sillytavern/character';
@@ -19,7 +19,7 @@ import { isPhotosRelativePath } from '@/lib/photos/photos-paths';
 import { SINGLE_FILE_OVERLAY_PATHS } from '@/lib/database/repositories/vault-overlay/schema';
 import { logger } from '@/lib/logger';
 import { notFound, serverError, successResponse } from '@/lib/api/responses';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import { readStoreFile, DEPICTION_GUIDELINES_FILENAME } from '@/lib/image-gen/aesthetic';
 
 const CHARACTER_GET_ACTIONS = ['export', 'chats', 'cascade-preview', 'default-partner', 'get-tags', 'stats', 'depiction-guidelines'] as const;
@@ -27,7 +27,7 @@ type CharacterGetAction = typeof CHARACTER_GET_ACTIONS[number];
 
 export async function handleGet(
   req: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   id: string
 ): Promise<NextResponse> {
   const { user, repos } = ctx;
@@ -35,7 +35,7 @@ export async function handleGet(
 
   // First verify ownership for all actions
   const character = await repos.characters.findById(id);
-  if (!checkOwnership(character, user.id)) {
+  if (!exists(character)) {
     return notFound('Character');
   }
 

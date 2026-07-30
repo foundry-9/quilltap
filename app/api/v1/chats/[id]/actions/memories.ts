@@ -24,7 +24,7 @@ import {
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
 import { getMemoryExtractionLimits } from '@/lib/instance-settings';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import type {
   Character,
   ChatMetadata,
@@ -36,7 +36,7 @@ import type {
  * memory extraction. Returns null when no valid profile is configured.
  */
 async function resolveCheapLLMProfileId(
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
 ): Promise<string | null> {
   const { user, repos } = ctx;
   const chatSettings = await repos.chatSettings.findByUserId(user.id);
@@ -72,7 +72,7 @@ export async function handleQueueMemories(
   _req: NextRequest,
   chatId: string,
   chat: ChatMetadata,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
 ): Promise<NextResponse> {
   const { user, repos } = ctx;
   const connectionProfileId = await resolveCheapLLMProfileId(ctx);
@@ -170,7 +170,7 @@ export async function handleExtractMemoriesDryRun(
   req: NextRequest,
   chatId: string,
   chat: ChatMetadata,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
 ): Promise<NextResponse> {
   const { user, repos } = ctx;
   const connectionProfileId = await resolveCheapLLMProfileId(ctx);

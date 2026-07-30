@@ -12,7 +12,7 @@ import {
   handleRemoveMember,
   handleResetState,
 } from '../actions';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 const GROUP_DELETE_ACTIONS = ['removeMember', 'reset-state'] as const;
 type GroupDeleteAction = typeof GROUP_DELETE_ACTIONS[number];
@@ -22,7 +22,7 @@ type GroupDeleteAction = typeof GROUP_DELETE_ACTIONS[number];
  */
 export async function handleDelete(
   req: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   groupId: string
 ): Promise<NextResponse> {
   const action = getActionParam(req);

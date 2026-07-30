@@ -30,7 +30,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-import type { RequestContext } from './auth';
+import type { RequestContext } from './context';
 
 const actionLogger = logger.child({ module: 'api-action-middleware' });
 

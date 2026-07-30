@@ -5,8 +5,8 @@
  * POST /api/v1/files?action=upload - Upload a file (multipart/form-data)
  */
 
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { handleGet, handlePost } from './handlers';
 
-export const GET = createAuthenticatedHandler(handleGet);
-export const POST = createAuthenticatedHandler(handlePost);
+export const GET = createContextHandler(handleGet);
+export const POST = createContextHandler(handlePost);

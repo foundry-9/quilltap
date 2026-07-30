@@ -11,7 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { successResponse, created, badRequest, serverError } from '@/lib/api/responses';
 import {
@@ -33,7 +33,7 @@ const listQuerySchema = z.object({
   offset: z.number().int().min(0).optional(),
 });
 
-export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
+export const GET = createContextHandler(async (req: NextRequest, { user, repos }) => {
   try {
     const url = new URL(req.url);
     const rawTags = url.searchParams.getAll('tag');
@@ -67,7 +67,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
   }
 });
 
-export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
+export const POST = createContextHandler(async (req: NextRequest, { user, repos }) => {
   try {
     const body = await req.json();
     const parsed = saveSchema.safeParse(body);

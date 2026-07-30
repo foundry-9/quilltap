@@ -13,14 +13,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { notFound, successResponse, badRequest } from '@/lib/api/responses';
 import { updateGroupSchema, addMemberSchema, removeMemberSchema } from '../schemas';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 /**
  * Get group details with enriched member count
  */
 export async function handleGetDefault(
   groupId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   const group = await repos.groups.findById(groupId);
 
@@ -45,7 +45,7 @@ export async function handleGetDefault(
  */
 export async function handleGetMembers(
   groupId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   const group = await repos.groups.findById(groupId);
   if (!group) {
@@ -74,7 +74,7 @@ export async function handleGetMembers(
 export async function handlePutDefault(
   req: NextRequest,
   groupId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   const existingGroup = await repos.groups.findById(groupId);
 
@@ -97,7 +97,7 @@ export async function handlePutDefault(
  */
 export async function handleDeleteGroup(
   groupId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   const existingGroup = await repos.groups.findById(groupId);
 
@@ -125,7 +125,7 @@ export async function handleDeleteGroup(
 export async function handleAddMember(
   req: NextRequest,
   groupId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   const group = await repos.groups.findById(groupId);
   if (!group) {
@@ -156,7 +156,7 @@ export async function handleAddMember(
 export async function handleRemoveMember(
   req: NextRequest,
   groupId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   const group = await repos.groups.findById(groupId);
   if (!group) {

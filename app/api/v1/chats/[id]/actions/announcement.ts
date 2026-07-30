@@ -11,12 +11,12 @@ import { logger } from '@/lib/logger';
 import { badRequest, notFound } from '@/lib/api/responses';
 import { postAdhocAnnouncement } from '@/lib/services/announcer/writer';
 import { insertAnnouncementSchema } from '../schemas';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 export async function handleInsertAnnouncement(
   req: NextRequest,
   chatId: string,
-  { repos }: AuthenticatedContext,
+  { repos }: RequestContext,
 ): Promise<NextResponse> {
   const body = await req.json();
   const validated = insertAnnouncementSchema.parse(body);

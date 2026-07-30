@@ -5,7 +5,7 @@
  * session access that always returns the single user.
  */
 
-import { getOrCreateSingleUser, SINGLE_USER_ID } from '@/lib/auth/single-user';
+import { getOrCreateSingleUser } from '@/lib/auth/single-user';
 import { logger } from '@/lib/logger';
 
 /**
@@ -56,43 +56,3 @@ export async function getServerSession(): Promise<ExtendedSession | null> {
   }
 }
 
-/**
- * Get required session or throw
- *
- * Convenience wrapper that throws if no session is available.
- *
- * @throws Error if no session is available
- * @returns The current session
- */
-export async function getRequiredSession(): Promise<ExtendedSession> {
-  const session = await getServerSession();
-
-  if (!session?.user?.id) {
-    throw new Error('Failed to get single user session');
-  }
-
-  return session;
-}
-
-/**
- * Get current user ID from session
- *
- * @returns The current user ID (always returns single user ID)
- */
-export async function getCurrentUserId(): Promise<string | null> {
-  const session = await getServerSession();
-  return session?.user?.id ?? null;
-}
-
-/**
- * Get required user ID from session
- *
- * @returns The current user ID (always single user)
- */
-export async function getRequiredUserId(): Promise<string> {
-  const session = await getRequiredSession();
-  return session.user.id;
-}
-
-// Re-export single user utilities for backwards compatibility
-export { SINGLE_USER_ID, getOrCreateSingleUser } from '@/lib/auth/single-user';

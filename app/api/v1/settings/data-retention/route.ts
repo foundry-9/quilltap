@@ -12,7 +12,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { successResponse, serverError, validationError } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import {
@@ -21,7 +21,7 @@ import {
   DataRetentionSettingsSchema,
 } from '@/lib/instance-settings';
 
-export const GET = createAuthenticatedHandler(async () => {
+export const GET = createContextHandler(async () => {
   try {
     const settings = await getDataRetentionSettings();
     return successResponse(settings);
@@ -31,7 +31,7 @@ export const GET = createAuthenticatedHandler(async () => {
   }
 });
 
-export const PUT = createAuthenticatedHandler(async (req: NextRequest) => {
+export const PUT = createContextHandler(async (req: NextRequest) => {
   try {
     const body = await req.json();
     const current = await getDataRetentionSettings();

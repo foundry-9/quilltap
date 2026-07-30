@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
+import { createContextParamsHandler } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { getUserRepositories } from '@/lib/repositories/factory';
 import { maskApiKey } from '@/lib/encryption';
@@ -54,7 +54,7 @@ async function testProviderApiKey(
 /**
  * GET /api/v1/api-keys/[id] - Get a specific API key (masked)
  */
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {
 
@@ -87,7 +87,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 /**
  * PUT /api/v1/api-keys/[id] - Update an API key
  */
-export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
+export const PUT = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {
 
@@ -156,7 +156,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 /**
  * DELETE /api/v1/api-keys/[id] - Delete an API key
  */
-export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+export const DELETE = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {
 
@@ -186,7 +186,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
 /**
  * POST /api/v1/api-keys/[id]?action=test - Test if an API key is valid
  */
-export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+export const POST = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     const action = getActionParam(req);
 

@@ -13,12 +13,12 @@ import { badRequest, notFound, forbidden } from '@/lib/api/responses';
 import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
 import { listMailbox } from '@/lib/post-office/mailbox';
 import { findOperatorPlayedParticipant } from '../participant-auth';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 export async function handleGetMailbox(
   req: NextRequest,
   chatId: string,
-  { repos }: AuthenticatedContext,
+  { repos }: RequestContext,
 ): Promise<NextResponse> {
   const characterId = req.nextUrl.searchParams.get('characterId');
   if (!characterId) {

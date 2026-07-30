@@ -15,14 +15,14 @@ import { badRequest, notFound, created } from '@/lib/api/responses';
 import { composeAndDeliverLetter } from '@/lib/post-office/deliver';
 import { sendMailActionSchema } from '../schemas';
 import { findOperatorPlayedParticipant } from '../participant-auth';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import type { ChatMetadata } from '@/lib/schemas/types';
 
 export async function handleSendMail(
   req: NextRequest,
   chatId: string,
   chat: ChatMetadata,
-  { repos }: AuthenticatedContext,
+  { repos }: RequestContext,
 ): Promise<NextResponse> {
   const body = await req.json();
   const validated = sendMailActionSchema.parse(body);

@@ -1,6 +1,6 @@
 /**
  * Unit Tests for API Context Middleware
- * Tests lib/api/middleware/auth.ts
+ * Tests lib/api/middleware/context.ts
  */
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
@@ -25,7 +25,7 @@ const {
   createContextHandler,
   createContextParamsHandler,
   exists,
-} = require('@/lib/api/middleware/auth');
+} = require('@/lib/api/middleware/context');
 
 const { getServerSession } = require('@/lib/auth/session');
 const { getRepositoriesSafe } = require('@/lib/repositories/factory');

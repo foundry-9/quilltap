@@ -20,10 +20,10 @@ jest.mock('@/lib/logger', () => ({
 }))
 
 jest.mock('@/lib/api/middleware', () => ({
-  createAuthenticatedParamsHandler: (handler: (req: any, ctx: any, params: any) => Promise<any>) => {
+  createContextParamsHandler: (handler: (req: any, ctx: any, params: any) => Promise<any>) => {
     return async (req: any, routeCtx: any) => handler(req, mockCtx, await routeCtx.params)
   },
-  checkOwnership: (entity: any, userId: string) => !!entity && entity.userId === userId,
+  exists: (entity: unknown) => entity != null,
 }))
 
 jest.mock('@/lib/api/responses', () => ({
@@ -90,9 +90,9 @@ it('404s when the vault-aware lookup finds nothing (and never deletes)', async (
   expect(repos.wardrobe.delete).not.toHaveBeenCalled()
 })
 
-it('404s Character when the requester does not own it', async () => {
+it('404s Character when the character does not exist (and never reaches the vault)', async () => {
   const repos = buildRepos({})
-  repos.characters.findById = jest.fn().mockResolvedValue({ id: CHAR_ID, userId: 'someone-else' })
+  repos.characters.findById = jest.fn().mockResolvedValue(null)
   mockCtx = { user: { id: OWNER_ID }, repos }
 
   const res: any = await DELETE(req, params)

@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { badRequest } from '@/lib/api/responses';
 import { handleAddMember } from '../actions';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 const GROUP_POST_ACTIONS = ['addMember'] as const;
 type GroupPostAction = typeof GROUP_POST_ACTIONS[number];
@@ -18,7 +18,7 @@ type GroupPostAction = typeof GROUP_POST_ACTIONS[number];
  */
 export async function handlePost(
   req: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   groupId: string
 ): Promise<NextResponse> {
   const action = getActionParam(req);

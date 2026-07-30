@@ -12,7 +12,7 @@ jest.mock('@/lib/logger', () => ({
 }));
 
 jest.mock('@/lib/api/middleware', () => ({
-  checkOwnership: (entity: unknown) => !!entity,
+  exists: (entity: unknown) => !!entity,
 }));
 
 import { handleGetState, handleSetState, handleResetState } from '@/app/api/v1/groups/[id]/actions/state';

@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { uploadImage, importImageFromUrl } from '@/lib/images-v2';
 import { createImageProvider } from '@/lib/llm';
@@ -65,7 +65,7 @@ const generateImageSchema = z.object({
 // GET Handler - List images
 // ============================================================================
 
-export const GET = createAuthenticatedHandler(async (request, { user, repos }) => {
+export const GET = createContextHandler(async (request, { user, repos }) => {
   try {
 
     const searchParams = request.nextUrl.searchParams;
@@ -156,7 +156,7 @@ export const GET = createAuthenticatedHandler(async (request, { user, repos }) =
 // POST Handler - Upload/Import or Generate
 // ============================================================================
 
-export const POST = createAuthenticatedHandler(async (request, { user, repos }) => {
+export const POST = createContextHandler(async (request, { user, repos }) => {
   const action = getActionParam(request);
 
   // Handle generate action

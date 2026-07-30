@@ -24,7 +24,7 @@ import {
 } from '@/lib/chat/turn-manager';
 import { postHostTurnPassAnnouncement } from '@/lib/services/host-notifications/writer';
 import { turnActionSchema } from '../schemas';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import type { ChatMetadata, MessageEvent, Character } from '@/lib/schemas/types';
 import { isParticipantPresent } from '@/lib/schemas/chat.types';
 
@@ -35,7 +35,7 @@ export async function handleTurnAction(
   req: NextRequest,
   chatId: string,
   chat: ChatMetadata,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const parsed = turnActionSchema.parse(body);

@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler, AuthenticatedContext } from '@/lib/api/middleware';
+import { createContextParamsHandler, RequestContext } from '@/lib/api/middleware';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
@@ -38,7 +38,7 @@ type ConnectionProfileItemPostAction = typeof CONNECTION_PROFILE_ITEM_POST_ACTIO
 /**
  * Helper to enrich profile with API key info
  */
-async function enrichProfile(profile: Record<string, unknown>, repos: AuthenticatedContext['repos']) {
+async function enrichProfile(profile: Record<string, unknown>, repos: RequestContext['repos']) {
   let apiKey = null;
   if (profile.apiKeyId) {
     const key = await repos.connections.findApiKeyById(profile.apiKeyId as string);
@@ -71,7 +71,7 @@ async function enrichProfile(profile: Record<string, unknown>, repos: Authentica
 /**
  * GET /api/v1/connection-profiles/[id] - Get a specific connection profile
  */
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {const profile = await repos.connections.findById(id);
 
@@ -92,7 +92,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 /**
  * PUT /api/v1/connection-profiles/[id] - Update a profile
  */
-export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
+export const PUT = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {// Verify ownership
       const existingProfile = await repos.connections.findById(id);
@@ -341,7 +341,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 /**
  * DELETE /api/v1/connection-profiles/[id] - Delete a profile
  */
-export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+export const DELETE = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {// Verify ownership
       const existingProfile = await repos.connections.findById(id);
@@ -366,7 +366,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
 /**
  * POST /api/v1/connection-profiles/[id] - Action dispatch
  */
-export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+export const POST = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     const action = getActionParam(req);
 

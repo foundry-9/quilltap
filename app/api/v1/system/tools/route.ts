@@ -25,7 +25,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createHash } from 'crypto';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, serverError, validationError } from '@/lib/api/responses';
@@ -1189,7 +1189,7 @@ async function handleAIImportStream(req: NextRequest, context: any) {
 // Request Handlers
 // ============================================================================
 
-export const GET = createAuthenticatedHandler(async (req: NextRequest, context) => {
+export const GET = createContextHandler(async (req: NextRequest, context) => {
   const action = getActionParam(req);
 
   if (!isValidAction(action, TOOLS_GET_ACTIONS)) {
@@ -1213,7 +1213,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, context) 
   return actionHandlers[action]();
 });
 
-export const POST = createAuthenticatedHandler(async (req: NextRequest, context) => {
+export const POST = createContextHandler(async (req: NextRequest, context) => {
   const action = getActionParam(req);
 
   if (!isValidAction(action, TOOLS_POST_ACTIONS)) {

@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler, type AuthenticatedContext } from '@/lib/api/middleware';
+import { createContextParamsHandler, type RequestContext } from '@/lib/api/middleware';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { z } from 'zod';
@@ -41,7 +41,7 @@ const setModelSchema = z.object({
 
 async function handleGet(
   _req: NextRequest,
-  context: AuthenticatedContext,
+  context: RequestContext,
   id: string
 ): Promise<NextResponse> {
   const { repos } = context;
@@ -68,7 +68,7 @@ async function handleGet(
 
 async function handleRename(
   req: NextRequest,
-  context: AuthenticatedContext,
+  context: RequestContext,
   id: string
 ): Promise<NextResponse> {
   const { repos } = context;
@@ -99,7 +99,7 @@ async function handleRename(
  */
 async function handleSetModel(
   req: NextRequest,
-  context: AuthenticatedContext,
+  context: RequestContext,
   id: string
 ): Promise<NextResponse> {
   const { user, repos } = context;
@@ -131,7 +131,7 @@ async function handleSetModel(
 
 async function handleDelete(
   _req: NextRequest,
-  context: AuthenticatedContext,
+  context: RequestContext,
   id: string
 ): Promise<NextResponse> {
   const { repos } = context;
@@ -153,13 +153,13 @@ async function handleDelete(
 // Route Handlers
 // ============================================================================
 
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   async (req, context, { id }) => {
     return handleGet(req, context, id);
   }
 );
 
-export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
+export const PATCH = createContextParamsHandler<{ id: string }>(
   async (req, context, { id }) => {
     const action = getActionParam(req);
 
@@ -179,7 +179,7 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
   }
 );
 
-export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+export const DELETE = createContextParamsHandler<{ id: string }>(
   async (req, context, { id }) => {
     return handleDelete(req, context, id);
   }

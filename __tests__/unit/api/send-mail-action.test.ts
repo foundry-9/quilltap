@@ -21,7 +21,7 @@ jest.mock('@/lib/post-office/deliver', () => ({
 }));
 
 import { handleSendMail } from '@/app/api/v1/chats/[id]/actions/send-mail';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import type { ChatMetadata } from '@/lib/schemas/types';
 
 const PLAYER = 'a0000000-0000-4000-8000-000000000001';
@@ -43,7 +43,7 @@ function createRequest(body: Record<string, unknown>): NextRequest {
   });
 }
 
-function ctxWith(chars: Record<string, { id: string; name: string } | undefined>): AuthenticatedContext {
+function ctxWith(chars: Record<string, { id: string; name: string } | undefined>): RequestContext {
   return {
     user: { id: 'user-1', name: 'Operator' },
     repos: {
@@ -51,7 +51,7 @@ function ctxWith(chars: Record<string, { id: string; name: string } | undefined>
         findByIdRaw: jest.fn((id: string) => Promise.resolve(chars[id] ?? null)),
       },
     },
-  } as unknown as AuthenticatedContext;
+  } as unknown as RequestContext;
 }
 
 describe('handleSendMail', () => {

@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto';
 import { logger } from '@/lib/logger';
 import { successResponse } from '@/lib/api/responses';
 import { toolResultSchema } from '../schemas';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 /**
  * Schema for updating tool settings
@@ -26,7 +26,7 @@ const updateToolSettingsSchema = z.object({
 export async function handleAddToolResult(
   req: NextRequest,
   chatId: string,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const validated = toolResultSchema.parse(body);
@@ -71,7 +71,7 @@ export async function handleAddToolResult(
 export async function handleUpdateToolSettings(
   req: NextRequest,
   chatId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const validated = updateToolSettingsSchema.parse(body);

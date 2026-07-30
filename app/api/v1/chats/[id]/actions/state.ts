@@ -15,15 +15,14 @@
 import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { serverError, notFound } from '@/lib/api/responses';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import { createResetStateHandler, createSetStateHandler } from '@/lib/api/state-handlers';
 import { resolveStateCascade } from '@/lib/state/state-cascade';
 
 const STATE_CFG = {
   entityName: 'Chat',
   idLogKey: 'chatId',
-  selectRepo: (repos: AuthenticatedContext['repos']) => repos.chats,
-  useOwnershipCheck: false,
+  selectRepo: (repos: RequestContext['repos']) => repos.chats,
 } as const;
 
 /**
@@ -33,7 +32,7 @@ const STATE_CFG = {
  */
 export async function handleGetState(
   chatId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   try {
     const chat = await repos.chats.findById(chatId);

@@ -11,7 +11,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware';
+import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { z } from 'zod';
 import { badRequest, created, successResponse } from '@/lib/api/responses';
@@ -34,7 +34,7 @@ const createBrahmaChatSchema = z.object({
 /**
  * List the user's Brahma Console chats (most-recent first).
  */
-async function handleList(_req: NextRequest, context: AuthenticatedContext) {
+async function handleList(_req: NextRequest, context: RequestContext) {
   const { user, repos } = context;
 
   const allChats = await repos.chats.findByUserId(user.id);
@@ -62,7 +62,7 @@ async function handleList(_req: NextRequest, context: AuthenticatedContext) {
 /**
  * Create a new Brahma Console chat.
  */
-async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
+async function handleCreate(req: NextRequest, context: RequestContext) {
   const { user, repos } = context;
 
   const body = await req.json().catch(() => ({}));
@@ -119,13 +119,13 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
 /**
  * GET /api/v1/brahma-console
  */
-export const GET = createAuthenticatedHandler(async (req, context) => {
+export const GET = createContextHandler(async (req, context) => {
   return handleList(req, context);
 });
 
 /**
  * POST /api/v1/brahma-console
  */
-export const POST = createAuthenticatedHandler(async (req, context) => {
+export const POST = createContextHandler(async (req, context) => {
   return handleCreate(req, context);
 });

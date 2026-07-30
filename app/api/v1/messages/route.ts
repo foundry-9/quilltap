@@ -7,7 +7,7 @@
  * The POST endpoint returns Server-Sent Events for real-time streaming.
  */
 
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import {
   handleSendMessage,
   sendMessageSchema,
@@ -23,7 +23,7 @@ import { scrubUserAgent } from '@/lib/utils/user-agent';
 /**
  * GET /api/v1/messages?chatId= - List messages for a chat
  */
-export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
+export const GET = createContextHandler(async (req, { user, repos }) => {
   const { searchParams } = req.nextUrl;
   const chatId = searchParams.get('chatId');
 
@@ -58,7 +58,7 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
  *
  * Returns Server-Sent Events (SSE) stream for real-time response.
  */
-export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
+export const POST = createContextHandler(async (req, { user, repos }) => {
   // Get chatId from query string
   const { searchParams } = req.nextUrl;
   const chatId = searchParams.get('chatId');

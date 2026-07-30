@@ -7,17 +7,17 @@
  */
 
 import { NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware';
+import { createContextParamsHandler, exists } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { notFound, serverError, badRequest } from '@/lib/api/responses';
 
 // GET /api/v1/characters/[id]/plugin-data/[pluginName]
-export const GET = createAuthenticatedParamsHandler<{ id: string; pluginName: string }>(
+export const GET = createContextParamsHandler<{ id: string; pluginName: string }>(
   async (req, { user, repos }, { id, pluginName }) => {
     try {
       const character = await repos.characters.findById(id);
 
-      if (!checkOwnership(character, user.id)) {
+      if (!exists(character)) {
         return notFound('Character');
       }
 
@@ -36,11 +36,11 @@ export const GET = createAuthenticatedParamsHandler<{ id: string; pluginName: st
 );
 
 // PUT /api/v1/characters/[id]/plugin-data/[pluginName]
-export const PUT = createAuthenticatedParamsHandler<{ id: string; pluginName: string }>(
+export const PUT = createContextParamsHandler<{ id: string; pluginName: string }>(
   async (req, { user, repos }, { id, pluginName }) => {
     const character = await repos.characters.findById(id);
 
-    if (!checkOwnership(character, user.id)) {
+    if (!exists(character)) {
       return notFound('Character');
     }
 
@@ -80,11 +80,11 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string; pluginName: st
 );
 
 // DELETE /api/v1/characters/[id]/plugin-data/[pluginName]
-export const DELETE = createAuthenticatedParamsHandler<{ id: string; pluginName: string }>(
+export const DELETE = createContextParamsHandler<{ id: string; pluginName: string }>(
   async (req, { user, repos }, { id, pluginName }) => {
     const character = await repos.characters.findById(id);
 
-    if (!checkOwnership(character, user.id)) {
+    if (!exists(character)) {
       return notFound('Character');
     }
 

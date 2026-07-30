@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { normalizeFolderPath, resolveEffectiveFolderPath } from '@/lib/files/folder-utils';
 import { successResponse, serverError } from '@/lib/api/responses';
@@ -7,7 +7,7 @@ import { serializeFileEntry } from '../shared';
 
 export async function handleGet(
   request: NextRequest,
-  ctx: AuthenticatedContext
+  ctx: RequestContext
 ): Promise<NextResponse> {
   try {
     const searchParams = request.nextUrl.searchParams;

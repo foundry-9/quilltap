@@ -9,7 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler, getFilePath } from '@/lib/api/middleware';
+import { createContextParamsHandler, getFilePath } from '@/lib/api/middleware';
 import { uploadChatFile, type ConflictResolution } from '@/lib/chat-files-v2';
 import { logger } from '@/lib/logger';
 import { notFound, badRequest, serverError } from '@/lib/api/responses';
@@ -27,7 +27,7 @@ import type { FileAttachment } from '@/lib/llm/base';
  *   ?action=link  - Link an existing library file to this chat (JSON body: { fileId })
  *   (default)     - Upload a new file via FormData
  */
-export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+export const POST = createContextParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }, { id: chatId }) => {
     try {
       // Verify chat belongs to user
@@ -348,7 +348,7 @@ async function handleAttachMountFile(
 /**
  * GET /api/v1/chats/[id]/files - List files for a chat (includes uploaded files and generated images)
  */
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }, { id: chatId }) => {
     try {
       // Verify chat belongs to user

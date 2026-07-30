@@ -9,7 +9,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { createAuthenticatedParamsHandler, type AuthenticatedContext } from '@/lib/api/middleware';
+import { createContextParamsHandler, type RequestContext } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import {
   handleSendMessage,
@@ -25,8 +25,8 @@ import { scrubUserAgent } from '@/lib/utils/user-agent';
 /**
  * POST - Send a message to a chat and receive a streaming response
  */
-export const POST = createAuthenticatedParamsHandler<{ id: string }>(
-  async (req: NextRequest, { user, repos }: AuthenticatedContext, { id }) => {
+export const POST = createContextParamsHandler<{ id: string }>(
+  async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     // Verify chat ownership
     const chat = await repos.chats.findById(id);
     if (!chat) {
