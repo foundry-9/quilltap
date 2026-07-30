@@ -161,19 +161,11 @@ if (existsSync(standaloneNodeModules)) {
     }
   }
 
-  // Strip native .node binaries from sharp (keep JS wrapper)
-  const sharpBuildDir = join(standaloneNodeModules, 'sharp', 'build');
-  if (existsSync(sharpBuildDir)) {
-    rmSync(sharpBuildDir, { recursive: true, force: true });
-    console.log('    Stripped: sharp/build (native binaries)');
-  }
-  const sharpPrebuildsDir = join(standaloneNodeModules, 'sharp', 'prebuilds');
-  if (existsSync(sharpPrebuildsDir)) {
-    rmSync(sharpPrebuildsDir, { recursive: true, force: true });
-    console.log('    Stripped: sharp/prebuilds (native binaries)');
-  }
-
-  // Remove @img/sharp-* platform-specific native packages but keep @img/colour (pure JS)
+  // Remove @img/sharp-* platform-specific native packages but keep @img/colour (pure JS).
+  // Since sharp 0.35 every native binary lives here — the package itself no longer
+  // carries build/ or prebuilds/ directories, and it dropped its install script, so
+  // the user's `npm install` restores these purely through optionalDependencies.
+  const imgDir = join(standaloneNodeModules, '@img');
   const imgDir = join(standaloneNodeModules, '@img');
   if (existsSync(imgDir)) {
     for (const entry of readdirSync(imgDir)) {

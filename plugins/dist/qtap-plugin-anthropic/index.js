@@ -6055,7 +6055,7 @@ var safeJSON2 = (text) => {
 var sleep2 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION2 = "6.48.0";
+var VERSION2 = "6.49.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser2 = () => {
@@ -8358,6 +8358,44 @@ function normalizeToolCallIds(chatCompletion) {
     }
   }
 }
+function toRequestMessage(message) {
+  if (!isAssistantMessage(message))
+    return message;
+  const requestMessage = { role: "assistant" };
+  if (message.audio != null)
+    requestMessage.audio = { id: message.audio.id };
+  if (message.content !== void 0)
+    requestMessage.content = message.content;
+  if (message.function_call != null)
+    requestMessage.function_call = message.function_call;
+  if (message.name !== void 0)
+    requestMessage.name = message.name;
+  if (message.refusal != null)
+    requestMessage.refusal = message.refusal;
+  if (message.tool_calls !== void 0) {
+    requestMessage.tool_calls = message.tool_calls.map((toolCall) => {
+      if (toolCall.type === "custom") {
+        return {
+          id: toolCall.id,
+          type: toolCall.type,
+          custom: {
+            input: toolCall.custom.input,
+            name: toolCall.custom.name
+          }
+        };
+      }
+      return {
+        id: toolCall.id,
+        type: toolCall.type,
+        function: {
+          arguments: toolCall.function.arguments,
+          name: toolCall.function.name
+        }
+      };
+    });
+  }
+  return requestMessage;
+}
 var AbstractChatCompletionRunner = class extends EventStream {
   constructor() {
     super(...arguments);
@@ -8548,7 +8586,7 @@ var AbstractChatCompletionRunner = class extends EventStream {
         ...restParams,
         tool_choice,
         tools,
-        messages: [...this.messages]
+        messages: this.messages.map(toRequestMessage)
       }, options);
       const message = chatCompletion.choices[0]?.message;
       if (!message) {
@@ -8878,6 +8916,7 @@ var partialParse2 = (input) => parseJSON(input, Allow.ALL ^ Allow.NUM);
 // ../../../node_modules/openai/lib/ChatCompletionStream.mjs
 var _ChatCompletionStream_instances;
 var _ChatCompletionStream_params;
+var _ChatCompletionStream_audioDoneChoiceIndexes;
 var _ChatCompletionStream_choiceEventStates;
 var _ChatCompletionStream_currentChatCompletionSnapshot;
 var _ChatCompletionStream_beginRequest;
@@ -8917,9 +8956,11 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
     super();
     _ChatCompletionStream_instances.add(this);
     _ChatCompletionStream_params.set(this, void 0);
+    _ChatCompletionStream_audioDoneChoiceIndexes.set(this, void 0);
     _ChatCompletionStream_choiceEventStates.set(this, void 0);
     _ChatCompletionStream_currentChatCompletionSnapshot.set(this, void 0);
     __classPrivateFieldSet2(this, _ChatCompletionStream_params, params, "f");
+    __classPrivateFieldSet2(this, _ChatCompletionStream_audioDoneChoiceIndexes, /* @__PURE__ */ new Set(), "f");
     __classPrivateFieldSet2(this, _ChatCompletionStream_choiceEventStates, [], "f");
   }
   get currentChatCompletionSnapshot() {
@@ -8999,9 +9040,10 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
     }
     throw new OpenAIError(`request ended without sending any chunks`);
   }
-  [(_ChatCompletionStream_params = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_choiceEventStates = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_currentChatCompletionSnapshot = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_instances = /* @__PURE__ */ new WeakSet(), _ChatCompletionStream_beginRequest = function _ChatCompletionStream_beginRequest2() {
+  [(_ChatCompletionStream_params = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_audioDoneChoiceIndexes = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_choiceEventStates = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_currentChatCompletionSnapshot = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_instances = /* @__PURE__ */ new WeakSet(), _ChatCompletionStream_beginRequest = function _ChatCompletionStream_beginRequest2() {
     if (this.ended)
       return;
+    __classPrivateFieldSet2(this, _ChatCompletionStream_audioDoneChoiceIndexes, /* @__PURE__ */ new Set(), "f");
     __classPrivateFieldSet2(this, _ChatCompletionStream_currentChatCompletionSnapshot, void 0, "f");
   }, _ChatCompletionStream_getChoiceEventState = function _ChatCompletionStream_getChoiceEventState2(choice) {
     let state = __classPrivateFieldGet2(this, _ChatCompletionStream_choiceEventStates, "f")[choice.index];
@@ -9139,9 +9181,11 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
     if (!snapshot) {
       throw new OpenAIError(`request ended without sending any chunks`);
     }
+    const audioDoneChoiceIndexes = __classPrivateFieldGet2(this, _ChatCompletionStream_audioDoneChoiceIndexes, "f");
+    __classPrivateFieldSet2(this, _ChatCompletionStream_audioDoneChoiceIndexes, /* @__PURE__ */ new Set(), "f");
     __classPrivateFieldSet2(this, _ChatCompletionStream_currentChatCompletionSnapshot, void 0, "f");
     __classPrivateFieldSet2(this, _ChatCompletionStream_choiceEventStates, [], "f");
-    return finalizeChatCompletion(snapshot, __classPrivateFieldGet2(this, _ChatCompletionStream_params, "f"));
+    return finalizeChatCompletion(snapshot, __classPrivateFieldGet2(this, _ChatCompletionStream_params, "f"), audioDoneChoiceIndexes);
   }, _ChatCompletionStream_getAutoParseableResponseFormat = function _ChatCompletionStream_getAutoParseableResponseFormat2() {
     const responseFormat = __classPrivateFieldGet2(this, _ChatCompletionStream_params, "f")?.response_format;
     if (isAutoParsableResponseFormat(responseFormat)) {
@@ -9149,7 +9193,7 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
     }
     return null;
   }, _ChatCompletionStream_accumulateChatCompletion = function _ChatCompletionStream_accumulateChatCompletion2(chunk) {
-    var _a4, _b, _c, _d;
+    var _a4, _b, _c, _d, _e;
     let snapshot = __classPrivateFieldGet2(this, _ChatCompletionStream_currentChatCompletionSnapshot, "f");
     const { choices, ...rest } = chunk;
     if (!snapshot) {
@@ -9196,14 +9240,30 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
       Object.assign(choice, other);
       if (!delta)
         continue;
-      const { content, refusal, function_call, role, tool_calls, ...rest2 } = delta;
+      __classPrivateFieldGet2(this, _ChatCompletionStream_audioDoneChoiceIndexes, "f").delete(index);
+      const { audio, content, refusal, function_call, role, tool_calls, ...rest2 } = delta;
       assertIsEmpty(rest2);
       Object.assign(choice.message, rest2);
+      if (audio?.expires_at != null && audio.id == null && audio.data == null && audio.transcript == null && content == null && refusal == null && function_call == null && role == null && tool_calls == null && Object.keys(rest2).length === 0) {
+        __classPrivateFieldGet2(this, _ChatCompletionStream_audioDoneChoiceIndexes, "f").add(index);
+      }
       if (refusal) {
         choice.message.refusal = (choice.message.refusal || "") + refusal;
       }
       if (role)
         choice.message.role = role;
+      if (audio) {
+        const audioSnapshot = (_c = choice.message).audio ?? (_c.audio = {});
+        if (audio.id != null)
+          audioSnapshot.id = audio.id;
+        if (audio.data != null)
+          audioSnapshot.data = (audioSnapshot.data ?? "") + audio.data;
+        if (audio.transcript != null) {
+          audioSnapshot.transcript = (audioSnapshot.transcript ?? "") + audio.transcript;
+        }
+        if (audio.expires_at != null)
+          audioSnapshot.expires_at = audio.expires_at;
+      }
       if (function_call) {
         if (!choice.message.function_call) {
           choice.message.function_call = function_call;
@@ -9211,7 +9271,7 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
           if (function_call.name)
             choice.message.function_call.name = function_call.name;
           if (function_call.arguments) {
-            (_c = choice.message.function_call).arguments ?? (_c.arguments = "");
+            (_d = choice.message.function_call).arguments ?? (_d.arguments = "");
             choice.message.function_call.arguments += function_call.arguments;
           }
         }
@@ -9226,7 +9286,7 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
         if (!choice.message.tool_calls)
           choice.message.tool_calls = [];
         for (const { index: index2, id, type, function: fn, ...rest3 } of tool_calls) {
-          const tool_call = (_d = choice.message.tool_calls)[index2] ?? (_d[index2] = {});
+          const tool_call = (_e = choice.message.tool_calls)[index2] ?? (_e[index2] = {});
           Object.assign(tool_call, rest3);
           if (id)
             tool_call.id = id;
@@ -9301,16 +9361,18 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
     return stream.toReadableStream();
   }
 };
-function finalizeChatCompletion(snapshot, params) {
+function finalizeChatCompletion(snapshot, params, audioDoneChoiceIndexes) {
   const { id, choices, created, model, system_fingerprint, ...rest } = snapshot;
   const completion = {
     ...rest,
     id,
     choices: choices.map(({ message, finish_reason, index, logprobs, ...choiceRest }) => {
-      if (!finish_reason) {
+      const { content = null, function_call, tool_calls, audio, ...messageRest } = message;
+      const finishReason = finish_reason ?? (audioDoneChoiceIndexes.has(index) && isCompleteAudio(audio) ? "stop" : null);
+      if (!finishReason) {
         throw new OpenAIError(`missing finish_reason for choice ${index}`);
       }
-      const { content = null, function_call, tool_calls, ...messageRest } = message;
+      const audioResponse = audio ? { audio } : {};
       const role = message.role;
       if (!role) {
         throw new OpenAIError(`missing role for choice ${index}`);
@@ -9326,12 +9388,13 @@ function finalizeChatCompletion(snapshot, params) {
         return {
           ...choiceRest,
           message: {
+            ...audioResponse,
             content,
             function_call: { arguments: args, name },
             role,
             refusal: message.refusal ?? null
           },
-          finish_reason,
+          finish_reason: finishReason,
           index,
           logprobs
         };
@@ -9340,10 +9403,11 @@ function finalizeChatCompletion(snapshot, params) {
         return {
           ...choiceRest,
           index,
-          finish_reason,
+          finish_reason: finishReason,
           logprobs,
           message: {
             ...messageRest,
+            ...audioResponse,
             role,
             content,
             refusal: message.refusal ?? null,
@@ -9374,8 +9438,8 @@ ${str(snapshot)}`);
       }
       return {
         ...choiceRest,
-        message: { ...messageRest, content, role, refusal: message.refusal ?? null },
-        finish_reason,
+        message: { ...messageRest, ...audioResponse, content, role, refusal: message.refusal ?? null },
+        finish_reason: finishReason,
         index,
         logprobs
       };
@@ -9386,6 +9450,9 @@ ${str(snapshot)}`);
     ...system_fingerprint ? { system_fingerprint } : {}
   };
   return maybeParseChatCompletion(completion, params);
+}
+function isCompleteAudio(audio) {
+  return audio?.id != null && audio.data != null && audio.transcript != null && audio.expires_at != null;
 }
 function str(x) {
   return JSON.stringify(x);
@@ -10141,6 +10208,60 @@ var SpendAlerts = class extends APIResource2 {
    */
   delete(alertID, options) {
     return this._client.delete(path2`/organization/spend_alerts/${alertID}`, {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+};
+
+// ../../../node_modules/openai/resources/admin/organization/spend-limit.mjs
+var SpendLimit = class extends APIResource2 {
+  /**
+   * Get the organization's hard spend limit.
+   *
+   * @example
+   * ```ts
+   * const organizationSpendLimit =
+   *   await client.admin.organization.spendLimit.retrieve();
+   * ```
+   */
+  retrieve(options) {
+    return this._client.get("/organization/spend_limit", {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Create or replace the organization's hard spend limit.
+   *
+   * @example
+   * ```ts
+   * const organizationSpendLimit =
+   *   await client.admin.organization.spendLimit.update({
+   *     currency: 'USD',
+   *     interval: 'month',
+   *     threshold_amount: 1,
+   *   });
+   * ```
+   */
+  update(body, options) {
+    return this._client.post("/organization/spend_limit", {
+      body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Delete the organization's hard spend limit.
+   *
+   * @example
+   * ```ts
+   * const organizationSpendLimitDeleted =
+   *   await client.admin.organization.spendLimit.delete();
+   * ```
+   */
+  delete(options) {
+    return this._client.delete("/organization/spend_limit", {
       ...options,
       __security: { adminAPIKeyAuth: true }
     });
@@ -11109,6 +11230,67 @@ var SpendAlerts2 = class extends APIResource2 {
   }
 };
 
+// ../../../node_modules/openai/resources/admin/organization/projects/spend-limit.mjs
+var SpendLimit2 = class extends APIResource2 {
+  /**
+   * Get a project's hard spend limit.
+   *
+   * @example
+   * ```ts
+   * const projectSpendLimit =
+   *   await client.admin.organization.projects.spendLimit.retrieve(
+   *     'proj_123',
+   *   );
+   * ```
+   */
+  retrieve(projectID, options) {
+    return this._client.get(path2`/organization/projects/${projectID}/spend_limit`, {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Create or replace a project's hard spend limit.
+   *
+   * @example
+   * ```ts
+   * const projectSpendLimit =
+   *   await client.admin.organization.projects.spendLimit.update(
+   *     'proj_123',
+   *     {
+   *       currency: 'USD',
+   *       interval: 'month',
+   *       threshold_amount: 1,
+   *     },
+   *   );
+   * ```
+   */
+  update(projectID, body, options) {
+    return this._client.post(path2`/organization/projects/${projectID}/spend_limit`, {
+      body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Delete a project's hard spend limit.
+   *
+   * @example
+   * ```ts
+   * const projectSpendLimitDeleted =
+   *   await client.admin.organization.projects.spendLimit.delete(
+   *     'proj_123',
+   *   );
+   * ```
+   */
+  delete(projectID, options) {
+    return this._client.delete(path2`/organization/projects/${projectID}/spend_limit`, {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+};
+
 // ../../../node_modules/openai/resources/admin/organization/projects/groups/roles.mjs
 var Roles4 = class extends APIResource2 {
   /**
@@ -11590,6 +11772,7 @@ var Projects = class extends APIResource2 {
     this.groups = new Groups2(this._client);
     this.roles = new Roles3(this._client);
     this.dataRetention = new DataRetention2(this._client);
+    this.spendLimit = new SpendLimit2(this._client);
     this.spendAlerts = new SpendAlerts2(this._client);
     this.certificates = new Certificates2(this._client);
   }
@@ -11693,6 +11876,7 @@ Projects.HostedToolPermissions = HostedToolPermissions;
 Projects.Groups = Groups2;
 Projects.Roles = Roles3;
 Projects.DataRetention = DataRetention2;
+Projects.SpendLimit = SpendLimit2;
 Projects.SpendAlerts = SpendAlerts2;
 Projects.Certificates = Certificates2;
 
@@ -11859,6 +12043,7 @@ var Organization = class extends APIResource2 {
     this.groups = new Groups(this._client);
     this.roles = new Roles(this._client);
     this.dataRetention = new DataRetention(this._client);
+    this.spendLimit = new SpendLimit(this._client);
     this.spendAlerts = new SpendAlerts(this._client);
     this.certificates = new Certificates(this._client);
     this.projects = new Projects(this._client);
@@ -11872,6 +12057,7 @@ Organization.Users = Users3;
 Organization.Groups = Groups;
 Organization.Roles = Roles;
 Organization.DataRetention = DataRetention;
+Organization.SpendLimit = SpendLimit;
 Organization.SpendAlerts = SpendAlerts;
 Organization.Certificates = Certificates;
 Organization.Projects = Projects;
@@ -14355,10 +14541,7 @@ function parseResponse(response, params) {
   const shouldParse = !response.status || response.status === "completed";
   const output = response.output.map((item) => {
     if (item.type === "function_call") {
-      return {
-        ...item,
-        parsed_arguments: shouldParse ? parseToolCall2(params, item) : null
-      };
+      return shouldParse ? parseToolCall2(params, item) : { ...item, parsed_arguments: null };
     }
     if (item.type === "message") {
       const content = item.content.map((content2) => {
@@ -14413,7 +14596,7 @@ function hasAutoParseableInput2(params) {
   if (isAutoParsableResponseFormat(params.text?.format)) {
     return true;
   }
-  return false;
+  return Array.isArray(params.tools) && params.tools.some((tool) => isAutoParsableTool2(tool) || tool.type === "function" && tool.strict === true);
 }
 function isAutoParsableTool2(tool) {
   return tool?.["$brand"] === "auto-parseable-tool";

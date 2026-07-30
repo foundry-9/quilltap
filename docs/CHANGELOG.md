@@ -4,6 +4,47 @@
 
 ### 4.8-dev
 
+#### PDF preview was broken by a stale worker file
+
+In-app PDF preview has been failing silently. `public/pdf.worker.mjs` is checked in and was hand-copied at some point at PDF.js **5.4.296**, while the installed `pdfjs-dist` had moved to **5.7.284**. PDF.js compares the two build versions on worker setup and throws on any difference:
+
+```
+The API version "5.7.284" does not match the Worker version "5.4.296".
+```
+
+`FilePreviewPdf.tsx` sets `GlobalWorkerOptions.workerSrc = '/pdf.worker.mjs'` and catches load failures to show "Failed to load PDF. Try downloading instead." — so the version throw was indistinguishable from a corrupt file, and every PDF hit it. Reproduced directly by pairing the installed API against each worker build: the checked-in one throws the version error, the installed one clears the handshake.
+
+The stale copy came from `pdf-parse@2.4.5`, which hard-pins `pdfjs-dist@5.4.296`. That is the version someone would have found by walking into `node_modules` at the time, and it stopped matching the moment the root dependency moved.
+
+Fixed by re-copying the worker and removing the hand-copy step entirely. `scripts/sync-pdf-worker.js` now runs on `postinstall`: it compares the two version strings, no-ops when they agree, and re-copies when they don't. Because the file stays checked in, a `pdfjs-dist` bump now shows up as a visible `public/pdf.worker.mjs` diff instead of drifting unnoticed. The script never fails the install — a read-only tree just gets a warning, since the mismatch is caught downstream anyway.
+
+That downstream catch is `pdf-worker-version.test.ts`, which pins the served worker to both the installed worker build and the API version the app actually loads, and asserts the component still points at that path. Confirmed to fail on drift, not just pass on green: reverting the version string to 5.4.296 fails two of its four assertions with the exact mismatched versions.
+
+Unrelated to any `pdfjs-dist` upgrade. Moving to 6.x stays blocked — `pdf-parse@2.4.5` hard-pins `pdfjs-dist@5.4.296`, and the repo's `"pdfjs-dist": "$pdfjs-dist"` override would force it across two majors with no install-time warning.
+
+#### Dependency pass: esbuild 0.28, sharp 0.35, plugin bundles realigned
+
+First of a staged dependency sweep, covering the two upgrades with no API surface to break.
+
+**esbuild 0.24.2 → 0.28.1 (root devDependency).** All 14 plugins already declared and installed `^0.28.1`; only the root lagged, so the project carried two esbuild copies and two platform binaries. The bump dedupes against the one `tsx` pulls in. None of the breaking changes apply: the 0.25.0 dev-server CORS lockdown only affects `esbuild serve`, which is unused, and 0.27.0's `binary` loader change needs an explicit `target`, which every call site already sets. Plugin bundles rebuilt byte-identical for this bump — the root esbuild is only used by `build-standalone-overlay.mjs` for `server.ts`, `lib/terminal/ws.ts`, and the background-job child entry. The stale `esbuild@0.24.2` entry was dropped from `allowScripts`.
+
+**sharp 0.34.5 → 0.35.3 (libvips 8.18.3).** No call site touched anything 0.35 removed — no `failOnError`, no `paletteBitDepth`, no `format.jp2k`, no deprecated `sharpen` properties. Four things did need handling:
+
+- Next 16 optionally depends on `sharp@^0.34.5`, so the bump broke the dedupe and nested a second copy under `node_modules/next/node_modules/` — 16 MB of duplicate native binaries that the standalone tarball's strip step, which only knows about `node_modules/sharp`, would have shipped. Pinned with a `"sharp": "$sharp"` override, matching the existing `pdfjs-dist` treatment. Next's image optimizer only uses `limitInputPixels`, `sequentialRead`, `timeout`, `rotate`, `resize`, and the format encoders, none of which changed.
+- 0.35.2 replaced sharp's TypeScript namespace with named exports for ESM, so `sharp.FormatEnum` and `sharp.Metadata` no longer resolve. `lib/files/image-processing.ts` now imports both as named types.
+- 0.35 dropped the `install` script (compiling from source is opt-in via `build`), so the `sharp@0.34.5` entry in `allowScripts` is gone. Restoring the stripped binaries on a user's machine now runs purely through `optionalDependencies`; coverage got wider this release, not narrower, with FreeBSD and WebContainers wasm32 targets added.
+- The package no longer ships `build/` or `prebuilds/` directories — every native binary lives in `@img/sharp-*`. The two strip blocks in `build-standalone-tarball.ts` targeting those paths had become silent no-ops and were removed; the `@img/sharp-*` strip that follows already did the work.
+
+Also new and harmless: sharp 0.35 adds an `exports` map limited to `"."`, so `require('sharp/package.json')` no longer resolves. Nothing in the repo imports a sharp subpath.
+
+**Plugin bundles realigned on openai 6.49.0.** Rebuilding surfaced pre-existing drift. The five provider plugins that depend on `openai` directly — openai, grok, z-ai, deepseek, openai-compatible — install it into their own `node_modules` and were pinned at 6.48.0. The eight that reach it transitively through `@quilltap/plugin-utils` resolve from the root, which had moved to 6.49.0, and their committed bundles were stale. Refreshing the five plugin lockfiles puts all 13 openai-carrying bundles on 6.49.0. Patch versions bumped in both `package.json` and `manifest.json`: anthropic 1.0.47, curl 1.0.20, deepseek 1.0.13, default-system-prompts 1.1.12, google 1.1.41, grok 1.0.44, mcp 1.1.31, ollama 1.0.34, openai 1.0.53, openai-compatible 1.0.34, openrouter 1.0.50, search-serper 1.0.15, z-ai 1.1.16. builtin-embeddings carries no openai and was untouched.
+
+`packages/quilltap` tracks the sharp bump so the CLI's native-module linking stays on the same version as the app.
+
+Verified: `npx tsc` clean, `eslint` clean, 560 suites / 9,223 tests pass. sharp 0.35.3 confirmed end to end against a real encode — create, `metadata()`, resize, WebP out — and esbuild 0.28.1 confirmed to bundle the background-job child entry with the production flag set.
+
+Deferred to later passes, with reasons: **openai 7.x** breaks nothing but the Node floor (22; we require 24), yet `@quilltap/plugin-utils` declares `openai: "^4 || ^5 || ^6"` as an optional peer, so it needs a package republish before anything can install cleanly. **@xterm/\* 6.0** removes the canvas renderer, stranding `@xterm/addon-canvas` at a `^5.0.0` peer with no successor, and renames the `selection` theme key to `selectionBackground` — a silent loss of terminal selection color across all six bundled themes if missed. **pdfjs-dist 6.x** is blocked outright: `pdf-parse@2.4.5` hard-pins `pdfjs-dist@5.4.296`, and the repo's `$pdfjs-dist` override would force it across two majors without an install-time warning.
+
 #### Restore no longer breaks the memory graph
 
 Release-checklist pass over backup/restore completeness. Backup is schema-driven — `ensureCollection` derives each table's JSON, array, and boolean columns straight from its Zod schema, backup reads entities through the repositories, and restore re-inserts them by spreading whatever the archive held. All 16 columns added this cycle are covered by that pipeline with no per-field work: the six answer-confirmation and Pascal columns on `chat_messages`, the four new `chats` columns, `customTools` and `answerConfirmationSettings` on `chat_settings`, and `occurredAt` / `narrativeTime` / `entities` / `kind` on `memories`. DDL.md documents all of them.

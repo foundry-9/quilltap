@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "4.8.0-dev.127",
+  "version": "4.8.0-dev.128",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -36,7 +36,7 @@
     "oneoff:theme-convert-v2.8": "tsx scripts/convert-theme-to-module.ts",
     "oneoff:theme-convert-v2.8:all": "tsx scripts/convert-theme-to-module.ts --all",
     "oneoff:theme-convert-v2.8:dry-run": "tsx scripts/convert-theme-to-module.ts --all --dry-run",
-    "postinstall": "node scripts/fix-node-pty-permissions.js",
+    "postinstall": "node scripts/fix-node-pty-permissions.js && node scripts/sync-pdf-worker.js",
     "start": "NODE_ENV=production tsx server.ts",
     "start:docker": "tsx scripts/start-quilltap-docker.ts",
     "stop:docker": "docker stop quilltap && docker rm quilltap",
@@ -107,7 +107,7 @@
     "remark-parse": "^11.0.0",
     "remark-rehype": "^11.1.2",
     "semver": "^7.8.5",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.3",
     "tar": "^7.5.20",
     "unified": "^11.0.5",
     "ws": "^8.21.1",
@@ -137,7 +137,7 @@
     "autoprefixer": "^10.5.4",
     "cross-env": "^10.1.0",
     "dotenv": "^17.4.2",
-    "esbuild": "^0.24.2",
+    "esbuild": "^0.28.1",
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.2.10",
     "jest": "^30.4.2",
@@ -152,6 +152,16 @@
     "glob": "^12.0.0",
     "cookie": "^0.7.0",
     "pdfjs-dist": "$pdfjs-dist",
+    "sharp": "$sharp",
     "@napi-rs/canvas": "^0.1.100"
+  },
+  "allowScripts": {
+    "@openrouter/sdk@0.13.67": true,
+    "better-sqlite3-multiple-ciphers@12.11.1": true,
+    "esbuild@0.28.1": true,
+    "node-pty@1.1.0": true,
+    "unrs-resolver@1.12.2": true,
+    "fsevents@2.3.3": true,
+    "fsevents@2.3.2": true
   }
 }

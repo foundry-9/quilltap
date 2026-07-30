@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-curl",
-  "version": "1.0.19",
+  "version": "1.0.20",
   "description": "HTTP request tool for LLMs",
   "main": "index.js",
   "scripts": {
