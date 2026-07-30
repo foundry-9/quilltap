@@ -1749,6 +1749,10 @@
    UTILITY CLASSES
    ========================================================================== */
 
+.qt-text {
+  color: var(--color-foreground);
+}
+
 .qt-text-primary {
   color: var(--color-foreground);
 }
@@ -2641,6 +2645,10 @@
 
 .qt-bg-surface {
   background-color: var(--color-background);
+}
+
+.qt-bg-surface-hover {
+  background-color: var(--color-muted);
 }
 
 .qt-bg-surface-alt {

@@ -43,7 +43,7 @@ export function TerminalPopoutPageClient({ chatId, sessionId }: { chatId: string
         <div className="flex items-center gap-3">
           <button
             onClick={handleBack}
-            className="qt-icon-button"
+            className="qt-button-icon"
             title="Back to chat"
           >
             <Icon name="chevron-left" className="w-5 h-5" />

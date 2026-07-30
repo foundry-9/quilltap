@@ -64,7 +64,7 @@ export function TerminalPane({
           <button
             type="button"
             onClick={onToggleFocusMode}
-            className="qt-icon-button p-1"
+            className="qt-button-icon p-1"
             title={mode === 'focus' ? 'Restore split layout' : 'Maximize terminal'}
             aria-label={mode === 'focus' ? 'Restore split layout' : 'Maximize terminal'}
           >
@@ -78,7 +78,7 @@ export function TerminalPane({
           <button
             type="button"
             onClick={() => void onHidePane()}
-            className="qt-icon-button p-1"
+            className="qt-button-icon p-1"
             title="Close pane (terminal stays alive)"
             aria-label="Close terminal pane"
           >
@@ -88,7 +88,7 @@ export function TerminalPane({
           <button
             type="button"
             onClick={handleKillClick}
-            className={`qt-icon-button p-1 qt-text-destructive ${confirmKill ? '' : 'opacity-70 hover:opacity-100'}`}
+            className={`qt-button-icon p-1 qt-text-destructive ${confirmKill ? '' : 'opacity-70 hover:opacity-100'}`}
             title={confirmKill ? 'Click again to confirm: kill terminal and close pane' : 'Kill terminal and close pane'}
             aria-label="Kill terminal and close pane"
           >

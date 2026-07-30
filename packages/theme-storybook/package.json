@@ -1,6 +1,6 @@
 {
   "name": "@quilltap/theme-storybook",
-  "version": "1.0.50",
+  "version": "1.0.51",
   "description": "Storybook preset and stories for developing Quilltap theme plugins",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -4,6 +4,18 @@
 
 ### 4.8-dev
 
+#### qt-* utility pass: three classes that were never defined
+
+Release-checklist pass over the `qt-*` theme utilities in components changed since the last checklist run. The raw-Tailwind audit came up clean — new components pair a `qt-*` class with layout-only utilities, which is the established pattern. What it did turn up was three class names that are referenced but have no rule anywhere, in the app CSS or in any bundled theme, so they silently did nothing.
+
+- `.qt-text` — the full-strength counterpart to `qt-text-secondary`, used 59 times across 7 files and never defined. Sites fell back to inherited color, which usually looked right, so the gap stayed hidden. Where it did show: `LLMInspectorEntry` styles inactive tabs `qt-text-secondary hover:qt-text`, and that hover brightening never happened. Now defined as `var(--color-foreground)`.
+- `.qt-bg-surface-hover` — used as `qt-bg-surface hover:qt-bg-surface-hover` on clickable rows in `CustomToolRunDialog` and `RunToolModal`. Never defined in any commit. Those rows did not respond to hover. Now defined as `var(--color-muted)`, matching `hover:qt-bg-surface-alt`.
+- `qt-icon-button` — the defined class is `qt-button-icon`. Five icon-only buttons across the terminal UI (`TerminalPane`, `TerminalEmbed`, `TerminalPopoutPageClient`) had the two words transposed and so got no button styling at all. Renamed at all five sites.
+
+Worth recording for whoever touches these next: `hover:` on a `qt-*` class does not work by itself. Tailwind 4 only generates variants for utilities registered with `@utility`, and these are plain rules inside `@layer utilities`, so each hover variant has to be hand-authored as an escaped `.hover\:qt-…:hover` selector. `_utilities.css` has a HOVER VARIANTS section holding the eight that exist; the two added here went there. This means the roughly 230 other `hover:qt-*` usages in the codebase whose escaped selector was never written are also inert — a pre-existing issue, not addressed here.
+
+Verified by running the project's own PostCSS/Tailwind pipeline over `app/globals.css` and confirming each new selector appears in the generated CSS. `npx tsc` clean, `eslint` clean.
+
 #### Dead-code sweep
 
 Release-checklist pass with knip, plus a whole-repo reference count over the 1,914 symbols it flagged. Only symbols with zero references anywhere — including tests, barrels, `packages/`, and `plugins/` — were considered, and each was checked by hand before removal.

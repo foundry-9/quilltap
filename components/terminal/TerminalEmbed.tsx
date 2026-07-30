@@ -117,7 +117,7 @@ export function TerminalEmbed({ sessionId, label, chatId }: TerminalEmbedProps) 
         <div className="flex items-center gap-2 flex-1">
           <button
             onClick={toggleCollapse}
-            className="qt-icon-button p-1"
+            className="qt-button-icon p-1"
             aria-label={collapsed ? 'Expand' : 'Collapse'}
           >
             <Icon
