@@ -62,7 +62,9 @@ A single global cap on in-flight jobs of any type, enforced in the dispatcher (`
 
 Writes are batched at job end. The proxy resolves write calls immediately with **client-generated IDs** (string UUIDs via `crypto.randomUUID()`, matching the existing schema convention — every Quilltap table uses string UUIDs). Subsequent reads inside the same handler cannot see those uncommitted rows. If a handler genuinely needs read-your-writes within a single job, the handler must be restructured to compute everything from in-memory state before flushing.
 
-The proxy logs a runtime warning when a read method hits a key recently appended to the pending-writes buffer. This is a cheap diagnostic for read-your-writes regressions.
+The proxy logs a runtime warning ("Read after buffered write on same table") when a read hits a table already written this job, deduped per `(jobId, readMethod)`. This is a cheap diagnostic for read-your-writes regressions: it compares method names, not row identity, so it flags suspicion rather than proof.
+
+The grouping key is the *table* a method implies, not the repository object — a repository fronting several tables would otherwise warn on pairs that cannot stale each other. `TABLE_GROUP_RESOLVERS` in `child-repositories-proxy.ts` holds the per-repository resolvers (today: `connections` splits `api_keys` from `connection_profiles`); a repository with no resolver is treated as a single table. **When you add a repository that fronts more than one table, add a resolver entry** — otherwise its every read/write pairing warns.
 
 ## Per-database partitioned apply
 

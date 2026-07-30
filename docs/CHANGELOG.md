@@ -4,6 +4,16 @@
 
 ### 4.8-dev
 
+#### Read-your-writes detector compares tables, not repositories
+
+The job child's read-your-writes diagnostic warned once per autonomous-room turn about a condition that could not happen: `connections.findApiKeyByIdAndUserId` (a `SELECT` from `api_keys`) read after a buffered `connections.incrementTokenUsage` (a counter bump on `connection_profiles`). The detector's grouping key was the repository object, and the connections repository fronts both tables, so every turn that made more than one provider call logged a false positive — the first call buffers the counter bump, later calls re-resolve an API key.
+
+The grouping key is now the table a method implies, via a `TABLE_GROUP_RESOLVERS` map in `lib/background-jobs/child/child-repositories-proxy.ts` (currently one entry: connections methods containing "ApiKey" resolve to `api_keys`, the rest to `connection_profiles`). Repositories without a resolver are treated as a single table, exactly as before. The warning message now reads "same table" and its context carries a `table` field. Add a resolver entry when a new repository fronts multiple tables.
+
+No behavioural change beyond the log: the buffered counter bump has no in-job reader. The one genuine read-your-writes lag on that path — `llmLogs.getTotalTokenUsageForRun` reading a turn behind its own buffered `llmLogs.create` — is unrelated, still detected, and already compensated by the monotonic `Math.max` clamp in `autonomous-room-turn.ts`.
+
+New tests in `__tests__/unit/background-jobs/child-repositories-proxy.test.ts`: cross-table silence, same-table warning on both of the connections tables, per-`(jobId, readMethod)` dedup, and unmapped-repo behaviour.
+
 #### Export a chat as a readable Markdown transcript
 
 New **Export Markdown** button in the chat sidebar's Organize drawer (`GET /api/v1/chats/[id]?action=export-markdown`). It renders the conversation as a single deterministic Markdown file — the readable record of what was said, not a data-interchange format. Included: the chat title, the opening scenario (with `{{char}}`/`{{user}}` expanded), every participant/user message (active swipe only), Pascal roll announcements, Carina answers (Brahma Console answers under the name "Brahma"), user-inserted announcements (Staff, character, or custom voice), the Host's continuation/merge notices linking the chat to conversations it continues or absorbed, and whispers (marked). Excluded: SYSTEM/TOOL messages, Staff housekeeping (memory whispers, image announcements, time marks), and anything sent to LLMs as prompts.
