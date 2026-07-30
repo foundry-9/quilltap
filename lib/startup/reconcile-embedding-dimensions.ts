@@ -46,6 +46,7 @@
 import type { Database as DatabaseType } from 'better-sqlite3'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { EMBEDDING_DIM_SQL } from '@/lib/embedding/float32-conversion'
+import { tableExists } from '@/lib/database/backends/sqlite/introspection'
 
 const logger = createServiceLogger('Startup:EmbeddingDimReconcile')
 
@@ -112,13 +113,6 @@ function countNonconforming(
     .prepare(`SELECT COUNT(*) AS n FROM "${table}" WHERE ${where} AND ${NOT_FAILED(table)}`)
     .get(targetDim, entityType, profileId) as { n: number }
   return row.n
-}
-
-function tableExists(db: DatabaseType, name: string): boolean {
-  const row = db
-    .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name = ?`)
-    .get(name) as { name: string } | undefined
-  return Boolean(row)
 }
 
 /**

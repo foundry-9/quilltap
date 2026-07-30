@@ -32,7 +32,7 @@ import { useRouter } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { Icon } from '@/components/ui/icon'
-import { apiFetch, ApiFetchError } from '@/lib/query/fetcher'
+import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { useWorkspaceOptional } from '@/components/providers/workspace-provider'
@@ -690,19 +690,9 @@ function ToolReferencePanel({ tool }: Readonly<{ tool: CustomTool }>) {
   )
 }
 
-/** Pull a human message out of an ApiFetchError's parsed `{ error }` body. */
+/** {@link apiErrorMessage} with this dialog's own fallback. */
 function extractErrorMessage(err: unknown): string {
-  if (err instanceof ApiFetchError) {
-    const info = err.info
-    if (info && typeof info === 'object') {
-      const record = info as Record<string, unknown>
-      if (typeof record.error === 'string') return record.error
-      if (typeof record.message === 'string') return record.message
-    }
-    return err.message
-  }
-  if (err instanceof Error) return err.message
-  return 'The tool could not be run.'
+  return apiErrorMessage(err, 'The tool could not be run.')
 }
 
 export default CustomToolRunDialog

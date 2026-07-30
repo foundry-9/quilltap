@@ -142,6 +142,29 @@ export const ReasoningSegmentSchema = z.object({
 });
 export type ReasoningSegment = z.infer<typeof ReasoningSegmentSchema>;
 
+/**
+ * The personified features ("the Staff") that may author a message in lieu of a
+ * participant. THE authoritative list — adding a member means extending this
+ * enum, the matching `chat_messages` column, the `getMessageAvatar` branch, the
+ * display-name table in `lib/chat/staff-display-names.ts`, and the value list in
+ * `public/schemas/qtap-export.schema.json`. Per-member responsibilities are
+ * documented on `MessageEventSchema.systemSender` below.
+ */
+export const SystemSenderEnum = z.enum([
+  'lantern',
+  'aurora',
+  'librarian',
+  'concierge',
+  'prospero',
+  'host',
+  'commonplaceBook',
+  'ariel',
+  'carina',
+  'suparna',
+  'pascal',
+]);
+export type SystemSender = z.infer<typeof SystemSenderEnum>;
+
 export const MessageEventSchema = z.object({
   type: z.literal('message'),
   id: UUIDSchema,
@@ -219,7 +242,7 @@ export const MessageEventSchema = z.object({
   /** Whether this message was generated while the character was in silent mode */
   isSilentMessage: z.boolean().nullable().optional(),
   /** Identifies a personified feature ("the Staff") that authored this message in lieu of a participant. 'lantern' = Lantern image announcements; 'aurora' = character-avatar refreshes; 'librarian' = Document Mode open/save announcements; 'concierge' = dangerous-content classification announcements; 'prospero' = agent / connection-profile change announcements; 'host' = Salon participation announcements; 'commonplaceBook' = memory recall whispers (recap, relevant memories, inter-character memories); 'ariel' = terminal session announcements (PTY open/close); 'carina' = inline-query reference answers (Carina); 'suparna' = Suparṇā's Post Office mail-delivery announcements (new letters arrived in the character's vault Mail/ folder); 'pascal' = Pascal the Croupier's custom-tool (pseudo-tool) roll outcomes, posted server-side so a model cannot fudge a failure into a success. Note: a 'carina' message renders with the ANSWERER character's own avatar (resolved via `carinaMeta.answererId`), not a dedicated Staff avatar — the tag exists for memory suppression and the compact reference-card UI hook. */
-  systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host', 'commonplaceBook', 'ariel', 'carina', 'suparna', 'pascal']).nullable().optional(),
+  systemSender: SystemSenderEnum.nullable().optional(),
   /**
    * Neutral, persona-free rewrite of `content` for Staff-authored messages
    * (systemSender != null). When the chat has any non-user-character

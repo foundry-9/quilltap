@@ -8,6 +8,20 @@
 
 import type { TimestampConfig, TimestampFormat } from '@/lib/schemas/types'
 
+/**
+ * The timestamp configuration a chat gets when nothing else supplies one — the
+ * settings-form default, and the last link of every resolution chain (chat
+ * config → Salon default → this). Mirrors the Zod default on
+ * `chatSettings.defaultTimestampConfig`; keep the two in step.
+ */
+export const DEFAULT_TIMESTAMP_CONFIG: TimestampConfig = {
+  mode: 'NONE',
+  format: 'FRIENDLY',
+  useFictionalTime: false,
+  autoPrepend: true,
+  intervalMinutes: 15,
+}
+
 export interface CalculatedTimestamp {
   /** Formatted timestamp string for display/prompt injection */
   formatted: string

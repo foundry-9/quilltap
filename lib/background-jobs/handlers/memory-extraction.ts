@@ -13,38 +13,17 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { processTurnForMemory } from '@/lib/memory/memory-processor';
 import {
   buildTurnTranscript,
+  resolveUserCharacterParticipant,
   type TurnTranscript,
 } from '@/lib/services/chat-message/turn-transcript';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
 import { createMemoryExtractionEvent } from '@/lib/services/system-events.service';
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service';
-import type { Character, ChatParticipantBase, MessageEvent } from '@/lib/schemas/types';
+import type { Character, MessageEvent } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { getMemoryExtractionLimits } from '@/lib/instance-settings';
 import type { MemoryExtractionPayload } from '../queue-service';
-
-/**
- * Resolve the user-controlled character (if any) from the chat's participants.
- *
- * Quilltap is single-user per instance: at most one CHARACTER participant is
- * marked as the user persona. When no user-controlled character exists, the
- * OTHER pass simply omits the user from its subject set.
- */
-function resolveUserCharacterParticipant(
-  participants: ChatParticipantBase[],
-  participantCharacters: Map<string, Character>,
-): { id: string; name: string; pronouns: Character['pronouns'] | null } | undefined {
-  const userCharParticipant = participants.find(
-    p => p.type === 'CHARACTER' && p.controlledBy === 'user' && p.characterId,
-  );
-  if (!userCharParticipant || userCharParticipant.type !== 'CHARACTER' || !userCharParticipant.characterId) {
-    return undefined;
-  }
-  const character = participantCharacters.get(userCharParticipant.characterId);
-  if (!character) return undefined;
-  return { id: character.id, name: character.name, pronouns: character.pronouns ?? null };
-}
 
 export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> {
   const payload = job.payload as unknown as MemoryExtractionPayload;

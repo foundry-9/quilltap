@@ -21,7 +21,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Icon } from '@/components/ui/icon'
-import { apiFetch, ApiFetchError } from '@/lib/query/fetcher'
+import { apiFetch, apiErrorMessage, ApiFetchError } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { buildMountFileItemUrl } from '@/components/files/mountBlobUrl'
@@ -71,16 +71,9 @@ function useDebounced<T>(value: T, delayMs: number): T {
   return debounced
 }
 
+/** {@link apiErrorMessage} with the bench's own fallback. */
 function extractErrorMessage(err: unknown): string {
-  if (err instanceof ApiFetchError) {
-    const info = err.info
-    if (info && typeof info === 'object' && typeof (info as { error?: unknown }).error === 'string') {
-      return (info as { error: string }).error
-    }
-    return err.message
-  }
-  if (err instanceof Error) return err.message
-  return 'Something went sideways at the bench.'
+  return apiErrorMessage(err, 'Something went sideways at the bench.')
 }
 
 export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonly<WorkbenchEditorProps>) {

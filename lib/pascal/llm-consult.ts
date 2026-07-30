@@ -21,6 +21,7 @@
  */
 
 import { getErrorMessage } from '@/lib/error-utils';
+import { withTimeout } from '@/lib/promise-timeout';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { buildCheapLLMConfig } from '@/lib/wardrobe/apply-outfit-selections';
@@ -63,24 +64,6 @@ export function consultMaxTokens(maxOutputChars: number): number {
   return Math.min(Math.max(Math.ceil(maxOutputChars / 3), 2048), 32_768);
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new Error(`the consult timed out after ${Math.round(ms / 1000)}s`)),
-      ms
-    );
-    promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (error) => {
-        clearTimeout(timer);
-        reject(error);
-      }
-    );
-  });
-}
 
 async function consult(
   context: CustomToolConsultContext,
@@ -145,7 +128,13 @@ async function consult(
 export function buildCustomToolLlmInvoker(context: CustomToolConsultContext): LlmInvoker {
   return async (prompt: string, options?: LlmInvokeOptions): Promise<LlmInvokeResult> => {
     try {
-      return await withTimeout(consult(context, prompt, options), CONSULT_TIMEOUT_MS);
+      // The reason reaches the author's `errorMessage` path, so it is phrased
+      // for a person reading a failed roll — seconds, not milliseconds.
+      return await withTimeout(
+        consult(context, prompt, options),
+        CONSULT_TIMEOUT_MS,
+        `the consult timed out after ${Math.round(CONSULT_TIMEOUT_MS / 1000)}s`
+      );
     } catch (error) {
       return { ok: false, reason: getErrorMessage(error) };
     }

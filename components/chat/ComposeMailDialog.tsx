@@ -6,7 +6,7 @@ import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 import { FloatingDialog } from '@/components/ui/FloatingDialog'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
-import { apiFetch, ApiFetchError } from '@/lib/query/fetcher'
+import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { formatDate } from '@/lib/format-time'
 
@@ -322,17 +322,7 @@ export default function ComposeMailDialog({
   )
 }
 
-/** Pull a human message out of an ApiFetchError's parsed `{ error }` body. */
+/** {@link apiErrorMessage} with this dialog's own fallback. */
 function extractErrorMessage(err: unknown): string {
-  if (err instanceof ApiFetchError) {
-    const info = err.info
-    if (info && typeof info === 'object') {
-      const record = info as Record<string, unknown>
-      if (typeof record.error === 'string') return record.error
-      if (typeof record.message === 'string') return record.message
-    }
-    return err.message
-  }
-  if (err instanceof Error) return err.message
-  return 'The letter could not be posted.'
+  return apiErrorMessage(err, 'The letter could not be posted.')
 }

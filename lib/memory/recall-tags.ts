@@ -340,6 +340,16 @@ export function temporalMultiplier(
 }
 
 /**
+ * A memory's event time in ms — `occurredAt` when the episodic spine recorded
+ * one, else the write clock. NaN when neither is present or parsable, which
+ * both boosts below read as "no ground to stand on" and pass through.
+ */
+function eventTimeMs(memory: MemoryTagView): number {
+  const eventIso = memory.occurredAt ?? memory.createdAt
+  return eventIso ? Date.parse(eventIso) : NaN
+}
+
+/**
  * Time-window boost — the memory's event time (occurredAt ?? createdAt) falls
  * inside the turn's resolved retrospective window. Soft fallback companion to
  * the hard filter in `searchMemoriesSemantic`. No window, or no parsable
@@ -350,9 +360,7 @@ export function occurredWithinMultiplier(
   window: { from: string; to: string } | null | undefined,
 ): RecallMultiplier {
   if (!window) return { multiplier: 1, fired: [] }
-  const eventIso = memory.occurredAt ?? memory.createdAt
-  if (!eventIso) return { multiplier: 1, fired: [] }
-  const t = Date.parse(eventIso)
+  const t = eventTimeMs(memory)
   const from = Date.parse(window.from)
   const to = Date.parse(window.to)
   if (!Number.isFinite(t) || !Number.isFinite(from) || !Number.isFinite(to)) {
@@ -391,9 +399,7 @@ export function freshEventMultiplier(
   if (memory.chatId && currentChatId && memory.chatId === currentChatId) {
     return { multiplier: 1, fired: [] }
   }
-  const eventIso = memory.occurredAt ?? memory.createdAt
-  if (!eventIso) return { multiplier: 1, fired: [] }
-  const t = Date.parse(eventIso)
+  const t = eventTimeMs(memory)
   if (!Number.isFinite(t)) return { multiplier: 1, fired: [] }
 
   const age = nowMs - t

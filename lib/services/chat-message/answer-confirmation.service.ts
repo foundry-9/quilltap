@@ -19,6 +19,7 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
+import { withTimeout } from '@/lib/promise-timeout'
 import { resolveUncensoredCheapLLMSelection, type CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { executeCheapLLMTask } from '@/lib/memory/cheap-llm-tasks/core-execution'
 import type { UncensoredFallbackOptions, CheapLLMTaskResult } from '@/lib/memory/cheap-llm-tasks/types'
@@ -277,17 +278,6 @@ function parseReaffirmationVerdict(content: string): ReaffirmationVerdict {
   }
 }
 
-/** Reject a promise after `ms`, so a hung LLM call degrades to `confirmed:null`. */
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
-    promise.then(
-      (v) => { clearTimeout(timer); resolve(v) },
-      (e) => { clearTimeout(timer); reject(e) },
-    )
-  })
-}
-
 /**
  * The resolved outcome the finalizer applies to the persisted message.
  * `confirmed === undefined` never occurs here — the finalizer only calls this
@@ -373,7 +363,7 @@ export async function runAnswerConfirmation(
         characterId,
       ),
       CONSISTENCY_CHECK_TIMEOUT_MS,
-      'answer-confirmation check',
+      `answer-confirmation check timed out after ${CONSISTENCY_CHECK_TIMEOUT_MS}ms`,
     )
   } catch (error) {
     logger.warn('Answer confirmation check failed/timed out; marking unverified', {
@@ -455,7 +445,7 @@ export async function runAnswerConfirmation(
         characterId,
       ),
       REAFFIRMATION_TIMEOUT_MS,
-      'answer-reaffirmation',
+      `answer-reaffirmation timed out after ${REAFFIRMATION_TIMEOUT_MS}ms`,
     )
   } catch (error) {
     logger.warn('Answer re-affirmation failed/timed out; marking unverified', {

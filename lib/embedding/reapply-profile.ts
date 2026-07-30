@@ -37,19 +37,13 @@ import { getMountIndexDatabasePath, getSQLiteDatabasePath } from '@/lib/paths'
 import { invalidateAll as invalidateMountChunkCacheAll } from '@/lib/mount-index/mount-chunk-cache'
 import { getVectorStoreManager } from '@/lib/embedding/vector-store'
 import { blobToFloat32, float32ToBlob, EMBEDDING_DIM_SQL } from '@/lib/embedding/float32-conversion'
+import { tableExists } from '@/lib/database/backends/sqlite/introspection'
 import type { EmbeddingProfile } from '@/lib/schemas/types'
 
 const FLUSH_BATCH = 500
 const ZERO_MAG = 1e-10
 
 const MAIN_DB_TABLES = ['memories', 'vector_entries', 'conversation_chunks', 'help_docs'] as const
-
-function tableExists(db: DatabaseType, name: string): boolean {
-  const row = db
-    .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name = ?`)
-    .get(name) as { name: string } | undefined
-  return Boolean(row)
-}
 
 function requireMainDatabase(): DatabaseType {
   const db = getRawDatabase()
@@ -254,12 +248,7 @@ function maxStoredDimension(): number {
   const mount = openMountIndexDb()
   if (mount) {
     try {
-      const tableExists = mount
-        .prepare(
-          `SELECT name FROM sqlite_master WHERE type='table' AND name='doc_mount_chunks'`,
-        )
-        .get()
-      if (tableExists) {
+      if (tableExists(mount, 'doc_mount_chunks')) {
         const row = mount
           .prepare(
             `SELECT MAX(${EMBEDDING_DIM_SQL}) AS maxDim FROM doc_mount_chunks WHERE embedding IS NOT NULL`,
@@ -374,10 +363,7 @@ export async function reapplyEmbeddingProfile(
   const mount = openMountIndexDb()
   if (mount) {
     try {
-      const tableExists = mount
-        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='doc_mount_chunks'")
-        .get()
-      if (tableExists) {
+      if (tableExists(mount, 'doc_mount_chunks')) {
         try {
           mountBackupPath = vacuumIntoBackup(mount, getMountIndexDatabasePath())
           logger.info('[ReapplyProfile] Mount index DB backed up', { mountBackupPath })

@@ -17,7 +17,10 @@ import { logger } from '@/lib/logger';
 import { badRequest } from '@/lib/api/responses';
 import { enqueueMemoryExtractionBatch, ensureProcessorRunning } from '@/lib/background-jobs';
 import { processTurnForMemory } from '@/lib/memory/memory-processor';
-import { buildTurnTranscript } from '@/lib/services/chat-message/turn-transcript';
+import {
+  buildTurnTranscript,
+  resolveUserCharacterParticipant,
+} from '@/lib/services/chat-message/turn-transcript';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
 import { getMemoryExtractionLimits } from '@/lib/instance-settings';
@@ -25,7 +28,6 @@ import type { AuthenticatedContext } from '@/lib/api/middleware';
 import type {
   Character,
   ChatMetadata,
-  ChatParticipantBase,
   MessageEvent,
 } from '@/lib/schemas/types';
 
@@ -55,22 +57,6 @@ async function resolveCheapLLMProfileId(
   }
 
   return null;
-}
-
-/** Find the user-controlled character participant on a chat (single-user instance). */
-function resolveUserCharacterParticipant(
-  participants: ChatParticipantBase[],
-  participantCharacters: Map<string, Character>,
-): { id: string; name: string; pronouns: Character['pronouns'] | null } | undefined {
-  const userCharParticipant = participants.find(
-    p => p.type === 'CHARACTER' && p.controlledBy === 'user' && p.characterId,
-  );
-  if (!userCharParticipant || userCharParticipant.type !== 'CHARACTER' || !userCharParticipant.characterId) {
-    return undefined;
-  }
-  const character = participantCharacters.get(userCharParticipant.characterId);
-  if (!character) return undefined;
-  return { id: character.id, name: character.name, pronouns: character.pronouns ?? null };
 }
 
 /**

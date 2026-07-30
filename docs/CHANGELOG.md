@@ -4,6 +4,21 @@
 
 ### 4.8-dev
 
+#### Deduplicate helpers across the release diff
+
+Release-checklist refactor pass over the 171 non-test source files changed since 4.7.0. Behavior is unchanged; the point is to collapse copies that would drift.
+
+- `extractErrorMessage` existed four times (`CustomToolRunDialog`, `WorkbenchEditor`, `ProvingBench`, `ComposeMailDialog`). Two read only `info.error`, two also read `info.message`. Now one `apiErrorMessage(err, fallback)` in `lib/query/fetcher.ts`, beside the `ApiFetchError` it unwraps; each caller keeps its own fallback sentence.
+- `resolveUserCharacterParticipant` was byte-identical in `lib/background-jobs/handlers/memory-extraction.ts` and `app/api/v1/chats/[id]/actions/memories.ts`. Moved to `lib/services/chat-message/turn-transcript.ts`, which both already import and whose `userCharacter*` options are exactly what it returns.
+- The Staff display-name table existed in `app/salon/[id]/components/system-message-labels.ts` and again in the new `lib/export/markdown-transcript.ts`. Now `lib/chat/staff-display-names.ts`. The `systemSender` enum is also extracted from `MessageEventSchema` into a named `SystemSenderEnum` / `SystemSender` in `lib/schemas/chat.types.ts`, so the authoritative list can be referenced instead of respelled.
+- The default `TimestampConfig` literal gained a fifth copy in the Markdown exporter. `DEFAULT_TIMESTAMP_CONFIG` now lives in `lib/chat/timestamp-utils.ts` with its consumers; `components/settings/chat-settings/types.ts` re-exports it, so existing imports are unchanged.
+- `tableExists` was duplicated in `lib/startup/reconcile-embedding-dimensions.ts` and `lib/embedding/reapply-profile.ts` — and `reapply-profile` had two further inline copies that shadowed its own function with a row object. All four now use `lib/database/backends/sqlite/introspection.ts`. The existing `sqliteTableExists` could not serve: it resolves the main database itself, and these need the mount-index handle.
+- `withTimeout` was duplicated in `lib/pascal/llm-consult.ts` and `lib/services/chat-message/answer-confirmation.service.ts`. Now `lib/promise-timeout.ts`. It takes the whole message rather than a label, because Pascal's version is shown to a person reading a failed roll ("timed out after 30s") while the other two only reach the log ("after 30000ms") — composing from a label would have quietly changed user-visible text.
+- The Workbench preview and audit handlers opened with the same parse-body / validate-definition / resolve-metadata triple and closed with the same `CustomToolRunError` to 422 catch. Both are now shared helpers in `app/api/v1/custom-tools/route.ts`.
+- `occurredAt ?? createdAt` plus `Date.parse` was inlined in both recall multipliers in `lib/memory/recall-tags.ts`; folded into one helper.
+
+Left alone deliberately: `resolveWhenPhrase` and `resolveDayReference` share an English day lexicon but resolve a point versus a window, in UTC versus server-local, against a message timestamp versus now — merging them would risk behavior for no correctness gain. The two same-named `collapseOneChat` functions do unrelated jobs. `getMessageAvatar` in `SalonView.tsx` respells the staff names in an eleven-branch chain and is a good candidate for the new table, but this diff did not touch it.
+
 #### Test coverage for the eight untested API routes
 
 Continues the release-checklist coverage pass. The `lib/` subset closed in the previous entry; this closes the API-route subset — the eight routes and route actions that the same coverage run found at 0%. All eight now sit at 100% statements and 100% branches, across 131 new tests in 8 new suites. The suite is 559 files / 9,223 tests.

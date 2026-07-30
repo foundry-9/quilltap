@@ -75,6 +75,32 @@ export function findTurnOpenerMessageId(messages: MessageEvent[]): string | null
   return null
 }
 
+/**
+ * Resolve the user-controlled character (if any) from a chat's participants,
+ * hydrated from a map of the chat's `Character` records.
+ *
+ * Quilltap is single-user per instance: at most one CHARACTER participant is
+ * marked as the user persona. When none exists — or its Character record is
+ * missing from the map — the caller simply omits the user from its subject set.
+ *
+ * Lives here because every caller is feeding {@link buildTurnTranscript}'s
+ * `userCharacter*` options, which is exactly what this returns.
+ */
+export function resolveUserCharacterParticipant(
+  participants: ChatParticipantBase[],
+  participantCharacters: Map<string, Character>,
+): { id: string; name: string; pronouns: Character['pronouns'] | null } | undefined {
+  const userCharParticipant = participants.find(
+    p => p.type === 'CHARACTER' && p.controlledBy === 'user' && p.characterId,
+  )
+  if (!userCharParticipant || userCharParticipant.type !== 'CHARACTER' || !userCharParticipant.characterId) {
+    return undefined
+  }
+  const character = participantCharacters.get(userCharParticipant.characterId)
+  if (!character) return undefined
+  return { id: character.id, name: character.name, pronouns: character.pronouns ?? null }
+}
+
 interface BuildTurnTranscriptOptions {
   /** The USER message that opened the turn. Pass null for greeting-only turns. */
   turnOpenerMessageId: string | null

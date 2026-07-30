@@ -1,18 +1,5 @@
 import type { Message } from '../types'
-
-const SENDER_DISPLAY_NAMES: Record<NonNullable<Message['systemSender']>, string> = {
-  lantern: 'The Lantern',
-  aurora: 'Aurora',
-  librarian: 'The Librarian',
-  concierge: 'The Concierge',
-  prospero: 'Prospero',
-  host: 'The Host',
-  commonplaceBook: 'The Commonplace Book',
-  ariel: 'Ariel',
-  carina: 'Carina',
-  suparna: 'Suparṇā',
-  pascal: 'Pascal',
-}
+import { staffDisplayName } from '@/lib/chat/staff-display-names'
 
 const KIND_DISPLAY_OVERRIDES: Record<string, string> = {
   'project-context': 'project information',
@@ -67,8 +54,7 @@ const KIND_DISPLAY_OVERRIDES: Record<string, string> = {
 }
 
 export function getSystemSenderDisplayName(sender: Message['systemSender']): string {
-  if (!sender) return ''
-  return SENDER_DISPLAY_NAMES[sender] ?? sender
+  return staffDisplayName(sender)
 }
 
 /**

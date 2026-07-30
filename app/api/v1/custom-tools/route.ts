@@ -171,21 +171,54 @@ async function resolveMetadata(
   }
 }
 
-async function handlePreview(req: NextRequest, ctx: RequestContext): Promise<NextResponse> {
-  const body = await parseBody(req, PreviewBodySchema);
-  if (!body.ok) return body.response;
+/**
+ * The three steps both bench actions open with: parse the body, validate the
+ * definition, resolve the fact sheet. Each can bail with the 4xx the author
+ * reads, so the caller gets either everything it needs or the response to
+ * return instead.
+ */
+async function parseBenchRequest<T extends { definition: unknown; metadata?: unknown }>(
+  req: NextRequest,
+  ctx: RequestContext,
+  schema: z.ZodType<T>
+): Promise<Parsed<{ body: T; definition: QtapCustomTool; metadata: Record<string, unknown> }>> {
+  const body = await parseBody(req, schema);
+  if (!body.ok) return body;
 
   const definition = parseDefinition(body.value.definition);
-  if (!definition.ok) return definition.response;
+  if (!definition.ok) return definition;
 
-  const metadata = await resolveMetadata(ctx, body.value.metadata);
-  if (!metadata.ok) return metadata.response;
+  const metadata = await resolveMetadata(
+    ctx,
+    body.value.metadata as z.infer<typeof MetadataInputSchema> | null | undefined
+  );
+  if (!metadata.ok) return metadata;
+
+  return { ok: true, value: { body: body.value, definition: definition.value, metadata: metadata.value } };
+}
+
+/**
+ * A refused run is the author's table working as written, not a server fault:
+ * report it as a 422 they can read, and let anything else throw.
+ */
+function benchRefusal(error: unknown, action: string, toolName: string): NextResponse {
+  if (error instanceof CustomToolRunError) {
+    logger.debug(`Workbench ${action} refused`, { context: HANDLER, tool: toolName, reason: error.message });
+    return errorResponse(error.message, 422);
+  }
+  throw error;
+}
+
+async function handlePreview(req: NextRequest, ctx: RequestContext): Promise<NextResponse> {
+  const parsed = await parseBenchRequest(req, ctx, PreviewBodySchema);
+  if (!parsed.ok) return parsed.response;
+  const { body, definition, metadata } = parsed.value;
 
   // Which oracle answers the bench: the real one (live), a scripted one, or a
   // scripted failure. Absent input leaves the seam unwired, so the consult
   // fails soft into the author's errorMessage path.
   let llmInvoke: LlmInvoker | undefined;
-  const llmInput = body.value.llm;
+  const llmInput = body.llm;
   if (llmInput && 'live' in llmInput) {
     llmInvoke = buildCustomToolLlmInvoker({ userId: ctx.user.id, chatId: null });
   } else if (llmInput && 'output' in llmInput) {
@@ -196,10 +229,10 @@ async function handlePreview(req: NextRequest, ctx: RequestContext): Promise<Nex
   }
 
   try {
-    const result = await executeCustomTool(definition.value, body.value.params ?? undefined, {
-      private: body.value.private,
-      metadata: metadata.value,
-      state: body.value.state ?? {},
+    const result = await executeCustomTool(definition, body.params ?? undefined, {
+      private: body.private,
+      metadata,
+      state: body.state ?? {},
       ...(llmInvoke ? { llmInvoke } : {}),
     });
     // The bench always deals — a gate decides whether a character is OFFERED a
@@ -208,60 +241,45 @@ async function handlePreview(req: NextRequest, ctx: RequestContext): Promise<Nex
     // been dealt it", which a roll alone could never reveal.
     return successResponse({
       ...result,
-      ...(hasToolGate(definition.value)
-        ? { gate: evaluateToolGate(definition.value, metadata.value) }
-        : {}),
+      ...(hasToolGate(definition) ? { gate: evaluateToolGate(definition, metadata) } : {}),
     });
   } catch (error) {
-    if (error instanceof CustomToolRunError) {
-      logger.debug('Workbench preview refused', { context: HANDLER, tool: definition.value.name, reason: error.message });
-      return errorResponse(error.message, 422);
-    }
-    throw error;
+    return benchRefusal(error, 'preview', definition.name);
   }
 }
 
 async function handleAudit(req: NextRequest, ctx: RequestContext): Promise<NextResponse> {
-  const body = await parseBody(req, AuditBodySchema);
-  if (!body.ok) return body.response;
-
-  const definition = parseDefinition(body.value.definition);
-  if (!definition.ok) return definition.response;
-
-  const metadata = await resolveMetadata(ctx, body.value.metadata);
-  if (!metadata.ok) return metadata.response;
+  const parsed = await parseBenchRequest(req, ctx, AuditBodySchema);
+  if (!parsed.ok) return parsed.response;
+  const { body, definition, metadata } = parsed.value;
 
   // The fixed consult every draw shares. A definition with an `llm` block and
   // no scripted answer audits its failure path — the honest default, since
   // that is the path a live table must always survive.
   let llm: LlmSubject | undefined;
-  if (definition.value.llm) {
-    const llmInput = body.value.llm;
+  if (definition.llm) {
+    const llmInput = body.llm;
     // Trimmed and capped exactly as a live run would keep it, so the audit
     // tests the answer the table would actually see.
-    const maxOutput = definition.value.llm.maxOutput ?? MAX_LLM_OUTPUT_LENGTH;
+    const maxOutput = definition.llm.maxOutput ?? MAX_LLM_OUTPUT_LENGTH;
     llm =
       llmInput && 'output' in llmInput
         ? { ok: true, output: llmInput.output.trim().slice(0, maxOutput).trim() }
-        : { ok: false, output: definition.value.llm.errorMessage };
+        : { ok: false, output: definition.llm.errorMessage };
   }
 
   try {
     const result = simulateOutcomes(
-      definition.value,
-      body.value.params ?? undefined,
+      definition,
+      body.params ?? undefined,
       AUDIT_RUNS,
-      metadata.value,
+      metadata,
       llm,
-      body.value.state ?? {}
+      body.state ?? {}
     );
     return successResponse(result);
   } catch (error) {
-    if (error instanceof CustomToolRunError) {
-      logger.debug('Workbench audit refused', { context: HANDLER, tool: definition.value.name, reason: error.message });
-      return errorResponse(error.message, 422);
-    }
-    throw error;
+    return benchRefusal(error, 'audit', definition.name);
   }
 }
 

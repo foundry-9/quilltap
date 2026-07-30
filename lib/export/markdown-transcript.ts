@@ -28,7 +28,12 @@
  * transcript needs both halves of the timestamp to stay readable.
  */
 
-import { calculateTimestampAt, resolveTimezone } from '@/lib/chat/timestamp-utils';
+import {
+  calculateTimestampAt,
+  resolveTimezone,
+  DEFAULT_TIMESTAMP_CONFIG,
+} from '@/lib/chat/timestamp-utils';
+import { staffDisplayName } from '@/lib/chat/staff-display-names';
 import { processTemplate } from '@/lib/templates/processor';
 import { BRAHMA_CARINA_ANSWERER_ID } from '@/lib/services/carina/brahma-answerer';
 import type { ChatMetadata, ChatEvent, MessageEvent, ChatParticipant } from '@/lib/schemas/chat.types';
@@ -36,30 +41,6 @@ import type { TimestampConfig } from '@/lib/schemas/types';
 
 /** Host notices that record where a conversation came from or moved to. */
 const HOST_LINK_KINDS = new Set(['continuation-from', 'continuation-to', 'merge-from', 'merge-to']);
-
-/** Display names for Staff members a user may pick as an announcement voice. */
-const STAFF_DISPLAY_NAMES: Record<string, string> = {
-  lantern: 'The Lantern',
-  aurora: 'Aurora',
-  librarian: 'The Librarian',
-  concierge: 'The Concierge',
-  prospero: 'Prospero',
-  host: 'The Host',
-  commonplaceBook: 'The Commonplace Book',
-  ariel: 'Ariel',
-  suparna: 'Suparṇā',
-  pascal: 'Pascal',
-  carina: 'Carina',
-};
-
-/** Config used when neither the chat nor the Salon defaults carry one. */
-const FALLBACK_CONFIG: TimestampConfig = {
-  mode: 'NONE',
-  format: 'FRIENDLY',
-  useFictionalTime: false,
-  autoPrepend: true,
-  intervalMinutes: 15,
-};
 
 export interface MarkdownTranscriptInput {
   chat: ChatMetadata;
@@ -119,7 +100,7 @@ function resolveSpeakerName(
   }
 
   if (msg.systemSender) {
-    return STAFF_DISPLAY_NAMES[msg.systemSender] ?? msg.systemSender;
+    return staffDisplayName(msg.systemSender);
   }
 
   if (msg.participantId) {
@@ -166,7 +147,7 @@ function collapseSwipes(messages: MessageEvent[]): MessageEvent[] {
 export function buildMarkdownTranscript(input: MarkdownTranscriptInput): string {
   const { chat, events, characterNamesById, userName } = input;
 
-  const config = chat.timestampConfig ?? input.defaultTimestampConfig ?? FALLBACK_CONFIG;
+  const config = chat.timestampConfig ?? input.defaultTimestampConfig ?? DEFAULT_TIMESTAMP_CONFIG;
   // DATE_ONLY / TIME_ONLY drop half the information a transcript needs.
   const effectiveConfig: TimestampConfig =
     config.format === 'DATE_ONLY' || config.format === 'TIME_ONLY'

@@ -13,7 +13,7 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Icon } from '@/components/ui/icon'
-import { apiFetch, ApiFetchError } from '@/lib/query/fetcher'
+import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { displayTitle, isStateRef } from '@/lib/pascal/custom-tool.types'
 import type { CustomToolAuditResult, CustomToolRunResult } from '@/lib/pascal/custom-tools'
@@ -61,16 +61,9 @@ type BenchOracle = { mode: 'scripted'; answer: string } | { mode: 'fail' } | { m
  */
 type BenchRoll = CustomToolRunResult & { gate?: ToolGateVerdict }
 
+/** {@link apiErrorMessage} with the bench's own fallback. */
 function extractErrorMessage(err: unknown): string {
-  if (err instanceof ApiFetchError) {
-    const info = err.info
-    if (info && typeof info === 'object' && typeof (info as { error?: unknown }).error === 'string') {
-      return (info as { error: string }).error
-    }
-    return err.message
-  }
-  if (err instanceof Error) return err.message
-  return 'The bench could not oblige.'
+  return apiErrorMessage(err, 'The bench could not oblige.')
 }
 
 export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchProps>) {

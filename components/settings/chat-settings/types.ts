@@ -319,15 +319,10 @@ export const TIMESTAMP_FORMATS = [
 ] as const
 
 /**
- * Default timestamp configuration
+ * Default timestamp configuration. Defined with the timestamp helpers that
+ * consume it and re-exported here so the settings form keeps its usual import.
  */
-export const DEFAULT_TIMESTAMP_CONFIG: TimestampConfig = {
-  mode: 'NONE',
-  format: 'FRIENDLY',
-  useFictionalTime: false,
-  autoPrepend: true,
-  intervalMinutes: 15,
-}
+export { DEFAULT_TIMESTAMP_CONFIG } from '@/lib/chat/timestamp-utils'
 
 /**
  * Memory Cascade Action Options
