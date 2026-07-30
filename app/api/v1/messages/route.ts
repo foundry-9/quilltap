@@ -7,7 +7,6 @@
  * The POST endpoint returns Server-Sent Events for real-time streaming.
  */
 
-import { NextResponse } from 'next/server';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import {
   handleSendMessage,
@@ -18,7 +17,7 @@ import {
   sseStreamResponse,
 } from '@/lib/services/chat-message';
 import { logger } from '@/lib/logger';
-import { notFound, badRequest, serverError } from '@/lib/api/responses';
+import { notFound, badRequest, serverError, successResponse } from '@/lib/api/responses';
 import { scrubUserAgent } from '@/lib/utils/user-agent';
 
 /**
@@ -44,7 +43,7 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
     // Filter to only message events (not system events, context summaries, etc.)
     const messageEvents = messages.filter((m) => m.type === 'message');
 
-    return NextResponse.json({
+    return successResponse({
       messages: messageEvents,
       count: messageEvents.length,
     });

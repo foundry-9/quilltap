@@ -29,6 +29,9 @@ jest.mock('@/lib/api/middleware', () => ({
 jest.mock('@/lib/api/responses', () => ({
   notFound: (what: string) => ({ __kind: 'notFound', status: 404, what }),
   serverError: (msg: string) => ({ __kind: 'serverError', status: 500, msg }),
+  // Mirrors the real helper through the global next/server mock: the payload
+  // lands on `.body`, exactly as the raw NextResponse.json call used to.
+  successResponse: (data: any, status = 200) => ({ body: data, status }),
 }))
 
 import { DELETE } from '@/app/api/v1/characters/[id]/wardrobe/[itemId]/route'

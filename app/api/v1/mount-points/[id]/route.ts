@@ -71,7 +71,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       // can gate verbs from a single server-side source of truth.
       const capabilities = deriveMountCapabilities(mountPoint);
 
-      return NextResponse.json({
+      return successResponse({
         mountPoint: { ...mountPoint, embeddedChunkCount, capabilities },
       });
     } catch (error) {
@@ -152,7 +152,7 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
         });
       });
 
-      return NextResponse.json({ mountPoint: updated });
+      return successResponse({ mountPoint: updated });
     } catch (error) {
       logger.error('[Mount Points v1] Error updating mount point', { mountPointId: id }, error instanceof Error ? error : undefined);
       return serverError('Failed to update mount point');

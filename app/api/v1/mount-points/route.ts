@@ -10,7 +10,7 @@ import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { created, serverError, badRequest, conflict } from '@/lib/api/responses';
+import { created, serverError, badRequest, conflict, successResponse } from '@/lib/api/responses';
 import { attachMountPoint } from '@/lib/mount-index/watcher';
 import { verifyBasePath } from '@/lib/mount-index/scanner';
 import { scaffoldCharacterMount } from '@/lib/mount-index/character-scaffold';
@@ -66,7 +66,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
       embeddedChunkCount: embeddedCountMap.get(mp.id) || 0,
     }));
 
-    return NextResponse.json({ mountPoints: enriched });
+    return successResponse({ mountPoints: enriched });
   } catch (error) {
     logger.error('[Mount Points v1] Error fetching mount points', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to fetch mount points');
@@ -126,7 +126,7 @@ async function handleSemanticSearch(req: NextRequest, userId: string) {
       // (knowledge injector, search tool, etc.) keep the default filtering.
       includeBlocked: true,
     });
-    return NextResponse.json({
+    return successResponse({
       results,
       count: results.length,
       query,

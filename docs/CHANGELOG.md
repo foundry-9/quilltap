@@ -4,6 +4,21 @@
 
 ### 4.8-dev
 
+#### Route responses go through the shared helpers
+
+Release-checklist pass over the API endpoint standard. No route moved and no response body changed.
+
+The audit itself came up clean: every route outside `/api/v1/` is one of the three sanctioned exceptions (`/api/health`, `/api/plugin-routes/[...path]`, `/api/themes/*`), all 21 routes changed since 4.7.0 use the context middleware and dispatch non-CRUD verbs through `?action=`, and there are no synchronous `params` / `cookies()` / `headers()` reads left.
+
+What did need fixing was response construction. Seven route files still called `NextResponse.json` by hand where a helper from `lib/api/responses` applies:
+
+- `characters/[id]/wardrobe/[itemId]`, `messages`, `messages/[id]`, `mount-points`, `mount-points/[id]`, `embedding-profiles/[id]`, and `chats` now use `successResponse` / `created` / `conflict`.
+- The swaps are byte-identical on the wire: `successResponse(data, status)` is `NextResponse.json(data, { status })` and `created(data)` is the 201 form, so no client sees a different payload.
+
+The nine `FileOpError` responses in the two `mount-points` routes were deliberately left as raw `NextResponse.json`. They return `{ error, code }`, and `errorResponse` emits `{ error, details? }` — converting them would have silently dropped the `code` field that callers branch on.
+
+Two test suites mocked `@/lib/api/responses` with only the helpers their route used at the time, so the new helpers were added to those factories, shaped to match the global `next/server` mock (payload on `.body`).
+
 #### Deduplicate helpers across the release diff
 
 Release-checklist refactor pass over the 171 non-test source files changed since 4.7.0. Behavior is unchanged; the point is to collapse copies that would drift.

@@ -33,6 +33,10 @@ jest.mock('@/lib/api/responses', () => ({
   notFound: (what: string) => ({ __kind: 'notFound', status: 404, what }),
   badRequest: (msg: string) => ({ __kind: 'badRequest', status: 400, msg }),
   serverError: (msg: string) => ({ __kind: 'serverError', status: 500, msg }),
+  // Mirror the real helpers through the global next/server mock: the payload
+  // lands on `.body`, exactly as the raw NextResponse.json calls used to.
+  successResponse: (data: any, status = 200) => ({ body: data, status }),
+  created: (data: any) => ({ body: data, status: 201 }),
 }))
 
 jest.mock('@/lib/services/chat-message', () => ({

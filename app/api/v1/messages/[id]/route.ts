@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler, getActionParam } from '@/lib/api/middleware';
-import { badRequest, notFound, serverError } from '@/lib/api/responses';
+import { badRequest, notFound, serverError, successResponse, created } from '@/lib/api/responses';
 import { regenerateMessageAsSwipe } from '@/lib/services/chat-message';
 import { deleteMemoriesBySourceMessagesWithVectors, deleteMemoryWithVector } from '@/lib/memory/memory-service';
 import { invalidateContextSummaryIfMessageCovered } from '@/lib/chat/context-summary';
@@ -90,7 +90,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
         return notFound('Message');
       }
 
-      return NextResponse.json({ message: result.message });
+      return successResponse({ message: result.message });
     } catch (error) {
       logger.error('[Messages API v1] Error fetching message', {}, error instanceof Error ? error : undefined);
       return serverError('Failed to fetch message');
@@ -126,7 +126,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
     // the set that fed it.
     await invalidateContextSummaryIfMessageCovered(result.chat.id, [messageId]);
 
-    return NextResponse.json({ message: updatedMessage });
+    return successResponse({ message: updatedMessage });
   }
 );
 
@@ -163,7 +163,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       const memoryCount = await repos.memories.countBySourceMessageIds(messageIdsToDelete);
 
       // If memories exist and no action specified, return info for confirmation dialog
-      if (memoryCount > 0 && !memoryAction && !skipConfirmation) {return NextResponse.json({
+      if (memoryCount > 0 && !memoryAction && !skipConfirmation) {return successResponse({
           requiresConfirmation: true,
           memoryCount,
           messageIds: messageIdsToDelete,
@@ -204,7 +204,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
         memoriesDeleted,
       });
 
-      return NextResponse.json({
+      return successResponse({
         success: true,
         memoriesDeleted,
       });
@@ -290,7 +290,7 @@ async function handleGenerateSwipe(
       activeUserParticipantId: result.chat.activeTypingParticipantId ?? null,
     });
 
-    return NextResponse.json({ message: newSwipe }, { status: 201 });
+    return created({ message: newSwipe });
   } catch (error) {
     logger.error(
       '[Messages API v1] Swipe generation failed',
@@ -330,7 +330,7 @@ async function handleSwitchSwipe(
     return notFound('Swipe');
   }
 
-  return NextResponse.json({ message: targetSwipe });
+  return successResponse({ message: targetSwipe });
 }
 
 async function handleReattributeAction(
@@ -395,7 +395,7 @@ async function handleReattributeAction(
     memoriesDeleted,
   });
 
-  return NextResponse.json({
+  return successResponse({
     success: true,
     message: updatedMessage,
     memoriesDeleted,

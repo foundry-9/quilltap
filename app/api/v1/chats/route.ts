@@ -37,7 +37,7 @@ import {
   type OutfitSelectionContext,
 } from '@/lib/wardrobe/apply-outfit-selections';
 import { createCreationProgressEmitter } from '@/lib/chat/creation-progress';
-import { notFound, badRequest, serverError } from '@/lib/api/responses';
+import { notFound, badRequest, serverError, successResponse, created } from '@/lib/api/responses';
 import {
   enrichParticipantSummary,
   enrichChatsForList,
@@ -869,7 +869,7 @@ async function handleList(req: NextRequest, context: AuthenticatedContext) {
 
     const result = cleanEnrichedChats(filteredChats);
 
-    return NextResponse.json({ chats: result });
+    return successResponse({ chats: result });
   } catch (error) {
     logger.error('[Chats v1] Error listing chats', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to fetch chats');
@@ -885,7 +885,7 @@ async function handleHasDangerous(context: AuthenticatedContext) {
   try {
     const allChats = await repos.chats.findByUserId(user.id);
     const hasDangerous = allChats.some((c: any) => c.isDangerousChat === true);
-    return NextResponse.json({ hasDangerous });
+    return successResponse({ hasDangerous });
   } catch (error) {
     logger.error('[Chats v1] Error checking dangerous chats', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to check dangerous chats');
@@ -1326,7 +1326,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
   progress.status('The players are ready.');
   progress.finish();
 
-  return NextResponse.json({ chat: { ...chat, participants: enrichedParticipants } }, { status: 201 });
+  return created({ chat: { ...chat, participants: enrichedParticipants } });
 }
 
 /**
@@ -1357,15 +1357,12 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
       try {
         const result = await importMultiCharacterChat(user.id, options, repos);
 
-        return NextResponse.json(
-          {
-            ...result.chat,
-            createdEntities: result.createdEntities,
-            triggerTitleGeneration: options.triggerTitleGeneration || false,
-            memoryJobCount: result.memoryJobCount,
-          },
-          { status: 201 }
-        );
+        return created({
+          ...result.chat,
+          createdEntities: result.createdEntities,
+          triggerTitleGeneration: options.triggerTitleGeneration || false,
+          memoryJobCount: result.memoryJobCount,
+        });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -1393,14 +1390,11 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
 
         const character = result.chat.participants.find((p) => p.type === 'CHARACTER')?.character;
 
-        return NextResponse.json(
-          {
-            ...result.chat,
-            character,
-            connectionProfile: { id: body.connectionProfileId },
-          },
-          { status: 201 }
-        );
+        return created({
+          ...result.chat,
+          character,
+          connectionProfile: { id: body.connectionProfileId },
+        });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
 

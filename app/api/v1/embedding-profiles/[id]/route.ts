@@ -9,10 +9,9 @@
  * POST /api/v1/embedding-profiles/[id]?action=reapply - Slice + renormalize stored vectors to match the profile's truncateToDimensions (Matryoshka, no provider call)
  */
 
-import { NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler, enrichProfile } from '@/lib/api/middleware';
 import { withActionDispatch } from '@/lib/api/middleware/actions';
-import { notFound, badRequest, serverError, messageResponse, successResponse } from '@/lib/api/responses';
+import { notFound, badRequest, serverError, messageResponse, successResponse, conflict } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { invalidateAllEmbeddings } from '@/lib/embedding/embedding-service';
 import {
@@ -37,7 +36,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       // Enrich with API key and tag details
       const enriched = await enrichProfile(profile, repos);
 
-      return NextResponse.json({
+      return successResponse({
         ...profile,
         ...enriched,
       });
@@ -87,10 +86,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
         const duplicateProfile = await repos.embeddingProfiles.findByName(user.id, name.trim());
 
         if (duplicateProfile && duplicateProfile.id !== id) {
-          return NextResponse.json(
-            { error: 'An embedding profile with this name already exists' },
-            { status: 409 }
-          );
+          return conflict('An embedding profile with this name already exists');
         }
 
         updateData.name = name.trim();
@@ -253,7 +249,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
         }
       }
 
-      return NextResponse.json({
+      return successResponse({
         ...updatedProfile,
         ...enriched,
         reembeddingTriggered: needsFullReindex || (truncateChanged && updatedProfile.isDefault),

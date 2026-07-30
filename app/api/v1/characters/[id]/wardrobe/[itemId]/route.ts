@@ -6,11 +6,10 @@
  * DELETE /api/v1/characters/[id]/wardrobe/[itemId] - Delete a wardrobe item
  */
 
-import { NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
-import { notFound, serverError } from '@/lib/api/responses';
+import { notFound, serverError, successResponse } from '@/lib/api/responses';
 import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types';
 
 const updateWardrobeItemSchema = z.object({
@@ -43,7 +42,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string; itemId: string
         return notFound('Wardrobe item');
       }
 
-      return NextResponse.json({ wardrobeItem: item });
+      return successResponse({ wardrobeItem: item });
     } catch (error) {
       logger.error('[Wardrobe v1] Error fetching wardrobe item', { characterId: id, itemId }, error instanceof Error ? error : undefined);
       return serverError('Failed to fetch wardrobe item');
@@ -79,7 +78,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string; itemId: string
       itemId,
     });
 
-    return NextResponse.json({ wardrobeItem: item });
+    return successResponse({ wardrobeItem: item });
   }
 );
 
@@ -122,7 +121,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string; itemId: str
         itemId,
       });
 
-      return NextResponse.json({ success: true });
+      return successResponse({ success: true });
     } catch (error) {
       logger.error('[Wardrobe v1] Error deleting wardrobe item', { characterId: id, itemId }, error instanceof Error ? error : undefined);
       return serverError('Failed to delete wardrobe item');
