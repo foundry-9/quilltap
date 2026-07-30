@@ -3,7 +3,7 @@
   "name": "qtap-plugin-z-ai",
   "title": "Z.AI (GLM)",
   "description": "Z.AI GLM models and CogView image generation for Quilltap",
-  "version": "1.1.16",
+  "version": "1.1.17",
   "author": {
     "name": "Foundry-9 LLC",
     "email": "charles.sebold@foundry-9.com",

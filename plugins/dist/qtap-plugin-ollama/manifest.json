@@ -3,7 +3,7 @@
   "name": "qtap-plugin-ollama",
   "title": "Ollama Provider",
   "description": "Provides local Ollama LLM models and embeddings for Quilltap - run AI models on your own machine",
-  "version": "1.0.34",
+  "version": "1.0.35",
   "author": {
     "name": "Foundry-9 LLC",
     "email": "charles.sebold@foundry-9.com",

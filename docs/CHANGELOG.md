@@ -4,6 +4,24 @@
 
 ### 4.8-dev
 
+#### Dependency refresh across root, packages, and plugins
+
+`npm update -S` over the root project, all five packages, and all 14 distributed plugins. Everything stayed inside its existing semver range, so no majors moved — openai stays on 6.x, `@xterm/*` on 5.x, pdfjs-dist on 5.x, all three deferred for the reasons recorded in the previous dependency entry.
+
+The root diff is range floors only. Its lockfile shows zero installed version changes: `npm update -S` rewrote `^` floors that had fallen behind what was already installed — next ^16.2.10 to ^16.2.12, react and react-dom ^19.2.7 to ^19.2.8, openai ^6.48.0 to ^6.49.0, TanStack Query ^5.101.2 to ^5.101.4, @playwright/test ^1.61.1 to ^1.62.1, plus postcss, tar, and @openrouter/sdk. Tidier declarations, no behavior change.
+
+Real updates landed in the packages and a few plugin SDKs. `@quilltap/plugin-utils` 2.2.14 → 2.2.15 (plugin-types floor, openai devDep) and `@quilltap/theme-storybook` 1.0.51 → 1.0.52 (Storybook 10.5.2 → 10.5.5); both published, and plugin-utils 2.2.15 is installed at the root and in all 13 plugins that bundle it. `create-quilltap-theme` had no changes; `@quilltap/plugin-types` saw lockfile churn only, so neither was bumped.
+
+All 14 plugins had declared-dependency changes and were patch-bumped in both `package.json` and `manifest.json`. Only three bundles actually changed:
+
+- **mcp** — `@modelcontextprotocol/sdk` 1.29.0 → 1.30.0, the one substantive code change
+- **openrouter** — `@openrouter/sdk` 0.13.66 → 0.13.67, which adds 403 handling to the endpoints-list calls
+- **google** — `@google/genai` internal API version constants
+
+The other 11 rebuilt byte-identical; their version bumps reflect declared ranges only. Rebuilding against plugin-utils 2.2.15 changed no bundles beyond those three, which is expected — its only edits were a types-only floor that gets stripped at build and a devDep floor.
+
+`npx tsc` clean, `eslint` clean, 561 suites / 9,227 tests pass.
+
 #### PDF preview was broken by a stale worker file
 
 In-app PDF preview has been failing silently. `public/pdf.worker.mjs` is checked in and was hand-copied at some point at PDF.js **5.4.296**, while the installed `pdfjs-dist` had moved to **5.7.284**. PDF.js compares the two build versions on worker setup and throws on any difference:

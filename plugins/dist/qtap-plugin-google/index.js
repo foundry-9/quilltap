@@ -445,7 +445,7 @@ var require_package = __commonJS({
   "node_modules/gaxios/package.json"(exports2, module2) {
     module2.exports = {
       name: "gaxios",
-      version: "7.2.0",
+      version: "7.3.0",
       description: "A simple common HTTP client specifically for Google APIs and services.",
       main: "build/cjs/src/index.js",
       types: "build/cjs/src/index.d.ts",
@@ -12261,7 +12261,7 @@ var require_package2 = __commonJS({
   "node_modules/google-auth-library/package.json"(exports2, module2) {
     module2.exports = {
       name: "google-auth-library",
-      version: "10.9.0",
+      version: "10.9.1",
       author: "Google Inc.",
       description: "Google APIs Authentication Client Library for Node.js",
       engines: {
@@ -17902,7 +17902,7 @@ var require_googleauth = __commonJS({
           return null;
         }
         try {
-          return this._getApplicationCredentialsFromFilePath(credentialsPath, options);
+          return await this._getApplicationCredentialsFromFilePath(credentialsPath, options);
         } catch (e2) {
           if (e2 instanceof Error) {
             e2.message = `Unable to read the credential file specified by the GOOGLE_APPLICATION_CREDENTIALS environment variable: ${e2.message}`;
@@ -17916,22 +17916,24 @@ var require_googleauth = __commonJS({
        * @api private
        */
       async _tryGetApplicationCredentialsFromWellKnownFile(options) {
-        let location = null;
-        if (this._isWindows()) {
-          location = process.env["APPDATA"];
-        } else {
-          const home = process.env["HOME"];
-          if (home) {
-            location = path3.join(home, ".config");
+        let configDir = process.env["CLOUDSDK_CONFIG"];
+        if (!configDir) {
+          if (this._isWindows()) {
+            if (process.env["APPDATA"]) {
+              configDir = path3.join(process.env["APPDATA"], "gcloud");
+            }
+          } else {
+            const home = process.env["HOME"];
+            if (home) {
+              configDir = path3.join(home, ".config", "gcloud");
+            }
           }
         }
-        if (location) {
-          location = path3.join(location, "gcloud", "application_default_credentials.json");
-          if (!fs3.existsSync(location)) {
-            location = null;
-          }
+        if (!configDir) {
+          return null;
         }
-        if (!location) {
+        const location = path3.join(configDir, "application_default_credentials.json");
+        if (!fs3.existsSync(location)) {
           return null;
         }
         const client = await this._getApplicationCredentialsFromFilePath(location, options);
