@@ -13,7 +13,6 @@ describe('Message Navigation Utilities', () => {
   let navigateToMessage: typeof import('@/lib/chat/message-navigation').navigateToMessage
   let getPendingMessageNavigation: typeof import('@/lib/chat/message-navigation').getPendingMessageNavigation
   let scrollToMessage: typeof import('@/lib/chat/message-navigation').scrollToMessage
-  let highlightMessage: typeof import('@/lib/chat/message-navigation').highlightMessage
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -28,7 +27,6 @@ describe('Message Navigation Utilities', () => {
       navigateToMessage = navModule.navigateToMessage
       getPendingMessageNavigation = navModule.getPendingMessageNavigation
       scrollToMessage = navModule.scrollToMessage
-      highlightMessage = navModule.highlightMessage
     })
   })
 
@@ -186,56 +184,6 @@ describe('Message Navigation Utilities', () => {
 
       jest.advanceTimersByTime(1)
       expect(mockElement.classList.contains('qt-memory-source-highlight')).toBe(false)
-    })
-  })
-
-  // ============================================================================
-  // highlightMessage Tests
-  // ============================================================================
-  describe('highlightMessage', () => {
-    let mockElement: HTMLDivElement
-
-    beforeEach(() => {
-      mockElement = document.createElement('div')
-      mockElement.setAttribute('data-message-id', 'msg-123')
-      document.body.appendChild(mockElement)
-    })
-
-    afterEach(() => {
-      document.body.innerHTML = ''
-    })
-
-    it('should add highlight class to message element', () => {
-      const result = highlightMessage('msg-123')
-
-      expect(result).toBe(true)
-      expect(mockElement.classList.contains('memory-source-highlight')).toBe(true)
-    })
-
-    it('should remove highlight after duration', () => {
-      highlightMessage('msg-123', 5000)
-
-      expect(mockElement.classList.contains('memory-source-highlight')).toBe(true)
-
-      jest.advanceTimersByTime(5000)
-
-      expect(mockElement.classList.contains('memory-source-highlight')).toBe(false)
-    })
-
-    it('should use default duration of 3000ms', () => {
-      highlightMessage('msg-123')
-
-      jest.advanceTimersByTime(2999)
-      expect(mockElement.classList.contains('memory-source-highlight')).toBe(true)
-
-      jest.advanceTimersByTime(1)
-      expect(mockElement.classList.contains('memory-source-highlight')).toBe(false)
-    })
-
-    it('should return false when element not found', () => {
-      const result = highlightMessage('nonexistent')
-
-      expect(result).toBe(false)
     })
   })
 })

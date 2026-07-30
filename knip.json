@@ -26,7 +26,8 @@
     "create-quilltap-theme",
     "esbuild",
     "better-sqlite3-multiple-ciphers",
-    "@anthropic-ai/sdk"
+    "@anthropic-ai/sdk",
+    "tar"
   ],
   "ignoreBinaries": [
     "ps",

@@ -443,36 +443,3 @@ export async function getModelPricing(
   return models.find(m => m.modelId === modelId) || null
 }
 
-/**
- * Find the cheapest available model across all providers
- */
-export async function findCheapestAvailableModel(
-  userId: string,
-  options?: {
-    requireVision?: boolean
-    requireTools?: boolean
-    excludeProviders?: Provider[]
-  }
-): Promise<ModelPricing | null> {
-  const cache = await getPricingCache(userId)
-  const candidates: ModelPricing[] = []
-
-  for (const [provider, providerData] of Object.entries(cache.providers)) {
-    if (options?.excludeProviders?.includes(provider as Provider)) {
-      continue
-    }
-
-    if (providerData?.models) {
-      for (const model of providerData.models) {
-        if (options?.requireVision && !model.supportsVision) continue
-        if (options?.requireTools && !model.supportsTools) continue
-        candidates.push(model)
-      }
-    }
-  }
-
-  if (candidates.length === 0) return null
-
-  return sortByCost(candidates)[0]
-}
-

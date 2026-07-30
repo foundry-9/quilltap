@@ -413,15 +413,6 @@ export function getThemesDir(): string {
 }
 
 /**
- * Get the theme bundle cache directory path
- *
- * @returns Theme bundle cache path (<base>/themes/.cache)
- */
-export function getThemeBundleCacheDir(): string {
-  return path.join(getThemesDir(), '.cache');
-}
-
-/**
  * Get the bundled themes directory path (shipped with the app)
  *
  * @returns Bundled themes directory path (themes/bundled/ in app source)

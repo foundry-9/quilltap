@@ -165,9 +165,6 @@ export const ICON_REGISTRY = {
 /** Union of every canonical icon name — derived from {@link ICON_REGISTRY}. */
 export type IconName = keyof typeof ICON_REGISTRY;
 
-/** Every canonical icon name as a runtime array (e.g. for storybook / soft validation). */
-export const ICON_NAMES = Object.keys(ICON_REGISTRY) as IconName[];
-
 /** Type guard: is `name` a known canonical icon? */
 export function isIconName(name: string): name is IconName {
   return Object.prototype.hasOwnProperty.call(ICON_REGISTRY, name);

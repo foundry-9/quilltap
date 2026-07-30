@@ -676,12 +676,3 @@ export interface ImportResult {
 // ============================================================================
 // EXPORT UTILITY TYPES
 // ============================================================================
-
-/**
- * Memory collection result
- */
-export interface MemoryCollection {
-  characterMemories: Record<string, Memory[]>;
-  personaMemories: Record<string, Memory[]>;
-  chatMemories: Record<string, Memory[]>;
-}

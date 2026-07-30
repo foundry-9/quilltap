@@ -4,6 +4,24 @@
 
 ### 4.8-dev
 
+#### Dead-code sweep
+
+Release-checklist pass with knip, plus a whole-repo reference count over the 1,914 symbols it flagged. Only symbols with zero references anywhere — including tests, barrels, `packages/`, and `plugins/` — were considered, and each was checked by hand before removal.
+
+Removed:
+
+- `highlightMessage` (`lib/chat/message-navigation.ts`) and its four tests. Nothing called it, and it added `memory-source-highlight` — a class that does not exist; the live `scrollToMessage` uses `qt-memory-source-highlight`. Its three siblings stay: `getPendingMessageNavigation` and `scrollToMessage` are wired in `SalonView`, and `navigateToMessage` is the writer half of that sessionStorage pair.
+- `findCheapestAvailableModel` (`lib/llm/pricing-fetcher.ts`) — never called; joins `getAllModelsSortedByCost`, `clearPricingCache`, and `isCacheFresh`, removed from the same file in earlier sweeps.
+- `getThemeBundleCacheDir` (`lib/paths.ts`) — the `<base>/themes/.cache` path it built is not used by the bundle loader or anything else. The only reference was a stale key in the `@/lib/paths` mock in `bundle-loader.test.ts`, dropped with it.
+- `ICON_NAMES` (`components/ui/icons/icon-registry.ts`) — speculative "for storybook / soft validation" array with no consumer in the app, `packages/`, or the themes. `ICON_REGISTRY` and `isIconName` are the live surface.
+- Four unreferenced types: `DatabaseBackendFactory` (`lib/database/interfaces.ts`, alongside `BackendRegistry` from the last sweep), `MemoryCollection` (`lib/export/types.ts`), `RegenerateConversationSummariesPayload` (`lib/background-jobs/queue-service.ts` — the job takes no payload), and `AdoptableStore` (`lib/mount-index/ensure-official-store.ts`).
+
+`tar` was added to knip's `ignoreDependencies`. It is a false positive: `lib/plugins/registry-client.ts` imports it at line 17 as `import * as tar from 'tar'`, and that module is live behind the plugin installer and version checker.
+
+Kept with reasons recorded in the dead-code report: the two in-progress SVAR file-manager files, the Zod `z.infer` schema surface, the theme validation API, and the tool-input types. `invalidateFrozenArchive` (`lib/memory/frozen-archive-cache.ts`) also stays, but it is worth noting that nothing in production calls it. The cache only refreshes when the compaction generation changes, so the out-of-band edits its doc comment names — manual deletion, a housekeeping sweep, an import — leave a stale archive in place until the next compaction.
+
+`npx tsc` clean, `eslint` clean, 559 suites / 9,219 tests passing.
+
 #### Finish the context-middleware rename and drop the vestigial auth surface
 
 The `createAuthenticatedHandler` → `createContextHandler` rename was started back in 2.x, but it landed as a set of aliases and the call sites were never moved. 105 routes still used the old names. This finishes it and deletes the shim.
