@@ -85,6 +85,9 @@ _quilltap_subcommand() {
     maintenance)
       _quilltap_maintenance
       ;;
+    file-verify)
+      _arguments '--all[read every top-level file, not just dataless ones]' '--stall-ms[per-chunk stall threshold in ms]:ms:' '--json[machine-readable output]' '--help[show help]'
+      ;;
     completion)
       _quilltap_completion
       ;;

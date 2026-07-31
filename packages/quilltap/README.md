@@ -187,6 +187,7 @@ quilltap docs status                            # Per-mount extraction + embeddi
 quilltap docs scan <mount>                                    # Trigger a rescan
 quilltap docs reindex <mount> [path] [--force]                # Re-extract + re-chunk
 quilltap docs embed <mount> [path] [--force] [--wait]         # Enqueue embedding jobs
+quilltap docs grep --semantic [--top N] [--threshold 0..1] <query>  # Embedding search over indexed chunks
 quilltap docs write [--force] [--base64] <mount> <path> [file]  # Stdin or file → mount
 quilltap docs read [--rendered] [--base64] <mount> <path>       # File contents → stdout
 quilltap docs delete <mount> <path>                           # Idempotent delete
@@ -226,6 +227,7 @@ quilltap memories grep -i --max 3 --context 1 "concrete examples"      # Pattern
 quilltap memories show <id|prefix> [--depth N] [--no-related]          # Full record + related-memory neighbourhood
 quilltap memories tree <id|prefix> [--depth N] [--max-nodes N]         # ASCII walk of the bidirectional related-memory graph
 quilltap memories status [--character <name|id>]                       # Per-holder rollup + dangling-edge check
+quilltap memories grep --semantic --character Ariadne "the argument"   # Embedding search (server required, one holder)
 ```
 
 Shared filter flags apply to `ls`, `find`, `grep`, and `status` where they make sense: `--character`, `--about` (with `self` / `none` shortcuts), `--source`, `--chat` (with `none` for manual entries), `--project`, `--since`, `--until`, `--min-importance`, `--min-reinforced`, `--has-embedding` / `--no-embedding`. Sort flags (`--sort reinforced|importance|created|accessed|reinforcement-count|links`, plus `-r` to reverse) apply to `ls`, `find`, and `grep`. Names accept fuzzy substrings; ambiguous names print candidates and exit 2. `--json` is supported by every verb. The legacy `quilltap db memories --character <name>` verb remains undisturbed.

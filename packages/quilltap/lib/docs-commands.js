@@ -73,6 +73,9 @@ Read subcommands:
   status [--mount <name|id>] [--top N]   Per-mount extraction + embedding rollup
 
 Server-required subcommands (background-job queue lives in the running server):
+  grep --semantic [--mount <name|id|all>] [--top N] [--threshold 0..1] <query>
+                                         Embedding search over indexed chunks
+                                         (default --top 20, --threshold 0.5)
   reindex <mount> [path] [--force]       Re-extract text + re-chunk affected files
   embed <mount> [path] [--force] [--wait]
                                          Enqueue embedding jobs for un-embedded chunks
@@ -158,6 +161,7 @@ Examples:
   quilltap docs find --mount notes --ext md Knowledge
   quilltap docs grep --mount notes --ignore-case "five-point Calvinist"
   quilltap docs grep --mount notes -l "TODO"
+  quilltap docs grep --semantic --mount notes --top 10 "what did we decide about pricing"
   quilltap docs read qtap://notes/today.md
   quilltap docs find --uri Manifesto
   quilltap docs status

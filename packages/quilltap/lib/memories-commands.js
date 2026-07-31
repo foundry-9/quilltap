@@ -1276,6 +1276,11 @@ Subcommands:
   grep     [filters] [-i] [-l] [--max N] [--context N] <pattern>
                                              Pattern search inside content
                                              with snippets.
+  grep --semantic --character <name|id> [--top N] [--threshold 0..1] <query>
+                                             Embedding search via the running
+                                             server (default --top 20,
+                                             --threshold 0.5). One holder at a
+                                             time; --port sets the server port.
   show     <id|prefix> [--depth N] [--no-related] [--json]
                                              Full record + related-memory
                                              neighbourhood.
@@ -1326,6 +1331,7 @@ Examples:
   quilltap memories ls --character Ariadne --sort created --limit 10
   quilltap memories find "concrete examples"
   quilltap memories grep -i --max 3 --context 1 "concrete examples"
+  quilltap memories grep --semantic --character Ariadne --top 10 "the argument about Calvin"
   quilltap memories show abc12345 --depth 2
   quilltap memories tree abc12345 --depth 3
   quilltap memories status --character Ariadne

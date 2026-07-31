@@ -55,6 +55,7 @@ complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'themes' -d 'Manage the
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'instances' -d 'Register or inspect instances'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'memories' -d 'Search and browse memories'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'memory-diff' -d 'Memory extraction dry-run'
+complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'recall-replay' -d 'Replay memory recall for a turn'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'logs' -d 'Tail or print log files'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'migrations' -d 'Inspect migration status'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'maintenance' -d 'Run retention/cleanup sweeps'
@@ -260,6 +261,16 @@ complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'port' -s 'p' 
 complete -c quilltap -n '__quilltap_using_subcommand memory-diff' -l 'port' -s 'p' -d 'Server port' -x
 complete -c quilltap -n '__quilltap_using_subcommand memory-diff' -l 'concurrency' -d 'Concurrency limit' -x
 complete -c quilltap -n '__quilltap_using_subcommand memory-diff' -l 'out' -d 'Output file' -r -F
+
+# ---------- recall-replay flags ----------
+complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'turn' -d 'Interchange to replay (1-based)' -x
+complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'char' -d 'Character whose memories are searched' -x
+complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'limit' -d 'Candidate rows per path' -x
+complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'port' -d 'Server port' -x
+
+# ---------- file-verify flags ----------
+complete -c quilltap -n '__quilltap_using_subcommand file-verify' -l 'all' -d 'Read every top-level file, not just dataless ones'
+complete -c quilltap -n '__quilltap_using_subcommand file-verify' -l 'stall-ms' -d 'Per-chunk stall threshold (ms)' -x
 
 # ---------- logs flags ----------
 complete -c quilltap -n '__quilltap_using_subcommand logs' -l 'stream' -d 'Log stream' -x -a 'combined error stdout stderr startup'

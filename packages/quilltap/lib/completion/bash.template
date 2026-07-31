@@ -244,6 +244,10 @@ _quilltap_complete() {
         COMPREPLY=($(compgen -W "$maint_flags" -- "$cur"))
       fi
       ;;
+    file-verify)
+      local fv_flags="--all --stall-ms --json --instance --data-dir --help"
+      COMPREPLY=($(compgen -W "$fv_flags" -- "$cur"))
+      ;;
     completion)
       if [[ "$cur" == -* ]]; then
         COMPREPLY=($(compgen -W "--help" -- "$cur"))

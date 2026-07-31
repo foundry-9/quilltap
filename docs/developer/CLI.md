@@ -41,7 +41,9 @@ SQLite columns are **camelCase**, mirroring the Zod/TypeScript types (`createdAt
 
 Read-only verbs: `list`, `show`, `files`, `ls`/`dir`, `tree` (ASCII folder hierarchy), `read`, `export`, `find` (substring on filename), `grep` (substring on extracted text), `status` (per-mount extraction + embedding rollup).
 
-Server-required verbs: `scan`, `reindex` (re-extract + re-chunk), `embed` (enqueue embedding jobs — `--wait` polls to completion), and the write verbs (`write`/`delete`/`mkdir`/`move`/`copy`/`link`/`rmdir`/`mvdir`). `reindex` and `embed` are explicit triggers for the two background pipelines; they refuse to run when the server is unreachable.
+Server-required verbs: `scan`, `reindex` (re-extract + re-chunk), `embed` (enqueue embedding jobs — `--wait` polls to completion), `grep --semantic`, and the write verbs (`write`/`delete`/`mkdir`/`move`/`copy`/`link`/`rmdir`/`mvdir`). `reindex` and `embed` are explicit triggers for the two background pipelines; they refuse to run when the server is unreachable.
+
+**Semantic search:** `npx quilltap docs grep --semantic [--mount <name|id|all>] [--top N] [--threshold 0..1] <query>` runs an embedding search over indexed chunks instead of a substring match (defaults: `--top 20`, `--threshold 0.5`, `--port 3000`). It goes through `POST /api/v1/mount-points?action=semantic-search` because the embedding provider lives in the server, so the server must be up.
 
 ### Addressing documents with `qtap://` URIs
 
@@ -64,6 +66,8 @@ The URI authority is matched name-first, UUID as fallback — the same rule as a
 Read-only namespace. Verbs: `ls`, `find` (substring on summary/content), `grep` (pattern search inside content with snippets), `show <id|prefix>` (full record + related-memory neighbors), `tree <id|prefix>` (ASCII walk of the bidirectional related-memory graph with cycle handling), `status` (per-holder rollup including AUTO/MANUAL split, about-distribution, embedding presence, graph stats, dangling-edge count), `validate` (read-only health check; exit 1 on any dangling edge — `--list` prints offending source IDs and dangling targets).
 
 Shared filter flags: `--character` (default `all`), `--about` (with `self`/`none` shortcuts), `--source`, `--chat` (with `none` for manual entries), `--project`, `--since`/`--until`, `--min-importance`/`--min-reinforced`, `--has-embedding`/`--no-embedding`.
+
+`grep --semantic --character <name|id> [--top N] [--threshold 0..1] <query>` swaps the substring match for an embedding search via `POST /api/v1/memories?action=search` (defaults `--top 20`, `--threshold 0.5`, `--port 3000`). The server must be running, and it scopes to **one holder at a time** — `--character all` is rejected. Still read-only.
 
 Sort flags on `ls`/`find`/`grep`: `--sort reinforced|importance|created|accessed|reinforcement-count|links`, `-r` to reverse. **Default sort is `reinforcedImportance DESC`** (what the recall path uses), not `createdAt DESC` like the legacy `db memories` verb. The legacy verb remains undisturbed.
 

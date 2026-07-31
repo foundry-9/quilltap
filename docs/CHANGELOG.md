@@ -4,6 +4,29 @@
 
 ### 4.8-dev
 
+#### CLI: semantic search reaches the help text, and every subcommand completes its own flags
+
+Release-checklist pass over `packages/quilltap`. The only new command this cycle, `recall-replay`, was already documented everywhere — CLI.md, the package README, `--help`, and the bash and zsh completions. Two older gaps turned up alongside it.
+
+`grep --semantic` (docs and memories, shipped in 4.5.0) was in all three completion scripts and in `help/cli-docs.md`, but in neither command's `--help` nor in CLI.md. The docs version was discoverable only by triggering the usage error. Both help texts now list it with its defaults (`--top 20`, `--threshold 0.5`), CLI.md documents both, including that each goes through the server because the embedding provider lives there and that the memories variant takes one holder at a time, and the package README lists both.
+
+Flag completion was missing for `file-verify` in all three shells and for `recall-replay` in fish, which also never offered `recall-replay` as a top-level verb. The existing guard test only checked that a subcommand's name appeared *somewhere* in each template, so a verb named in a shared `case` list passed while completing none of its own flags. The test now requires a real per-subcommand arm: a `case` arm in bash, a `_quilltap_subcommand` dispatch in zsh, and both a top-level entry and a `__quilltap_using_subcommand` block in fish. Run against the pre-fix templates it fails on exactly the three gaps.
+
+#### Docs: 4.8.0 release notes take in the second batch of post-draft work
+
+Second catch-up pass over `docs/releases/4.8.0.md`, covering the twenty-six commits that landed after the 2026-07-26 pass. Features and significant fixes only — the release-checklist work (dead-code sweep, coverage passes, response-helper and middleware renames, `qt-*` definitions, plugin typechecking and packaging, dependency bumps) is deliberately not in the notes.
+
+- **Added — "Taking a Conversation With You":** the Markdown transcript export, what it includes and excludes, and its use of the chat's own clock.
+- **Added — "The Archive Can Be Read Back":** the three restore defects (mount-point/file-link type coercion, the `backupFormat === 2` gate, the files-before-stores ordering), the memory-id restore fix that had been returning the Commonplace Book as unconnected notes, and the >3 MB blob import truncation.
+- **Added to "A Lighter Database":** one enforced embedding standard — profile switch forces a re-embed, the startup reconcile, and the cold-tier boot loop that re-embedded and re-billed on every restart.
+- **Added to the episodic-recall subsection:** same-day references reaching recall (local-calendar day resolution) and the fresh-event weight, with the current-chat echo guard.
+- **Added to Pascal:** a composer run rolls against the operator's own character rather than the first participant, and labels the row when it cannot.
+- **Added to "A New Generation of Models":** OpenRouter image/embedding model discovery returning nothing since the SDK paginated its catalogue.
+- **Added to "Under the Floorboards":** the `properties.json` read failure that wiped project settings, the stale PDF worker, and the xterm 6 terminal selection key and exited-session input guard.
+- **Added to "Upgrading from 4.7":** the one-time re-embed the enforced embedding standard queues on first restart, and that built-in-embedder instances are unaffected.
+
+Dates left at 2026-07-20, as in the previous pass.
+
 #### Plugins are typechecked now
 
 Until this, no plugin TypeScript was verified anywhere. The root `tsconfig.json` excludes `plugins/`, no plugin had a `tsconfig.json` or a `typecheck` script, and esbuild strips types without checking them — so `npx tsc` passing said nothing about the 14 bundles that actually ship. That is how the OpenRouter pagination bugs survived three years of `models.list()` returning a `PageIterator`.
