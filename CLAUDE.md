@@ -31,7 +31,7 @@ The project is **"Quilltap"** (quill + tap), **never** "Quilttap" (quilt + tap).
 ### Hard stops (ask first / never work around)
 
 - **`packages/` changes:** bump the version, then **stop and ask the human to `npm publish`** before installing. Never hand-copy package contents into place. If publish fails, fix the npm problem — don't work around it. **Exception — `packages/quilltap` (the CLI):** still bump its version, but don't ask for a manual `npm publish`; it publishes automatically at release.
-- **Plugin changes:** bump the patch version in `package.json` (and `manifest.json` if needed), then re-run `npm run build:plugins` before staging.
+- **Plugin changes:** bump the patch version in `package.json` (and `manifest.json` if needed), then re-run `npm run build:plugins` before staging. That build now typechecks each plugin first (`tsc -p tsconfig.json`, extending [`plugins/tsconfig.base.json`](./plugins/tsconfig.base.json)) and fails on any error — the root `npx tsc` excludes `plugins/`, so this is the only thing checking plugin types. A new plugin needs its own `tsconfig.json` extending that base plus a `typecheck` script.
 - **Release (`tag-for-release`):** only after the human confirms they've walked the [release checklist](./docs/developer/DEVELOPMENT.md#checklist-before-release). Don't initiate it yourself.
 - **No stubs or `TODO` code** unless agreed in advance.
 - **Database writes via the CLI** use `--write` (lock-gated). Never use `--lock-override`.

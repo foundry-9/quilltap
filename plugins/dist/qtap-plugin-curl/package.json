@@ -1,9 +1,10 @@
 {
   "name": "qtap-plugin-curl",
-  "version": "1.0.22",
+  "version": "1.0.23",
   "description": "HTTP request tool for LLMs",
   "main": "index.js",
   "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
     "build": "node esbuild.config.mjs"
   },
   "dependencies": {

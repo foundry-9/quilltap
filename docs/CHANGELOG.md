@@ -4,6 +4,22 @@
 
 ### 4.8-dev
 
+#### Plugins are typechecked now
+
+Until this, no plugin TypeScript was verified anywhere. The root `tsconfig.json` excludes `plugins/`, no plugin had a `tsconfig.json` or a `typecheck` script, and esbuild strips types without checking them — so `npx tsc` passing said nothing about the 14 bundles that actually ship. That is how the OpenRouter pagination bugs survived three years of `models.list()` returning a `PageIterator`.
+
+Each plugin now has a `tsconfig.json` extending a shared `plugins/tsconfig.base.json`, plus a `typecheck` script. `npm run build:plugins` runs it before esbuild, in both the serial and `--parallel` paths, and fails the build on any error. Verified by planting a deliberate type error: both paths fail the plugin and report the file, line, and message. That last part needed a fix of its own — `execSync` failures were reported as bare "Command failed", discarding the child's output, so the tsc diagnostics never reached the summary.
+
+The first run turned up 11 errors across 5 plugins. Two were the config's fault (`findLastIndex` needs `lib: ES2023`, which Node 18+ has). The rest:
+
+- **ollama** — `logger.warn(message, context, error)` passed three arguments to a two-argument method. `PluginLogger` only accepts a third `Error` on `error()`, so the cause was dropped and the warning about a failed `/api/show` carried no detail. Folded into the context object.
+- **grok** — three xAI extensions that OpenAI's Responses types do not model: `stop` sequences, the `x_search` tool, and the `citations` include value. All sent deliberately, so `stop` is now recorded once as a `WithGrokStop<T>` alias rather than cast away at each assignment, and the two value-level extensions are cast at their use sites with a note on why.
+- **deepseek** and **z-ai** — assistant messages are built as `Record<string, unknown>` to carry the vendor-specific `reasoning_content`, which stops them overlapping `ChatMessage`'s discriminated union. Routed through `unknown` with the reason recorded.
+
+One trap worth writing down: **esbuild auto-discovers `tsconfig.json`** and honors `useDefineForClassFields`. Simply adding these configs flipped class fields from assignment to `Object.defineProperty` semantics and rewrote nine bundles — a real behavior change from what was meant to be a type-only addition. The base pins the option to `false`. With that in place, rebuilding leaves exactly one bundle changed (ollama's, the only genuine runtime fix); the ten plugins with no source edits rebuild byte-identical, which is what confirms the config is emit-neutral.
+
+`npx tsc` clean, `eslint` clean, 561 suites / 9,229 tests pass.
+
 #### OpenRouter model discovery has been returning nothing since 0.13
 
 `@openrouter/sdk` 0.13.67 → 1.2.2. The major bump itself costs nothing: typechecking the plugin against both versions produces the same five errors, and every surface we use is unchanged — `chat.send`, `models.list`, `callModel`, `fromChatMessages` from the `lib/chat-compat` subpath, `Parameter.Tools` / `Parameter.ToolChoice`, and `GetModelsResponse = { result: ModelsListResponse }`.

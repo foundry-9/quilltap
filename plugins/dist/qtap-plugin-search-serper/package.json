@@ -1,9 +1,10 @@
 {
   "name": "qtap-plugin-search-serper",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "description": "Serper.dev web search provider for Quilltap",
   "main": "index.js",
   "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
     "build": "node esbuild.config.mjs"
   },
   "dependencies": {

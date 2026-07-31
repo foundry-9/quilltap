@@ -1,12 +1,13 @@
 {
   "name": "qtap-plugin-z-ai",
-  "version": "1.1.18",
+  "version": "1.1.19",
   "description": "Z.AI GLM provider plugin for Quilltap",
   "main": "index.js",
   "types": "index.d.ts",
   "author": "Foundry-9 LLC",
   "license": "MIT",
   "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
     "build": "node esbuild.config.mjs",
     "clean": "rm -f index.js"
   },

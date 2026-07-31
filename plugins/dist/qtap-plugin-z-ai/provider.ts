@@ -184,7 +184,10 @@ export class ZAIProvider implements TextProvider {
           if (msg.reasoningContent) {
             assistantMessage.reasoning_content = msg.reasoningContent;
           }
-          out.push(assistantMessage as ChatMessage);
+          // Deliberate widening: the message is built as a Record so it can
+          // carry Z.AI's non-OpenAI `reasoning_content`, which means it no
+          // longer overlaps ChatMessage's discriminated union.
+          out.push(assistantMessage as unknown as ChatMessage);
         } else {
           out.push({
             role: 'assistant',

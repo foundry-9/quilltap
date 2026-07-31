@@ -125,7 +125,10 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
         if (msg.reasoningContent) {
           assistantMessage.reasoning_content = msg.reasoningContent;
         }
-        out.push(assistantMessage as ChatMessage);
+        // Deliberate widening: the message is built as a Record so it can carry
+        // DeepSeek's non-OpenAI `reasoning_content`, which means it no longer
+        // overlaps ChatMessage's discriminated union. Route through unknown.
+        out.push(assistantMessage as unknown as ChatMessage);
         continue;
       }
 

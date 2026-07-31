@@ -92,6 +92,20 @@ function hasBuildScript(pluginPath: string): boolean {
 }
 
 /**
+ * Check if a plugin has a typecheck script in package.json
+ */
+function hasTypecheckScript(pluginPath: string): boolean {
+  const packageJsonPath = join(pluginPath, 'package.json');
+  try {
+    const content = readFileSync(packageJsonPath, 'utf-8');
+    const pkg = JSON.parse(content);
+    return !!pkg.scripts?.typecheck;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Check if a plugin needs npm install (no node_modules or package-lock.json changed)
  */
 function needsInstall(pluginPath: string): boolean {
@@ -121,6 +135,18 @@ async function buildPlugin(plugin: { name: string; path: string }): Promise<Buil
       });
     }
 
+    // Typecheck before building. esbuild strips types without checking them, so
+    // this is the only thing standing between a type error and a shipped bundle
+    // — the root tsconfig.json excludes `plugins` entirely.
+    if (hasTypecheckScript(pluginPath)) {
+      console.log(`  🔎 Typechecking ${name}...`);
+      execSync('npm run typecheck', {
+        cwd: pluginPath,
+        stdio: 'pipe',
+        encoding: 'utf-8',
+      });
+    }
+
     // Run the build
     console.log(`  🔨 Building ${name}...`);
     execSync('npm run build', {
@@ -131,8 +157,16 @@ async function buildPlugin(plugin: { name: string; path: string }): Promise<Buil
 
     return { name, success: true };
   } catch (err) {
+    // execSync's error carries the child's output on .stdout/.stderr; without
+    // them the report is just "Command failed", which hides the tsc diagnostics
+    // that say what actually broke.
+    const piped = err as { stdout?: Buffer | string; stderr?: Buffer | string };
+    const details = [piped?.stdout, piped?.stderr]
+      .map((chunk) => (chunk ? chunk.toString().trim() : ''))
+      .filter(Boolean)
+      .join('\n');
     const errorMessage = err instanceof Error ? err.message : String(err);
-    return { name, success: false, error: errorMessage };
+    return { name, success: false, error: details || errorMessage };
   }
 }
 
@@ -175,6 +209,40 @@ function buildPluginAsync(plugin: { name: string; path: string }): Promise<Build
       });
     };
 
+    // Same gate as the serial path — otherwise --parallel would ship type
+    // errors that a normal build refuses. tsc writes diagnostics to stdout.
+    const runTypecheck = (onPass: () => void) => {
+      if (!hasTypecheckScript(pluginPath)) {
+        onPass();
+        return;
+      }
+
+      const check = spawn('npm', ['run', 'typecheck'], {
+        cwd: pluginPath,
+        stdio: 'pipe',
+      });
+
+      let output = '';
+      check.stdout?.on('data', (data) => {
+        output += data.toString();
+      });
+      check.stderr?.on('data', (data) => {
+        output += data.toString();
+      });
+
+      check.on('close', (code) => {
+        if (code === 0) {
+          onPass();
+        } else {
+          resolve({ name, success: false, error: output || `Typecheck exit code ${code}` });
+        }
+      });
+
+      check.on('error', (err) => {
+        resolve({ name, success: false, error: err.message });
+      });
+    };
+
     if (installFirst) {
       const install = spawn('npm', ['install'], {
         cwd: pluginPath,
@@ -183,7 +251,7 @@ function buildPluginAsync(plugin: { name: string; path: string }): Promise<Build
 
       install.on('close', (code) => {
         if (code === 0) {
-          runBuild();
+          runTypecheck(runBuild);
         } else {
           resolve({ name, success: false, error: 'npm install failed' });
         }
@@ -193,7 +261,7 @@ function buildPluginAsync(plugin: { name: string; path: string }): Promise<Build
         resolve({ name, success: false, error: `npm install error: ${err.message}` });
       });
     } else {
-      runBuild();
+      runTypecheck(runBuild);
     }
   });
 }

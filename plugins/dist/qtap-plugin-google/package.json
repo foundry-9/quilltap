@@ -1,12 +1,13 @@
 {
   "name": "qtap-plugin-google",
-  "version": "1.1.43",
+  "version": "1.1.44",
   "description": "Google Gemini provider plugin for Quilltap",
   "main": "index.js",
   "types": "index.d.ts",
   "author": "Foundry-9 LLC",
   "license": "MIT",
   "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
     "build": "node esbuild.config.mjs",
     "clean": "rm -f index.js"
   },

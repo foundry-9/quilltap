@@ -27,6 +27,15 @@ type ResponsesTool = OpenAI.Responses.Tool;
 type ResponsesResponse = OpenAI.Responses.Response;
 type ResponsesStreamEvent = OpenAI.Responses.ResponseStreamEvent;
 
+/**
+ * xAI's Responses endpoint accepts `stop` sequences; OpenAI's Responses API
+ * does not model them, so the SDK types omit the field. Quilltap sends them
+ * deliberately — this records the divergence in one place instead of casting at
+ * each assignment. (The other two xAI extensions, the `x_search` tool and the
+ * `citations` include value, are value-level and cast at their use sites.)
+ */
+type WithGrokStop<T> = T & { stop?: string[] };
+
 export class GrokProvider implements TextProvider {
   private readonly baseUrl = 'https://api.x.ai/v1';
   readonly supportsFileAttachments = true;
@@ -310,7 +319,7 @@ export class GrokProvider implements TextProvider {
     });
     const { input, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
 
-    const requestParams: OpenAI.Responses.ResponseCreateParamsNonStreaming = {
+    const requestParams: WithGrokStop<OpenAI.Responses.ResponseCreateParamsNonStreaming> = {
       model: params.model,
       input,
       store: false, // Stateless operation - Quilltap manages history locally
@@ -344,8 +353,10 @@ export class GrokProvider implements TextProvider {
     if (params.webSearchEnabled) {
       // Grok uses web_search and x_search (not web_search_preview)
       tools.push({ type: 'web_search' } as ResponsesTool);
-      tools.push({ type: 'x_search' } as ResponsesTool);
-      requestParams.include = ['citations'] as OpenAI.Responses.ResponseIncludable[];
+      // x_search is an xAI-only tool, absent from OpenAI's Tool union.
+      tools.push({ type: 'x_search' } as unknown as ResponsesTool);
+      // 'citations' is an xAI-only include value, absent from OpenAI's union.
+      requestParams.include = ['citations'] as unknown as OpenAI.Responses.ResponseIncludable[];
     }
 
     if (params.tools && params.tools.length > 0) {
@@ -407,7 +418,7 @@ export class GrokProvider implements TextProvider {
     });
     const { input, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
 
-    const requestParams: OpenAI.Responses.ResponseCreateParamsStreaming = {
+    const requestParams: WithGrokStop<OpenAI.Responses.ResponseCreateParamsStreaming> = {
       model: params.model,
       input,
       store: false,
@@ -434,8 +445,10 @@ export class GrokProvider implements TextProvider {
 
     if (params.webSearchEnabled) {
       tools.push({ type: 'web_search' } as ResponsesTool);
-      tools.push({ type: 'x_search' } as ResponsesTool);
-      requestParams.include = ['citations'] as OpenAI.Responses.ResponseIncludable[];
+      // x_search is an xAI-only tool, absent from OpenAI's Tool union.
+      tools.push({ type: 'x_search' } as unknown as ResponsesTool);
+      // 'citations' is an xAI-only include value, absent from OpenAI's union.
+      requestParams.include = ['citations'] as unknown as OpenAI.Responses.ResponseIncludable[];
     }
 
     if (params.tools && params.tools.length > 0) {

@@ -3,7 +3,7 @@
   "name": "qtap-plugin-anthropic",
   "title": "Anthropic Provider",
   "description": "Provides Anthropic Claude models for Quilltap",
-  "version": "1.0.49",
+  "version": "1.0.50",
   "author": {
     "name": "Foundry-9 LLC",
     "email": "charles.sebold@foundry-9.com",
