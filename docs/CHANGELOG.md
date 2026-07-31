@@ -4,6 +4,31 @@
 
 ### 4.8-dev
 
+#### openai 7, xterm 6, and a terminal selection color that was never applied
+
+The two upgrades held back from the earlier dependency pass, plus the theme work xterm 6 required.
+
+**openai 6.49.0 → 7.2.0.** The only breaking change in 7.0.0 is the Node floor moving to 22; we require 24 in `engines`, CI, and both Dockerfiles. The v4→v5 migration notes also flag `asResponse`, `withResponse`, and `APIError.headers` as reshaped — none of which appear anywhere in this repo. Every call site we do use is stable: `chat.completions.create`, `responses.create`, `images.generate`, `embeddings.create`, `models.list`.
+
+The blocker was declaration, not code. `@quilltap/plugin-utils` listed `openai: "^4 || ^5 || ^6"` as an optional peer, so installing 7 anywhere produced an unmet-peer resolution. Widened to include `^7.0.0` and published as 2.2.16, after confirming the package typechecks and builds against 7.2.0. All 11 openai-carrying plugin bundles now ship 7.2.0.
+
+**@xterm/xterm 5.5.0 → 6.0.0**, with addon-fit 0.11.0, addon-serialize 0.14.0, and addon-web-links 0.12.0. Two things had to change:
+
+- `@xterm/addon-canvas` is gone. xterm 6 removed the canvas renderer, and the addon was retired with it — its last release (April 2024) and even its abandoned 0.8.0 beta still peer on xterm `^5.0.0`. It was loaded in a try/catch so it would have degraded quietly, but it would have been a permanently peer-broken dependency. Removed; the DOM renderer is the supported default.
+- **xterm 6 renamed the `selection` theme key to `selectionBackground`.** The old key is ignored rather than rejected, so every bundled theme's `--qt-terminal-selection` would have stopped reaching the terminal — selection highlighting silently falling back to the xterm default, in all six themes at once.
+
+That silence had a root cause worth fixing. `getTerminalTheme()` had no return type, so its object was inferred, assigned to a variable, and only then handed to the Terminal constructor — and TypeScript skips excess-property checks on variables. The function is now annotated `ITheme`, which turns any unknown key into a build error. Verified by reintroducing the old key: `TS2353: 'selection' does not exist in type 'ITheme'`.
+
+Six optional terminal variables are now mapped through, deliberately left undefined so xterm keeps deriving them from `--qt-terminal-bg` / `--qt-terminal-fg` (the scrollbar sliders default to the foreground at 20/40/50% opacity, which already tracks the theme). A theme sets one only to override that derivation: `--qt-terminal-cursor-accent`, `--qt-terminal-selection-fg`, `--qt-terminal-selection-inactive`, `--qt-terminal-scrollbar`, `--qt-terminal-scrollbar-hover`, `--qt-terminal-scrollbar-active`. Because they are optional, no bundled theme needed editing. They read through a separate `optionalColor` helper — the existing `getColor` falls back to `#000000`, which would have painted each of them hard black instead of letting xterm derive them. Documented in `_variables.css` and in THEME_PLUGIN_DEVELOPMENT.md, which had no terminal section at all before.
+
+Also fixed while in the file: disabling input after a session exits poked at `termRef.current._input`, which is not an xterm field in any version — `_input` appears zero times in the 6.0 runtime. The guard always short-circuited, so exited sessions stayed typeable. Now uses the documented `textarea` handle.
+
+`npx tsc` clean, `eslint` clean, 561 suites / 9,227 tests pass.
+
+Known flake, unrelated: full-suite runs intermittently lose one worker to a SIGSEGV, in a different suite each time, and the affected suites pass in isolation. This is the existing native-SQLCipher-under-jsdom teardown crash, not a regression from these upgrades.
+
+pdfjs-dist 6.x remains blocked by `pdf-parse@2.4.5`'s exact pin on 5.4.296.
+
 #### Dependency refresh across root, packages, and plugins
 
 `npm update -S` over the root project, all five packages, and all 14 distributed plugins. Everything stayed inside its existing semver range, so no majors moved — openai stays on 6.x, `@xterm/*` on 5.x, pdfjs-dist on 5.x, all three deferred for the reasons recorded in the previous dependency entry.

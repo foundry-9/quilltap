@@ -693,6 +693,17 @@
   --qt-terminal-fg: #e6e6e6;
   --qt-terminal-cursor: #e6e6e6;
   --qt-terminal-selection: rgba(255, 255, 255, 0.2);
+
+  /* Optional terminal knobs, deliberately left undefined. xterm derives each
+     from --qt-terminal-bg / --qt-terminal-fg when unset (slider colors default
+     to the foreground at 20/40/50% opacity), which already tracks the theme.
+     A theme only needs to set one to override that derivation:
+       --qt-terminal-cursor-accent      text color under a block cursor
+       --qt-terminal-selection-fg       text color inside a selection
+       --qt-terminal-selection-inactive selection while the pane is unfocused
+       --qt-terminal-scrollbar          scrollbar slider
+       --qt-terminal-scrollbar-hover    scrollbar slider, hovered
+       --qt-terminal-scrollbar-active   scrollbar slider, dragged           */
   --qt-terminal-ansi-black: #000000;
   --qt-terminal-ansi-red: #cd3131;
   --qt-terminal-ansi-green: #0dbc79;

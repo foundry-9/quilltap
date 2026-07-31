@@ -3,7 +3,7 @@
   "name": "qtap-plugin-mcp",
   "title": "MCP Server Connector",
   "description": "Connect to MCP (Model Context Protocol) servers via SSE and expose their tools to LLMs. Supports multiple server connections with Bearer token and API key authentication.",
-  "version": "1.1.32",
+  "version": "1.1.33",
   "author": {
     "name": "Foundry-9 LLC",
     "url": "https://github.com/foundry-9"

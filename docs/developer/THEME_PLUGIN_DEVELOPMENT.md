@@ -701,6 +701,26 @@ Override these variables for consistent component styling:
 --qt-badge-padding-x
 --qt-badge-font-size
 --qt-badge-font-weight
+
+/* Terminal (The Ariel terminal pane).
+   Terminals keep a "terminal" identity regardless of the surrounding theme's
+   light/dark mode, so a parchment theme can still render a dark terminal. */
+--qt-terminal-bg
+--qt-terminal-fg
+--qt-terminal-cursor
+--qt-terminal-selection
+--qt-terminal-ansi-black         /* ...and red/green/yellow/blue/magenta/cyan/white */
+--qt-terminal-ansi-bright-black  /* ...and the seven matching bright- variants */
+
+/* Terminal, optional. Leave unset and xterm derives each from
+   --qt-terminal-bg / --qt-terminal-fg (slider colors default to the
+   foreground at 20/40/50% opacity). Set one only to override that. */
+--qt-terminal-cursor-accent      /* text under a block cursor */
+--qt-terminal-selection-fg       /* text inside a selection */
+--qt-terminal-selection-inactive /* selection while the pane is unfocused */
+--qt-terminal-scrollbar          /* scrollbar slider */
+--qt-terminal-scrollbar-hover    /* scrollbar slider, hovered */
+--qt-terminal-scrollbar-active   /* scrollbar slider, dragged */
 ```
 
 ---

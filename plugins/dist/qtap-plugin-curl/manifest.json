@@ -3,7 +3,7 @@
   "name": "qtap-plugin-curl",
   "title": "curl Tool",
   "description": "HTTP request tool for LLMs to fetch web content and API responses",
-  "version": "1.0.21",
+  "version": "1.0.22",
   "author": {
     "name": "Foundry-9 LLC",
     "url": "https://github.com/foundry-9"
