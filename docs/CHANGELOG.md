@@ -4,6 +4,26 @@
 
 ### 4.8-dev
 
+#### OpenRouter model discovery has been returning nothing since 0.13
+
+`@openrouter/sdk` 0.13.67 → 1.2.2. The major bump itself costs nothing: typechecking the plugin against both versions produces the same five errors, and every surface we use is unchanged — `chat.send`, `models.list`, `callModel`, `fromChatMessages` from the `lib/chat-compat` subpath, `Parameter.Tools` / `Parameter.ToolChoice`, and `GetModelsResponse = { result: ModelsListResponse }`.
+
+Those five pre-existing errors were the real finding. `models.list()` became a paginated async-iterable back in **0.13**, and only two of four call sites were migrated. `provider.ts` and `lib/llm/pricing-fetcher.ts` iterate pages correctly. Three others were left reading `response.data`, which does not exist on a `PageIterator` — so `|| []` swallowed it and they silently produced nothing:
+
+- `image-provider.ts` — image-model discovery found zero models on every call and always fell through to `FALLBACK_IMAGE_MODELS`. It logged "No image models found via API, using fallback list", which reads like an empty API response rather than a bug.
+- `embedding-provider.ts` — same failure for embedding-model discovery.
+- the plugin's own `pricing-fetcher.ts` — same bug, but the file is unreferenced and tree-shaken out of the bundle, so it never shipped. Fixed rather than deleted; it is a candidate for the next dead-code sweep.
+
+All three now iterate pages the way `provider.ts` already did.
+
+The reason this survived is that **no plugin TypeScript is typechecked anywhere**. The root `tsconfig.json` excludes `plugins`, `packages`, and `scripts`; no plugin has a `tsconfig.json` or a `typecheck` script; and esbuild strips types without checking them. A throwaway tsconfig surfaced all five errors in one run against the version already installed. Wiring a real typecheck into the plugin builds is tracked separately.
+
+The tests did not catch it either, for a subtler reason. `openrouter-image-provider.test.ts` covered only the two failure paths — network error and missing API key — both of which assert the fallback list, so the broken success path had nothing asserting against it. Worse, the file declared an inline `jest.mock('@openrouter/sdk', ...)` factory, but `jest.config.ts` maps that specifier to `__mocks__/@openrouter/sdk.ts`. The inline factory registered against the raw specifier while the subject's own import was rewritten to the manual mock, so the provider called a different `jest.fn()` than the test configured: `models.list()` returned `undefined`, the call threw, and the test went green off the error path. The suite now configures the manual mock's exported handle, and a new test walks a two-page paginated response and asserts real discovery — confirmed to fail when the old `response.data` read is restored.
+
+Worth recording for that follow-up: three other test files use inline factories for modules that `moduleNameMapper` also redirects (two for `openai`, one for `@anthropic-ai/sdk`). They may be exercising the same wrong mock and were not touched here.
+
+`npx tsc` clean, `eslint` clean, 561 suites / 9,229 tests pass.
+
 #### openai 7, xterm 6, and a terminal selection color that was never applied
 
 The two upgrades held back from the earlier dependency pass, plus the theme work xterm 6 required.

@@ -186,8 +186,17 @@ export class OpenRouterEmbeddingProvider {
         appTitle: getQuilltapUserAgent(),
       });
 
-      const response = await client.embeddings.listModels();
-      const models = response.data?.map((m) => m.id) ?? [];
+      // embeddings.listModels() returns a paginated async-iterable and the
+      // model array lives at page.result.data. This read was left on the
+      // pre-0.13 `response.data`, which is undefined on a PageIterator — so it
+      // silently resolved to an empty list on every call.
+      const pages = await client.embeddings.listModels();
+      const models: string[] = [];
+      for await (const page of pages) {
+        for (const m of page.result?.data ?? []) {
+          models.push(m.id);
+        }
+      }
       return models;
     } catch (error) {
       logger.error(
