@@ -26,7 +26,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
-COPY scripts/fix-node-pty-permissions.js ./scripts/fix-node-pty-permissions.js
+COPY scripts/fix-node-pty-permissions.js scripts/sync-pdf-worker.js ./scripts/
 RUN npm ci --omit=dev && npm rebuild
 
 # --- Production stage ---

@@ -4,6 +4,14 @@
 
 ### 4.8-dev
 
+#### Release build: a duplicated line and a script the Docker images never got
+
+Two failures in the same release run, both from the pdf.worker.mjs fix.
+
+`scripts/build-standalone-tarball.ts` had `const imgDir = ...` twice in a row, a duplicated line. esbuild refused to transform the file ("The symbol `imgDir` has already been declared"), so the standalone tarball job died before it started.
+
+The same commit added `node scripts/sync-pdf-worker.js` to the root `postinstall`, but the Docker dependency stages copy only the scripts they need before `npm ci`, and that list still held just `fix-node-pty-permissions.js`. Both architectures failed on `Cannot find module '/app/scripts/sync-pdf-worker.js'`. All four dependency stages — `deps`, `deps-prod`, `development` in `Dockerfile`, and `deps-prod` in `Dockerfile.ci` — now copy both scripts.
+
 #### CI build: the shared plugin tsconfig was never committed
 
 `plugins/tsconfig.base.json`, added when plugin typechecking went in, was matched by `.gitignore`'s `plugins/*` rule and never tracked. It exists on a development machine, so `npm run build:plugins` passes locally; on a fresh clone it does not exist, and every plugin's `tsconfig.json` (`"extends": "../../tsconfig.base.json"`) fails with TS5083. The follow-on `TS2307` module-resolution errors in the CI log are cascade — without the base config, tsc falls back to its default `module`/`moduleResolution` and resolves none of the imports.

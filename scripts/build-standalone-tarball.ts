@@ -166,7 +166,6 @@ if (existsSync(standaloneNodeModules)) {
   // carries build/ or prebuilds/ directories, and it dropped its install script, so
   // the user's `npm install` restores these purely through optionalDependencies.
   const imgDir = join(standaloneNodeModules, '@img');
-  const imgDir = join(standaloneNodeModules, '@img');
   if (existsSync(imgDir)) {
     for (const entry of readdirSync(imgDir)) {
       if (entry.startsWith('sharp-')) {
