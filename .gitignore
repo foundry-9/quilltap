@@ -156,10 +156,13 @@ backups/*
 data/
 data-backup/
 temp/
-# Plugins - ignore everything except documentation and dist/ directory
+# Plugins - ignore everything except documentation, dist/, and the shared tsconfig
 plugins/*
 !plugins/*.md
 !plugins/dist/
+# Each plugin's tsconfig.json extends this; without it every `npm run build:plugins`
+# typecheck fails with TS5083 on a fresh clone (CI).
+!plugins/tsconfig.base.json
 
 # Ignore node_modules and package-lock.json everywhere under plugins, including under dist
 plugins/**/node_modules/

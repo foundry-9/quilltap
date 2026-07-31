@@ -1,0 +1,36 @@
+{
+  "//": [
+    "Shared type-checking bar for every plugin in plugins/dist/.",
+    "",
+    "The root tsconfig.json excludes `plugins`, and esbuild strips types without",
+    "checking them, so plugin sources went unchecked entirely until this existed.",
+    "Each plugin extends this and exposes a `typecheck` script; build-plugins.ts",
+    "runs it before building, so a type error fails the build instead of shipping.",
+    "",
+    "target/lib track the esbuild output target (node18+), not the root's ES2017 —",
+    "plugins legitimately use ES2018+ features such as `for await`.",
+    "",
+    "compilerOptions only: TypeScript resolves `include`/`exclude` relative to the",
+    "file that declares them, so putting them here would point every plugin at",
+    "plugins/*.ts. Each plugin declares its own.",
+    "",
+    "useDefineForClassFields is pinned false on purpose. esbuild auto-discovers",
+    "tsconfig.json and honors it, so simply adding these configs flipped class",
+    "fields from assignment to Object.defineProperty semantics and rewrote nine",
+    "bundles. Adding a typecheck must not change what ships."
+  ],
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM"],
+    "useDefineForClassFields": false,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx"
+  }
+}

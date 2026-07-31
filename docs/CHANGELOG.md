@@ -4,6 +4,14 @@
 
 ### 4.8-dev
 
+#### CI build: the shared plugin tsconfig was never committed
+
+`plugins/tsconfig.base.json`, added when plugin typechecking went in, was matched by `.gitignore`'s `plugins/*` rule and never tracked. It exists on a development machine, so `npm run build:plugins` passes locally; on a fresh clone it does not exist, and every plugin's `tsconfig.json` (`"extends": "../../tsconfig.base.json"`) fails with TS5083. The follow-on `TS2307` module-resolution errors in the CI log are cascade — without the base config, tsc falls back to its default `module`/`moduleResolution` and resolves none of the imports.
+
+That took down the whole GitHub Actions build job, not just the plugins: `npm run build` runs `build:plugins && next build`, so the Next build never started. All 14 plugins failed, 0 succeeded.
+
+`.gitignore` now exempts the file alongside `!plugins/*.md` and `!plugins/dist/`, with a comment saying why removing the exemption breaks CI.
+
 #### CLI: semantic search reaches the help text, and every subcommand completes its own flags
 
 Release-checklist pass over `packages/quilltap`. The only new command this cycle, `recall-replay`, was already documented everywhere — CLI.md, the package README, `--help`, and the bash and zsh completions. Two older gaps turned up alongside it.
