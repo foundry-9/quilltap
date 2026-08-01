@@ -32,11 +32,7 @@
 import { useEffect, useRef } from 'react'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
 import { $getRoot } from 'lexical'
-import {
-  $convertFromMarkdownString,
-  $convertToMarkdownString,
-} from '@lexical/markdown'
-import { COMPOSER_TRANSFORMERS, stripMarkdownEscapes } from './MarkdownBridgePlugin'
+import { $exportComposerMarkdown, $importComposerMarkdown } from './MarkdownBridgePlugin'
 
 const PRESERVED_EXPORT_CHARS = ['*', '_', '`', '~']
 
@@ -90,7 +86,7 @@ export function ComposerSyncPlugin({
       () => {
         $getRoot().clear()
         if (value) {
-          $convertFromMarkdownString(value, COMPOSER_TRANSFORMERS, undefined, true)
+          $importComposerMarkdown(editor, value)
         }
       },
       { tag: 'external-sync' },
@@ -120,8 +116,7 @@ export function ComposerSyncPlugin({
         draftTimerRef.current = setTimeout(() => {
           let markdown = ''
           editor.getEditorState().read(() => {
-            const raw = $convertToMarkdownString(COMPOSER_TRANSFORMERS, undefined, true)
-            markdown = stripMarkdownEscapes(raw, PRESERVED_EXPORT_CHARS)
+            markdown = $exportComposerMarkdown(editor, PRESERVED_EXPORT_CHARS)
           })
           onPersistDraft(markdown)
         }, DRAFT_DEBOUNCE_MS)

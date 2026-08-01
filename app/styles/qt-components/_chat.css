@@ -1059,6 +1059,24 @@
     margin: 0.1em 0;
   }
 
+  /**
+   * Wrapper item for a sub-list. Lexical represents nesting as a list item
+   * whose only child is another list, so this <li> is structure rather than
+   * content — left to itself it draws the parent list's bullet right beside
+   * the sub-list's own first bullet. Ordered lists are unaffected: Lexical
+   * writes an explicit `value` on every real item and skips the wrapper, so
+   * hiding this marker doesn't disturb the numbering.
+   */
+  .qt-lexical-li-nested {
+    list-style-type: none;
+    margin: 0;
+  }
+
+  .qt-lexical-li-nested::before,
+  .qt-lexical-li-nested::after {
+    display: none;
+  }
+
   /* Checklist items */
   .qt-lexical-checklist {
     @apply list-none pl-0;
@@ -1480,6 +1498,15 @@
    */
   .qt-formatting-button-code-block {
     font-family: var(--qt-formatting-code-font, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace);
+  }
+
+  /**
+   * List indent / outdent buttons - arrow glyphs sized to match the text labels
+   */
+  .qt-formatting-button-indent,
+  .qt-formatting-button-outdent {
+    font-size: 1.05rem;
+    line-height: 1;
   }
 
   /**

@@ -4,6 +4,36 @@
 
 ### 4.8-dev
 
+#### Sub-lists survive the Markdown editor, and can be created in it
+
+Opening a document with nested bullets flattened them, and the next save wrote the flat version back to disk:
+
+```diff
+ - **Jackie** (3 nodes)
+-  - Implant
+-  - Notation Engine
++- Implant
++- Notation Engine
+```
+
+`@lexical/markdown` hard-codes a four-space indent unit and resolves a list item's depth on import with `Math.floor(spaces / 4)`. Two-space nesting — what Prettier emits, what most LLMs emit, what most hand-written Markdown uses — divides to zero, so every child became a sibling. Nothing downstream could recover the nesting because it was already gone from the editor state.
+
+New `components/chat/lexical/transformers/list-indentation.ts` sits on both sides of the bridge:
+
+- **On import**, list indentation is rewritten onto the four-space grid Lexical counts in, with depth resolved from a stack of open levels rather than a fixed divisor. Two-space, three-space, four-space and tab-indented documents all import identically.
+- **On export**, indentation is written back at the unit the loaded document used, detected when it was opened. A two-space file stays a two-space file; editing one line no longer reflows every nested line in the diff.
+- A child is never emitted narrower than its parent's marker, so an `1. ` parent keeps its children at three columns even in a two-space document, where two would re-parse as a sibling rather than a child.
+
+Fenced code blocks and leading YAML frontmatter are copied through untouched — a YAML sequence looks exactly like a bullet list.
+
+All conversions now go through `$importComposerMarkdown` / `$exportComposerMarkdown` in `MarkdownBridgePlugin`, so the composer, the Salon's document pane, and the standalone Markdown editor cannot drift apart.
+
+Separately, there was no way to *create* a sub-list in the first place: no plugin claimed Tab, and the toolbar had no indent control. `FormattingCommandPlugin` now registers `INDENT_LIST_ITEM_COMMAND` / `OUTDENT_LIST_ITEM_COMMAND` and handles Tab / Shift+Tab, and the formatting toolbar gained ⇥ / ⇤ buttons (which also work in raw-source mode). All of it is confined to list items — Tab outside a list still moves focus, and indenting a paragraph is refused rather than accepted and silently dropped on save, since Markdown can't represent it.
+
+Sub-lists also rendered with a doubled bullet on their first item. Lexical represents nesting as a list item whose only child is another list, and maps that wrapper to `list.nested.listitem` — `qt-lexical-li-nested`, which the theme declared but no stylesheet ever styled, so the wrapper drew the parent list's marker beside the sub-list's own. It now clears its marker and its margin. Ordered lists are unaffected: Lexical writes an explicit `value` on each real item and skips the wrapper, so the numbering never depended on the marker being drawn.
+
+The buttons act on the caret wherever it sits in a list item, not only where it happens to land first. `$selectionIsInListItem` consults the selection's anchor and focus alongside `getNodes()`, which reports nothing for a collapsed caret expressed as an element point; the commands restore the previous selection when the editor has none; and, like every other button in the toolbar, they are never disabled on selection state — a stale or blurred selection used to leave them greyed out with no way to tell why.
+
 #### Salon message list no longer calls flushSync from React's commit phase
 
 `VirtualizedMessageList` passed `virtualizer.measureElement` straight to each row's `ref`. TanStack Virtual measures the row inside that callback, and when a row above the scroll fold measures differently from the 150px estimate, it corrects `scrollTop` and asks React to re-render synchronously via `flushSync`.

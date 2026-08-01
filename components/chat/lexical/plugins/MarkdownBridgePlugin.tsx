@@ -17,7 +17,7 @@
 
 import { useEffect, useRef, useCallback } from 'react'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
-import { $getRoot } from 'lexical'
+import { $getRoot, type LexicalEditor } from 'lexical'
 import {
   $convertFromMarkdownString,
   $convertToMarkdownString,
@@ -38,6 +38,13 @@ import {
   type ElementTransformer,
 } from '@lexical/markdown'
 import { TABLE_TRANSFORMER } from '@/components/chat/lexical/transformers/table-transformer'
+import {
+  applyListIndentUnit,
+  detectListIndentUnit,
+  getListIndentUnit,
+  normalizeListIndentForLexical,
+  setListIndentUnit,
+} from '@/components/chat/lexical/transformers/list-indentation'
 
 /**
  * Case-insensitive CHECK_LIST transformer.
@@ -140,6 +147,40 @@ function normalizeExportMarkdown(markdown: string, chars: string[]): string {
   return chars.length > 0 ? stripMarkdownEscapes(markdown, chars) : markdown
 }
 
+/**
+ * Load markdown into the editor.
+ *
+ * List indentation is put onto the four-space grid Lexical's importer counts
+ * in (see [[list-indentation]]) — without this, the two-space nesting that most
+ * documents use collapses to a flat list — and the document's own indentation
+ * unit is remembered so {@link $exportComposerMarkdown} hands it back unchanged.
+ *
+ * Must be called inside `editor.update()`.
+ */
+export function $importComposerMarkdown(editor: LexicalEditor, markdown: string): void {
+  setListIndentUnit(editor, detectListIndentUnit(markdown))
+  $convertFromMarkdownString(
+    normalizeListIndentForLexical(markdown),
+    COMPOSER_TRANSFORMERS,
+    undefined,
+    true,
+  )
+}
+
+/**
+ * Serialise the editor back to markdown, re-indenting sub-lists to the unit the
+ * loaded document used so a save doesn't churn every nested line.
+ *
+ * Must be called inside `editor.update()` or `editorState.read()`.
+ */
+export function $exportComposerMarkdown(editor: LexicalEditor, preserveChars: string[]): string {
+  const raw = $convertToMarkdownString(COMPOSER_TRANSFORMERS, undefined, true)
+  return applyListIndentUnit(
+    normalizeExportMarkdown(raw, preserveChars),
+    getListIndentUnit(editor),
+  )
+}
+
 export function MarkdownBridgePlugin({
   input,
   setInput,
@@ -167,7 +208,7 @@ export function MarkdownBridgePlugin({
 
     editor.update(
       () => {
-        $convertFromMarkdownString(markdown, COMPOSER_TRANSFORMERS, undefined, true)
+        $importComposerMarkdown(editor, markdown)
       },
       { tag: 'external-sync' },
     )
@@ -180,14 +221,13 @@ export function MarkdownBridgePlugin({
       if (tags.has('external-sync')) return
 
       editorState.read(() => {
-        const raw = $convertToMarkdownString(COMPOSER_TRANSFORMERS, undefined, true)
         const preserveChars = [
           ...(preserveAsterisks ? ['*'] : []),
           ...(preserveUnderscores ? ['_'] : []),
           ...(preserveBackticks ? ['`'] : []),
           ...(preserveTildes ? ['~'] : []),
         ]
-        const markdown = normalizeExportMarkdown(raw, preserveChars)
+        const markdown = $exportComposerMarkdown(editor, preserveChars)
 
         // Debounce parent state updates (16ms, ~1 frame)
         if (debounceTimerRef.current) {
@@ -244,8 +284,7 @@ export function useMarkdownBridge() {
   const getMarkdown = useCallback((): string => {
     let markdown = ''
     editor.getEditorState().read(() => {
-      const raw = $convertToMarkdownString(COMPOSER_TRANSFORMERS, undefined, true)
-      markdown = normalizeExportMarkdown(raw, [...DEFAULT_PRESERVED_MARKDOWN_CHARS])
+      markdown = $exportComposerMarkdown(editor, [...DEFAULT_PRESERVED_MARKDOWN_CHARS])
     })
     return markdown
   }, [editor])
@@ -256,7 +295,7 @@ export function useMarkdownBridge() {
         () => {
           $getRoot().clear()
           if (text) {
-            $convertFromMarkdownString(text, COMPOSER_TRANSFORMERS, undefined, true)
+            $importComposerMarkdown(editor, text)
           }
         },
         { tag: 'external-sync' },
