@@ -4,7 +4,7 @@
   "id": "earl-grey",
   "name": "Earl Grey",
   "description": "A high-contrast dark theme inspired by modern AI chat interfaces, with pure black sidebar, charcoal main area, and clean minimal styling",
-  "version": "1.3.5",
+  "version": "1.3.6",
   "author": "Foundry-9 LLC",
   "license": "MIT",
   "supportsDarkMode": true,

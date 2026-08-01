@@ -989,7 +989,7 @@
   --qt-chat-whisper-bg: hsl(270 20% 90%);
   --qt-chat-whisper-fg: hsl(270 15% 25%);
   --qt-chat-whisper-border: hsl(270 25% 72%);
-  --qt-chat-whisper-label-fg: hsl(270 20% 55%);
+  --qt-chat-whisper-label-fg: hsl(270 25% 44%);
 
   /* Silent messages — light sage for light mode */
   --qt-chat-silent-bg: hsl(158 18% 88%);

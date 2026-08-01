@@ -247,7 +247,7 @@
   /* --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #9b8ec4 40%); */
   /* --qt-chat-whisper-fg: var(--qt-chat-assistant-fg); */
   /* --qt-chat-whisper-border: #9b8ec4; */
-  /* --qt-chat-whisper-label-fg: #7c6fa0; */
+  /* --qt-chat-whisper-label-fg: #5c447e; */
   /* --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, #7a9e8e 35%); */
   /* --qt-chat-silent-fg: var(--qt-chat-assistant-fg); */
   /* --qt-chat-silent-border: #7a9e8e; */

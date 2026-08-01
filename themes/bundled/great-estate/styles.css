@@ -187,7 +187,7 @@
   /* Chat: Whisper messages — dusty plum, like a whispered secret in the library */
   --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 55%, hsl(280 25% 35%) 45%);
   --qt-chat-whisper-border: hsl(280 30% 42%);
-  --qt-chat-whisper-label-fg: hsl(280 25% 50%);
+  --qt-chat-whisper-label-fg: hsl(280 35% 26%);
 
   /* Chat: Silent messages — rich garden green for estate aesthetic */
   --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, hsl(158 25% 42%) 35%);

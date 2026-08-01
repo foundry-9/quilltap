@@ -4,6 +4,32 @@
 
 ### 4.8-dev
 
+#### Whisper labels were unreadable in light mode
+
+`--qt-chat-whisper-label-fg` colors the "whispered to X" label on a whisper bubble. In light mode it failed WCAG AA (4.5:1 for normal text; the label is 0.75rem) in every bundled theme but one, and in the default theme. Art Deco measured 1.07:1 — effectively invisible. Measured against each theme's own `--qt-chat-whisper-bg`:
+
+| theme (light) | before | after |
+|---|---|---|
+| Art Deco | 1.07 | 5.20 |
+| The Great Estate | 1.95 | 4.65 |
+| Earl Grey | 3.13 | 4.86 |
+| Old School | 3.24 | 4.85 |
+| Rains | 3.67 | 5.03 |
+| Madman's Box | 5.84 | unchanged |
+| default theme | 2.79 | 5.02 |
+
+Each theme's light value was darkened within its own palette family — violet for the five purple themes, blue-gray for Rains. Dark mode was not touched except in the default theme, which measured 4.33 and is now 5.00.
+
+Art Deco needed more than a label change. This theme's `muted` is an unusually dim `hsl(222 16% 72%)` for a light theme, so the shared whisper recipe landed the bubble at a luminance whose *maximum possible* contrast is 5.13:1 against pure black — no palette-appropriate violet could clear 4.5. Its light-mode `--qt-chat-whisper-bg` is now mixed lighter, which also lifts the bubble's own body text from 4.25 (failing) to 6.30.
+
+The same variable colors `.qt-chat-system-bar-whisper`, the audience tag on announcement chips. That usage sits on `--qt-chat-system-bar-bg` and already measured better; every theme improves there too (light mode now 5.94–9.69).
+
+This corrects a claim in the whispered-announcements entry below, which said no bundled theme needed a change. The new classes did reuse an existing variable, as stated — but that variable was already failing AA in light mode, so reusing it spread a pre-existing bug to a second surface rather than introducing one.
+
+Two remaining failures were found and deliberately left alone, since they are outside this fix's light-mode scope: Earl Grey and Rains in **dark** mode measure 3.26 and 3.33. Both themes set their whisper colors in the mode-agnostic base block and override only light, so dark inherits a label that was tuned for neither.
+
+Changed: `themes/bundled/{art-deco,great-estate,earl-grey,old-school,rains}/styles.css` (patch-bumped), `app/styles/qt-components/_variables.css`, and the mirrors in `@quilltap/theme-storybook` (1.0.54) and `create-quilltap-theme` (2.0.17).
+
 #### Manual announcements can be whispered to specific characters
 
 Insert Announcement only ever posted publicly. The dialog now has a **Who hears it** section listing the chat's current participants with a checkbox each. Check none and the announcement is public, exactly as before — that remains the default and the unchanged path. Check one or more and the bubble is persisted as a whisper (`targetParticipantIds`), so only those participants' LLM contexts include it.

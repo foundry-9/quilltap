@@ -148,7 +148,7 @@
   /* Chat: Whisper messages — soft violet, classic and understated */
   --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, hsl(270 45% 55%) 40%);
   --qt-chat-whisper-border: hsl(270 45% 55%);
-  --qt-chat-whisper-label-fg: hsl(270 40% 48%);
+  --qt-chat-whisper-label-fg: hsl(270 45% 36%);
 
   /* Chat: Silent messages — faded green for retro feel */
   --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, hsl(120 25% 55%) 35%);

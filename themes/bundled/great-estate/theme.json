@@ -4,7 +4,7 @@
   "id": "great-estate",
   "name": "The Great Estate",
   "description": "Warm gold and mahogany, like a manor house library at golden hour. Playfair Display serif headings with Inter sans-serif body text, carbon-fibre texture overlay, and a palette that whispers old money. Light mode is cream and vellum; dark mode is deep walnut and burnished gold.",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "author": "Foundry-9 LLC",
   "license": "MIT",
   "supportsDarkMode": true,

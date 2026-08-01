@@ -291,7 +291,9 @@
   --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #9b8ec4 40%);
   --qt-chat-whisper-fg: var(--qt-chat-assistant-fg);
   --qt-chat-whisper-border: #9b8ec4;
-  --qt-chat-whisper-label-fg: #7c6fa0;
+  /* Deep enough to clear WCAG AA (4.5:1) against --qt-chat-whisper-bg at this
+     label's 0.75rem size; it also tints .qt-chat-system-bar-whisper. */
+  --qt-chat-whisper-label-fg: #5c447e;
 
   /* Chat: Silent messages — inner thoughts/actions from characters in silent mode */
   --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, #7a9e8e 35%);
@@ -849,7 +851,7 @@
   /* Chat: Whisper messages — dark mode */
   --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #6b5b95 40%);
   --qt-chat-whisper-border: #6b5b95;
-  --qt-chat-whisper-label-fg: #a89cc8;
+  --qt-chat-whisper-label-fg: #b5a9d1;
 
   /* Chat: Silent messages — dark mode */
   --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, #4a7a6a 35%);

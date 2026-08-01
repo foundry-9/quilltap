@@ -1039,7 +1039,7 @@
   --qt-chat-whisper-bg: hsl(240 18% 90%);
   --qt-chat-whisper-fg: hsl(240 15% 25%);
   --qt-chat-whisper-border: hsl(240 15% 72%);
-  --qt-chat-whisper-label-fg: hsl(240 12% 50%);
+  --qt-chat-whisper-label-fg: hsl(240 18% 43%);
 
   /* Silent messages — light cool blue-green for light mode */
   --qt-chat-silent-bg: hsl(170 25% 86%);
