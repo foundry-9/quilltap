@@ -423,11 +423,14 @@
   --qt-chat-assistant-border: transparent;
   --qt-chat-assistant-font: var(--font-claude-response);
 
-  /* Chat: Whisper messages — muted lavender, tea-steeped secrets */
+  /* Chat: Whisper messages — muted lavender, tea-steeped secrets.
+     These are the dark-mode values; the .light block below overrides every one
+     of them. The label has to stay light enough to clear WCAG AA against the
+     bubble above it — it is 0.75rem, so the 4.5:1 bar applies, not 3:1. */
   --qt-chat-whisper-bg: hsl(270 15% 22%);
   --qt-chat-whisper-fg: hsl(270 10% 82%);
   --qt-chat-whisper-border: hsl(270 20% 35%);
-  --qt-chat-whisper-label-fg: hsl(270 15% 55%);
+  --qt-chat-whisper-label-fg: hsl(270 20% 70%);
 
   /* Chat: Silent messages — classic sage for refined palette */
   --qt-chat-silent-bg: hsl(158 18% 28%);

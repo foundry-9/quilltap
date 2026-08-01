@@ -451,10 +451,13 @@
   --qt-chat-assistant-border: var(--stroke-soft);
   --qt-chat-assistant-font: var(--font-claude-response);
 
-  /* Chat: Whisper messages — stormy indigo, like rain on dark glass */
+  /* Chat: Whisper messages — stormy indigo, like rain on dark glass.
+     These are the dark-mode values; the .light block below overrides them. The
+     label has to stay light enough to clear WCAG AA against the bubble above
+     it — it is 0.75rem, so the 4.5:1 bar applies, not 3:1. */
   --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 55%, hsl(240 25% 28%) 45%);
   --qt-chat-whisper-border: hsl(240 20% 40%);
-  --qt-chat-whisper-label-fg: hsl(240 18% 55%);
+  --qt-chat-whisper-label-fg: hsl(240 18% 68%);
 
   /* Chat: Silent messages — cool blue-green for rain/water theme */
   --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, hsl(170 28% 38%) 35%);

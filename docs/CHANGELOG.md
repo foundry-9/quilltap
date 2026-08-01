@@ -18,7 +18,7 @@
 | Madman's Box | 5.84 | unchanged |
 | default theme | 2.79 | 5.02 |
 
-Each theme's light value was darkened within its own palette family — violet for the five purple themes, blue-gray for Rains. Dark mode was not touched except in the default theme, which measured 4.33 and is now 5.00.
+Each theme's light value was darkened within its own palette family — violet for the five purple themes, blue-gray for Rains.
 
 Art Deco needed more than a label change. This theme's `muted` is an unusually dim `hsl(222 16% 72%)` for a light theme, so the shared whisper recipe landed the bubble at a luminance whose *maximum possible* contrast is 5.13:1 against pure black — no palette-appropriate violet could clear 4.5. Its light-mode `--qt-chat-whisper-bg` is now mixed lighter, which also lifts the bubble's own body text from 4.25 (failing) to 6.30.
 
@@ -26,7 +26,9 @@ The same variable colors `.qt-chat-system-bar-whisper`, the audience tag on anno
 
 This corrects a claim in the whispered-announcements entry below, which said no bundled theme needed a change. The new classes did reuse an existing variable, as stated — but that variable was already failing AA in light mode, so reusing it spread a pre-existing bug to a second surface rather than introducing one.
 
-Two remaining failures were found and deliberately left alone, since they are outside this fix's light-mode scope: Earl Grey and Rains in **dark** mode measure 3.26 and 3.33. Both themes set their whisper colors in the mode-agnostic base block and override only light, so dark inherits a label that was tuned for neither.
+Dark mode needed three fixes as well. The default theme measured 4.33 and is now 5.02. Earl Grey and Rains measured 3.26 and 3.33: both set their whisper colors in the mode-agnostic base block and override only light, so dark inherited a label tuned for neither. Their base-block labels are now `hsl(270 20% 70%)` and `hsl(240 18% 68%)`, in line with the 65–72% lightness the other themes already use for this label in dark. That also lifts the announcement-chip audience tag in those two themes from 3.47 and 4.06 to 5.70 and 6.62.
+
+All 6 bundled themes plus the default theme now clear 4.5:1 on both surfaces in both modes — 26 measurements, lowest 4.65.
 
 Changed: `themes/bundled/{art-deco,great-estate,earl-grey,old-school,rains}/styles.css` (patch-bumped), `app/styles/qt-components/_variables.css`, and the mirrors in `@quilltap/theme-storybook` (1.0.54) and `create-quilltap-theme` (2.0.17).
 
