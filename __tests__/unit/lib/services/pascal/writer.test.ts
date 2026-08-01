@@ -14,8 +14,8 @@ const BASE = {
 }
 
 describe('buildPascalResultContent', () => {
-  it('is the title and the message', () => {
-    expect(buildPascalResultContent(BASE).content).toBe('🎲 **Force the Lock** — The lock clicks open.')
+  it('is a heading paragraph, then the message as its own block', () => {
+    expect(buildPascalResultContent(BASE).content).toBe('🎲 **Force the Lock**\n\nThe lock clicks open.')
   })
 
   it('names the tool by its title, never its declaration name', () => {
@@ -31,7 +31,31 @@ describe('buildPascalResultContent', () => {
 
   it('trims the message but never revoices it', () => {
     const { content } = buildPascalResultContent({ ...BASE, message: '   Still locked.   ' })
-    expect(content).toBe('🎲 **Force the Lock** — Still locked.')
+    expect(content).toBe('🎲 **Force the Lock**\n\nStill locked.')
+  })
+
+  it('lets a message that opens with a list item be a list', () => {
+    // The blank line is the point of the two-block form: a leading block token
+    // must start its own Markdown block, not glue inline to the bold heading.
+    const { content } = buildPascalResultContent({ ...BASE, message: '- Jackie (3 nodes)\n- Marlow (1 node)' })
+    expect(content).toBe('🎲 **Force the Lock**\n\n- Jackie (3 nodes)\n- Marlow (1 node)')
+  })
+
+  it('lets a message that opens with a heading be a heading', () => {
+    const { content } = buildPascalResultContent({ ...BASE, message: '# Dossier' })
+    expect(content).toBe('🎲 **Force the Lock**\n\n# Dossier')
+  })
+
+  describe('the chip label as heading', () => {
+    it('uses the rendered chipLabel when present — one string for chip and bubble', () => {
+      const { content } = buildPascalResultContent({ ...BASE, chipLabel: 'Agent lambda — Jackie' })
+      expect(content).toBe('🎲 **Agent lambda — Jackie**\n\nThe lock clicks open.')
+    })
+
+    it('falls back to the title when the chipLabel renders blank', () => {
+      const { content } = buildPascalResultContent({ ...BASE, chipLabel: '   ' })
+      expect(content).toBe('🎲 **Force the Lock**\n\nThe lock clicks open.')
+    })
   })
 
   describe('what the croupier no longer says', () => {

@@ -9,15 +9,25 @@
  * JSON Schema at `public/schemas/qtap-custom-tool.schema.json` mirrors it for
  * editor completion.
  *
- * Design constraint that shapes everything below: **no expression evaluation,
- * anywhere.** Outcome tests are AND-composed comparator objects, and indirection
- * is limited to two closed forms — a `{ "$param": "name" }` reference and a
- * `{ "$state": "path", "fallback": <literal> }` reference. There is no string
- * grammar to parse, so there is nothing to inject into.
+ * Design constraint that shapes everything below: outcome tests are
+ * AND-composed comparator objects, and indirection is limited to two closed
+ * forms — a `{ "$param": "name" }` reference and a
+ * `{ "$state": "path", "fallback": <literal> }` reference. The **one** place a
+ * string grammar exists is an effect's `value`, evaluated by the closed,
+ * eval-free parser in `lib/pascal/expressions.ts`: arithmetic, string
+ * concatenation, parentheses, literals, and `{{ref}}` substitution. There are
+ * no identifiers, no function calls, and no member access — the only names
+ * that grammar admits are the same `{{...}}` reference families
+ * `renderTemplate` already substitutes, so there is still nothing callable and
+ * nothing reachable beyond the run's own subjects.
  */
 
 import { z } from 'zod';
 import { MAX_DIE_SIDES, MIN_DIE_SIDES, parseDiceNotation } from './dice-notation';
+import { parsePath } from '@/lib/state/state-paths';
+import { MAX_EFFECT_EXPRESSION_LENGTH, parseExpression } from './expressions';
+
+export { MAX_EFFECT_EXPRESSION_LENGTH };
 
 /** Well-known folder, at a store's root, holding custom-tool definitions. */
 export const TOOLS_FOLDER = 'Tools';
@@ -42,6 +52,19 @@ export const MAX_DESCRIPTION_LENGTH = 500;
 
 /** Cap on a tool's display title, in characters. */
 export const MAX_TITLE_LENGTH = 80;
+
+/**
+ * Cap on a `chipLabel` TEMPLATE's text, in characters. The rendered result is
+ * uncapped here — the UI truncates it via CSS, which is where display concerns
+ * belong.
+ */
+export const MAX_CHIP_LABEL_LENGTH = 160;
+
+/** Cap on effects per tool. */
+export const MAX_EFFECTS = 16;
+
+/** Cap on an effect's `target` string, in characters. */
+export const MAX_EFFECT_TARGET_LENGTH = 200;
 
 /** Cap on an LLM consult prompt, in characters (measured before templating). */
 export const MAX_LLM_PROMPT_LENGTH = 4000;
@@ -479,6 +502,141 @@ export const CustomToolOutcomeSchema = z.strictObject({
 
 export type CustomToolOutcome = z.infer<typeof CustomToolOutcomeSchema>;
 
+/**
+ * An effect's condition. The outcome-row `when` comparator language plus ONE
+ * new subject — `outcome`, the winning row's semantic state — because an effect
+ * is evaluated after the table has dealt, when there finally IS a winning
+ * outcome to test.
+ *
+ * A separate schema rather than a widened {@link WhenObjectSchema} on purpose:
+ * an `outcome` subject inside an outcome row would be a self-referential dead
+ * branch (the row cannot test a verdict it has not yet won), and keeping the
+ * shapes separate leaves `matchesWhen` untouched.
+ */
+export const EffectWhenSchema = z
+  .strictObject({
+    ...NUMERIC_COMPARATOR_SHAPE,
+    roll: NumericComparatorSchema.optional().describe('Test the raw pre-transform draw rather than the final value.'),
+    params: z
+      .record(IdentifierSchema, ParamComparatorSchema)
+      .optional()
+      .describe('Test the resolved parameters, keyed by parameter name.'),
+    metadata: z
+      .record(MetadataKeySchema, MetadataComparatorSchema)
+      .optional()
+      .describe("Test the invoking character's metadata.json, keyed by metadata key. A key the character lacks does not match."),
+    llm: LlmComparatorSchema.optional().describe(
+      "Test the LLM consult's answer (or, via `ok`, whether it succeeded). Only valid on a tool that declares an `llm` block."
+    ),
+    outcome: z
+      .strictObject({
+        eq: OutcomeStateSchema.optional().describe('The winning outcome carries this state.'),
+        neq: OutcomeStateSchema.optional().describe('The winning outcome does not carry this state.'),
+      })
+      .refine((test) => test.eq !== undefined || test.neq !== undefined, {
+        message: 'must test something: `eq` or `neq` against an outcome state',
+      })
+      .optional()
+      .describe("Test the WINNING outcome's semantic state — e.g. { \"eq\": \"success\" }."),
+  })
+  .refine(
+    (when) =>
+      hasComparator(when) ||
+      when.roll !== undefined ||
+      when.llm !== undefined ||
+      when.outcome !== undefined ||
+      (when.params !== undefined && Object.keys(when.params).length > 0) ||
+      (when.metadata !== undefined && Object.keys(when.metadata).length > 0),
+    {
+      message:
+        'must test something: a comparator on the value, `roll`, `llm`, `outcome`, a non-empty `params`, or a non-empty `metadata`',
+    }
+  );
+
+export type EffectWhen = z.infer<typeof EffectWhenSchema>;
+
+/**
+ * One side effect: a write the run records after the table has dealt.
+ *
+ * `value` discrimination is the one ergonomic trap in the format: a JSON number
+ * or boolean is a literal, stored as-is, but a JSON **string is always an
+ * expression** — so literal prose must be quoted INSIDE the expression
+ * (`"value": "'broken pick'"`, not `"value": "broken pick"`; the bare form is a
+ * load-time parse error, and a loud one).
+ */
+export const CustomToolEffectSchema = z.strictObject({
+  when: EffectWhenSchema.optional().describe('Condition for this effect. Omitted = fires on every run.'),
+  target: z
+    .string()
+    .min(1)
+    .max(MAX_EFFECT_TARGET_LENGTH)
+    .describe(
+      'Where to write: "state.<path>" (tiered persistent state, written at the tier where the key already lives) ' +
+        'or "metadata.<key>" (the rolling character\'s fact sheet).'
+    ),
+  value: z
+    .union([
+      z.number().finite(),
+      z.boolean(),
+      z.string().min(1).max(MAX_EFFECT_EXPRESSION_LENGTH),
+    ])
+    .describe(
+      'What to write. A JSON number or boolean is a literal. A JSON string is ALWAYS an expression — quote literal ' +
+        "prose inside it (\"'broken pick'\"). Expressions take arithmetic, +-concatenation, parentheses, and {{ref}} " +
+        'substitution ({{value}}, {{roll}}, {{dice}}, {{llm}}, {{params.x}}, {{metadata.key}}, {{state.path}}).'
+    ),
+});
+
+export type CustomToolEffect = z.infer<typeof CustomToolEffectSchema>;
+
+/** A parsed effect target, with the raw text kept for records and messages. */
+export type EffectTarget =
+  | { kind: 'state'; path: Array<string | number>; raw: string }
+  | { kind: 'metadata'; key: string; raw: string };
+
+/**
+ * Parse an effect's `target`. The single parser for the syntax — validation,
+ * the applier, and the Workbench all come through here, so "what counts as a
+ * writable target" is decided exactly once.
+ *
+ * - `state.<path>` — the remainder is a state path (`parsePath` dot/bracket
+ *   syntax). An empty path is rejected, and so is a first segment starting with
+ *   `_`: those keys are the user's own (the `state` tool's underscore guard),
+ *   and no AI-adjacent path may write them.
+ * - `metadata.<key>` — the remainder is taken WHOLE as the key. Metadata keys
+ *   are the user's vocabulary, so dots inside the key are fine precisely
+ *   because it is not path-parsed.
+ */
+export function parseEffectTarget(
+  target: string
+): { ok: true; target: EffectTarget } | { ok: false; reason: string } {
+  if (target.startsWith('state.')) {
+    const rest = target.slice('state.'.length);
+    const path = parsePath(rest);
+    if (path.length === 0) {
+      return { ok: false, reason: 'names no state path after "state."' };
+    }
+    const first = path[0];
+    if (typeof first === 'string' && first.startsWith('_')) {
+      return {
+        ok: false,
+        reason: `writes "${rest}" — state keys starting with an underscore are user-only, and no tool may write them`,
+      };
+    }
+    return { ok: true, target: { kind: 'state', path, raw: target } };
+  }
+
+  if (target.startsWith('metadata.')) {
+    const key = target.slice('metadata.'.length);
+    if (key.length === 0) {
+      return { ok: false, reason: 'names no metadata key after "metadata."' };
+    }
+    return { ok: true, target: { kind: 'metadata', key, raw: target } };
+  }
+
+  return { ok: false, reason: 'must start with "state." or "metadata."' };
+}
+
 /** Default visibility for a tool's result. */
 export const VisibilitySchema = z.enum(['public', 'whisper']);
 
@@ -536,9 +694,9 @@ export type CustomToolLlm = z.infer<typeof CustomToolLlmSchema>;
 /**
  * The custom-tool definition.
  *
- * Unknown TOP-LEVEL keys are tolerated, which reserves room for v2 keys —
- * notably `persist` — without breaking older builds. `collectUnknownKeys`
- * surfaces them for a debug log.
+ * Unknown TOP-LEVEL keys are tolerated, which reserves room for future keys
+ * (as it once did for `effects`, which shipped under that tolerance) without
+ * breaking older builds. `collectUnknownKeys` surfaces them for a debug log.
  *
  * That tolerance stops at the top level: every nested object below is strict.
  * The forward-compatibility argument does not reach them, and inside a `when`
@@ -558,6 +716,15 @@ export const QtapCustomToolSchema = z
       .max(MAX_TITLE_LENGTH)
       .optional()
       .describe('Human-readable name for display. Defaults to a title-cased `name`.'),
+    chipLabel: z
+      .string()
+      .min(1)
+      .max(MAX_CHIP_LABEL_LENGTH)
+      .optional()
+      .describe(
+        'Templated label for the outcome chip and the announcement header. Same placeholders as an outcome message. ' +
+          'Rendered after the outcome is chosen. Blank/absent = the title labels the chip.'
+      ),
     description: z
       .string()
       .min(1)
@@ -585,6 +752,13 @@ export const QtapCustomToolSchema = z
     llm: CustomToolLlmSchema.optional().describe(
       'Ask an LLM for a generated result after the roll; outcomes may then test it and messages may render it.'
     ),
+    effects: z
+      .array(CustomToolEffectSchema)
+      .max(MAX_EFFECTS, `at most ${MAX_EFFECTS} effects`)
+      .optional()
+      .describe(
+        'Side effects applied after the run: writes into tiered persistent state or the rolling character\'s metadata.'
+      ),
     outcomes: z
       .array(CustomToolOutcomeSchema)
       .min(1, 'at least one outcome is required')
@@ -595,6 +769,7 @@ export const QtapCustomToolSchema = z
     validateOutcomeOrdering(tool.outcomes, ctx);
     validateReferences(tool, ctx);
     validateGates(tool, ctx);
+    validateEffects(tool, ctx);
   });
 
 export type QtapCustomTool = z.infer<typeof QtapCustomToolSchema>;
@@ -712,57 +887,136 @@ function validateReferences(
 
   tool.outcomes.forEach((outcome, i) => {
     if (outcome.when === true) return;
-    const path = ['outcomes', i, 'when'];
+    validateWhenSubjects(declared, outcome.when, Boolean(tool.llm), ctx, ['outcomes', i, 'when']);
+  });
+}
 
-    // Bare comparator keys, and `roll`, both address a number.
-    validateComparator(declared, outcome.when, 'number', 'the rolled value', ctx, path);
-    if (outcome.when.roll !== undefined) {
-      validateComparator(declared, outcome.when.roll, 'number', 'the raw roll', ctx, [...path, 'roll']);
+/**
+ * The shared walk over one `when` object's subjects — outcome rows and effect
+ * conditions carry the same comparator language, so they are checked by the
+ * same code rather than two copies that drift.
+ */
+function validateWhenSubjects(
+  declared: Record<string, CustomToolParameter>,
+  when: WhenObject | EffectWhen,
+  hasLlmBlock: boolean,
+  ctx: z.RefinementCtx,
+  path: Array<string | number>
+): void {
+  // Bare comparator keys, and `roll`, both address a number.
+  validateComparator(declared, when, 'number', 'the rolled value', ctx, path);
+  if (when.roll !== undefined) {
+    validateComparator(declared, when.roll, 'number', 'the raw roll', ctx, [...path, 'roll']);
+  }
+
+  for (const [name, comparator] of Object.entries(when.params ?? {})) {
+    const target = declared[name];
+    if (!target) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `tests undeclared parameter "${name}"`,
+        path: [...path, 'params', name],
+      });
+      continue;
+    }
+    validateComparator(declared, comparator, valueTypeOf(target.type), `parameter "${name}"`, ctx, [
+      ...path,
+      'params',
+      name,
+    ]);
+  }
+
+  // An `llm` test on a tool with no `llm` block could never fire — there is
+  // no consult whose answer it might match. That is a typo, not an intent,
+  // and left alone it reads as a dead branch in the outcome table.
+  if (when.llm !== undefined) {
+    if (!hasLlmBlock) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'tests the LLM consult, but the tool declares no `llm` block',
+        path: [...path, 'llm'],
+      });
+    }
+    // The answer's run-time type is the model's business (see the schema
+    // comment), so — exactly as with `metadata` — only the `$param` operands
+    // are checkable here.
+    validateMetadataOperands(declared, when.llm, ctx, [...path, 'llm']);
+  }
+
+  // `metadata` gets a shallower check, and there is no way around it: the
+  // keys live on a character the file has never seen, so neither the key's
+  // existence nor its stored type is knowable here. What IS checkable is the
+  // operand — a `$param` reference must still resolve to a declared
+  // parameter, exactly as anywhere else. The rest (absent key, wrong type,
+  // non-primitive value) is caught fail-soft at run time by `matchesWhen`,
+  // where the character is finally in the room.
+  for (const [key, comparator] of Object.entries(when.metadata ?? {})) {
+    validateMetadataOperands(declared, comparator, ctx, [...path, 'metadata', key]);
+  }
+}
+
+/**
+ * Rule: every effect must be applicable. The target parses (including the
+ * underscore guard), a string `value` parses as an expression, every
+ * `params.x` reference names a declared parameter, and an `{{llm}}` reference
+ * or an `llm` `when`-subject requires an `llm` block — the same rule outcome
+ * rows follow.
+ *
+ * Parse failure here is the dice-notation doctrine: syntax errors are typos,
+ * caught in the Workbench and at discovery, never at the table.
+ */
+function validateEffects(
+  tool: {
+    parameters?: Record<string, CustomToolParameter>;
+    llm?: CustomToolLlm;
+    effects?: CustomToolEffect[];
+  },
+  ctx: z.RefinementCtx
+): void {
+  const declared = tool.parameters ?? {};
+
+  (tool.effects ?? []).forEach((effect, i) => {
+    const base = ['effects', i];
+
+    const target = parseEffectTarget(effect.target);
+    if (!target.ok) {
+      ctx.addIssue({ code: 'custom', message: `target ${target.reason}`, path: [...base, 'target'] });
     }
 
-    for (const [name, comparator] of Object.entries(outcome.when.params ?? {})) {
-      const target = declared[name];
-      if (!target) {
+    // A JSON string value is ALWAYS an expression — the quoting trap. The bare
+    // prose an author meant as a literal fails to parse right here, loudly.
+    if (typeof effect.value === 'string') {
+      const parsed = parseExpression(effect.value);
+      if (!parsed.ok) {
         ctx.addIssue({
           code: 'custom',
-          message: `tests undeclared parameter "${name}"`,
-          path: [...path, 'params', name],
+          message: `value is not a valid expression: ${parsed.reason}`,
+          path: [...base, 'value'],
         });
-        continue;
+      } else {
+        for (const ref of parsed.expr.refs) {
+          if (ref.startsWith('params.')) {
+            const name = ref.slice('params.'.length);
+            if (!declared[name]) {
+              ctx.addIssue({
+                code: 'custom',
+                message: `value references undeclared parameter "${name}"`,
+                path: [...base, 'value'],
+              });
+            }
+          } else if (ref === 'llm' && !tool.llm) {
+            ctx.addIssue({
+              code: 'custom',
+              message: 'value references {{llm}}, but the tool declares no `llm` block',
+              path: [...base, 'value'],
+            });
+          }
+        }
       }
-      validateComparator(declared, comparator, valueTypeOf(target.type), `parameter "${name}"`, ctx, [
-        ...path,
-        'params',
-        name,
-      ]);
     }
 
-    // An `llm` test on a tool with no `llm` block could never fire — there is
-    // no consult whose answer it might match. That is a typo, not an intent,
-    // and left alone it reads as a dead branch in the outcome table.
-    if (outcome.when.llm !== undefined) {
-      if (!tool.llm) {
-        ctx.addIssue({
-          code: 'custom',
-          message: 'tests the LLM consult, but the tool declares no `llm` block',
-          path: [...path, 'llm'],
-        });
-      }
-      // The answer's run-time type is the model's business (see the schema
-      // comment), so — exactly as with `metadata` — only the `$param` operands
-      // are checkable here.
-      validateMetadataOperands(declared, outcome.when.llm, ctx, [...path, 'llm']);
-    }
-
-    // `metadata` gets a shallower check, and there is no way around it: the
-    // keys live on a character the file has never seen, so neither the key's
-    // existence nor its stored type is knowable here. What IS checkable is the
-    // operand — a `$param` reference must still resolve to a declared
-    // parameter, exactly as anywhere else. The rest (absent key, wrong type,
-    // non-primitive value) is caught fail-soft at run time by `matchesWhen`,
-    // where the character is finally in the room.
-    for (const [key, comparator] of Object.entries(outcome.when.metadata ?? {})) {
-      validateMetadataOperands(declared, comparator, ctx, [...path, 'metadata', key]);
+    if (effect.when !== undefined) {
+      validateWhenSubjects(declared, effect.when, Boolean(tool.llm), ctx, [...base, 'when']);
     }
   });
 }
@@ -966,6 +1220,7 @@ const KNOWN_TOP_LEVEL_KEYS = new Set([
   '$schema',
   'name',
   'title',
+  'chipLabel',
   'description',
   'disabled',
   'availableWhen',
@@ -975,6 +1230,7 @@ const KNOWN_TOP_LEVEL_KEYS = new Set([
   'parameters',
   'roll',
   'llm',
+  'effects',
   'outcomes',
 ]);
 

@@ -372,6 +372,14 @@ export const MessageEventSchema = z.object({
      * identity and always present.
      */
     toolTitle: z.string().optional(),
+    /**
+     * The definition's `chipLabel` template, rendered at roll time with the
+     * run's own subjects — the per-run name of the deal ("Agent lambda —
+     * Jackie"). The Salon chip and the bubble heading both read this one
+     * string. Absent on rows from before the field existed and on tools that
+     * declare no label; readers fall back to `toolTitle`, then `tool`.
+     */
+    chipLabel: z.string().optional(),
     definitionTier: z.enum(['character', 'participant', 'group', 'project', 'global']),
     definitionMountId: z.string(),
     params: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])),
@@ -406,6 +414,21 @@ export const MessageEventSchema = z.object({
       provider: z.string().optional(),
       model: z.string().optional(),
     }).optional(),
+    /**
+     * The side effects this run actually applied — the audit trail of the
+     * definition's `effects` array. Each entry names the raw target
+     * ("state.encounter.count" / "metadata.lockpick"), what the store held
+     * before (absent when it held nothing), what was written, and — for state
+     * targets only — which tier the write landed in. The Salon body shows none
+     * of this; the bubble stays the author's message. Absent when the run
+     * declared or applied no effects.
+     */
+    effects: z.array(z.object({
+      target: z.string(),
+      previous: z.unknown().optional(),
+      next: z.unknown(),
+      tier: z.enum(['chat', 'project', 'group', 'general']).optional(),
+    })).optional(),
     invokedBy: z.enum(['llm', 'user']),
     callerParticipantId: UUIDSchema.optional(),
   }).nullable().optional(),

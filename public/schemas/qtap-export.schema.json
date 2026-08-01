@@ -747,6 +747,7 @@
           "properties": {
             "tool": { "type": "string", "description": "Name of the custom tool that was run (the definition's `name`, not its filename)." },
             "toolTitle": { "type": "string", "description": "The tool's display title at the moment it ran (its `title`, or a title-cased `name`) — what the Salon labels the outcome with. Absent on messages posted before the field existed; readers fall back to `tool`." },
+            "chipLabel": { "type": "string", "description": "The definition's chipLabel template rendered at roll time — the per-run label the Salon chip and the bubble heading share ('Agent lambda — Jackie'). Absent on older rows and on tools that declare no label; readers fall back to toolTitle, then tool." },
             "definitionTier": { "type": "string", "enum": ["character", "participant", "group", "project", "global"], "description": "Mount tier the definition resolved from. Tiers shadow one another, so the same tool name can mean different things in different rooms." },
             "definitionMountId": { "type": "string", "description": "Mount point ID of the document store the definition was loaded from." },
             "params": { "type": "object", "description": "Resolved parameter values for this run (declared defaults filled in, numeric values clamped).", "additionalProperties": { "type": ["number", "string", "boolean"] } },
@@ -769,6 +770,20 @@
                 "reason": { "type": "string" },
                 "provider": { "type": "string" },
                 "model": { "type": "string" }
+              }
+            },
+            "effects": {
+              "type": "array",
+              "description": "The side effects this run applied — the audit of the definition's `effects` array. Each entry names the raw target ('state.encounter.count' / 'metadata.lockpick'), what the store held before (absent when nothing), what was written, and — state targets only — which tier the write landed in. Absent when the run declared or applied none.",
+              "items": {
+                "type": "object",
+                "required": ["target", "next"],
+                "properties": {
+                  "target": { "type": "string", "description": "The effect's raw target, as written in the definition." },
+                  "previous": { "description": "What the store held before the write. Absent when it held nothing." },
+                  "next": { "description": "What was written." },
+                  "tier": { "type": "string", "enum": ["chat", "project", "group", "general"], "description": "Which state store the write landed in. Absent on metadata writes." }
+                }
               }
             },
             "invokedBy": { "type": "string", "enum": ["llm", "user"], "description": "Whether the model reached for the tool or the user ran it themselves." },

@@ -561,10 +561,12 @@ function stateToken(state: string | undefined): 'success' | 'warning' | 'error' 
 }
 
 /**
- * A faithful miniature of the Salon's Pascal bubble — state accent, rendered
- * message, dice breakdown, whisper styling — plus the debug line the real
- * bubble never shows: raw draw, final value, the matched row, and the metadata
- * the winning row consulted.
+ * A faithful miniature of the Salon's Pascal bubble — state accent, the
+ * heading paragraph over its own message block (the chip label as heading when
+ * the run rendered one), dice breakdown, whisper styling — plus the debug
+ * lines the real bubble never shows: raw draw, final value, the matched row,
+ * the metadata the winning row consulted, and the effects as a dry run. The
+ * bench computes those effects; it never applies them.
  */
 function MiniPascalBubble({
   roll,
@@ -574,6 +576,7 @@ function MiniPascalBubble({
   const outcome = draft.outcomes[roll.outcomeIndex]
   const rowLabel = outcome?.catchAll ? 'the catch-all' : `row ${roll.outcomeIndex + 1}`
   const title = displayTitle({ name: draft.name || 'contrivance', title: draft.title || undefined })
+  const heading = roll.chipLabel?.trim() || title
 
   return (
     <div
@@ -582,8 +585,9 @@ function MiniPascalBubble({
       }`}
     >
       <p>
-        🎲 <strong>{title}</strong> — {roll.message}
+        🎲 <strong>{heading}</strong>
       </p>
+      <p>{roll.message}</p>
       {roll.diceBreakdown && <p className="text-xs qt-text-secondary font-mono">{roll.diceBreakdown}</p>}
       {roll.visibility === 'whisper' && <p className="text-xs qt-text-secondary italic">whispered</p>}
       <p className="text-xs qt-text-secondary font-mono">
@@ -598,6 +602,22 @@ function MiniPascalBubble({
           consult {roll.llm.ok ? 'answered' : `failed (${roll.llm.reason ?? 'no reason recorded'})`}:{' '}
           {JSON.stringify(roll.llm.output)}
         </p>
+      )}
+      {roll.effects && roll.effects.length > 0 && (
+        <div className="text-xs qt-text-secondary font-mono">
+          {roll.effects.map((effect) =>
+            'target' in effect ? (
+              <p key={effect.index}>
+                → {effect.target.raw} = {JSON.stringify(effect.value)} <em>(would write)</em>
+              </p>
+            ) : (
+              <p key={effect.index}>
+                · effect {effect.index + 1} skipped: {effect.skipped}
+              </p>
+            )
+          )}
+          <p className="italic">The bench computes effects; it never applies them.</p>
+        </div>
       )}
     </div>
   )

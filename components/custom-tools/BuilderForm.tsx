@@ -15,6 +15,7 @@ import { useMemo, useState } from 'react'
 import { Icon } from '@/components/ui/icon'
 import {
   IDENTIFIER_PATTERN,
+  MAX_CHIP_LABEL_LENGTH,
   MAX_DESCRIPTION_LENGTH,
   MAX_LLM_OUTPUT_CEILING,
   MAX_LLM_OUTPUT_LENGTH,
@@ -74,6 +75,12 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
     issues.find((issue) => issue.severity === 'error' && predicate(issue))?.message ?? null
 
   const nameError = fieldError((i) => i.where.section === 'identity' && i.where.field === 'name')
+  const chipLabelError = fieldError((i) => i.where.section === 'identity' && i.where.field === 'chipLabel')
+  const chipLabelWarnings = issues
+    .filter(
+      (i) => i.severity === 'warning' && i.where.section === 'identity' && i.where.field === 'chipLabel'
+    )
+    .map((i) => i.message)
   const descriptionError = fieldError((i) => i.where.section === 'identity' && i.where.field === 'description')
   const llmError = (field: 'prompt' | 'errorMessage' | 'maxOutput') =>
     fieldError((i) => i.where.section === 'llm' && i.where.field === field)
@@ -227,6 +234,33 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
           <p className="qt-hint">
             Optional. Leave it blank and the table announces {draft.name ? `“${displayTitle({ name: draft.name })}”` : 'a title-cased name'}.
           </p>
+        </div>
+
+        <div>
+          <label htmlFor="wb-chip-label" className="qt-label">
+            Chip label
+          </label>
+          <input
+            id="wb-chip-label"
+            type="text"
+            value={draft.chipLabel}
+            maxLength={MAX_CHIP_LABEL_LENGTH}
+            onChange={(e) => update({ chipLabel: e.target.value })}
+            placeholder="Agent lambda — {{params.label}}"
+            disabled={disabled}
+            className={`qt-input w-full ${chipLabelError ? 'qt-input-error' : ''}`}
+          />
+          <p className={chipLabelError ? 'text-xs qt-text-destructive mt-1' : 'qt-hint'}>
+            {chipLabelError ??
+              'Optional. Names each RUN on the chip and the announcement heading, rendered after the deal — ' +
+                'takes {{value}}, {{roll}}, {{dice}}, {{params.name}}, {{metadata.key}}, {{state.path}}, and {{llm}}. ' +
+                'Blank, and the title labels the chip.'}
+          </p>
+          {chipLabelWarnings.map((message) => (
+            <p key={message} className="text-xs qt-text-secondary">
+              ⚠ {message}
+            </p>
+          ))}
         </div>
 
         <div>

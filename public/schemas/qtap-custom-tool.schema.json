@@ -22,6 +22,12 @@
       "maxLength": 80,
       "description": "How the tool is named to a human — in Pascal's announcement, in the composer popup, and in the roster list. Omit it and the `name` is title-cased instead ('scan_hawking_radiation' becomes 'Scan Hawking Radiation'), which is often enough. The model never sees this: it calls the tool by `name`."
     },
+    "chipLabel": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160,
+      "description": "Templated label for the outcome chip and the announcement header — a per-run name for a tool that does many different things per run ('Agent lambda — {{params.label}}'). Takes the same placeholders as an outcome message ({{value}}, {{roll}}, {{dice}}, {{params.name}}, {{metadata.key}}, {{state.path}}, {{llm}}), rendered after the outcome is chosen. Blank or absent = the title labels the chip. Never sent to the model; to have the LLM name the chip, declare a string parameter whose description prompts it, then template that parameter here."
+    },
     "description": {
       "type": "string",
       "minLength": 1,
@@ -135,6 +141,12 @@
         }
       }
     },
+    "effects": {
+      "type": "array",
+      "maxItems": 16,
+      "description": "Side effects applied after the run, in order: writes into tiered persistent state (at the tier where the key already lives, defaulting to the chat) or onto the rolling character's metadata.json fact sheet. Computed server-side as part of the roll, so the model cannot fudge them. At most 16. The Workbench's Proving Bench shows them as a dry run and never applies them.",
+      "items": { "$ref": "#/$defs/Effect" }
+    },
     "outcomes": {
       "type": "array",
       "minItems": 1,
@@ -201,6 +213,84 @@
     }
   },
   "$defs": {
+    "Effect": {
+      "type": "object",
+      "required": ["target", "value"],
+      "additionalProperties": false,
+      "description": "One side effect: a write the run records after the outcome table has dealt. Effects apply in order, each seeing the writes of the ones before it; a condition that does not hold, or an expression that fails to evaluate at run time, skips that one effect fail-soft — a broken effect never sinks a roll.",
+      "properties": {
+        "when": {
+          "$ref": "#/$defs/EffectWhen",
+          "description": "Condition for this effect. Omitted = fires on every run."
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Where to write: \"state.<path>\" (tiered persistent state — written at the tier where the key already lives, chat → project → group → general, defaulting to the chat) or \"metadata.<key>\" (the rolling character's metadata.json; the remainder after \"metadata.\" is taken whole as the key, dots included). A state path whose first segment starts with an underscore is rejected — those keys are the user's own, and no tool may write them."
+        },
+        "value": {
+          "description": "What to write. A JSON number or boolean is a literal, stored as-is. A JSON string is ALWAYS an expression — quote literal prose inside it: \"'broken pick'\", not \"broken pick\" (the bare form is a load-time parse error). Expressions take arithmetic (+ - * /), string concatenation (+ with a string operand), parentheses, number/string/boolean literals, and {{ref}} substitution ({{value}}, {{roll}}, {{dice}}, {{llm}}, {{params.x}}, {{metadata.key}}, {{state.path}}) — no identifiers, no function calls, no member access. {{dice}} and {{llm}} are strings and are never numerically coerced. Division by zero, or any reference that does not resolve, skips the effect at run time.",
+          "oneOf": [
+            { "type": "number" },
+            { "type": "boolean" },
+            { "type": "string", "minLength": 1, "maxLength": 500 }
+          ]
+        }
+      }
+    },
+    "EffectWhen": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "description": "An effect's condition: the outcome-row `when` comparator language plus one new subject — `outcome`, the winning row's semantic state — because an effect is evaluated after the table has dealt. Every subject named must hold (they AND together).",
+      "properties": {
+        "gt": { "$ref": "#/$defs/NumberOperand", "description": "Value is greater than." },
+        "gte": { "$ref": "#/$defs/NumberOperand", "description": "Value is greater than or equal to." },
+        "lt": { "$ref": "#/$defs/NumberOperand", "description": "Value is less than." },
+        "lte": { "$ref": "#/$defs/NumberOperand", "description": "Value is less than or equal to." },
+        "eq": { "$ref": "#/$defs/NumberOperand", "description": "Value is equal to." },
+        "neq": { "$ref": "#/$defs/NumberOperand", "description": "Value is not equal to." },
+        "roll": {
+          "$ref": "#/$defs/NumericComparator",
+          "description": "Test the RAW pre-transform draw rather than the final value."
+        },
+        "params": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test the resolved parameters, keyed by parameter name. Same rules as an outcome row's params subject.",
+          "additionalProperties": { "$ref": "#/$defs/ParamComparator" },
+          "propertyNames": { "pattern": "^[a-z][a-z0-9_-]{0,63}$" }
+        },
+        "metadata": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test the invoking character's metadata.json, keyed by metadata key. Fail-soft exactly as in an outcome row: a key the character lacks does not match.",
+          "additionalProperties": { "$ref": "#/$defs/MetadataComparator" },
+          "propertyNames": { "minLength": 1 }
+        },
+        "llm": {
+          "$ref": "#/$defs/LlmComparator",
+          "description": "Test the LLM consult's result. Only valid on a tool that declares an `llm` block (enforced when the file loads)."
+        },
+        "outcome": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "description": "Test the WINNING outcome's semantic state — { \"eq\": \"success\" } fires the effect only on a success. This subject exists only here: an outcome row cannot test a verdict it has not yet won.",
+          "properties": {
+            "eq": {
+              "enum": ["success", "partial", "failure", "info"],
+              "description": "The winning outcome carries this state."
+            },
+            "neq": {
+              "enum": ["success", "partial", "failure", "info"],
+              "description": "The winning outcome does not carry this state."
+            }
+          }
+        }
+      }
+    },
     "ToolGate": {
       "type": "object",
       "required": ["metadata"],

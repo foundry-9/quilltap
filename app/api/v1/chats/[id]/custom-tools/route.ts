@@ -60,8 +60,9 @@ import {
   type DiscoveredCustomTool,
 } from '@/lib/pascal/custom-tools';
 import { displayTitle } from '@/lib/pascal/custom-tool.types';
+import { applyCustomToolEffects } from '@/lib/pascal/side-effects';
 import { collectToolVocabulary, type ToolVocabulary } from '@/lib/pascal/tool-vocabulary';
-import { resolveStateCascade } from '@/lib/state/state-cascade';
+import { resolveStateCascade, type StateCascadeResult } from '@/lib/state/state-cascade';
 import { buildCustomToolLlmInvoker } from '@/lib/pascal/llm-consult';
 import { buildPascalResultContent, postPascalResult } from '@/lib/services/pascal/writer';
 import { postProsperoCustomToolError } from '@/lib/services/prospero-notifications/writer';
@@ -440,28 +441,31 @@ async function handleRun(
   // borrowing some arbitrary participant's secrets to decide it.
   const metadata = body.asCharacterId ? perspective.metadata : {};
 
-  // The merged state cascade the run's `$state` references resolve against. The
-  // group tier follows the same asymmetry as metadata above: it is scoped to
-  // the named character's own groups, or skipped entirely for a run nobody made
+  // The state cascade the run's `$state` references resolve against — retained
+  // WHOLE, not just `.merged`, because the effect applier needs the per-tier
+  // objects to decide where a write lives. Read once; never re-read. The group
+  // tier follows the same asymmetry as metadata above: it is scoped to the
+  // named character's own groups, or skipped entirely for a run nobody made
   // (no `asCharacterId`), rather than borrowing an arbitrary participant's
-  // groups. Fail-soft — required fallbacks keep every run dealable.
-  let toolState: Record<string, unknown> = {};
+  // groups. Fail-soft — required fallbacks keep every run dealable, and state
+  // effects skip when the cascade cannot be read.
+  let cascade: StateCascadeResult | null = null;
   try {
-    const cascade = await resolveStateCascade({
+    cascade = await resolveStateCascade({
       chat,
       groupScope: body.asCharacterId
         ? { kind: 'character', characterId: body.asCharacterId }
         : { kind: 'none' },
     });
-    toolState = cascade.merged;
   } catch (error) {
     logger.debug('Manual custom-tool run: state cascade unavailable, defaulting to {}', {
       context: HANDLER,
       chatId: id,
       error: getErrorMessage(error),
     });
-    toolState = {};
+    cascade = null;
   }
+  const toolState = cascade?.merged ?? {};
 
   let result;
   try {
@@ -495,6 +499,22 @@ async function handleRun(
     throw error;
   }
 
+  // Effects apply BEFORE the Pascal post; if the post then fails, the effects
+  // stand — they happened. `characterId` follows the same asymmetry as the
+  // metadata rule above: only a run made AS a character (body.asCharacterId)
+  // writes to that character's sheet — a run nobody made writes to nobody's,
+  // because an unattributed operator roll must not edit an arbitrary character.
+  const appliedEffects = result.effects?.length
+    ? await applyCustomToolEffects({
+        chatId: id,
+        toolName: result.tool,
+        effects: result.effects,
+        cascade,
+        characterId: body.asCharacterId ? perspective.characterId : null,
+        metadataSnapshot: metadata,
+      })
+    : [];
+
   // Pascal's announcement is the ONLY thing posted for a manual run, and it is
   // identical to the one a character's roll produces — the transcript does not
   // record that the operator was the one who reached for the tool, nor what
@@ -505,6 +525,7 @@ async function handleRun(
 
   const { content, opaqueContent } = buildPascalResultContent({
     toolTitle,
+    ...(result.chipLabel ? { chipLabel: result.chipLabel } : {}),
     message: result.message,
   });
 
@@ -516,6 +537,7 @@ async function handleRun(
     pascalMeta: {
       tool: result.tool,
       toolTitle,
+      ...(result.chipLabel ? { chipLabel: result.chipLabel } : {}),
       definitionTier: entry.tier,
       definitionMountId: entry.mountPointId,
       params: result.params,
@@ -528,6 +550,7 @@ async function handleRun(
       outcomeIndex: result.outcomeIndex,
       ...(result.metadataTested ? { metadataTested: result.metadataTested } : {}),
       ...(result.llm ? { llm: result.llm } : {}),
+      ...(appliedEffects.length ? { effects: appliedEffects } : {}),
       invokedBy: 'user',
     },
   });

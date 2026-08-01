@@ -68,6 +68,10 @@ export interface CustomToolReferences {
   metadata: string[]
   /** Paths into the merged persistent state this tool reads. */
   state: string[]
+  /** State paths this tool's effects may WRITE. Absent on rosters from an older server. */
+  stateWrites?: string[]
+  /** Metadata keys this tool's effects may WRITE on the rolling character. Absent on older servers. */
+  metadataWrites?: string[]
 }
 
 /** A runnable tool in the resolved roster. */
@@ -647,10 +651,16 @@ function ToolReferencePanel({ tool }: Readonly<{ tool: CustomTool }>) {
   const rows = referenceRows(tool)
   const readsMetadata = (tool.references?.metadata.length ?? 0) > 0
   const readsState = (tool.references?.state.length ?? 0) > 0
+  // Writes are a different claim than reads, and they get their own sentence:
+  // "consults the encounter count" and "changes it" must not blur together.
+  const writes = [
+    ...(tool.references?.stateWrites ?? []).map((path) => `state.${path}`),
+    ...(tool.references?.metadataWrites ?? []).map((key) => `metadata.${key}`),
+  ]
 
-  // A tool that quotes nothing gets no panel. An empty list under a heading
-  // promising a list is worse than the heading's absence.
-  if (rows.length === 0) return null
+  // A tool that quotes nothing and writes nothing gets no panel. An empty list
+  // under a heading promising a list is worse than the heading's absence.
+  if (rows.length === 0 && writes.length === 0) return null
 
   return (
     <details className="rounded-lg qt-border p-5" open>
@@ -684,6 +694,19 @@ function ToolReferencePanel({ tool }: Readonly<{ tool: CustomTool }>) {
             : readsMetadata
               ? 'A metadata key the character does not have simply leaves its placeholder standing.'
               : 'A state path that has never been set simply leaves its placeholder standing.'}
+        </p>
+      )}
+
+      {writes.length > 0 && (
+        <p className="text-xs qt-text-secondary mt-4 leading-relaxed">
+          When it runs, this tool may also write:{' '}
+          {writes.map((target, i) => (
+            <span key={target}>
+              {i > 0 && ', '}
+              <code className="font-mono qt-text">{target}</code>
+            </span>
+          ))}
+          . The record of what actually changed rides with the roll itself.
         </p>
       )}
     </details>

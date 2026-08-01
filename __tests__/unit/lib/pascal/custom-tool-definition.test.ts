@@ -15,7 +15,10 @@ import {
   QtapCustomToolSchema,
   displayTitle,
   formatDefinitionIssues,
+  parseEffectTarget,
   MAX_TITLE_LENGTH,
+  MAX_CHIP_LABEL_LENGTH,
+  MAX_EFFECTS,
 } from '@/lib/pascal/custom-tool.types'
 
 import mirror from '@/public/schemas/qtap-custom-tool.schema.json'
@@ -102,6 +105,170 @@ describe('title', () => {
 
   it('rejects a title past the cap', () => {
     expect(accepts({ ...BASE, title: 'x'.repeat(MAX_TITLE_LENGTH + 1) })).toBe(false)
+  })
+})
+
+/** A definition carrying one effect (with a trailing catch-all outcome). */
+function withEffects(effects: unknown, extra: Record<string, unknown> = {}) {
+  return { ...BASE, ...extra, effects }
+}
+
+describe('chipLabel', () => {
+  it('is optional', () => {
+    expect(accepts(BASE)).toBe(true)
+  })
+
+  it('accepts a templated label within the cap', () => {
+    expect(accepts({ ...BASE, chipLabel: 'Agent lambda — {{params.label}}' })).toBe(true)
+  })
+
+  it('rejects an empty chipLabel', () => {
+    expect(accepts({ ...BASE, chipLabel: '' })).toBe(false)
+  })
+
+  it('rejects a chipLabel past the cap', () => {
+    expect(accepts({ ...BASE, chipLabel: 'x'.repeat(MAX_CHIP_LABEL_LENGTH + 1) })).toBe(false)
+  })
+
+  it('tolerates an unknown placeholder — the renderTemplate doctrine, no load-time reference rule', () => {
+    expect(accepts({ ...BASE, chipLabel: '{{params.never_declared}}' })).toBe(true)
+  })
+})
+
+describe('parseEffectTarget', () => {
+  it('parses a state target into a path', () => {
+    const result = parseEffectTarget('state.encounter.count')
+    expect(result.ok && result.target).toEqual({
+      kind: 'state',
+      path: ['encounter', 'count'],
+      raw: 'state.encounter.count',
+    })
+  })
+
+  it('takes a metadata key WHOLE — dots inside the key are part of it', () => {
+    const result = parseEffectTarget('metadata.ansible.tool')
+    expect(result.ok && result.target).toEqual({ kind: 'metadata', key: 'ansible.tool', raw: 'metadata.ansible.tool' })
+  })
+
+  it('rejects a target with neither prefix', () => {
+    const result = parseEffectTarget('encounter.count')
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.reason).toContain('must start with')
+  })
+
+  it('rejects an empty state path', () => {
+    expect(parseEffectTarget('state.').ok).toBe(false)
+  })
+
+  it('rejects an empty metadata key', () => {
+    expect(parseEffectTarget('metadata.').ok).toBe(false)
+  })
+
+  it('rejects a state path whose first segment starts with an underscore — user-only keys', () => {
+    const result = parseEffectTarget('state._secrets.combo')
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.reason).toContain('user-only')
+  })
+
+  it('allows an underscore deeper in the path — the guard is on the first segment', () => {
+    expect(parseEffectTarget('state.encounter._notes').ok).toBe(true)
+  })
+})
+
+describe('effects — load-time validation', () => {
+  it('accepts a literal-number effect with no condition', () => {
+    expect(accepts(withEffects([{ target: 'state.encounter.count', value: 3 }]))).toBe(true)
+  })
+
+  it('accepts a boolean literal and a quoted-string expression', () => {
+    expect(
+      accepts(
+        withEffects([
+          { target: 'metadata.lockBroken', value: true },
+          { target: 'metadata.lockpick', value: "'broken pick'" },
+        ])
+      )
+    ).toBe(true)
+  })
+
+  it('accepts an expression over the run subjects', () => {
+    expect(
+      accepts(withEffects([{ target: 'state.tally', value: '{{state.tally}} + {{params.scale}}' }], NUM_PARAM))
+    ).toBe(true)
+  })
+
+  it('accepts an outcome-state condition', () => {
+    expect(
+      accepts(withEffects([{ when: { outcome: { eq: 'success' } }, target: 'state.wins', value: 1 }]))
+    ).toBe(true)
+  })
+
+  it('accepts a metadata condition on an effect', () => {
+    expect(
+      accepts(withEffects([{ when: { metadata: { hasKey: { eq: true } } }, target: 'state.opened', value: true }]))
+    ).toBe(true)
+  })
+
+  it('rejects the bare-prose value — the quoting trap fails loudly', () => {
+    expect(rejection(withEffects([{ target: 'metadata.lockpick', value: 'broken pick' }]))).toMatch(
+      /not a valid expression/
+    )
+  })
+
+  it('rejects a target that is neither state. nor metadata.', () => {
+    expect(rejection(withEffects([{ target: 'somewhere.else', value: 1 }]))).toMatch(/must start with/)
+  })
+
+  it('rejects an underscore-guarded state target', () => {
+    expect(rejection(withEffects([{ target: 'state._secrets.combo', value: 1 }]))).toMatch(/user-only/)
+  })
+
+  it('rejects an expression referencing an undeclared parameter', () => {
+    expect(rejection(withEffects([{ target: 'state.x', value: '{{params.ghost}} + 1' }]))).toMatch(
+      /undeclared parameter "ghost"/
+    )
+  })
+
+  it('rejects an {{llm}} reference on a tool with no llm block', () => {
+    expect(rejection(withEffects([{ target: 'metadata.verdict', value: '{{llm}}' }]))).toMatch(
+      /declares no `llm` block/
+    )
+  })
+
+  it('accepts an {{llm}} reference when the tool consults', () => {
+    expect(accepts(withEffects([{ target: 'metadata.verdict', value: '{{llm}}' }], LLM_BLOCK))).toBe(true)
+  })
+
+  it('rejects an llm when-subject on a tool with no llm block', () => {
+    expect(rejection(withEffects([{ when: { llm: { ok: true } }, target: 'state.x', value: 1 }]))).toMatch(
+      /declares no `llm` block/
+    )
+  })
+
+  it("rejects a when testing an undeclared parameter — the outcome rows' walk, shared", () => {
+    expect(rejection(withEffects([{ when: { params: { ghost: { gt: 1 } } }, target: 'state.x', value: 1 }]))).toMatch(
+      /tests undeclared parameter "ghost"/
+    )
+  })
+
+  it('renders effect issues at effects.N paths', () => {
+    const result = QtapCustomToolSchema.safeParse(withEffects([{ target: 'nowhere', value: 1 }]))
+    expect(result.success).toBe(false)
+    if (result.success) return
+    expect(formatDefinitionIssues(result.error)).toMatch(/effects\.0\.target/)
+  })
+
+  it('rejects more effects than the cap', () => {
+    const many = Array.from({ length: MAX_EFFECTS + 1 }, (_, i) => ({ target: `state.k${i}`, value: 1 }))
+    expect(accepts(withEffects(many))).toBe(false)
+  })
+
+  it('rejects an empty outcome condition', () => {
+    expect(accepts(withEffects([{ when: { outcome: {} }, target: 'state.x', value: 1 }]))).toBe(false)
+  })
+
+  it('rejects a when that tests nothing', () => {
+    expect(rejection(withEffects([{ when: {}, target: 'state.x', value: 1 }]))).toMatch(/must test something/)
   })
 })
 
@@ -453,6 +620,22 @@ describe('the JSON Schema mirror agrees with Zod', () => {
     ['an llm maxOutput of zero', { ...BASE, llm: { ...LLM_BLOCK.llm, maxOutput: 0 } }],
     ['a fractional llm maxOutput', { ...BASE, llm: { ...LLM_BLOCK.llm, maxOutput: 12.5 } }],
     ['an llm maxOutput past the ceiling', { ...BASE, llm: { ...LLM_BLOCK.llm, maxOutput: 100_001 } }],
+    ['a templated chipLabel', { ...BASE, chipLabel: 'Agent lambda — {{params.label}}' }],
+    ['an empty chipLabel', { ...BASE, chipLabel: '' }],
+    ['an over-long chipLabel', { ...BASE, chipLabel: 'x'.repeat(MAX_CHIP_LABEL_LENGTH + 1) }],
+    ['a literal-number effect', withEffects([{ target: 'state.encounter.count', value: 3 }])],
+    ['a boolean-literal effect', withEffects([{ target: 'metadata.lockBroken', value: true }])],
+    ['a quoted-string-expression effect', withEffects([{ target: 'metadata.lockpick', value: "'broken pick'" }])],
+    ['an effect conditioned on the winning outcome', withEffects([{ when: { outcome: { eq: 'success' } }, target: 'state.wins', value: 1 }])],
+    ['an effect conditioned on metadata', withEffects([{ when: { metadata: { hasKey: { eq: true } } }, target: 'state.opened', value: true }])],
+    ['an effect with an empty value string', withEffects([{ target: 'state.x', value: '' }])],
+    ['an effect with an over-long value string', withEffects([{ target: 'state.x', value: `'${'x'.repeat(500)}'` }])],
+    ['an effect with an empty target', withEffects([{ target: '', value: 1 }])],
+    ['an unknown key inside an effect', withEffects([{ target: 'state.x', value: 1, bogus: true }])],
+    ['an empty outcome condition on an effect', withEffects([{ when: { outcome: {} }, target: 'state.x', value: 1 }])],
+    ['an unknown outcome state in an effect condition', withEffects([{ when: { outcome: { eq: 'triumph' } }, target: 'state.x', value: 1 }])],
+    ['an outcome subject inside an effect condition ANDed with a value test', withEffects([{ when: { gt: 0.5, outcome: { neq: 'failure' } }, target: 'state.x', value: 1 }])],
+    ['more effects than the cap', withEffects(Array.from({ length: MAX_EFFECTS + 1 }, (_, i) => ({ target: `state.k${i}`, value: 1 })))],
   ]
 
   it.each(corpus)('on %s', (_label, doc) => {
@@ -487,5 +670,35 @@ describe('the JSON Schema mirror agrees with Zod', () => {
     const numericHaystack = withWhen({ params: { scale: { contains: '1' } } }, NUM_PARAM)
     expect(validate(numericHaystack)).toBe(true)
     expect(accepts(numericHaystack)).toBe(false)
+  })
+
+  it('is deliberately weaker than Zod on the effect expression grammar', () => {
+    // The grammar lives in the loader's parser; the mirror can only say
+    // "non-empty string ≤ 500" and describe the language in prose. So the
+    // bare-prose quoting trap is caught by Zod alone.
+    const bareProse = withEffects([{ target: 'metadata.lockpick', value: 'broken pick' }])
+    expect(validate(bareProse)).toBe(true)
+    expect(accepts(bareProse)).toBe(false)
+  })
+
+  it('is deliberately weaker than Zod on effect target syntax', () => {
+    // The prefix rule and the underscore guard are the loader's parser too.
+    const badPrefix = withEffects([{ target: 'somewhere.else', value: 1 }])
+    const userOnly = withEffects([{ target: 'state._secrets.combo', value: 1 }])
+    expect(validate(badPrefix)).toBe(true)
+    expect(accepts(badPrefix)).toBe(false)
+    expect(validate(userOnly)).toBe(true)
+    expect(accepts(userOnly)).toBe(false)
+  })
+
+  it('is deliberately weaker than Zod on effect cross-item rules', () => {
+    // Undeclared params and a missing llm block are cross-item facts the
+    // mirror cannot see from inside an effect.
+    const ghostParam = withEffects([{ target: 'state.x', value: '{{params.ghost}} + 1' }])
+    const orphanLlm = withEffects([{ target: 'metadata.verdict', value: '{{llm}}' }])
+    expect(validate(ghostParam)).toBe(true)
+    expect(accepts(ghostParam)).toBe(false)
+    expect(validate(orphanLlm)).toBe(true)
+    expect(accepts(orphanLlm)).toBe(false)
   })
 })

@@ -53,6 +53,8 @@ export interface Message {
     tool: string
     /** Display title at the time of the roll. Absent on messages predating it — fall back to `tool`. */
     toolTitle?: string
+    /** The definition's chipLabel template rendered at roll time — the per-run label the chip and the bubble heading share. Absent on older rows and unlabelled tools — fall back to `toolTitle`, then `tool`. */
+    chipLabel?: string
     definitionTier: 'character' | 'participant' | 'group' | 'project' | 'global'
     definitionMountId: string
     params: Record<string, number | string | boolean>
@@ -63,6 +65,13 @@ export interface Message {
     value: number
     state: 'success' | 'partial' | 'failure' | 'info'
     outcomeIndex: number
+    /** Side effects the run applied (audit only — the Salon body shows nothing of these). */
+    effects?: Array<{
+      target: string
+      previous?: unknown
+      next: unknown
+      tier?: 'chat' | 'project' | 'group' | 'general'
+    }>
     invokedBy: 'llm' | 'user'
     callerParticipantId?: string
   } | null

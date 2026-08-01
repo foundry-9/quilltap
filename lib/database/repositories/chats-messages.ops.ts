@@ -120,6 +120,10 @@ export const ChatMessageRowSchema = z.object({
   pascalMeta: z.object({
     tool: z.string(),
     toolTitle: z.string().optional(),
+    // chipLabel = the definition's chipLabel template rendered at roll time —
+    // the per-run label the Salon chip and the bubble heading share. Absent on
+    // older rows; readers fall back to toolTitle, then tool.
+    chipLabel: z.string().optional(),
     definitionTier: z.enum(['character', 'participant', 'group', 'project', 'global']),
     definitionMountId: z.string(),
     params: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])),
@@ -144,6 +148,15 @@ export const ChatMessageRowSchema = z.object({
       provider: z.string().optional(),
       model: z.string().optional(),
     }).optional(),
+    // The side effects this run applied (the audit of the definition's
+    // `effects` array): raw target, prior value (absent when none), what was
+    // written, and — state targets only — the tier the write landed in.
+    effects: z.array(z.object({
+      target: z.string(),
+      previous: z.unknown().optional(),
+      next: z.unknown(),
+      tier: z.enum(['chat', 'project', 'group', 'general']).optional(),
+    })).optional(),
     invokedBy: z.enum(['llm', 'user']),
     callerParticipantId: UUIDSchema.optional(),
   }).nullable().optional(),

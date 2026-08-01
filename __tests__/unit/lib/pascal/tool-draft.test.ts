@@ -721,3 +721,158 @@ describe('the availability gate in the draft', () => {
     })
   })
 })
+
+describe('the chip label in the draft', () => {
+  const BASE = {
+    name: 'agent_lambda',
+    description: 'Dispatch.',
+    outcomes: [{ when: true, message: '-', state: 'info' }],
+  }
+
+  it('round-trips a chipLabel', () => {
+    expectRoundTrip({ ...BASE, chipLabel: 'Agent lambda — {{params.label}}', parameters: { label: { type: 'string', default: '' } } })
+  })
+
+  it('emits no chipLabel key while blank', () => {
+    const draft = newDraft()
+    draft.name = 'probe'
+    draft.description = 'x'
+    expect('chipLabel' in definitionFromDraft(draft)).toBe(false)
+  })
+
+  it('errors on an over-long chip label', () => {
+    const draft = newDraft()
+    draft.chipLabel = 'x'.repeat(161)
+    expect(
+      validateDraft(draft).some(
+        (i) => i.severity === 'error' && i.where.section === 'identity' && i.where.field === 'chipLabel',
+      ),
+    ).toBe(true)
+  })
+
+  it('warns — never errors — on {{llm}} without the oracle, and accepts it with one', () => {
+    const draft = newDraft()
+    draft.chipLabel = 'Consulted: {{llm}}'
+    const withoutOracle = validateDraft(draft).filter(
+      (i) => i.where.section === 'identity' && i.where.field === 'chipLabel',
+    )
+    expect(withoutOracle).toHaveLength(1)
+    expect(withoutOracle[0].severity).toBe('warning')
+
+    draft.llmEnabled = true
+    draft.llmPrompt = 'Speak.'
+    draft.llmErrorMessage = 'Silence.'
+    expect(
+      validateDraft(draft).filter((i) => i.where.section === 'identity' && i.where.field === 'chipLabel'),
+    ).toEqual([])
+  })
+
+  it('warns on a placeholder naming no declared parameter', () => {
+    const draft = newDraft()
+    draft.chipLabel = '{{params.ghost}}'
+    const issues = validateDraft(draft).filter(
+      (i) => i.where.section === 'identity' && i.where.field === 'chipLabel',
+    )
+    expect(issues).toHaveLength(1)
+    expect(issues[0].severity).toBe('warning')
+  })
+})
+
+describe('effects in the draft', () => {
+  const BASE = {
+    name: 'unlock',
+    description: 'Pick the lock.',
+    outcomes: [{ when: true, message: '-', state: 'info' }],
+  }
+
+  /** Issues anchored to any effect row. */
+  function effectIssues(draft: ReturnType<typeof newDraft>) {
+    return validateDraft(draft).filter((i) => i.where.section === 'effect')
+  }
+
+  it('round-trips a literal, an expression, and every when shape', () => {
+    expectRoundTrip({
+      ...BASE,
+      parameters: { by: { type: 'number', default: 1 } },
+      effects: [
+        { target: 'state.tally', value: 3 },
+        { target: 'metadata.lockBroken', value: true },
+        { when: { outcome: { eq: 'failure' } }, target: 'metadata.lockpick', value: "'broken pick'" },
+        { when: { gte: 0.5, metadata: { hasKey: { eq: true } } }, target: 'state.opened', value: '{{value}} + {{params.by}}' },
+      ],
+    })
+  })
+
+  it('maps the when shapes onto their form kinds', () => {
+    const draft = draftFromDefinition({
+      ...BASE,
+      effects: [
+        { target: 'state.a', value: 1 },
+        { when: { outcome: { eq: 'success' } }, target: 'state.b', value: 1 },
+        { when: { outcome: { neq: 'failure' } }, target: 'state.c', value: 1 },
+        { when: { gt: 0.5 }, target: 'state.d', value: 1 },
+      ],
+    })!
+    expect(draft.effects.map((e) => e.when.kind)).toEqual(['always', 'outcome-state', 'verbatim', 'verbatim'])
+  })
+
+  it('emits no effects key while the list is empty', () => {
+    const draft = newDraft()
+    draft.name = 'probe'
+    draft.description = 'x'
+    expect('effects' in definitionFromDraft(draft)).toBe(false)
+  })
+
+  it('errors on a target with the wrong prefix, an underscore-guarded path, and a blank', () => {
+    const draft = newDraft()
+    draft.effects = [
+      { id: 'e1', when: { kind: 'always' }, target: 'nowhere.x', valueKind: 'literal-number', value: '1' },
+      { id: 'e2', when: { kind: 'always' }, target: 'state._secret', valueKind: 'literal-number', value: '1' },
+      { id: 'e3', when: { kind: 'always' }, target: '', valueKind: 'literal-number', value: '1' },
+    ]
+    expect(effectIssues(draft).filter((i) => i.severity === 'error')).toHaveLength(3)
+  })
+
+  it('errors on the bare-prose quoting trap', () => {
+    const draft = newDraft()
+    draft.effects = [
+      { id: 'e1', when: { kind: 'always' }, target: 'metadata.lockpick', valueKind: 'expression', value: 'broken pick' },
+    ]
+    const issues = effectIssues(draft)
+    expect(issues.some((i) => i.severity === 'error' && i.message.includes('does not parse'))).toBe(true)
+  })
+
+  it('errors on an expression naming an undeclared parameter', () => {
+    const draft = newDraft()
+    draft.effects = [
+      { id: 'e1', when: { kind: 'always' }, target: 'state.x', valueKind: 'expression', value: '{{params.ghost}} + 1' },
+    ]
+    expect(effectIssues(draft).some((i) => i.message.includes('ghost'))).toBe(true)
+  })
+
+  it('errors on {{llm}} (and a verbatim llm condition) without the oracle enabled', () => {
+    const draft = newDraft()
+    draft.effects = [
+      { id: 'e1', when: { kind: 'always' }, target: 'state.x', valueKind: 'expression', value: '{{llm}}' },
+      { id: 'e2', when: { kind: 'verbatim', when: { llm: { ok: true } } }, target: 'state.y', valueKind: 'literal-number', value: '1' },
+    ]
+    expect(effectIssues(draft).filter((i) => i.severity === 'error')).toHaveLength(2)
+
+    draft.llmEnabled = true
+    draft.llmPrompt = 'Speak.'
+    draft.llmErrorMessage = 'Silence.'
+    expect(effectIssues(draft)).toEqual([])
+  })
+
+  it('errors past the effects cap', () => {
+    const draft = newDraft()
+    draft.effects = Array.from({ length: 17 }, (_, i) => ({
+      id: `e${i}`,
+      when: { kind: 'always' as const },
+      target: `state.k${i}`,
+      valueKind: 'literal-number' as const,
+      value: '1',
+    }))
+    expect(validateDraft(draft).some((i) => i.message.includes('at most 16 effects'))).toBe(true)
+  })
+})

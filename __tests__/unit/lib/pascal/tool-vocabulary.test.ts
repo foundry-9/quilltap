@@ -34,6 +34,8 @@ describe('collectToolVocabulary', () => {
       params: [],
       metadata: [],
       state: [],
+      stateWrites: [],
+      metadataWrites: [],
     })
   })
 
@@ -170,7 +172,50 @@ describe('collectToolVocabulary', () => {
       params: [],
       metadata: [],
       state: [],
+      stateWrites: [],
+      metadataWrites: [],
     })
+  })
+
+  it('reads the chip label for placeholders like any other rendered string', () => {
+    const tool = define({
+      parameters: { label: { type: 'string', default: '' } },
+      chipLabel: 'Agent lambda — {{params.label}} ({{state.run.id}})',
+    })
+    const vocabulary = collectToolVocabulary(tool)
+    expect(vocabulary.params).toEqual(['label'])
+    expect(vocabulary.state).toEqual(['run.id'])
+  })
+
+  it('reports effect targets as WRITES, on their own lists', () => {
+    const tool = define({
+      effects: [
+        { target: 'state.encounter.count', value: '{{state.encounter.count}} + 1' },
+        { target: 'metadata.ansibleTool', value: "'granted'" },
+      ],
+    })
+    const vocabulary = collectToolVocabulary(tool)
+    expect(vocabulary.stateWrites).toEqual(['encounter.count'])
+    expect(vocabulary.metadataWrites).toEqual(['ansibleTool'])
+    // The expression's {{state...}} ref is a READ, collected as one.
+    expect(vocabulary.state).toEqual(['encounter.count'])
+  })
+
+  it('collects the metadata keys an effect condition tests, and refs in its expression', () => {
+    const tool = define({
+      parameters: { by: { type: 'number', default: 1 } },
+      effects: [
+        {
+          when: { metadata: { hasKey: { eq: true } }, outcome: { eq: 'success' } },
+          target: 'state.tally',
+          value: '{{value}} + {{params.by}}',
+        },
+      ],
+    })
+    const vocabulary = collectToolVocabulary(tool)
+    expect(vocabulary.metadata).toEqual(['hasKey'])
+    expect(vocabulary.params).toEqual(['by'])
+    expect(vocabulary.value).toBe(true)
   })
 
   it('collects the metadata keys an availability gate reads', () => {

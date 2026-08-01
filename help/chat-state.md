@@ -86,6 +86,16 @@ AI sets "player.health" → 100
 AI: "The potion's warmth spreads through you as your wounds close."
 ```
 
+### Custom Tools May Write It Too
+
+Pascal's custom tools are no longer read-only guests at this ledger. A tool may declare
+**side effects** — writes applied on the server as part of the roll itself, quite beyond
+any model's power to fudge — and a state effect lands **at the tier where the key already
+lives** (a project counter stays a project counter), defaulting to the chat for a fresh key.
+Every write is recorded with the roll, previous value and all. See
+*[Custom Tools](custom-tools.md)* for the recipe. Underscore-prefixed keys remain yours
+alone: no tool may write them, any more than the state tool may.
+
 ## The Cascade — Four Tiers
 
 State no longer flows from a mere two springs but from four, each nearer tier

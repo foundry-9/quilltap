@@ -85,7 +85,7 @@ value = value + offset
 if round: value = the nearest whole number
 ```
 
-That order matters and does not vary. Any of `min`, `max`, `multiplier`, and `offset` may be a plain number, a `{ "$param": "bonus" }` referring to one of your numeric parameters, or a `{ "$state": "path", "fallback": 0 }` drawing on persistent state (of which more below). These two references are the format's *only* indirection — there are no formulas, no expressions, and nothing that gets evaluated. You will find this restriction generous rather than mean: it means a typo is caught when the file loads, not three hours into a scene.
+That order matters and does not vary. Any of `min`, `max`, `multiplier`, and `offset` may be a plain number, a `{ "$param": "bonus" }` referring to one of your numeric parameters, or a `{ "$state": "path", "fallback": 0 }` drawing on persistent state (of which more below). In rolls and tests these two references are the *only* indirection — no formulas, no expressions, nothing that gets evaluated. (The one place the format keeps a small arithmetic grammar is a side effect's `value`, of which more below.) You will find this restriction generous rather than mean: it means a typo is caught when the file loads, not three hours into a scene.
 
 **Dice.** Or simply write dice, as dice are written:
 
@@ -258,6 +258,61 @@ And a tool that rolls honest dice:
   ]
 }
 ```
+
+## Naming each run — `chipLabel`
+
+The Salon labels every outcome with the tool that produced it — the chip above the bubble reads *Force the Lock*, and so does the bold heading of Pascal's announcement. For most tools that is exactly right. But a tool that does many *different* things per run — a dispatcher, a generator, a drawer of many things — wants each run named for what it did, not merely for the machinery that did it.
+
+Give it a `chipLabel`: a small template, rendered *after* the outcome is chosen, with every placeholder a message takes:
+
+```json
+{ "chipLabel": "Agent lambda — {{params.label}}" }
+```
+
+One string then labels both the chip and the announcement heading, so the transcript and the chip can never disagree. Leave it out (or let it render blank) and the title labels the chip, as it always has.
+
+Your characters never see the template — like `title`, it is display furniture, not vocabulary. If you want the *model* to name the run, do it the honest way: declare a string parameter whose `description` invites a short label, then quote it —
+
+```json
+{
+  "parameters": {
+    "label": { "type": "string", "default": "", "description": "A short human label for this run — who or what it concerns." }
+  },
+  "chipLabel": "Agent lambda — {{params.label}}"
+}
+```
+
+## Recording consequences — side effects
+
+A roll can now leave a mark. A tool may carry an `effects` array — up to sixteen entries, applied in order after the table has dealt — each writing one value into the story's **persistent state** or onto the rolling character's own **fact sheet**. The third failed lockpick really can break the pick, and nobody has to *ask* the model to record it — the write happens on the server, as part of the roll, entirely beyond a model's power to fudge:
+
+```json
+"effects": [
+  { "when": { "outcome": { "eq": "failure" } }, "target": "state.lockpicking.failures",
+    "value": "{{state.lockpicking.failures}} + 1" },
+  { "when": { "outcome": { "eq": "failure" } , "gte": 3 }, "target": "metadata.lockpick",
+    "value": "'broken pick'" }
+]
+```
+
+Each effect has three parts:
+
+- **`when`** — optional; omit it and the effect fires on every run. It takes everything an outcome's `when` takes, plus one subject only an effect can ask about: `outcome`, the winning row's state — `{ "outcome": { "eq": "failure" } }` fires only on a failure, `{ "neq": "success" }` on anything short of one.
+- **`target`** — where to write. `state.<path>` reaches into the persistent-state cascade, and the write lands **at the tier where the key already lives** — a counter kept in project state stays in project state — defaulting to the chat (the most local ledger) for a key found nowhere. `metadata.<key>` writes onto the rolling character's `metadata.json`; the part after `metadata.` is taken whole, dots and all. Keys beginning with an underscore are yours alone, and no tool may write them — see *[Chat State](chat-state.md)*.
+- **`value`** — what to write. A JSON number or `true`/`false` is stored as it stands. A JSON **string is always an expression**: a little closed arithmetic of `+ − × ÷`, parentheses, quoted text, and the same `{{…}}` references a message takes — `"{{value}} * 2"`, `"'rolled ' + {{dice}}"`.
+
+**The one trap, stated in bold so you meet it here and not in a rejection badge: literal prose must be quoted *inside* the expression.**
+
+```json
+{ "target": "metadata.lockpick", "value": "'broken pick'" }     ✓
+{ "target": "metadata.lockpick", "value": "broken pick" }       ✗ refused when the file loads
+```
+
+The bare form is two words where the grammar expects an expression, and the file is refused on the spot — loudly, when the file loads, never silently mid-scene.
+
+A few civilities, all in the fail-soft family you know from `metadata`: an expression that cannot be evaluated at run time (a division by zero, a `{{metadata.key}}` the roller hasn't got) skips *that one effect* and never sinks the roll; a run with no character attached skips the `metadata.` writes (a run nobody made writes to nobody's sheet — which includes an unattributed roll of your own from the composer); and everything that *was* written rides in the roll's permanent record, previous value and all. The oracle's answer may be written too — `"value": "{{llm}}"` files the consult's text — but it is never treated as a number; route numeric judgments through the outcome table instead.
+
+Your characters are told a tool records side effects and *where* it writes (the targets are vocabulary, like a parameter's name) — never the values or the conditions, and under `revealOdds: false` not even the targets. The run dialog names them too, under **What this tool can quote**. And on the Workbench, the proving bench shows every would-be write as a dry run — `→ state.lockpicking.failures = 3 (would write)` — while applying, as ever, nothing at all.
 
 ## Which tool wins: the matter of tiers
 
