@@ -44,12 +44,15 @@ import {
   formatDefinitionIssues,
   isParamRef,
   isStateRef,
+  parseEffectTarget,
   MAX_LLM_OUTPUT_LENGTH,
   MAX_ROSTER_SIZE,
   TOOLS_FOLDER,
   TOOL_FILE_SUFFIX,
   type CustomToolLlm,
   type CustomToolParameter,
+  type EffectTarget,
+  type EffectWhen,
   type LlmComparator,
   type MetadataComparator,
   type NumberOrParamRef,
@@ -62,7 +65,11 @@ import {
   type StateRef,
   type Visibility,
   type When,
+  type WhenObject,
 } from './custom-tool.types';
+import { evaluateExpression, formatValue, parseExpression, type ExprValue } from './expressions';
+
+export { formatValue };
 import { isPrimitive, metadataComparatorHolds } from './metadata-match';
 import { evaluateToolGate, hasToolGate } from './tool-gate';
 
@@ -274,8 +281,8 @@ export async function loadToolsFromMount(
 
     const unknownKeys = collectUnknownKeys(parsedJson);
     if (unknownKeys.length > 0) {
-      // Tolerated, not rejected — `persist` is a planned v2 key and an older
-      // build must not choke on a newer file.
+      // Tolerated, not rejected — future keys ship under this tolerance (as
+      // `effects` did) and an older build must not choke on a newer file.
       logger.debug('Custom tool carries keys this build does not know', {
         context: CONTEXT,
         mountPointId,
@@ -584,6 +591,20 @@ export interface CustomToolRunResult {
   metadataTested?: MetadataTested;
   /** The LLM consult, when the definition declares one. */
   llm?: LlmConsultResult;
+  /**
+   * The rendered `chipLabel`, when the definition declares one — rendered once,
+   * here, after outcome selection, with the same subjects as the message. Both
+   * entrances copy it into `pascalMeta`; the Salon chip and the announcement
+   * header read the same string, so they can never disagree.
+   */
+  chipLabel?: string;
+  /**
+   * The definition's effects, resolved (or skipped, with reasons) against this
+   * run. Computed pure — the entrances apply them via
+   * `applyCustomToolEffects`; the Proving Bench only ever shows them.
+   * Absent when the definition declares none.
+   */
+  effects?: ResolvedEffect[];
 }
 
 /**
@@ -1060,6 +1081,120 @@ export function matchesWhen(when: When, subjects: OutcomeSubjects, toolName = 'c
   return true;
 }
 
+/** What an effect condition may be posed about: the run's subjects, plus the winning outcome. */
+export interface EffectSubjects extends OutcomeSubjects {
+  /** The winning outcome — the one subject that exists only after the deal. */
+  outcome: { state: OutcomeState; index: number };
+  /** Dice breakdown for `{{dice}}` in expressions — a string, '' for Form A. */
+  dice: string;
+}
+
+/**
+ * Evaluate an effect's condition. Delegates the shared subjects to the same
+ * comparator chain outcome rows use, and adds the one subject only an effect
+ * can test — the winning outcome's semantic state.
+ */
+export function matchesEffectWhen(
+  when: EffectWhen | undefined,
+  subjects: EffectSubjects,
+  toolName = 'custom tool'
+): boolean {
+  if (when === undefined) return true;
+
+  if (when.outcome !== undefined) {
+    if (when.outcome.eq !== undefined && subjects.outcome.state !== when.outcome.eq) return false;
+    if (when.outcome.neq !== undefined && subjects.outcome.state === when.outcome.neq) return false;
+  }
+
+  const { outcome: _outcome, ...shared } = when;
+  return matchesWhen(shared as WhenObject, subjects, toolName);
+}
+
+/**
+ * One effect, resolved by the pure core: either the value it would write, or
+ * the reason it was skipped. The entrances (and only they) apply the former;
+ * the Proving Bench shows both as a dry run.
+ */
+export type ResolvedEffect =
+  | { index: number; target: EffectTarget; value: ExprValue }
+  | { index: number; skipped: string };
+
+/** True for a resolved effect that would actually write. */
+export function isApplicableEffect(
+  effect: ResolvedEffect
+): effect is Extract<ResolvedEffect, { target: EffectTarget }> {
+  return 'target' in effect;
+}
+
+/**
+ * Resolve a definition's effects against a finished run. Pure — nothing is
+ * written here; the module's "no writes, no message posting" contract holds.
+ *
+ * Failure semantics are the `renderTemplate` doctrine: a condition that does
+ * not hold, or an expression that fails to evaluate (a division by zero, a
+ * reference that resolves to nothing), skips THAT effect with a debug log and
+ * a recorded reason — a broken effect never sinks a roll. Parse failures are
+ * load-time rejections and only reach here as regressions, handled the same
+ * fail-soft way.
+ */
+function resolveEffects(definition: QtapCustomTool, subjects: EffectSubjects): ResolvedEffect[] {
+  const resolveRef = (refname: string): ExprValue | undefined => {
+    if (refname === 'value') return subjects.value;
+    if (refname === 'roll') return subjects.roll;
+    if (refname === 'dice') return subjects.dice;
+    if (refname === 'llm') return subjects.llm?.output;
+    if (refname.startsWith('params.')) {
+      return subjects.params[refname.slice('params.'.length)];
+    }
+    if (refname.startsWith('metadata.')) {
+      const v = subjects.metadata?.[refname.slice('metadata.'.length)];
+      return isPrimitive(v) ? v : undefined;
+    }
+    if (refname.startsWith('state.')) {
+      const v = getAtPath(subjects.state ?? {}, parsePath(refname.slice('state.'.length)));
+      return isPrimitive(v) ? v : undefined;
+    }
+    return undefined;
+  };
+
+  const skipped = (index: number, reason: string): ResolvedEffect => {
+    logger.debug('Custom tool effect skipped', {
+      context: CONTEXT,
+      tool: definition.name,
+      effectIndex: index,
+      reason,
+    });
+    return { index, skipped: reason };
+  };
+
+  return (definition.effects ?? []).map((effect, index) => {
+    let holds: boolean;
+    try {
+      holds = matchesEffectWhen(effect.when, subjects, definition.name);
+    } catch (error) {
+      // A comparator regression past load-time validation. An outcome row in
+      // this state fails the run; an effect never does — it just doesn't fire.
+      return skipped(index, `condition could not be evaluated: ${getErrorMessage(error)}`);
+    }
+    if (!holds) return skipped(index, 'condition did not hold');
+
+    const target = parseEffectTarget(effect.target);
+    if (!target.ok) return skipped(index, `target ${target.reason}`);
+
+    if (typeof effect.value !== 'string') {
+      return { index, target: target.target, value: effect.value };
+    }
+
+    const parsed = parseExpression(effect.value);
+    if (!parsed.ok) return skipped(index, `expression did not parse: ${parsed.reason}`);
+
+    const evaluated = evaluateExpression(parsed.expr, resolveRef);
+    if (!evaluated.ok) return skipped(index, `expression did not evaluate: ${evaluated.reason}`);
+
+    return { index, target: target.target, value: evaluated.value };
+  });
+}
+
 /**
  * The metadata a winning outcome consulted, for the roll record.
  *
@@ -1083,15 +1218,9 @@ export function collectMetadataTested(
   return Object.keys(tested).length > 0 ? tested : undefined;
 }
 
-/**
- * Render a number for display: integers plain, floats to 4 significant digits.
- */
-export function formatValue(value: number): string {
-  if (Number.isInteger(value)) return String(value);
-  // `toPrecision` can hand back exponential form for extremes; Number() folds
-  // that back to the shortest faithful representation.
-  return String(Number(value.toPrecision(4)));
-}
+// `formatValue` (integers plain, floats to 4 significant digits) now lives in
+// `./expressions` — one number-rendering convention for templates and effect
+// expressions alike — and is re-exported above for existing importers.
 
 /**
  * Substitute the four placeholder families. Plain string replacement — user
@@ -1296,6 +1425,25 @@ export async function executeCustomTool(
   const message = renderTemplate(outcome.message, { value, roll: raw, dice: diceBreakdown, params, metadata, llm, state });
   const metadataTested = collectMetadataTested(outcome.when, metadata);
 
+  // F1 — the chip label, rendered AFTER the outcome is chosen so it may quote
+  // everything the message may. This is the one render site; both entrances
+  // copy the result, so the chip and the bubble header can never drift.
+  const chipLabel = definition.chipLabel
+    ? renderTemplate(definition.chipLabel, { value, roll: raw, dice: diceBreakdown, params, metadata, llm, state })
+    : undefined;
+
+  // F3 — effects, resolved pure against the finished run. Nothing is written
+  // here; the entrances decide whether (and where) the writes land.
+  const effectSubjects: EffectSubjects = {
+    ...subjects,
+    outcome: { state: outcome.state, index: outcomeIndex },
+    dice: diceBreakdown,
+  };
+  const effects =
+    definition.effects && definition.effects.length > 0
+      ? resolveEffects(definition, effectSubjects)
+      : undefined;
+
   const visibility: Visibility =
     overrides?.private === true
       ? 'whisper'
@@ -1318,6 +1466,8 @@ export async function executeCustomTool(
     visibility,
     ...(metadataTested ? { metadataTested } : {}),
     ...(llm ? { llm } : {}),
+    ...(chipLabel !== undefined ? { chipLabel } : {}),
+    ...(effects ? { effects } : {}),
   };
 }
 
@@ -1336,7 +1486,9 @@ export interface CustomToolAuditResult {
  * Same draw, same transform, same {@link matchesWhen} evaluation as
  * {@link executeCustomTool}, run `runs` times with one param resolution up
  * front. `renderTemplate` is deliberately skipped: it is the expensive step and
- * contributes nothing to hit rates.
+ * contributes nothing to hit rates. So are `chipLabel` (a label contributes
+ * nothing either) and `effects` (an audit that wrote ten thousand times would
+ * not be an audit).
  *
  * The result is one sample of a wider space — hit rates generally depend on the
  * supplied `params` and `metadata`, so a zero-hit row here may simply need a

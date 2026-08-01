@@ -21,7 +21,9 @@
 import {
   COMPARATOR_KEYS,
   IDENTIFIER_PATTERN,
+  MAX_CHIP_LABEL_LENGTH,
   MAX_DESCRIPTION_LENGTH,
+  MAX_EFFECTS,
   MAX_LLM_OUTPUT_CEILING,
   MAX_LLM_PROMPT_LENGTH,
   MAX_MESSAGE_LENGTH,
@@ -31,8 +33,11 @@ import {
   QtapCustomToolSchema,
   isParamRef,
   isStateRef,
+  parseEffectTarget,
+  type CustomToolEffect,
   type CustomToolOutcome,
   type CustomToolParameter,
+  type EffectWhen,
   type NumberOrParamRef,
   type OutcomeState,
   type ParamComparator,
@@ -45,6 +50,7 @@ import {
   type WhenObject,
 } from './custom-tool.types';
 import { parseDiceNotation } from './dice-notation';
+import { parseExpression } from './expressions';
 
 /** The `$schema` value the Builder writes when a file carries none. */
 export const DEFAULT_SCHEMA_VALUE = '/schemas/qtap-custom-tool.schema.json';
@@ -164,9 +170,33 @@ export interface DraftGateCondition {
     | { kind: 'boolean'; value: boolean };
 }
 
+/**
+ * One side effect, form-shaped.
+ *
+ * The form authors only the common `when` shapes — Always, or "on a given
+ * outcome state". A hand-written richer condition (comparators, metadata,
+ * llm…) is carried VERBATIM with a read-only badge, the established
+ * `$state`-default precedent: the builder round-trips what it cannot author.
+ */
+export interface DraftEffect {
+  id: string;
+  when:
+    | { kind: 'always' }
+    | { kind: 'outcome-state'; state: OutcomeState }
+    | { kind: 'verbatim'; when: EffectWhen };
+  /** The target verbatim: `state.…` or `metadata.…`. */
+  target: string;
+  /** How `value` serializes: a JSON number, a JSON boolean, or an expression string. */
+  valueKind: 'literal-number' | 'literal-boolean' | 'expression';
+  /** Loose form text ('true'/'false' for booleans, numeric text, or expression source). */
+  value: string;
+}
+
 export interface ToolDraft {
   name: string;
   title: string;
+  /** Templated chip/heading label. '' = omitted — the title labels the chip. */
+  chipLabel: string;
   description: string;
   disabled: boolean;
   /** Which availability clause the tool declares, if any. */
@@ -189,6 +219,8 @@ export interface ToolDraft {
   llmErrorMessage: string;
   /** Loose numeric text for `llm.maxOutput`; '' means the default cap. */
   llmMaxOutput: string;
+  /** Side effects, in application order. Empty = no `effects` key emitted. */
+  effects: DraftEffect[];
   /** Ordered; the last entry is always the catch-all. */
   outcomes: DraftOutcome[];
   /** The `$schema` value to re-emit. */
@@ -221,6 +253,7 @@ export function newDraft(): ToolDraft {
   return {
     name: '',
     title: '',
+    chipLabel: '',
     description: '',
     disabled: false,
     gateMode: 'none',
@@ -235,6 +268,7 @@ export function newDraft(): ToolDraft {
     llmPrompt: '',
     llmErrorMessage: '',
     llmMaxOutput: '',
+    effects: [],
     outcomes: [
       { id: nextDraftId('outcome'), catchAll: false, conditions: [], state: 'success', message: '' },
       {
@@ -389,6 +423,71 @@ export function gateFromConditions(conditions: DraftGateCondition[]): ToolGate |
   return Object.keys(metadata).length > 0 ? ({ metadata } as ToolGate) : undefined;
 }
 
+/**
+ * True when an effect's condition is exactly "the winning outcome IS this
+ * state" — the one shape (besides Always) the form authors directly. Anything
+ * richer rides verbatim.
+ */
+function isPlainOutcomeEq(when: EffectWhen): when is EffectWhen & { outcome: { eq: OutcomeState } } {
+  const keys = Object.keys(when).filter((key) => (when as Record<string, unknown>)[key] !== undefined);
+  return (
+    keys.length === 1 &&
+    keys[0] === 'outcome' &&
+    when.outcome?.eq !== undefined &&
+    when.outcome.neq === undefined
+  );
+}
+
+function effectToDraft(effect: CustomToolEffect): DraftEffect {
+  let when: DraftEffect['when'];
+  if (effect.when === undefined) {
+    when = { kind: 'always' };
+  } else if (isPlainOutcomeEq(effect.when)) {
+    when = { kind: 'outcome-state', state: effect.when.outcome.eq };
+  } else {
+    // Carried verbatim with a read-only badge — the $state-default precedent.
+    when = { kind: 'verbatim', when: effect.when };
+  }
+
+  return {
+    id: nextDraftId('effect'),
+    when,
+    target: effect.target,
+    valueKind:
+      typeof effect.value === 'number'
+        ? 'literal-number'
+        : typeof effect.value === 'boolean'
+          ? 'literal-boolean'
+          : 'expression',
+    value: String(effect.value),
+  };
+}
+
+/** The `effects` entry a draft effect emits — the inverse of {@link effectToDraft}. */
+function effectFromDraft(effect: DraftEffect): CustomToolEffect {
+  let when: EffectWhen | undefined;
+  if (effect.when.kind === 'outcome-state') {
+    when = { outcome: { eq: effect.when.state } } as EffectWhen;
+  } else if (effect.when.kind === 'verbatim') {
+    when = effect.when.when;
+  }
+
+  let value: number | boolean | string;
+  if (effect.valueKind === 'literal-number') {
+    value = parseNumberText(effect.value);
+  } else if (effect.valueKind === 'literal-boolean') {
+    value = effect.value === 'true';
+  } else {
+    value = effect.value;
+  }
+
+  return {
+    ...(when !== undefined ? { when } : {}),
+    target: effect.target,
+    value,
+  } as CustomToolEffect;
+}
+
 function outcomeToDraft(outcome: CustomToolOutcome): DraftOutcome {
   return {
     id: nextDraftId('outcome'),
@@ -441,6 +540,7 @@ export function draftFromDefinition(raw: unknown): ToolDraft | null {
   return {
     name: definition.name,
     title: definition.title ?? '',
+    chipLabel: definition.chipLabel ?? '',
     description: definition.description,
     disabled: definition.disabled ?? false,
     gateMode: definition.availableWhen ? 'available' : definition.withheldWhen ? 'withheld' : 'none',
@@ -463,6 +563,7 @@ export function draftFromDefinition(raw: unknown): ToolDraft | null {
     llmPrompt: definition.llm?.prompt ?? '',
     llmErrorMessage: definition.llm?.errorMessage ?? '',
     llmMaxOutput: definition.llm?.maxOutput === undefined ? '' : numberText(definition.llm.maxOutput),
+    effects: (definition.effects ?? []).map(effectToDraft),
     outcomes: definition.outcomes.map(outcomeToDraft),
     schemaValue:
       typeof rawRecord.$schema === 'string' && rawRecord.$schema.length > 0
@@ -480,6 +581,7 @@ export function draftFromDefinition(raw: unknown): ToolDraft | null {
 const KNOWN_KEY_ORDER = [
   'name',
   'title',
+  'chipLabel',
   'description',
   'disabled',
   'availableWhen',
@@ -489,6 +591,7 @@ const KNOWN_KEY_ORDER = [
   'parameters',
   'roll',
   'llm',
+  'effects',
   'outcomes',
 ];
 
@@ -644,6 +747,7 @@ export function definitionFromDraft(draft: ToolDraft): Record<string, unknown> {
   doc.$schema = draft.schemaValue || DEFAULT_SCHEMA_VALUE;
   doc.name = draft.name;
   if (draft.title.trim() !== '') doc.title = draft.title;
+  if (draft.chipLabel.trim() !== '') doc.chipLabel = draft.chipLabel;
   doc.description = draft.description;
   if (draft.disabled) doc.disabled = true;
   if (draft.gateMode !== 'none') {
@@ -671,6 +775,10 @@ export function definitionFromDraft(draft: ToolDraft): Record<string, unknown> {
     const maxOutput = parseNumberText(draft.llmMaxOutput);
     if (Number.isFinite(maxOutput)) llm.maxOutput = maxOutput;
     doc.llm = llm;
+  }
+
+  if (draft.effects.length > 0) {
+    doc.effects = draft.effects.map(effectFromDraft);
   }
 
   doc.outcomes = draft.outcomes.map((outcome) => {
@@ -705,12 +813,13 @@ export interface DraftIssue {
   severity: 'error' | 'warning';
   /** Where in the form the issue lives, for anchoring UI state. */
   where:
-    | { section: 'identity'; field: 'name' | 'title' | 'description' }
+    | { section: 'identity'; field: 'name' | 'title' | 'chipLabel' | 'description' }
     | { section: 'gate'; conditionId?: string }
     | { section: 'options' }
     | { section: 'parameter'; id: string; field: 'name' | 'default' | 'min' | 'max' }
     | { section: 'roll'; field?: 'dice' | 'min' | 'max' | 'multiplier' | 'offset' }
     | { section: 'llm'; field: 'prompt' | 'errorMessage' | 'maxOutput' }
+    | { section: 'effect'; id: string }
     | { section: 'outcome'; id: string; conditionId?: string }
     | { section: 'message'; id: string };
   message: string;
@@ -800,6 +909,44 @@ function validateMessagePlaceholders(outcome: DraftOutcome, draft: ToolDraft, is
     issues.push(
       warn({ section: 'message', id: outcome.id }, `{{${key}}} is not a placeholder this build knows — it will render as written`)
     );
+  }
+}
+
+/**
+ * The chip label's placeholder audit — the same families an outcome message
+ * takes, `{{llm}}` included (the label renders after the consult, so quoting
+ * the answer is legitimate iff the oracle is enabled). Warnings only: an
+ * unknown placeholder renders as written, per the runtime convention, and the
+ * load-time schema imposes no reference rule on the label.
+ */
+function validateChipLabelPlaceholders(draft: ToolDraft, issues: DraftIssue[]): void {
+  const declaredParams = new Set(draft.parameters.map((p) => p.name));
+  const where: DraftIssue['where'] = { section: 'identity', field: 'chipLabel' };
+  PLACEHOLDER_PATTERN.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = PLACEHOLDER_PATTERN.exec(draft.chipLabel)) !== null) {
+    const key = match[1].trim();
+    if (key === 'value' || key === 'roll') continue;
+    if (key === 'dice') {
+      if (draft.rollForm !== 'dice') {
+        issues.push(warn(where, '{{dice}} renders as an empty string outside the dice form'));
+      }
+      continue;
+    }
+    if (key === 'llm') {
+      if (!draft.llmEnabled) {
+        issues.push(warn(where, '{{llm}} renders as written unless the LLM consult is enabled'));
+      }
+      continue;
+    }
+    if (key.startsWith('params.')) {
+      if (!declaredParams.has(key.slice('params.'.length))) {
+        issues.push(warn(where, `{{${key}}} names no declared parameter — it will render as written`));
+      }
+      continue;
+    }
+    if (key.startsWith('metadata.') || key.startsWith('state.')) continue;
+    issues.push(warn(where, `{{${key}}} is not a placeholder this build knows — it will render as written`));
   }
 }
 
@@ -999,6 +1146,60 @@ function validateGate(draft: ToolDraft, issues: DraftIssue[]): void {
   }
 }
 
+/**
+ * The side effects' audit — the same rules `validateEffects` enforces at load
+ * time, said beside the row instead of on a rejection badge: the target
+ * parses (underscore guard included), an expression parses and names only
+ * declared parameters, and anything touching the oracle needs it enabled.
+ */
+function validateDraftEffects(draft: ToolDraft, issues: DraftIssue[]): void {
+  if (draft.effects.length > MAX_EFFECTS) {
+    issues.push(err({ section: 'options' }, `at most ${MAX_EFFECTS} effects`));
+  }
+
+  const declaredParams = new Set(draft.parameters.map((p) => p.name));
+
+  for (const effect of draft.effects) {
+    const where: DraftIssue['where'] = { section: 'effect', id: effect.id };
+
+    if (effect.target.trim() === '') {
+      issues.push(err(where, 'an effect needs a target — state.<path> or metadata.<key>'));
+    } else {
+      const target = parseEffectTarget(effect.target.trim());
+      if (!target.ok) issues.push(err(where, `target ${target.reason}`));
+    }
+
+    if (effect.valueKind === 'literal-number') {
+      if (!Number.isFinite(parseNumberText(effect.value))) {
+        issues.push(err(where, 'the value must be a number'));
+      }
+    } else if (effect.valueKind === 'expression') {
+      if (effect.value.trim() === '') {
+        issues.push(err(where, "the value needs an expression — quote literal prose: 'broken pick'"));
+      } else {
+        const parsed = parseExpression(effect.value);
+        if (!parsed.ok) {
+          issues.push(err(where, `the expression does not parse: ${parsed.reason}`));
+        } else {
+          for (const ref of parsed.expr.refs) {
+            if (ref.startsWith('params.') && !declaredParams.has(ref.slice('params.'.length))) {
+              issues.push(err(where, `{{${ref}}} names no declared parameter`));
+            } else if (ref === 'llm' && !draft.llmEnabled) {
+              issues.push(err(where, '{{llm}} needs the LLM consult enabled'));
+            } else if (ref === 'dice' && draft.rollForm !== 'dice') {
+              issues.push(warn(where, '{{dice}} is an empty string outside the dice form'));
+            }
+          }
+        }
+      }
+    }
+
+    if (effect.when.kind === 'verbatim' && effect.when.when.llm !== undefined && !draft.llmEnabled) {
+      issues.push(err(where, 'the condition tests the LLM consult, but the consult is not enabled'));
+    }
+  }
+}
+
 function subjectValueType(
   subject: ConditionSubject,
   paramByName: Map<string, DraftParameter>
@@ -1058,6 +1259,12 @@ export function validateDraft(draft: ToolDraft): DraftIssue[] {
   if (draft.title.length > MAX_TITLE_LENGTH) {
     issues.push(err({ section: 'identity', field: 'title' }, `title is over ${MAX_TITLE_LENGTH} characters`));
   }
+  if (draft.chipLabel.length > MAX_CHIP_LABEL_LENGTH) {
+    issues.push(
+      err({ section: 'identity', field: 'chipLabel' }, `chip label is over ${MAX_CHIP_LABEL_LENGTH} characters`)
+    );
+  }
+  validateChipLabelPlaceholders(draft, issues);
   if (draft.description.trim() === '') {
     issues.push(err({ section: 'identity', field: 'description' }, 'description is required'));
   } else if (draft.description.length > MAX_DESCRIPTION_LENGTH) {
@@ -1161,6 +1368,9 @@ export function validateDraft(draft: ToolDraft): DraftIssue[] {
     }
     validateLlmPromptPlaceholders(draft, issues);
   }
+
+  // Side effects.
+  validateDraftEffects(draft, issues);
 
   // Outcomes.
   if (draft.outcomes.length > MAX_OUTCOMES) {

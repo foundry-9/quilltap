@@ -53,14 +53,25 @@ export interface BuildPascalResultContentParams {
    * reads is prose.
    */
   toolTitle: string;
+  /**
+   * Rendered `chipLabel`, when the definition declares one — the header uses
+   * it, same string as the chip, so transcript and chip never disagree.
+   */
+  chipLabel?: string;
   /** The author's rendered outcome message. Emitted VERBATIM, never revoiced. */
   message: string;
 }
 
 /**
- * Build the body of an outcome announcement: the tool's title, and the
- * author's own message. Both bodies are the same string — see the note on
- * opacity in the file header.
+ * Build the body of an outcome announcement: a heading line naming the run,
+ * then the author's own message as its own paragraph. Both bodies are the same
+ * string — see the note on opacity in the file header.
+ *
+ * The blank line is load-bearing: it makes the message its own Markdown block,
+ * so an outcome that begins with `- `, `#`, `1.`, `>`, or a fence renders as
+ * the list/heading/quote its author wrote instead of gluing inline to the bold
+ * heading. (Messages posted before this change keep their one-line bodies —
+ * content is frozen at post time, which is correct for a record.)
  *
  * Deliberately knows nothing about the roll. Who invoked it, what fell, and
  * what the parameters were are all matters for `pascalMeta`, not for the
@@ -69,7 +80,8 @@ export interface BuildPascalResultContentParams {
 export function buildPascalResultContent(
   params: BuildPascalResultContentParams,
 ): { content: string; opaqueContent: string } {
-  const body = `🎲 **${params.toolTitle}** — ${params.message.trim()}`;
+  const heading = params.chipLabel?.trim() || params.toolTitle;
+  const body = `🎲 **${heading}**\n\n${params.message.trim()}`;
 
   return { content: body, opaqueContent: body };
 }

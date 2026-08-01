@@ -43,6 +43,7 @@ import {
 } from '@/lib/pascal/tool-draft'
 import { BuilderForm } from './BuilderForm'
 import { OutcomesSection } from './OutcomesSection'
+import { SideEffectsSection } from './SideEffectsSection'
 import { ProvingBench } from './ProvingBench'
 import { DestinationPicker, type PickedDestination } from './DestinationPicker'
 
@@ -530,6 +531,12 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
             {editorMode === 'form' && draft ? (
               <>
                 <BuilderForm draft={draft} issues={issues} onChange={handleDraftChange} disabled={saveMutation.isPending} />
+                <SideEffectsSection
+                  draft={draft}
+                  issues={issues}
+                  onChange={handleDraftChange}
+                  disabled={saveMutation.isPending}
+                />
                 <OutcomesSection
                   draft={draft}
                   issues={issues}

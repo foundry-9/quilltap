@@ -27,7 +27,7 @@
  * `hasAnsibleAccess` is true".
  */
 
-import { isStateRef, type QtapCustomTool } from './custom-tool.types';
+import { isStateRef, parseEffectTarget, type QtapCustomTool } from './custom-tool.types';
 
 /** The placeholder families `renderTemplate` understands. */
 const PLACEHOLDER_PATTERN = /\{\{([^}]+)\}\}/g;
@@ -63,6 +63,15 @@ export interface ToolVocabulary {
    * references and from `{{state.path}}` placeholders. Sorted.
    */
   state: string[];
+  /**
+   * State paths this tool's effects may WRITE. A write is a different claim
+   * than a read — "this tool consults the encounter count" and "this tool
+   * changes it" deserve different sentences — so writes get their own list
+   * rather than folding into `state`. Sorted.
+   */
+  stateWrites: string[];
+  /** Metadata keys this tool's effects may WRITE on the rolling character. Sorted. */
+  metadataWrites: string[];
 }
 
 /** True when a tool quotes nothing at all, and so has no vocabulary to show. */
@@ -74,7 +83,9 @@ export function isEmptyVocabulary(vocabulary: ToolVocabulary): boolean {
     !vocabulary.llm &&
     vocabulary.params.length === 0 &&
     vocabulary.metadata.length === 0 &&
-    vocabulary.state.length === 0
+    vocabulary.state.length === 0 &&
+    vocabulary.stateWrites.length === 0 &&
+    vocabulary.metadataWrites.length === 0
   );
 }
 
@@ -95,6 +106,8 @@ export function collectToolVocabulary(
     params: new Set<string>(),
     metadata: new Set<string>(),
     state: new Set<string>(),
+    stateWrites: new Set<string>(),
+    metadataWrites: new Set<string>(),
   };
 
   for (const outcome of definition.outcomes ?? []) {
@@ -117,6 +130,26 @@ export function collectToolVocabulary(
 
   if (definition.llm) collectPlaceholders(definition.llm.prompt, declared, found);
 
+  // The chip label is a rendered string like any outcome message.
+  if (definition.chipLabel) collectPlaceholders(definition.chipLabel, declared, found);
+
+  // Effects: an expression's `{{ref}}`s are the outcome-message vocabulary
+  // verbatim, so the one placeholder scanner reads them too; a condition's
+  // metadata keys are reads like an outcome row's; and each target is a WRITE,
+  // reported on its own lists because it is a different claim than a read.
+  for (const effect of definition.effects ?? []) {
+    if (typeof effect.value === 'string') collectPlaceholders(effect.value, declared, found);
+    for (const key of Object.keys(effect.when?.metadata ?? {})) found.metadata.add(key);
+
+    const target = parseEffectTarget(effect.target);
+    if (!target.ok) continue; // load-rejected; nothing honest to report
+    if (target.target.kind === 'state') {
+      found.stateWrites.add(target.target.raw.slice(STATE_PREFIX.length));
+    } else {
+      found.metadataWrites.add(target.target.key);
+    }
+  }
+
   // Every `$state` reference, wherever it sits — a parameter default, a roll
   // field, a comparator operand. Walked rather than enumerated: the schema is
   // free to grow new sites, and a list of them here would silently fall behind.
@@ -130,6 +163,8 @@ export function collectToolVocabulary(
     params: sorted(found.params),
     metadata: sorted(found.metadata),
     state: sorted(found.state),
+    stateWrites: sorted(found.stateWrites),
+    metadataWrites: sorted(found.metadataWrites),
   };
 }
 

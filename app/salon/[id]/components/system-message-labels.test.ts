@@ -48,6 +48,20 @@ describe('getAnnouncementImportance', () => {
         pascalMeta: pascalMeta as Message['pascalMeta'],
       }) as Pick<Message, 'systemSender' | 'systemKind' | 'content' | 'pascalMeta'>
 
+    it('prefers the rendered chip label over the title — the per-run name of the deal', () => {
+      expect(
+        getSystemKindDisplayLabel(
+          roll({ tool: 'agent_lambda', toolTitle: 'Agent lambda', chipLabel: 'Agent lambda — Jackie' }),
+        ),
+      ).toBe('Agent lambda — Jackie')
+    })
+
+    it('ignores a blank chip label rather than showing an empty chip', () => {
+      expect(
+        getSystemKindDisplayLabel(roll({ tool: 'unlock', toolTitle: 'Force the Lock', chipLabel: '   ' })),
+      ).toBe('Force the Lock')
+    })
+
     it('prefers the display title recorded with the roll', () => {
       expect(getSystemKindDisplayLabel(roll({ tool: 'scan_hawking_radiation', toolTitle: 'Scan Hawking Radiation' })))
         .toBe('Scan Hawking Radiation')

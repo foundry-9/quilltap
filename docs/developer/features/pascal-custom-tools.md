@@ -99,7 +99,7 @@ A dice-driven example:
 
 ### `roll` — the two forms
 
-**Form A — numeric range object.** Fields (all optional): `min` (default 0), `max` (default 1), `multiplier` (default 1), `offset` (default 0), `round` (default false). Each numeric field accepts a JSON number, a `{ "$param": "<name>" }` reference to a declared numeric parameter, or a `{ "$state": "<path>", "fallback": <number> }` reference into merged persistent state — **`$param` and `$state` are the two forms of indirection; no expression strings anywhere.** A `$state` roll field requires a **numeric** fallback (load-checked in `validateRollRefs`). Raw value = uniform float in `[min, max)` from **crypto-strength randomness** (`crypto.randomInt`/`randomBytes`-derived, not `Math.random`).
+**Form A — numeric range object.** Fields (all optional): `min` (default 0), `max` (default 1), `multiplier` (default 1), `offset` (default 0), `round` (default false). Each numeric field accepts a JSON number, a `{ "$param": "<name>" }` reference to a declared numeric parameter, or a `{ "$state": "<path>", "fallback": <number> }` reference into merged persistent state — **`$param` and `$state` are the two forms of indirection — roll fields and tests take no expression strings** (the one string grammar in the format is an effect's `value`; see [Security constraints](#security-constraints)). A `$state` roll field requires a **numeric** fallback (load-checked in `validateRollRefs`). Raw value = uniform float in `[min, max)` from **crypto-strength randomness** (`crypto.randomInt`/`randomBytes`-derived, not `Math.random`).
 
 **Form B — dice notation string.** A string like `"3d6+2"`, `"1d20"`, `"2d10-1"`. Parsed and rolled by the **existing dice system** in `lib/tools/rng-tool.ts` — extract its dice parser/roller into a shared module (`lib/pascal/dice.ts`) and have both `rng-tool` and `run_custom` consume it, rather than duplicating (single source of truth). Raw value = the dice total. Dice form does not accept `$param` references inside the notation string (v1); if parameterized dice are needed later, that is a v2 extension.
 
@@ -196,7 +196,7 @@ A definition may reach into the chat's persistent **state** — the four-tier ca
   - **LLM path** (`run_custom`, `lib/tools/handlers/run-custom-handler.ts`): `resolveStateCascade` with `{ kind: 'character', characterId }` — the responding character's own groups (Knowledge's rule). Fail-soft to `{}`.
   - **Manual popup** (`app/api/v1/chats/[id]/custom-tools/route.ts` `handleRun`): character scope when `asCharacterId` names a character, else `{ kind: 'none' }` — the same asymmetry the metadata rule uses (a run nobody made borrows no one's groups). Fail-soft to `{}`.
   - **Workbench** (`app/api/v1/custom-tools/route.ts` preview/audit): an optional mock `state` object on the request body, exactly like the mock `metadata`; `simulateOutcomes` takes it as a trailing `state` argument (default `{}`). The proving bench exposes a **Mock state** JSON field.
-- **`persist` stays deferred.** Writing state back from a roll (the reserved v2 `persist` key) remains out of scope; `$state` is read-only. The top-level schema still tolerates unknown keys so a future `persist` file won't break older builds.
+- **Writing state back shipped as `effects`.** `$state` references themselves stay read-only, but a roll can now record consequences through the tool-level `effects` array ([pascal-custom-tool-enhancements.md](./pascal-custom-tool-enhancements.md)) — the reserved `persist` key, implemented under a better name. The top-level schema still tolerates unknown keys so future keys won't break older builds.
 
 ### Validation rules (load-time)
 
@@ -293,9 +293,13 @@ New file `lib/tools/run-custom-tool.ts`, following the five-part chokepoint patt
 
 Constructed like Suparṇā's writer (`lib/services/suparna-notifications/writer.ts:90` is the template): `role: 'ASSISTANT'`, `participantId: null`, `systemSender: 'pascal'`, `systemKind: 'custom-tool-result'`, persisted via `repos.chats.addMessage`. New writer module: `lib/services/pascal/writer.ts`.
 
-`content` is the human/LLM-readable text, and it is the tool's title plus the author's own message — nothing else:
+`content` is the human/LLM-readable text, and it is a heading naming the run plus the author's own message as its own paragraph — nothing else:
 
-> 🎲 **Force the Lock** — The lock clicks open.
+> 🎲 **Force the Lock**
+>
+> The lock clicks open.
+
+The blank line makes the message its own Markdown block, so an outcome that begins with `- `/`#`/`1.`/`>`/a fence renders as written rather than gluing inline to the bold heading. (Messages posted before this change keep their original one-line bodies — content is frozen at post time.) When the definition declares a `chipLabel` ([pascal-custom-tool-enhancements.md](./pascal-custom-tool-enhancements.md)), its rendered result replaces the title as the heading — the same string that labels the Salon chip, so transcript and chip never disagree.
 
 The tool is named by `displayTitle(definition)` — the author's `title`, or a title-cased `name` — never by the raw declaration name. `buildPascalResultContent` takes it as `toolTitle` for exactly that reason. The identity is not lost: `pascalMeta.tool` records `name`, which is what audit and shadowing resolve on. Because the title is interpolated at post time, no stored message changes when a `title` is later edited — the transcript keeps what was announced, which is correct for a record of what happened.
 
@@ -305,7 +309,7 @@ The tool is named by `displayTitle(definition)` — the author's `title`, or a t
 - **The `*(rolled 14)*` suffix.** What a roll says is the author's to decide: a table that wants its number read out puts `{{value}}` or `{{dice}}` in the `message`. Nothing is lost — the whole roll record still lives in `pascalMeta`, and the rolling model still gets `value`/`state` back from `run_custom`.
 - **The separate opaque body.** The spec first said `opaqueContent = content` (copying Suparṇā), then a correction made it a distinct neutral `System: …` body, because Pascal's framing would have leaked his name to an opaque character. With the framing gone the original answer is right again for the original reason: no persona in the body, nothing to strip. `opaqueContent === content`, both still populated in lockstep per the contract in `lib/schemas/chat.types.ts`.
 
-The remaining `🎲 **Title** —` prefix is a label, not a voice: it carries no Staff name and every part of it comes from the author's own JSON.
+The remaining `🎲 **Title**` heading is a label, not a voice: it carries no Staff name and every part of it comes from the author's own JSON — including the per-run `chipLabel`, when one is declared.
 
 **A manual run posts ONE message, not two.** The spec paired Pascal's outcome with a USER invocation line (`*I ran unlock (scale: 1)*`) so the model would attribute the roll to the operator. Its only unique contribution was to publish the operator's chosen parameters — precisely what a model must not see, since it is the human's hand on the scale and a character reading it can infer the roll was arranged. The line is gone; `?action=run` returns `messages: [pascalMessage]`.
 
@@ -406,7 +410,7 @@ Load-time validation failures do not error at run time; they simply keep the too
 
 ## Security constraints
 
-- **No expression evaluation anywhere.** Comparator objects and `$param` refs only. Reject on schema, don't sanitize.
+- **Outcome tests are comparator objects, never expressions.** Indirection in tests and roll fields is limited to the two closed reference forms (`$param`, `$state`). The **one** place a string grammar exists is an effect's `value` (added by [pascal-custom-tool-enhancements.md](./pascal-custom-tool-enhancements.md)), evaluated by the closed, eval-free parser in `lib/pascal/expressions.ts`: arithmetic, string concatenation, parentheses, literals, and `{{ref}}` substitution. There are no identifiers, no function calls, and no member access — the only names that grammar admits are the same `{{...}}` reference families `renderTemplate` already substitutes, so there is still nothing callable and nothing reachable beyond the run's own subjects. Reject on schema, don't sanitize.
 - Roster caps: max 64 tools per resolved roster (excess dropped with a logged warning and UI notice — no silent truncation), max 8 parameters and 32 outcomes per tool, message ≤ 1000 chars, description ≤ 500 chars.
 - Parameter values from the model/UI are validated against declared types and clamped to declared ranges before any use.
 - Crypto-strength RNG (`node:crypto`), never `Math.random`.
@@ -414,7 +418,7 @@ Load-time validation failures do not error at run time; they simply keep the too
 
 ## Deferred to v2 (schema room reserved)
 
-- **`persist` block** — `"persist": { "baseline": "{{value}}" }`: after each run, store the value as this chat's default for a parameter, backed by Pascal's existing state system (`lib/tools/state-tool.ts`). Enables self-ratcheting tools (each Hawking reading becomes the next floor) and counters ("third failed lockpick breaks the pick"). v1 ignores the key with a warning.
+- ~~**`persist` block**~~ — **Shipped as `effects`** (a better fit: the array describes consequences, not storage) by [pascal-custom-tool-enhancements.md](./pascal-custom-tool-enhancements.md): a tool-level list of conditional writes into tiered persistent state or the rolling character's metadata, applied server-side after the deal. Covers the ratcheting and counter use cases the reserved `persist` key was for.
 - Parameterized dice notation (`"{{params.n}}d6"`).
 - ~~Group-tier authoring UI (definitions are hand-authored JSON in v1; a form-based editor could come later).~~ Shipped as [Pascal's Workbench](complete/custom-tool-builder.md) — a full visual editor, library, and proving bench at `/custom-tools`.
 - Per-run seeds / deterministic replay.

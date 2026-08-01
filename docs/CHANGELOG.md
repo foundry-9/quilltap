@@ -4,6 +4,16 @@
 
 ### 4.8-dev
 
+#### Custom tools: per-run chip labels, two-block bubbles, and side effects
+
+Three additions to Pascal's custom tools (spec: `docs/developer/features/pascal-custom-tool-enhancements.md`):
+
+- **`chipLabel`** — an optional template (same placeholders as an outcome message, rendered after the outcome is chosen) that names each run on the Salon chip and the announcement heading: "Agent lambda — Jackie" instead of the static title. Rendered once in `executeCustomTool`; carried in `pascalMeta.chipLabel`; chip precedence is `chipLabel → toolTitle → tool`. Never shown to the model — to have the LLM name the run, declare a string parameter and template it.
+- **Two-block bubble** — `buildPascalResultContent` now emits `🎲 **Heading**\n\n<message>` instead of a single line, so an outcome message that opens with a list item, heading, quote, or fence renders as written instead of gluing inline to the bold title. Old messages keep their one-line bodies (content is frozen at post time). The heading is the rendered `chipLabel` when present. The ProvingBench miniature matches.
+- **`effects`** — a tool-level array (max 16) of conditional writes applied server-side after the run: into tiered persistent state ("write where it lives": chat → project → group → general, project only with a projectId, group only under the exactly-one rule, defaulting to chat) or onto the rolling character's metadata (whole-object RMW; skipped when no character rolled — including unattributed manual runs). Effect `when` is the outcome-row comparator language plus an `outcome` (winning state) subject. Effect `value` is a literal number/boolean, or a string that is **always an expression** — a new closed, eval-free grammar in `lib/pascal/expressions.ts` (arithmetic, concatenation, parentheses, literals, `{{ref}}` substitution; no identifiers, no calls; bare prose like `"broken pick"` is a load-time parse error — quote it: `"'broken pick'"`). Run-time eval failures skip that effect fail-soft; writes are batched one per touched store, buffered-repo (job-child) safe, never re-read, and recorded in `pascalMeta.effects` with previous values. Applied before the Pascal post; the Workbench preview/audit never applies.
+
+Also: the underscore guard (`_`-prefixed state keys are user-only) is enforced on effect targets at load and apply time; the `run_custom` preamble mentions side effects and per-tool descriptions list write targets (hidden under `revealOdds: false`); tool vocabulary gains `stateWrites`/`metadataWrites` and the run dialog shows a "may write" line; the Workbench gains a Chip label field, a Side effects card (Always / on-outcome conditions authored in the form, richer conditions carried verbatim), and dry-run effect display on the bench; export schema and DDL updated (`pascalMeta` is JSON — no migration).
+
 #### Sub-lists survive the Markdown editor, and can be created in it
 
 Opening a document with nested bullets flattened them, and the next save wrote the flat version back to disk:

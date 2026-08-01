@@ -86,6 +86,7 @@ const RUN_CUSTOM_PREAMBLE = [
   'Do not describe the result before calling, and do not re-run a tool to get a better answer.',
   'An outcome table may also consult your own character\'s metadata, so the same tool can deal differently to different characters.',
   'Some tools additionally pose a question to a separate model mid-run and let its answer steer the outcome; that consult happens server-side too, and you never speak for it.',
+  'Some tools record side effects when they run — adjusting the scene\'s persistent state or the rolling character\'s own records, server-side, as part of the roll.',
   '',
   'Available tools:',
 ].join('\n');
@@ -212,6 +213,14 @@ export function buildRunCustomDescription(roster: DiscoveredCustomTool[]): strin
       // rendered — it is instructions for a different model, and quoting it
       // here would invite this one to answer it.
       lines.push('    Consults a separate model; outcomes may test its answer.');
+    }
+    if (definition.effects && definition.effects.length > 0) {
+      // Targets only — vocabulary, never values or conditions. Under
+      // `revealOdds: false` this line is gone with the rest of the odds: the
+      // consequences stay as hidden as the thresholds. (The human popup still
+      // sees the targets via the vocabulary — the file is the user's own.)
+      const targets = [...new Set(definition.effects.map((effect) => effect.target))];
+      lines.push(`    Side effects: writes ${targets.join(', ')}`);
     }
     for (const outcome of definition.outcomes) {
       lines.push(`    ${describeWhen(outcome.when)} → ${outcome.state}`);

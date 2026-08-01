@@ -1,6 +1,6 @@
 # Feature: Custom Tool Enhancements — chip labels, paragraph breaks, side effects
 
-Status: **planned**. Extends [pascal-custom-tools.md](./pascal-custom-tools.md); read that first — this document only describes the deltas.
+Status: **implemented**. Extends [pascal-custom-tools.md](./pascal-custom-tools.md); read that first — this document only describes the deltas.
 
 ## Motivation
 

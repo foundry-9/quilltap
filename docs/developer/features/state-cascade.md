@@ -82,12 +82,12 @@ Ref shape: `{ "$state": "<path>", "fallback": <number|string|boolean> }` — **f
 - `docs/developer/DDL.md`: document the general mount's root `state.json` + startup ensure (group store section already documents its `state.json`).
 - `public/schemas/qtap-export.schema.json`: chat/project/group state already exported. **Verify at implementation** whether the Quilltap General mount rides in the `documentStores` dump; record the outcome in the schema description either way.
 - `help/chat-state.md`: rewrite for four tiers (steampunk voice; keep `url` frontmatter + In-Chat Navigation matching). `help/custom-tools.md`: document `$state` + Workbench mock. Cross-check `help/groups.md`.
-- `docs/developer/features/pascal-custom-tools.md`: retire "only indirection", document `$state` and per-entrance cascade; note `persist` stays deferred.
+- `docs/developer/features/pascal-custom-tools.md`: retire "only indirection", document `$state` and per-entrance cascade. (The `persist` key noted here as deferred has since shipped as `effects` — see [pascal-custom-tool-enhancements.md](./pascal-custom-tool-enhancements.md).)
 - `docs/CHANGELOG.md`: terse plain-English entries.
 
 ## Known risks (accepted)
 
-- Whole-object replace on set → concurrent-write races now shared across chats via group/general tiers (pre-existing pattern; doc note only).
+- Whole-object replace on set → concurrent-write races now shared across chats via group/general tiers (pre-existing pattern; doc note only). Custom-tool `effects` ([pascal-custom-tool-enhancements.md](./pascal-custom-tool-enhancements.md)) write through the same whole-object replaces, so the race is now likelier within a single turn; re-reading just before write stays rejected (the job child's no-read-your-writes contract).
 - `parsePath`'s `\w+` segments: keys with spaces/dots unreachable (pre-existing; document beside `$state`).
 - Merged fetch now costs membership lookups + hydrated group read + one general-doc read per call — acceptable; `findByIdRaw` + targeted state read is the escape hatch if ever needed.
 
