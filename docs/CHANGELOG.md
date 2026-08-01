@@ -4,6 +4,52 @@
 
 ### 4.8-dev
 
+#### Chat-start wardrobe consults now run in parallel, time out, and can choose nudity
+
+Three fixes to the `llm_choose` starting-outfit path, prompted by a live chat that took 2m32s to open.
+
+**The consults were serial.** Each character's wardrobe consult is a network round trip, and they ran one after another. A DeepSeek call that took 2m32s to emit 19 tokens held the entire chat-creation request behind one character while the rest waited their turn.
+
+`applyOutfitSelections` now runs in two phases. Every character's outfit is resolved concurrently through `Promise.allSettled`; the results are then committed serially. The split is not cosmetic — `chats.setEquippedOutfit` reads the chat's whole `equippedOutfit` map, sets one character's key, and writes it back, so concurrent writers would silently drop each other's entries. Resolution is parallel, persistence is not. Writes go in the caller's selection order regardless of who finished first, so the stored JSON is deterministic. The function still resolves only after every character has landed, and a character who can't be resolved or persisted is logged and left as-is instead of failing the chat around them.
+
+**A stalled provider had no bound.** Concurrency stops one straggler from blocking the others, but not from blocking the chat. The wardrobe consult now gives up after 60s (`OUTFIT_LLM_TIMEOUT_MS`) and dresses that character in their defaults. The abandoned request is not aborted — it will still be billed and still appear in the LLM log.
+
+**"Naked" and "I failed" were the same answer.** The model's only way to say a character should be unclothed was to return every slot empty, which is exactly what a model that has failed to choose also returns. The previous entry's fix — treat all-empty as a miss and fall back to defaults — made the failure case safe but made deliberate nudity unexpressible.
+
+The prompt now asks for `"deliberate": true` alongside the empty slots, and explicitly states that an unflagged empty answer will be overridden by the character's defaults. `chooseLLMOutfit` returns `{slots, deliberatelyUnclothed}` instead of bare `EquippedSlots`; only a real boolean `true` counts, so a model that omits the flag or sends `"true"` as a string still gets the safe fallback. A deliberate choice is applied as-is and noted in the chat-creation dialog.
+
+Observed in the wild before this change: a character whose manifesto describes her as a nudist was asked what to wear in a scene with no setting, answered `{"top": [], "bottom": [], ...}`, and was overridden — arguably the model was right and had no way to say so.
+
+Not changed: the candidate pool is still unfiltered. Pre-filtering by `appropriateness` would cut prompt size and cost, but it was not the cause here — the slow call was 5,034 prompt tokens and the fast one 1,671, a 3× difference against a 95× difference in wall time.
+
+#### Shared wardrobe tiers now dress characters at chat start
+
+The wardrobe has three tiers: a character's own vault, the project's linked document stores, and the singleton "Quilltap General" store. The wardrobe UI and every in-chat wardrobe tool already merged all three. The two server paths that dress characters at chat start read the character's vault only.
+
+Three defects followed:
+
+- `llm_choose` could not pick shared items. The candidate list came from `findByCharacterId` alone, and the validator dropped any id outside it. A character whose wardrobe is entirely shared also failed the non-empty guard, so the LLM was never called at all — the character silently fell through to defaults.
+- `default` mode disagreed between client and server. The composer decided "has a usable default" over the merged list and sent `mode: 'default'`; the server resolved it from the character vault. A character whose defaults live in shared tiers showed "Use defaults" in the dialog and then started the chat wearing nothing.
+- The creation dialog's outfit preview missed the project tier, so a project-tier garment rendered with no title.
+
+All three run through `applyOutfitSelections`, so new chat, Add Character, and conversation merge were all affected.
+
+Behavior now: items marked `isDefault` in any tier auto-equip. A General default dresses every character everywhere; a project default dresses everyone in that project's chats. Personal and shared defaults **layer** in the same slot rather than one winning it, ordered by `createdAt` ascending on both the server and the composer preview. The character tier still shadows on id collision, so a personal copy with `isDefault: false` is how a character opts out of a shared default.
+
+That ordering matters because the tiers are merged *before* the `isDefault` filter, not after. Filtering first would hide the opt-out: a personal `isDefault: false` item is absent from a filtered list, so nothing would be there to shadow the shared default.
+
+A fourth defect had to be fixed for any of this to be visible. A shared composite — a "House Livery" bundling coat, waistcoat, and boots, all General items — resolved to nothing: `resolve-equipped.ts` seeded its item map from the character's vault plus the equipped ids only, so the components were absent, `expandComposites` emitted each one as an unknown leaf, and the routing pass dropped them. Blank preview panel, `topIsBare` in avatar prompts, empty live-clothing override, empty Aurora announcement. It now hydrates missing components with one bulk query per nesting level, bounded by the same depth expansion walks.
+
+Also changed:
+
+- New `lib/wardrobe/wearable-pool.ts` (`mergeWearablePool`) and `wardrobe.repository.findWearablePoolForCharacter` — one merged-pool method with one merge rule, replacing the hand-rolled merge in `wardrobe-list-handler`. `findDefaultsForCharacter` is deleted; it asked the same question the wrong way.
+- `OutfitSelectionContext.projectMountPointIds` is required, so a future call site that forgets the project tier fails to compile. Callers resolve it from the project id they already hold; `apply-chat-merge` resolves it once outside the per-character loop.
+- The shared tier is read once per `applyOutfitSelections` call, not once per character.
+- An `llm_choose` result with every slot empty is now treated as a miss and falls back to defaults. `chooseLLMOutfit` never fails parsing — it drops ids it can't validate and still reports success — so this was previously a silent path to an undressed character. Rare before; routine once shared-only characters could reach it.
+- The pool size per character is debug-logged.
+
+Known gaps, unchanged by this work: cross-tier composite component refs are still dropped at parse time (a character-vault composite whose components live in a project store, or a project composite whose components live in General); character-scoped `.qtap` exports carry no shared-item records, so `equippedOutfit` ids pointing at shared items dangle on import; the repository still does not accept group mounts.
+
 #### Whisper labels were unreadable in light mode
 
 `--qt-chat-whisper-label-fg` colors the "whispered to X" label on a whisper bubble. In light mode it failed WCAG AA (4.5:1 for normal text; the label is 0.75rem) in every bundled theme but one, and in the default theme. Art Deco measured 1.07:1 — effectively invisible. Measured against each theme's own `--qt-chat-whisper-bg`:

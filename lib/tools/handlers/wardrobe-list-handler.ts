@@ -77,19 +77,14 @@ export async function executeWardrobeListTool(
     const validatedInput = parsed;
     const { type_filter, appropriateness_filter, include_equipped } = validatedInput;
 
-    // Merge the character's own wardrobe with shared archetypes (project +
-    // Quilltap General). Character items win on id collision so a personal
+    // The character's own wardrobe merged under the shared archetypes (project
+    // + Quilltap General). Character items win on id collision so a personal
     // override masks the shared item. (The group tier is a tracked follow-up —
     // the repo doesn't accept group mounts yet.)
     const projectMountPointIds = await resolveProjectMountPointIdsForChat(context.chatId);
-    const ownRaw = await repos.wardrobe.findByCharacterId(context.characterId);
-    const archetypesRaw = await repos.wardrobe.findArchetypes(false, { projectMountPointIds });
-
-    const byId = new Map<string, WardrobeItem>();
-    for (const item of archetypesRaw) byId.set(item.id, item);
-    for (const item of ownRaw) byId.set(item.id, item); // character overrides shared
-
-    const allItems = Array.from(byId.values()).filter((item) => !item.archivedAt);
+    const allItems = await repos.wardrobe.findWearablePoolForCharacter(context.characterId, {
+      projectMountPointIds,
+    });
 
     const equippedSlots: EquippedSlots | null = await repos.chats.getEquippedOutfitForCharacter(
       context.chatId,

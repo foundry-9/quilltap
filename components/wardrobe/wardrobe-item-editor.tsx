@@ -67,6 +67,20 @@ export function WardrobeItemEditor({
     isSharedProp ? 'global' : 'character',
   )
 
+  // A default garment is put on at the start of every chat by every character
+  // that can reach it — so the checkbox's promise depends on where the item is
+  // headed. On edit we know only that the item is shared (General vs project
+  // isn't recorded on the item itself), so that copy stays deliberately broad.
+  const defaultOutfitLabel = isEditing
+    ? isShared
+      ? 'Worn by default by every character who can reach this item'
+      : "Part of this character's default outfit"
+    : createScope === 'global'
+      ? 'Worn by default by every character'
+      : createScope === 'project'
+        ? 'Worn by default by every character in this project'
+        : "Part of this character's default outfit"
+
   const { formData, handleChange } = useFormState({
     title: item?.title || '',
     description: item?.description || '',
@@ -604,9 +618,7 @@ export function WardrobeItemEditor({
                   onChange={handleChange}
                   className="qt-checkbox mt-0.5"
                 />
-                <span className="text-sm text-foreground">
-                  Part of this character&apos;s default outfit
-                </span>
+                <span className="text-sm text-foreground">{defaultOutfitLabel}</span>
               </label>
             </div>
 

@@ -54,9 +54,9 @@ You'll be asked:
   - This appears as a system message in the chat
 
 - **Starting Outfit** — How the new arrival is dressed when they step into the room. The same four choices the new-chat ceremony offers:
-  - **Use defaults** — They arrive in whatever the wardrobe marks as default (the standing presumption)
+  - **Use defaults** — They arrive in whatever is marked default across all three wardrobe tiers — their own vault, the project's wardrobe, and Quilltap General — layered together (the standing presumption)
   - **Compose outfit** — Pick the starting outfit slot by slot, the way one might lay clothes out on the bed before a party
-  - **Let character choose** — A cheap LLM peeks at the scenario and chooses something fitting (not offered to characters you're impersonating)
+  - **Let character choose** — A cheap LLM peeks at the scenario and chooses something fitting from all three wardrobe tiers (not offered to characters you're impersonating). It may deliberately choose nothing at all where the scene calls for it; an *undeclared* empty answer, or a consultation that runs past a minute, falls back to their defaults
   - **Start undressed** — Every slot empty, for entrances best left to imagination
 
   The dialog now settles on a sensible opening choice for each character on its own, so you need only overrule it when your taste differs:

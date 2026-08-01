@@ -39,6 +39,7 @@ import {
   applyOutfitSelections,
   buildCheapLLMConfig,
 } from '@/lib/wardrobe/apply-outfit-selections';
+import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 
 type Repos = RepositoryContainer;
 
@@ -162,6 +163,10 @@ export async function applyChatMerge(
   const chatSettings = await repos.chatSettings.findByUserId(userId);
   const cheapLLMConfig = buildCheapLLMConfig(chatSettings);
 
+  // Project wardrobe tier for the target chat. Hoisted out of the per-character
+  // loop — it's the same for every merged character.
+  const projectMountPointIds = await resolveProjectMountPointIds(targetChat.projectId ?? null);
+
   // Character tags to fold into the chat's tag set, mirroring the add-character
   // flow (handleAddParticipant) so merged characters surface under the chat's
   // tags too. Applied once after all joins.
@@ -242,6 +247,7 @@ export async function applyChatMerge(
       try {
         await applyOutfitSelections(targetChatId, [selection], repos, {
           userId,
+          projectMountPointIds,
           scenarioText: targetChat.scenarioText ?? null,
           cheapLLMConfig,
           sourceChatId,

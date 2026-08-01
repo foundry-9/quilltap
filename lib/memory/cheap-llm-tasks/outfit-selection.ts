@@ -33,7 +33,26 @@ If the available wardrobe contains a composite item (its description mentions it
 Example response:
 {"top": ["uuid-tshirt", "uuid-sweater"], "bottom": ["uuid-jeans"], "footwear": ["uuid-boots"], "accessories": []}
 
+Wearing nothing at all is a legitimate choice, but you must mark it as a choice. If the character genuinely should be unclothed — a nudist at home, a bath or swim scene, a setting where clothing would be absurd — leave every slot empty AND include "deliberate": true:
+
+{"deliberate": true, "top": [], "bottom": [], "footwear": [], "accessories": []}
+
+An all-empty response WITHOUT "deliberate": true is read as a failure to choose, and the character will be dressed in their default outfit instead. Do not use the empty response to opt out of the task — if you are unsure, pick something.
+
 Do not include any other text, explanation, or markdown formatting. Just the JSON object.`
+
+/**
+ * What the model decided.
+ *
+ * `deliberatelyUnclothed` separates "the character should be naked" from "the
+ * model produced nothing usable" — two states that were previously identical on
+ * the wire (all-empty slots) and therefore indistinguishable to the caller.
+ */
+export interface LLMOutfitChoice {
+  slots: EquippedSlots
+  /** The model explicitly flagged its empty answer as intentional. */
+  deliberatelyUnclothed: boolean
+}
 
 /**
  * Ask an LLM to choose an outfit for a character based on context.
@@ -60,11 +79,14 @@ export async function chooseLLMOutfit(
   userId: string,
   chatId?: string,
   characterId?: string,
-): Promise<CheapLLMTaskResult<EquippedSlots>> {
+): Promise<CheapLLMTaskResult<LLMOutfitChoice>> {
   if (wardrobeItems.length === 0) {
     return {
       success: true,
-      result: { top: [], bottom: [], footwear: [], accessories: [] },
+      result: {
+        slots: { top: [], bottom: [], footwear: [], accessories: [] },
+        deliberatelyUnclothed: false,
+      },
     }
   }
 
@@ -126,7 +148,7 @@ Choose what ${characterName} should wear for this scene:`,
     selection,
     messages,
     userId,
-    (content: string): EquippedSlots => {
+    (content: string): LLMOutfitChoice => {
       const cleanContent = stripCodeFences(content)
       const parsed = JSON.parse(cleanContent)
 
@@ -135,15 +157,23 @@ Choose what ${characterName} should wear for this scene:`,
           chatId,
           responsePreview: cleanContent.substring(0, 200),
         })
-        return { top: [], bottom: [], footwear: [], accessories: [] }
+        return {
+          slots: { top: [], bottom: [], footwear: [], accessories: [] },
+          deliberatelyUnclothed: false,
+        }
       }
+
+      // Only an explicit boolean `true` counts. A model that omits the flag, or
+      // sends a stringy "true", has not made the deliberate claim — and the
+      // fallback (dress them in their defaults) is the safe reading.
+      const deliberatelyUnclothed = parsed.deliberate === true
 
       // Validate and map the response to EquippedSlots. Each slot is an
       // array; we validate each ID, accept it if the wardrobe contains it
       // and the item covers this slot (composites that cover the slot are
       // accepted as-is — equipping them is the "store-as-composite" path),
       // and drop anything else with a debug log.
-      const result: EquippedSlots = {
+      const slots: EquippedSlots = {
         top: [],
         bottom: [],
         footwear: [],
@@ -176,13 +206,13 @@ Choose what ${characterName} should wear for this scene:`,
             continue
           }
           // Avoid emitting the same id twice in one slot.
-          if (!result[slot].includes(candidate)) {
-            result[slot].push(candidate)
+          if (!slots[slot].includes(candidate)) {
+            slots[slot].push(candidate)
           }
         }
       }
 
-      return result
+      return { slots, deliberatelyUnclothed }
     },
     'outfit-selection',
     chatId,

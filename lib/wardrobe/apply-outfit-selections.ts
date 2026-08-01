@@ -28,6 +28,8 @@ import {
 } from '@/lib/llm/cheap-llm';
 import { chooseLLMOutfit } from '@/lib/memory/cheap-llm-tasks/outfit-selection';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
+import { mergeWearablePool } from '@/lib/wardrobe/wearable-pool';
+import { sortForDefaultOutfit } from '@/lib/wardrobe/default-outfit';
 import type {
   CreationProgressEmitter,
   OutfitPreviewSlots,
@@ -35,12 +37,66 @@ import type {
 
 type Repos = RepositoryContainer;
 
+const SLOT_KEYS = ['top', 'bottom', 'footwear', 'accessories'] as const;
+
+const emptySlots = (): EquippedSlots => ({
+  top: [],
+  bottom: [],
+  footwear: [],
+  accessories: [],
+});
+
+/**
+ * How long to wait on the wardrobe LLM for one character before giving up and
+ * dressing them in their defaults.
+ *
+ * A healthy call on a cheap model is a second or two. Observed in the wild: a
+ * provider that took 2m32s to emit 19 tokens, which — back when this loop was
+ * serial — stalled the entire chat-creation request behind one character.
+ * Concurrency stops one straggler from blocking the others; this stops a
+ * straggler from blocking the chat.
+ *
+ * Note the underlying request is not aborted, only abandoned; it will still be
+ * billed and still land in the LLM log.
+ */
+export const OUTFIT_LLM_TIMEOUT_MS = 60_000;
+
+/** Sentinel distinguishing "gave up waiting" from any legitimate resolution. */
+const TIMED_OUT = Symbol('outfit-llm-timed-out');
+
+/**
+ * Resolve `work`, or `TIMED_OUT` if it takes longer than `ms`.
+ *
+ * The timer is always cleared so a fast resolution doesn't hold the event loop
+ * open, and a late rejection from `work` is absorbed by the race rather than
+ * surfacing as an unhandled rejection.
+ */
+function withTimeout<T>(work: Promise<T>, ms: number): Promise<T | typeof TIMED_OUT> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const guard = new Promise<typeof TIMED_OUT>((resolve) => {
+    timer = setTimeout(() => resolve(TIMED_OUT), ms);
+  });
+  return Promise.race([work, guard]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
 /**
  * Context needed for LLM-based outfit selection during chat creation or
  * participant addition.
  */
 export interface OutfitSelectionContext {
   userId: string;
+  /**
+   * Project document stores in scope for this chat, resolved by the caller from
+   * the project id it already holds (`resolveProjectMountPointIds` /
+   * `resolveProjectMountPointIdsForChat`). Folded into the shared wardrobe tier
+   * alongside Quilltap General.
+   *
+   * Required rather than optional so a future call site that forgets it fails
+   * to compile instead of silently dressing characters from one tier.
+   */
+  projectMountPointIds: string[];
   scenarioText?: string | null;
   cheapLLMConfig?: CheapLLMConfig;
   /**
@@ -85,25 +141,37 @@ function toOutfitPreviewSlots(leafItemsBySlot: {
 }
 
 /**
- * Resolve the default outfit for a character from their wardrobe items marked as default.
- * Each default item's coverage types receive the item's ID appended to the slot's array.
- * Multiple defaults may share a slot (e.g. layered tops, several accessories) — order is
- * deterministic by `createdAt` ascending.
+ * Resolve the default outfit for a character from every item marked default
+ * across all three tiers — the character's own vault, the project's linked
+ * stores, and Quilltap General. Each default item's coverage types receive the
+ * item's ID appended to the slot's array.
+ *
+ * Personal and shared defaults **layer** rather than one winning the slot; only
+ * an id collision shadows (a personal copy of a shared item replaces it, so a
+ * personal `isDefault: false` override is how a character opts out of a shared
+ * default). That is why the merge happens on the *full* pools and `isDefault`
+ * is filtered last — filtering first would hide the opt-out.
+ *
+ * Order is deterministic by `createdAt` ascending (slot arrays read
+ * inner-to-outer); `sortForDefaultOutfit` is shared with the client composer so
+ * the preview and the chat that opens agree.
+ *
+ * @param opts.pool A pre-merged wearable pool, when the caller already has one
+ *   (`applyOutfitSelections` fetches the shared tier once for the whole batch).
+ * @param opts.projectMountPointIds Used only when no `pool` is supplied.
  */
 export async function resolveDefaultOutfit(
   characterId: string,
   repos: Repos,
+  opts?: { pool?: WardrobeItem[]; projectMountPointIds?: string[] },
 ): Promise<EquippedSlots> {
-  const defaultItems = await repos.wardrobe.findDefaultsForCharacter(characterId);
+  const pool =
+    opts?.pool ??
+    (await repos.wardrobe.findWearablePoolForCharacter(characterId, {
+      projectMountPointIds: opts?.projectMountPointIds,
+    }));
 
-  if (defaultItems.length === 0) {
-    return {
-      top: [],
-      bottom: [],
-      footwear: [],
-      accessories: [],
-    };
-  }
+  const defaultItems = pool.filter((item) => item.isDefault && !item.archivedAt);
 
   const slots: EquippedSlots = {
     top: [],
@@ -112,14 +180,11 @@ export async function resolveDefaultOutfit(
     accessories: [],
   };
 
-  // Deterministic order: oldest default first. Items lacking createdAt sort to the end.
-  const orderedDefaults = [...defaultItems].sort((a, b) => {
-    const aTime = a.createdAt ? Date.parse(a.createdAt) : Number.POSITIVE_INFINITY;
-    const bTime = b.createdAt ? Date.parse(b.createdAt) : Number.POSITIVE_INFINITY;
-    return aTime - bTime;
-  });
+  if (defaultItems.length === 0) {
+    return slots;
+  }
 
-  for (const item of orderedDefaults) {
+  for (const item of sortForDefaultOutfit(defaultItems)) {
     for (const slotType of item.types) {
       if (slotType in slots) {
         slots[slotType as keyof EquippedSlots].push(item.id);
@@ -137,7 +202,23 @@ export async function resolveDefaultOutfit(
  * - 'manual': Use the provided slot assignments directly (already arrays)
  * - 'none': Set every slot to an empty array
  * - 'previous_chat': Copy equipped state from the source chat (continuation flow)
- * - 'llm_choose': Ask a cheap LLM to pick an outfit, fall back to defaults on failure
+ * - 'llm_choose': Ask a cheap LLM to pick an outfit, fall back to defaults on
+ *   failure, on an unflagged empty answer, or on {@link OUTFIT_LLM_TIMEOUT_MS}
+ *
+ * Runs in two phases:
+ *
+ *  1. **Resolve, concurrently.** Every character's slots are worked out in
+ *     parallel via `Promise.allSettled` — `llm_choose` is a network round trip
+ *     apiece, and serially they added up (one stalled provider held the whole
+ *     cast). Nothing is written here, and one character's failure can't cancel
+ *     its siblings.
+ *  2. **Commit, serially.** `chats.setEquippedOutfit` reads the chat's whole
+ *     `equippedOutfit` map, sets one key, and writes it back, so concurrent
+ *     writers would lose every entry but the last.
+ *
+ * Resolves only once every character has landed one way or the other. Never
+ * throws: a character that can't be resolved or persisted is logged and left
+ * as-is rather than failing the chat around them.
  */
 export async function applyOutfitSelections(
   chatId: string,
@@ -145,49 +226,123 @@ export async function applyOutfitSelections(
   repos: Repos,
   context?: OutfitSelectionContext,
 ): Promise<void> {
-  for (const selection of selections) {
+  const projectMountPointIds = context?.projectMountPointIds ?? [];
+
+  // The shared tiers are the same for every character in this batch, and
+  // `findArchetypes` re-reads and YAML-parses every file in each shared folder.
+  // Fetch it at most once, lazily — a batch of `manual`/`none` selections
+  // shouldn't pay for a wardrobe read at all.
+  let sharedPoolPromise: Promise<WardrobeItem[]> | null = null;
+  const getSharedPool = (): Promise<WardrobeItem[]> => {
+    if (!sharedPoolPromise) {
+      sharedPoolPromise = repos.wardrobe
+        .findArchetypes(false, { projectMountPointIds })
+        .catch((error) => {
+          logger.warn('[applyOutfitSelections] Failed to read shared wardrobe tiers; using the character vault alone', {
+            chatId,
+            projectMountCount: projectMountPointIds.length,
+            error: getErrorMessage(error, 'Unknown error'),
+          });
+          return [] as WardrobeItem[];
+        });
+    }
+    return sharedPoolPromise;
+  };
+
+  // Per-character merged pool (shared tiers under the character's own vault),
+  // memoized so a character whose `llm_choose` falls back to defaults doesn't
+  // re-read their vault.
+  const poolByCharacter = new Map<string, Promise<WardrobeItem[]>>();
+  const getPool = (characterId: string): Promise<WardrobeItem[]> => {
+    let pending = poolByCharacter.get(characterId);
+    if (!pending) {
+      pending = (async () => {
+        const shared = await getSharedPool();
+        let own: WardrobeItem[] = [];
+        try {
+          own = await repos.wardrobe.findByCharacterId(characterId);
+        } catch (error) {
+          logger.warn('[applyOutfitSelections] Failed to read character wardrobe; using shared tiers alone', {
+            chatId,
+            characterId,
+            error: getErrorMessage(error, 'Unknown error'),
+          });
+        }
+        const pool = mergeWearablePool(shared, own);
+        logger.debug('[applyOutfitSelections] Resolved wearable pool', {
+          chatId,
+          characterId,
+          poolSize: pool.length,
+          sharedCount: shared.length,
+          ownCount: own.length,
+          projectMountCount: projectMountPointIds.length,
+        });
+        return pool;
+      })();
+      poolByCharacter.set(characterId, pending);
+    }
+    return pending;
+  };
+
+  /** Publish a resolved outfit to the status dialog. Never throws. */
+  const publishPreview = async (
+    characterId: string,
+    characterName: string,
+    slots: EquippedSlots,
+  ): Promise<void> => {
+    if (!context?.progress) return;
+    try {
+      const resolved = await resolveEquippedOutfitForCharacter(repos, characterId, slots, {
+        projectMountPointIds,
+      });
+      context.progress.wardrobeResult(
+        characterId,
+        characterName,
+        toOutfitPreviewSlots(resolved.leafItemsBySlot),
+      );
+    } catch (resolveError) {
+      logger.warn('[applyOutfitSelections] Failed to resolve outfit for progress preview', {
+        chatId,
+        characterId,
+        error: getErrorMessage(resolveError, 'Unknown error'),
+      });
+    }
+  };
+
+  /**
+   * Work out what a character should be wearing. Returns `null` when nothing
+   * should be written at all (an unrecognised mode).
+   *
+   * Deliberately does **no** persistence: these run concurrently, and
+   * `setEquippedOutfit` is a read-modify-write of a single JSON column keyed by
+   * character, so concurrent writers would drop each other's entries. The
+   * caller commits the results serially afterwards.
+   */
+  const resolveSelection = async (
+    selection: OutfitSelection,
+  ): Promise<EquippedSlots | null> => {
     const { characterId, mode } = selection;
 
     switch (mode) {
-      case 'default': {
-        const slots = await resolveDefaultOutfit(characterId, repos);
-        await repos.chats.setEquippedOutfit(chatId, characterId, slots);
-        break;
-      }
-
-      case 'manual': {
-        const slots: EquippedSlots = selection.slots ?? {
-          top: [],
-          bottom: [],
-          footwear: [],
-          accessories: [],
-        };
-        await repos.chats.setEquippedOutfit(chatId, characterId, slots);
-        break;
-      }
-
-      case 'none': {
-        await repos.chats.setEquippedOutfit(chatId, characterId, {
-          top: [],
-          bottom: [],
-          footwear: [],
-          accessories: [],
+      case 'default':
+        return resolveDefaultOutfit(characterId, repos, {
+          pool: await getPool(characterId),
         });
-        break;
-      }
+
+      case 'manual':
+        return selection.slots ?? emptySlots();
+
+      case 'none':
+        return emptySlots();
 
       case 'previous_chat': {
-        let applied = false;
         if (context?.sourceChatId) {
           try {
             const previousSlots = await repos.chats.getEquippedOutfitForCharacter(
               context.sourceChatId,
               characterId,
             );
-            if (previousSlots) {
-              await repos.chats.setEquippedOutfit(chatId, characterId, previousSlots);
-              applied = true;
-            }
+            if (previousSlots) return previousSlots;
           } catch (error) {
             logger.warn('[applyOutfitSelections] Failed to copy previous-chat outfit; falling back to default', {
               chatId,
@@ -202,24 +357,26 @@ export async function applyOutfitSelections(
             characterId,
           });
         }
-        if (!applied) {
-          const slots = await resolveDefaultOutfit(characterId, repos);
-          await repos.chats.setEquippedOutfit(chatId, characterId, slots);
-        }
-        break;
+        return resolveDefaultOutfit(characterId, repos, {
+          pool: await getPool(characterId),
+        });
       }
 
       case 'llm_choose': {
-        let applied = false;
+        let chosen: EquippedSlots | null = null;
         // Track whether we announced a consult so the fallback path can still
         // resolve the dialog's panel instead of leaving it spinning.
         let consulted = false;
         let consultedName = '';
+        let deliberatelyUnclothed = false;
 
         if (context) {
           try {
             const character = await repos.characters.findById(characterId);
-            const wardrobeItems = await repos.wardrobe.findByCharacterId(characterId);
+            // Candidates come from all three tiers: a character whose entire
+            // wardrobe is shared used to fail this guard and fall through to
+            // (empty) defaults without the LLM ever being consulted.
+            const wardrobeItems = await getPool(characterId);
 
             if (character && wardrobeItems.length > 0) {
               const allProfiles = await repos.connections.findAll();
@@ -239,50 +396,53 @@ export async function applyOutfitSelections(
                 consultedName = character.name;
                 context.progress?.wardrobeStart(characterId, character.name);
 
-                const result = await chooseLLMOutfit(
-                  character.name,
-                  character.description || null,
-                  character.personality || null,
-                  character.manifesto || null,
-                  wardrobeItems,
-                  context.scenarioText || null,
-                  cheapSelection,
-                  context.userId,
-                  chatId,
-                  characterId,
-                );
-
-                if (result.success && result.result) {
-                  await repos.chats.setEquippedOutfit(chatId, characterId, result.result);
-                  applied = true;
-
-                  // Publish the decided four-slot outfit for the status dialog.
-                  if (context.progress) {
-                    try {
-                      const resolved = await resolveEquippedOutfitForCharacter(
-                        repos,
-                        characterId,
-                        result.result,
-                      );
-                      context.progress.wardrobeResult(
-                        characterId,
-                        character.name,
-                        toOutfitPreviewSlots(resolved.leafItemsBySlot),
-                      );
-                    } catch (resolveError) {
-                      logger.warn('[applyOutfitSelections] Failed to resolve outfit for progress preview', {
-                        chatId,
-                        characterId,
-                        error: getErrorMessage(resolveError, 'Unknown error'),
-                      });
-                    }
-                  }
-                } else {
-                  logger.warn('[applyOutfitSelections] LLM outfit selection failed, falling back to defaults', {
+                const startedAt = Date.now();
+                const result = await withTimeout(
+                  chooseLLMOutfit(
+                    character.name,
+                    character.description || null,
+                    character.personality || null,
+                    character.manifesto || null,
+                    wardrobeItems,
+                    context.scenarioText || null,
+                    cheapSelection,
+                    context.userId,
                     chatId,
                     characterId,
-                    error: result.error,
+                  ),
+                  OUTFIT_LLM_TIMEOUT_MS,
+                );
+
+                if (result === TIMED_OUT) {
+                  logger.warn('[applyOutfitSelections] LLM outfit selection timed out, falling back to defaults', {
+                    chatId,
+                    characterId,
+                    timeoutMs: OUTFIT_LLM_TIMEOUT_MS,
+                    poolSize: wardrobeItems.length,
                   });
+                } else {
+                  // `chooseLLMOutfit` never fails parsing — it drops ids it
+                  // can't validate and still reports success. An all-empty
+                  // answer therefore means either "nothing usable" or "naked on
+                  // purpose", and only the model's own `deliberate` flag tells
+                  // the two apart. Without it, dress them in their defaults.
+                  const picked =
+                    !!result.result && SLOT_KEYS.some((slot) => result.result!.slots[slot].length > 0);
+                  const declaredBare = result.result?.deliberatelyUnclothed === true;
+
+                  if (result.success && result.result && (picked || declaredBare)) {
+                    chosen = result.result.slots;
+                    deliberatelyUnclothed = declaredBare && !picked;
+                  } else {
+                    logger.warn('[applyOutfitSelections] LLM outfit selection failed, falling back to defaults', {
+                      chatId,
+                      characterId,
+                      error: result.error,
+                      emptyResult: result.success && !picked,
+                      poolSize: wardrobeItems.length,
+                      elapsedMs: Date.now() - startedAt,
+                    });
+                  }
                 }
               }
             }
@@ -295,39 +455,68 @@ export async function applyOutfitSelections(
           }
         }
 
-        if (!applied) {
-          const slots = await resolveDefaultOutfit(characterId, repos);
-          await repos.chats.setEquippedOutfit(chatId, characterId, slots);
-
-          // If we already told the dialog we were consulting this character,
-          // resolve their panel with the default we fell back to (and note it).
-          if (consulted && context?.progress) {
-            context.progress.log(
-              `${consultedName} settled on their usual attire.`,
-              'warn',
-            );
-            try {
-              const resolved = await resolveEquippedOutfitForCharacter(repos, characterId, slots);
-              context.progress.wardrobeResult(
-                characterId,
-                consultedName,
-                toOutfitPreviewSlots(resolved.leafItemsBySlot),
-              );
-            } catch (resolveError) {
-              logger.warn('[applyOutfitSelections] Failed to resolve fallback outfit for progress preview', {
-                chatId,
-                characterId,
-                error: getErrorMessage(resolveError, 'Unknown error'),
-              });
-            }
+        if (chosen) {
+          if (deliberatelyUnclothed) {
+            logger.info('[applyOutfitSelections] Character is deliberately unclothed by LLM choice', {
+              chatId,
+              characterId,
+            });
+            context?.progress?.log(`${consultedName} chose to wear nothing at all.`, 'info');
           }
+          await publishPreview(characterId, consultedName, chosen);
+          return chosen;
         }
-        break;
+
+        const slots = await resolveDefaultOutfit(characterId, repos, {
+          pool: await getPool(characterId),
+        });
+        // If we already told the dialog we were consulting this character,
+        // resolve their panel with the default we fell back to (and note it).
+        if (consulted && context?.progress) {
+          context.progress.log(`${consultedName} settled on their usual attire.`, 'warn');
+          await publishPreview(characterId, consultedName, slots);
+        }
+        return slots;
       }
 
       default:
         logger.warn('[applyOutfitSelections] Unknown outfit selection mode', { chatId, characterId, mode });
-        break;
+        return null;
+    }
+  };
+
+  // Resolve every character concurrently — the `llm_choose` path is a network
+  // round trip apiece, and serially they added up (one stalled provider call
+  // held up the whole cast). `allSettled` means we don't move on until every
+  // character has landed one way or the other, and one character's blow-up
+  // can't cancel its siblings.
+  const resolved = await Promise.allSettled(selections.map(resolveSelection));
+
+  // Commit serially, in the caller's order. `setEquippedOutfit` reads the chat's
+  // whole `equippedOutfit` map, sets one key, and writes it back — running these
+  // concurrently would lose every entry but the last.
+  for (let i = 0; i < selections.length; i += 1) {
+    const { characterId } = selections[i];
+    const outcome = resolved[i];
+
+    if (outcome.status === 'rejected') {
+      logger.error('[applyOutfitSelections] Failed to resolve outfit; character left as-is', {
+        chatId,
+        characterId,
+        error: getErrorMessage(outcome.reason, 'Unknown error'),
+      });
+      continue;
+    }
+    if (!outcome.value) continue;
+
+    try {
+      await repos.chats.setEquippedOutfit(chatId, characterId, outcome.value);
+    } catch (error) {
+      logger.error('[applyOutfitSelections] Failed to persist equipped outfit', {
+        chatId,
+        characterId,
+        error: getErrorMessage(error, 'Unknown error'),
+      });
     }
   }
 }

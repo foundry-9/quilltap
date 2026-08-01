@@ -31,6 +31,7 @@ import {
   buildCheapLLMConfig,
 } from '@/lib/wardrobe/apply-outfit-selections';
 import type { OutfitSelection } from '@/lib/schemas/wardrobe.types';
+import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 
 /**
  * Start impersonating a participant
@@ -196,6 +197,9 @@ async function applyOutfitForAddedParticipant(
       repos,
       {
         userId,
+        // Project wardrobe tier for this chat, so a joining character can be
+        // dressed from the project's shared stores as well as their own vault.
+        projectMountPointIds: await resolveProjectMountPointIds(chat.projectId ?? null),
         scenarioText: chat.scenarioText ?? null,
         cheapLLMConfig: buildCheapLLMConfig(chatSettings),
       },

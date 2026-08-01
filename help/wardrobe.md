@@ -106,6 +106,8 @@ When you add a new garment from the Wardrobe dialog, an **"Add to"** selector at
 
 Shared items appear in the dialog's list tagged "· shared" and are wear-only there; manage household archetypes from any character's wardrobe and project items from the project's [Wardrobe card](project-wardrobe.md). (Editing an existing item keeps it in whichever tier it already lives.)
 
+A shared item marked as a **default** garment is worn by *every* character — a household archetype dresses the whole cast in every chat, a project item dresses everyone in that project's chats. Use the honour sparingly, and only when the garment truly is a uniform: a mourning band for a season of grief, the livery of a great house, the regimental coat that no member of the regiment would be seen without. Any character who would rather not may keep a personal copy of the item with its default flag turned off, and the house will say nothing further about it.
+
 When you use **Move** or **Copy** from an item's `⋮` menu, Quilltap opens a destination picker with:
 
 - **General** (Quilltap General)
@@ -177,9 +179,11 @@ All three flags live on the character's **Wardrobe** tab on the Aurora page — 
 
 When you begin a new conversation, you will be asked how to handle the character's outfit:
 
-- **Default** --- The character starts wearing whatever they had equipped in their most recent chat (or their full wardrobe if no prior chat exists)
+- **Default** --- The character arrives wearing everything marked as a default garment across all three tiers --- their own vault, the project's wardrobe, and Quilltap General --- layered one atop the next rather than squabbling over a single slot. Should the character keep their own copy of a shared garment, that copy prevails: mark it *not* a default and they will decline the house livery altogether, with no offence taken.
 - **Manual** --- You hand-pick which items the character is wearing at the start of the scene
-- **Let Character Choose** --- The character examines the scenario and their own wardrobe, then selects what seems most appropriate for the occasion. This is accomplished by a discreet consultation with the AI before the conversation begins --- rather like sending one's valet ahead to assess the dress code. Should the consultation fail for any reason (a misplaced cufflink, an uncooperative telegraph), the character simply falls back to their default outfit with admirable composure.
+- **Let Character Choose** --- The character examines the scenario and the whole of their wardrobe (all three tiers), then selects what seems most appropriate for the occasion. This is accomplished by a discreet consultation with the AI before the conversation begins --- rather like sending one's valet ahead to assess the dress code. Should the consultation fail for any reason (a misplaced cufflink, an uncooperative telegraph, or a valet who has simply not returned within the minute allotted him), the character falls back to their default outfit with admirable composure.
+
+  A character may also elect to wear *nothing* --- a nudist at home, a bathing scene, a setting in which clothing would be plainly absurd --- and when they do so deliberately, the house respects it. The distinction matters: an empty answer offered *without* that deliberate declaration is treated as a valet who has lost his nerve, and the character is put into their defaults rather than sent out undressed by accident. When several characters are dressing at once, they now consult in parallel rather than queueing politely in the hall, so one slow valet no longer keeps the entire party waiting.
 - **None** --- The character begins with no equipped outfit; what they wear (if anything) is left to the narrative
 
 The dialog now proposes a sensible starting choice for each character on its own, so you need only intervene when your taste differs. Continuing from an earlier conversation keeps everyone in what they last wore; a character carrying the **canChooseOutfit** flag opens on **Let Character Choose**; a character with a proper default outfit on file opens on **Default**; and a character with no default outfit to speak of opens on **Manual**, its panel already unfolded so the empty slots are plain to see. When several characters are present, each folded panel wears a small badge — **Defaults**, **Composed**, **Dress Themselves**, **Undressed**, or **Same as Last** — so the whole cast's attire reads at a glance.

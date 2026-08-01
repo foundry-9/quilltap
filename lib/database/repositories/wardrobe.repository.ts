@@ -14,6 +14,7 @@ import {
   updateVaultWardrobeItem,
   deleteVaultWardrobeItem,
 } from './vault-overlay/wardrobe-writes';
+import { mergeWearablePool } from '@/lib/wardrobe/wearable-pool';
 import { TypedQueryFilter } from '../interfaces';
 
 /**
@@ -122,13 +123,37 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
   }
 
   /**
-   * Find default wardrobe items for a character. Sourced solely from the vault.
+   * Find everything a character can actually wear: the shared tiers (Quilltap
+   * General + any project stores in `opts.projectMountPointIds`) merged under
+   * the character's own vault. Character items shadow shared ones on id
+   * collision; archived items are dropped.
+   *
+   * This is the pool every "what can this character wear?" question should ask
+   * — `wardrobe_list`, chat-start default resolution, the `llm_choose`
+   * candidate list. Filter it (e.g. `isDefault`) *after* the merge, never
+   * before: a personal `isDefault: false` item shadowing a shared default is
+   * invisible to a merge done on pre-filtered lists.
+   *
+   * Do NOT "simplify" this to call `readCharacterVaultWardrobe` directly or to
+   * flip `seedArchetypes` on the shared readers. The archetype read is a
+   * *sibling* of the vault read here, not nested inside it, which is what keeps
+   * the recursion guard in `lib/mount-index/general-wardrobe.ts` intact.
+   *
+   * The `opts` object shape is deliberate: the group tier lands later as
+   * `opts.groupMountPointIds` with no call-site churn.
    */
-  async findDefaultsForCharacter(characterId: string): Promise<WardrobeItem[]> {
+  async findWearablePoolForCharacter(
+    characterId: string,
+    opts?: { projectMountPointIds?: string[] },
+  ): Promise<WardrobeItem[]> {
     return this.safeQuery(
-      () => getOverlaidWardrobeItems(characterId, { defaultsOnly: true }),
-      'Error finding default wardrobe items for character',
-      { characterId }
+      async () => {
+        const shared = await this.findArchetypes(false, opts);
+        const own = await this.findByCharacterId(characterId);
+        return mergeWearablePool(shared, own);
+      },
+      'Error finding wearable pool for character',
+      { characterId, projectMountCount: opts?.projectMountPointIds?.length ?? 0 }
     );
   }
 

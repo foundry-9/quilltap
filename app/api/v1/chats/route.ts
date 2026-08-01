@@ -1173,6 +1173,9 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
   // If no selections provided, apply 'default' mode for all LLM-controlled participants
   const outfitContext: OutfitSelectionContext = {
     userId: user.id,
+    // Shared wardrobe tiers in scope for this chat's project — General is
+    // always folded in by the repository; these add the project stores.
+    projectMountPointIds: await resolveProjectMountPointIds(validatedData.projectId || null),
     scenarioText: resolvedScenario,
     cheapLLMConfig: buildCheapLLMConfig(chatSettings),
     sourceChatId: validatedData.continuationFromChatId ?? null,

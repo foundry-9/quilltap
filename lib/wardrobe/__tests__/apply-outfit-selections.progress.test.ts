@@ -55,7 +55,12 @@ function makeRepos(overrides: Record<string, unknown> = {}) {
       },
       wardrobe: {
         findByCharacterId: jest.fn().mockResolvedValue([{ id: 'w1', title: 'Jacket' }]),
-        findDefaultsForCharacter: jest.fn().mockResolvedValue([]),
+        // The shared tiers (Quilltap General + project stores). Empty here —
+        // these cases only care about the narration, not the merge.
+        findArchetypes: jest.fn().mockResolvedValue([]),
+        findWearablePoolForCharacter: jest
+          .fn()
+          .mockResolvedValue([{ id: 'w1', title: 'Jacket' }]),
       },
       connections: {
         findAll: jest.fn().mockResolvedValue([{ id: 'p1', isDefault: true }]),
@@ -77,7 +82,10 @@ describe('applyOutfitSelections — status-dialog emissions', () => {
   it('llm_choose announces the consult and publishes the decided four-slot outfit', async () => {
     mockChooseLLMOutfit.mockResolvedValue({
       success: true,
-      result: { top: ['w1'], bottom: [], footwear: [], accessories: [] },
+      result: {
+        slots: { top: ['w1'], bottom: [], footwear: [], accessories: [] },
+        deliberatelyUnclothed: false,
+      },
     } as Awaited<ReturnType<typeof chooseLLMOutfit>>)
     mockResolve.mockResolvedValue({
       outfitValues: { top: ['Jacket'], bottom: [], footwear: [], accessories: [] },
@@ -97,7 +105,7 @@ describe('applyOutfitSelections — status-dialog emissions', () => {
       'chat-1',
       [{ characterId: 'c1', mode: 'llm_choose' }],
       repos as any,
-      { userId: 'u1', progress },
+      { userId: 'u1', projectMountPointIds: [], progress },
     )
 
     expect(progress.wardrobeStart).toHaveBeenCalledWith('c1', 'Bertie')
@@ -133,7 +141,7 @@ describe('applyOutfitSelections — status-dialog emissions', () => {
       'chat-1',
       [{ characterId: 'c1', mode: 'llm_choose' }],
       repos as any,
-      { userId: 'u1', progress },
+      { userId: 'u1', projectMountPointIds: [], progress },
     )
 
     expect(progress.wardrobeStart).toHaveBeenCalledWith('c1', 'Bertie')
@@ -150,7 +158,7 @@ describe('applyOutfitSelections — status-dialog emissions', () => {
       'chat-1',
       [{ characterId: 'c1', mode: 'default' }],
       repos as any,
-      { userId: 'u1', progress },
+      { userId: 'u1', projectMountPointIds: [], progress },
     )
 
     expect(progress.wardrobeStart).not.toHaveBeenCalled()
@@ -173,7 +181,7 @@ describe('applyOutfitSelections — status-dialog emissions', () => {
         },
       ],
       repos as any,
-      { userId: 'u1', progress },
+      { userId: 'u1', projectMountPointIds: [], progress },
     )
 
     expect(progress.wardrobeStart).not.toHaveBeenCalled()

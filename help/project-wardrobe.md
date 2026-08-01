@@ -18,6 +18,14 @@ Quilltap draws a character's wearable garments from three tiers, nearest to fart
 
 When the same item appears in more than one tier, the nearer tier prevails — a project may quietly shadow a household archetype with its own version, and a character's personal garment always outranks both. A project garment becomes wearable the moment a chat belongs to that project; outside the project, it is simply not on offer.
 
+## Garments Worn Without Being Asked
+
+Mark a project garment as a **default** and it is put on at the opening of the curtain: every character joining a chat in that project arrives already wearing it, whether they were cast at the chat's creation, ushered in mid-scene by **Add Character**, or folded in when two conversations are merged. This is the proper way to dress a household — the livery goes on every footman without your having to dress each one by hand.
+
+Defaults layer rather than compete. A character with a default coat of her own does not lose it to the project's waistcoat; she wears both, in the order the garments were made. And a character who would rather abstain need only keep a personal copy of the item with its default flag turned off — the personal copy shadows the project's, and she goes without.
+
+A default **composite** ("House Livery" bundling coat, waistcoat, and boots) resolves to its component garments, so the character is dressed in the pieces, not in an abstraction.
+
 ## The Files Themselves
 
 Each project wardrobe item lives as a Markdown file inside a folder called `Wardrobe/` within the project's official document store (the auto-created store named `Project Files: <your project name>`). The folder is conjured automatically the moment you visit the project page, so no incantation is required to bring it into being. The same `Wardrobe/` convention is used by character vaults and by Quilltap General, so an item may be moved between tiers simply by moving its file.

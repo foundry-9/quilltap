@@ -11,6 +11,9 @@
  *      `itemsById` map can resolve composite components transitively).
  *   2. Falls back to `wardrobe.findByIdsForCharacter` for any equipped IDs not
  *      found in the character's own wardrobe (archetype items, etc.).
+ *   2a. Hydrates composite components that are still missing — a shared
+ *      composite's parts live in the shared tiers, not the character's vault —
+ *      one bulk query per nesting level.
  *   3. Expands each input slot's array via `expandComposites`, then routes
  *      each resulting leaf into every output slot the leaf's own `types`
  *      declares — dedup'd across input slots. That way an atomic dress with
@@ -24,7 +27,7 @@
  * @module wardrobe/resolve-equipped
  */
 import { logger } from '@/lib/logger';
-import { expandComposites } from '@/lib/wardrobe/expand-composites';
+import { COMPOSITE_MAX_DEPTH, expandComposites } from '@/lib/wardrobe/expand-composites';
 import type { OutfitSlotValues } from '@/lib/wardrobe/outfit-description';
 import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
 
@@ -138,6 +141,49 @@ export async function resolveEquippedOutfitForCharacter(
         missingCount: missing.length,
         error: error instanceof Error ? error.message : String(error),
       });
+    }
+  }
+
+  // A composite may bundle components the character doesn't own and that aren't
+  // equipped in their own right — the canonical case is a shared "House Livery"
+  // whose coat, waistcoat and boots all live in Quilltap General or a project
+  // store. Without those components in `itemsById`, `expandComposites` emits
+  // each one as an unknown leaf and the routing pass below drops it, resolving
+  // the whole outfit to nothing.
+  //
+  // Walk the component graph a level at a time, one bulk query per level,
+  // bounded by the same depth `expandComposites` will walk. Bulk matters: this
+  // file is on child-process hot paths (avatar generation, story backgrounds,
+  // scene state).
+  const requestedComponentIds = new Set<string>();
+  for (let depth = 0; depth < COMPOSITE_MAX_DEPTH; depth += 1) {
+    const wanted: string[] = [];
+    for (const item of itemsById.values()) {
+      for (const componentId of item.componentItemIds ?? []) {
+        if (itemsById.has(componentId)) continue;
+        if (requestedComponentIds.has(componentId)) continue;
+        requestedComponentIds.add(componentId);
+        wanted.push(componentId);
+      }
+    }
+    if (wanted.length === 0) break;
+    try {
+      const components = await repos.wardrobe.findByIdsForCharacter(characterId, wanted, {
+        projectMountPointIds: opts?.projectMountPointIds,
+      });
+      if (components.length === 0) break;
+      for (const item of components) {
+        itemsById.set(item.id, item);
+      }
+    } catch (error) {
+      logger.warn('[resolveEquippedOutfitForCharacter] composite component hydration failed', {
+        context: 'wardrobe',
+        characterId,
+        depth,
+        wantedCount: wanted.length,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      break;
     }
   }
 

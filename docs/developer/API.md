@@ -1893,7 +1893,9 @@ Add a character to the chat.
 - `controlledBy` accepts `"llm"` (default) or `"user"` (user-impersonated). `connectionProfileId` is required for LLM control and ignored for user control.
 - `hasHistoryAccess` (default `false`) controls whether the new participant sees messages from before they joined.
 - `joinScenario` is optional context describing how the character entered; surfaced as a Host announcement targeted at the new participant when `hasHistoryAccess` is false.
-- `outfitSelection` is optional. Modes: `default` (wardrobe defaults), `manual` (provide a `slots` object), `llm_choose` (cheap LLM picks), `none` (start undressed). Omitting it on a fresh add defaults to `mode: "default"` so the new arrival is dressed; on reactivation of a previously-removed participant, omitting it preserves their previous outfit.
+- `outfitSelection` is optional. Modes: `default`, `manual` (provide a `slots` object), `llm_choose` (cheap LLM picks), `none` (start undressed). Omitting it on a fresh add defaults to `mode: "default"` so the new arrival is dressed; on reactivation of a previously-removed participant, omitting it preserves their previous outfit.
+- `mode: "llm_choose"` consults a cheap LLM per character. Consults for all characters in one request run concurrently; each is bounded by a 60s timeout. The model may return `"deliberate": true` alongside empty slots to dress the character in nothing on purpose; an all-empty response *without* that flag, a failure, or a timeout falls back to `default`.
+- `mode: "default"` resolves across **all three wardrobe tiers** — the character's own vault, the project stores linked to the chat's project, and Quilltap General. Items marked `isDefault` in any tier are equipped and **layer** in the same slot (ordered by `createdAt` ascending). Tiers are merged before the `isDefault` filter, so a character's own copy of a shared item shadows it by id: a personal `isDefault: false` override means the shared default is not worn. `llm_choose` draws its candidate list from that same merged pool.
 
 #### `POST /api/v1/chats/[id]?action=update-participant`
 
