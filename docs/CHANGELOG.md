@@ -4,6 +4,24 @@
 
 ### 4.8-dev
 
+#### Salon message list no longer calls flushSync from React's commit phase
+
+`VirtualizedMessageList` passed `virtualizer.measureElement` straight to each row's `ref`. TanStack Virtual measures the row inside that callback, and when a row above the scroll fold measures differently from the 150px estimate, it corrects `scrollTop` and asks React to re-render synchronously via `flushSync`.
+
+Ref callbacks run in React's commit phase, where `flushSync` is illegal. React logged:
+
+> flushSync was called from inside a lifecycle method. React cannot flush when React is already rendering. Consider moving this call to a scheduler task or micro task.
+
+and downgraded the flush to an ordinary asynchronous update. The synchronous correction the library was reaching for never happened on this path, so the console error bought nothing.
+
+Row measurement now runs on a microtask — the remedy React's own message suggests. It runs after commit unwinds, so `flushSync` is legal, but still before paint, so the scroll correction lands in the same frame and the list doesn't visibly jump. New `app/salon/[id]/hooks/useDeferredMeasureRef.ts`.
+
+Only the ref path is deferred. The virtualizer also measures from a ResizeObserver — the path that keeps a streaming message anchored as it grows — and that already fires outside React, where `flushSync` works. The blunter fix, the adapter's `useFlushSync: false` option, would have disabled both.
+
+Detach (`ref(null)`) still runs synchronously: inside the virtualizer it is only cache pruning, never a notify, and deferring it would let the element cache outlive the DOM node. A row unmounted between the ref firing and its microtask is skipped, so a detached node's stale `data-index` can't resize the wrong row.
+
+Verified layout-neutral against a 784-message chat: with and without the change, row offsets track measured heights exactly across the mounted window.
+
 #### Chat-start wardrobe consults now run in parallel, time out, and can choose nudity
 
 Three fixes to the `llm_choose` starting-outfit path, prompted by a live chat that took 2m32s to open.

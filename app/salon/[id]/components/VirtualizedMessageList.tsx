@@ -14,6 +14,7 @@ import { AnnouncementGroup } from './AnnouncementChip'
 import { isOperatorAuthoredAnnouncement } from '../whisper-visibility'
 import { StreamingMessage } from './StreamingMessage'
 import type { StreamingToolBatch } from '../hooks/useSSEStreaming'
+import { useDeferredMeasureRef } from '../hooks/useDeferredMeasureRef'
 
 interface VirtualizedMessageListProps {
   /** Flat (post-tool-grouping) message list. Still needed for the TOOL-row
@@ -164,6 +165,11 @@ export function VirtualizedMessageList({
   showScrollToBottom = false,
   onScrollToBottom,
 }: VirtualizedMessageListProps) {
+  // Measure rows on a microtask rather than during commit — measuring inline
+  // makes the virtualizer call `flushSync` from a ref callback, which React
+  // refuses (and warns about) while it is already rendering. See the hook.
+  const measureRow = useDeferredMeasureRef(virtualizer)
+
   // Resolve per-message character from participantData, falling back to first character
   const getCharacterForMessage = (message: Message): CharacterData | undefined => {
     if (message.participantId) {
@@ -198,7 +204,7 @@ export function VirtualizedMessageList({
                 <div
                   key={item.id}
                   data-index={virtualRow.index}
-                  ref={virtualizer.measureElement}
+                  ref={measureRow}
                   style={{
                     position: 'absolute',
                     top: 0,
@@ -251,7 +257,7 @@ export function VirtualizedMessageList({
                 <div
                   key={message.id}
                   data-index={virtualRow.index}
-                  ref={virtualizer.measureElement}
+                  ref={measureRow}
                   style={{
                     position: 'absolute',
                     top: 0,
@@ -279,7 +285,7 @@ export function VirtualizedMessageList({
               <div
                 key={message.id}
                 data-index={virtualRow.index}
-                ref={virtualizer.measureElement}
+                ref={measureRow}
                 style={{
                   position: 'absolute',
                   top: 0,
