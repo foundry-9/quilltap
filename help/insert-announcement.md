@@ -48,7 +48,13 @@ From there: post it as it stands, polish it with a small edit, click **Regenerat
 
 ## What characters see
 
-The bubble's *content* — the Markdown body you typed — is exactly what the audience's LLM receives (every character, when the announcement is public; only those you named, when it is whispered). The avatar and name on the bubble are for the human audience; the LLM reads the prose. As with the Salon's automated Staff messages, this means the announcement's content should carry whatever attribution the conversation needs. *"The Host raises a glass and says…"* will read clearly to any character; bare prose with no speaker indicated may leave them guessing.
+The bubble's *content* — the Markdown body you typed — is what the audience's LLM receives (every character, when the announcement is public; only those you named, when it is whispered).
+
+**The speaker travels with it.** When you post as an off-scene character or under a name of your own invention, the announcement reaches the characters prefixed with that name — `[Ariel] *She drifts closer…*` — in the same form the Salon uses to attribute every other speaker. You need not repeat the name in your prose, and the room will not have to guess who spoke.
+
+It did have to guess, once. Before this, the name and avatar on the bubble were for the human audience alone, and the LLM read the prose by itself: a whispered aside written in one character's voice arrived at its recipient as anonymous prose, and the character — reasonably, and quite wrongly — concluded it had been a different member of the Staff entirely, then went on speaking as though the matter were settled. A name is now attached at the source.
+
+Staff announcements are unaffected: they have always named themselves in their own prose. *"The Host raises a glass and says…"* reads clearly to any character, and still does.
 
 ## A note on permanence
 

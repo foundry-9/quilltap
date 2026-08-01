@@ -21,7 +21,12 @@ import {
   type FallbackResult,
 } from '@/lib/chat/file-attachment-fallback'
 import { resolveTimezone } from '@/lib/chat/timestamp-utils'
-import type { getRepositories } from '@/lib/repositories/factory'
+import { getRepositories } from '@/lib/repositories/factory'
+import {
+  attributeAdhocAnnouncements,
+  collectAnnouncerCharacterIds,
+  type CustomAnnouncer,
+} from '@/lib/chat/context/announcement-attribution'
 import type {
   ChatMetadataBase,
   ChatParticipantBase,
@@ -468,7 +473,7 @@ export function normalizeWhisperRoles<
  */
 export async function buildMessageContext(
   options: BuildMessageContextOptions,
-  existingMessages: Array<{ type: string; role?: string; content?: string; opaqueContent?: string | null; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string; attachments?: string[] | null; systemSender?: string | null; systemKind?: string | null }>,
+  existingMessages: Array<{ type: string; role?: string; content?: string; opaqueContent?: string | null; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string; attachments?: string[] | null; systemSender?: string | null; systemKind?: string | null; customAnnouncer?: CustomAnnouncer | null }>,
   attachmentsToSend: unknown[]
 ): Promise<MessageContextResult> {
   const {
@@ -514,6 +519,34 @@ export async function buildMessageContext(
   if (cmpbStrippedCount > 0) {
   }
 
+  // Name the speaker on ad-hoc announcements. `customAnnouncer` is a rendering
+  // field — the Salon paints the name and avatar on the bubble — so without
+  // this the model receives an anonymous block of prose and guesses who said
+  // it. See lib/chat/context/announcement-attribution.ts.
+  const announcerCharacterIds = collectAnnouncerCharacterIds(messagesWithoutCmpb)
+  const announcerNames = new Map<string, string>()
+  if (announcerCharacterIds.length > 0) {
+    const announcerRepos = getRepositories()
+    await Promise.all(
+      announcerCharacterIds.map(async id => {
+        try {
+          const character = await announcerRepos.characters.findById(id)
+          if (character?.name) announcerNames.set(id, character.name)
+        } catch (error) {
+          // A deleted or unreadable character stays unnamed rather than
+          // blocking the turn; the announcement passes through as it did before.
+          logger.warn('[Context] Could not resolve announcer name', {
+            characterId: id,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
+      }),
+    )
+  }
+  // Always run the pass: a `custom` announcer carries its own display name and
+  // needs no lookup, so gating on the resolved-name map would skip it.
+  const messagesAttributed = attributeAdhocAnnouncements(messagesWithoutCmpb, announcerNames)
+
   // Drop whispers the responding character isn't a party to — the same rule
   // `filterWhisperMessages` applies in multi-character mode, enforced here so
   // single-character context can't be the one place a private aside leaks.
@@ -523,13 +556,13 @@ export async function buildMessageContext(
   // from every character it wasn't addressed to on the same test.
   const respondingParticipantId = characterParticipant?.id
   const messagesAfterWhisperFilter = respondingParticipantId
-    ? messagesWithoutCmpb.filter(m => {
+    ? messagesAttributed.filter(m => {
         const targets = m.targetParticipantIds
         if (!targets || targets.length === 0) return true
         if (m.participantId === respondingParticipantId) return true
         return targets.includes(respondingParticipantId)
       })
-    : messagesWithoutCmpb
+    : messagesAttributed
 
   // System transparency: when any non-user-character participant in this chat
   // has systemTransparency !== true, the whole chat goes "opaque-anywhere" —

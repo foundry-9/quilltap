@@ -30,6 +30,24 @@ Two remaining failures were found and deliberately left alone, since they are ou
 
 Changed: `themes/bundled/{art-deco,great-estate,earl-grey,old-school,rains}/styles.css` (patch-bumped), `app/styles/qt-components/_variables.css`, and the mirrors in `@quilltap/theme-storybook` (1.0.54) and `create-quilltap-theme` (2.0.17).
 
+#### Ad-hoc announcements now name their speaker to the LLM
+
+`customAnnouncer` — the off-scene character or custom display name on an Insert Announcement bubble — was a rendering field. The Salon painted the name and avatar; nothing carried it into the model's context, so an announcement posted as a named character arrived at every character as anonymous prose.
+
+Observed in the wild: a whispered announcement posted as one character was read by its recipient as a message from a different member of the Staff, and the character carried that misattribution into the scene. The Host then auto-introduced the *one* figure the prose happened to name, because that machinery keys off the text — while the actual speaker, named only in the metadata, went unintroduced.
+
+The Courier transport already resolved the speaker for its own transcript (`courier-transport.service.ts`), so the same message was attributed on one path and anonymous on the other; the model's reading of a scene changed with the transport carrying it.
+
+Announcements with a `customAnnouncer` are now prefixed `[Name] ` in LLM context, the same form `attributeMessagesForCharacter` already emits for participant messages. New `lib/chat/context/announcement-attribution.ts`, applied in `buildMessageContext` so both the single- and multi-character paths get it. An announcer that can't be resolved (deleted character) passes through unnamed rather than inventing one, and the pass is idempotent so retries don't stack tags. Staff announcements are untouched — they name themselves in their prose.
+
+#### Prospero's group-context whispers ignored the All Whispers toggle
+
+`OPERATOR_FACING_WHISPER_SENDERS` exempted whole senders. It was narrowed to `pascal` and `prospero` in 4.8-dev after a blanket `systemSender` exemption leaked the Commonplace Book's recall, but `prospero` covers more than the private Run Tool results the exemption was written for — notably `group-context`, Prospero telling one character which group shelves they may read. That is scene machinery addressed to a character, and at 3,059 rows in the reporting instance it is the highest-volume whisper in the app. All of them rendered to the operator with All Whispers off.
+
+The exemption is now keyed on sender **and** `systemKind`: `pascal/custom-tool-result`, and `prospero/tool-run`, `custom-tool-error`, `carina-error` — the rolls, the private runs, and the failure notices for each, since an error the operator can't see is one they can't act on. Everything else follows the toggle. A legacy row with no stored kind keeps the old sender-level behavior rather than disappearing from a view the operator is used to.
+
+Sender alone has now been the wrong granularity twice, so the map is keyed by kind and the tests pin `group-context` explicitly.
+
 #### Manual announcements can be whispered to specific characters
 
 Insert Announcement only ever posted publicly. The dialog now has a **Who hears it** section listing the chat's current participants with a checkbox each. Check none and the announcement is public, exactly as before — that remains the default and the unchanged path. Check one or more and the bubble is persisted as a whisper (`targetParticipantIds`), so only those participants' LLM contexts include it.

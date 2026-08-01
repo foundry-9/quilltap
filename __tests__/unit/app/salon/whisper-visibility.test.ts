@@ -63,17 +63,57 @@ describe('isMessageVisibleToOperator', () => {
     },
   )
 
-  it.each(['pascal', 'prospero'] as const)(
-    'shows %s private runs even when the toggle is off — they are operator machinery',
-    sender => {
+  it.each([
+    ['pascal', 'custom-tool-result'],
+    ['prospero', 'tool-run'],
+    ['prospero', 'custom-tool-error'],
+    ['prospero', 'carina-error'],
+  ] as const)(
+    'shows %s/%s even when the toggle is off — that is operator machinery',
+    (sender, kind) => {
       const run = message({
         systemSender: sender,
+        systemKind: kind,
         participantId: null,
         targetParticipantIds: [CHARACTER_A],
       })
       expect(isMessageVisibleToOperator(run, audience(false))).toBe(true)
     },
   )
+
+  it('hides Prospero group-context whispers — scene machinery addressed to a character', () => {
+    // Prospero telling ONE character which group shelves they may read. Exempting
+    // Prospero by sender leaked these, and they are the highest-volume whisper
+    // in the app, so the leak was not subtle.
+    const groupContext = message({
+      systemSender: 'prospero',
+      systemKind: 'group-context',
+      participantId: null,
+      targetParticipantIds: [CHARACTER_A],
+    })
+    expect(isMessageVisibleToOperator(groupContext, audience(false))).toBe(false)
+    expect(isMessageVisibleToOperator(groupContext, audience(true))).toBe(true)
+  })
+
+  it('still shows a group-context whisper addressed to the human', () => {
+    const toUser = message({
+      systemSender: 'prospero',
+      systemKind: 'group-context',
+      participantId: null,
+      targetParticipantIds: [USER_PARTICIPANT],
+    })
+    expect(isMessageVisibleToOperator(toUser, audience(false))).toBe(true)
+  })
+
+  it('keeps sender-level behaviour for legacy rows with no stored kind', () => {
+    const legacy = message({
+      systemSender: 'pascal',
+      systemKind: null,
+      participantId: null,
+      targetParticipantIds: [CHARACTER_A],
+    })
+    expect(isMessageVisibleToOperator(legacy, audience(false))).toBe(true)
+  })
 
   it('shows Staff whispers addressed to the human regardless of sender', () => {
     const toUser = message({
