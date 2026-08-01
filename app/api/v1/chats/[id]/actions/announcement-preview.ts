@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound } from '@/lib/api/responses';
 import { generateCharacterVoicedAnnouncement } from '@/lib/services/announcer/character-voiced';
+import { resolveAnnouncementAudience } from '@/lib/services/announcer/audience';
 import { insertAnnouncementPreviewSchema } from '../schemas';
 import type { RequestContext } from '@/lib/api/middleware';
 
@@ -35,6 +36,11 @@ export async function handleAnnouncementPreview(
     return notFound('Connection profile');
   }
 
+  // Nothing is persisted here, so an unresolvable target is not worth failing
+  // the rehearsal over — it simply doesn't contribute a name to the audience.
+  // The post action is the gate that refuses dangling ids.
+  const audience = await resolveAnnouncementAudience(chatId, validated.targetParticipantIds);
+
   const result = await generateCharacterVoicedAnnouncement({
     chatId,
     character,
@@ -42,6 +48,7 @@ export async function handleAnnouncementPreview(
     seedMarkdown: validated.seedMarkdown,
     systemPromptId: validated.systemPromptId,
     userId: user.id,
+    audienceNames: audience.targetNames,
   });
 
   if (!result.success) {
@@ -52,6 +59,7 @@ export async function handleAnnouncementPreview(
     chatId,
     characterId: validated.characterId,
     profileId: validated.connectionProfileId,
+    audienceCount: audience.targetNames.length,
     proposedLength: result.proposedMarkdown.length,
   });
 

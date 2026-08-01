@@ -253,7 +253,11 @@ function MessageRowInner({
     // omits them to avoid a duplicate id.
     return (
       <div key={message.id} className={messageRowClasses.join(' ')}>
-        <AnnouncementChip message={message} onToggleExpanded={onToggleSystemMessageExpanded} />
+        <AnnouncementChip
+          message={message}
+          onToggleExpanded={onToggleSystemMessageExpanded}
+          participantNames={participantNames}
+        />
       </div>
     )
   }
@@ -287,7 +291,11 @@ function MessageRowInner({
               aria-expanded={true}
               aria-label={`Collapse ${senderName}${kindLabel ? ` ${kindLabel}` : ''} message`}
             >
-              <AnnouncementBarContents message={message} expanded />
+              <AnnouncementBarContents
+                message={message}
+                expanded
+                participantNames={participantNames}
+              />
             </button>
           )
         })()}

@@ -1,4 +1,7 @@
-import { isMessageVisibleToOperator } from '@/app/salon/[id]/whisper-visibility'
+import {
+  isMessageVisibleToOperator,
+  isOperatorAuthoredAnnouncement,
+} from '@/app/salon/[id]/whisper-visibility'
 import type { Message } from '@/app/salon/[id]/types'
 
 const USER_PARTICIPANT = 'user-participant-id'
@@ -10,10 +13,14 @@ const audience = (showAllWhispers: boolean) => ({
   userParticipantIds: new Set([USER_PARTICIPANT]),
 })
 
-type FilterInput = Pick<Message, 'systemSender' | 'participantId' | 'targetParticipantIds'>
+type FilterInput = Pick<
+  Message,
+  'systemSender' | 'systemKind' | 'participantId' | 'targetParticipantIds'
+>
 
 const message = (overrides: Partial<FilterInput> = {}): FilterInput => ({
   systemSender: null,
+  systemKind: null,
   participantId: CHARACTER_A,
   targetParticipantIds: null,
   ...overrides,
@@ -88,5 +95,36 @@ describe('isMessageVisibleToOperator', () => {
     })
     expect(isMessageVisibleToOperator(fromUser, audience(false))).toBe(true)
     expect(isMessageVisibleToOperator(betweenCharacters, audience(false))).toBe(false)
+  })
+
+  it.each(['host', 'librarian', 'commonplaceBook'] as const)(
+    'shows a whispered ad-hoc announcement signed by %s — the operator wrote it',
+    sender => {
+      const ownAside = message({
+        systemSender: sender,
+        systemKind: 'announcement',
+        participantId: null,
+        targetParticipantIds: [CHARACTER_A],
+      })
+      expect(isMessageVisibleToOperator(ownAside, audience(false))).toBe(true)
+    },
+  )
+
+  it('shows a whispered announcement posted under a custom name (no systemSender)', () => {
+    const narrator = message({
+      systemSender: null,
+      systemKind: 'announcement',
+      participantId: null,
+      targetParticipantIds: [CHARACTER_B],
+    })
+    expect(isMessageVisibleToOperator(narrator, audience(false))).toBe(true)
+  })
+})
+
+describe('isOperatorAuthoredAnnouncement', () => {
+  it('recognizes only the ad-hoc announcer kind', () => {
+    expect(isOperatorAuthoredAnnouncement({ systemKind: 'announcement' })).toBe(true)
+    expect(isOperatorAuthoredAnnouncement({ systemKind: 'memory-recap' })).toBe(false)
+    expect(isOperatorAuthoredAnnouncement({ systemKind: null })).toBe(false)
   })
 })

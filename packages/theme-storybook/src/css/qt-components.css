@@ -1257,6 +1257,21 @@
   white-space: nowrap;
 }
 
+/**
+ * Whisper audience on an announcement bar or chip ("to Alice, Bob"). Wears the
+ * same ink as the message body's whisper label so a private aside reads the
+ * same whether it is collapsed to a chip or opened in full.
+ */
+.qt-chat-system-bar-whisper {
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--qt-chat-whisper-label-fg);
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .qt-chat-system-bar-time {
   color: var(--qt-chat-system-bar-fg);
   opacity: 0.75;
@@ -1328,6 +1343,18 @@
 .qt-chat-announcement-chip .qt-chat-system-bar-kind {
   flex: 0 1 auto;
   max-width: 22ch;
+}
+
+/* Same cap for a long audience list — a whisper to five people must not push
+   the timestamp and chevron off the chip. */
+.qt-chat-announcement-chip .qt-chat-system-bar-whisper {
+  max-width: 18ch;
+}
+
+/* A whispered announcement carries the whisper's border colour, so a private
+   aside is distinguishable from a public one before it is ever expanded. */
+.qt-chat-announcement-chip-whisper {
+  border-color: var(--qt-chat-whisper-label-fg);
 }
 
 /**

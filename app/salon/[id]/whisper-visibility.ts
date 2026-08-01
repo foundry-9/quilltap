@@ -22,6 +22,24 @@ export const OPERATOR_FACING_WHISPER_SENDERS: ReadonlySet<SystemSender> = new Se
   'prospero',
 ])
 
+/**
+ * Whether a message is an ad-hoc announcement the operator wrote themselves
+ * (Insert Announcement composer). `systemKind: 'announcement'` is set by
+ * exactly one writer — `lib/services/announcer/writer.ts` — so it is the
+ * marker for "the human at the keyboard authored this", whichever Staff member
+ * or invented name it wears.
+ *
+ * These are never hidden and never dimmed. A whispered announcement has no
+ * `participantId` to match the author against, so without this it would vanish
+ * the instant the operator posted it: they'd type a private aside, send it, and
+ * watch nothing appear.
+ */
+export function isOperatorAuthoredAnnouncement(
+  msg: Pick<Message, 'systemKind'>,
+): boolean {
+  return msg.systemKind === 'announcement'
+}
+
 interface WhisperAudience {
   /** The "All Whispers" toggle: when on, nothing is filtered. */
   showAllWhispers: boolean
@@ -37,13 +55,16 @@ interface WhisperAudience {
  * message shown here was never added to anyone's context by being shown.
  */
 export function isMessageVisibleToOperator(
-  msg: Pick<Message, 'systemSender' | 'participantId' | 'targetParticipantIds'>,
+  msg: Pick<Message, 'systemSender' | 'systemKind' | 'participantId' | 'targetParticipantIds'>,
   { showAllWhispers, userParticipantIds }: WhisperAudience,
 ): boolean {
   // Not a whisper at all — public scene content.
   if (!msg.targetParticipantIds || msg.targetParticipantIds.length === 0) return true
 
   if (showAllWhispers) return true
+
+  // The operator's own aside, whoever it is signed by.
+  if (isOperatorAuthoredAnnouncement(msg)) return true
 
   if (msg.systemSender && OPERATOR_FACING_WHISPER_SENDERS.has(msg.systemSender)) return true
 

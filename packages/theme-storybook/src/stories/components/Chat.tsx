@@ -291,7 +291,9 @@ export const Chat: React.FC = () => {
           Messages authored by a personified feature rather than a character. Each collapses to a one-line
           bar; a run of consecutive ones packs into a row of content-width chips. The leading dot carries an
           importance tier &mdash; filled for high and medium, hollow for low &mdash; so the eye lands on the
-          file changes and arrivals and skims past the time calls.
+          file changes and arrivals and skims past the time calls. An announcement whispered to named
+          participants carries the whisper&rsquo;s border colour and names its audience, so a private aside
+          is distinguishable from a public one without expanding it.
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '32rem' }}>
           <button type="button" className="qt-chat-system-bar">
@@ -324,7 +326,25 @@ export const Chat: React.FC = () => {
               <span className="qt-chat-system-bar-time">4:14 PM</span>
               <span className="qt-chat-system-bar-chevron" aria-hidden="true">&rsaquo;</span>
             </button>
+            <button type="button" className="qt-chat-announcement-chip qt-chat-announcement-chip-whisper">
+              <span className="qt-chat-announcement-dot qt-chat-announcement-dot-medium" aria-hidden="true" />
+              <span className="qt-chat-system-bar-sender">The Host</span>
+              <span className="qt-chat-system-bar-kind">announcement</span>
+              <span className="qt-chat-system-bar-whisper">to Amy</span>
+              <span className="qt-chat-system-bar-time">4:15 PM</span>
+              <span className="qt-chat-system-bar-chevron" aria-hidden="true">&rsaquo;</span>
+            </button>
           </div>
+
+          {/* Whispered announcement as a full-width expanded bar. */}
+          <button type="button" className="qt-chat-system-bar qt-chat-system-bar-expanded">
+            <span className="qt-chat-announcement-dot qt-chat-announcement-dot-medium" aria-hidden="true" />
+            <span className="qt-chat-system-bar-sender">The Host</span>
+            <span className="qt-chat-system-bar-kind">announcement</span>
+            <span className="qt-chat-system-bar-whisper">to Amy, Bartholomew</span>
+            <span className="qt-chat-system-bar-time">4:15 PM</span>
+            <span className="qt-chat-system-bar-chevron qt-chat-system-bar-chevron-down" aria-hidden="true">&rsaquo;</span>
+          </button>
         </div>
       </section>
 

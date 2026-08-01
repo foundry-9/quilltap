@@ -6,10 +6,17 @@
  *   - a workspace character not currently in this chat, or
  *   - a free-text custom display name (placeholder avatar).
  *
- * The result is persisted to chat_messages as a broadcast (`targetParticipantIds = null`),
- * indistinguishable in behaviour from an automated Staff announcement: visible to all
- * participants (present and silent), and included verbatim in every character's LLM
- * transcript via normal message history.
+ * By default the result is persisted to chat_messages as a broadcast
+ * (`targetParticipantIds = null`), indistinguishable in behaviour from an automated
+ * Staff announcement: visible to all participants (present and silent), and included
+ * verbatim in every character's LLM transcript via normal message history.
+ *
+ * When the operator names an audience, the same bubble is persisted as a *whisper* —
+ * `targetParticipantIds` carries the chosen participant ids and the ordinary whisper
+ * machinery takes over: only those participants' LLM contexts include it
+ * (`filterWhisperMessages`), and the Salon shows it to the operator with the usual
+ * whisper chrome. Callers must have already verified that every id is a current
+ * participant of this chat.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -40,6 +47,12 @@ export interface AdhocAnnouncementParams {
   /** Plain Markdown body of the announcement bubble. */
   contentMarkdown: string;
   sender: AnnouncerSender;
+  /**
+   * Participant ids the announcement is whispered to. Null / empty posts a
+   * public broadcast (the historical behaviour). Every id must already have
+   * been verified as a current participant of this chat by the caller.
+   */
+  targetParticipantIds?: string[] | null;
 }
 
 /**
@@ -70,6 +83,11 @@ export async function postAdhocAnnouncement(
     const messageId = randomUUID();
     const now = new Date().toISOString();
 
+    // Normalize an empty audience to null so "public" has exactly one
+    // representation on the row — every whisper check downstream tests for a
+    // non-empty array, and a stored `[]` would read as "whispered to nobody".
+    const targets = params.targetParticipantIds?.length ? [...params.targetParticipantIds] : null;
+
     const message: MessageEvent = {
       type: 'message',
       id: messageId,
@@ -79,7 +97,7 @@ export async function postAdhocAnnouncement(
       createdAt: now,
       participantId: null,
       systemKind: 'announcement',
-      targetParticipantIds: null,
+      targetParticipantIds: targets,
       systemSender: params.sender.kind === 'staff' ? params.sender.staffId : null,
       customAnnouncer:
         params.sender.kind === 'character'
@@ -96,6 +114,8 @@ export async function postAdhocAnnouncement(
       chatId: params.chatId,
       messageId,
       senderKind: params.sender.kind,
+      audience: targets ? 'whisper' : 'public',
+      targetCount: targets?.length ?? 0,
       staffId: params.sender.kind === 'staff' ? params.sender.staffId : undefined,
       characterId: params.sender.kind === 'character' ? params.sender.characterId : undefined,
       displayName: params.sender.kind === 'custom' ? params.sender.displayName : undefined,

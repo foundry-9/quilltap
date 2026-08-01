@@ -514,16 +514,16 @@ export async function buildMessageContext(
   if (cmpbStrippedCount > 0) {
   }
 
-  // Drop TOOL whispers the responding character isn't a target of. Operator-
-  // only Prospero runs (run-tool with `private: true`) target the userId, so
-  // no character participant ever matches and the message is filtered out of
-  // every context. Multi-character mode also runs `filterWhisperMessages`
-  // downstream — this filter just makes sure single-character context honors
-  // the same rule.
+  // Drop whispers the responding character isn't a party to — the same rule
+  // `filterWhisperMessages` applies in multi-character mode, enforced here so
+  // single-character context can't be the one place a private aside leaks.
+  // Operator-only Prospero runs (run-tool with `private: true`) target the
+  // userId, so no character participant ever matches and the message is
+  // filtered out of every context; a whispered ad-hoc announcement is excluded
+  // from every character it wasn't addressed to on the same test.
   const respondingParticipantId = characterParticipant?.id
   const messagesAfterWhisperFilter = respondingParticipantId
     ? messagesWithoutCmpb.filter(m => {
-        if (m.role !== 'TOOL') return true
         const targets = m.targetParticipantIds
         if (!targets || targets.length === 0) return true
         if (m.participantId === respondingParticipantId) return true

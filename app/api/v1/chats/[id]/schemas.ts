@@ -197,6 +197,12 @@ export const insertAnnouncementSchema = z.object({
     z.object({ kind: z.literal('character'), characterId: z.uuid() }),
     z.object({ kind: z.literal('custom'), displayName: z.string().min(1).max(120) }),
   ]),
+  /**
+   * Whisper audience: CHAT PARTICIPANT ids (not character ids). Omitted / null
+   * posts the announcement publicly, as it always has. Every id is re-verified
+   * against the chat's current participants server-side.
+   */
+  targetParticipantIds: z.array(z.uuid()).nullable().optional(),
 });
 
 export const insertAnnouncementPreviewSchema = z.object({
@@ -204,6 +210,12 @@ export const insertAnnouncementPreviewSchema = z.object({
   characterId: z.uuid(),
   connectionProfileId: z.uuid(),
   systemPromptId: z.uuid().optional(),
+  /**
+   * The audience the operator has chosen for the eventual post, so the
+   * character's rewrite can be addressed to the right people (and told the
+   * remark is private). Same shape as the post action's field.
+   */
+  targetParticipantIds: z.array(z.uuid()).nullable().optional(),
 });
 
 /**

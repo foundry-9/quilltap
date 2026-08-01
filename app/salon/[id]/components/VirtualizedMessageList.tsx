@@ -11,6 +11,7 @@ import type { RenderItem } from '../announcement-render-items'
 import { Icon } from '@/components/ui/icon'
 import { MessageRow } from './MessageRow'
 import { AnnouncementGroup } from './AnnouncementChip'
+import { isOperatorAuthoredAnnouncement } from '../whisper-visibility'
 import { StreamingMessage } from './StreamingMessage'
 import type { StreamingToolBatch } from '../hooks/useSSEStreaming'
 
@@ -209,6 +210,7 @@ export function VirtualizedMessageList({
                   <AnnouncementGroup
                     members={item.members}
                     onToggleSystemMessageExpanded={onToggleSystemMessageExpanded}
+                    participantNames={participantNames}
                   />
                 </div>
               )
@@ -355,7 +357,10 @@ export function VirtualizedMessageList({
                     // them to read would undercut the reason we showed it. They
                     // keep the whisper border and "whispered" label, so the
                     // privacy status stays legible without the 0.6 opacity.
+                    // An announcement the operator wrote themselves is not
+                    // overheard by definition — they are its author.
                     !message.systemSender &&
+                    !isOperatorAuthoredAnnouncement(message) &&
                     !!(userParticipantIdSet) &&
                     !(message.participantId && userParticipantIdSet.has(message.participantId)) &&
                     !message.targetParticipantIds.some(id => userParticipantIdSet.has(id))

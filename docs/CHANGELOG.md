@@ -4,6 +4,24 @@
 
 ### 4.8-dev
 
+#### Manual announcements can be whispered to specific characters
+
+Insert Announcement only ever posted publicly. The dialog now has a **Who hears it** section listing the chat's current participants with a checkbox each. Check none and the announcement is public, exactly as before — that remains the default and the unchanged path. Check one or more and the bubble is persisted as a whisper (`targetParticipantIds`), so only those participants' LLM contexts include it.
+
+The API takes an optional `targetParticipantIds` on both `?action=announcement` and `?action=announcement-preview`. These are chat participant ids, not character ids. Every id is re-verified server-side against the chat's current participants; a removed participant or an id from another chat is a 400 on the post action, since the alternative is storing a message no filter will ever surface. An empty array is normalized to NULL rather than stored as `[]`.
+
+Three supporting changes:
+
+- **The operator always sees their own asides.** A whispered announcement has no `participantId`, so the existing visibility rule — author or target, else hidden unless "All Whispers" is on — would have hidden it from the person who just wrote it. `systemKind: 'announcement'` is set by exactly one writer, so it now serves as the operator-authored marker: those messages are never filtered and never dimmed as "overheard".
+- **The chip says who it went to.** A collapsed announcement showed none of the message body's whisper chrome. It now carries the whisper border color and an audience tag (*to Amy*), so a private aside is distinguishable from a public one without expanding it.
+- **The in-character rewrite is told the audience.** `announcement-preview` gives the character the named audience in place of the room's roster, and tells them the remark is private — a line pitched to a full room reads wrong when one person hears it. Changing the audience invalidates a proposal already on screen.
+
+Also aligned one filter: single-character context building applied the whisper rule to TOOL messages only, so it was the one path where a targeted non-TOOL message could reach a character it wasn't addressed to. It now applies the same test as `filterWhisperMessages` to every role.
+
+Two new `qt-*` classes, `qt-chat-system-bar-whisper` and `qt-chat-announcement-chip-whisper`, propagated to `@quilltap/theme-storybook` (1.0.53) with a whispered chip and a whispered expanded bar added to the Chat story. Both derive from the existing `--qt-chat-whisper-label-fg`, so no theme has a new variable to define and no bundled theme needed a change — verified by measuring the resolved colors under all six themes in both modes.
+
+`targetParticipantIds` is now declared in `public/schemas/qtap-export.schema.json`. The exporter has always emitted it (it writes the whole `MessageEvent`), and `additionalProperties` is true so exports validated regardless, but the published schema didn't document a field the format carries — and it now decides whether an imported announcement is private or public.
+
 #### Release build: a duplicated line and a script the Docker images never got
 
 Two failures in the same release run, both from the pdf.worker.mjs fix.

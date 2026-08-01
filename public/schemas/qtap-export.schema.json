@@ -667,6 +667,11 @@
         "content": { "type": "string" },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
         "participantId": { "$ref": "#/$defs/UUID" },
+        "targetParticipantIds": {
+          "type": ["array", "null"],
+          "items": { "$ref": "#/$defs/UUID" },
+          "description": "Whisper audience: chat participant IDs that may see this message. NULL or absent means public — visible to every participant. Set on user whispers, Staff whispers (Commonplace Book recall, Librarian summaries, private Pascal rolls and Prospero tool runs), and whispered ad-hoc announcements. Like participantId, these reference participants of the exported chat."
+        },
         "tokenCount": { "type": "integer", "minimum": 0 },
         "promptTokens": { "type": "integer", "minimum": 0 },
         "completionTokens": { "type": "integer", "minimum": 0 },

@@ -2743,7 +2743,7 @@ Ad-hoc announcement messages — system or character bubbles inserted into the c
 
 #### `POST /api/v1/chats/[id]?action=announcement`
 
-Post an ad-hoc announcement bubble.
+Post an ad-hoc announcement bubble, publicly or whispered to named participants.
 
 **Request Body**:
 
@@ -2753,13 +2753,16 @@ Post an ad-hoc announcement bubble.
   "sender": {
     "kind": "character",
     "characterId": "char-uuid"
-  }
+  },
+  "targetParticipantIds": ["participant-uuid"]
 }
 ```
 
 `sender.kind` is one of `"system"`, `"character"`, or a `systemSender` value (e.g. `"lantern"`, `"host"`). For `character` senders the referenced character must exist.
 
-**Response**: `201 Created` — `{ success: true, message: {...} }`.
+`targetParticipantIds` is optional. Omitted, `null`, or empty posts a public announcement (the default). Otherwise the announcement is persisted as a whisper: only those participants' LLM contexts include it. The ids are **chat participant ids, not character ids**, and each is re-verified against the chat's current participants — a removed participant or an id from another chat is rejected.
+
+**Response**: `201 Created` — `{ success: true, message: {...} }`. `400` when any target is not a current participant of this chat.
 
 #### `POST /api/v1/chats/[id]?action=announcement-preview`
 
@@ -2772,9 +2775,12 @@ Generate an in-character rewrite of a seed announcement for an off-scene charact
   "characterId": "char-uuid",
   "connectionProfileId": "profile-uuid",
   "systemPromptId": "prompt-uuid",
-  "seedMarkdown": "Aurora announces the wardrobe refresh."
+  "seedMarkdown": "Aurora announces the wardrobe refresh.",
+  "targetParticipantIds": ["participant-uuid"]
 }
 ```
+
+`targetParticipantIds` carries the audience the operator has chosen for the eventual post. When present, the character is told the remark is private and is given those names in place of the room's roster, so the rewrite is phrased as an aside rather than a proclamation. Unresolvable ids are ignored here (nothing is persisted); the post action is the gate that rejects them.
 
 **Response**: `200 OK`
 

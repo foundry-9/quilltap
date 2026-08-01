@@ -322,6 +322,15 @@ export function ChatModals({
             .filter(p => p.type === 'CHARACTER' && !p.removedAt)
             .map(p => p.character?.id)
             .filter((id): id is string => id !== null && id !== undefined) || []}
+          audienceCandidates={(chat?.participants || [])
+            .filter(p => p.type === 'CHARACTER' && !p.removedAt && p.status !== 'removed' && p.character)
+            .map(p => ({
+              participantId: p.id,
+              name: p.character!.name,
+              controlledBy: p.controlledBy ?? 'llm',
+              avatarUrl: p.character!.avatarUrl ?? null,
+              status: p.status,
+            }))}
           onPosted={() => {
             fetchChat()
           }}
