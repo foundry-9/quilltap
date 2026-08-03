@@ -73,6 +73,11 @@ const config: Config = {
     // collide in the Haste map — see modulePathIgnorePatterns below).
     // Skipped when jest itself runs inside a worktree (see isAgentWorktree).
     ...(isAgentWorktree ? [] : ['/\\.claude/']),
+    // Native-port differential-harness oracle bridge — an external tool's
+    // mirror of its test cases into this checkout. Its suites drive the Rust
+    // port's harness, not this repo's jest run (they expect harness env/args
+    // and fail without them). Gitignored and eslint-ignored for the same reason.
+    '/\\.qt-oracle-mirror/',
     '/__tests__/integration/',
     '/__tests__/unit/lib/fixtures/',
   ],
@@ -85,6 +90,9 @@ const config: Config = {
     // nested worktrees, so there is nothing to exclude — and the pattern would
     // otherwise ignore the whole rootDir).
     ...(isAgentWorktree ? [] : ['/\\.claude/']),
+    // See testPathIgnorePatterns — the oracle mirror carries its own
+    // package.json, which would otherwise collide in the Haste map.
+    '/\\.qt-oracle-mirror/',
   ],
   coverageThreshold: {
     global: {

@@ -36,6 +36,13 @@ import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { useWorkspaceOptional } from '@/components/providers/workspace-provider'
+import { buildMountFileItemUrl } from '@/components/files/mountBlobUrl'
+import {
+  PRESET_NAME_PATTERN,
+  parsePresetFromPath,
+  presetSettingsPath,
+  sanitizePresetNameInput,
+} from '@/lib/pascal/tool-presets'
 import {
   CustomToolParamsForm,
   coerceParamValues,
@@ -90,6 +97,12 @@ export interface CustomTool {
   characterLabel?: string
   /** Disambiguates a character-labeled variant on the run call. */
   asCharacterId?: string
+  /**
+   * The running character's vault mount, where presets live. Null when the
+   * vault could not be resolved; absent on a roster from an older server.
+   * Either way the preset controls stay hidden.
+   */
+  vaultMountPointId?: string | null
   definitionPath: string
   /** Which store holds the file — the Workbench edits it by this pair. */
   mountPointId?: string
@@ -308,6 +321,9 @@ export function CustomToolRunDialog({
               [selectedFormKey]: { ...prev[selectedFormKey], [param]: value },
             }))
           }
+          onValuesReplace={(next) =>
+            setFormValues((prev) => ({ ...prev, [selectedFormKey]: next }))
+          }
           isPrivate={isPrivate}
           onPrivateChange={(next) =>
             setPrivateByKey((prev) => ({ ...prev, [selectedFormKey]: next }))
@@ -488,6 +504,8 @@ interface ToolRunFormProps {
   tool: CustomTool
   values: ParameterFormValues
   onValueChange: (param: string, value: string | boolean) => void
+  /** Replace the whole value set at once — preset loads and resets. */
+  onValuesReplace: (next: ParameterFormValues) => void
   isPrivate: boolean
   onPrivateChange: (next: boolean) => void
   disabled: boolean
@@ -498,6 +516,7 @@ function ToolRunForm({
   tool,
   values,
   onValueChange,
+  onValuesReplace,
   isPrivate,
   onPrivateChange,
   disabled,
@@ -552,6 +571,18 @@ function ToolRunForm({
         )}
       </section>
 
+      {/* Presets only make sense where there is something to preserve: a tool
+          with parameters, run as a character whose vault can hold the file. */}
+      {parameterNames.length > 0 && tool.vaultMountPointId && (
+        <ToolPresetsSection
+          tool={tool}
+          vaultMountPointId={tool.vaultMountPointId}
+          values={values}
+          onValuesReplace={onValuesReplace}
+          disabled={disabled}
+        />
+      )}
+
       {/* Above the reference panel on purpose: this is the last decision the
           operator makes about the run, and the panel below it is reading
           matter rather than a control. */}
@@ -576,6 +607,188 @@ function ToolRunForm({
 
       <ToolReferencePanel tool={tool} />
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Presets — parameter values set aside in the character's vault
+// ---------------------------------------------------------------------------
+
+/** What `GET /api/v1/mount-points/{id}/files` answers with, as far as we read it. */
+interface MountFilesListing {
+  files: Array<{ relativePath: string }>
+}
+
+interface ToolPresetsSectionProps {
+  tool: CustomTool
+  vaultMountPointId: string
+  values: ParameterFormValues
+  onValuesReplace: (next: ParameterFormValues) => void
+  disabled: boolean
+}
+
+/**
+ * Save the form's current values as `Tools/{name}.{preset}.settings.json` in
+ * the running character's vault, list what is already there, and deal a chosen
+ * one back into the form.
+ *
+ * Loading is deliberately loose: a preset key lands only where the tool still
+ * declares a parameter of that name and the value is a plain primitive;
+ * everything else is ignored, and unmentioned parameters keep their current
+ * values. A preset saved against an older revision of a tool therefore
+ * degrades gracefully instead of erroring.
+ *
+ * The name input is filtered as typed ({@link sanitizePresetNameInput}) so a
+ * character that cannot appear in the filename cannot be entered at all.
+ */
+function ToolPresetsSection({
+  tool,
+  vaultMountPointId,
+  values,
+  onValuesReplace,
+  disabled,
+}: Readonly<ToolPresetsSectionProps>) {
+  const queryClient = useQueryClient()
+  const [presetName, setPresetName] = useState('')
+
+  // Fresh per mount of the form, same doctrine as the roster: the files live
+  // in a store the user edits, so a stale list is worse than a round-trip.
+  const presetsQuery = useQuery({
+    queryKey: queryKeys.customTools.presets(vaultMountPointId, tool.name),
+    queryFn: async ({ signal }) => {
+      const listing = await apiFetch<MountFilesListing>(
+        `/api/v1/mount-points/${encodeURIComponent(vaultMountPointId)}/files`,
+        { signal },
+      )
+      return listing.files
+        .map((file) => parsePresetFromPath(tool.name, file.relativePath))
+        .filter((preset): preset is string => preset !== null)
+        .sort((a, b) => a.localeCompare(b))
+    },
+  })
+  const presets = presetsQuery.data ?? []
+
+  const loadMutation = useMutation({
+    mutationFn: async (preset: string) => {
+      const file = await apiFetch<{ content: string }>(
+        buildMountFileItemUrl(vaultMountPointId, presetSettingsPath(tool.name, preset)),
+      )
+      try {
+        return JSON.parse(file.content) as unknown
+      } catch {
+        throw new Error(`Preset “${preset}” would not read as JSON. It stays as written in the vault.`)
+      }
+    },
+    onSuccess: (parsed, preset) => {
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        showErrorToast(`Preset “${preset}” is not a settings object. It stays as written in the vault.`)
+        return
+      }
+      const record = parsed as Record<string, unknown>
+      const next = { ...values }
+      for (const [name, param] of Object.entries(tool.parameters)) {
+        if (!(name in record)) continue
+        const v = record[name]
+        if (typeof v !== 'string' && typeof v !== 'number' && typeof v !== 'boolean') continue
+        next[name] = param.type === 'boolean' ? Boolean(v) : String(v)
+      }
+      onValuesReplace(next)
+      // So saving again, values adjusted, updates the hand just taken up.
+      setPresetName(preset)
+    },
+    onError: (err) => showErrorToast(apiErrorMessage(err, 'The preset could not be read.')),
+  })
+
+  const saveMutation = useMutation({
+    mutationFn: (preset: string) =>
+      apiFetch(buildMountFileItemUrl(vaultMountPointId, presetSettingsPath(tool.name, preset)), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: JSON.stringify(coerceParamValues(tool.parameters, values), null, 2),
+        }),
+      }),
+    onSuccess: (_data, preset) => {
+      showSuccessToast(`Preset “${preset}” filed in the character's vault.`)
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.customTools.presets(vaultMountPointId, tool.name),
+      })
+    },
+    onError: (err) => showErrorToast(apiErrorMessage(err, 'The preset could not be saved.')),
+  })
+
+  const busy = disabled || loadMutation.isPending || saveMutation.isPending
+  const canSave = !busy && PRESET_NAME_PATTERN.test(presetName)
+
+  return (
+    <section className="rounded-lg qt-border p-5 space-y-4">
+      <div>
+        <h4 className="text-sm font-medium qt-text">Presets</h4>
+        <p className="text-xs qt-text-secondary mt-1">
+          A hand you set aside earlier — kept in the character&rsquo;s vault, dealt back on
+          request. Saving under an existing name replaces it.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value=""
+          onChange={(e) => {
+            if (e.target.value) loadMutation.mutate(e.target.value)
+          }}
+          disabled={busy || presets.length === 0}
+          className="qt-input text-sm"
+          aria-label={`Load a saved preset for ${tool.title}`}
+        >
+          <option value="">
+            {presetsQuery.isLoading
+              ? 'Consulting the vault…'
+              : presets.length === 0
+                ? 'No presets yet'
+                : loadMutation.isPending
+                  ? 'Dealing it back…'
+                  : 'Load a preset…'}
+          </option>
+          {presets.map((preset) => (
+            <option key={preset} value={preset}>
+              {preset}
+            </option>
+          ))}
+        </select>
+
+        <input
+          type="text"
+          value={presetName}
+          onChange={(e) => setPresetName(sanitizePresetNameInput(e.target.value))}
+          placeholder="preset-name"
+          disabled={busy}
+          className="qt-input text-sm flex-1 min-w-32 font-mono"
+          aria-label="Name to save this preset under"
+        />
+        <button
+          type="button"
+          onClick={() => saveMutation.mutate(presetName)}
+          disabled={!canSave}
+          className="qt-button qt-button-secondary"
+        >
+          {saveMutation.isPending ? 'Saving…' : 'Save preset'}
+        </button>
+        <button
+          type="button"
+          onClick={() => onValuesReplace(initialParamValues(tool.parameters))}
+          disabled={busy}
+          className="qt-button qt-button-secondary"
+        >
+          Reset to defaults
+        </button>
+      </div>
+
+      {presetsQuery.isError && (
+        <p className="text-xs qt-text-destructive">
+          {apiErrorMessage(presetsQuery.error, 'The vault would not list its presets.')}
+        </p>
+      )}
+    </section>
   )
 }
 

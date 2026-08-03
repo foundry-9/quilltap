@@ -147,6 +147,7 @@ playwright/.cache/
 .vscode/
 
 .claude/*
+.qt-oracle-mirror/
 !.claude/commands
 certs
 next-env.d.ts

@@ -4,6 +4,12 @@
 
 ### 4.8-dev
 
+#### Custom tools: run presets, and a schema-description fix
+
+- **Run presets.** The Salon's custom-tool run dialog can now save the current parameter values as a named preset, stored as `Tools/{tool}.{preset}.settings.json` in the running character's vault (an ordinary JSON file — flat map of parameter name → value, hand-editable, rides in vault export/backup). A dropdown lists the tool's existing presets and loads a selection back into the form; a Reset-to-defaults button re-seeds from the definition. Loading is loosely bound: preset keys naming a declared parameter land, everything else is ignored, so presets survive tool revisions. Preset names are locked to `[a-z0-9][a-z0-9_-]{0,63}` — the input filters illegal characters as typed, and dots are excluded so the filename parses unambiguously (tool names can't contain dots). The roster listing gains `vaultMountPointId` (null hides the controls, as does a parameterless tool); file IO goes through the existing mount-points file routes. Naming contract in new `lib/pascal/tool-presets.ts`; spec at `docs/developer/features/custom-tool-presets.md`.
+- **Fix:** the LLM-consult `prompt` field's schema description omitted `{{state.path}}` from its supported-placeholder list. Rendering always supported it (and the help doc said so); the description now agrees.
+- **Tooling:** `.qt-oracle-mirror/` (the native-port differential-harness oracle bridge, mirrored into this checkout by an external tool) is now ignored by git, eslint, and jest — its suites drive the Rust port's harness and were failing this repo's lint and unit runs.
+
 #### Hard links between document stores are now real
 
 A file linked into a second store with `quilltap docs link` did not stay linked. Editing either side forked the two apart silently: the write kept pointing the edited link at a fresh content row while the other link kept the old one, so the second location went on serving the previous revision indefinitely — to the file browser, to search, and to characters.

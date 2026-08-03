@@ -394,6 +394,16 @@ It arrives in two acts. First the table: every tool available to this scene, wit
 
 It remembers. Close the dialog and reopen it, and you are back on the tool you last used, with the figures you last set still in their boxes. This is deliberate: the same roll is usually wanted twice, and re-typing it is a tax on the second one.
 
+### Presets — hands set aside for later
+
+Memory of the last hand is all very well, but some tools are run the same three ways for a season at a stretch, and for those the dialog offers **presets**. Beneath a tool's parameters — provided it has any, and provided the roll runs as a character with a vault to keep things in — you will find a modest row of conveniences: a dropdown of hands set aside earlier, a box for naming a new one, **Save preset**, and **Reset to defaults**.
+
+**Save preset** files the figures currently in the boxes under the name you give, as a small JSON document in the running character's vault: `Tools/{tool}.{preset}.settings.json`, sitting companionably beside the tool definitions themselves. It is an ordinary file — you may read it, edit it, or discard it from [The Scriptorium](scriptorium.md) like any other, and it travels with the character wherever the vault goes. Saving under a name already taken quietly replaces the earlier hand, which is usually what you meant.
+
+The name itself is kept respectable by force: lowercase letters, digits, hyphens, and underscores, and nothing else — no spaces, no dots, and certainly no directory separators. The box simply declines to accept anything the filename could not carry.
+
+Choosing a preset from the dropdown deals it back into the form. The binding is deliberately loose: each entry in the file lands in the parameter of the same name, entries naming no current parameter are ignored without comment, and parameters the file does not mention keep whatever they held. A preset saved against an older draft of a tool therefore ages gracefully rather than refusing to load. **Reset to defaults** returns every box to what the definition itself prescribes, as though you had opened the tool for the first time.
+
 ### What a tool can quote
 
 At the foot of the dialog is **What this tool can quote** — the placeholders *this particular tool* actually uses when Pascal writes the outcome.

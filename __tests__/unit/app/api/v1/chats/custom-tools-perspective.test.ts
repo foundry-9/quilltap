@@ -74,7 +74,15 @@ jest.mock('@/lib/services/prospero-notifications/writer', () => ({
 // Fixtures
 // ---------------------------------------------------------------------------
 
-const CHARACTERS: Record<string, { id: string; name: string; metadata: Record<string, unknown> }> = {
+const CHARACTERS: Record<
+  string,
+  {
+    id: string;
+    name: string;
+    metadata: Record<string, unknown>;
+    characterDocumentMountPointId?: string;
+  }
+> = {
   'char-friday': {
     id: 'char-friday',
     name: 'Friday',
@@ -84,6 +92,7 @@ const CHARACTERS: Record<string, { id: string; name: string; metadata: Record<st
     id: 'char-charlie',
     name: 'Charlie',
     metadata: { toolAbilities: 'programmable' },
+    characterDocumentMountPointId: 'vault-charlie',
   },
   'char-ariel': { id: 'char-ariel', name: 'Ariel', metadata: { toolAbilities: 'sing' } },
 };
@@ -169,6 +178,7 @@ async function listTools(chat: Record<string, unknown>) {
     asCharacterId: string;
     characterLabel?: string;
     definitionPath: string;
+    vaultMountPointId: string | null;
   }>;
 }
 
@@ -197,6 +207,30 @@ describe('GET custom-tools — whose perspective an unlabelled row records', () 
     expect(tools).toHaveLength(1);
     expect(tools[0].asCharacterId).toBe('char-charlie');
     expect(tools[0].characterLabel).toBeUndefined();
+  });
+
+  it("carries the running character's vault mount for presets, null when it has none", async () => {
+    rosterPerCharacter({ 'char-friday': SHARED, 'char-charlie': SHARED });
+
+    const withVault = await listTools({
+      id: 'chat-1',
+      participants: [
+        participant('p-friday', 'char-friday', 'llm'),
+        participant('p-charlie', 'char-charlie', 'user'),
+      ],
+    });
+    expect(withVault[0].asCharacterId).toBe('char-charlie');
+    expect(withVault[0].vaultMountPointId).toBe('vault-charlie');
+
+    // Friday's fixture declares no vault: the row must say so with null, not
+    // invent one — the dialog hides its preset controls off this field.
+    rosterPerCharacter({ 'char-friday': SHARED });
+    const withoutVault = await listTools({
+      id: 'chat-1',
+      participants: [participant('p-friday', 'char-friday', 'llm')],
+    });
+    expect(withoutVault[0].asCharacterId).toBe('char-friday');
+    expect(withoutVault[0].vaultMountPointId).toBeNull();
   });
 
   it('prefers the character the operator is currently typing as', async () => {

@@ -665,7 +665,7 @@ export const CustomToolLlmSchema = z.strictObject({
     .min(1)
     .max(MAX_LLM_PROMPT_LENGTH)
     .describe(
-      'What to ask. Supports {{value}}, {{roll}}, {{dice}}, {{params.name}}, and {{metadata.key}} — but not {{llm}}. ' +
+      'What to ask. Supports {{value}}, {{roll}}, {{dice}}, {{params.name}}, {{metadata.key}}, and {{state.path}} — but not {{llm}}. ' +
         'Ask for the answer shape you intend to test: a bare word, a number, a sentence.'
     ),
   errorMessage: z

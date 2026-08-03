@@ -98,6 +98,14 @@ export const queryKeys = {
      * per-invoker shadowing. Fresh per request, same doctrine as `byChat`.
      */
     library: () => ['custom-tools', 'library'] as const,
+    /**
+     * Run presets for one tool in one character's vault —
+     * `Tools/{toolName}.{preset}.settings.json`, listed by the run dialog.
+     * Invalidated after a save; refetched per dialog open, same doctrine as
+     * `byChat` (the files live in a store the user edits).
+     */
+    presets: (vaultMountPointId: string, toolName: string) =>
+      ['custom-tools', 'presets', vaultMountPointId, toolName] as const,
     /** The Workbench save-target list, grouped by attachment. */
     destinations: () => ['custom-tools', 'destinations'] as const,
   },

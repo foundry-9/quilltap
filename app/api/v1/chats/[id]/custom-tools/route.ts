@@ -89,6 +89,12 @@ interface CustomToolListing {
   characterLabel?: string;
   /** Whose perspective produced this variant — POST replays it. */
   asCharacterId: string;
+  /**
+   * That character's vault mount, where run presets
+   * (`Tools/{name}.{preset}.settings.json`) are kept. Null for a character
+   * whose vault could not be resolved — the dialog hides its preset controls.
+   */
+  vaultMountPointId: string | null;
   definitionPath: string;
   /** Which store holds the file — Pascal's Workbench edits it by this pair. */
   mountPointId: string;
@@ -351,6 +357,7 @@ function buildListing(
     sourceTier: entry.tier,
     ...(characterLabel ? { characterLabel } : {}),
     asCharacterId: perspective.characterId,
+    vaultMountPointId: perspective.characterMountPointId,
     definitionPath: entry.definitionPath,
     mountPointId: entry.mountPointId,
     mountName: entry.mountName,
