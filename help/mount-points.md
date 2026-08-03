@@ -110,6 +110,16 @@ As of this revision, a single file in a database-backed document store may inhab
 
 This applies only to database-backed mounts; filesystem and Obsidian mounts continue to keep their files on disk where each path is its own physical artefact. The user interface for orchestrating hard links across stores is still in fitting, but the underlying machinery is in place and quietly avoiding duplicate work whenever the same bytes turn up in more than one store.
 
+### One File, Two Shelves — And It Stays That Way
+
+A link made deliberately, with `quilltap docs link`, now behaves as any reader of the old filesystems would expect: the two shelf-marks name **one** document. Amend it at either address and the amendment appears at both, immediately and without ceremony. Search results, character context, and the extracted text on both sides are brought up to date together; only the private annotations — a description you wrote for one shelf, a caption the machinery extracted for the other — remain each location's own business, as they always have.
+
+Do note the distinction between a link and a coincidence. Because Quilltap files bytes by their fingerprint, two documents that happen to be *identical* — two empty files, two copies of the same boilerplate heading — occupy a single shelf beneath the floorboards purely by economy. Those are **not** linked, and editing one leaves the other entirely undisturbed. Only a link you asked for is a link. `quilltap docs ls --links` reports this honestly: the count beside a file is the number of deliberate links to it, not the number of unrelated documents that happen to weigh the same.
+
+A copy (`quilltap docs copy`) is likewise its own document from the moment you make it, notwithstanding that it economises on storage until one side or the other is amended.
+
+Should you dissolve a link by deleting one of its addresses, the survivor reverts to being an ordinary, unaccompanied document. And when a revision leaves an old set of bytes with no shelf-mark at all pointing to it, those bytes are now retired promptly rather than lingering in the cellar — a small housekeeping oversight, corrected, which also sweeps up whatever had accumulated there before.
+
 ## Searching Documents
 
 Document chunks appear as a new source type in the unified search tool. When a character searches using the `search` tool, document results appear alongside memories and conversation history, ranked by semantic relevance. Each result includes the source file name, the mount point it belongs to, and the heading context (if the document used headings), so you always know precisely where a piece of information came from.

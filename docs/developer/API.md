@@ -4095,8 +4095,8 @@ Cross-mount and folder operations live on the `[id]` action-dispatch route (they
 - `POST /api/v1/mount-points/[id]?action=write-file` — multipart `file`/`path`/`force` write (legacy; prefer `PUT .../files/[...path]`).
 - `POST /api/v1/mount-points/[id]?action=delete-file` — JSON `{ path }`.
 - `POST /api/v1/mount-points/[id]?action=move-file` — JSON `{ sourcePath, destMountPointId, destPath }`. Cross-mount move (rename / byte-copy / hard-link strategy chosen automatically). Returns `{ strategy, sourceSha256, destSha256, sizeBytes, ... }`.
-- `POST /api/v1/mount-points/[id]?action=copy-file` — JSON `{ sourcePath, destMountPointId, destPath, force? }`. Copies; hard-links when possible unless `force` forces a byte copy.
-- `POST /api/v1/mount-points/[id]?action=link-file` — JSON `{ sourcePath, destMountPointId, destPath }`. Creates a **true hard link** (db→db link row or POSIX `fs.link`); never byte-copies. Cross-storage or cross-device links return `400 UNSUPPORTED`. Never overwrites (`409 DEST_EXISTS`).
+- `POST /api/v1/mount-points/[id]?action=copy-file` — JSON `{ sourcePath, destMountPointId, destPath, force? }`. Copies. The result is an **independent** document: it shares a content-addressed row with the source until either side is written and then forks. `force` skips the shared-content path and writes bytes for real; the end state is the same.
+- `POST /api/v1/mount-points/[id]?action=link-file` — JSON `{ sourcePath, destMountPointId, destPath }`. Creates a **true hard link** (db→db link row or POSIX `fs.link`); never byte-copies. Both ends are enrolled in a `linkGroupId` (see DDL), so a later write through *either* path repoints both and re-chunks the sibling — unlike `copy-file`, which forks. Cross-storage or cross-device links return `400 UNSUPPORTED`. Never overwrites (`409 DEST_EXISTS`).
 - `POST /api/v1/mount-points/[id]?action=delete-folder` — JSON `{ path }`. Empty folders only (`409 NOT_EMPTY` otherwise).
 - `POST /api/v1/mount-points/[id]?action=move-folder` — JSON `{ fromPath, toPath }`. Moves the folder and everything under it (database rows or `fs.rename` + link-row reconciliation).
 

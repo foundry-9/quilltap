@@ -551,6 +551,7 @@ async function* streamDocumentStores(
             plainTextLength: d.plainTextLength,
             lastModified: d.lastModified,
             folderId: d.folderId,
+            linkGroupId: d.linkGroupId ?? null,
           },
         };
         bump(counts, 'documentStoreDocuments');

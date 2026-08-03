@@ -141,12 +141,20 @@ export async function importDocumentStores(
 
   // Documents — database-backed only; filesystem/obsidian sources keep their
   // documents on disk.
+  //
+  // Hard-link groups are re-established in a second pass, keyed by the group id
+  // the export carried. The imported ids are never reused directly: they are
+  // only a grouping token here, and re-binding through bindLinkGroup mints a
+  // fresh id, so importing the same archive twice can't fuse the two copies
+  // into one group.
+  const membersByExportedGroup = new Map<string, string[]>();
+
   for (const doc of documents) {
     const targetMountId = idMap.get(doc.mountPointId);
     if (!targetMountId) continue;
     try {
       // linkDocumentContent handles file + document + link in one shot.
-      await globalRepos.docMountFileLinks.linkDocumentContent({
+      const { link } = await globalRepos.docMountFileLinks.linkDocumentContent({
         mountPointId: targetMountId,
         relativePath: doc.relativePath,
         fileName: doc.fileName,
@@ -157,10 +165,30 @@ export async function importDocumentStores(
         plainTextLength: doc.plainTextLength,
         fileSizeBytes: Buffer.byteLength(doc.content, 'utf-8'),
       });
+      if (doc.linkGroupId) {
+        const existing = membersByExportedGroup.get(doc.linkGroupId);
+        if (existing) existing.push(link.id);
+        else membersByExportedGroup.set(doc.linkGroupId, [link.id]);
+      }
       counts.documents++;
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       warnings.push(`Failed to import document "${doc.relativePath}": ${msg}`);
+    }
+  }
+
+  // A group whose other members fell outside the export's scope arrives with a
+  // single member and is simply left un-linked — a group of one is not a link.
+  for (const [exportedGroupId, memberLinkIds] of membersByExportedGroup) {
+    if (memberLinkIds.length < 2) continue;
+    const [anchor, ...rest] = memberLinkIds;
+    for (const memberId of rest) {
+      try {
+        await globalRepos.docMountFileLinks.bindLinkGroup(anchor, memberId);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        warnings.push(`Failed to restore hard link for group "${exportedGroupId}": ${msg}`);
+      }
     }
   }
 

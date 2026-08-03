@@ -4,6 +4,30 @@
 
 ### 4.8-dev
 
+#### Hard links between document stores are now real
+
+A file linked into a second store with `quilltap docs link` did not stay linked. Editing either side forked the two apart silently: the write kept pointing the edited link at a fresh content row while the other link kept the old one, so the second location went on serving the previous revision indefinitely — to the file browser, to search, and to characters.
+
+The cause was that a hard link had no representation of its own. Both `linkDocumentContent` and `linkBlobContent` find-or-create a `doc_mount_files` row for the incoming sha256 and repoint the written link at it; nothing consulted the file's other links. Simply propagating on a shared `fileId` would have been much worse than the bug: content rows are content-addressed, so unrelated byte-identical files (empty files, boilerplate headers) share one row by coincidence — one row in a real instance was shared by 36 character vaults — and a write would have rewritten all of them.
+
+Deliberate links are therefore recorded explicitly:
+
+- New nullable `doc_mount_file_links.linkGroupId` (migration `add-doc-mount-link-groups-v1`, partial index on non-null values). Links sharing a non-null group are one file; a shared `fileId` alone still means nothing.
+- `linkFile` binds a group via `bindLinkGroup` (DB→DB and FS→FS both). `copyFile` deliberately does not — a copy shares a deduped content row until the first write, then forks, which is correct copy semantics.
+- On write, `fanOutGroupFileId` repoints every group member at the new content row, carrying `plainTextLength`, conversion status, and the three `allow*` policy flags. Per-link `description` and `extractedText` are not propagated — two consumers of the same bytes keep their own captions.
+- Chunks are per-`linkId`, so `reindexLinkGroupSiblings` (new `lib/mount-index/link-groups.ts`) rebuilds each sibling's chunk set after the write commits, from `writeDatabaseDocument` and from the doc-edit tools' `triggerReindexIfNeeded`. Parent-process only; in-child writes leave it to the next rescan.
+- `deleteWithGC` NULLs the group when one member is left.
+
+No backfill: a pre-existing shared `fileId` cannot be told apart from coincidence, so existing links start ungrouped and must be re-made with `docs link`.
+
+`ensureLinkGroupColumn` (`mount-index-case-repair.ts`) adds the column at repository init as well, called from both repositories that reference it. `generateDDL` only ever emits CREATE TABLE, so on an existing database the column would otherwise arrive solely from the startup migration — while code can reach the table before it (a dev-server hot reload, a failed or skipped migration, a backup restored mid-upgrade). That gap is not a loud failure: every link query names the column, and `safeQuery` turns the resulting "no such column" into a null result, so a missing column presents as *every document silently not existing* — `docs link` reporting a file that plainly exists as "source not found", and writes to those paths looking like first-time creates.
+
+**Orphaned content rows.** Every content-addressed rewrite abandoned its old `doc_mount_files` row and never collected it, leaking the `doc_mount_documents` / `doc_mount_blobs` payload with it (36 orphans in one instance). `gcOrphanedFileRow` now collects on the write path, `deleteWithGC` shares it, and the migration sweeps the backlog. The payload rows are deleted explicitly rather than via `ON DELETE CASCADE`, which only exists on databases whose tables came from `add-doc-mount-file-links-v1` — schema-generated tables have no foreign keys, so `deleteWithGC` had been leaking there too.
+
+**CLI.** The `ls` `links` column and `--links` now count group members rather than rows sharing a `fileId`, so a boilerplate file no longer reports 36 links when nothing was linked. Degrades to `1` against an instance that hasn't run the migration. Help text for `link` / `copy` / `move` corrected.
+
+**Export/import.** `linkGroupId` rides in `ExportedDocumentStoreDocument` and is re-bound on import (remapped to a fresh id, so importing an archive twice can't fuse the copies); export schema updated, along with `folderId`, which the writer had been emitting without a schema entry.
+
 #### Custom tools: per-run chip labels, two-block bubbles, and side effects
 
 Three additions to Pascal's custom tools (spec: `docs/developer/features/pascal-custom-tool-enhancements.md`):

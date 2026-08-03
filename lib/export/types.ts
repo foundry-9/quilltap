@@ -298,6 +298,14 @@ export interface ExportedDocumentStoreDocument {
   plainTextLength: number;
   lastModified: string;
   folderId?: string | null;
+  /**
+   * Deliberate hard-link group (see doc_mount_file_links.linkGroupId). Carried
+   * through so a file linked into two stores comes back linked rather than as
+   * two documents that silently drift apart on the next edit. Omitted for the
+   * ordinary un-linked case; a group whose other members fall outside the
+   * export's scope imports as an inert group of one.
+   */
+  linkGroupId?: string | null;
 }
 
 export interface ExportedDocumentStoreBlob {

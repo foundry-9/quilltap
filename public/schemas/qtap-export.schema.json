@@ -1296,7 +1296,12 @@
         "content": { "type": "string" },
         "contentSha256": { "type": "string", "minLength": 64, "maxLength": 64 },
         "plainTextLength": { "type": "integer", "minimum": 0 },
-        "lastModified": { "$ref": "#/$defs/Timestamp" }
+        "lastModified": { "$ref": "#/$defs/Timestamp" },
+        "folderId": { "oneOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }] },
+        "linkGroupId": {
+          "description": "Deliberate hard-link group. Documents sharing a linkGroupId are one file at several paths: a write through any of them repoints all of them. Absent/null for ordinary independent documents. Note that two documents with identical content are NOT linked — content rows are deduplicated by sha256, and only this field records intent.",
+          "oneOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }]
+        }
       }
     },
 

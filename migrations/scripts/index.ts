@@ -361,6 +361,8 @@ import { addCustomToolsFieldMigration } from './add-custom-tools-field';
 import { addEpisodicMemoryFieldsMigration } from './add-episodic-memory-fields';
 // Story clock: backfill timestampConfig.fictionalBaseRealTime so fictional clocks advance
 import { anchorFictionalClockBaseMigration } from './anchor-fictional-clock-base';
+// Scriptorium hard links: linkGroupId column on doc_mount_file_links + orphaned-content sweep
+import { addDocMountLinkGroupsMigration } from './add-doc-mount-link-groups';
 
 /**
  * All available migrations.
@@ -719,6 +721,8 @@ export const migrations: Migration[] = [
   addEpisodicMemoryFieldsMigration,
   // Story clock: backfill timestampConfig.fictionalBaseRealTime so fictional clocks advance
   anchorFictionalClockBaseMigration,
+  // Scriptorium hard links: linkGroupId column on doc_mount_file_links + orphaned-content sweep
+  addDocMountLinkGroupsMigration,
 ];
 
 export {
@@ -1058,5 +1062,7 @@ export {
   addEpisodicMemoryFieldsMigration,
   // Story clock: backfill timestampConfig.fictionalBaseRealTime so fictional clocks advance
   anchorFictionalClockBaseMigration,
+  // Scriptorium hard links: linkGroupId column on doc_mount_file_links + orphaned-content sweep
+  addDocMountLinkGroupsMigration,
 };
 

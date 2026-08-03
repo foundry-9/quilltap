@@ -154,6 +154,21 @@ export async function writeDatabaseDocument(
         error: chunkErr instanceof Error ? chunkErr.message : String(chunkErr),
       });
     }
+
+    // linkDocumentContent has already repointed every member of this file's
+    // hard-link group at the new content row, but chunks are per-link: without
+    // this pass a sibling path would keep serving the previous revision's
+    // chunks to search and to character context.
+    try {
+      const { reindexLinkGroupSiblings } = await import('@/lib/mount-index/link-groups');
+      await reindexLinkGroupSiblings(mountPointId, rel);
+    } catch (groupErr) {
+      logger.warn('Failed to re-index hard-link group after database write', {
+        mountPointId,
+        relativePath: rel,
+        error: groupErr instanceof Error ? groupErr.message : String(groupErr),
+      });
+    }
   }
 
   emitDocumentWritten({ mountPointId, relativePath: rel });

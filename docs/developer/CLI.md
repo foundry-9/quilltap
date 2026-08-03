@@ -43,6 +43,8 @@ Read-only verbs: `list`, `show`, `files`, `ls`/`dir`, `tree` (ASCII folder hiera
 
 Server-required verbs: `scan`, `reindex` (re-extract + re-chunk), `embed` (enqueue embedding jobs — `--wait` polls to completion), `grep --semantic`, and the write verbs (`write`/`delete`/`mkdir`/`move`/`copy`/`link`/`rmdir`/`mvdir`). `reindex` and `embed` are explicit triggers for the two background pipelines; they refuse to run when the server is unreachable.
 
+**`link` vs `copy`:** `docs link` makes two addresses into one document — it shares the content row *and* enrols both link rows in a `linkGroupId`, so a later write through either path repoints both and re-chunks the sibling. `docs copy` produces an independent document that merely shares a deduped content row until the first write. The `links` column in `ls` counts group members, not rows sharing a `fileId` (identical bytes are not a link). See [DDL.md](DDL.md#doc_mount_file_links).
+
 **Semantic search:** `npx quilltap docs grep --semantic [--mount <name|id|all>] [--top N] [--threshold 0..1] <query>` runs an embedding search over indexed chunks instead of a substring match (defaults: `--top 20`, `--threshold 0.5`, `--port 3000`). It goes through `POST /api/v1/mount-points?action=semantic-search` because the embedding provider lives in the server, so the server must be up.
 
 ### Addressing documents with `qtap://` URIs
