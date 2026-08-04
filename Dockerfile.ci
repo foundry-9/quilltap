@@ -63,11 +63,15 @@ COPY --chown=nextjs:nodejs prebuild/plugins/dist/ ./plugins/dist
 COPY package.json package-lock.json ./
 
 # Install runtime tools:
-#   - zip + unzip — backup/restore (lib/backup/restore-service.ts shells out to `unzip`)
+#   - zip + unzip — backup/restore (lib/backup/restore/archive.ts and
+#     lib/backup/backup-service.ts shell out to `unzip` / `zip`)
 #   - bash — required by Ariel's terminal (PTY hard-codes /bin/bash)
-#   - git, curl, wget, jq — common tools available to the LLM shell agent
+#
+# git/curl/wget/jq removed for CVE surface — see the matching block in Dockerfile
+# for the full rationale. The `curl` *tool* is qtap-plugin-curl (Node fetch()), so
+# it is unaffected.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends bash zip unzip git curl wget jq \
+    && apt-get install -y --no-install-recommends bash zip unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy pre-compiled production node_modules from build stage (native modules already built)
@@ -82,6 +86,19 @@ RUN ln -s /app/packages/quilltap/bin/quilltap.js /usr/local/bin/quilltap
 # Copy entrypoint script
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# --- Attack-surface reduction (must stay LAST: no apt-get or npm may follow, in
+# --- this stage OR in the wsl2 stage that extends it) ---
+# Strips npm/npx/corepack/yarn (1 CRITICAL + 6 HIGH from npm's own bundled
+# node_modules; nothing at runtime shells out to them) and Debian's perl (2
+# CRITICAL + 2 HIGH, no fix in bookworm or trixie). See Dockerfile for the full
+# rationale — keep the two files in lockstep.
+RUN rm -rf /usr/local/lib/node_modules/npm \
+           /usr/local/lib/node_modules/corepack \
+           /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+           /usr/local/bin/yarn /usr/local/bin/yarnpkg /opt/yarn-v* \
+    && dpkg --purge --force-remove-essential --force-depends \
+           perl perl-base perl-modules-5.36 libperl5.36 2>/dev/null || true
 
 USER nextjs
 
@@ -103,11 +120,10 @@ USER root
 COPY lima/wsl-init.sh /usr/local/bin/wsl-init.sh
 RUN chmod +x /usr/local/bin/wsl-init.sh
 
-# Pre-install runtime dependencies (Lima YAML does this at provision time)
-# Note: libstdc++6 / libgcc-s1 ship in bookworm-slim; we only need to add zip/unzip
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends zip unzip \
-    && rm -rf /var/lib/apt/lists/*
+# Runtime dependencies are already present: libstdc++6 / libgcc-s1 ship in
+# bookworm-slim, and the production stage above installs bash/zip/unzip. This
+# stage deliberately runs no apt-get — the production stage ends by purging perl,
+# which dpkg maintainer scripts may need, so package installs must not follow it.
 
 # Set environment defaults
 RUN printf 'export LIMA_CONTAINER=true\nexport NODE_ENV=production\nexport PORT=5050\nexport HOSTNAME=0.0.0.0\nexport NODE_OPTIONS="--max-old-space-size=4096"\n' \

@@ -4,6 +4,22 @@
 
 ### 4.8-dev
 
+#### Docker image CVE reduction: 3 critical / 12 high → 0 critical / 0 high
+
+A Docker Scout scan of `foundry9/quilltap:4.8.0-dev.152` reported 117 vulnerabilities across 30 packages (3 critical, 12 high, 22 medium, 91 low). None were in Quilltap's own code; all came from tooling that ships in the image but is never executed at runtime. Four changes, verified by rescanning:
+
+**Removed npm, npx, corepack, and yarn from the production stage.** These ship in `node:24-bookworm-slim` and account for 1 critical and 6 high — all in npm's own bundled `node_modules` (`tar` 7.5.16, `brace-expansion` 5.0.6, `undici` 6.26.0, `ip-address` 10.2.0). The container's only command is `node server.js`, and plugin installs go through `lib/plugins/registry-client.ts`, which downloads and extracts registry tarballs over HTTP rather than shelling out to the npm CLI. Nothing at runtime invokes any of these binaries.
+
+**Purged Debian's `perl`.** 2 critical (CVE-2026-13221, CVE-2026-12087) and 2 high (CVE-2026-48959, CVE-2026-48962), all marked "not fixed" in Debian 12 *and* Debian 13, so no base-image bump clears them — `node:24-trixie-slim` scans identically to bookworm on this package. `perl-base` is Essential, so the purge needs `--force-remove-essential`. Verified afterward: `zip`, `unzip`, `bash`, Node, and all three native modules (`better-sqlite3`, `sharp`, `node-pty`) still load.
+
+**Dropped `git`, `curl`, `wget`, and `jq`** from the production and CI images. These were pre-installed as a convenience toolbox for the LLM shell agent. `git` is what dragged in `perl`; `git` and `curl` together pull `libssh2` (CVE-2025-15661, high, no fix available). Not a code path: the `curl` **tool** is `qtap-plugin-curl`, which uses Node's `fetch()`, not the binary, and is unaffected. Only a human typing at Ariel's bash prompt inside a container loses them; non-Docker installs are untouched. `bash`, `zip`, and `unzip` stay — `lib/backup/restore/archive.ts` and `lib/backup/backup-service.ts` shell out to `unzip`/`zip`, and the PTY hard-codes `/bin/bash`.
+
+**Added `fast-uri` and `postcss` overrides** in `package.json`. `ajv` pinned `fast-uri` to 3.1.4 (CVE-2026-18446, high) and `next` pinned `postcss` to 8.4.31 (GHSA-r28c-9q8g-f849 and CVE-2026-45623, both high, plus the `<=8.5.22` sourceMappingURL chain). Now `^3.1.5` and `^8.5.25`; `postcss` hoists to a single copy instead of a nested one under `next`. `npm audit --omit=dev` reports 0 vulnerabilities.
+
+The attack-surface reduction runs as the last `RUN` in the production stage of both `Dockerfile` and `Dockerfile.ci`. Nothing may `apt-get` or `npm` after it — the `wsl2` stage in `Dockerfile.ci` extended production and re-ran `apt-get install zip unzip`, which the production stage already covers, so that step is gone.
+
+Not changed: the production stage still overwrites the Next.js standalone traced `node_modules` with the full `--omit=dev` tree. That is deliberate (native modules are prebuilt in `deps-prod`), and no remaining critical or high traces to it.
+
 #### Docker containers now apply the timezone to the process clock, not just to timestamps
 
 `QUILLTAP_TIMEZONE` feeds the timestamp-formatting chain in `lib/chat/timestamp-utils.ts`, but several paths read Node's system-local clock instead and so stayed on UTC in Docker:

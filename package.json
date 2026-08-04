@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "4.8.0-dev.153",
+  "version": "4.8.0-dev.154",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -152,7 +152,9 @@
     "cookie": "^0.7.0",
     "pdfjs-dist": "$pdfjs-dist",
     "sharp": "$sharp",
-    "@napi-rs/canvas": "^0.1.100"
+    "@napi-rs/canvas": "^0.1.100",
+    "fast-uri": "^3.1.5",
+    "postcss": "^8.5.25"
   },
   "allowScripts": {
     "@openrouter/sdk@1.2.2": true,

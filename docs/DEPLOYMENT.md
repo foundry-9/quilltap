@@ -16,6 +16,7 @@ Quilltap uses **SQLite** for data storage and the **local filesystem** for files
 - [Monitoring](#monitoring)
 - [Backup Strategy](#backup-strategy)
 - [Updating](#updating)
+- [Container Contents](#container-contents)
 - [Troubleshooting](#troubleshooting)
 
 ## Prerequisites
@@ -355,6 +356,53 @@ docker stop quilltap
 docker rm quilltap
 docker run -d --name quilltap ... foundry9/quilltap:previous-version
 ```
+
+## Container Contents
+
+The production image is deliberately minimal. Beyond Node.js and the application
+itself, it ships only what a code path actually invokes:
+
+| Present | Why |
+| --- | --- |
+| `node` | The container's only command (`node server.js`) |
+| `bash` | Ariel's terminal — the PTY hard-codes `/bin/bash` |
+| `zip`, `unzip` | Backup creation and restore shell out to these |
+| `quilltap` | The CLI, for in-container debugging (`quilltap db --tables`) |
+
+**Deliberately absent:** `npm`, `npx`, `corepack`, `yarn`, `perl`, `git`, `curl`,
+`wget`, `jq`.
+
+Each was removed to shrink the image's CVE surface, and none is on a code path:
+
+- **npm / npx / corepack / yarn** ship in the Node base image and carry a critical
+  and several high findings in their own bundled dependencies. Plugin installation
+  does not use them — Quilltap downloads and extracts registry tarballs over HTTP
+  directly, so Settings → Plugins and the install API work exactly as before.
+- **perl** carries critical findings with no fix available in any current Debian
+  release. Nothing in Quilltap invokes it; it was present only as a dependency of
+  `git`.
+- **git / curl / wget / jq** were previously pre-installed as a convenience toolbox
+  for the LLM shell agent. The `curl` **tool** your characters use is a plugin that
+  makes HTTP requests from within Node, so it is unaffected. Only a human typing at
+  Ariel's bash prompt loses these commands.
+
+If your deployment genuinely needs one of them, layer it on top rather than
+patching the base:
+
+```dockerfile
+FROM foundry9/quilltap:latest
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+USER nextjs
+```
+
+Be aware that you are reintroducing that package's vulnerabilities, and that
+`git` in particular pulls `perl` in behind it.
+
+Non-Docker installations are unaffected — they use whatever tools are already on
+the host.
 
 ## Troubleshooting
 
