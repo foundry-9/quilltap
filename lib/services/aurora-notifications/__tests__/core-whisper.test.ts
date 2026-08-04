@@ -28,7 +28,7 @@ describe('Core whisper builders', () => {
 
   it('buildCoreWhisperContent includes Aurora narrative opener, preamble verbatim, and every file', () => {
     const out = buildCoreWhisperContent(samplePacket);
-    expect(out).toContain('*Aurora pauses beside the workbench');
+    expect(out).toContain('Aurora pauses beside the workbench');
     expect(out).toContain(CORE_WHISPER_PREAMBLE);
     expect(out).toContain('### Core/manifesto.md');
     expect(out).toContain('I keep my word');
@@ -38,7 +38,7 @@ describe('Core whisper builders', () => {
 
   it('buildCoreWhisperOpaqueContent strips Aurora narrative opener but keeps preamble + bodies', () => {
     const out = buildCoreWhisperOpaqueContent(samplePacket);
-    expect(out).not.toContain('*Aurora pauses');
+    expect(out).not.toContain('Aurora pauses');
     expect(out).toContain(CORE_WHISPER_PREAMBLE);
     expect(out).toContain('### Core/manifesto.md');
     expect(out).toContain('### Core/desires.md');
@@ -61,7 +61,7 @@ describe('Core whisper builders', () => {
 
   it('LLM context form does NOT include the Aurora narrative opener', () => {
     const out = buildCoreWhisperLLMContext(samplePacket);
-    expect(out).not.toContain('*Aurora pauses');
+    expect(out).not.toContain('Aurora pauses');
   });
 });
 

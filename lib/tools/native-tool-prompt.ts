@@ -21,7 +21,7 @@ export function buildNativeToolInstructions(hasTools: boolean = true): string {
 
 You have access to tools. When you decide to use a tool, you MUST actually invoke it by generating a tool_use content block. Follow these rules without exception:
 
-1. **Never narrate tool use as a substitute for performing it.** Writing "*pulls up the file*", "*executes the search*", or "*reaches for the vault*" is NOT the same as calling a tool. If you find yourself writing prose that describes using a tool, STOP and actually call the tool instead.
+1. **Never narrate tool use as a substitute for performing it.** Describing the action in prose — pulling up the file, executing the search, reaching for the vault — is NOT the same as calling a tool. If you find yourself writing prose that describes using a tool, STOP and actually call the tool instead.
 
 2. **Do not announce tool calls before making them.** Do not write "Let me search for that now" or "I'll look that up" as a separate text block before the tool call. Just call the tool. If you want to add brief context, include the tool call in the SAME response — do not end your turn with a promise to act.
 

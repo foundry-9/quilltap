@@ -102,37 +102,37 @@ export function buildCommonplacePersonaWhisper(parts: CommonplaceParts): string 
 
   if (currentState) {
     sections.push(
-      `*The Commonplace Book sets its memories aside for a moment to take stock of where you stand —*\n\n${currentState}`,
+      `The Commonplace Book sets its memories aside for a moment to take stock of where you stand:\n\n${currentState}`,
     );
   }
   if (recap) {
     sections.push(
-      `*The Commonplace Book lays open at your bookmark; here is the gist of what you have noted so far —*\n\n${recap}`,
+      `The Commonplace Book lays open at your bookmark; here is the gist of what you have noted so far:\n\n${recap}`,
     );
   }
   if (relevant) {
     sections.push(
-      `*The Commonplace Book turns to the entries that bear on this moment.*\n\n${relevant}`,
+      `The Commonplace Book turns to the entries that bear on this moment.\n\n${relevant}`,
     );
   }
   if (interChar) {
     sections.push(
-      `*The Commonplace Book opens to the pages where you have noted those present.*\n\n${interChar}`,
+      `The Commonplace Book opens to the pages where you have noted those present.\n\n${interChar}`,
     );
   }
   if (knowledge) {
     sections.push(
-      `*The Commonplace Book pulls down volumes from your own shelves — the references and reckonings you yourself have curated —*\n\n${knowledge}`,
+      `The Commonplace Book pulls down volumes from your own shelves — the references and reckonings you yourself have curated:\n\n${knowledge}`,
     );
   }
   if (relevantConversations) {
     sections.push(
-      `*The conversation has wandered on, and the Commonplace Book re-marks the past dialogues that now bear on the present —*\n\n${relevantConversations}`,
+      `The conversation has wandered on, and the Commonplace Book re-marks the past dialogues that now bear on the present:\n\n${relevantConversations}`,
     );
   }
   if (retrospectiveRecall) {
     sections.push(
-      `*You speak of days gone by, and the Commonplace Book obligingly riffles back through its dated pages —*\n\n${retrospectiveRecall}`,
+      `You speak of days gone by, and the Commonplace Book obligingly riffles back through its dated pages:\n\n${retrospectiveRecall}`,
     );
   }
   return sections.join('\n\n').trim();

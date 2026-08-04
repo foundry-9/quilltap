@@ -59,7 +59,7 @@ const CORE_WHISPER_ADVISORY =
   'recognised self-shape. Ask whether this still comes from you.';
 
 const AURORA_NARRATIVE_OPENER =
-  '*Aurora pauses beside the workbench and sets your own plumb line into your hand —*';
+  'Aurora pauses beside the workbench and sets your own plumb line into your hand:';
 
 const LLM_CONTEXT_OPENER =
   'Your own center of gravity, as you have written it for yourself:';

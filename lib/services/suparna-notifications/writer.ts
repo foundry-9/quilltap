@@ -32,7 +32,7 @@ export type SuparnaWhisperKind = 'mail-delivery';
 /** Quote a letter body as a Markdown blockquote (so Suparṇā "reads it aloud"). */
 function quoteBody(body: string): string {
   const trimmed = body.trim();
-  if (!trimmed) return '> *(the letter is blank)*';
+  if (!trimmed) return '> (the letter is blank)';
   return trimmed
     .split('\n')
     .map((line) => (line ? `> ${line}` : '>'))
@@ -48,8 +48,8 @@ export function buildSuparnaMailWhisper(letters: DeliveredLetterSummary[]): stri
   const count = letters.length;
   const opener =
     count === 1
-      ? '*Suparṇā glides in from the Post Office, a single letter held out for you.*'
-      : `*Suparṇā glides in from the Post Office with an armful of ${count} letters for you.*`;
+      ? 'Suparṇā glides in from the Post Office, a single letter held out for you.'
+      : `Suparṇā glides in from the Post Office with an armful of ${count} letters for you.`;
   const parts = letters.map((letter) => {
     const head = `**A letter from ${letter.from}**, posted ${formatLetterDate(letter.sentAt)}:`;
     return `${head}\n\n${quoteBody(letter.body)}\n\n${formatLetterActions(letter)}`;

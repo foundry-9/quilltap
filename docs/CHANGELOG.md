@@ -4,6 +4,20 @@
 
 ### 4.8-dev
 
+#### Staff announcements no longer wrap themselves in asterisks
+
+Twelve staff strings were written as asterisk-delimited narration — `*Aurora regards Charlie and pronounces upon their attire —*` and the like. Under a roleplay template that uses a different narration delimiter, those asterisks teach the model the wrong format. Models copy what the context shows them far more reliably than they follow an instruction that contradicts it, and the closing delimiter is where the instruction loses: a model told to narrate with `+` will open the span correctly and then close it with `*` two hundred tokens later, matching the surrounding prior.
+
+The announcements are now plain declarative lines, matching what the Host, Librarian, Lantern, Prospero, Ariel, Concierge, and Pascal writers already did. Wording is unchanged — only the delimiters are gone, and a trailing em-dash becomes a colon where the line introduces content. Affected: `aurora-notifications/writer.ts` (opening outfit, outfit change), `aurora-notifications/core-whisper.ts` (Core whisper opener), `commonplace-notifications/writer.ts` (all seven recall sections), `suparna-notifications/writer.ts` (mail delivery opener, and the blank-letter placeholder).
+
+The substrings that `system-message-labels.ts` matches on to label these bubbles all sit inside the wording, not the delimiters, so bubble labels are unaffected.
+
+Most of these were already reaching the model in persona-free form: every one has an `opaqueContent` twin, swapped in whenever any non-user character in the chat has `systemTransparency !== true`. The exceptions were chats where every character is transparent, and Suparṇā, which sets `opaqueContent` equal to `content` by design so the recipient reads her announcement verbatim.
+
+#### Tool-execution rules stop demonstrating asterisk narration
+
+`buildNativeToolInstructions` illustrated the "don't narrate tool use" rule with `"*pulls up the file*"`, `"*executes the search*"`, and `"*reaches for the vault*"`. That block is appended to the system prompt on every tool-enabled turn regardless of chat, character, or roleplay template, so those three examples were the one unconditional source of asterisk narration in the prompt — and they landed after the template's own formatting rules, where recency works against them. The examples are now unquoted prose: "Describing the action in prose — pulling up the file, executing the search, reaching for the vault — is NOT the same as calling a tool."
+
 #### Pick a roleplay template when you create the chat
 
 The New Chat form (page and modal) now has a **Roleplay Template** dropdown, beneath **Play As**. Previously the template was decided silently at creation — project default, then the user's global default — and could only be seen or changed afterward from the chat sidebar.
