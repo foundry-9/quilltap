@@ -4,6 +4,14 @@
 
 ### 4.8-dev
 
+#### `PLUGIN_UTILS_VERSION` is generated, not hand-written
+
+plugin-utils exported `PLUGIN_UTILS_VERSION` as a hardcoded string literal, documented as usable "at runtime to check compatibility." It had been left at `2.2.1` while the package shipped `2.2.18` — seventeen releases of drift, and a wrong answer for anything that trusted it. Nothing in this repo or in `plugins/dist/` actually reads the constant, so no shipped behavior was affected, but the value published to npm was wrong.
+
+The literal is gone. `scripts/generate-version.mjs` writes `src/version.generated.ts` from the `version` field in package.json, and runs from `prebuild` and `pretypecheck` — so `npm run build`, `npm run typecheck`, and `prepublishOnly` (which builds) all regenerate before anything reads it. `src/index.ts` re-exports the generated constant. The generated file is committed so a fresh checkout typechecks without building first, and the generator skips the write when the content is unchanged so watch-mode rebuilds don't loop. The emitted `.d.ts` keeps a literal type (`declare const PLUGIN_UTILS_VERSION = "2.2.19"`) rather than widening to `string`, matching what the hand-written constant declared. Bumping package.json is now the only step.
+
+Published as plugin-utils 2.2.19; the app's dependency moves from `^2.2.17` to `^2.2.19`. The bundled plugins are not rebuilt for this — their declared ranges (`^2.2.16` / `^2.2.18`) already admit 2.2.19, so each picks it up on its next install, and since nothing reads the constant a mass rebuild would regenerate thirteen bundles for no behavior change.
+
 #### A stalled provider no longer wedges a turn
 
 A turn could sit on "Recalling *X*'s memories…" for ten minutes with no log output and no CPU use. The cause was a provider that accepted the request and then never answered: provider SDKs default to a 600-second request timeout, so a single silent DeepSeek call held the turn for the full ten minutes before its first retry — measured at 622,451 ms for a memory recap whose healthy runtime is about 9 seconds. Nothing was wrong locally; nothing was logged, because `llm_logs` rows are only written when a call *finishes*.

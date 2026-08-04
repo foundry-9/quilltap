@@ -163,8 +163,6 @@ export type {
 // Package Version
 // ============================================================================
 
-/**
- * Version of the plugin-utils package.
- * Can be used at runtime to check compatibility.
- */
-export const PLUGIN_UTILS_VERSION = '2.2.1';
+// Generated from package.json by scripts/generate-version.mjs — never edit the
+// literal by hand, or it drifts from the version actually published.
+export { PLUGIN_UTILS_VERSION } from './version.generated';
