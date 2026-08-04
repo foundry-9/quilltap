@@ -32,8 +32,21 @@ import {
 
 /** Cap on entries in the retrospective mini-recap conversation list. */
 const RETRO_MINI_RECAP_MAX_ENTRIES = 5
+
+/**
+ * Wall-clock ceiling on the whole memory-recap phase.
+ *
+ * Set above `CHEAP_LLM_TASK_TIMEOUT_MS` on purpose: the recap makes an
+ * embedding call and a cheap-LLM call in sequence, each already deadlined, and
+ * a recap that is merely slow in both places is still doing useful work. This
+ * is the backstop that keeps a visible turn from sitting on "Recalling…" no
+ * matter which leg misbehaves. The recap is optional context — losing it costs
+ * the character some remembered flavour, not the turn.
+ */
+const MEMORY_RECAP_PHASE_TIMEOUT_MS = 60_000
 import { getMemoryRecallSettings } from '@/lib/instance-settings'
 import { generateMemoryRecap, type MemoryRecapResult } from '@/lib/memory/memory-recap'
+import { withTimeout } from '@/lib/promise-timeout'
 import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
 import { compressMemories } from '@/lib/memory/cheap-llm-tasks'
 import type { ConnectionProfile } from '@/lib/schemas/types'
@@ -1065,16 +1078,27 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       ''
 
     try {
-      const recapResult = await generateMemoryRecap(
-        character.id,
-        character.name,
-        options.cheapLLMSelection,
-        userId,
-        chat.id,
-        options.uncensoredFallbackOptions,
-        budgetInfo?.maxContext,
-        recapRelevanceQuery,
-        embeddingProfileId,
+      // The recap is the one context step awaited inline on a visible turn that
+      // makes several independent network calls — an embedding for the
+      // relevant-conversations search, then the cheap-LLM summarization. Each
+      // leg carries its own deadline; this bounds the phase as a whole so no
+      // combination of slow legs can leave the turn sitting on "Recalling…".
+      // Deliberately above the per-leg budget: a recap that is merely slow in
+      // two places is still working, and the recap is optional context.
+      const recapResult = await withTimeout(
+        generateMemoryRecap(
+          character.id,
+          character.name,
+          options.cheapLLMSelection,
+          userId,
+          chat.id,
+          options.uncensoredFallbackOptions,
+          budgetInfo?.maxContext,
+          recapRelevanceQuery,
+          embeddingProfileId,
+        ),
+        MEMORY_RECAP_PHASE_TIMEOUT_MS,
+        `Memory recap exceeded its ${MEMORY_RECAP_PHASE_TIMEOUT_MS}ms phase budget`,
       )
 
       if (recapResult.content) {

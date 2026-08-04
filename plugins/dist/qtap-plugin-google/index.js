@@ -51591,6 +51591,11 @@ function getQuilltapVersion() {
 function getQuilltapUserAgent() {
   return `Quilltap/${getQuilltapVersion()}`;
 }
+var DEFAULT_REQUEST_TIMEOUT_MS = 3e5;
+function resolveRequestTimeoutMs(params, defaultMs = DEFAULT_REQUEST_TIMEOUT_MS) {
+  const requested = params.requestTimeoutMs;
+  return typeof requested === "number" && requested > 0 ? requested : defaultMs;
+}
 var rewriteLogger = createPluginLogger("host-rewrite");
 
 // provider.ts
@@ -51966,7 +51971,7 @@ var GoogleProvider = class {
     return { contents, systemInstruction, shouldDisableTools, attachmentResults: { sent, failed } };
   }
   async sendMessage(params, apiKey) {
-    const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { "User-Agent": getQuilltapUserAgent() } } });
+    const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { "User-Agent": getQuilltapUserAgent() }, timeout: resolveRequestTimeoutMs(params) } });
     const tools = [];
     if (params.tools && params.tools.length > 0) {
       tools.push({
@@ -52076,7 +52081,13 @@ var GoogleProvider = class {
     }
   }
   async *streamMessage(params, apiKey) {
-    const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { "User-Agent": getQuilltapUserAgent() } } });
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: { "User-Agent": getQuilltapUserAgent() },
+        ...params.requestTimeoutMs ? { timeout: params.requestTimeoutMs } : {}
+      }
+    });
     const tools = [];
     if (params.tools && params.tools.length > 0) {
       tools.push({

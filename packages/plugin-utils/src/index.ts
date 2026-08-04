@@ -89,6 +89,11 @@ export type {
 
 export {
   OpenAICompatibleProvider,
+  DEFAULT_REQUEST_TIMEOUT_MS,
+  resolveRequestTimeoutMs,
+  buildSdkRequestOptions,
+  buildSdkClientOptions,
+  buildRequestAbortSignal,
 } from './providers';
 
 export type {

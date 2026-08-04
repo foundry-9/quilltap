@@ -11076,6 +11076,18 @@ function getQuilltapVersion() {
 function getQuilltapUserAgent() {
   return `Quilltap/${getQuilltapVersion()}`;
 }
+var DEFAULT_REQUEST_TIMEOUT_MS = 3e5;
+function resolveRequestTimeoutMs(params, defaultMs = DEFAULT_REQUEST_TIMEOUT_MS) {
+  const requested = params.requestTimeoutMs;
+  return typeof requested === "number" && requested > 0 ? requested : defaultMs;
+}
+function buildSdkClientOptions(params, defaultMs = DEFAULT_REQUEST_TIMEOUT_MS) {
+  const capped = typeof params.requestTimeoutMs === "number" && params.requestTimeoutMs > 0;
+  return {
+    timeout: resolveRequestTimeoutMs(params, defaultMs),
+    maxRetries: capped ? 0 : 2
+  };
+}
 var rewriteLogger = createPluginLogger("host-rewrite");
 
 // models.ts
@@ -11226,11 +11238,18 @@ var ZAIProvider = class {
     this.supportedMimeTypes = Z_AI_SUPPORTED_MIME_TYPES;
     this.supportsWebSearch = true;
   }
-  createClient(apiKey) {
+  /**
+   * @param apiKey - Z.AI API key
+   * @param params - Request the client is being built for, so a caller-supplied
+   *   budget applies. Omit for metadata calls (model listing, key validation),
+   *   which fall back to the shared default rather than the SDK's 10 minutes.
+   */
+  createClient(apiKey, params = {}) {
     return new OpenAI({
       apiKey,
       baseURL: this.baseUrl,
-      defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
+      defaultHeaders: { "User-Agent": getQuilltapUserAgent() },
+      ...buildSdkClientOptions(params)
     });
   }
   /**
@@ -11384,7 +11403,7 @@ var ZAIProvider = class {
     if (!apiKey) {
       throw new Error("Z.AI provider requires an API key");
     }
-    const client = this.createClient(apiKey);
+    const client = this.createClient(apiKey, params);
     const { messages, attachmentResults } = this.formatMessages(params.messages, params.model);
     const body = {
       model: params.model,
@@ -11466,7 +11485,7 @@ var ZAIProvider = class {
     if (!apiKey) {
       throw new Error("Z.AI provider requires an API key");
     }
-    const client = this.createClient(apiKey);
+    const client = this.createClient(apiKey, params);
     const { messages, attachmentResults } = this.formatMessages(params.messages, params.model);
     const body = {
       model: params.model,

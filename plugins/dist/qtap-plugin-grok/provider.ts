@@ -9,7 +9,7 @@
 
 import OpenAI from 'openai';
 import type { TextProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage, ImageGenParams, ImageGenResponse } from './types';
-import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
+import { buildSdkClientOptions, createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
 
 const logger = createPluginLogger('qtap-plugin-grok');
 
@@ -316,6 +316,9 @@ export class GrokProvider implements TextProvider {
       apiKey,
       baseURL: this.baseUrl,
       defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+      // A caller-supplied budget is a ceiling; without one the SDK's 10-minute
+      // default would let a silent endpoint hold a turn open indefinitely.
+      ...buildSdkClientOptions(params),
     });
     const { input, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
 
@@ -415,6 +418,9 @@ export class GrokProvider implements TextProvider {
       apiKey,
       baseURL: this.baseUrl,
       defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+      // A caller-supplied budget is a ceiling; without one the SDK's 10-minute
+      // default would let a silent endpoint hold a turn open indefinitely.
+      ...buildSdkClientOptions(params),
     });
     const { input, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
 

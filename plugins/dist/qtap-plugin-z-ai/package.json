@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-z-ai",
-  "version": "1.1.19",
+  "version": "1.1.20",
   "description": "Z.AI GLM provider plugin for Quilltap",
   "main": "index.js",
   "types": "index.d.ts",
@@ -12,8 +12,8 @@
     "clean": "rm -f index.js"
   },
   "dependencies": {
-    "@quilltap/plugin-types": "^2.5.4",
-    "@quilltap/plugin-utils": "^2.2.16",
+    "@quilltap/plugin-types": "^2.5.5",
+    "@quilltap/plugin-utils": "^2.2.18",
     "openai": "^7.2.0"
   },
   "devDependencies": {

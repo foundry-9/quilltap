@@ -16,7 +16,7 @@ import type {
   LLMMessage,
   FileAttachment,
 } from './types';
-import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
+import { buildSdkClientOptions, createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
 import { STATIC_CHAT_MODEL_IDS, IMAGE_GEN_MODEL_PATTERN } from './models';
 
 const logger = createPluginLogger('qtap-plugin-z-ai');
@@ -71,11 +71,18 @@ export class ZAIProvider implements TextProvider {
   readonly supportedMimeTypes = Z_AI_SUPPORTED_MIME_TYPES;
   readonly supportsWebSearch = true;
 
-  private createClient(apiKey: string): OpenAI {
+  /**
+   * @param apiKey - Z.AI API key
+   * @param params - Request the client is being built for, so a caller-supplied
+   *   budget applies. Omit for metadata calls (model listing, key validation),
+   *   which fall back to the shared default rather than the SDK's 10 minutes.
+   */
+  private createClient(apiKey: string, params: Pick<LLMParams, 'requestTimeoutMs'> = {}): OpenAI {
     return new OpenAI({
       apiKey,
       baseURL: this.baseUrl,
       defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+      ...buildSdkClientOptions(params),
     });
   }
 
@@ -282,7 +289,7 @@ export class ZAIProvider implements TextProvider {
       throw new Error('Z.AI provider requires an API key');
     }
 
-    const client = this.createClient(apiKey);
+    const client = this.createClient(apiKey, params);
     const { messages, attachmentResults } = this.formatMessages(params.messages, params.model);
 
     const body: Record<string, unknown> = {
@@ -384,7 +391,7 @@ export class ZAIProvider implements TextProvider {
       throw new Error('Z.AI provider requires an API key');
     }
 
-    const client = this.createClient(apiKey);
+    const client = this.createClient(apiKey, params);
     const { messages, attachmentResults } = this.formatMessages(params.messages, params.model);
 
     const body: Record<string, unknown> = {

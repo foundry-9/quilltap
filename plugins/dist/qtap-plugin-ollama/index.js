@@ -11076,6 +11076,14 @@ function getQuilltapVersion() {
 function getQuilltapUserAgent() {
   return `Quilltap/${getQuilltapVersion()}`;
 }
+var DEFAULT_REQUEST_TIMEOUT_MS = 3e5;
+function resolveRequestTimeoutMs(params, defaultMs = DEFAULT_REQUEST_TIMEOUT_MS) {
+  const requested = params.requestTimeoutMs;
+  return typeof requested === "number" && requested > 0 ? requested : defaultMs;
+}
+function buildRequestAbortSignal(params, defaultMs = DEFAULT_REQUEST_TIMEOUT_MS) {
+  return AbortSignal.timeout(resolveRequestTimeoutMs(params, defaultMs));
+}
 var rewriteLogger = createPluginLogger("host-rewrite");
 
 // provider.ts
@@ -11152,7 +11160,11 @@ var OllamaProvider = class {
           "Content-Type": "application/json",
           "User-Agent": getQuilltapUserAgent()
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify(requestBody),
+        // Non-streaming: the whole exchange is one JSON blob, so bounding the
+        // entire request is right. A local endpoint that stops answering — a
+        // model still loading, a crashed runner — fails instead of hanging.
+        signal: buildRequestAbortSignal(params)
       });
       if (!response.ok) {
         const errorText = await response.text();
@@ -11220,14 +11232,25 @@ var OllamaProvider = class {
       requestBody.tools = params.tools;
     }
     try {
-      const response = await fetch(`${this.baseUrl}/api/chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "User-Agent": getQuilltapUserAgent()
-        },
-        body: JSON.stringify(requestBody)
-      });
+      const controller = new AbortController();
+      const firstByteTimer = setTimeout(
+        () => controller.abort(),
+        resolveRequestTimeoutMs(params)
+      );
+      let response;
+      try {
+        response = await fetch(`${this.baseUrl}/api/chat`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "User-Agent": getQuilltapUserAgent()
+          },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal
+        });
+      } finally {
+        clearTimeout(firstByteTimer);
+      }
       if (!response.ok) {
         const errorText = await response.text();
         logger.error("Ollama streaming API error", { context: "OllamaProvider.streamMessage", status: response.status, error: errorText });

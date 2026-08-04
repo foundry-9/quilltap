@@ -4,6 +4,29 @@
 
 ### 4.8-dev
 
+#### A stalled provider no longer wedges a turn
+
+A turn could sit on "Recalling *X*'s memories…" for ten minutes with no log output and no CPU use. The cause was a provider that accepted the request and then never answered: provider SDKs default to a 600-second request timeout, so a single silent DeepSeek call held the turn for the full ten minutes before its first retry — measured at 622,451 ms for a memory recap whose healthy runtime is about 9 seconds. Nothing was wrong locally; nothing was logged, because `llm_logs` rows are only written when a call *finishes*.
+
+Requests are now bounded at three levels.
+
+**The caller's deadline** — `executeCheapLLMTask` gives each attempt a wall-clock budget: 45 s against a remote provider, 180 s against a local one, where a cold model load is slow rather than stalled. Exceeding it throws `CheapLLMTimeoutError`, which the existing failure path already degrades through, and logs `[CheapLLM] Abandoned a stalled provider call` with the provider, model, task type and elapsed time. This covers every cheap-LLM task on every provider: recap, titling, compression, extraction, summarization, prompt crafting.
+
+**The phase ceiling** — the memory recap in `context-manager.ts` gets its own 60-second bound. It makes an embedding call *and* a cheap-LLM call in sequence, so per-leg budgets alone could still add up to a long visible stall. The ceiling sits above the per-leg budget deliberately: a recap slow in two places is still working, and the recap is optional context.
+
+**The provider's own budget** — new `LLMParams.requestTimeoutMs` (plugin-types 2.5.5) is a hard per-request ceiling that providers must not retry past. Cheap-LLM calls set it 5 s inside their own deadline, so a stalled request is aborted at the socket rather than left running while the caller walks away. plugin-utils 2.2.18 adds `resolveRequestTimeoutMs`, `buildSdkRequestOptions`, `buildSdkClientOptions` and `buildRequestAbortSignal` so every provider applies it identically, and drops `OpenAICompatibleProvider`'s client default from the SDK's 600 s to 300 s.
+
+All nine text providers were updated. How the budget is applied depends on what the transport measures:
+
+- **OpenAI-SDK-backed** (deepseek, openai-compatible, grok, z-ai, openai) and **Anthropic** — the SDK timeout stops at the response headers, not the last token, so it is safe on streaming paths and applies everywhere.
+- **ollama** — non-streaming bounds the whole exchange; streaming clears its timer once the headers land, so the body streams unbounded and a long generation is not cut off.
+- **openrouter** — same split, via the SDK for non-streaming and a manual first-byte timer on the Chat Completions fetch path.
+- **google** and **openrouter streaming** — only an explicit caller budget is honored. Both SDKs document their timeout as bounding the whole request, so imposing a default could truncate a long answer. Background work, which is what the budget exists for, never streams.
+
+Also: `withTimeout` (`lib/promise-timeout.ts`) now accepts an error factory alongside a message string, so a caller can tell "the deadline fired" from "the work failed" by type rather than by string matching.
+
+An abandoned request is not cancelled at the caller's layer — nothing there can cancel it. It runs to completion and its result is discarded; only the *waiting* stops, which is the part that blocked the turn.
+
 #### Custom tools: run presets, and a schema-description fix
 
 - **Run presets.** The Salon's custom-tool run dialog can now save the current parameter values as a named preset, stored as `Tools/{tool}.{preset}.settings.json` in the running character's vault (an ordinary JSON file — flat map of parameter name → value, hand-editable, rides in vault export/backup). A dropdown lists the tool's existing presets and loads a selection back into the form; a Reset-to-defaults button re-seeds from the definition. Loading is loosely bound: preset keys naming a declared parameter land, everything else is ignored, so presets survive tool revisions. Preset names are locked to `[a-z0-9][a-z0-9_-]{0,63}` — the input filters illegal characters as typed, and dots are excluded so the filename parses unambiguously (tool names can't contain dots). The roster listing gains `vaultMountPointId` (null hides the controls, as does a parameterless tool); file IO goes through the existing mount-points file routes. Naming contract in new `lib/pascal/tool-presets.ts`; spec at `docs/developer/features/custom-tool-presets.md`.

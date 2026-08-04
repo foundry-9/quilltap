@@ -21,10 +21,21 @@
  * The whole sentence is the caller's, not a label this composes into one: some
  * of these messages are logged and some are surfaced to a person reading a
  * failed roll, and those two want different wording.
+ *
+ * Pass a factory instead of a string when the caller needs to tell "the
+ * deadline fired" apart from "the work failed" — a typed error survives the
+ * `catch` that a message alone only survives by string matching.
  */
-export function withTimeout<T>(promise: Promise<T>, ms: number, timeoutMessage: string): Promise<T> {
+export function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  timeoutMessage: string | (() => Error)
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(timeoutMessage)), ms)
+    const timer = setTimeout(
+      () => reject(typeof timeoutMessage === 'string' ? new Error(timeoutMessage) : timeoutMessage()),
+      ms
+    )
     promise.then(
       (value) => {
         clearTimeout(timer)

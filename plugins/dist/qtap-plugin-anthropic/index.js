@@ -16855,6 +16855,18 @@ function getQuilltapVersion() {
 function getQuilltapUserAgent() {
   return `Quilltap/${getQuilltapVersion()}`;
 }
+var DEFAULT_REQUEST_TIMEOUT_MS = 3e5;
+function resolveRequestTimeoutMs(params, defaultMs = DEFAULT_REQUEST_TIMEOUT_MS) {
+  const requested = params.requestTimeoutMs;
+  return typeof requested === "number" && requested > 0 ? requested : defaultMs;
+}
+function buildSdkClientOptions(params, defaultMs = DEFAULT_REQUEST_TIMEOUT_MS) {
+  const capped = typeof params.requestTimeoutMs === "number" && params.requestTimeoutMs > 0;
+  return {
+    timeout: resolveRequestTimeoutMs(params, defaultMs),
+    maxRetries: capped ? 0 : 2
+  };
+}
 var rewriteLogger = createPluginLogger("host-rewrite");
 
 // provider.ts
@@ -17089,7 +17101,10 @@ var AnthropicProvider = class _AnthropicProvider {
   async sendMessage(params, apiKey) {
     const client = new Anthropic({
       apiKey,
-      defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
+      defaultHeaders: { "User-Agent": getQuilltapUserAgent() },
+      // A caller-supplied budget is a ceiling; without one the SDK's 10-minute
+      // default would let a silent endpoint hold a turn open indefinitely.
+      ...buildSdkClientOptions(params)
     });
     const systemMessages = params.messages.filter((m) => m.role === "system" && typeof m.content === "string" && m.content.length > 0);
     const profileParams = params.profileParameters;
@@ -17199,7 +17214,10 @@ var AnthropicProvider = class _AnthropicProvider {
   async *streamMessage(params, apiKey) {
     const client = new Anthropic({
       apiKey,
-      defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
+      defaultHeaders: { "User-Agent": getQuilltapUserAgent() },
+      // A caller-supplied budget is a ceiling; without one the SDK's 10-minute
+      // default would let a silent endpoint hold a turn open indefinitely.
+      ...buildSdkClientOptions(params)
     });
     const systemMessages = params.messages.filter((m) => m.role === "system" && typeof m.content === "string" && m.content.length > 0);
     const profileParams = params.profileParameters;

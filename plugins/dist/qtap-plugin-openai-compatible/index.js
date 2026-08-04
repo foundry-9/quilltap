@@ -11079,6 +11079,13 @@ function getQuilltapVersion() {
 function getQuilltapUserAgent() {
   return `Quilltap/${getQuilltapVersion()}`;
 }
+var DEFAULT_REQUEST_TIMEOUT_MS = 3e5;
+function buildSdkRequestOptions(params) {
+  const requested = params.requestTimeoutMs;
+  if (typeof requested !== "number" || requested <= 0) return void 0;
+  return { timeout: requested, maxRetries: 0 };
+}
+var DEFAULT_MAX_RETRIES = 2;
 var OpenAICompatibleProvider = class {
   /**
    * Creates a new OpenAI-compatible provider instance.
@@ -11094,11 +11101,15 @@ var OpenAICompatibleProvider = class {
       this.providerName = "OpenAICompatible";
       this.requireApiKey = false;
       this.attachmentErrorMessage = "OpenAI-compatible provider file attachment support varies by implementation (not yet implemented)";
+      this.requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS;
+      this.maxRetries = DEFAULT_MAX_RETRIES;
     } else {
       this.baseUrl = config2.baseUrl;
       this.providerName = config2.providerName ?? "OpenAICompatible";
       this.requireApiKey = config2.requireApiKey ?? false;
       this.attachmentErrorMessage = config2.attachmentErrorMessage ?? "OpenAI-compatible provider file attachment support varies by implementation (not yet implemented)";
+      this.requestTimeoutMs = config2.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+      this.maxRetries = config2.maxRetries ?? DEFAULT_MAX_RETRIES;
     }
     this.logger = createPluginLogger(`${this.providerName}Provider`);
   }
@@ -11150,8 +11161,27 @@ var OpenAICompatibleProvider = class {
     return new OpenAI({
       apiKey: this.getEffectiveApiKey(apiKey),
       baseURL: this.baseUrl,
-      defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
+      defaultHeaders: { "User-Agent": getQuilltapUserAgent() },
+      timeout: this.requestTimeoutMs,
+      maxRetries: this.maxRetries
     });
+  }
+  /**
+   * Builds the per-request options for a single call.
+   *
+   * When the caller supplied `params.requestTimeoutMs` it is a hard ceiling:
+   * the request uses that budget and does not retry, so the total time spent is
+   * what the caller asked for rather than a multiple of it. Otherwise the
+   * client-level defaults apply.
+   *
+   * Subclasses that build their own request bodies should pass the result as
+   * the second argument to `client.chat.completions.create(...)`.
+   *
+   * @param params - LLM parameters for the request
+   * @returns Request options for the OpenAI SDK, or undefined to use defaults
+   */
+  buildRequestOptions(params) {
+    return buildSdkRequestOptions(params);
   }
   /**
    * Sends a message and returns the complete response.
@@ -11200,7 +11230,7 @@ var OpenAICompatibleProvider = class {
         top_p: params.topP ?? 1,
         stop: params.stop,
         ...params.cacheKey ? { user: params.cacheKey } : {}
-      });
+      }, this.buildRequestOptions(params));
       const choice = response.choices[0];
       return {
         content: choice.message.content ?? "",
@@ -11271,7 +11301,7 @@ var OpenAICompatibleProvider = class {
         stream: true,
         stream_options: { include_usage: true },
         ...params.cacheKey ? { user: params.cacheKey } : {}
-      });
+      }, this.buildRequestOptions(params));
       let chunkCount = 0;
       let accumulatedUsage = null;
       for await (const chunk of stream) {

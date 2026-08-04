@@ -7,7 +7,7 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import type { TextProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage, ImageGenParams, ImageGenResponse } from './types'
-import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils'
+import { buildSdkClientOptions, createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils'
 
 const logger = createPluginLogger('qtap-plugin-anthropic')
 
@@ -338,6 +338,9 @@ export class AnthropicProvider implements TextProvider {
     const client = new Anthropic({
       apiKey,
       defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+      // A caller-supplied budget is a ceiling; without one the SDK's 10-minute
+      // default would let a silent endpoint hold a turn open indefinitely.
+      ...buildSdkClientOptions(params),
     })
 
     // Anthropic requires system messages separate from the messages array.
@@ -532,6 +535,9 @@ export class AnthropicProvider implements TextProvider {
     const client = new Anthropic({
       apiKey,
       defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+      // A caller-supplied budget is a ceiling; without one the SDK's 10-minute
+      // default would let a silent endpoint hold a turn open indefinitely.
+      ...buildSdkClientOptions(params),
     })
 
     // Quilltap may emit multiple system messages (a stable identity stack

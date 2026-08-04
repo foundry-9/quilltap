@@ -42915,6 +42915,11 @@ function getQuilltapVersion() {
 function getQuilltapUserAgent() {
   return `Quilltap/${getQuilltapVersion()}`;
 }
+var DEFAULT_REQUEST_TIMEOUT_MS = 3e5;
+function resolveRequestTimeoutMs(params, defaultMs = DEFAULT_REQUEST_TIMEOUT_MS) {
+  const requested = params.requestTimeoutMs;
+  return typeof requested === "number" && requested > 0 ? requested : defaultMs;
+}
 var rewriteLogger = createPluginLogger("host-rewrite");
 
 // provider.ts
@@ -42990,7 +42995,10 @@ var OpenRouterProvider = class {
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || "http://localhost:3000",
-      appTitle: getQuilltapUserAgent()
+      appTitle: getQuilltapUserAgent(),
+      // Non-streaming, so bounding the whole request is right. Without this the
+      // SDK default would let a silent endpoint hold a turn open indefinitely.
+      timeoutMs: resolveRequestTimeoutMs(params)
     });
     const messages = params.messages.filter((m) => !(m.role === "tool" && !m.toolCallId)).map((m) => {
       if (m.role === "tool" && m.toolCallId) {
@@ -43105,7 +43113,12 @@ var OpenRouterProvider = class {
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || "http://localhost:3000",
-      appTitle: getQuilltapUserAgent()
+      appTitle: getQuilltapUserAgent(),
+      // Streaming: only an explicit caller budget is honored. The SDK's
+      // timeoutMs bounds the whole request rather than stopping at the response
+      // headers, so a default here could cut off a long generation mid-answer.
+      // Background work, which is what the budget exists for, never streams.
+      ...params.requestTimeoutMs ? { timeoutMs: params.requestTimeoutMs } : {}
     });
     const messages = params.messages.filter((m) => !(m.role === "tool" && !m.toolCallId)).map((m) => {
       if (m.role === "tool" && m.toolCallId) {
@@ -43313,17 +43326,28 @@ var OpenRouterProvider = class {
       body.reasoning = { exclude: false };
     }
     try {
-      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
-          "HTTP-Referer": process.env.BASE_URL || "http://localhost:3000",
-          "X-Title": "Quilltap",
-          "User-Agent": getQuilltapUserAgent()
-        },
-        body: JSON.stringify(body)
-      });
+      const controller = new AbortController();
+      const firstByteTimer = setTimeout(
+        () => controller.abort(),
+        resolveRequestTimeoutMs(params)
+      );
+      let response;
+      try {
+        response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`,
+            "HTTP-Referer": process.env.BASE_URL || "http://localhost:3000",
+            "X-Title": "Quilltap",
+            "User-Agent": getQuilltapUserAgent()
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal
+        });
+      } finally {
+        clearTimeout(firstByteTimer);
+      }
       if (!response.ok) {
         const errorText = await response.text();
         logger.error("OpenRouter API error", {

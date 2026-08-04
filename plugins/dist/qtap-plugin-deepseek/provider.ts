@@ -222,7 +222,8 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
 
     try {
       const response = (await client.chat.completions.create(
-        body as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming
+        body as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming,
+        this.buildRequestOptions(params)
       )) as OpenAI.Chat.Completions.ChatCompletion;
 
       const choice = response.choices[0];
@@ -322,7 +323,8 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
 
     try {
       const stream = (await client.chat.completions.create(
-        body as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming
+        body as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming,
+        this.buildRequestOptions(params)
       )) as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
 
       const toolCallAccumulator = new Map<

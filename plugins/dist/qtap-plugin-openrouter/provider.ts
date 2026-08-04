@@ -17,7 +17,7 @@ import type {
   LLMResponse,
   StreamChunk,
 } from './types';
-import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
+import { createPluginLogger, getQuilltapUserAgent, resolveRequestTimeoutMs } from '@quilltap/plugin-utils';
 
 const logger = createPluginLogger('qtap-plugin-openrouter');
 
@@ -146,6 +146,9 @@ export class OpenRouterProvider implements TextProvider {
       apiKey,
       httpReferer: process.env.BASE_URL || 'http://localhost:3000',
       appTitle: getQuilltapUserAgent(),
+      // Non-streaming, so bounding the whole request is right. Without this the
+      // SDK default would let a silent endpoint hold a turn open indefinitely.
+      timeoutMs: resolveRequestTimeoutMs(params),
     });
 
     // Convert messages to OpenRouter format, formatting image attachments
@@ -309,6 +312,11 @@ export class OpenRouterProvider implements TextProvider {
       apiKey,
       httpReferer: process.env.BASE_URL || 'http://localhost:3000',
       appTitle: getQuilltapUserAgent(),
+      // Streaming: only an explicit caller budget is honored. The SDK's
+      // timeoutMs bounds the whole request rather than stopping at the response
+      // headers, so a default here could cut off a long generation mid-answer.
+      // Background work, which is what the budget exists for, never streams.
+      ...(params.requestTimeoutMs ? { timeoutMs: params.requestTimeoutMs } : {}),
     });
 
     // Convert messages to SDK format for the no-tools, no-images path.
@@ -589,17 +597,32 @@ export class OpenRouterProvider implements TextProvider {
     }
 
     try {
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-          'HTTP-Referer': process.env.BASE_URL || 'http://localhost:3000',
-          'X-Title': 'Quilltap',
-          'User-Agent': getQuilltapUserAgent(),
-        },
-        body: JSON.stringify(body),
-      });
+      // Bound how long OpenRouter may take to *start* answering, not how long
+      // it takes to finish: the timer is cleared once the response headers land
+      // so the SSE body streams unbounded. A signal covering the whole exchange
+      // would cut off a long generation mid-answer.
+      const controller = new AbortController();
+      const firstByteTimer = setTimeout(
+        () => controller.abort(),
+        resolveRequestTimeoutMs(params)
+      );
+      let response: Response;
+      try {
+        response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+            'HTTP-Referer': process.env.BASE_URL || 'http://localhost:3000',
+            'X-Title': 'Quilltap',
+            'User-Agent': getQuilltapUserAgent(),
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(firstByteTimer);
+      }
 
       if (!response.ok) {
         const errorText = await response.text();
