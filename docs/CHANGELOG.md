@@ -4,6 +4,24 @@
 
 ### 4.8-dev
 
+#### Anthropic SDK 0.88.0 → 0.115.0, and published images stop shipping plugin node_modules
+
+Two findings from scanning a locally built image, both in the same area.
+
+**The Anthropic SDK was frozen 27 minor versions behind.** `qtap-plugin-anthropic` declared `"@anthropic-ai/sdk": "^0.88.0"`. For 0.x packages npm's caret pins the minor, so `^0.88.0` resolves to `>=0.88.0 <0.89.0` — `npm update` could never reach anything newer, and `@anthropic-ai/sdk` is not a root dependency, so nothing else pulled it forward. It is the only plugin SDK on a 0.x line; `openai@^7.2.0`, `@google/genai@^1.52.0`, `@modelcontextprotocol/sdk@^1.30.0`, and `@openrouter/sdk@^1.2.2` all float minors normally.
+
+That left CVE-2026-41686 (GHSA-p7fg-763f-g4gf, medium, fixed in 0.91.1): `BetaLocalFilesystemMemoryTool` created memory files with Node's default `0o666`/`0o777` modes, world-readable under a standard umask and world-writable under the permissive umask common in Docker images. Quilltap never instantiates that class — the plugin only uses `new Anthropic()`, `client.messages.create()`, and `client.models.list()` — so it was unreachable dead code inside the bundle, but it was real code, not a scanner artifact.
+
+Now on `^0.115.0`. The SDK surface in use is unchanged, the `anthropic-version` header is still `2023-06-01`, and all nine streaming event types the provider switches on (`content_block_start`/`_delta`/`_stop`, `message_start`/`_delta`, `text_delta`, `thinking_delta`, `signature_delta`, `input_json_delta`) still exist in 0.115.0 — checked explicitly, because the streaming path casts through `as unknown as AsyncIterable<any>` and the typecheck cannot see it. Plugin 1.0.51 → 1.0.52; `manifest.json` had drifted to 1.0.50 in 74ec93b5 and is resynced to 1.0.52.
+
+**Published images shipped every plugin's `node_modules`.** esbuild bundles each plugin's dependencies into its `index.js`, so those trees are dead weight once the build finishes — 683 MB across the 14 plugins, plus scanner findings for SDK copies that are never loaded. `.dockerignore` excluded `plugins/dist/*/node_modules` and the root `Dockerfile` also `rm -rf`'d them, but `Dockerfile.ci` copies `prebuild/plugins/dist/` from the CI artifact, and neither guard matched that path — so the images actually published to Docker Hub carried all 14. `Dockerfile.ci` now strips them, and `.dockerignore` excludes `prebuild/plugins/dist/*/node_modules` as well, matching the belt-and-braces already used for the non-CI path.
+
+Verified by building both Dockerfiles: the CI path now reports 0 plugin `node_modules` directories while keeping every plugin bundle, the bundled SDK reads 0.115.0, and the image scans 0 critical / 0 high. The image is 1.73 GB, down from 2.73 GB.
+
+Two verification limits worth knowing before the next release. First, every build and scan across this Docker pass was **arm64 only** — releases publish a multi-arch manifest, and the amd64 half is unverified. That matters most for the perl purge in the entry below: `dpkg --purge` ends in `|| true`, so if the unqualified `libperl5.36` name failed to resolve on amd64 the build would still succeed and perl would silently survive, putting 2 critical + 2 high back into that half. Worth one emulated `--platform linux/amd64` build and scan to confirm. Second, the Anthropic SDK bump was verified statically — typecheck, bundle load, streaming event types, version header — but no live API call was made, so a real streaming turn with extended thinking is still worth running.
+
+Not changed: `scripts/build-standalone-tarball.ts` copies `plugins/dist/.` wholesale, so the standalone tarball — and the Electron shell and `npx quilltap` paths that consume it — still carry the same 683 MB. Same root cause, different consumer; left alone here because it needs testing against those two shells.
+
 #### Docker image CVE reduction: 3 critical / 12 high → 0 critical / 0 high
 
 A Docker Scout scan of `foundry9/quilltap:4.8.0-dev.152` reported 117 vulnerabilities across 30 packages (3 critical, 12 high, 22 medium, 91 low). None were in Quilltap's own code; all came from tooling that ships in the image but is never executed at runtime. Four changes, verified by rescanning:

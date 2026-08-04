@@ -2,6 +2,7 @@ Dockerfile
 .dockerignore
 node_modules
 plugins/dist/*/node_modules
+prebuild/plugins/dist/*/node_modules
 npm-debug.log
 README.md
 .next
@@ -11,7 +12,11 @@ features
 *.md
 .env*.local
 
-# prebuild/ is intentionally NOT excluded — Dockerfile.ci uses it for CI builds
+# prebuild/ is intentionally NOT excluded — Dockerfile.ci uses it for CI builds.
+# Its plugins' node_modules ARE excluded above: esbuild bundles every dependency
+# into each plugin's index.js, so the CI artifact's copies are dead weight that
+# would otherwise ship in the published image. Dockerfile.ci also rm -rf's them,
+# the same belt-and-braces the root Dockerfile uses for plugins/dist.
 
 # Large directories not needed for Docker build
 out

@@ -59,6 +59,13 @@ COPY public ./public
 # Copy plugins from CI build-app job
 COPY --chown=nextjs:nodejs prebuild/plugins/dist/ ./plugins/dist
 
+# Drop the plugins' own node_modules — esbuild bundles every dependency into each
+# plugin's index.js, so these trees are dead weight the moment the build finishes
+# (~683 MB across the 14 plugins, and a pile of scanner findings for SDK copies
+# that are never loaded). The regular Dockerfile does this in its builder stage;
+# the CI path copies prebuilt artifacts wholesale, so it has to strip them here.
+RUN rm -rf /app/plugins/dist/*/node_modules
+
 # Copy package files for native module dependencies
 COPY package.json package-lock.json ./
 
