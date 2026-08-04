@@ -120,6 +120,13 @@ const createChatSchema = z.object({
   timestampConfig: TimestampConfigSchema.optional(),
   projectId: z.uuid().optional(),
   imageProfileId: z.uuid().optional(), // Chat-level image profile (shared by all participants)
+  /**
+   * Roleplay template for the new chat, chosen in the New Chat dialog. When the
+   * key is present it wins outright — including an explicit `null`, which means
+   * "no template" — over the project default and the user's global default.
+   * Omit the key entirely to fall back to that default chain.
+   */
+  roleplayTemplateId: z.uuid().nullable().optional(),
   outfitSelections: z.array(OutfitSelectionSchema).optional(), // Per-character outfit selections for chat start
   avatarGenerationEnabled: z.boolean().optional(), // Enable auto-generated character avatars on outfit changes
   /**
@@ -1123,10 +1130,26 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
   // Resolve image profile: request > project default > character default > null
   const chatImageProfileId = validatedData.imageProfileId || projectDefaultImageProfileId || buildResult.firstImageProfileId || null;
 
-  // Resolve roleplay template: project default > user/global default > null.
-  // Baked onto the chat at creation so the project's preference sticks.
+  // Resolve roleplay template: explicit request (including a deliberate null)
+  // > project default > user/global default > null. Baked onto the chat at
+  // creation so the choice — or the project's preference — sticks.
+  if (validatedData.roleplayTemplateId) {
+    const template = await repos.roleplayTemplates.findById(validatedData.roleplayTemplateId);
+    if (!template) {
+      return badRequest('Roleplay template not found');
+    }
+  }
   const defaultRoleplayTemplateId =
-    projectDefaultRoleplayTemplateId || chatSettings?.defaultRoleplayTemplateId || null;
+    typeof validatedData.roleplayTemplateId !== 'undefined'
+      ? validatedData.roleplayTemplateId
+      : projectDefaultRoleplayTemplateId || chatSettings?.defaultRoleplayTemplateId || null;
+  logger.debug('[Chats v1] Resolved roleplay template for new chat', {
+    requested: validatedData.roleplayTemplateId ?? null,
+    requestedExplicitly: typeof validatedData.roleplayTemplateId !== 'undefined',
+    projectDefault: projectDefaultRoleplayTemplateId,
+    userDefault: chatSettings?.defaultRoleplayTemplateId ?? null,
+    resolved: defaultRoleplayTemplateId,
+  });
 
   const chat = await repos.chats.create({
     userId: user.id,

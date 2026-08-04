@@ -120,6 +120,19 @@ export interface Project {
   color?: string | null
   defaultAvatarGenerationEnabled?: boolean | null
   defaultImageProfileId?: string | null
+  defaultRoleplayTemplateId?: string | null
+}
+
+/**
+ * A roleplay template offered in the New Chat dialog's template dropdown.
+ * Trimmed from the `/api/v1/roleplay-templates` record — the form only needs
+ * enough to label an option.
+ */
+export interface RoleplayTemplateOption {
+  id: string
+  name: string
+  description?: string | null
+  isBuiltIn: boolean
 }
 
 export interface SelectedCharacter {
@@ -157,6 +170,18 @@ export interface NewChatAutonomousState {
 
 export interface NewChatFormState {
   imageProfileId: string
+  /**
+   * Roleplay template for the new chat. Seeded with whatever the chat would
+   * have defaulted to (project default > user/global default), and sent
+   * verbatim at create time — `null` means "no template".
+   */
+  roleplayTemplateId: string | null
+  /**
+   * Set once the user picks a template by hand. Reference data reloads
+   * (adding a character, switching projects) re-seed the default only while
+   * this is false, so an explicit choice is never quietly overwritten.
+   */
+  roleplayTemplateTouched: boolean
   scenario: string
   scenarioId: string | null
   /** Relative path of a selected project scenario; mutually exclusive with `scenarioId` and free-text `scenario`. */

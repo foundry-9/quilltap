@@ -19,6 +19,7 @@ import type {
   Character,
   GeneralScenarioOption,
   NewChatFormState,
+  RoleplayTemplateOption,
   SelectedCharacter,
 } from '../types'
 
@@ -79,6 +80,8 @@ jest.mock('@/hooks/usePersonaDisplayName', () => ({
 function makeState(overrides: Partial<NewChatFormState> = {}): NewChatFormState {
   return {
     imageProfileId: '',
+    roleplayTemplateId: null,
+    roleplayTemplateTouched: false,
     scenario: '',
     scenarioId: null,
     projectScenarioPath: null,
@@ -312,5 +315,70 @@ describe('NewChatForm Play As (in-place)', () => {
 
     expect(autonomousCheckbox()).not.toBeDisabled()
     expect(screen.queryByText(/revert it to/i)).not.toBeInTheDocument()
+  })
+})
+
+// --- Roleplay template picker ----------------------------------------------
+
+const TEMPLATES: RoleplayTemplateOption[] = [
+  { id: 'tpl-classic', name: 'Classic Roleplay', description: null, isBuiltIn: true },
+  { id: 'tpl-house', name: 'House Style', description: null, isBuiltIn: false },
+]
+
+function templateSelect() {
+  return screen.getByLabelText('Roleplay Template') as HTMLSelectElement
+}
+
+describe('NewChatForm roleplay template picker', () => {
+  it('is hidden when no templates are available', () => {
+    renderForm()
+    expect(screen.queryByLabelText('Roleplay Template')).not.toBeInTheDocument()
+  })
+
+  it('defaults to the chat default and marks it in the list', () => {
+    renderForm(
+      { roleplayTemplateId: 'tpl-house' },
+      { roleplayTemplates: TEMPLATES, defaultRoleplayTemplateId: 'tpl-house' }
+    )
+
+    expect(templateSelect().value).toBe('tpl-house')
+    expect(screen.getByRole('option', { name: /House Style \(default\)/ })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Classic Roleplay (Built-in)' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'No Template' })).toBeInTheDocument()
+  })
+
+  it('marks "No Template" as the default when no default template is set', () => {
+    renderForm({}, { roleplayTemplates: TEMPLATES, defaultRoleplayTemplateId: null })
+
+    expect(templateSelect().value).toBe('')
+    expect(screen.getByRole('option', { name: 'No Template (default)' })).toBeInTheDocument()
+  })
+
+  it('records an explicit pick as touched so reference reloads cannot re-seed it', () => {
+    const { setState } = renderForm(
+      { roleplayTemplateId: 'tpl-house' },
+      { roleplayTemplates: TEMPLATES, defaultRoleplayTemplateId: 'tpl-house' }
+    )
+
+    fireEvent.change(templateSelect(), { target: { value: 'tpl-classic' } })
+
+    const updater = setState.mock.calls[0][0] as (prev: NewChatFormState) => NewChatFormState
+    const next = updater(makeState({ roleplayTemplateId: 'tpl-house' }))
+    expect(next.roleplayTemplateId).toBe('tpl-classic')
+    expect(next.roleplayTemplateTouched).toBe(true)
+  })
+
+  it('turns "No Template" into a null id, still marked as touched', () => {
+    const { setState } = renderForm(
+      { roleplayTemplateId: 'tpl-house' },
+      { roleplayTemplates: TEMPLATES, defaultRoleplayTemplateId: 'tpl-house' }
+    )
+
+    fireEvent.change(templateSelect(), { target: { value: '' } })
+
+    const updater = setState.mock.calls[0][0] as (prev: NewChatFormState) => NewChatFormState
+    const next = updater(makeState({ roleplayTemplateId: 'tpl-house' }))
+    expect(next.roleplayTemplateId).toBeNull()
+    expect(next.roleplayTemplateTouched).toBe(true)
   })
 })

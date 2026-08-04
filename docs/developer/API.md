@@ -1733,6 +1733,8 @@ Create a new chat.
 
 **Note**: `userCharacterId` is optional - provide a user-controlled character ID to "play as" that character in the chat.
 
+**Note**: `roleplayTemplateId` is optional and tri-state. Omit the key to fall back to the default chain (project default > user/global default > none). Send a template UUID to force that template, or send an explicit `null` for "no template" — both beat the defaults. A UUID that doesn't resolve returns `400 Roleplay template not found`.
+
 **Note**: `progressId` is optional — a client-generated UUID. When present, the handler publishes creation progress (setup milestones and per-character LLM wardrobe choices) to an in-memory bus keyed by that id, which the "Green Room" status dialog subscribes to via `GET /api/v1/chats/creation-progress?id=…` (below). Omit it and creation behaves exactly as before, returning the same JSON.
 
 To create an autonomous room, include `chatType: "autonomous"` and autonomous-room fields:

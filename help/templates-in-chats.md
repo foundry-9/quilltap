@@ -26,6 +26,16 @@ When a template is active in a chat, it:
 - **Independent** — Changing one chat's template doesn't affect others
 - **Can be changed anytime** — Switch templates at any point in a conversation
 
+## Choosing a Template When You Create the Chat
+
+The New Chat form carries its own **Roleplay Template** dropdown, just beneath **Play As**. It saves a trip to the sidebar for chats you already know the style of.
+
+- **Pre-selected for you** — It arrives set to whatever the chat would have used anyway: the project's default template (when the chat is filed under a project), your own default from **Settings → Templates** otherwise, or **No Template** when you keep no default
+- **The default is labelled** — The option that would have been chosen for you is marked *(default)*, so an override is obvious
+- **Built-in templates are labelled** — Same "(Built-in)" marker as the in-chat dropdown
+- **Hidden when there's nothing to choose** — With no templates installed, the dropdown doesn't appear
+- **Your pick sticks** — Adding characters or switching projects re-suggests the default only until you've chosen by hand
+
 ## Accessing the Template Selector
 
 While in a chat:
@@ -210,11 +220,11 @@ Some templates include:
 
 ### Scenario 1: Starting a New Chat
 
-1. Create a new chat
-2. Open Chat Settings
-3. The default template is already selected
+1. Open the New Chat form
+2. Find the **Roleplay Template** dropdown beneath **Play As**
+3. The default template is already selected, marked *(default)*
 4. If you want a different template, select it now
-5. Close Settings and start chatting
+5. Create the chat and start chatting
 
 ### Scenario 2: Switching Styles Mid-Story
 

@@ -47,6 +47,8 @@ export function NewChatPageClient() {
     project,
     projectScenarios,
     generalScenarios,
+    roleplayTemplates,
+    defaultRoleplayTemplateId,
     availableProjects,
     selectedProjectId,
     setSelectedProjectId,
@@ -144,6 +146,8 @@ export function NewChatPageClient() {
             project={project}
             projectScenarios={projectScenarios}
             generalScenarios={generalScenarios}
+            roleplayTemplates={roleplayTemplates}
+            defaultRoleplayTemplateId={defaultRoleplayTemplateId}
             availableProjects={availableProjects}
             selectedProjectId={selectedProjectId}
             onSelectedProjectIdChange={setSelectedProjectId}

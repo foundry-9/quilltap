@@ -93,6 +93,16 @@ Choose one, and that character quietly changes hats: where the machine once spok
 
 One consequence follows, as surely as a headache follows a particularly long dinner party: the moment any character takes your chair, the room can no longer be made **autonomous**, for an autonomous room by its very nature keeps no human at the table. The *Make this an autonomous room* toggle greys itself out and posts a courteous note to that effect. Return the character to LLM control to restore the option.
 
+### Settling the House Style Before a Word Is Spoken — the Roleplay Template
+
+A conversation's *roleplay template* decides how prose, dialogue, and murmured asides are dressed — and until now it was a matter to be discovered after the fact, by opening the sidebar of a chat already in progress and adjusting it there. No longer. The new-chat form carries a **Roleplay Template** dropdown of its own, sitting quietly beneath **Play As**.
+
+It arrives already set to whatever this conversation would have chosen for itself: the project's preferred template when you are filing the chat under a project, your own default from **Settings → Templates** otherwise, and **No Template** when you keep no default at all. The option that would have been chosen for you is marked *(default)*, so you may see at a glance whether you are agreeing with the house or overruling it.
+
+Change it and the new conversation begins in that style — no visit to the sidebar required. Leave it be and nothing whatever is different from before. And should you think better of it once the conversation is under way, the **Roleplay Template** dropdown in the chat's own sidebar remains where it always was, ready to be reconsidered.
+
+(The dropdown keeps its counsel when you have no templates installed at all, there being nothing to choose between.)
+
 ## The Chat Interface
 
 ### Message Area

@@ -122,6 +122,8 @@ export function NewChatModal({
     project,
     projectScenarios,
     generalScenarios,
+    roleplayTemplates,
+    defaultRoleplayTemplateId,
     availableProjects,
     selectedProjectId,
     setSelectedProjectId,
@@ -256,6 +258,8 @@ export function NewChatModal({
               project={project}
               projectScenarios={projectScenarios}
               generalScenarios={generalScenarios}
+              roleplayTemplates={roleplayTemplates}
+              defaultRoleplayTemplateId={defaultRoleplayTemplateId}
               availableProjects={isContinuation ? undefined : availableProjects}
               selectedProjectId={isContinuation ? undefined : selectedProjectId}
               onSelectedProjectIdChange={isContinuation ? undefined : setSelectedProjectId}

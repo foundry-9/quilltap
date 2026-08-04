@@ -4,6 +4,18 @@
 
 ### 4.8-dev
 
+#### Pick a roleplay template when you create the chat
+
+The New Chat form (page and modal) now has a **Roleplay Template** dropdown, beneath **Play As**. Previously the template was decided silently at creation — project default, then the user's global default — and could only be seen or changed afterward from the chat sidebar.
+
+The dropdown is pre-selected with exactly what the chat would have gotten: project default > user/global default > No Template. That option is labelled `(default)`, so an override is visible. Built-in templates keep their `(Built-in)` marker. The control is hidden when no templates exist.
+
+The chosen value is always sent on create, including `null` for "No Template". `POST /api/v1/chats` accepts a new `roleplayTemplateId` field: present (even as `null`) wins over both defaults; omitted keeps the old default chain. An id that doesn't resolve is a 400.
+
+Reference-data reloads — adding a character, switching projects — re-seed the default only until the user picks a template by hand (`roleplayTemplateTouched` on the form state), so an explicit choice is never overwritten.
+
+Known limitation, pre-existing: choosing "No Template" stores `null`, and `getRoleplayTemplate` treats a null template on a chat as "never set" and re-inherits the default on the first turn. Same behavior as picking "No Template" in the chat sidebar today. Distinguishing a deliberate none from an unset value needs a data-model marker and is not part of this change.
+
 #### `PLUGIN_UTILS_VERSION` is generated, not hand-written
 
 plugin-utils exported `PLUGIN_UTILS_VERSION` as a hardcoded string literal, documented as usable "at runtime to check compatibility." It had been left at `2.2.1` while the package shipped `2.2.18` — seventeen releases of drift, and a wrong answer for anything that trusted it. Nothing in this repo or in `plugins/dist/` actually reads the constant, so no shipped behavior was affected, but the value published to npm was wrong.
