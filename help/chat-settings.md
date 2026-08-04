@@ -469,8 +469,11 @@ To remedy this situation:
    ```
    docker run -e QUILLTAP_TIMEZONE=America/New_York ...
    ```
+   The container obligingly winds its own clock to match, so the one variable settles the whole household.
 
 The timezone resolution follows a courteous chain of precedence: per-chat setting wins, then the Salon default, then the `QUILLTAP_TIMEZONE` environment variable, and finally the server's system timezone.
+
+A word on why the container's own clock matters, and not merely the formatting: some of the establishment's business consults the wall clock directly rather than asking how to phrase things. Rooms that wake on a schedule, the daily token allowance that turns over at midnight, and the Commonplace Book's notion of what counts as "today" all take their cue from the server's hour. Set the timezone in the Salon alone and your timestamps will read handsomely while a room scheduled for seven in the morning rings at two — a discrepancy that has ruined many a well-planned breakfast. The environment variable sets both at once and spares you the arithmetic.
 
 **Fictional Time:**
 

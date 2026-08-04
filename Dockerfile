@@ -59,7 +59,12 @@ RUN apt-get update \
       -subj "/C=US/ST=Development/L=Local/O=Quilltap Dev/OU=Dev/CN=localhost" \
       -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
 
+# Same entrypoint as production, so the timezone knobs stay in lockstep here too
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
 EXPOSE 3000
+ENTRYPOINT ["entrypoint.sh"]
 CMD ["npm", "run", "dev"]
 
 # Build stage

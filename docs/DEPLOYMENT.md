@@ -102,6 +102,11 @@ Only needed when exposing Quilltap on a custom domain. For local use, everything
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `QUILLTAP_TIMEZONE` | IANA timezone name (e.g., `America/New_York`, `Europe/London`, `Asia/Tokyo`) for timestamp injection. Auto-detected in Electron app. | System default (usually UTC in Docker) |
+| `TZ` | Standard Unix timezone for the process clock. Governs the paths that read local time directly rather than the formatting chain: episodic day-references ("today"/"yesterday" recall windows), the autonomous-room daily token budget rollover at local midnight, and croner schedule evaluation. | System default (UTC in Docker) |
+
+Setting either one in Docker is enough: the container entrypoint copies whichever is present into the other, with `QUILLTAP_TIMEZONE` winning if both are set and disagree. This mirrors what `lima/wsl-init.sh` does for the Lima and WSL2 shells. No `tzdata` package is needed — Node resolves `TZ` through its bundled ICU.
+
+Setting only one *outside* the entrypoint (a bare `node server.js`, say) leaves the two halves disagreeing: chat timestamps on your clock, schedules and recall windows on UTC.
 
 ### Logging
 

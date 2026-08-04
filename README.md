@@ -8,7 +8,7 @@ No subscriptions. No data harvested. No forgetting between sessions. No landlord
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap-server?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap-server/releases/latest)
-[![This Version](https://img.shields.io/badge/version-4.8.0--dev.152-yellow.svg?logo=github)](package.json)
+[![This Version](https://img.shields.io/badge/version-4.8.0--dev.153-yellow.svg?logo=github)](package.json)
 [![Docker Hub](https://img.shields.io/docker/v/foundry9/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/foundry9/quilltap)
 [![npm](https://img.shields.io/npm/v/quilltap?logo=npm)](https://www.npmjs.com/package/quilltap)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/6enCeQxY)
@@ -99,7 +99,7 @@ docker run -d \
 
 Open [http://localhost:3000](http://localhost:3000) and the setup wizard will guide you through first-time configuration.
 
-> **Timezone tip:** Set `QUILLTAP_TIMEZONE` to your IANA timezone (e.g., `America/New_York`, `Europe/London`, `Asia/Tokyo`) so timestamps in chats show your local time instead of UTC.
+> **Timezone tip:** Set `QUILLTAP_TIMEZONE` to your IANA timezone (e.g., `America/New_York`, `Europe/London`, `Asia/Tokyo`) so timestamps in chats show your local time instead of UTC. The container entrypoint also applies it to `TZ`, so scheduled rooms, daily budget rollovers, and "today"/"yesterday" memory recall land on your calendar day too.
 
 ### The Quick Route: npx
 

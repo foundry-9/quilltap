@@ -4,6 +4,20 @@
 
 ### 4.8-dev
 
+#### Docker containers now apply the timezone to the process clock, not just to timestamps
+
+`QUILLTAP_TIMEZONE` feeds the timestamp-formatting chain in `lib/chat/timestamp-utils.ts`, but several paths read Node's system-local clock instead and so stayed on UTC in Docker:
+
+- `lib/memory/day-references.ts` — resolves "today"/"yesterday" for episodic recall against the server-local calendar, so recall windows were offset by the UTC gap.
+- `lib/background-jobs/handlers/autonomous-room-turn.ts` — the daily user-token budget rolls over at "instance-local midnight."
+- `lib/background-jobs/handlers/autonomous-room-schedule-tick.ts` — croner evaluates cron expressions in local time, so a room scheduled for 07:00 fired at 02:00 US Eastern.
+
+Those follow `TZ`, which nothing was setting. `docker/entrypoint.sh` now copies whichever of `TZ` / `QUILLTAP_TIMEZONE` is set into the other, with `QUILLTAP_TIMEZONE` winning when both are set and disagree — matching what `lima/wsl-init.sh` already did for the Lima and WSL2 shells. Setting neither is unchanged (UTC). No `tzdata` package is required; Node resolves `TZ` through bundled ICU.
+
+The `development` stage in `Dockerfile` had no `ENTRYPOINT` at all and now uses the same one, so dev containers get the same behavior as production and CI.
+
+Docs updated: `docs/DEPLOYMENT.md` (new `TZ` row plus the precedence note), `README.md` timezone tip, `help/chat-settings.md`.
+
 #### Staff announcements no longer wrap themselves in asterisks
 
 Twelve staff strings were written as asterisk-delimited narration — `*Aurora regards Charlie and pronounces upon their attire —*` and the like. Under a roleplay template that uses a different narration delimiter, those asterisks teach the model the wrong format. Models copy what the context shows them far more reliably than they follow an instruction that contradicts it, and the closing delimiter is where the instruction loses: a model told to narrate with `+` will open the span correctly and then close it with `*` two hundred tokens later, matching the surrounding prior.
