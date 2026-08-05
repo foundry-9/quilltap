@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Docs: PROMPT_ARCHITECTURE.md rewritten for the current builder
+
+The file still described the pre-refactor prompt — twelve concatenated blocks (`[IDENTITY BLOCK]`, `[RELATIONSHIP FRAME]`, `[EMOTIONAL STYLE]`, …) assembled by `lib/chat/initialize.ts`. None of that is how a turn has been built for several releases. The rewrite documents what actually runs: the stable-prefix / Staff-whisper split and why it exists; `buildIdentityStack` block order and the fields deliberately left out of it (`description`, `identity`, `scenario`); the per-turn wrapper (roleplay template, math note, Taboo, tool instructions, tool reinforcement); the wire order of the three system blocks, the history, and the trailing sections on the new user message; `chats.compiledIdentityStacks` with its five invalidation hooks and read-through fallback; both provider-caching mechanisms; the persona-body/`opaqueContent` split and whisper role normalization; the template-variable table; and the help-chat, Brahma Console, Carina, and `self_inventory` prompt paths. Closes with the traps — including that the `role: SYSTEM` message `initialize.ts` writes at the head of every chat is filtered out of the LLM context and reaches no model.
+
 #### CI: timezone-pinned tests, Discord notifications off deprecated actions, build job cleanup
 
 **The Almanack snapshot failed in CI but passed locally.** `renderAlmanackMarkdown` formats its date stamps with `toLocaleString`, which uses the ambient timezone, so the committed snapshot carried the recording machine's local times and the UTC runner produced a five-hour shift on every date. The test's own pin (`process.env.TZ = 'UTC'` in a `beforeAll`) never worked: ICU resolves and caches the default zone the first time a locale-aware formatter runs in a worker process, well before `beforeAll`. The pin moved to `jest.config.ts` and `jest.integration.config.ts`, where it runs before Jest forks its workers, and the snapshot was regenerated under UTC. Local and CI now agree on timezone instead of agreeing by accident.
