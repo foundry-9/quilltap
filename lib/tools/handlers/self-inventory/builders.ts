@@ -508,6 +508,10 @@ export async function buildPromptSection(
     }
   }
 
+  // Deliberately omits `tabooPhrases`: this is introspection, not a live turn,
+  // and the async instance-settings read isn't worth threading through for a
+  // reporting path. The reconstructed prompt is therefore missing the Taboo
+  // section a real turn would carry — a known, accepted fidelity gap.
   const systemPrompt = buildSystemPrompt({
     character,
     userCharacter,

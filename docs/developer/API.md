@@ -469,6 +469,32 @@ Update the retention window. Merges with the current value and validates (intege
 }
 ```
 
+#### `GET /api/v1/settings/taboo`
+
+Read the instance-wide Taboo list (`instance_settings['taboo']`, not a `chat_settings` column) — phrases characters must never say. Rendered into the universal, cache-stable portion of every character's system prompt on conversational turns; an empty list renders no prompt section at all.
+
+**Response:**
+
+```json
+{
+  "phrases": ["that's not nothing", "weight-bearing"]
+}
+```
+
+#### `PUT /api/v1/settings/taboo`
+
+Replace the phrase list. The body is merged over the current value (so `{}` is a no-op rather than a wipe) and validated: at most 500 phrases, each 1–200 characters after trimming.
+
+The response echoes what was **stored**, not what was submitted — the write normalizes (trim, drop empties, drop case-insensitive duplicates keeping the first occurrence) while preserving the submitted order.
+
+**Request Body:**
+
+```json
+{
+  "phrases": ["that's not nothing", "weight-bearing"]
+}
+```
+
 ---
 
 ### Text Replacement Rules

@@ -19,6 +19,7 @@ import { ThinkingDisplaySettings } from '@/components/settings/chat-settings/Thi
 import { AnswerConfirmationSettings } from '@/components/settings/chat-settings/AnswerConfirmationSettings'
 import { DangerousContentSettings } from '@/components/settings/chat-settings/DangerousContentSettings'
 import { DataRetentionSettings } from '@/components/settings/chat-settings/DataRetentionSettings'
+import { TabooSettings } from '@/components/settings/chat-settings/TabooSettings'
 import { AutonomousRoomSettingsComponent } from '@/components/settings/chat-settings/AutonomousRoomSettings'
 import { AutonomousRoomsCard } from '@/components/tools/autonomous-rooms-card'
 import { useSettingsSection } from './useSettingsSection'
@@ -193,6 +194,10 @@ export function ChatTabContent() {
             imagePromptProfileId={settings.cheapLLMSettings.imagePromptProfileId}
             onImagePromptProfileChange={(id) => handleCheapLLMUpdate({ imagePromptProfileId: id })}
           />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Taboo" description="Phrases no character may utter, anywhere in the house" sectionId="taboo" forceOpen={activeSection === 'taboo'}>
+          <TabooSettings />
         </CollapsibleCard>
 
         <CollapsibleCard title="Data Retention" description="How long inactive chats keep their regenerable working data" sectionId="data-retention" forceOpen={activeSection === 'data-retention'}>

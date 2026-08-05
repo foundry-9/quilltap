@@ -71,6 +71,16 @@ const FIXTURE_OPTIONS: BuildSystemPromptOptions = {
   precompiledIdentityStack: null,
 }
 
+/**
+ * The same fixture with a Taboo list. The base fixture deliberately carries no
+ * `tabooPhrases` — an instance that never touches the feature must keep the
+ * golden above unchanged — so the rendered section needs a golden of its own.
+ */
+const FIXTURE_OPTIONS_WITH_TABOO: BuildSystemPromptOptions = {
+  ...FIXTURE_OPTIONS,
+  tabooPhrases: ["that's not nothing", 'weight-bearing'],
+}
+
 function hash(s: string): string {
   return createHash('sha256').update(s, 'utf8').digest('hex').slice(0, 16)
 }
@@ -116,5 +126,37 @@ describe('cache-determinism: system prompt', () => {
       )
     }
     expect(actual).toBe(golden)
+  })
+
+  it('buildSystemPrompt with a Taboo list is byte-identical across consecutive calls', () => {
+    const a = buildSystemPrompt(FIXTURE_OPTIONS_WITH_TABOO)
+    const b = buildSystemPrompt(FIXTURE_OPTIONS_WITH_TABOO)
+    expect(b).toBe(a)
+  })
+
+  it('buildSystemPrompt with a Taboo list matches its own checked-in golden', () => {
+    const golden = process.env.UPDATE_GOLDEN_PROMPT_HASH === '1'
+      ? hash(buildSystemPrompt(FIXTURE_OPTIONS_WITH_TABOO))
+      : '911204033cd41164'
+    const actual = hash(buildSystemPrompt(FIXTURE_OPTIONS_WITH_TABOO))
+    if (actual !== golden) {
+      console.error(
+        '[cache-determinism] system-prompt (with Taboo) hash drift\n' +
+        `  expected: ${golden}\n` +
+        `  actual:   ${actual}\n` +
+        '  Update the golden (after confirming the change is intentional) by\n' +
+        '  re-running the test with UPDATE_GOLDEN_PROMPT_HASH=1 and copying\n' +
+        '  the printed hash into the test source.',
+      )
+    }
+    expect(actual).toBe(golden)
+  })
+
+  it('an empty Taboo list leaves the prompt byte-identical to no Taboo option at all', () => {
+    // This is what keeps the golden above stable for every instance that never
+    // touches the feature: empty ⇒ the section is omitted entirely, header and
+    // all, rather than rendered as an empty block.
+    const empty = buildSystemPrompt({ ...FIXTURE_OPTIONS, tabooPhrases: [] })
+    expect(empty).toBe(buildSystemPrompt(FIXTURE_OPTIONS))
   })
 })

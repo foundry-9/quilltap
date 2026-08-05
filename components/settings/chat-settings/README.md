@@ -25,6 +25,7 @@ chat-settings/
 ├── AgentModeSettings.tsx           # Agent mode (agentic tool use) configuration (97 lines)
 ├── StoryBackgroundsSettings.tsx    # AI-generated background image settings (99 lines)
 ├── DangerousContentSettings.tsx    # The Concierge content management system (359 lines)
+├── TabooSettings.tsx               # Instance-wide forbidden-phrase list (self-fetching)
 └── README.md                       # This file
 ```
 
@@ -198,6 +199,11 @@ This component integrates with the memory system to track dangerous content dete
 - `imagePromptProfileId`: Current image prompt profile ID
 - `onImagePromptProfileChange`: Callback for profile changes
 
+### TabooSettings (TabooSettings.tsx)
+Editor for the instance-wide **Taboo** list — phrases no character may utter, rendered into the universal (cache-stable) portion of every character's system prompt.
+
+Unlike most components here it takes **no props** and does not ride `useChatSettings`: the value is instance-scoped (`instance_settings['taboo']`), so the component fetches for itself via TanStack Query (`queryKeys.settings.taboo` → `GET /api/v1/settings/taboo`), same shape of decision as `DataRetentionSettings`. Each add/remove PUTs the whole `phrases` array; the server normalizes (trim, drop empties, case-insensitive dedupe, order preserved) and the normalized response is written straight into the query cache.
+
 ### TimestampConfigCard (components/TimestampConfigCard.tsx)
 Reusable component for configuring timestamp display and fictional time:
 - Timestamp mode: NONE, START_ONLY, or EVERY_MESSAGE
@@ -308,6 +314,8 @@ The module communicates with the following v1 REST API endpoints:
 ### Settings Endpoints
 - `GET /api/v1/settings/chat` - Fetch current user's chat settings
 - `PUT /api/v1/settings/chat` - Update chat settings (request body varies by endpoint action)
+- `GET /api/v1/settings/taboo` - Fetch the instance-wide forbidden-phrase list
+- `PUT /api/v1/settings/taboo` - Replace the forbidden-phrase list (merged over the stored value, then normalized)
 
 ### Profile Endpoints
 - `GET /api/v1/connection-profiles` - Fetch all available LLM connection profiles

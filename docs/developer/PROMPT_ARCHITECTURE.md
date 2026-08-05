@@ -243,7 +243,5 @@ It deliberately omits `personality` and `manifesto`, the private vantage points,
 - [features/complete/per-character-prompt-caching.md](features/complete/per-character-prompt-caching.md)
 - [features/complete/commonplace-whisper-overhaul.md](features/complete/commonplace-whisper-overhaul.md)
 - [features/complete/carina.md](features/complete/carina.md)
-- [features/taboo.md](features/taboo.md)
+- [features/complete/taboo.md](features/complete/taboo.md)
 - [SYSTEM_PROMPT_PLUGIN_DEVELOPMENT.md](SYSTEM_PROMPT_PLUGIN_DEVELOPMENT.md)
-</content>
-</invoke>

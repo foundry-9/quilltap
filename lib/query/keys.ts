@@ -47,6 +47,7 @@ export const queryKeys = {
     chat: ['settings', 'chat'] as const,
     textReplacements: ['settings', 'text-replacements'] as const,
     generalState: ['settings', 'general-state'] as const,
+    taboo: ['settings', 'taboo'] as const,
   },
   connectionProfiles: {
     all: ['connection-profiles'] as const,

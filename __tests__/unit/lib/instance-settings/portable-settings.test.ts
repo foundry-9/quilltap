@@ -50,6 +50,7 @@ describe('listPortableInstanceSettings', () => {
       { key: 'lastMaintenanceSweepAt', value: '2026-08-01T00:00:00.000Z' },
       { key: 'highest_app_version', value: '4.8.0' },
       { key: 'dataRetention', value: '{"staleChatDays":30}' },
+      { key: 'taboo', value: '{"phrases":["weight-bearing"]}' },
     ])
 
     const settings = await listPortableInstanceSettings()
@@ -58,6 +59,7 @@ describe('listPortableInstanceSettings', () => {
       'maxConcurrentJobs',
       'memoryRecall',
       'dataRetention',
+      'taboo',
     ])
     for (const key of NON_PORTABLE) {
       expect(settings.some((s) => s.key === key)).toBe(false)

@@ -44,7 +44,7 @@ const RETRO_MINI_RECAP_MAX_ENTRIES = 5
  * the character some remembered flavour, not the turn.
  */
 const MEMORY_RECAP_PHASE_TIMEOUT_MS = 60_000
-import { getMemoryRecallSettings } from '@/lib/instance-settings'
+import { getMemoryRecallSettings, getTabooSettings } from '@/lib/instance-settings'
 import { generateMemoryRecap, type MemoryRecapResult } from '@/lib/memory/memory-recap'
 import { withTimeout } from '@/lib/promise-timeout'
 import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
@@ -775,6 +775,27 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   const precompiledIdentityStack = respondingParticipant
     ? getCompiledIdentityStack(chat, respondingParticipant.id)
     : null
+
+  // Instance-wide Taboo list. `buildSystemPrompt` is synchronous by design, so
+  // the read happens here and the phrases are handed down. A failure to read is
+  // never worth losing the turn over — the section is style guidance.
+  let tabooPhrases: string[] = []
+  try {
+    const tabooSettings = await getTabooSettings()
+    tabooPhrases = tabooSettings.phrases
+    if (tabooPhrases.length > 0) {
+      logger.debug('[ContextManager] Taboo phrases applied to system prompt', {
+        chatId: chat.id,
+        phraseCount: tabooPhrases.length,
+      })
+    }
+  } catch (error) {
+    logger.warn('[ContextManager] Failed to read Taboo settings — continuing without them', {
+      chatId: chat.id,
+      error: getErrorMessage(error),
+    })
+  }
+
   const systemPrompt = buildSystemPrompt({
     character,
     userCharacter,
@@ -786,6 +807,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     timezone: options.timezone,
     scenarioText: options.chat.scenarioText ?? undefined,
     precompiledIdentityStack,
+    tabooPhrases,
   })
   const systemPromptTokens = estimateTokens(systemPrompt, provider)
 

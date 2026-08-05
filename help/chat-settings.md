@@ -491,6 +491,18 @@ Sets how many days a chat may sit with nobody actually speaking in it (Staff ann
 
 Full particulars, including what precisely is and isn't tidied: [Data Retention](data-retention.md).
 
+### Taboo
+
+A standing list of phrases nobody in the house is to utter — the stock verbal tics of the age, the borrowed cleverness that arrives already exhausted. Every character receives the list as part of their standing instructions, with orders to avoid each entry not merely word for word but in all its inflections, rewordings, and near-variants, and to say the plain thing instead. They are likewise forbidden to mention the list, which spares you characters remarking archly upon what they've been told not to say.
+
+- **Add a phrase** — one at a time; commas belong inside a phrase, so they cannot serve as separators
+- **Remove a phrase** — the small × beside it
+- Up to 500 phrases, each up to 200 characters. Duplicates are quietly discarded regardless of capitalisation; your ordering is left exactly as you arranged it
+
+The list is instance-wide — one register for the whole establishment, no per-character or per-chat exceptions. An empty list adds nothing whatever to any prompt.
+
+Full particulars: [Taboo](taboo.md).
+
 ## Saving Chat Settings
 
 Most settings save automatically as you make changes. You'll see:

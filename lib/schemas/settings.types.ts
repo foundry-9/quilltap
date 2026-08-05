@@ -227,6 +227,38 @@ export const DataRetentionSettingsSchema = z.object({
 export type DataRetentionSettings = z.infer<typeof DataRetentionSettingsSchema>;
 
 // ============================================================================
+// TABOO (instance-wide forbidden phrases)
+// ============================================================================
+
+/**
+ * Phrases no character may utter — the stock LLM-isms of the day ("that's not
+ * nothing", "weight-bearing"). One list per instance, rendered as a universal,
+ * character-independent section of the system prompt on every conversational
+ * character response.
+ *
+ * Stored instance-wide in `instance_settings['taboo']` (single-user model —
+ * same class as `dataRetention`), NOT on the column-per-field `chat_settings`
+ * table, so adding it needs no migration. Accessors: `getTabooSettings` /
+ * `setTabooSettings` in `lib/instance-settings`; the setter normalizes
+ * (trim, drop empties, case-insensitive dedupe) while preserving user order.
+ * Rendered by `renderTabooSection` in
+ * `lib/chat/context/system-prompt-builder.ts`.
+ */
+export const TabooSettingsSchema = z.object({
+  /**
+   * The forbidden phrases, in the order the user arranged them. Order is
+   * user-controlled on purpose: it is part of the cacheable prompt prefix, so
+   * it only shifts when the user edits the list.
+   */
+  phrases: z
+    .array(z.string().trim().min(1).max(200))
+    .max(500)
+    .default([]),
+});
+
+export type TabooSettings = z.infer<typeof TabooSettingsSchema>;
+
+// ============================================================================
 // AUTONOMOUS ROOM SETTINGS (4.6 Private Character Rooms)
 // ============================================================================
 

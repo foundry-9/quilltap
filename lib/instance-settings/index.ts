@@ -25,6 +25,8 @@ import {
   type MemoryExtractionLimits,
   MemoryRecallSettingsSchema,
   type MemoryRecallSettings,
+  TabooSettingsSchema,
+  type TabooSettings,
 } from '@/lib/schemas/settings.types';
 
 const KEY_MAX_CONCURRENT_JOBS = 'maxConcurrentJobs';
@@ -36,6 +38,7 @@ const KEY_USER_UPLOADS_MOUNT_POINT_ID = 'userUploadsMountPointId';
 const KEY_GENERAL_MOUNT_POINT_ID = 'generalMountPointId';
 const KEY_LAST_MAINTENANCE_SWEEP_AT = 'lastMaintenanceSweepAt';
 const KEY_DATA_RETENTION = 'dataRetention';
+const KEY_TABOO = 'taboo';
 
 /** Key the version guard writes (see `lib/startup/version-guard.ts`). */
 const KEY_HIGHEST_APP_VERSION = 'highest_app_version';
@@ -81,6 +84,9 @@ const DEFAULT_MEMORY_RECALL_SETTINGS: MemoryRecallSettings = {
 };
 const DEFAULT_DATA_RETENTION_SETTINGS: DataRetentionSettings = {
   staleChatDays: 30,
+};
+const DEFAULT_TABOO_SETTINGS: TabooSettings = {
+  phrases: [],
 };
 
 async function readSetting(key: string): Promise<string | null> {
@@ -225,6 +231,74 @@ export async function setDataRetentionSettings(value: DataRetentionSettings): Pr
 }
 
 /**
+ * Normalize a raw phrase list the way {@link setTabooSettings} stores it: trim
+ * each entry, drop the ones that trimmed away to nothing, and drop
+ * case-insensitive duplicates keeping the FIRST occurrence.
+ *
+ * Order is deliberately preserved rather than sorted. The rendered section sits
+ * inside the cacheable system-prompt prefix, so the byte order matters; leaving
+ * it under the user's control means it only shifts when they actually edit the
+ * list (a legitimate cache invalidation) instead of every time a phrase is
+ * added in the "wrong" alphabetical spot.
+ */
+export function normalizeTabooPhrases(phrases: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of phrases) {
+    const phrase = typeof raw === 'string' ? raw.trim() : '';
+    if (!phrase) continue;
+    const fingerprint = phrase.toLowerCase();
+    if (seen.has(fingerprint)) continue;
+    seen.add(fingerprint);
+    out.push(phrase);
+  }
+  return out;
+}
+
+/**
+ * Read the per-instance Taboo list — the phrases no character may utter.
+ * Returns an empty list when the setting has never been written, which is what
+ * suppresses the prompt section entirely (see `renderTabooSection`). Read once
+ * per turn on the conversational path (`lib/chat/context-manager.ts`).
+ */
+export async function getTabooSettings(): Promise<TabooSettings> {
+  const raw = await readSetting(KEY_TABOO);
+  if (raw === null) return DEFAULT_TABOO_SETTINGS;
+  try {
+    const parsed = JSON.parse(raw);
+    const settings = TabooSettingsSchema.parse(parsed);
+    logger.debug('[InstanceSettings] Read taboo settings', {
+      phraseCount: settings.phrases.length,
+    });
+    return settings;
+  } catch (error) {
+    logger.warn('[InstanceSettings] taboo failed to parse — using defaults', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return DEFAULT_TABOO_SETTINGS;
+  }
+}
+
+/**
+ * Persist the per-instance Taboo list, normalized (see
+ * {@link normalizeTabooPhrases}). Returns exactly what was stored so callers —
+ * the PUT route, and through it the settings UI — echo the normalized list
+ * rather than the raw one they submitted.
+ */
+export async function setTabooSettings(value: TabooSettings): Promise<TabooSettings> {
+  const normalized: TabooSettings = {
+    ...value,
+    phrases: normalizeTabooPhrases(value.phrases ?? []),
+  };
+  const validated = TabooSettingsSchema.parse(normalized);
+  await writeSetting(KEY_TABOO, JSON.stringify(validated));
+  logger.debug('[InstanceSettings] Wrote taboo settings', {
+    phraseCount: validated.phrases.length,
+  });
+  return validated;
+}
+
+/**
  * Read the Lantern Backgrounds mount-point id. The provisioning migration
  * writes this on first boot; runtime callers (the Lantern bridge) read it
  * to find where to land generated story backgrounds when no project context
@@ -327,5 +401,15 @@ export async function writeInstanceSetting(key: string, value: string): Promise<
 }
 
 // Re-export the schema for callers that want to validate independently.
-export { DataRetentionSettingsSchema, MemoryExtractionLimitsSchema, MemoryRecallSettingsSchema };
-export type { DataRetentionSettings, MemoryExtractionLimits, MemoryRecallSettings };
+export {
+  DataRetentionSettingsSchema,
+  MemoryExtractionLimitsSchema,
+  MemoryRecallSettingsSchema,
+  TabooSettingsSchema,
+};
+export type {
+  DataRetentionSettings,
+  MemoryExtractionLimits,
+  MemoryRecallSettings,
+  TabooSettings,
+};
