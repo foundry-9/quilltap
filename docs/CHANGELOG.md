@@ -4,6 +4,18 @@
 
 ### 4.8-dev
 
+#### Standalone tarball drops redundant plugin node_modules: 274 MB → 143 MB
+
+`scripts/build-standalone-tarball.ts` copied `plugins/dist/.` wholesale, so every bundled plugin's `node_modules` rode along into the tarball — and from there into the Electron shell and the `npx quilltap` path, which both consume it. esbuild inlines each plugin's dependencies into its `index.js`, so most of that is dead weight: 680 MB across the 14 plugins, the bulk of the tarball.
+
+Most, but not all — which is why this isn't the same `rm -rf` the Docker images use. A few packages survive bundling as bare `require()` calls, either because the plugin marks them external or because a dependency requires them dynamically in a way esbuild can't follow. Node resolves those by walking up from the plugin directory, so whether the plugin's own copy matters depends on what sits in the standalone root. Docker can delete all of them because its image carries the full production `node_modules`; the standalone root is only Next's traced subset, and `ajv`, `ajv-formats`, `@quilltap/plugin-types`, and `google-auth-library` are not in it. Deleting wholesale would have broken the MCP, Google, OpenAI-compatible, and default-system-prompts plugins.
+
+The build now decides per plugin: scan the bundle for bare `require()` specifiers, and keep the tree only when one of them resolves from it and *not* from the standalone root. That correctly ignores specifiers resolving from neither — `ws` reaching for its optional native accelerators (`bufferutil`, `utf-8-validate`) is absent everywhere today and handled by a fallback, so keeping a tree for it would buy nothing. Computed per build rather than hardcoded, so it stays correct as plugin dependencies change. Current result: 10 pruned, 4 kept, logged individually with the package that pinned each one.
+
+Verified by driving the real script against a published 4.8.0-dev.155 tarball staged as `.next/standalone`, so the root's traced module set was the genuine article rather than a guess. The produced tarball keeps all 14 plugin bundles and 4 trees, and a check against the original trees confirms no stripped plugin lost a package that previously resolved — 10 checked, 0 regressions.
+
+One note on how this was tested, because it shaped the approach. A load test that `require()`s each plugin passes even with a needed tree removed: the `ajv` calls inside the MCP SDK are lazy, so nothing throws at module load. Runtime loading is therefore not a sufficient check, and the guard here is the textual scan of the bundle, which sees lazy requires the same as eager ones. An earlier hand-run scan that only matched double-quoted requires missed `google-auth-library` entirely — computing the set during the build, over both quote styles, is what caught it.
+
 #### Startup scripts pass the host timezone to the container
 
 `a7f691e7` made the container honor `QUILLTAP_TIMEZONE` / `TZ`, but nothing set them, so a container started with the shipped scripts still ran on UTC — scheduled rooms firing at the wrong hour, daily budget rollover at UTC midnight, and "today"/"yesterday" recall windows offset. All three launchers now detect the host's IANA timezone and pass it as `QUILLTAP_TIMEZONE`: `scripts/start-quilltap.sh`, `scripts/start-quilltap.ps1`, and `scripts/start-quilltap-docker.ts` (`npm run start:docker`).
