@@ -109,6 +109,21 @@ Setting either one in Docker is enough: the container entrypoint copies whicheve
 
 Setting only one *outside* the entrypoint (a bare `node server.js`, say) leaves the two halves disagreeing: chat timestamps on your clock, schedules and recall windows on UTC.
 
+**The startup scripts set this for you.** `scripts/start-quilltap.sh`, `scripts/start-quilltap.ps1`, and `npm run start:docker` detect the host's IANA timezone and pass it as `QUILLTAP_TIMEZONE`, so a container started through any of them follows your clock rather than UTC. Supplying your own value always wins:
+
+```bash
+./scripts/start-quilltap.sh -e "QUILLTAP_TIMEZONE=Europe/Paris"   # explicit zone
+./scripts/start-quilltap.sh -e "QUILLTAP_TIMEZONE=UTC"            # pin to UTC
+```
+
+Each script prints what it resolved (`Timezone:  America/Chicago (detected)`), and falls back to UTC with a note if the host zone can't be determined. If you invoke `docker run` yourself, pass it explicitly:
+
+```bash
+docker run -d -e "QUILLTAP_TIMEZONE=$(node -p 'Intl.DateTimeFormat().resolvedOptions().timeZone')" foundry9/quilltap:latest
+```
+
+Use an IANA name, not an abbreviation — `America/Chicago`, not `CDT`. ICU can't resolve abbreviations and will silently fall back to UTC, so the scripts reject them rather than pass them through.
+
 ### Logging
 
 | Variable | Description | Default |

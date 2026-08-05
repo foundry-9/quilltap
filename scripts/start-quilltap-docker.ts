@@ -27,6 +27,13 @@
  *   QUILLTAP_PORT               Host port
  *   QUILLTAP_CONTAINER_NAME     Container name
  *   QUILLTAP_IMAGE_TAG          Image tag
+ *   QUILLTAP_TIMEZONE           IANA timezone (default: detected from this host)
+ *   TZ                          Same; QUILLTAP_TIMEZONE wins if both are set
+ *
+ * The host's timezone is detected and passed to the container automatically, so
+ * scheduled rooms, daily budget rollover, and "today"/"yesterday" recall follow
+ * the host clock rather than UTC. Override with `-e QUILLTAP_TIMEZONE=Europe/Paris`,
+ * or pin the container to UTC with `-e QUILLTAP_TIMEZONE=UTC`.
  */
 
 import { execFileSync, execSync } from 'child_process';
@@ -76,7 +83,35 @@ Environment variables (override defaults):
   QUILLTAP_DATA_DIR           Data directory
   QUILLTAP_PORT               Host port
   QUILLTAP_CONTAINER_NAME     Container name
-  QUILLTAP_IMAGE_TAG          Image tag`);
+  QUILLTAP_IMAGE_TAG          Image tag
+  QUILLTAP_TIMEZONE           IANA timezone (default: detected from this host)
+  TZ                          Same; QUILLTAP_TIMEZONE wins if both are set
+
+The host timezone is detected and passed to the container automatically. Override
+with '-e QUILLTAP_TIMEZONE=Europe/Paris', or pin to UTC with '-e QUILLTAP_TIMEZONE=UTC'.`);
+}
+
+/**
+ * Resolve the host's IANA timezone name (e.g. "America/Chicago"), or null if it
+ * can't be determined confidently.
+ *
+ * Unlike the shell twins, this needs no fallback chain: we are already running
+ * under Node, so `Intl` resolves the zone through the same full-ICU build the
+ * container will use, which makes it authoritative by construction.
+ *
+ * The guard matters. Anything that is not "UTC" or an "Area/Location" name —
+ * an abbreviation like "CDT" leaking in through TZ, say — would be silently
+ * ignored by the container's ICU and fall back to UTC, which is the exact bug
+ * this is meant to prevent. Better to pass nothing than to pass a lie.
+ */
+function detectTimezone(): string | null {
+  const candidate =
+    process.env.QUILLTAP_TIMEZONE ||
+    process.env.TZ ||
+    Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  if (!candidate) return null;
+  return candidate === 'UTC' || candidate.includes('/') ? candidate : null;
 }
 
 interface Options {
@@ -173,11 +208,24 @@ function dockerContainerRunning(name: string): boolean {
 const platform = detectPlatform();
 const opts = parseArgs(platform);
 
+// An explicit --env always wins; detection only fills the gap.
+const tzExplicit = opts.extraEnvs.some(
+  e => e.startsWith('QUILLTAP_TIMEZONE=') || e.startsWith('TZ=')
+);
+const timezone = tzExplicit ? null : detectTimezone();
+
 console.log(`Platform:  ${platform}`);
 console.log(`Data dir:  ${opts.dataDir}`);
 console.log(`Port:      ${opts.port}`);
 console.log(`Container: ${opts.name}`);
 console.log(`Image:     ${IMAGE}:${opts.tag}`);
+if (tzExplicit) {
+  console.log('Timezone:  (set explicitly via --env)');
+} else if (timezone) {
+  console.log(`Timezone:  ${timezone} (detected)`);
+} else {
+  console.log('Timezone:  UTC (could not detect host timezone)');
+}
 console.log('');
 
 // Create data directory if needed
@@ -200,6 +248,11 @@ cmd.push('-e', `QUILLTAP_HOST_DATA_DIR=${opts.dataDir}`);
 // Linux needs explicit host.docker.internal mapping for localhost URL rewriting
 if (platform === 'linux') {
   cmd.push('--add-host=host.docker.internal:host-gateway');
+}
+
+// Pass the host timezone through, unless the caller already supplied one
+if (timezone) {
+  cmd.push('-e', `QUILLTAP_TIMEZONE=${timezone}`);
 }
 
 // Extra environment variables

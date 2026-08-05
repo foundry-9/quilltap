@@ -4,6 +4,22 @@
 
 ### 4.8-dev
 
+#### Startup scripts pass the host timezone to the container
+
+`a7f691e7` made the container honor `QUILLTAP_TIMEZONE` / `TZ`, but nothing set them, so a container started with the shipped scripts still ran on UTC — scheduled rooms firing at the wrong hour, daily budget rollover at UTC midnight, and "today"/"yesterday" recall windows offset. All three launchers now detect the host's IANA timezone and pass it as `QUILLTAP_TIMEZONE`: `scripts/start-quilltap.sh`, `scripts/start-quilltap.ps1`, and `scripts/start-quilltap-docker.ts` (`npm run start:docker`).
+
+An explicit `-e QUILLTAP_TIMEZONE=…` or `-e TZ=…` always wins; detection only fills the gap. Each script prints what it resolved and falls back to UTC with a note when the host zone can't be determined. `-e QUILLTAP_TIMEZONE=UTC` pins to UTC.
+
+Detection order is `QUILLTAP_TIMEZONE`, then `TZ`, then a platform lookup, and every path is validated to be an IANA name (`UTC`, or containing `/`) before use. `date +%Z` is deliberately never used: it returns an abbreviation like `CDT`, which ICU cannot resolve and would silently fall back to UTC — the exact bug being fixed. A bogus `TZ=CDT` is therefore rejected rather than forwarded.
+
+Platform lookups differ per script. The TypeScript version needs no fallback chain — it already runs under Node, so `Intl.DateTimeFormat().resolvedOptions().timeZone` is authoritative by construction. The shell script tries Node, then `/etc/timezone`, then `timedatectl`, then `readlink /etc/localtime`, stripping through `zoneinfo/` so it handles both Linux (`/usr/share/zoneinfo/…`) and macOS (`/var/db/timezone/zoneinfo/…`). PowerShell uses `[TimeZoneInfo]::Local.Id`, which returns a *Windows* id on Windows (`Central Standard Time`) rather than IANA, so it converts via `TryConvertWindowsIdToIanaId` (.NET 6+ / PowerShell 7.2+) and falls back to Node.
+
+Verified per script: macOS under zsh/bash/sh, Linux containers with and without `node` and with `/etc/timezone` removed to exercise the `readlink` path, and PowerShell 7.4 in a container covering the env-var, override, rejection, and Windows-id paths (`Central Standard Time` → `America/Chicago`).
+
+Also fixed in passing: `scripts/start-quilltap.sh --help` printed a sed error instead of help on macOS. The expression `sed -n '2,/^$/{ s/^# \?//; p }'` is rejected by BSD sed, which wants a separator before `}`, and its line range ended at the blank line on line 3 rather than covering the usage block. Replaced with an `awk` one-liner that behaves identically on BSD and GNU.
+
+And the Ollama probe in `start-quilltap.ps1` is now bounded. It used `TcpClient.Connect("localhost", 11434)`, which takes no timeout: on a host that silently drops the SYN rather than refusing it — corporate firewalls, some VPN configurations — that blocks for the OS default, roughly 21 seconds on Windows, before concluding "no Ollama." Now `BeginConnect` plus a 500 ms bounded wait, which is generous for a service on loopback. The `finally` also closes a leak: the old form only reached `Close()` on the success path, so every miss abandoned an undisposed socket. Measured against a blackholed address: 534 ms instead of the OS default. Detection itself is unchanged — a live listener on 11434 is still found, in 78 ms.
+
 #### Anthropic SDK 0.88.0 → 0.115.0, and published images stop shipping plugin node_modules
 
 Two findings from scanning a locally built image, both in the same area.
