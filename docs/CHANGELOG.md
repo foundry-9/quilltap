@@ -4,6 +4,14 @@
 
 ### 4.8-dev
 
+#### CI: timezone-pinned tests, Discord notifications off deprecated actions, build job cleanup
+
+**The Almanack snapshot failed in CI but passed locally.** `renderAlmanackMarkdown` formats its date stamps with `toLocaleString`, which uses the ambient timezone, so the committed snapshot carried the recording machine's local times and the UTC runner produced a five-hour shift on every date. The test's own pin (`process.env.TZ = 'UTC'` in a `beforeAll`) never worked: ICU resolves and caches the default zone the first time a locale-aware formatter runs in a worker process, well before `beforeAll`. The pin moved to `jest.config.ts` and `jest.integration.config.ts`, where it runs before Jest forks its workers, and the snapshot was regenerated under UTC. Local and CI now agree on timezone instead of agreeing by accident.
+
+**Discord notifications no longer run deprecated actions.** `tristanbudd/discord-commit-github-action@1.0.1` (CI) and `tsickert/discord-webhook@v7.0.0` (Release) both declare `using: node20` in their latest releases, so the runner's Node 20 deprecation warning had no version to bump to. Each action amounted to one webhook POST; both steps are now `curl` + `jq` with no JavaScript runtime to go stale, and the release embed is byte-identical to what the action sent. Commit data reaches the payload through `env:` and `jq --arg` rather than `${{ }}` interpolation, so an attacker-controlled commit message cannot inject shell. A missing webhook secret or a push carrying no head commit skips with a warning; a non-2xx response fails the step.
+
+**Build job.** Dropped the `.next` artifact upload — nothing consumed the artifact, and the job exists only to prove the application still compiles. Removed `continue-on-error: true`, so a broken build now fails CI instead of being ignored. The CI Summary's Build row rendered "❌ Failed" on every run, including runs where the build passed, because the `report` job never listed `build` in `needs` and `needs.build.result` was therefore an empty string; `build` is now in `needs` and in the failure condition. Removed the dead `MONGODB_URI` and `JWT_SECRET` build env vars — MongoDB support was removed in 2.7, and neither variable appears in `lib/env.ts`'s schema or anywhere else in the application.
+
 #### The Almanack: capabilities report renamed, rewritten, and taught about the Scriptorium
 
 The capabilities report was last overhauled in March; its model of the system was the 4.0 app. Since then the 4.4–4.9 cutovers moved character content, wardrobe, custom tools, photos, mail and scenarios into the mount-index database — which the report never opened. It is now **The Almanack (System Report)**, with a rewritten collector, four new sections, and a progress bar that names what it is doing.

@@ -426,14 +426,48 @@ jobs:
     runs-on: ubuntu-latest
     needs: create-release
     continue-on-error: true
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    # Was tsickert/discord-webhook@v7.0.0, a JavaScript action stuck on the
+    # node20 runtime with no newer release to move to — the same dead end as the
+    # commit notification in ci.yml, and posting the embed with curl is the same
+    # cure. A failed announcement still must not fail a release, hence the
+    # continue-on-error above.
     steps:
       - name: Notify Discord of release
-        uses: tsickert/discord-webhook@v7.0.0
-        with:
-          webhook-url: ${{ secrets.DISCORD_WEBHOOK_RELEASE_URL }}
-          embed-title: "Quilltap ${{ github.ref_name }} Released"
-          embed-url: "https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}"
-          embed-description: "A new version of Quilltap has been published. See the release notes for details."
-          embed-color: 5814783
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_RELEASE_URL }}
+          VERSION: ${{ github.ref_name }}
+          RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "::warning::DISCORD_WEBHOOK_RELEASE_URL is not set — skipping the release notification."
+            exit 0
+          fi
+
+          payload=$(jq -n \
+            --arg version "$VERSION" \
+            --arg release_url "$RELEASE_URL" \
+            '{
+              embeds: [{
+                title: ("Quilltap " + $version + " Released"),
+                url: $release_url,
+                description: "A new version of Quilltap has been published. See the release notes for details.",
+                color: 5814783
+              }]
+            }')
+
+          status=$(printf '%s' "$payload" | curl -sS -X POST \
+            -H 'Content-Type: application/json' \
+            --data-binary @- \
+            -o /tmp/discord-response.txt \
+            -w '%{http_code}' \
+            "$WEBHOOK_URL")
+
+          if [ "$status" -ge 200 ] && [ "$status" -lt 300 ]; then
+            echo "✅ Release notification sent (HTTP $status)"
+          else
+            echo "❌ Discord rejected the release notification (HTTP $status)"
+            cat /tmp/discord-response.txt
+            exit 1
+          fi

@@ -16,17 +16,10 @@ import { renderAlmanackMarkdown } from '@/lib/tools/almanack/render'
 import { ALMANACK_PHASES, ALMANACK_TITLE } from '@/lib/tools/almanack/phases'
 import { makeAlmanackFixture } from '@/__tests__/helpers/almanack/fixture'
 
-// `toLocaleString()` on the generated-at stamp is timezone-sensitive; pin it so
-// the snapshot is the same on every machine.
-const ORIGINAL_TZ = process.env.TZ
-
-beforeAll(() => {
-  process.env.TZ = 'UTC'
-})
-
-afterAll(() => {
-  process.env.TZ = ORIGINAL_TZ
-})
+// The date stamps below go through `toLocaleString()`, which formats in the
+// ambient timezone. The pin that makes this snapshot machine-independent lives
+// in jest.config.ts (`process.env.TZ = 'UTC'`) — pinning it from inside this
+// file is too late, because ICU has already cached the worker's default zone.
 
 describe('renderAlmanackMarkdown', () => {
   it('renders the whole volume', () => {

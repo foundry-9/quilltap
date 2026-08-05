@@ -1,6 +1,15 @@
 import type { Config } from 'jest'
 import nextJest from 'next/jest.js'
 
+// Pin the timezone for the whole suite. Anything rendered with `toLocaleString`
+// /`toLocaleDateString` (the Almanack's date stamps, for one) formats in the
+// ambient zone, so a snapshot recorded on a developer's machine fails on the
+// UTC CI runner. Setting TZ inside a test file is too late: ICU resolves and
+// caches the default zone the first time a locale-aware formatter runs in the
+// worker process, so a `beforeAll` pin silently does nothing. Setting it here —
+// before Jest forks its workers — is what actually takes.
+process.env.TZ = 'UTC'
+
 const createJestConfig = nextJest({
   // Provide the path to your Next.js app to load next.config.js and .env files in your test environment
   dir: './',
