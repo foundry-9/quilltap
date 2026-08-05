@@ -429,7 +429,11 @@ function countUserInstalledThemes(): number {
 /**
  * Creates a backup manifest with entity counts
  */
-function createManifest(userId: string, data: Omit<BackupData, 'manifest'>): BackupManifest {
+function createManifest(
+  userId: string,
+  data: Omit<BackupData, 'manifest'>,
+  options?: { compact?: boolean }
+): BackupManifest {
   const totalMessages = data.chats.reduce((sum, chat) => sum + chat.messages.length, 0);
 
   return {
@@ -438,6 +442,7 @@ function createManifest(userId: string, data: Omit<BackupData, 'manifest'>): Bac
     createdAt: new Date().toISOString(),
     userId,
     appVersion: APP_VERSION,
+    ...(options?.compact && { compact: true }),
     counts: {
       characters: data.characters.length,
       chats: data.chats.length,
@@ -538,18 +543,53 @@ async function cleanupDir(dirPath: string): Promise<void> {
 }
 
 /**
+ * Strip every embedding-derived payload out of a collected backup.
+ *
+ * Full fidelity remains the default for a reason: a backup restores the
+ * *same* instance, so its vectors are valid on arrival, and re-embedding a
+ * whole corpus costs real money and time at exactly the moment the user is
+ * recovering from something. Compact is for users whose constraint is archive
+ * size instead — search is rebuilt after restore rather than carried.
+ *
+ * `llmLogs` are untouched: compact is about embeddings, not logs (the
+ * existing 10k cap already bounds them).
+ */
+function compactBackupData(
+  data: Omit<BackupData, 'manifest'>
+): Omit<BackupData, 'manifest'> {
+  return {
+    ...data,
+    // Memories keep every word; only the vector goes.
+    memories: data.memories.map((memory) => ({ ...memory, embedding: null })),
+    // Wholly derived collections — regenerable from the content above.
+    conversationChunks: [],
+    vectorEntries: [],
+    vectorIndexMetas: [],
+    tfidfVocabularies: [],
+    embeddingStatus: [],
+    docMountChunks: [],
+  };
+}
+
+/**
  * Creates a complete backup as a ZIP file on disk.
  *
  * Stages all data in a temp directory and shells out to `zip -r` to create
  * the archive. At no point is more than one user file buffer in memory.
  *
+ * @param options.compact Drop embeddings and every derived embedding table
+ *   (see {@link compactBackupData}). Off by default — full fidelity is the
+ *   documented behaviour and the safer one.
  * @returns The path to the zip file on disk and the backup manifest
  */
-export async function createBackup(userId: string): Promise<{
+export async function createBackup(
+  userId: string,
+  options?: { compact?: boolean }
+): Promise<{
   zipPath: string;
   manifest: BackupManifest;
 }> {
-  moduleLogger.info('Starting backup creation', { userId });
+  moduleLogger.info('Starting backup creation', { userId, compact: options?.compact ?? false });
 
   // Flush WAL to ensure logical backup reads consistent data
   const rawDb = getRawDatabase();
@@ -570,8 +610,18 @@ export async function createBackup(userId: string): Promise<{
   }
 
   // Collect all user data
-  const data = await collectUserData(userId);
-  const manifest = createManifest(userId, data);
+  const collected = await collectUserData(userId);
+  const data = options?.compact ? compactBackupData(collected) : collected;
+  const manifest = createManifest(userId, data, options);
+  if (options?.compact) {
+    moduleLogger.debug('Compact backup — embeddings and derived tables omitted', {
+      userId,
+      memories: data.memories.length,
+      droppedConversationChunks: collected.conversationChunks?.length ?? 0,
+      droppedVectorEntries: collected.vectorEntries?.length ?? 0,
+      droppedDocMountChunks: collected.docMountChunks?.length ?? 0,
+    });
+  }
 
   // Create temp directory for staging
   const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'quilltap-backup-'));
@@ -614,16 +664,25 @@ export async function createBackup(userId: string): Promise<{
     // Format-3 additions (older restorers will simply skip these missing files).
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'chat-documents.json'), data.chatDocuments || []);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'instance-settings.json'), data.instanceSettings || []);
-    await writeJsonArrayFile(path.join(stagingDir, 'data', 'embedding-status.json'), data.embeddingStatus || []);
-    await writeJsonArrayFile(path.join(stagingDir, 'data', 'conversation-chunks.json'), data.conversationChunks || []);
-    await writeJsonArrayFile(path.join(stagingDir, 'data', 'tfidf-vocabularies.json'), data.tfidfVocabularies || []);
-    await writeJsonArrayFile(path.join(stagingDir, 'data', 'vector-index-metas.json'), data.vectorIndexMetas || []);
-    await writeJsonArrayFile(path.join(stagingDir, 'data', 'vector-entries.json'), data.vectorEntries || []);
+    // Derived embedding collections. A compact backup omits the files
+    // outright rather than writing empty arrays — the restore reader treats
+    // all of these as optional (`readJsonArrayFileOptional`), so an absent
+    // file and an empty one behave identically on the way back in, and the
+    // absent one is what makes the archive small.
+    if (!options?.compact) {
+      await writeJsonArrayFile(path.join(stagingDir, 'data', 'embedding-status.json'), data.embeddingStatus || []);
+      await writeJsonArrayFile(path.join(stagingDir, 'data', 'conversation-chunks.json'), data.conversationChunks || []);
+      await writeJsonArrayFile(path.join(stagingDir, 'data', 'tfidf-vocabularies.json'), data.tfidfVocabularies || []);
+      await writeJsonArrayFile(path.join(stagingDir, 'data', 'vector-index-metas.json'), data.vectorIndexMetas || []);
+      await writeJsonArrayFile(path.join(stagingDir, 'data', 'vector-entries.json'), data.vectorEntries || []);
+    }
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'doc-mount-points.json'), data.docMountPoints || []);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'doc-mount-folders.json'), data.docMountFolders || []);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'doc-mount-files.json'), data.docMountFiles || []);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'doc-mount-file-links.json'), data.docMountFileLinks || []);
-    await writeJsonArrayFile(path.join(stagingDir, 'data', 'doc-mount-chunks.json'), data.docMountChunks || []);
+    if (!options?.compact) {
+      await writeJsonArrayFile(path.join(stagingDir, 'data', 'doc-mount-chunks.json'), data.docMountChunks || []);
+    }
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'doc-mount-documents.json'), data.docMountDocuments || []);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'doc-mount-blobs.json'), data.docMountBlobs || []);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'project-doc-mount-links.json'), data.projectDocMountLinks || []);

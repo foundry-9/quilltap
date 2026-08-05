@@ -18,6 +18,7 @@
  *   images/<safeFilename>         — paste/drag-drop image uploads outside a project
  *   diagnostics/<safeFilename>    — capabilities-report exports
  *   restored/<safeFilename>       — backup-restore replay of project-less files
+ *   imported/<safeFilename>       — `.qtap` file-library import of project-less files
  *
  * Returns the same `mount-blob:{mountPointId}:{blobId}` shim the project,
  * character, and Lantern bridges use, so existing `FileStorageManager` read /
@@ -42,6 +43,7 @@ export type UserUploadsSubfolder =
   | 'images'
   | 'diagnostics'
   | 'restored'
+  | 'imported'
   | 'uploads'
   | 'photos';
 

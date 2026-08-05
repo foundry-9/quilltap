@@ -1338,6 +1338,19 @@ Known keys (others may be present from migrations / startup hooks):
 - `userUploadsMountPointId` (4.4+) — UUID of the global "Quilltap Uploads" database-backed mount point in `quilltap-mount-index.db`. Read by `lib/file-storage/user-uploads-bridge.ts`; written by `provision-user-uploads-mount-v1`. Used for every project-less file write: chat attachments, paste/drag-drop images, the Files-tab uploader, capabilities-report exports, and backup-restore replay of project-less files. Replaces the legacy `<filesDir>/_general/` namespace as the catch-all destination.
 - `generalMountPointId` (4.4+) — UUID of the global "Quilltap General" database-backed mount point in `quilltap-mount-index.db`. Read by `lib/mount-index/general-scenarios.ts` / `lib/mount-index/general-state.ts`; written by `provision-general-mount-v1`. Houses the instance-wide `Scenarios/` folder offered alongside project- and character-specific scenarios in every non-help New Chat dialog (managed via `/api/v1/scenarios` and the `/scenarios` page), **and** a root **`state.json`** — the **general tier** of the four-tier state cascade (chat → project → group → general). The `state.json` document is seeded idempotently at startup by `ensureGeneralStateFile()` (instrumentation PHASE 3.4b, right after `ensureGeneralScenariosFolder()`): a `{}` file is created when absent and never healed if the user has edited it (mirrors `ensureCharacterMetadataFile`). Read/written via `readGeneralState()` / `writeGeneralState()` (both `{}`-graceful and warn-on-corrupt), exposed at `GET/PUT/DELETE /api/v1/settings/general-state` and edited from Settings → Chat → General State. No migration and no `instance_settings` row of its own — the state lives as a mount document, not a column.
 
+**Portability (4.8+).** The `instance-settings` `.qtap` export type dumps this
+whole table minus `NON_PORTABLE_INSTANCE_SETTING_KEYS`
+(`lib/instance-settings/index.ts`), so **a newly added key is portable by
+default** — add it to that constant if it must not travel. Currently withheld:
+the three mount-point pointers above (instance-local UUIDs into *this*
+instance's `quilltap-mount-index.db`), `lastMaintenanceSweepAt` (local timing
+state), and `highest_app_version` (the version guard's downgrade tripwire — an
+imported value could lock a healthy instance out of its own database). Import
+upserts by key, overwriting the receiving instance's values; that is the point
+of the type. Backup/restore is separate and carries every key, remapping the
+mount-point pointers in `new-account` mode (`MOUNT_POINT_SETTING_KEYS`,
+`lib/backup/restore/uuid-remap.ts`).
+
 ### quilltap_meta
 
 ```sql

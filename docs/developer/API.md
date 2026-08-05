@@ -4901,6 +4901,46 @@ Set the global background-job concurrency cap. Applies within ~2 s without a res
 
 `concurrency` is an integer in the range 1–32. Returns `{ "success": true, "concurrency": 8 }`.
 
+#### `GET /api/v1/system/tools?action=export-entities`
+
+List the entities of one export type, for the export wizard's selection step.
+
+**Query Parameters:**
+- `type` (required) — an `ExportEntityType`: `characters`, `chats`, `roleplay-templates`, `prompt-templates`, `connection-profiles`, `image-profiles`, `embedding-profiles`, `tags`, `projects`, `groups`, `document-stores`, `files`, `provider-models`, `plugin-configs`, `instance-settings`.
+
+**Response:**
+```json
+{
+  "success": true,
+  "entities": [{ "id": "…", "name": "…", "memoryCount": 12 }],
+  "totalMemoryCount": 12
+}
+```
+
+`memoryCount` / `totalMemoryCount` are present only for `characters` and `chats`.
+
+Scoping notes, because they are not uniform:
+
+- `document-stores` and `provider-models` are **instance-scoped** — they come from the global repositories, not the user-scoped ones.
+- `prompt-templates` and `roleplay-templates` exclude built-ins (`isBuiltIn`), which are seeded from `prompts/` on every instance.
+- `files` excludes backup files (`category === 'BACKUP'` or `folderPath === '/backups'`), mirroring the backup service's own rule.
+- `instance-settings` is keyed by **setting key**, not a UUID — the table has no id column — and omits the keys that only make sense inside the exporting instance (the three mount-point pointers, `lastMaintenanceSweepAt`, `highest_app_version`).
+
+An unknown `type` returns 400.
+
+#### `POST /api/v1/system/backup`
+
+Create a backup and stage it for download.
+
+**Body (optional):**
+```json
+{ "compact": true }
+```
+
+`compact` defaults to `false`. When true the archive omits every embedding-derived payload — memory embeddings are nulled and `conversation-chunks.json`, `vector-entries.json`, `vector-index-metas.json`, `tfidf-vocabularies.json`, `embedding-status.json`, and `doc-mount-chunks.json` are not written at all — and the manifest records `compact: true`. Restore keys off that flag to enqueue a full `EMBEDDING_REINDEX_ALL`. A malformed body is treated as absent rather than rejected.
+
+**Response:** `201` with `{ "success": true, "backupId": "…", "manifest": { … } }`.
+
 ---
 
 ### LLM Tools

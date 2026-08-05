@@ -155,9 +155,87 @@ export async function previewImport(
       ),
     ]);
 
+  // Document stores and the configuration-shaped types. Each is previewed
+  // against its own natural key rather than an id, because that is what the
+  // corresponding importer dedupes on.
+  const globalRepos = getRepositories();
+
+  const documentStores: ImportPreviewEntity[] = [];
+  for (const mp of data.mountPoints ?? []) {
+    const exists = !!(await globalRepos.docMountPoints.findById(mp.id));
+    if (exists) conflictCounts.documentStores = (conflictCounts.documentStores ?? 0) + 1;
+    documentStores.push({ id: mp.id, name: mp.name, exists });
+  }
+
+  const files: ImportPreviewEntity[] = [];
+  for (const file of data.files ?? []) {
+    const exists = !!(await repos.files.findById(file.id));
+    if (exists) conflictCounts.files = (conflictCounts.files ?? 0) + 1;
+    files.push({
+      id: file.id,
+      name: file.originalFilename,
+      exists,
+      ...(file._bytesMissing && { detail: 'contents missing — will be skipped' }),
+    });
+  }
+
+  const promptTemplates: ImportPreviewEntity[] = [];
+  for (const template of data.promptTemplates ?? []) {
+    const existing = await globalRepos.promptTemplates.findByName(userId, template.name);
+    if (existing) conflictCounts.promptTemplates = (conflictCounts.promptTemplates ?? 0) + 1;
+    promptTemplates.push({
+      id: template.id,
+      name: template.name,
+      exists: !!existing,
+      ...(existing && { matchedExistingId: existing.id }),
+    });
+  }
+
+  const providerModels: ImportPreviewEntity[] = (data.providerModels ?? []).map((model) => ({
+    id: model.id,
+    name: `${model.provider} / ${model.modelId}`,
+    // Always an upsert by (provider, modelId), so "exists" would be noise.
+    exists: false,
+  }));
+
+  const pluginConfigs: ImportPreviewEntity[] = [];
+  for (const config of data.pluginConfigs ?? []) {
+    const existing = await globalRepos.pluginConfigs.findByUserAndPlugin(
+      userId,
+      config.pluginName
+    );
+    if (existing) conflictCounts.pluginConfigs = (conflictCounts.pluginConfigs ?? 0) + 1;
+    // Secrets are stripped at export time; tell the user exactly what they
+    // will have to type back in rather than letting them discover it later.
+    const redacted = config._redactedKeys ?? [];
+    pluginConfigs.push({
+      id: config.id,
+      name: config.pluginName,
+      exists: !!existing,
+      ...(redacted.length > 0 && {
+        detail: redacted.includes('*')
+          ? 'all settings withheld — re-enter them here'
+          : `secrets withheld: ${redacted.join(', ')}`,
+      }),
+    });
+  }
+
+  const instanceSettings: ImportPreviewEntity[] = (data.instanceSettings ?? []).map((setting) => ({
+    id: setting.key,
+    name: setting.key,
+    // Instance settings always overwrite — that's the point of the type.
+    exists: false,
+  }));
+
   const preview: ImportPreview = {
     manifest: exportData.manifest,
     entities: {
+      ...(documentStores.length > 0 && { documentStores }),
+      ...(files.length > 0 && { files }),
+      ...(promptTemplates.length > 0 && { promptTemplates }),
+      ...(providerModels.length > 0 && { providerModels }),
+      ...(pluginConfigs.length > 0 && { pluginConfigs }),
+      ...(instanceSettings.length > 0 && { instanceSettings }),
       ...(characters.length > 0 && { characters }),
       ...(chats.length > 0 && { chats }),
       ...(tags.length > 0 && { tags }),

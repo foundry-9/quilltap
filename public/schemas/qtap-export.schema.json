@@ -177,6 +177,87 @@
           }
         }
       }
+    },
+    {
+      "if": {
+        "properties": { "manifest": { "properties": { "exportType": { "const": "prompt-templates" } } } }
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "required": ["promptTemplates"],
+            "properties": {
+              "promptTemplates": { "type": "array", "items": { "$ref": "#/$defs/ExportedPromptTemplate" } }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "manifest": { "properties": { "exportType": { "const": "files" } } } }
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "required": ["files"],
+            "properties": {
+              "files": { "type": "array", "items": { "$ref": "#/$defs/ExportedFile" } },
+              "folders": { "type": "array", "items": { "$ref": "#/$defs/ExportedFolder" } }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "manifest": { "properties": { "exportType": { "const": "provider-models" } } } }
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "required": ["providerModels"],
+            "properties": {
+              "providerModels": { "type": "array", "items": { "$ref": "#/$defs/ExportedProviderModel" } }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "manifest": { "properties": { "exportType": { "const": "plugin-configs" } } } }
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "required": ["pluginConfigs"],
+            "properties": {
+              "pluginConfigs": { "type": "array", "items": { "$ref": "#/$defs/ExportedPluginConfig" } }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "manifest": { "properties": { "exportType": { "const": "instance-settings" } } } }
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "required": ["instanceSettings"],
+            "properties": {
+              "instanceSettings": { "type": "array", "items": { "$ref": "#/$defs/ExportedInstanceSetting" } }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
     }
   ],
 
@@ -216,12 +297,18 @@
             "characters",
             "chats",
             "roleplay-templates",
+            "prompt-templates",
             "connection-profiles",
             "image-profiles",
             "embedding-profiles",
             "tags",
             "projects",
-            "document-stores"
+            "groups",
+            "document-stores",
+            "files",
+            "provider-models",
+            "plugin-configs",
+            "instance-settings"
           ],
           "description": "Type of entity contained in this export"
         },
@@ -271,9 +358,18 @@
         "projects": { "type": "integer", "minimum": 0 },
         "groups": { "type": "integer", "minimum": 0 },
         "documentStores": { "type": "integer", "minimum": 0 },
+        "documentStoreFolders": { "type": "integer", "minimum": 0 },
         "documentStoreDocuments": { "type": "integer", "minimum": 0 },
         "documentStoreBlobs": { "type": "integer", "minimum": 0 },
-        "documentStoreProjectLinks": { "type": "integer", "minimum": 0 }
+        "documentStoreProjectLinks": { "type": "integer", "minimum": 0 },
+        "conversationAnnotations": { "type": "integer", "minimum": 0 },
+        "chatDocuments": { "type": "integer", "minimum": 0 },
+        "files": { "type": "integer", "minimum": 0 },
+        "folders": { "type": "integer", "minimum": 0 },
+        "promptTemplates": { "type": "integer", "minimum": 0 },
+        "providerModels": { "type": "integer", "minimum": 0 },
+        "pluginConfigs": { "type": "integer", "minimum": 0 },
+        "instanceSettings": { "type": "integer", "minimum": 0 }
       }
     },
 
@@ -795,7 +891,7 @@
 
     "Memory": {
       "type": "object",
-      "description": "A memory entry from the Commonplace Book system.",
+      "description": "A memory entry from the Commonplace Book system. The `embedding` vector is deliberately absent: it is enormous (a serialized Float32Array runs ~29.6 KB per row) and only meaningful against the model that produced it, so a foreign vector corrupts semantic search silently whenever the dimensionality happens to match. The importer re-embeds every memory it inserts. Archives written before this rule may still carry the field; importers drop it on sight.",
       "required": ["id", "characterId", "content", "summary", "createdAt", "updatedAt"],
       "additionalProperties": true,
       "properties": {
@@ -1342,6 +1438,137 @@
       "properties": {
         "projectId": { "$ref": "#/$defs/UUID" },
         "mountPointId": { "$ref": "#/$defs/UUID" }
+      }
+    },
+
+    "ExportedFolder": {
+      "type": "object",
+      "description": "A folder in the general file library. `id` travels so children and files can be matched to their parent inside the archive; the importer re-mints IDs and resolves parents by path, reusing a folder that already exists at the same path rather than duplicating it.",
+      "required": ["id", "path", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "path": { "type": "string", "description": "Full normalized path, e.g. '/documents/reports/'" },
+        "name": { "type": "string" },
+        "parentFolderId": {
+          "anyOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }],
+          "description": "Null at root level"
+        },
+        "projectId": {
+          "anyOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }],
+          "description": "Null for general (non-project) files"
+        }
+      }
+    },
+
+    "ExportedFile": {
+      "type": "object",
+      "description": "A general-library file: metadata plus base64 bytes. `userId` and `storageKey` never travel — a storage key names a location inside the exporting instance's own storage (commonly 'mount-blob:<mountPointId>:<blobId>'). It rides as `_sourceStorageKey` provenance and the importer discards it, recording whatever key its own upload bridge returns. Backup files (category 'BACKUP' or folderPath '/backups') are never exported.",
+      "required": ["id", "sha256", "originalFilename", "mimeType", "size", "source", "category"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "sha256": { "type": "string", "minLength": 64, "maxLength": 64 },
+        "originalFilename": { "type": "string" },
+        "mimeType": { "type": "string" },
+        "size": { "type": "integer", "minimum": 0 },
+        "source": { "type": "string" },
+        "category": { "type": "string", "description": "Never 'BACKUP' — backup files are excluded from exports" },
+        "projectId": { "anyOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }] },
+        "folderPath": { "type": ["string", "null"] },
+        "linkedTo": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/UUID" },
+          "description": "Entities this file is attached to. On import each id is remapped where the import knows it, kept where it already names something on the receiving instance, and dropped otherwise."
+        },
+        "tags": { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
+        "description": { "type": ["string", "null"] },
+        "dataBase64": {
+          "type": "string",
+          "contentEncoding": "base64",
+          "description": "Raw file bytes. Absent when `_bytesMissing` is true. In the streaming NDJSON format these bytes arrive as separate file_blob / file_blob_chunk records."
+        },
+        "_sourceStorageKey": {
+          "type": ["string", "null"],
+          "description": "Provenance only — the storage key on the exporting instance. Never reused."
+        },
+        "_bytesMissing": {
+          "type": "boolean",
+          "description": "The bytes could not be read at export time; only metadata travels and the importer skips the row."
+        },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "updatedAt": { "$ref": "#/$defs/Timestamp" }
+      }
+    },
+
+    "ExportedPromptTemplate": {
+      "type": "object",
+      "description": "A user-created prompt template. Built-ins are seeded from `prompts/` on every instance and never travel.",
+      "required": ["id", "name", "createdAt", "updatedAt"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "userId": { "$ref": "#/$defs/UUID" },
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": ["string", "null"] },
+        "isBuiltIn": { "const": false },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "updatedAt": { "$ref": "#/$defs/Timestamp" }
+      }
+    },
+
+    "ExportedProviderModel": {
+      "type": "object",
+      "description": "One row of the provider model catalogue. This table is a REGENERABLE CACHE: it is normally populated by a live refetch from each provider, and a refetch supersedes anything an import wrote. Exportable purely as a convenience for offline or air-gapped instances. Imported by upsert on (provider, modelId); ids and timestamps are discarded.",
+      "required": ["provider", "modelId", "displayName"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "provider": { "type": "string" },
+        "modelId": { "type": "string", "minLength": 1 },
+        "modelType": { "type": "string", "enum": ["chat", "image", "embedding"] },
+        "displayName": { "type": "string" },
+        "baseUrl": { "type": ["string", "null"] },
+        "contextWindow": { "type": ["integer", "null"] },
+        "maxOutputTokens": { "type": ["integer", "null"] },
+        "deprecated": { "type": "boolean" },
+        "experimental": { "type": "boolean" },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "updatedAt": { "$ref": "#/$defs/Timestamp" }
+      }
+    },
+
+    "ExportedPluginConfig": {
+      "type": "object",
+      "description": "A plugin's per-user configuration with secrets removed. Every key the plugin's manifest declares as `password`-typed is dropped at export time and named in `_redactedKeys`. When the manifest cannot be resolved the whole `config` is withheld and `_redactedKeys` is ['*'] — the exporter never guesses which keys are safe. `userId` never travels. Import merges into any existing config, so a redacted key leaves the receiving instance's own secret intact.",
+      "required": ["pluginName", "config"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "pluginName": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "config": { "type": "object", "description": "Non-secret configuration values" },
+        "enabled": {
+          "type": "boolean",
+          "description": "Per-user enable flag, preserved through import so a disabled plugin stays disabled"
+        },
+        "_redactedKeys": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Config keys withheld from the export. ['*'] means the entire bag was withheld."
+        },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "updatedAt": { "$ref": "#/$defs/Timestamp" }
+      }
+    },
+
+    "ExportedInstanceSetting": {
+      "type": "object",
+      "description": "One row of the instance_settings key/value table — the 'move my setup' export. Keys meaningful only inside the exporting instance are withheld by the writer: the three mount-point pointers (lanternBackgroundsMountPointId, userUploadsMountPointId, generalMountPointId), lastMaintenanceSweepAt, and the version-guard key highest_app_version. Import overwrites the receiving instance's values by key.",
+      "required": ["key", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "value": { "type": "string" }
       }
     }
   }

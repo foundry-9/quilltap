@@ -31,11 +31,22 @@ import type {
   ExportedProject,
   ExportedGroup,
   ExportedRoleplayTemplate,
+  ExportedFolder,
+  ExportedFileWithBytes,
+  ExportedPluginConfig,
+  ExportedInstanceSetting,
   SanitizedConnectionProfile,
   SanitizedImageProfile,
   SanitizedEmbeddingProfile,
 } from '@/lib/export/types';
-import type { Tag, Memory, MessageEvent, ConversationAnnotation } from '@/lib/schemas/types';
+import type {
+  Tag,
+  Memory,
+  MessageEvent,
+  ConversationAnnotation,
+  PromptTemplate,
+  ProviderModel,
+} from '@/lib/schemas/types';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import type { ChatDocument } from '@/lib/schemas/chat-document.types';
 
@@ -81,6 +92,20 @@ export async function assembleExportFromStream(
 
   const conversationAnnotations: ConversationAnnotation[] = [];
   const chatDocuments: ChatDocument[] = [];
+
+  const folderRecords: ExportedFolder[] = [];
+  const filesById = new Map<string, ExportedFileWithBytes>();
+  const fileOrder: string[] = [];
+  const promptTemplates: PromptTemplate[] = [];
+  const providerModels: ProviderModel[] = [];
+  const pluginConfigs: ExportedPluginConfig[] = [];
+  const instanceSettings: ExportedInstanceSetting[] = [];
+
+  /** Same chunk-reassembly contract as the doc-store blobs, keyed by fileId. */
+  const fileBlobAccumulators = new Map<
+    string,
+    { chunkCount: number; received: string[] }
+  >();
 
   const blobAccumulators = new Map<string, BlobAccumulator>();
   const blobKey = (mountPointId: string, sha256: string) =>
@@ -208,9 +233,18 @@ export async function assembleExportFromStream(
         break;
       }
 
-      case 'memory':
-        memories.push((record as { data: Memory }).data);
+      case 'memory': {
+        // Embeddings never cross an instance boundary. Current exports don't
+        // emit the field at all, but archives written before that change carry
+        // it, and a foreign vector landing in a corpus governed by a different
+        // embedding standard corrupts semantic search silently whenever the
+        // dimensionality happens to match. Drop it here; `importMemories`
+        // drops it again for the legacy monolithic path, which never passes
+        // through this reassembler.
+        const { embedding: _embedding, ...memoryData } = (record as { data: Memory }).data;
+        memories.push(memoryData);
         break;
+      }
 
       case 'conversation_annotation':
         conversationAnnotations.push(
@@ -302,6 +336,76 @@ export async function assembleExportFromStream(
         projectLinks.push((record as { data: ExportedProjectDocMountLink }).data);
         break;
 
+      case 'folder':
+        folderRecords.push((record as { data: ExportedFolder }).data);
+        break;
+
+      case 'file': {
+        const fileRec = record as QtapRecord & { kind: 'file' };
+        filesById.set(fileRec.data.id, { ...fileRec.data });
+        fileOrder.push(fileRec.data.id);
+        break;
+      }
+
+      case 'file_blob': {
+        const blobRec = record as QtapRecord & { kind: 'file_blob' };
+        fileBlobAccumulators.set(blobRec.fileId, {
+          chunkCount: blobRec.chunkCount,
+          received: new Array(blobRec.chunkCount),
+        });
+        break;
+      }
+
+      case 'file_blob_chunk': {
+        const chunk = record as QtapRecord & { kind: 'file_blob_chunk' };
+        const accum = fileBlobAccumulators.get(chunk.fileId);
+        if (!accum) {
+          throw new Error(
+            `file_blob_chunk received without preceding file_blob (fileId=${chunk.fileId})`
+          );
+        }
+        if (chunk.index < 0 || chunk.index >= accum.chunkCount) {
+          throw new Error(
+            `file_blob_chunk index ${chunk.index} out of range (chunkCount=${accum.chunkCount}, fileId=${chunk.fileId})`
+          );
+        }
+        if (accum.received[chunk.index] !== undefined) {
+          throw new Error(
+            `Duplicate file_blob_chunk at index ${chunk.index} for fileId=${chunk.fileId}`
+          );
+        }
+        accum.received[chunk.index] = chunk.dataBase64;
+
+        // Count arrivals rather than asking `every`: the accumulator is a
+        // pre-sized sparse array and `every` skips holes, so it would answer
+        // true the moment the first chunk landed. Same trap as the doc-store
+        // blob path above.
+        const allReceived =
+          accum.received.filter((v) => typeof v === 'string').length === accum.chunkCount;
+        if (allReceived) {
+          const target = filesById.get(chunk.fileId);
+          if (target) target.dataBase64 = accum.received.join('');
+          fileBlobAccumulators.delete(chunk.fileId);
+        }
+        break;
+      }
+
+      case 'prompt_template':
+        promptTemplates.push((record as { data: PromptTemplate }).data);
+        break;
+
+      case 'provider_model':
+        providerModels.push((record as { data: ProviderModel }).data);
+        break;
+
+      case 'plugin_config':
+        pluginConfigs.push((record as { data: ExportedPluginConfig }).data);
+        break;
+
+      case 'instance_setting':
+        instanceSettings.push((record as { data: ExportedInstanceSetting }).data);
+        break;
+
       default:
         unknownKindCount++;
         logger.warn('Unknown NDJSON record kind — skipping', { kind: String(kind) });
@@ -322,6 +426,17 @@ export async function assembleExportFromStream(
     }));
     throw new Error(
       `NDJSON export truncated: ${blobAccumulators.size} blob(s) missing chunks — ${JSON.stringify(pending)}`
+    );
+  }
+
+  if (fileBlobAccumulators.size > 0) {
+    const pending = Array.from(fileBlobAccumulators.entries()).map(([fileId, a]) => ({
+      fileId,
+      received: a.received.filter((v) => typeof v === 'string').length,
+      expected: a.chunkCount,
+    }));
+    throw new Error(
+      `NDJSON export truncated: ${fileBlobAccumulators.size} file(s) missing byte chunks — ${JSON.stringify(pending)}`
     );
   }
 
@@ -366,6 +481,12 @@ export async function assembleExportFromStream(
     projectLinks,
     conversationAnnotations,
     chatDocuments,
+    fileFolders: folderRecords,
+    files: fileOrder.map((id) => filesById.get(id)!),
+    promptTemplates,
+    providerModels,
+    pluginConfigs,
+    instanceSettings,
   });
 
   return {
@@ -398,6 +519,16 @@ interface CollectedArrays {
   projectLinks: ExportedProjectDocMountLink[];
   conversationAnnotations: ConversationAnnotation[];
   chatDocuments: ChatDocument[];
+  /**
+   * General file-library folders. Named `fileFolders` rather than `folders`
+   * because `folders` is already taken by the document-store folder rows.
+   */
+  fileFolders: ExportedFolder[];
+  files: ExportedFileWithBytes[];
+  promptTemplates: PromptTemplate[];
+  providerModels: ProviderModel[];
+  pluginConfigs: ExportedPluginConfig[];
+  instanceSettings: ExportedInstanceSetting[];
 }
 
 function buildExportDataForType(
@@ -439,6 +570,20 @@ function buildExportDataForType(
         blobs: c.blobs,
         projectLinks: c.projectLinks,
       };
+    case 'files':
+      // `folders` is the same field name the document-store branch uses; the
+      // two never coexist because a .qtap carries exactly one export type,
+      // and each importer is gated on its own primary array (`files` vs
+      // `mountPoints`).
+      return { files: c.files, folders: c.fileFolders };
+    case 'prompt-templates':
+      return { promptTemplates: c.promptTemplates };
+    case 'provider-models':
+      return { providerModels: c.providerModels };
+    case 'plugin-configs':
+      return { pluginConfigs: c.pluginConfigs };
+    case 'instance-settings':
+      return { instanceSettings: c.instanceSettings };
     default:
       throw new Error(`Unknown export type in manifest: ${String(exportType)}`);
   }

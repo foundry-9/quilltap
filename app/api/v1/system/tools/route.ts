@@ -32,7 +32,11 @@ import { badRequest, notFound, serverError, validationError } from '@/lib/api/re
 import { deleteAllUserData, previewDeleteAllUserData } from '@/lib/backup/restore-service';
 import { BackgroundJob } from '@/lib/schemas/types';
 import { startProcessor, stopProcessor, getProcessorStatus, wakeProcessor } from '@/lib/background-jobs/processor';
-import { getMaxConcurrentJobs, setMaxConcurrentJobs } from '@/lib/instance-settings';
+import {
+  getMaxConcurrentJobs,
+  setMaxConcurrentJobs,
+  listPortableInstanceSettings,
+} from '@/lib/instance-settings';
 import { previewExport } from '@/lib/export/quilltap-export-service';
 import { createNdjsonStream, QTAP_NDJSON_CONTENT_TYPE } from '@/lib/export/ndjson-writer';
 import { previewImport, executeImport, type QuilltapExport, type ConflictStrategy } from '@/lib/import/quilltap-import-service';
@@ -528,6 +532,62 @@ async function handleExportEntities(req: NextRequest, context: any) {
       case 'projects': {
         const projects = await repos.projects.findAll();
         entities = projects.map((p) => ({ id: p.id, name: p.name }));
+        break;
+      }
+
+      case 'groups': {
+        const groups = await repos.groups.findAll();
+        entities = groups.map((g) => ({ id: g.id, name: g.name }));
+        break;
+      }
+
+      case 'document-stores': {
+        // Document stores are instance-scoped, not user-scoped — global repos
+        // on purpose, mirroring resolveExportIds in the NDJSON writer.
+        const stores = await globalRepos.docMountPoints.findAll();
+        entities = stores.map((s) => ({ id: s.id, name: s.name }));
+        break;
+      }
+
+      case 'files': {
+        // Backups are never offered — mirrors the backup service's own rule.
+        const files = (await repos.files.findAll()).filter(
+          (f) => f.category !== 'BACKUP' && f.folderPath !== '/backups'
+        );
+        entities = files.map((f) => ({ id: f.id, name: f.originalFilename }));
+        break;
+      }
+
+      case 'prompt-templates': {
+        const templates = await globalRepos.promptTemplates.findAll();
+        const userTemplates = templates.filter(
+          (t) => !t.isBuiltIn && t.userId === user.id
+        );
+        entities = userTemplates.map((t) => ({ id: t.id, name: t.name }));
+        break;
+      }
+
+      case 'provider-models': {
+        // Instance-global catalogue, no user filter.
+        const models = await globalRepos.providerModels.findAll();
+        entities = models.map((m) => ({
+          id: m.id,
+          name: `${m.provider} / ${m.modelId}`,
+        }));
+        break;
+      }
+
+      case 'plugin-configs': {
+        const configs = await globalRepos.pluginConfigs.findByUserId(user.id);
+        entities = configs.map((c) => ({ id: c.id, name: c.pluginName }));
+        break;
+      }
+
+      case 'instance-settings': {
+        // Keyed by setting key — instance_settings has no id column. Keys that
+        // only make sense inside the exporting instance are already withheld.
+        const settings = await listPortableInstanceSettings();
+        entities = settings.map((s) => ({ id: s.key, name: s.key }));
         break;
       }
 

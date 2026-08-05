@@ -11,6 +11,7 @@ import { logger as baseLogger } from '@/lib/logger';
 import { getUserRepositories, getRepositories } from '@/lib/repositories/factory';
 import type { ExportOptions, ExportPreview } from './types';
 import type { Memory } from '@/lib/schemas/types';
+import { listPortableInstanceSettings } from '@/lib/instance-settings';
 
 const logger = baseLogger.child({ module: 'export:quilltap-export-service' });
 
@@ -249,6 +250,79 @@ export async function previewExport(
           if (store) {
             entities.push({ id: store.id, name: store.name });
           }
+        }
+        break;
+      }
+
+      case 'files': {
+        const allFiles = options.scope === 'all'
+          ? (await repos.files.findAll()).filter(
+              (f) => f.category !== 'BACKUP' && f.folderPath !== '/backups'
+            )
+          : [];
+        const ids = options.scope === 'all'
+          ? allFiles.map(f => f.id)
+          : entityIds;
+
+        for (const id of ids) {
+          const file = await repos.files.findById(id);
+          if (file) {
+            entities.push({ id: file.id, name: file.originalFilename });
+          }
+        }
+        break;
+      }
+
+      case 'prompt-templates': {
+        const globalReposPT = getRepositories();
+        const allTemplates = options.scope === 'all'
+          ? await globalReposPT.promptTemplates.findAll()
+          : [];
+        const ids = options.scope === 'all'
+          ? allTemplates
+              .filter(t => !t.isBuiltIn && t.userId === userId)
+              .map(t => t.id)
+          : entityIds;
+
+        for (const id of ids) {
+          const template = await globalReposPT.promptTemplates.findById(id);
+          if (template && !template.isBuiltIn && template.userId === userId) {
+            entities.push({ id: template.id, name: template.name });
+          }
+        }
+        break;
+      }
+
+      case 'provider-models': {
+        // Instance-global catalogue, no user filter.
+        const globalReposPM = getRepositories();
+        const allModels = await globalReposPM.providerModels.findAll();
+        const wanted = options.scope === 'all' ? null : new Set(entityIds);
+        for (const model of allModels) {
+          if (wanted && !wanted.has(model.id)) continue;
+          entities.push({ id: model.id, name: `${model.provider} / ${model.modelId}` });
+        }
+        break;
+      }
+
+      case 'plugin-configs': {
+        const globalReposPC = getRepositories();
+        const configs = await globalReposPC.pluginConfigs.findByUserId(userId);
+        const wanted = options.scope === 'all' ? null : new Set(entityIds);
+        for (const config of configs) {
+          if (wanted && !wanted.has(config.id)) continue;
+          entities.push({ id: config.id, name: config.pluginName });
+        }
+        break;
+      }
+
+      case 'instance-settings': {
+        // Keyed by setting key — the table has no id column.
+        const settings = await listPortableInstanceSettings();
+        const wanted = options.scope === 'all' ? null : new Set(entityIds);
+        for (const setting of settings) {
+          if (wanted && !wanted.has(setting.key)) continue;
+          entities.push({ id: setting.key, name: setting.key });
         }
         break;
       }

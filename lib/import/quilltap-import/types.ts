@@ -25,6 +25,9 @@ import type {
   ExportedDocumentStoreDocument,
   ExportedDocumentStoreBlob,
   ExportedProjectDocMountLink,
+  ExportedFileWithBytes,
+  ExportedPluginConfig,
+  ExportedInstanceSetting,
 } from '@/lib/export/types';
 
 /**
@@ -44,6 +47,13 @@ export interface AnyExportData {
   memories?: Memory[];
   // Document store export payload (Scriptorium)
   mountPoints?: ExportedDocumentStore[];
+  /**
+   * Folder rows. Shared between two export types on purpose: a
+   * `document-stores` archive puts `ExportedDocumentStoreFolder` here, a
+   * `files` archive puts `ExportedFolder`. A `.qtap` carries exactly one
+   * export type, and each importer is gated on its own primary array
+   * (`mountPoints` vs `files`), so the two never meet.
+   */
   folders?: any[];
   documents?: ExportedDocumentStoreDocument[];
   blobs?: ExportedDocumentStoreBlob[];
@@ -51,6 +61,13 @@ export interface AnyExportData {
   // Chat sidecars (per-chat annotations + Document Mode pane state)
   conversationAnnotations?: import('@/lib/schemas/types').ConversationAnnotation[];
   chatDocuments?: import('@/lib/schemas/chat-document.types').ChatDocument[];
+  // General file library (files + folders; folders share the field above)
+  files?: ExportedFileWithBytes[];
+  // Configuration / catalogue export types
+  promptTemplates?: import('@/lib/schemas/types').PromptTemplate[];
+  providerModels?: import('@/lib/schemas/types').ProviderModel[];
+  pluginConfigs?: ExportedPluginConfig[];
+  instanceSettings?: ExportedInstanceSetting[];
 }
 
 /**
@@ -66,6 +83,12 @@ export interface ImportPreviewEntity {
   exists: boolean;
   /** When a cross-instance name match is found, this holds the existing entity's ID */
   matchedExistingId?: string;
+  /**
+   * Short human-readable note shown beside the entity — used to warn that a
+   * plugin config arrived with its secret keys redacted and they must be
+   * re-entered by hand.
+   */
+  detail?: string;
 }
 
 export interface ImportPreview {
@@ -80,6 +103,12 @@ export interface ImportPreview {
     tags?: ImportPreviewEntity[];
     projects?: ImportPreviewEntity[];
     groups?: ImportPreviewEntity[];
+    documentStores?: ImportPreviewEntity[];
+    files?: ImportPreviewEntity[];
+    promptTemplates?: ImportPreviewEntity[];
+    providerModels?: ImportPreviewEntity[];
+    pluginConfigs?: ImportPreviewEntity[];
+    instanceSettings?: ImportPreviewEntity[];
     memories?: { count: number };
   };
   conflictCounts: Record<string, number>;

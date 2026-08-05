@@ -1,0 +1,213 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quilltap.app/schemas/qtap-export-ndjson.schema.json",
+  "title": "Quilltap Export Format — NDJSON stream (qtap-ndjson v1)",
+  "description": "Schema for a single line of a streaming .qtap export. A streaming .qtap file is newline-delimited JSON: the first line is an __envelope__ record carrying the manifest, the last line is an optional __footer__ carrying authoritative counts, and every line between is one tagged entity record. Validate each line against this schema individually — the file as a whole is not a JSON document.\n\nDetection rule: a .qtap file whose first parseable JSON value is an object with format === 'qtap-ndjson' is streaming NDJSON. Anything else is the legacy monolithic {manifest, data} format described by qtap-export.schema.json.\n\nWhich record kinds appear depends on manifest.exportType. Records are emitted in dependency order: a parent always precedes its children (character before its wardrobe_item records, chat before its chat_message records, doc_mount_blob before its chunks), so a reader can resolve references without buffering the whole stream.",
+
+  "type": "object",
+  "required": ["kind"],
+  "properties": {
+    "kind": { "$ref": "#/$defs/RecordKind" }
+  },
+
+  "oneOf": [
+    { "$ref": "#/$defs/Envelope" },
+    { "$ref": "#/$defs/Footer" },
+    { "$ref": "#/$defs/SimpleRecord" },
+    { "$ref": "#/$defs/CharacterChildRecord" },
+    { "$ref": "#/$defs/ChatChildRecord" },
+    { "$ref": "#/$defs/DocMountBlobRecord" },
+    { "$ref": "#/$defs/DocMountBlobChunkRecord" },
+    { "$ref": "#/$defs/FileBlobRecord" },
+    { "$ref": "#/$defs/FileBlobChunkRecord" }
+  ],
+
+  "$defs": {
+    "RecordKind": {
+      "enum": [
+        "__envelope__",
+        "__footer__",
+        "tag",
+        "connection_profile",
+        "image_profile",
+        "embedding_profile",
+        "roleplay_template",
+        "prompt_template",
+        "project",
+        "group",
+        "character",
+        "wardrobe_item",
+        "character_plugin_data",
+        "chat",
+        "chat_message",
+        "conversation_annotation",
+        "chat_document",
+        "memory",
+        "doc_mount_point",
+        "doc_mount_folder",
+        "doc_mount_document",
+        "doc_mount_blob",
+        "doc_mount_blob_chunk",
+        "project_doc_mount_link",
+        "folder",
+        "file",
+        "file_blob",
+        "file_blob_chunk",
+        "provider_model",
+        "plugin_config",
+        "instance_setting"
+      ],
+      "description": "Discriminator for the record. A reader that meets an unrecognised kind warns and skips it — that is how the format tolerates archives written by a newer build. An unrecognised manifest.exportType, by contrast, is fatal: a reader that does not know the type cannot assemble the payload."
+    },
+
+    "Envelope": {
+      "type": "object",
+      "description": "Always the first line. Its manifest.counts are best-effort and are usually empty for streaming exports; the footer carries the authoritative counts.",
+      "required": ["kind", "format", "version", "manifest"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "__envelope__" },
+        "format": { "const": "qtap-ndjson" },
+        "version": { "const": 1, "description": "Stream format version. Adding new record kinds does not bump this." },
+        "manifest": { "$ref": "https://quilltap.app/schemas/qtap-export.schema.json#/$defs/Manifest" }
+      }
+    },
+
+    "Footer": {
+      "type": "object",
+      "description": "Optional final line carrying the record counts actually emitted, so a reader can tell a complete stream from a truncated one.",
+      "required": ["kind", "counts"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "__footer__" },
+        "counts": { "$ref": "https://quilltap.app/schemas/qtap-export.schema.json#/$defs/ExportCounts" }
+      }
+    },
+
+    "SimpleRecord": {
+      "type": "object",
+      "description": "One entity per line, payload in `data`. Parent references inside `data` use the exporting instance's IDs and are remapped at import time.",
+      "required": ["kind", "data"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "tag",
+            "connection_profile",
+            "image_profile",
+            "embedding_profile",
+            "roleplay_template",
+            "prompt_template",
+            "project",
+            "group",
+            "character",
+            "chat",
+            "memory",
+            "doc_mount_point",
+            "doc_mount_folder",
+            "doc_mount_document",
+            "project_doc_mount_link",
+            "folder",
+            "file",
+            "provider_model",
+            "plugin_config",
+            "instance_setting"
+          ]
+        },
+        "data": {
+          "type": "object",
+          "description": "The entity, in the same shape the legacy monolithic format uses for its corresponding array element — with two exceptions that exist because the stream splits large payloads: a `character` carries no wardrobeItems or pluginData (those stream as their own records), and a `chat` carries no messages (likewise). A `memory` never carries an embedding at all; see the Memory definition in qtap-export.schema.json."
+        }
+      }
+    },
+
+    "CharacterChildRecord": {
+      "type": "object",
+      "description": "A wardrobe item or plugin-data blob belonging to the most recent `character` record. Split out so a large wardrobe cannot blow past the per-line size ceiling.",
+      "required": ["kind", "characterId", "data"],
+      "properties": {
+        "kind": { "enum": ["wardrobe_item", "character_plugin_data"] },
+        "characterId": { "$ref": "https://quilltap.app/schemas/qtap-export.schema.json#/$defs/UUID" },
+        "pluginName": { "type": "string", "description": "Present on character_plugin_data only." },
+        "data": {}
+      },
+      "additionalProperties": false
+    },
+
+    "ChatChildRecord": {
+      "type": "object",
+      "description": "A message, annotation, or Document-Mode pane record belonging to the most recent `chat` record. Messages are split out so a chat with tens of thousands of them still streams; annotations and chat documents follow the messages so a reader can resolve sourceMessageId against IDs it has already seen.",
+      "required": ["kind", "chatId", "data"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["chat_message", "conversation_annotation", "chat_document"] },
+        "chatId": { "$ref": "https://quilltap.app/schemas/qtap-export.schema.json#/$defs/UUID" },
+        "data": { "type": "object" }
+      }
+    },
+
+    "DocMountBlobRecord": {
+      "type": "object",
+      "description": "Document-store blob header, emitted once before its byte chunks. NOTE: despite the name, doc_mount_blob_chunk has nothing to do with embeddings — it is the base64 splitting of binary blob content. The embedding table (doc_mount_chunks) is never exported at all.",
+      "required": ["kind", "data"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "doc_mount_blob" },
+        "data": {
+          "type": "object",
+          "description": "Everything in ExportedDocumentStoreBlob except dataBase64, plus chunkCount.",
+          "required": ["mountPointId", "sha256", "chunkCount"],
+          "additionalProperties": true,
+          "properties": {
+            "mountPointId": { "$ref": "https://quilltap.app/schemas/qtap-export.schema.json#/$defs/UUID" },
+            "sha256": { "type": "string", "minLength": 64, "maxLength": 64 },
+            "chunkCount": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    },
+
+    "DocMountBlobChunkRecord": {
+      "type": "object",
+      "description": "One ordered slice of a document-store blob, keyed to its header by (mountPointId, sha256). Raw slices are 3 MiB — a multiple of 3 — so each base64 piece is padding-free and the reader can concatenate the encoded strings directly.",
+      "required": ["kind", "mountPointId", "sha256", "index", "total", "dataBase64"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "doc_mount_blob_chunk" },
+        "mountPointId": { "$ref": "https://quilltap.app/schemas/qtap-export.schema.json#/$defs/UUID" },
+        "sha256": { "type": "string", "minLength": 64, "maxLength": 64 },
+        "index": { "type": "integer", "minimum": 0, "description": "0-based" },
+        "total": { "type": "integer", "minimum": 1, "description": "Mirrors the header's chunkCount" },
+        "dataBase64": { "type": "string", "contentEncoding": "base64" }
+      }
+    },
+
+    "FileBlobRecord": {
+      "type": "object",
+      "description": "General-library file byte header, emitted once after its `file` record and before its chunks. Absent when the file's bytes could not be read — the `file` record then carries _bytesMissing.",
+      "required": ["kind", "fileId", "sha256", "sizeBytes", "chunkCount"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "file_blob" },
+        "fileId": { "$ref": "https://quilltap.app/schemas/qtap-export.schema.json#/$defs/UUID" },
+        "sha256": { "type": "string", "minLength": 64, "maxLength": 64 },
+        "sizeBytes": { "type": "integer", "minimum": 0 },
+        "chunkCount": { "type": "integer", "minimum": 1 }
+      }
+    },
+
+    "FileBlobChunkRecord": {
+      "type": "object",
+      "description": "One ordered slice of a general-library file's bytes, keyed to its header by fileId. Same 3 MiB multiple-of-3 rule as the document-store chunks.",
+      "required": ["kind", "fileId", "index", "total", "dataBase64"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "file_blob_chunk" },
+        "fileId": { "$ref": "https://quilltap.app/schemas/qtap-export.schema.json#/$defs/UUID" },
+        "index": { "type": "integer", "minimum": 0, "description": "0-based" },
+        "total": { "type": "integer", "minimum": 1, "description": "Mirrors the header's chunkCount" },
+        "dataBase64": { "type": "string", "contentEncoding": "base64" }
+      }
+    }
+  }
+}

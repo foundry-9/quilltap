@@ -31,9 +31,108 @@ import {
   importMemories,
 } from './import-entities';
 import { importDocumentStores } from './import-document-stores';
+import { importFiles } from './import-files';
+import {
+  importPromptTemplates,
+  importProviderModels,
+  importPluginConfigs,
+  importInstanceSettings,
+} from './import-configuration';
 import { reconcileRelationships } from './reconcile';
+import { enqueueEmbeddingGenerate } from '@/lib/background-jobs/queue-service';
+import { getDefaultEmbeddingProfile } from '@/lib/embedding/embedding-service';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
+
+/**
+ * Enqueue one targeted `EMBEDDING_GENERATE` per memory this import created.
+ *
+ * Imported memories arrive with a NULL embedding on purpose — a foreign
+ * instance's vectors are meaningless here (see `importMemories`). Mirrors the
+ * memory backfill sweeper (`/api/v1/memories?action=backfill-embeddings`),
+ * including its reliance on `enqueueEmbeddingGenerate`'s per-entity dedup.
+ *
+ * Deliberately *not* one `EMBEDDING_REINDEX_ALL`: that job walks every
+ * character's entire memory table plus conversation chunks, help docs and
+ * mount chunks — wildly disproportionate to an import of a handful of rows.
+ *
+ * Never throws: a failure to schedule re-indexing must not fail an import
+ * whose rows are already committed. The boot reconcile remains the backstop.
+ */
+async function enqueueImportedMemoryEmbeddings(
+  userId: string,
+  memoryRefs: Array<{ id: string; characterId: string }>,
+  warnings: string[]
+): Promise<void> {
+  if (memoryRefs.length === 0) return;
+
+  moduleLogger.debug('Resolving embedding profile for imported memories', {
+    userId,
+    memoryCount: memoryRefs.length,
+  });
+
+  let profile: { id: string; provider: string } | null = null;
+  try {
+    profile = await getDefaultEmbeddingProfile(userId);
+  } catch (error) {
+    moduleLogger.warn('Failed to resolve default embedding profile after import', {
+      userId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  // The BUILTIN TF-IDF profile is corpus-derived rather than model-derived;
+  // per-row generates against it are not the right repair, so we leave those
+  // rows to the boot reconcile just as we do when no profile exists at all.
+  if (!profile || profile.provider === 'BUILTIN') {
+    const reason = profile
+      ? 'the configured embedding profile is the built-in TF-IDF one'
+      : 'no default embedding profile is configured';
+    moduleLogger.warn('Imported memories left unembedded', {
+      userId,
+      memoryCount: memoryRefs.length,
+      reason,
+    });
+    warnings.push(
+      `${memoryRefs.length} memories were imported without embeddings because ${reason}; ` +
+        'they will be indexed once an embedding profile is configured.'
+    );
+    return;
+  }
+
+  let enqueued = 0;
+  for (const ref of memoryRefs) {
+    try {
+      const result = await enqueueEmbeddingGenerate(userId, {
+        entityType: 'MEMORY',
+        entityId: ref.id,
+        characterId: ref.characterId,
+        profileId: profile.id,
+      });
+      if (result.isNew) enqueued++;
+    } catch (error) {
+      moduleLogger.warn('Failed to enqueue embedding job for imported memory', {
+        userId,
+        memoryId: ref.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  moduleLogger.debug('Enqueued embedding jobs for imported memories', {
+    userId,
+    profileId: profile.id,
+    requested: memoryRefs.length,
+    enqueued,
+  });
+
+  if (enqueued < memoryRefs.length) {
+    warnings.push(
+      `${memoryRefs.length - enqueued} of ${memoryRefs.length} imported memories could not be ` +
+        'queued for embedding; the next startup sweep will pick them up.'
+    );
+  }
+}
 
 /**
  * Executes the import of QuilltapExport data
@@ -97,6 +196,13 @@ export async function executeImport(
   };
 
   const data = getExportData(exportData);
+
+  /**
+   * Memories created by this import, collected so we can enqueue targeted
+   * re-embedding once the whole import has settled. Imported memories always
+   * arrive with a NULL embedding (see importMemories).
+   */
+  let importedMemoryRefs: Array<{ id: string; characterId: string }> = [];
 
   try {
     // Import in dependency order
@@ -273,7 +379,34 @@ export async function executeImport(
       imported.chatDocuments = chatDocsImported;
     }
 
-    // 7c. Group character membership and linked document stores. Remap
+    // 7c. Document stores (Scriptorium) — mount point configs plus, for
+    //    database-backed mounts, folder structures, document bodies and blobs.
+    //
+    //    Must run *before* the group↔store link step below: those links
+    //    resolve through idMaps.mountPoints, which only this importer
+    //    populates. It ran last for a long time, so in a mixed archive every
+    //    group's linked stores were silently dropped. It still has to follow
+    //    importProjects — its project links remap through idMaps.projects.
+    if (data.mountPoints && data.mountPoints.length > 0) {
+      const counts = await importDocumentStores(
+        data.mountPoints,
+        data.folders ?? [],
+        data.documents ?? [],
+        data.blobs ?? [],
+        data.projectLinks ?? [],
+        options,
+        repos,
+        idMaps,
+        warnings
+      );
+      imported.documentStores = counts.mountPoints;
+      imported.documentStoreFolders = counts.folders;
+      imported.documentStoreDocuments = counts.documents;
+      imported.documentStoreBlobs = counts.blobs;
+      imported.documentStoreProjectLinks = counts.projectLinks;
+    }
+
+    // 7d. Group character membership and linked document stores. Remap
     // group and character IDs; skip members/links that don't exist in the import.
     if (data.groups && data.groups.length > 0) {
       const groupsData = data.groups as Array<{
@@ -344,31 +477,59 @@ export async function executeImport(
       );
       imported.memories = counts.imported;
       skipped.memories = counts.skipped;
+      importedMemoryRefs = counts.createdIds;
     }
 
-    // 9. Document stores (Scriptorium) — mount point configs plus, for
-    //    database-backed mounts, folder structures, document bodies and blobs.
-    if (data.mountPoints && data.mountPoints.length > 0) {
-      const counts = await importDocumentStores(
-        data.mountPoints,
-        data.folders ?? [],
-        data.documents ?? [],
-        data.blobs ?? [],
-        data.projectLinks ?? [],
+    // 9. General file library. Runs after projects (folders and files remap
+    //    projectId) and after characters/chats (linkedTo resolution).
+    if (data.files && data.files.length > 0) {
+      const counts = await importFiles(
+        userId,
+        data.files,
+        (data.folders ?? []) as Parameters<typeof importFiles>[2],
         options,
         repos,
         idMaps,
         warnings
       );
-      imported.documentStores = counts.mountPoints;
-      imported.documentStoreFolders = counts.folders;
-      imported.documentStoreDocuments = counts.documents;
-      imported.documentStoreBlobs = counts.blobs;
-      imported.documentStoreProjectLinks = counts.projectLinks;
+      imported.files = counts.files;
+      imported.folders = counts.folders;
+      skipped.files = counts.skipped;
+    }
+
+    // 10. Configuration-shaped types. None of these are referenced by id, so
+    //     they have no ordering constraint against the entity importers.
+    if (data.promptTemplates && data.promptTemplates.length > 0) {
+      const counts = await importPromptTemplates(userId, data.promptTemplates, options, warnings);
+      imported.promptTemplates = counts.imported;
+      skipped.promptTemplates = counts.skipped;
+    }
+
+    if (data.providerModels && data.providerModels.length > 0) {
+      const counts = await importProviderModels(data.providerModels, warnings);
+      imported.providerModels = counts.imported;
+      skipped.providerModels = counts.skipped;
+    }
+
+    if (data.pluginConfigs && data.pluginConfigs.length > 0) {
+      const counts = await importPluginConfigs(userId, data.pluginConfigs, warnings);
+      imported.pluginConfigs = counts.imported;
+      skipped.pluginConfigs = counts.skipped;
+    }
+
+    if (data.instanceSettings && data.instanceSettings.length > 0) {
+      const counts = await importInstanceSettings(data.instanceSettings, warnings);
+      imported.instanceSettings = counts.imported;
+      skipped.instanceSettings = counts.skipped;
     }
 
     // Post-import reconciliation
     await reconcileRelationships(userId, repos, idMaps, warnings);
+
+    // Re-embed what we just inserted. Imported memories carry no vector, and
+    // without this their semantic search stays broken until the next boot's
+    // reconcile sweep runs.
+    await enqueueImportedMemoryEmbeddings(userId, importedMemoryRefs, warnings);
 
     // Destination character IDs — for the `duplicate` strategy every value is a
     // freshly created character (see import-characters). The Salon "Summon from

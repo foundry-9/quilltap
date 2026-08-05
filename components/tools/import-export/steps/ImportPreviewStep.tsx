@@ -10,6 +10,8 @@ interface EntityPreview {
   name?: string
   title?: string
   exists: boolean
+  /** Short note from the server, e.g. which plugin secrets were withheld. */
+  detail?: string
 }
 
 interface ImportPreview {
@@ -118,6 +120,11 @@ export function ImportPreviewStep({
                     />
                     <span className="text-foreground flex-1">
                       {entity.name || entity.title}
+                      {entity.detail && (
+                        <span className="block qt-text-small qt-text-secondary">
+                          {entity.detail}
+                        </span>
+                      )}
                     </span>
                     {entity.exists && (
                       <span className="text-xs qt-bg-warning/10 qt-text-warning px-2 py-1 rounded">

@@ -20,12 +20,20 @@ export const maxDuration = 300; // 5 minutes
  */
 export const POST = createContextHandler(async (req, { user }) => {
   try {
+    // `{ compact?: boolean }` — omit or send `false` for a full-fidelity
+    // backup, which is the default. A body is optional; a malformed one is
+    // treated as absent rather than rejected, matching how this route has
+    // always behaved.
+    const body = await req.json().catch(() => ({} as Record<string, unknown>));
+    const compact = (body as { compact?: unknown }).compact === true;
+
     logger.info('[System Backup v1] Creating backup', {
       userId: user.id,
+      compact,
     });
 
     // Create the backup (returns path to zip on disk)
-    const { zipPath, manifest } = await createBackup(user.id);
+    const { zipPath, manifest } = await createBackup(user.id, { compact });
 
     // Store zip path temporarily for download
     const backupId = randomUUID();

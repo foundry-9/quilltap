@@ -37,6 +37,36 @@ const KEY_GENERAL_MOUNT_POINT_ID = 'generalMountPointId';
 const KEY_LAST_MAINTENANCE_SWEEP_AT = 'lastMaintenanceSweepAt';
 const KEY_DATA_RETENTION = 'dataRetention';
 
+/** Key the version guard writes (see `lib/startup/version-guard.ts`). */
+const KEY_HIGHEST_APP_VERSION = 'highest_app_version';
+
+/**
+ * Settings that must never leave the instance that wrote them.
+ *
+ * Keep this list beside the key constants above so adding a setting is a
+ * conscious include/exclude decision rather than an accident: the
+ * `instance-settings` export type dumps the whole table minus this set, so a
+ * new key is portable by default.
+ *
+ *  - The three mount-point pointers are UUIDs into *this* instance's
+ *    mount-index database (the same set backup restore has to remap — see
+ *    `MOUNT_POINT_SETTING_KEYS` in `lib/backup/restore/uuid-remap.ts`).
+ *    Carrying them over would aim the Lantern, uploads, and general stores at
+ *    mount points that don't exist on the receiving instance.
+ *  - `lastMaintenanceSweepAt` is local timing state; importing it would make
+ *    the receiving instance skip a sweep it never ran.
+ *  - `highest_app_version` is the version guard's downgrade tripwire. An
+ *    imported value could lock a perfectly healthy instance out of its own
+ *    database.
+ */
+export const NON_PORTABLE_INSTANCE_SETTING_KEYS: ReadonlySet<string> = new Set([
+  KEY_LANTERN_BACKGROUNDS_MOUNT_POINT_ID,
+  KEY_USER_UPLOADS_MOUNT_POINT_ID,
+  KEY_GENERAL_MOUNT_POINT_ID,
+  KEY_LAST_MAINTENANCE_SWEEP_AT,
+  KEY_HIGHEST_APP_VERSION,
+]);
+
 const DEFAULT_MAX_CONCURRENT_JOBS = 4;
 const DEFAULT_MEMORY_EXTRACTION_CONCURRENCY = 1;
 const DEFAULT_MEMORY_EXTRACTION_LIMITS: MemoryExtractionLimits = {
@@ -256,6 +286,44 @@ export async function getLastMaintenanceSweepAt(): Promise<Date | null> {
  */
 export async function setLastMaintenanceSweepAt(when: Date = new Date()): Promise<void> {
   await writeSetting(KEY_LAST_MAINTENANCE_SWEEP_AT, when.toISOString());
+}
+
+/**
+ * Every portable `instance_settings` row, in key order — the payload behind
+ * the `instance-settings` export type ("move my setup"). Keys in
+ * {@link NON_PORTABLE_INSTANCE_SETTING_KEYS} are withheld.
+ *
+ * Returns [] when the table is missing (very old databases predating the
+ * instance_settings provisioning migration), matching `dumpInstanceSettings`
+ * in the backup service.
+ */
+export async function listPortableInstanceSettings(): Promise<
+  Array<{ key: string; value: string }>
+> {
+  try {
+    const rows =
+      (await rawQuery<Array<{ key: string; value: string }>>(
+        'SELECT "key", "value" FROM "instance_settings" ORDER BY "key"',
+      )) ?? [];
+    return rows.filter((row) => !NON_PORTABLE_INSTANCE_SETTING_KEYS.has(row.key));
+  } catch (error) {
+    logger.warn('[InstanceSettings] Failed to list settings for export', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
+}
+
+/**
+ * Upsert one raw `instance_settings` row.
+ *
+ * Exposed for the `instance-settings` importer, which writes values it cannot
+ * interpret — the whole point of "move my setup" is that a setting travels
+ * without the import path needing a typed helper for it. Prefer the typed
+ * setters above everywhere else.
+ */
+export async function writeInstanceSetting(key: string, value: string): Promise<void> {
+  await writeSetting(key, value);
 }
 
 // Re-export the schema for callers that want to validate independently.

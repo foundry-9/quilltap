@@ -384,15 +384,29 @@ export async function importChats(
   return { imported, skipped, messages };
 }
 
+/**
+ * Insert imported memories, remapping every FK through the id maps.
+ *
+ * Deliberately uses the raw repository rather than `createMemoryWithGate`:
+ * the gate can silently skip near-duplicates, reinforce an existing row
+ * instead of inserting, or lose rows entirely when the embedding provider is
+ * down — none of which is acceptable for an import, where the user asked for
+ * exactly these rows.
+ *
+ * Returns the created memory IDs (alongside the counts) so the orchestrator
+ * can enqueue targeted re-embedding — imported memories arrive with a NULL
+ * embedding by design (see below).
+ */
 export async function importMemories(
   userId: string,
   memories: Memory[],
   idMaps: IdMappingState,
   repos: ReturnType<typeof getUserRepositories>,
   warnings: string[]
-): Promise<ImportCounts> {
+): Promise<ImportCounts & { createdIds: Array<{ id: string; characterId: string }> }> {
   let imported = 0;
   let skipped = 0;
+  const createdIds: Array<{ id: string; characterId: string }> = [];
 
   for (const memory of memories) {
     try {
@@ -433,8 +447,15 @@ export async function importMemories(
           .filter((id) => id !== null) as string[];
       }
 
-      const { id: _, createdAt, updatedAt, ...memoryData } = memory;
-      await repos.memories.create({
+      // `embedding` is excluded on purpose. A vector is only meaningful
+      // against the model that produced it, so a foreign one silently
+      // corrupts semantic search whenever the dimensionality happens to
+      // match — and the boot repair in lib/startup/repair-text-embeddings.ts
+      // would *preserve* a bad vector by converting it to a valid blob rather
+      // than discarding it. Import time is the only correct place to drop it.
+      // The orchestrator enqueues an EMBEDDING_GENERATE per created row.
+      const { id: _, createdAt, updatedAt, embedding: _embedding, ...memoryData } = memory;
+      const created = await repos.memories.create({
         ...memoryData,
         characterId: newCharacterId,
         aboutCharacterId: newAboutCharacterId,
@@ -442,6 +463,7 @@ export async function importMemories(
         projectId: newProjectId,
         tags: newTags,
       });
+      createdIds.push({ id: created.id, characterId: newCharacterId });
       imported++;
     } catch (error) {
       warnings.push(
@@ -457,5 +479,5 @@ export async function importMemories(
     }
   }
 
-  return { imported, skipped };
+  return { imported, skipped, createdIds };
 }

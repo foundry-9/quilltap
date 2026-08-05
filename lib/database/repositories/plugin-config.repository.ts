@@ -146,12 +146,16 @@ export class PluginConfigRepository extends UserOwnedBaseRepository<PluginConfig
    * @param userId The user ID
    * @param pluginName The plugin name
    * @param config The configuration values to set
+   * @param enabled Optional per-user enable flag. Omit to leave it untouched;
+   *   backup restore and `.qtap` import both pass it so a plugin the user had
+   *   switched off doesn't come back on.
    * @returns Promise<PluginConfig> The updated or created config
    */
   async upsertForUserPlugin(
     userId: string,
     pluginName: string,
-    config: Record<string, unknown>
+    config: Record<string, unknown>,
+    enabled?: boolean
   ): Promise<PluginConfig> {
     const existing = await this.findByUserAndPlugin(userId, pluginName);
 
@@ -161,7 +165,10 @@ export class PluginConfigRepository extends UserOwnedBaseRepository<PluginConfig
         ...existing.config,
         ...config,
       };
-      const updated = await this.update(existing.id, { config: mergedConfig });
+      const updated = await this.update(existing.id, {
+        config: mergedConfig,
+        ...(enabled !== undefined && { enabled }),
+      });
       if (!updated) {
         throw new Error(`Failed to update plugin config for ${pluginName}`);
       }
@@ -171,6 +178,7 @@ export class PluginConfigRepository extends UserOwnedBaseRepository<PluginConfig
       userId,
       pluginName,
       config,
+      ...(enabled !== undefined && { enabled }),
     });
   }
 

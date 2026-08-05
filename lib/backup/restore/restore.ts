@@ -21,6 +21,9 @@ import { rawQuery } from '@/lib/database/manager';
 import { getRawMountIndexDatabase, isMountIndexDegraded } from '@/lib/database/backends/sqlite/mount-index-client';
 import { TextReplacementRuleConflictError } from '@/lib/database/repositories';
 import { normalizeProfileName, makeUniqueProfileName } from '@/lib/llm/connection-profile-names';
+import { reconcileEmbeddingDimensions } from '@/lib/startup/reconcile-embedding-dimensions';
+import { enqueueEmbeddingReindexAll } from '@/lib/background-jobs/queue-service';
+import { getDefaultEmbeddingProfile } from '@/lib/embedding/embedding-service';
 import type { RestoreOptions, RestoreSummary } from '../types';
 import { UuidRemapper } from '../uuid-remapper';
 import { parseBackupZip, getFileFromExtractedBackup, cleanupDir } from './archive';
@@ -294,11 +297,14 @@ export async function restore(
     for (const config of data.pluginConfigs || []) {
       try {
         const { id, createdAt, updatedAt, ...configData } = config;
-        // Use upsert to merge with existing configs or create new ones
+        // Use upsert to merge with existing configs or create new ones.
+        // `enabled` rides along: without it a plugin the user had switched
+        // off silently came back on after a restore.
         await globalRepos.pluginConfigs.upsertForUserPlugin(
           targetUserId,
           configData.pluginName,
-          configData.config as Record<string, unknown>
+          configData.config as Record<string, unknown>,
+          configData.enabled
         );
         pluginConfigsRestored++;
       } catch (error) {
@@ -864,6 +870,75 @@ export async function restore(
 
     moduleLogger.info('All entities restored with preserved IDs - no reconciliation needed');
 
+    // 24a. Compact archives arrive with no vectors at all: memory embeddings
+    // are NULL and every derived collection (conversation chunks, vector
+    // entries, TF-IDF vocabularies, doc-mount chunks) was omitted at backup
+    // time. The reconcile below deliberately ignores *absent* chunk rows — it
+    // only repairs non-conforming ones — so without this the instance would
+    // come back with search quietly cold. Enqueued before the reconcile so the
+    // reconcile's own dedup sees this job and doesn't stack a second one.
+    if (parsedData.manifest?.compact) {
+      try {
+        const profile = await getDefaultEmbeddingProfile(targetUserId);
+        if (profile) {
+          await enqueueEmbeddingReindexAll(targetUserId, { profileId: profile.id, scope: 'all' });
+          moduleLogger.debug('Queued full re-index for compact backup restore', {
+            targetUserId,
+            profileId: profile.id,
+          });
+          warnings.push(
+            'This was a compact backup, so search indexes were rebuilt rather than restored — ' +
+              'search will warm back up as re-indexing completes. Conversation and document ' +
+              'chunks are rebuilt as those chats and stores are next touched.'
+          );
+        } else {
+          warnings.push(
+            'This was a compact backup, but no default embedding profile is configured, so ' +
+              'search cannot be rebuilt yet. Configure one and re-index from the Commonplace Book.'
+          );
+        }
+      } catch (error) {
+        warnings.push(
+          `Failed to queue re-indexing after compact restore: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+        moduleLogger.warn('Failed to enqueue reindex after compact restore', { error });
+      }
+    }
+
+    // 25. Embedding reconcile. Restore is the one moment a corpus can arrive
+    // whose vectors were produced under a different embedding standard than
+    // this instance's default profile — new-account mode, or simply a machine
+    // configured differently from the one the backup came off. Until now the
+    // only repair was the *next boot's* sweep, which is fine for an in-place
+    // restore and wrong for everything else.
+    //
+    // The reconcile takes no arguments, never throws (it catches into a null
+    // result), resolves the default profile itself and dedupes its own
+    // reindex enqueue — so in the ordinary conforming case this is a cheap
+    // no-op.
+    const reconcileResult = await reconcileEmbeddingDimensions();
+    moduleLogger.debug('Post-restore embedding reconcile complete', {
+      targetDimensions: reconcileResult.targetDimensions,
+      skippedReason: reconcileResult.skippedReason,
+      vectorEntriesDeleted: reconcileResult.vectorEntriesDeleted,
+      vectorIndexMetaFixed: reconcileResult.vectorIndexMetaFixed,
+      reindexEnqueued: reconcileResult.reindexEnqueued,
+      mismatched: reconcileResult.mismatched,
+    });
+    if (reconcileResult.skippedReason) {
+      warnings.push(
+        `Embedding reconcile was skipped after restore (${reconcileResult.skippedReason}); ` +
+          'semantic search will be repaired on the next startup.'
+      );
+    } else if (reconcileResult.reindexEnqueued) {
+      warnings.push(
+        'Some restored embeddings did not match this instance\'s embedding profile; ' +
+          're-indexing has been queued and search will warm back up as it completes.'
+      );
+    }
+
     const summary: RestoreSummary = {
       characters: data.characters.length,
       chats: data.chats.length,
@@ -910,6 +985,13 @@ export async function restore(
       groupDocMountLinks: groupDocMountLinksRestored,
       groupCharacterMembers: groupCharacterMembersRestored,
       textReplacementRules: textReplacementRulesRestored,
+      embeddingReconcile: {
+        targetDimensions: reconcileResult.targetDimensions,
+        skippedReason: reconcileResult.skippedReason,
+        vectorEntriesDeleted: reconcileResult.vectorEntriesDeleted,
+        vectorIndexMetaFixed: reconcileResult.vectorIndexMetaFixed,
+        reindexEnqueued: reconcileResult.reindexEnqueued,
+      },
       warnings,
     };
 

@@ -25,7 +25,10 @@ import type {
   SanitizedImageProfile,
   SanitizedEmbeddingProfile,
 } from './types';
-import type { MessageEvent } from '@/lib/schemas/types';
+import type { MessageEvent, Memory } from '@/lib/schemas/types';
+import { fileStorageManager } from '@/lib/file-storage/manager';
+import { getPlugin } from '@/lib/plugins/registry';
+import { listPortableInstanceSettings } from '@/lib/instance-settings';
 
 const logger = baseLogger.child({ module: 'export:ndjson-writer' });
 const APP_VERSION = packageJson.version;
@@ -85,6 +88,28 @@ function sanitizeProfile<T extends { apiKeyId?: string | null }>(
     ...rest,
     ...(apiKeyLabel && { _apiKeyLabel: apiKeyLabel }),
   } as Omit<T, 'apiKeyId'> & { _apiKeyLabel?: string };
+}
+
+/**
+ * Drop the hydrated vector off a memory before it leaves the instance.
+ *
+ * Two reasons, both load-bearing:
+ *
+ *  1. **Size.** `Memory.embedding` is a `Float32Array`, and `JSON.stringify`
+ *     turns a typed array into an index-keyed object — ~29.6 KB per memory.
+ *     A real corpus made embeddings 99.7% of the export (791 MB → ~2.5 MB
+ *     once stripped).
+ *  2. **Correctness.** A vector is only meaningful against the model that
+ *     produced it. Shipping one into an instance governed by a different
+ *     embedding standard silently poisons the corpus whenever the
+ *     dimensionality happens to match, and nothing downstream can detect it.
+ *
+ * The importer re-embeds what it inserts (see `executeImport`), so no
+ * information is lost — only a cache that must be rebuilt locally anyway.
+ */
+function stripEmbedding(memory: Memory): Omit<Memory, 'embedding'> {
+  const { embedding: _embedding, ...rest } = memory;
+  return rest;
 }
 
 function buildManifest(
@@ -186,7 +211,8 @@ async function* streamCharacters(
       try {
         const memories = await repos.memories.findByCharacterId(id);
         for (const memory of memories) {
-          yield { kind: 'memory', data: memory };
+          // Embeddings never travel (see stripEmbedding).
+          yield { kind: 'memory', data: stripEmbedding(memory) };
           bump(counts, 'memories');
         }
       } catch (error) {
@@ -299,7 +325,8 @@ async function* streamChats(
           const memories = await repos.memories.findByCharacterId(char.id);
           for (const memory of memories) {
             if (memory.chatId !== id) continue;
-            yield { kind: 'memory', data: memory };
+            // Embeddings never travel (see stripEmbedding).
+            yield { kind: 'memory', data: stripEmbedding(memory) };
             bump(counts, 'memories');
           }
         } catch {
@@ -612,6 +639,215 @@ async function* streamDocumentStores(
   }
 }
 
+/**
+ * General file library: folders first (so the importer can build the tree
+ * before anything references it), then each file's metadata followed by its
+ * bytes as a `file_blob` header plus ordered `file_blob_chunk` records —
+ * the same shape as the document-store blob pair.
+ */
+async function* streamFiles(
+  userId: string,
+  ids: string[],
+  counts: QuilltapExportCounts
+): AsyncGenerator<QtapRecord> {
+  const repos = getUserRepositories(userId);
+  const globalRepos = getRepositories();
+
+  // Folders are cheap metadata and the whole tree is emitted regardless of
+  // which files were selected: a file whose folder is missing would import
+  // into a flat root, and re-creating the tree later is not possible.
+  try {
+    const folders = await globalRepos.folders.findByUserId(userId);
+    // Parents before children — the importer resolves parentFolderId by path.
+    const sorted = [...folders].sort((a, b) => a.path.length - b.path.length);
+    for (const folder of sorted) {
+      yield {
+        kind: 'folder',
+        data: {
+          id: folder.id,
+          path: folder.path,
+          name: folder.name,
+          parentFolderId: folder.parentFolderId ?? null,
+          projectId: folder.projectId ?? null,
+        },
+      };
+      bump(counts, 'folders');
+    }
+  } catch (error) {
+    logger.warn('Failed to load folders for file export', {
+      userId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  const idSet = new Set(ids);
+  const allFiles = await repos.files.findAll();
+
+  for (const file of allFiles) {
+    if (!idSet.has(file.id)) continue;
+
+    // Backups are excluded exactly as the backup service excludes them —
+    // nobody wants last month's archive riding inside this month's.
+    if (file.category === 'BACKUP' || file.folderPath === '/backups') {
+      logger.debug('Skipping backup file in export', { fileId: file.id });
+      continue;
+    }
+
+    let bytes: Buffer | null = null;
+    try {
+      bytes = await fileStorageManager.downloadFile(file);
+    } catch (error) {
+      logger.warn('Failed to read file bytes for export — exporting metadata only', {
+        fileId: file.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    // storageKey never travels verbatim: it points into this instance's
+    // storage (commonly `mount-blob:<mountPointId>:<blobId>`). It rides as
+    // provenance only and the importer discards it.
+    const { userId: _ownerId, storageKey, ...fileRest } = file;
+    yield {
+      kind: 'file',
+      data: {
+        ...fileRest,
+        _sourceStorageKey: storageKey ?? null,
+        ...(bytes === null && { _bytesMissing: true }),
+      },
+    };
+    bump(counts, 'files');
+
+    if (!bytes) continue;
+
+    const chunkCount = Math.max(1, Math.ceil(bytes.length / BLOB_CHUNK_BYTES));
+    yield {
+      kind: 'file_blob',
+      fileId: file.id,
+      sha256: file.sha256,
+      sizeBytes: bytes.length,
+      chunkCount,
+    };
+    for (let index = 0; index < chunkCount; index++) {
+      const start = index * BLOB_CHUNK_BYTES;
+      const end = Math.min(start + BLOB_CHUNK_BYTES, bytes.length);
+      yield {
+        kind: 'file_blob_chunk',
+        fileId: file.id,
+        index,
+        total: chunkCount,
+        dataBase64: bytes.subarray(start, end).toString('base64'),
+      };
+    }
+  }
+}
+
+async function* streamPromptTemplates(
+  userId: string,
+  ids: string[],
+  counts: QuilltapExportCounts
+): AsyncGenerator<QtapRecord> {
+  const globalRepos = getRepositories();
+  for (const id of ids) {
+    const template = await globalRepos.promptTemplates.findById(id);
+    // Built-ins are seeded from `prompts/` on every instance — they never
+    // travel, exactly as with roleplay templates.
+    if (!template || template.isBuiltIn || template.userId !== userId) continue;
+    yield { kind: 'prompt_template', data: template };
+    bump(counts, 'promptTemplates');
+  }
+}
+
+async function* streamProviderModels(
+  _userId: string,
+  ids: string[],
+  counts: QuilltapExportCounts
+): AsyncGenerator<QtapRecord> {
+  // The model catalogue is instance-global, not user-scoped.
+  const globalRepos = getRepositories();
+  const idSet = new Set(ids);
+  const models = await globalRepos.providerModels.findAll();
+  for (const model of models) {
+    if (!idSet.has(model.id)) continue;
+    yield { kind: 'provider_model', data: model };
+    bump(counts, 'providerModels');
+  }
+}
+
+/**
+ * Resolve a plugin's manifest and return the set of config keys it declares as
+ * `password`-typed. Returns `null` when the manifest can't be resolved — the
+ * caller then withholds the whole config rather than guessing.
+ */
+function resolveSecretConfigKeys(pluginName: string): Set<string> | null {
+  const plugin = getPlugin(pluginName);
+  if (!plugin) return null;
+  const schema = plugin.manifest.configSchema ?? [];
+  return new Set(schema.filter((field) => field.type === 'password').map((field) => field.key));
+}
+
+async function* streamPluginConfigs(
+  userId: string,
+  ids: string[],
+  counts: QuilltapExportCounts
+): AsyncGenerator<QtapRecord> {
+  const globalRepos = getRepositories();
+  const idSet = new Set(ids);
+  const configs = await globalRepos.pluginConfigs.findByUserId(userId);
+
+  for (const config of configs) {
+    if (!idSet.has(config.id)) continue;
+
+    // Redaction is mandatory. `config` is an untyped bag and manifests may
+    // declare password-typed fields, which are stored in plaintext — fine in
+    // a local backup, never in a portable .qtap.
+    const secretKeys = resolveSecretConfigKeys(config.pluginName);
+    let redactedKeys: string[];
+    let safeConfig: Record<string, unknown>;
+
+    if (secretKeys === null) {
+      // Plugin isn't installed here, so we cannot tell which keys are secret.
+      // Withhold everything rather than leak by omission of knowledge.
+      redactedKeys = ['*'];
+      safeConfig = {};
+      logger.warn('Plugin manifest unavailable during export — withholding entire config', {
+        pluginName: config.pluginName,
+      });
+    } else {
+      redactedKeys = Object.keys(config.config).filter((key) => secretKeys.has(key));
+      safeConfig = Object.fromEntries(
+        Object.entries(config.config).filter(([key]) => !secretKeys.has(key))
+      );
+    }
+
+    const { userId: _ownerId, ...rest } = config;
+    yield {
+      kind: 'plugin_config',
+      data: {
+        ...rest,
+        config: safeConfig,
+        ...(redactedKeys.length > 0 && { _redactedKeys: redactedKeys }),
+      },
+    };
+    bump(counts, 'pluginConfigs');
+  }
+}
+
+async function* streamInstanceSettings(
+  _userId: string,
+  ids: string[],
+  counts: QuilltapExportCounts
+): AsyncGenerator<QtapRecord> {
+  const idSet = new Set(ids);
+  // The exclusion of instance-local keys lives with the key constants in
+  // lib/instance-settings so a new setting is a conscious decision.
+  const settings = await listPortableInstanceSettings();
+  for (const setting of settings) {
+    if (!idSet.has(setting.key)) continue;
+    yield { kind: 'instance_setting', data: setting };
+    bump(counts, 'instanceSettings');
+  }
+}
+
 // ============================================================================
 // TOP-LEVEL STREAMER
 // ============================================================================
@@ -652,6 +888,22 @@ async function resolveExportIds(
       return (await repos.groups.findAll()).map((g) => g.id);
     case 'document-stores':
       return (await globalRepos.docMountPoints.findAll()).map((s) => s.id);
+    case 'files':
+      return (await repos.files.findAll())
+        // Backups are never exported (mirrors the backup service's own rule).
+        .filter((f) => f.category !== 'BACKUP' && f.folderPath !== '/backups')
+        .map((f) => f.id);
+    case 'prompt-templates':
+      return (await globalRepos.promptTemplates.findAll())
+        .filter((t) => !t.isBuiltIn && t.userId === userId)
+        .map((t) => t.id);
+    case 'provider-models':
+      return (await globalRepos.providerModels.findAll()).map((m) => m.id);
+    case 'plugin-configs':
+      return (await globalRepos.pluginConfigs.findByUserId(userId)).map((c) => c.id);
+    case 'instance-settings':
+      // Keyed by setting key rather than a UUID — the table has no id column.
+      return (await listPortableInstanceSettings()).map((s) => s.key);
     default:
       throw new Error(`Unknown export type: ${options.type}`);
   }
@@ -715,6 +967,21 @@ export async function* streamExportRecords(
       break;
     case 'document-stores':
       yield* streamDocumentStores(userId, ids, counts);
+      break;
+    case 'files':
+      yield* streamFiles(userId, ids, counts);
+      break;
+    case 'prompt-templates':
+      yield* streamPromptTemplates(userId, ids, counts);
+      break;
+    case 'provider-models':
+      yield* streamProviderModels(userId, ids, counts);
+      break;
+    case 'plugin-configs':
+      yield* streamPluginConfigs(userId, ids, counts);
+      break;
+    case 'instance-settings':
+      yield* streamInstanceSettings(userId, ids, counts);
       break;
     default:
       throw new Error(`Unknown export type: ${options.type}`);
