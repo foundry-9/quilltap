@@ -70,7 +70,9 @@ export function ProvidersTabContent() {
           )}
         </CollapsibleCard>
 
-        <CollapsibleCard title="Capabilities Report" description="View LLM provider capabilities and feature support" sectionId="capabilities-report" forceOpen={activeSection === 'capabilities-report'}>
+        {/* `sectionId` stays `capabilities-report`: it is the deep-link anchor
+            (?section=…) that the help docs and old bookmarks point at. */}
+        <CollapsibleCard title="The Almanack (System Report)" description="A compendium of the whole establishment — configuration, contents and condition" sectionId="capabilities-report" forceOpen={activeSection === 'capabilities-report'}>
           <CapabilitiesReportCard />
         </CollapsibleCard>
       </div>

@@ -4,6 +4,38 @@
 
 ### 4.8-dev
 
+#### The Almanack: capabilities report renamed, rewritten, and taught about the Scriptorium
+
+The capabilities report was last overhauled in March; its model of the system was the 4.0 app. Since then the 4.4–4.9 cutovers moved character content, wardrobe, custom tools, photos, mail and scenarios into the mount-index database — which the report never opened. It is now **The Almanack (System Report)**, with a rewritten collector, four new sections, and a progress bar that names what it is doing.
+
+The API action names (`capabilities-report-generate` and friends) and the settings deep-link anchor (`?section=capabilities-report`) are deliberately unchanged; renaming them would break bookmarks to buy nothing.
+
+**Bugs fixed on the way in.**
+
+- **Download 404 on a freshly generated report.** `generateAndSaveReport` minted a throwaway `crypto.randomUUID()` as `reportId`, but list/get/delete key off the `files` row created in the route. The card fed the generate response's id straight to the dialog, whose Download link then 404'd every time. Report creation now returns the files-row id.
+- **`GET ?action=capabilities-report`** returned a hardcoded fake object (`maxFileSize: 50MB`, `maxCharactersPerUser: 500`) and had no callers. Deleted.
+- **`LLMLogsRepository.getTotalTokenUsage` and `getTotalTokenUsageSince` always returned zero.** Both filtered on `usage: { $exists: true, $ne: null }`; the SQLite translator emits the `$ne` as `usage != NULL`, which is unknown for every row, so the filter matched nothing. The report renders exactly this number, which is how a long-standing "0 tokens logged" reading was finally traced. The in-repo comment on the third sibling had documented the trap since 4.6.
+- **Memory counting was O(characters) queries.** `collectEnhancedDatabaseStats` ran `findByCharacterId(...).length` per character. One `GROUP BY characterId` now serves both the census and the new top-ten table.
+- **`customTools` was rendered under "Pascal the Croupier (RNG)".** Custom tools are Pascal's Workbench, a separate subsystem; it has its own heading and a real inventory.
+- **`databaseSecurity` and `backupStatus` knew about two databases.** The mount index has its own file, its own size and its own backups. Both are three rows now.
+
+**Profile attribution in `llm_logs` (migration `add-llm-logs-profile-columns-v1`).** No table recorded which connection or image profile served a request. `provider`/`modelName` are flattened copies taken from the profile at call time and cannot distinguish two profiles sharing a pair. Two nullable columns, `connectionProfileId` and `imageProfileId`, now carry the id; older rows fall back to a `(provider, modelName)` join and the report labels those figures approximate. Both columns are added to the `new-account` restore's UUID remap list — connection and image profiles are themselves remapped, so a restored log row left holding the source instance's profile id would name nothing on the receiving one.
+
+`durationMs` was also missing at most call sites. The shared cheap-LLM path (memory extraction, title generation, summarization, context compression, scene-state tracking, image-prompt crafting — a large share of all rows) never set it; auto-configure and the gatekeeper never set it; the character optimizer hardcoded `0`, which poisoned any average taken over the column. All of them measure now. Latency figures in the report always print the count they were averaged over.
+
+**Seven phases, all new coverage.** `generateReportData`'s flat 17-way `Promise.all` became seven sequential phase groups, each running its own collectors in parallel. The collectors moved out of the single 1,750-line file into `lib/tools/almanack/`, and they now read SQL aggregates rather than hydrating entities to count them.
+
+New or substantially expanded: migration state and `highest_app_version` (declared in the type since March, never populated); plugins by capability kind and npm-vs-bundled; `provider_models` cache staleness per provider; API keys per provider with never-used flagged; theme icon-override counts including overrides naming an icon that does not exist; chats by type, cast-size histogram, document mode, outfits, narrative clock; autonomous rooms by run state, schedule, budgets and visibility; memories by kind/source/witnessed-context with the episodic-recall fields; characters by vault, NPC, persona, Carina and transparency; every feature dial added since 4.4; instance settings including how many chats the next stale sweep would actually touch; background jobs by status and type with failures; the embedding pipeline including stored-vector widths versus the active profile's; Ariel's terminal sessions; and generated images by model.
+
+Entirely new: **the Scriptorium** (document stores by kind, wedged scans and conversions, content rows, blobs by MIME type — now the largest disk consumer and previously absent — hard-link groups and dedup ratio, per-document policy, character-vault keystone health, wardrobe by tier, Pascal's Workbench inventory *including definitions that failed to parse*, the Post Office, photograph albums, scenarios by tier, state cascade); **dramatis personae** (ten busiest characters by chats/memories/vault size in one `json_each` pass, every project, every group with members by name); and a much-expanded **wire records** section (requests by type, per-profile lifetime and windowed usage with average and median latency, prompt-cache hit and miss by provider and by profile).
+
+The wire-records section prints the current LLM-logging enabled flag and retention window at its top, since those bound everything below it.
+
+**Progress bar.** The chat-creation progress bus generalized into `lib/progress/operation-progress.ts` — same buffered channel, replay and TTL, plus a `phase` event; `lib/chat/creation-progress.ts` is now a thin face over it. `capabilities-report-generate` accepts an optional `progressId` and a new `capabilities-report-progress` GET streams the phases over SSE. Because the bus buffers, the card can be collapsed and reopened mid-run and the bar picks up where it left off.
+
+**`qt-progress` class family.** A sweep found three bar-shaped constructs in the app, each styled differently and two using raw Tailwind colours. The new family covers all of them — track, fill, success/danger states, two heights, an indeterminate mode, and a `--qt-progress-indicator` variable for callers needing a bespoke fill colour. The character optimizer's bar (which drops `bg-primary`/`bg-green-500`), Pascal's Proving Bench outcome meters (which keep their per-state colours through the variable) and the search-results importance meter (which was not themeable at all) all migrated in the same change. The optimizer's segmented bar itself moved to `components/ui/ProgressBar` and both features drive it.
+
+
 #### Export/import: embeddings dropped, all fifteen types reachable, compact backup
 
 Five related changes to the `.qtap` export surface and the backup archive.

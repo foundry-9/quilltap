@@ -122,6 +122,7 @@ Client server-state runs on **TanStack Query v5** (`@tanstack/react-query`); SWR
 | **The Librarian** | synthetic author for Document-Mode events + character `doc_*` calls |
 | **The Host** | synthetic author for Salon participation + autonomous-room events |
 | **Carina** | inline LLM queries (`@Name:` / `@Name?` / `ask_carina`) — see [Carina](#carina-summary) |
+| **The Almanack** | the system report (formerly "capabilities report") — `/settings?tab=providers&section=capabilities-report`; code in `lib/tools/almanack/`. API actions stay `capabilities-report-*` |
 
 Old UI routes (`/foundry/*`, `/chats`, `/characters`, `/projects`) redirect to their current equivalents.
 

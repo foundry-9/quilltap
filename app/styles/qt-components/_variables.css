@@ -626,6 +626,18 @@
   --qt-spinner-indicator: var(--color-primary);
 
   /* ==========================================================================
+     PROGRESS BAR VARIABLES
+     Every bar-shaped construct in the app — task progress, value meters —
+     draws its track and fill from these two. A caller wanting a bespoke fill
+     colour (Pascal's per-outcome meters) sets --qt-progress-indicator inline
+     rather than reaching for a raw background utility.
+     ========================================================================== */
+  --qt-progress-track: var(--color-muted);
+  --qt-progress-indicator: var(--color-primary);
+  --qt-progress-indicator-success: var(--color-success);
+  --qt-progress-indicator-danger: var(--color-destructive);
+
+  /* ==========================================================================
      FAVORITE VARIABLES
      ========================================================================== */
   --qt-favorite-color: hsl(45 96% 58%);

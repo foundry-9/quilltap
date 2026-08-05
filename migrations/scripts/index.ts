@@ -363,6 +363,8 @@ import { addEpisodicMemoryFieldsMigration } from './add-episodic-memory-fields';
 import { anchorFictionalClockBaseMigration } from './anchor-fictional-clock-base';
 // Scriptorium hard links: linkGroupId column on doc_mount_file_links + orphaned-content sweep
 import { addDocMountLinkGroupsMigration } from './add-doc-mount-link-groups';
+// The Almanack: connectionProfileId + imageProfileId attribution columns on llm_logs
+import { addLLMLogsProfileColumnsMigration } from './add-llm-logs-profile-columns';
 
 /**
  * All available migrations.
@@ -723,6 +725,8 @@ export const migrations: Migration[] = [
   anchorFictionalClockBaseMigration,
   // Scriptorium hard links: linkGroupId column on doc_mount_file_links + orphaned-content sweep
   addDocMountLinkGroupsMigration,
+  // The Almanack: connectionProfileId + imageProfileId attribution columns on llm_logs
+  addLLMLogsProfileColumnsMigration,
 ];
 
 export {
@@ -1064,5 +1068,7 @@ export {
   anchorFictionalClockBaseMigration,
   // Scriptorium hard links: linkGroupId column on doc_mount_file_links + orphaned-content sweep
   addDocMountLinkGroupsMigration,
+  // The Almanack: connectionProfileId + imageProfileId attribution columns on llm_logs
+  addLLMLogsProfileColumnsMigration,
 };
 

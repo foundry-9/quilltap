@@ -251,6 +251,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-episodic-memory-fields-v1': 'Dating and placing your memories — the when and the where, properly filed…',
   'anchor-fictional-clock-base-v1': 'Winding the story-clocks, which had been standing at one hour rather too long…',
   'add-doc-mount-link-groups-v1': 'Teaching a document kept on two shelves to remember it is one document, and sweeping up the pages nobody claims…',
+  'add-llm-logs-profile-columns-v1': 'Noting, against each wire record, precisely which correspondent was engaged to send it…',
 
   // Misc / fixes
   'add-use-native-web-search-field-v1': 'Adding native-web-search flag',

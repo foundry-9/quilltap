@@ -1415,6 +1415,8 @@ CREATE TABLE "llm_logs" (
   "requestHashes" TEXT,
   "durationMs" INTEGER,
   "autonomousRunId" TEXT,
+  "connectionProfileId" TEXT,
+  "imageProfileId" TEXT,
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
 );
@@ -1424,7 +1426,13 @@ CREATE INDEX "idx_llm_logs_createdAt" ON "llm_logs" ("createdAt" DESC);
 CREATE INDEX "idx_llm_logs_type" ON "llm_logs" ("type");
 CREATE INDEX "idx_llm_logs_userId" ON "llm_logs" ("userId");
 CREATE INDEX "idx_llm_logs_autonomousRunId" ON "llm_logs" ("autonomousRunId");
+CREATE INDEX "idx_llm_logs_connectionProfileId" ON "llm_logs" ("connectionProfileId");
+CREATE INDEX "idx_llm_logs_imageProfileId" ON "llm_logs" ("imageProfileId");
 ```
+
+`connectionProfileId` / `imageProfileId` are the profile-attribution columns added by `add-llm-logs-profile-columns-v1` (4.9). `provider` and `modelName` are flattened copies taken from the serving profile at call time — they *look* like profile attribution but cannot distinguish two profiles that share a provider/model pair, which is exactly what The Almanack's per-profile statistics need. Both are nullable: rows written before the columns landed carry NULL and are attributed by joining on `(provider, modelName)`, which the report labels "approximate". `connectionProfileId` is populated by the streaming path, the shared cheap-LLM path, auto-configure, the gatekeeper's LLM classifier, and the character optimizer; `imageProfileId` by the three image-generation call sites (tool handler, story background, character avatar), including the Concierge reroute's fallback profile.
+
+`durationMs` is the wall-clock of the provider call. The shared cheap-LLM path (`lib/memory/cheap-llm-tasks/core-execution.ts`) and several service call sites did not populate it before 4.9; the character optimizer hardcoded `0`, which poisoned any average taken over the column. All of those now measure.
 
 `autonomousRunId` is stamped on every LLM call made within an autonomous-room turn (the turn plus its agent-mode tool sub-calls), via an `AsyncLocalStorage` context the turn handler establishes. It is `NULL` for all non-autonomous calls. The autonomous-room turn handler sums `usage.totalTokens` for a run by this column to enforce the per-run token budget — superseding the older timestamp-window sum, which double-counted overlapping chat activity and background housekeeping. Added by migration `add-llm-logs-autonomous-run-id-column-v1`.
 

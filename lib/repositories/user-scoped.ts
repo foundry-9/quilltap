@@ -27,6 +27,9 @@ import {
   GroupDocMountLinksRepository,
   LLMLogsRepository,
   type CreateOptions,
+  type LLMLogTypeStatsRow,
+  type LLMLogProfileStatsRow,
+  type LLMLogCacheStatsRow,
 } from '@/lib/database/repositories';
 import { getRepositories, getRepositoriesSafe } from './factory';
 import type {
@@ -43,6 +46,7 @@ import type {
   Project,
   Group,
   LLMLog,
+  LLMLogType,
 } from '@/lib/schemas/types';
 
 // ============================================================================
@@ -519,6 +523,36 @@ class UserScopedLLMLogsRepository extends UserScopedRepository<LLMLog, LLMLogsRe
 
   async deleteByCharacterId(characterId: string): Promise<number> {
     return this.baseRepo.deleteByCharacterId(characterId);
+  }
+
+  // --- Aggregates (The Almanack) -------------------------------------------
+
+  /** Does the logs table carry the 4.9 profile-attribution columns yet? */
+  hasProfileAttributionColumns(): boolean {
+    return this.baseRepo.hasProfileAttributionColumns();
+  }
+
+  async getStatsByType(): Promise<LLMLogTypeStatsRow[]> {
+    return this.baseRepo.getStatsByType(this.userId);
+  }
+
+  async getStatsByProfile(
+    groupBy: 'connectionProfileId' | 'imageProfileId' | 'providerModel',
+    options?: { type?: LLMLogType },
+  ): Promise<LLMLogProfileStatsRow[]> {
+    return this.baseRepo.getStatsByProfile(this.userId, groupBy, options ?? {});
+  }
+
+  async getMedianDurationByProfile(
+    groupBy: 'connectionProfileId' | 'imageProfileId' | 'providerModel',
+  ): Promise<Array<{ key: string; medianDurationMs: number }>> {
+    return this.baseRepo.getMedianDurationByProfile(this.userId, groupBy);
+  }
+
+  async getCacheStats(
+    groupBy: 'provider' | 'connectionProfileId',
+  ): Promise<LLMLogCacheStatsRow[]> {
+    return this.baseRepo.getCacheStats(this.userId, groupBy);
   }
 }
 

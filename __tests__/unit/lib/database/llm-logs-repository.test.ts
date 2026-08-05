@@ -631,6 +631,48 @@ describe('LLMLogsRepository', () => {
         totalTokens: 0,
       });
     });
+
+    // Regression: the filter carried `$ne: null` alongside `$exists: true`
+    // until 4.9. The SQLite translator emits that as `usage != NULL`, which is
+    // unknown for every row by SQL NULL semantics, so the query matched nothing
+    // and this method returned zeroes on every install. These tests mock the
+    // collection, so they never saw it — the assertion is on the filter itself.
+    it('filters on $exists only, never $ne: null', async () => {
+      mockCollection.find.mockResolvedValue([]);
+
+      await repo.getTotalTokenUsage(USER_ID);
+
+      expect(mockCollection.find).toHaveBeenCalledWith(
+        { userId: USER_ID, usage: { $exists: true } },
+        undefined
+      );
+    });
+  });
+
+  describe('getTotalTokenUsageSince', () => {
+    const SINCE = '2026-08-01T00:00:00.000Z';
+
+    it('filters on $exists only, never $ne: null', async () => {
+      mockCollection.find.mockResolvedValue([]);
+
+      await repo.getTotalTokenUsageSince(USER_ID, SINCE);
+
+      expect(mockCollection.find).toHaveBeenCalledWith(
+        { userId: USER_ID, usage: { $exists: true }, createdAt: { $gte: SINCE } },
+        undefined
+      );
+    });
+
+    it('aggregates usage across the matching logs', async () => {
+      mockCollection.find.mockResolvedValue([
+        createMockLog({ usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 } }),
+        createMockLog({ id: LOG_ID_2, usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 } }),
+      ]);
+
+      const result = await repo.getTotalTokenUsageSince(USER_ID, SINCE);
+
+      expect(result).toEqual({ promptTokens: 11, completionTokens: 6, totalTokens: 17 });
+    });
   });
 
   describe('getTotalTokenUsageForRun', () => {

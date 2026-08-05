@@ -447,6 +447,7 @@ export async function* streamMessage(
           characterId,
           provider: connectionProfile.provider,
           modelName: connectionProfile.modelName,
+          connectionProfileId: connectionProfile.id,
           request: {
             messages: llmMessages.map(m => ({
               role: m.role,

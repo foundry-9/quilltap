@@ -586,6 +586,79 @@
   }
 
   /* ==========================================================================
+     PROGRESS BAR UTILITIES
+     Every bar-shaped construct in the app: multi-phase task progress (the
+     Almanack's report run, the character optimizer) and static value meters
+     (Pascal's Proving Bench outcome shares, search-result importance).
+     Replaces: bg-primary / bg-green-500 / bg-border / bg-destructive fills.
+     ========================================================================== */
+
+  /**
+   * Bar track. Put the fill inside it.
+   * Usage: <div class="qt-progress"><div class="qt-progress-fill" style="width:40%" /></div>
+   */
+  .qt-progress {
+    background-color: var(--qt-progress-track, var(--color-muted));
+    border-radius: 9999px;
+    overflow: hidden;
+    height: 0.5rem;
+  }
+
+  /** Slim variant, for meters sitting inside dense rows. */
+  .qt-progress-sm {
+    height: 0.375rem;
+  }
+
+  /**
+   * The filled portion. Width is the caller's business (it is a value, not a
+   * style); everything else comes from the tokens.
+   *
+   * For a bespoke colour — Pascal's per-outcome meters — set
+   * `--qt-progress-indicator` inline rather than adding a background utility,
+   * so themes keep a single lever over every bar in the app.
+   */
+  .qt-progress-fill {
+    height: 100%;
+    border-radius: 9999px;
+    background-color: var(--qt-progress-indicator, var(--color-primary));
+    transition: width 500ms ease-out;
+  }
+
+  /** Completed state. */
+  .qt-progress-fill-success {
+    background-color: var(--qt-progress-indicator-success, var(--color-success));
+  }
+
+  /** Failed / at-risk state. */
+  .qt-progress-fill-danger {
+    background-color: var(--qt-progress-indicator-danger, var(--color-destructive));
+  }
+
+  /** An empty segment: present in the layout, painted with nothing. */
+  .qt-progress-fill-idle {
+    background-color: transparent;
+  }
+
+  /**
+   * Indeterminate mode — for the beat between "work started" and the first
+   * real progress event, when a determinate width would be a lie.
+   */
+  .qt-progress-indeterminate {
+    width: 40% !important;
+    transition: none;
+    animation: qt-progress-slide 1.4s ease-in-out infinite;
+  }
+
+  @keyframes qt-progress-slide {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(250%);
+    }
+  }
+
+  /* ==========================================================================
      FAVORITE STAR UTILITY
      Replaces: text-amber-400
      ========================================================================== */

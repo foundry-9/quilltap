@@ -476,15 +476,18 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
                     </span>
                     <span>{(entry.share * 100).toFixed(1)}%</span>
                   </div>
-                  <div className="h-1.5 rounded qt-bg-muted overflow-hidden">
+                  <div className="qt-progress qt-progress-sm">
                     <div
-                      className="h-full rounded"
+                      className="qt-progress-fill"
                       style={{
                         width: `${Math.max(entry.share * 100, entry.hits > 0 ? 1 : 0)}%`,
-                        // The same token family the Pascal bubble accents use,
-                        // so the bars read in every bundled theme.
-                        backgroundColor: `var(--qt-alert-${stateToken(outcome?.state)}-border)`,
-                      }}
+                        // Per-outcome colour goes through the bar family's own
+                        // indicator variable rather than a bespoke background,
+                        // so a theme restyling `qt-progress` restyles these too.
+                        // The value is the same token family the Pascal bubble
+                        // accents use, so the bars read in every bundled theme.
+                        ['--qt-progress-indicator' as string]: `var(--qt-alert-${stateToken(outcome?.state)}-border)`,
+                      } as React.CSSProperties}
                     />
                   </div>
                   {entry.hits === 0 && !outcome?.catchAll && (

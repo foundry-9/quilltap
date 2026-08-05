@@ -395,6 +395,7 @@ async function generateImagesWithProvider(
       chatId,
       provider: imageProfile.provider,
       modelName: imageProfile.modelName,
+      imageProfileId: imageProfile.id,
       request: {
         messages: [{ role: 'user', content: toolInput.prompt }],
       },
@@ -417,6 +418,7 @@ async function generateImagesWithProvider(
       chatId,
       provider: imageProfile.provider,
       modelName: imageProfile.modelName,
+      imageProfileId: imageProfile.id,
       request: {
         messages: [{ role: 'user', content: toolInput.prompt }],
       },
@@ -477,6 +479,7 @@ async function generateImagesWithProvider(
         chatId,
         provider: reroute.profile.provider,
         modelName: reroute.profile.modelName,
+        imageProfileId: reroute.profile.id,
         request: {
           messages: [{ role: 'user', content: toolInput.prompt }],
         },
@@ -504,6 +507,7 @@ async function generateImagesWithProvider(
         chatId,
         provider: reroute.profile.provider,
         modelName: reroute.profile.modelName,
+        imageProfileId: reroute.profile.id,
         request: {
           messages: [{ role: 'user', content: toolInput.prompt }],
         },

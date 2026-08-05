@@ -12,11 +12,15 @@
  * GET /api/v1/system/tools?action=export-preview - Preview export contents
  * POST /api/v1/system/tools?action=import-preview - Preview import contents
  * POST /api/v1/system/tools?action=import-execute - Execute the actual import
- * GET /api/v1/system/tools?action=capabilities-report - Get system capabilities report
- * POST /api/v1/system/tools?action=capabilities-report-generate - Generate a new report
- * GET /api/v1/system/tools?action=capabilities-report-list - List saved reports
- * GET /api/v1/system/tools?action=capabilities-report-get - Get a specific report
- * POST /api/v1/system/tools?action=capabilities-report-delete - Delete a specific report
+ * POST /api/v1/system/tools?action=capabilities-report-generate - Generate a new Almanack
+ * GET /api/v1/system/tools?action=capabilities-report-progress - Live phase progress (SSE)
+ * GET /api/v1/system/tools?action=capabilities-report-list - List saved Almanacks
+ * GET /api/v1/system/tools?action=capabilities-report-get - Get a specific Almanack
+ * POST /api/v1/system/tools?action=capabilities-report-delete - Delete a specific Almanack
+ *
+ * The `capabilities-report-*` action names are deliberately unchanged: The
+ * Almanack is the feature's name, not the route's, and renaming the actions
+ * would break saved links and bookmarks to buy nothing.
  * GET /api/v1/system/tools?action=memory-dedup-preview - Preview memory deduplication
  * POST /api/v1/system/tools?action=memory-dedup - Execute memory deduplication
  * POST /api/v1/system/tools?action=ai-import-stream - AI character import from source material (SSE)
@@ -42,7 +46,13 @@ import { createNdjsonStream, QTAP_NDJSON_CONTENT_TYPE } from '@/lib/export/ndjso
 import { previewImport, executeImport, type QuilltapExport, type ConflictStrategy } from '@/lib/import/quilltap-import-service';
 import { peekFormat, readNdjsonLines, collectLegacyJson } from '@/lib/import/ndjson-reader';
 import { assembleExportFromStream } from '@/lib/import/quilltap-import-stream';
-import { generateAndSaveReport } from '@/lib/tools/capabilities-report';
+import { generateAndSaveAlmanack } from '@/lib/tools/almanack';
+import { sseStreamResponse } from '@/lib/services/chat-message/request-helpers';
+import { safeEnqueue, safeClose } from '@/lib/services/chat-message/streaming.service';
+import {
+  subscribeOperationProgress,
+  type CoreProgressEvent,
+} from '@/lib/progress/operation-progress';
 import { deduplicateAllMemories } from '@/lib/tools/memory-dedup';
 import { runAIImportStreaming } from '@/lib/services/ai-import.service';
 import type { AIImportRequest, AIImportProgressEvent } from '@/lib/services/ai-import.service';
@@ -56,8 +66,8 @@ const TOOLS_GET_ACTIONS = [
   'delete-data-preview',
   'export-entities',
   'export-preview',
-  'capabilities-report',
   'capabilities-report-list',
+  'capabilities-report-progress',
   'capabilities-report-get',
   'memory-dedup-preview',
 ] as const;
@@ -76,6 +86,9 @@ const TOOLS_POST_ACTIONS = [
   'ai-import-stream',
 ] as const;
 type ToolsPostAction = typeof TOOLS_POST_ACTIONS[number];
+
+/** ~15s idle ping on the progress stream, matching the message stream's cadence. */
+const PROGRESS_KEEP_ALIVE_MS = 15_000;
 
 // ============================================================================
 // Helper Functions
@@ -874,79 +887,127 @@ async function handleImportExecute(req: NextRequest, context: any) {
   }
 }
 
-async function handleCapabilitiesReport(req: NextRequest, context: any) {
-  try {
-
-    const report = {
-      version: '1.0',
-      capabilities: {
-        maxFileSize: 52428800, // 50MB
-        supportedImageFormats: ['jpeg', 'png', 'webp', 'gif'],
-        supportedDocumentFormats: ['pdf', 'docx', 'txt'],
-        maxStoragePerUser: 5368709120, // 5GB
-      },
-      features: {
-        memorySystem: true,
-        imageGeneration: true,
-        contextCompression: true,
-        fileAttachments: true,
-      },
-      limits: {
-        maxChatsPerCharacter: 1000,
-        maxCharactersPerUser: 500,
-        maxMemoriesPerCharacter: 5000,
-        requestTimeoutMs: 300000,
-      },
-    };
-
-
-    return NextResponse.json(report);
-  } catch (error) {
-    logger.error(
-      '[System Tools v1] Error generating capabilities report',
-      {},
-      error instanceof Error ? error : undefined
-    );
-    return serverError('Failed to generate capabilities report');
+/**
+ * The Almanack progress side-channel: `GET ?action=capabilities-report-progress&id=<progressId>`.
+ *
+ * The generate POST must keep returning JSON (the card reads the rendered
+ * report straight out of the body), so phase progress travels separately on the
+ * shared operation-progress bus, keyed by a client-supplied correlation id.
+ *
+ * The bus buffers per id, which is what lets the card be collapsed and reopened
+ * mid-run and still re-attach: the new reader replays the backlog, including a
+ * terminal `done`/`error` if the run already finished.
+ */
+async function handleCapabilitiesReportProgress(req: NextRequest, _context: any) {
+  const id = req.nextUrl.searchParams.get('id');
+  if (!id) {
+    return badRequest('Missing progress id');
   }
+
+  const encoder = new TextEncoder();
+  let unsubscribe: (() => void) | null = null;
+  let keepAlive: ReturnType<typeof setInterval> | null = null;
+
+  const cleanup = () => {
+    if (unsubscribe) {
+      unsubscribe();
+      unsubscribe = null;
+    }
+    if (keepAlive) {
+      clearInterval(keepAlive);
+      keepAlive = null;
+    }
+  };
+
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const send = (event: CoreProgressEvent) => {
+        safeEnqueue(controller, encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        if (event.kind === 'done' || event.kind === 'error') {
+          cleanup();
+          safeClose(controller);
+        }
+      };
+
+      const { replay, unsubscribe: unsub } = subscribeOperationProgress<CoreProgressEvent>(id, send);
+      unsubscribe = unsub;
+
+      // Replay the backlog first. If it already carries a terminal event the
+      // stream closes here and the keep-alive is never armed.
+      for (const event of replay) {
+        send(event);
+        if (event.kind === 'done' || event.kind === 'error') return;
+      }
+
+      keepAlive = setInterval(() => {
+        safeEnqueue(controller, encoder.encode(`: keep-alive\n\n`));
+      }, PROGRESS_KEEP_ALIVE_MS);
+      keepAlive.unref?.();
+
+      req.signal.addEventListener('abort', () => {
+        cleanup();
+        safeClose(controller);
+      });
+    },
+    cancel() {
+      cleanup();
+    },
+  });
+
+  return sseStreamResponse(stream);
 }
 
 async function handleCapabilitiesReportGenerate(req: NextRequest, context: any) {
   const { user, repos } = context;
 
   try {
-    logger.info('[System Tools v1] Generating capabilities report', { userId: user.id });
+    // Optional correlation id for the progress side-channel. Mirrors the
+    // chat-creation flow; absent means the run is simply untracked.
+    let progressId: string | null = null;
+    try {
+      const body = await req.json();
+      const parsed = z.object({ progressId: z.uuid().optional() }).safeParse(body ?? {});
+      if (parsed.success) progressId = parsed.data.progressId ?? null;
+    } catch {
+      // No body at all is fine — the card only sends one when it is watching.
+    }
 
-    const result = await generateAndSaveReport(user.id);
+    logger.info('[System Tools v1] Generating Almanack', { userId: user.id, tracked: !!progressId });
 
-    // Create a file entry in the database for the report
-    const contentBuffer = Buffer.from(result.content, 'utf-8');
-    const sha256Hash = createHash('sha256').update(result.content, 'utf-8').digest('hex');
-    const fileEntry = await repos.files.create({
-      userId: user.id,
-      originalFilename: result.filename,
-      mimeType: 'text/markdown',
-      size: contentBuffer.length,
-      storageKey: result.storageKey,
-      category: 'DOCUMENT',
-      sha256: sha256Hash,
-      folderPath: '/reports',
-      source: 'SYSTEM',
-      projectId: null,
-      linkedTo: [],
-      generationPrompt: null,
-      generationModel: null,
-      generationRevisedPrompt: null,
-      description: 'System-generated capabilities report',
-      tags: [],
+    const result = await generateAndSaveAlmanack(user.id, {
+      progressId,
+      // The `files` row is created here, and its id is what list/get/delete key
+      // off — so it is what comes back as `reportId`. Minting a separate UUID
+      // (as this used to) handed the dialog an id nothing could resolve, and
+      // the Download link on a freshly generated report 404'd.
+      persist: async ({ filename, storageKey, size, content }) => {
+        const fileEntry = await repos.files.create({
+          userId: user.id,
+          originalFilename: filename,
+          mimeType: 'text/markdown',
+          size,
+          storageKey,
+          category: 'DOCUMENT',
+          sha256: createHash('sha256').update(content, 'utf-8').digest('hex'),
+          folderPath: '/reports',
+          source: 'SYSTEM',
+          projectId: null,
+          linkedTo: [],
+          generationPrompt: null,
+          generationModel: null,
+          generationRevisedPrompt: null,
+          description: 'The Almanack — system report',
+          tags: [],
+        });
+        return fileEntry.id;
+      },
     });
 
-    logger.info('[System Tools v1] Capabilities report generated successfully', {
+    logger.info('[System Tools v1] Almanack generated successfully', {
       userId: user.id,
       reportId: result.reportId,
       filename: result.filename,
       size: result.size,
-      fileEntryId: fileEntry.id,
     });
 
     return NextResponse.json({
@@ -959,7 +1020,7 @@ async function handleCapabilitiesReportGenerate(req: NextRequest, context: any) 
     });
   } catch (error) {
     logger.error(
-      '[System Tools v1] Failed to generate capabilities report',
+      '[System Tools v1] Failed to generate Almanack',
       { userId: user.id },
       error instanceof Error ? error : undefined
     );
@@ -1264,8 +1325,8 @@ export const GET = createContextHandler(async (req: NextRequest, context) => {
     'delete-data-preview': () => handleDeleteDataPreview(req, context),
     'export-entities': () => handleExportEntities(req, context),
     'export-preview': () => handleExportPreview(req, context),
-    'capabilities-report': () => handleCapabilitiesReport(req, context),
     'capabilities-report-list': () => handleCapabilitiesReportList(req, context),
+    'capabilities-report-progress': () => handleCapabilitiesReportProgress(req, context),
     'capabilities-report-get': () => handleCapabilitiesReportGet(req, context),
     'memory-dedup-preview': () => handleMemoryDedupPreview(req, context),
   };

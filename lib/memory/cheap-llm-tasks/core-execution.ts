@@ -174,7 +174,12 @@ async function sendToProvider(
   const profileKey = `${selection.provider}:${selection.modelName}`
   const effectiveMaxTokens = Math.max(maxTokens ?? 2048, 2048)
 
-  const logCall = (response: LLMResponse, temperature?: number) => {
+  // `durationMs` is the wall-clock of the provider call this row describes.
+  // This shared path covers MEMORY_EXTRACTION, TITLE_GENERATION, SUMMARIZATION,
+  // CONTEXT_COMPRESSION, SCENE_STATE_TRACKING and IMAGE_PROMPT_CRAFTING — a
+  // large share of all llm_logs rows — so leaving it null used to hollow out
+  // every latency average the Almanack draws.
+  const logCall = (response: LLMResponse, temperature: number | undefined, durationMs: number) => {
     logLLMCall({
       userId,
       type: mapTaskTypeToLogType(taskType),
@@ -183,6 +188,7 @@ async function sendToProvider(
       characterId,
       provider: selection.provider,
       modelName: selection.modelName,
+      connectionProfileId: selection.connectionProfileId ?? null,
       request: {
         messages: messages.map(m => ({ role: m.role, content: m.content })),
         ...(temperature !== undefined ? { temperature } : {}),
@@ -192,6 +198,7 @@ async function sendToProvider(
         content: response.content,
       },
       usage: response.usage,
+      durationMs,
     }).catch(err => {
       logger.warn('Failed to log cheap LLM call', {
         error: err instanceof Error ? err.message : String(err)
@@ -221,15 +228,17 @@ async function sendToProvider(
 
   // Check if we already know this profile doesn't support custom temperature
   if (profilesWithoutCustomTemp.has(profileKey)) {
+    const startedAt = Date.now()
     const response: LLMResponse = await provider.sendMessage(baseParams, apiKey)
-    logCall(response)
+    logCall(response, undefined, Date.now() - startedAt)
     return { content: response.content, usage: response.usage }
   }
 
   // Try with lower temperature for more consistent outputs
+  const firstAttemptStartedAt = Date.now()
   try {
     const response: LLMResponse = await provider.sendMessage({ ...baseParams, temperature: 0.3 }, apiKey)
-    logCall(response, 0.3)
+    logCall(response, 0.3, Date.now() - firstAttemptStartedAt)
     return { content: response.content, usage: response.usage }
   } catch (error) {
     // If temperature is not supported, cache it and retry with default temperature
@@ -237,8 +246,9 @@ async function sendToProvider(
     if (errorMessage.includes('temperature') || errorMessage.includes('does not support')) {
       profilesWithoutCustomTemp.add(profileKey)
 
+      const retryStartedAt = Date.now()
       const response: LLMResponse = await provider.sendMessage(baseParams, apiKey)
-      logCall(response)
+      logCall(response, undefined, Date.now() - retryStartedAt)
       return { content: response.content, usage: response.usage }
     }
     throw error

@@ -151,6 +151,14 @@ export const LLMLogSchema = z.object({
   provider: z.string(),
   modelName: z.string(),
 
+  // Profile attribution. `provider`/`modelName` above are flattened copies
+  // taken from the profile at call time and cannot distinguish two profiles
+  // that share the same provider/model pair — these columns can. Nullable:
+  // rows written before 4.9 carry NULL and must be attributed by joining on
+  // (provider, modelName), which the Almanack labels "approximate".
+  connectionProfileId: UUIDSchema.nullable().optional(),
+  imageProfileId: UUIDSchema.nullable().optional(),
+
   // Request summary
   request: LLMLogRequestSummarySchema,
 

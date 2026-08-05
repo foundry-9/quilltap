@@ -111,6 +111,7 @@ export const HELP_CATEGORIES: readonly HelpCategory[] = [
       'system-import-export',
       'system-llm-logs',
       'system-tasks-queue',
+      'the-almanack',
       'system-capabilities-report',
       'system-delete-data',
     ],

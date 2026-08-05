@@ -268,7 +268,9 @@ async function classifyWithModerationProvider(
   }
 
   // Call the moderation provider
+  const moderationStartedAt = Date.now()
   const moderationResult = await provider.moderate(content, apiKey)
+  const moderationDurationMs = Date.now() - moderationStartedAt
 
   // Map to our classification result format
   const result = mapModerationResult(moderationResult, settings.threshold)
@@ -291,6 +293,7 @@ async function classifyWithModerationProvider(
         categories: moderationResult.categories,
       }),
     },
+    durationMs: moderationDurationMs,
   }).catch(err => {
     logger.warn('[Gatekeeper] Failed to log moderation provider call', {
       error: err instanceof Error ? err.message : String(err),
@@ -378,6 +381,7 @@ export async function classifyContent(
       cheapLLMSelection.baseUrl
     )
 
+    const classificationStartedAt = Date.now()
     const response = await provider.sendMessage(
       {
         messages,
@@ -391,6 +395,7 @@ export async function classifyContent(
       },
       apiKey
     )
+    const classificationDurationMs = Date.now() - classificationStartedAt
 
     // Log the classification call (fire and forget)
     logLLMCall({
@@ -399,6 +404,7 @@ export async function classifyContent(
       chatId,
       provider: cheapLLMSelection.provider,
       modelName: cheapLLMSelection.modelName,
+      connectionProfileId: cheapLLMSelection.connectionProfileId ?? null,
       request: {
         messages: messages.map(m => ({ role: m.role, content: m.content })),
         temperature: 0.1,
@@ -408,6 +414,7 @@ export async function classifyContent(
         content: response.content,
       },
       usage: response.usage,
+      durationMs: classificationDurationMs,
     }).catch(err => {
       logger.warn('[Gatekeeper] Failed to log classification call', {
         error: err instanceof Error ? err.message : String(err),
