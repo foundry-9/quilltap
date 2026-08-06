@@ -544,6 +544,9 @@ export async function handleGet(
       imageProfileId: chatMetadata.imageProfileId ?? null,
       lastTurnParticipantId: chatMetadata.lastTurnParticipantId ?? null,
       isPaused: chatMetadata.isPaused ?? false,
+      // All-LLM-pause bookkeeping — surfaced so the client can explain a silent
+      // pause (opens AllLLMPauseModal on load / mid-session).
+      allLLMPauseTurnCount: chatMetadata.allLLMPauseTurnCount ?? 0,
       isManuallyRenamed: chatMetadata.isManuallyRenamed ?? false,
       updatedAt: chatMetadata.updatedAt,
       createdAt: chatMetadata.createdAt,
@@ -558,6 +561,12 @@ export async function handleGet(
       coreWhisperEnabled: chatMetadata.coreWhisperEnabled ?? null,
       coreWhisperInterval: chatMetadata.coreWhisperInterval ?? null,
       turnSkippingEnabled: chatMetadata.turnSkippingEnabled ?? null,
+      // Controlled selects in chat settings — projected so the UI reflects the
+      // saved value on reload instead of snapping back to its default.
+      timelineMode: chatMetadata.timelineMode ?? null,
+      alertCharactersOfLanternImages: chatMetadata.alertCharactersOfLanternImages ?? null,
+      showThinking: chatMetadata.showThinking ?? null,
+      answerConfirmationOverride: chatMetadata.answerConfirmationOverride ?? null,
       agentModeEnabled: chatMetadata.agentModeEnabled ?? false,
       resolvedAgentModeEnabled: resolvedAgentMode.enabled,
       agentModeSource: resolvedAgentMode.enabledSource,

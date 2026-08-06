@@ -173,4 +173,77 @@ describe('chats [id] GET handler', () => {
     expect(body.chat.documentMode).toBe('focus')
     expect(body.chat.dividerPosition).toBe(30)
   })
+
+  // Bug 22: the four controlled-select fields must round-trip through the GET
+  // projection so a reload shows the saved value instead of the default.
+  it('projects the four controlled-select fields when set (Bug 22)', async () => {
+    ctx.repos.chats.findById.mockResolvedValueOnce({
+      ...chatMetadata,
+      timelineMode: 'narrative',
+      alertCharactersOfLanternImages: false,
+      showThinking: true,
+      answerConfirmationOverride: 'OFF',
+    })
+
+    const req = {
+      nextUrl: new URL(`http://localhost:3000/api/v1/chats/${chatId}`),
+    } as any
+
+    const response = await handleGet(req, ctx, chatId)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.chat.timelineMode).toBe('narrative')
+    expect(body.chat.alertCharactersOfLanternImages).toBe(false)
+    expect(body.chat.showThinking).toBe(true)
+    expect(body.chat.answerConfirmationOverride).toBe('OFF')
+  })
+
+  it('defaults the four controlled-select fields to null when unset (Bug 22)', async () => {
+    const req = {
+      nextUrl: new URL(`http://localhost:3000/api/v1/chats/${chatId}`),
+    } as any
+
+    const response = await handleGet(req, ctx, chatId)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.chat.timelineMode).toBeNull()
+    expect(body.chat.alertCharactersOfLanternImages).toBeNull()
+    expect(body.chat.showThinking).toBeNull()
+    expect(body.chat.answerConfirmationOverride).toBeNull()
+  })
+
+  // Bug 37: the all-LLM pause bookkeeping must be projected so the client can
+  // open AllLLMPauseModal instead of the room stopping silently.
+  it('projects isPaused and allLLMPauseTurnCount for the pause modal (Bug 37)', async () => {
+    ctx.repos.chats.findById.mockResolvedValueOnce({
+      ...chatMetadata,
+      isPaused: true,
+      allLLMPauseTurnCount: 12,
+    })
+
+    const req = {
+      nextUrl: new URL(`http://localhost:3000/api/v1/chats/${chatId}`),
+    } as any
+
+    const response = await handleGet(req, ctx, chatId)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.chat.isPaused).toBe(true)
+    expect(body.chat.allLLMPauseTurnCount).toBe(12)
+  })
+
+  it('defaults allLLMPauseTurnCount to 0 when unset (Bug 37)', async () => {
+    const req = {
+      nextUrl: new URL(`http://localhost:3000/api/v1/chats/${chatId}`),
+    } as any
+
+    const response = await handleGet(req, ctx, chatId)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.chat.allLLMPauseTurnCount).toBe(0)
+  })
 })

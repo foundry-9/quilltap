@@ -201,12 +201,33 @@ describe('chat-enrichment.service', () => {
         name: 'OpenAI Profile',
         provider: 'openai',
         modelName: 'gpt-4',
+        // allowToolUse defaults to true when the profile omits it.
+        allowToolUse: true,
         apiKey: {
           id: 'key-1',
           provider: 'openai',
           label: 'My OpenAI Key',
         },
       })
+    })
+
+    // Bug 36: allowToolUse must be projected so the "tools disabled by profile"
+    // warning box can actually fire (previously always undefined === false).
+    it('projects allowToolUse when the profile forbids tools (Bug 36)', async () => {
+      const profile = {
+        id: 'conn-1',
+        name: 'No-Tools Profile',
+        provider: 'openai',
+        modelName: 'gpt-4',
+        apiKeyId: null,
+        allowToolUse: false,
+      }
+
+      mockRepos.connections.findById.mockResolvedValue(profile)
+
+      const result = await getConnectionProfile('conn-1', mockRepos)
+
+      expect(result?.allowToolUse).toBe(false)
     })
 
     it('should handle profile without API key', async () => {

@@ -13,11 +13,11 @@
  * GET /api/v1/chats/[id]?action=outfit - Get equipped outfit state
  * PUT /api/v1/chats/[id]?action=set-state - Set chat state
  * DELETE /api/v1/chats/[id]?action=reset-state - Reset chat state to empty
+ * DELETE /api/v1/chats/[id]?action=stop-impersonate - Stop impersonating
  * POST /api/v1/chats/[id]?action=regenerate-title - Regenerate chat title
  * POST /api/v1/chats/[id]?action=add-tag - Add tag
  * POST /api/v1/chats/[id]?action=remove-tag - Remove tag
  * POST /api/v1/chats/[id]?action=impersonate - Start impersonating
- * POST /api/v1/chats/[id]?action=stop-impersonate - Stop impersonating
  * POST /api/v1/chats/[id]?action=set-active-speaker - Set active typing participant
  * POST /api/v1/chats/[id]?action=turn - Turn action (nudge/queue/dequeue)
  * POST /api/v1/chats/[id]?action=add-participant - Add participant

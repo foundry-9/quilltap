@@ -2067,11 +2067,11 @@ Start impersonating a character in the chat.
 
 **Response**: `200 OK`
 
-Returns updated chat metadata with `impersonatingParticipantIds` including the new participant.
+Returns updated chat metadata with `impersonatingParticipantIds` including the new participant. Starting impersonation also flips the participant to `controlledBy: 'user'` so the operator's messages are attributed to that character (and it drops out of the LLM responder rotation); `stop-impersonate` hands it back to `'llm'`.
 
-#### `POST /api/v1/chats/[id]?action=stop-impersonate`
+#### `DELETE /api/v1/chats/[id]?action=stop-impersonate`
 
-Stop impersonating a character.
+Stop impersonating a character. (Uses the `DELETE` verb — the impersonation seat is being torn down.)
 
 **Request Body**:
 
@@ -2082,7 +2082,7 @@ Stop impersonating a character.
 }
 ```
 
-**Note**: `newConnectionProfileId` is required when the character doesn't have a default connection profile. This assigns the LLM profile that will control the character after you stop impersonating.
+**Note**: `newConnectionProfileId` is required when the character doesn't have a default connection profile. This assigns the LLM profile that will control the character after you stop impersonating. When omitted, the character reverts to LLM control keeping its existing connection profile.
 
 #### `POST /api/v1/chats/[id]?action=set-active-speaker`
 

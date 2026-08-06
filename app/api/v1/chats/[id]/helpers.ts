@@ -80,6 +80,7 @@ export async function getEnrichedConnectionProfile(profileId: string, repos: Rep
     name: profile.name,
     provider: profile.provider,
     modelName: profile.modelName,
+    allowToolUse: profile.allowToolUse ?? true,
     apiKey: apiKeyInfo,
   };
 }
@@ -196,11 +197,9 @@ export async function handleParticipantUpdate(
 
       await repos.chats.update(chatId, updateData);
     }
-
-    const updatedChat = await repos.chats.findById(chatId);
-    if (updatedChat) {
-      return { chat: updatedChat };
-    }
+    // Fall through to the shared tail: the status/isActive back-compat sync and
+    // the identity-stack recompile below must run for a controlledBy patch too.
+    // The finalChat re-read (further down) picks up the impersonation update.
   }
 
   // If status was explicitly set, sync isActive and record the change event

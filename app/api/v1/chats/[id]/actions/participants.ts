@@ -25,7 +25,7 @@ import {
   postHostRemoveAnnouncement,
   postHostJoinScenarioAnnouncement,
 } from '@/lib/services/host-notifications/writer';
-import { compileIdentityStackForParticipant } from '@/lib/services/system-prompt-compiler/compiler';
+import { compileIdentityStackForParticipant, compileAllIdentityStacks } from '@/lib/services/system-prompt-compiler/compiler';
 import {
   applyOutfitSelections,
   buildCheapLLMConfig,
@@ -53,9 +53,27 @@ export async function handleImpersonate(
     return badRequest('Participant is not active or silent');
   }
 
+  // Impersonation means the operator now speaks as this character, so flip it to
+  // user-controlled — the same invariant handleParticipantUpdate maintains when
+  // the "User (you type)" connection-profile option is chosen. Without this the
+  // attribution resolvers (findActiveUserParticipant) never honour the selection
+  // and the operator's next message lands under their own character (Bug 27).
+  await repos.chats.updateParticipant(chatId, participantId, { controlledBy: 'user' });
+
   const updatedChat = await repos.chats.addImpersonation(chatId, participantId);
   if (!updatedChat) {
     return serverError('Failed to start impersonation');
+  }
+
+  // controlledBy changed, which alters {{user}}/{{persona}} for everyone — recompile
+  // the identity stacks. Non-fatal (read-through fallback on failure).
+  try {
+    await compileAllIdentityStacks(updatedChat);
+  } catch (error) {
+    logger.warn('[Chats v1] Failed to recompile identity stacks after impersonation start', {
+      chatId, participantId,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   const characterName = await resolveParticipantCharacterName(participant, repos);
@@ -93,6 +111,10 @@ export async function handleStopImpersonate(
     return serverError('Failed to stop impersonation');
   }
 
+  // Hand the character back to the LLM — the mirror of the controlledBy flip in
+  // handleImpersonate. A new profile may accompany the hand-back (the client's
+  // stop flow prompts for one when the character has none); otherwise the
+  // character keeps its existing connection profile.
   if (newConnectionProfileId) {
     const profile = await repos.connections.findById(newConnectionProfileId);
     if (!profile) {
@@ -102,6 +124,20 @@ export async function handleStopImpersonate(
     updatedChat = await repos.chats.updateParticipant(chatId, participantId, {
       connectionProfileId: newConnectionProfileId,
       controlledBy: 'llm',
+    }) ?? updatedChat;
+  } else {
+    updatedChat = await repos.chats.updateParticipant(chatId, participantId, {
+      controlledBy: 'llm',
+    }) ?? updatedChat;
+  }
+
+  // controlledBy changed back — recompile identity stacks. Non-fatal.
+  try {
+    await compileAllIdentityStacks(updatedChat);
+  } catch (error) {
+    logger.warn('[Chats v1] Failed to recompile identity stacks after impersonation stop', {
+      chatId, participantId,
+      error: error instanceof Error ? error.message : String(error),
     });
   }
 
@@ -529,7 +565,11 @@ export async function handleRemoveParticipantAction(
     return serverError(result.error);
   }
 
-  // Clean up impersonation state for removed participant
+  // Clean up impersonation state for removed participant. The cleanup update
+  // happens after result.chat was captured, so the returned chat must reflect
+  // it — otherwise the response still lists the removed participant in
+  // impersonatingParticipantIds (stale client state until a refetch).
+  let finalChat = result.chat;
   const currentImpersonating = result.chat.impersonatingParticipantIds || [];
   if (currentImpersonating.includes(validatedData.participantId)) {
     const cleanedIds = currentImpersonating.filter((id: string) => id !== validatedData.participantId);
@@ -537,7 +577,10 @@ export async function handleRemoveParticipantAction(
     if (result.chat.activeTypingParticipantId === validatedData.participantId) {
       updateData.activeTypingParticipantId = cleanedIds[0] || null;
     }
-    await repos.chats.update(chatId, updateData);
+    const cleanedChat = await repos.chats.update(chatId, updateData);
+    if (cleanedChat) {
+      finalChat = cleanedChat;
+    }
   }
 
   logger.info('[Chats v1] Participant removed', {
@@ -553,5 +596,5 @@ export async function handleRemoveParticipantAction(
     });
   }
 
-  return NextResponse.json({ success: true, chat: result.chat });
+  return NextResponse.json({ success: true, chat: finalChat });
 }

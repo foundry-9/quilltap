@@ -1217,6 +1217,20 @@ export function SalonView({ chatId }: SalonViewProps) {
     }
   }, [fetchChat, modals])
 
+  // Surface the all-LLM pause so it is no longer silent. The pause fires
+  // server-side (isPaused set at the turn-count threshold) and the chain-complete
+  // SSE event triggers fetchChat, so chat.isPaused flips to true both on a live
+  // pause and when loading an already-paused all-LLM room. Keying the opener off
+  // that projected field covers both cases without touching the SSE transport.
+  // Only fires when the value transitions, so closing the modal (Continue/Stop/
+  // Take Over) will not immediately reopen it.
+  const { setAllLLMPauseModalOpen } = modals
+  useEffect(() => {
+    if (chat?.isPaused && participantsWithImpersonation.isAllLLM) {
+      setAllLLMPauseModalOpen(true)
+    }
+  }, [chat?.isPaused, participantsWithImpersonation.isAllLLM, setAllLLMPauseModalOpen])
+
   // --- All-LLM pause handlers ---
   const handleAllLLMContinue = useCallback(() => {
     modals.setAllLLMPauseModalOpen(false)
