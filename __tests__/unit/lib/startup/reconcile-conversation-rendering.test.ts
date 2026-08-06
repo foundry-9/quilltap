@@ -27,6 +27,12 @@ jest.mock('@/lib/embedding/embedding-service', () => ({
   EMBEDDING_MAX_CHARS: 131072,
 }));
 
+// Pin the per-chunk budget (arm C's over-budget bound) without loading the
+// renderer's transitive deps.
+jest.mock('@/lib/scriptorium/markdown-renderer', () => ({
+  CHUNK_CHAR_BUDGET: 24000,
+}));
+
 // The staleness gate is exercised as a mock: the reconcile must consult it and
 // skip stale (cold-tiered) chats, but its internals belong to the sweep tests.
 // embeddingProfiles.findAll feeds the FAILED-status exclusion's profile bind.
@@ -103,9 +109,10 @@ describe('reconcileConversationRendering', () => {
 
     expect(result.incompleteChats).toBe(0);
     expect(result.enqueued).toBe(0);
-    // The scan binds the size cap (oversized-chunk exclusion) and the default
-    // profile id (permanently-FAILED-chunk exclusion).
-    expect(all).toHaveBeenCalledWith(131072, 'profile-default');
+    // The scan binds the size cap (oversized-chunk exclusion), the default
+    // profile id (permanently-FAILED-chunk exclusion), then arm (C)'s
+    // over-budget / within-transport-cap window for the sub-chunk heal.
+    expect(all).toHaveBeenCalledWith(131072, 'profile-default', 24000, 131072);
     expect(enqueueConversationRender).not.toHaveBeenCalled();
   });
 
@@ -147,7 +154,27 @@ describe('reconcileConversationRendering', () => {
     const result = await reconcileConversationRendering();
 
     expect(result.incompleteChats).toBe(0);
-    expect(all).toHaveBeenCalledWith(131072, '');
+    expect(all).toHaveBeenCalledWith(131072, '', 24000, 131072);
+  });
+
+  it('scans for sub-chunkable oversize chunks (arm C) so Bug 17 chats re-render once', async () => {
+    // Arm (C): a chunk over the per-chunk budget but under the transport cap is
+    // pulled back in — the renderer now sub-chunks it, so re-rendering heals it.
+    // FAILED status is NOT excluded here (unlike arm B), because these are the
+    // very chunks arm B skips.
+    const { db, prepare } = makeDb([]);
+    getRawDatabase.mockReturnValue(db);
+
+    const { reconcileConversationRendering } = await import(
+      '@/lib/startup/reconcile-conversation-rendering'
+    );
+    await reconcileConversationRendering();
+
+    const sql = (prepare.mock.calls[0] as [string])[0];
+    // The arm-(C) window: over CHUNK_CHAR_BUDGET, within EMBEDDING_MAX_CHARS.
+    expect(sql).toContain('LENGTH(cc2."content") > ?');
+    expect(sql).toContain('LENGTH(cc2."content") <= ?');
+    expect(sql).toContain('cc2."embedding" IS NULL');
   });
 
   it('still scans (exclusion disabled) when profile resolution throws', async () => {
@@ -167,7 +194,7 @@ describe('reconcileConversationRendering', () => {
     );
     const result = await reconcileConversationRendering();
 
-    expect(all).toHaveBeenCalledWith(131072, '');
+    expect(all).toHaveBeenCalledWith(131072, '', 24000, 131072);
     expect(result.enqueued).toBe(1);
   });
 

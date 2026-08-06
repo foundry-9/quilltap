@@ -167,7 +167,9 @@ export async function runFoldEpisodePass(
           // Link the character's per-turn fragment memories from the same
           // window so one-hop expansion can pull them when the episode
           // surfaces. Union-preserving on both sides (never clobber links the
-          // gate already made).
+          // gate already made) — this relies on `createMemoryWithGate` returning
+          // the POST-LINK row for INSERT_RELATED, so `memory.relatedMemoryIds`
+          // below already carries the gate's links (Bug 26).
           const fragments = await repos.memories.findByCharacterAndSourceMessageIds(
             characterId,
             windowMessageIds,

@@ -4,10 +4,11 @@
 **Codebase**: Quilltap v4.8.0-dev (HEAD `3adefeba`)
 **Provenance**: the quilltap-v5 native port's differential harness, and its
 dogfood walks against a copy of real data
-**Status**: Bugs 1–7 plus **8, 9, 10, 11, 12, and 18** are **fixed in v4** (see
-[Status](#status)). The remaining bugs 13–17 and 19–43 are **NOT yet fixed in
-v4** — they are the defects the port has surfaced in
-the weeks since, each one still live in `3adefeba`. They are catalogued in
+**Status**: Bugs **1–18** plus **26, 38, and 43** are **fixed in v4** — each
+fixed bug's section below carries a **FIXED in v4** marker (see
+[Status](#status)). The remaining bugs **19–25, 27–37, and 39–42** are **NOT yet
+fixed in v4** — they are the defects the port has surfaced in the weeks since.
+They are catalogued in
 [Bugs found since — not yet fixed in v4](#bugs-found-since--not-yet-fixed-in-v4),
 and summarised in the [Status](#status) table with a **No** in the "Fixed in
 v4?" column.
@@ -1168,6 +1169,16 @@ recorded here rather than diverged, since it is v4's bug to fix.
 
 ## Bug 14 — an entity export is 99.7% regenerable embeddings
 
+**FIXED in v4 (2026-08-06)** — `stripEmbedding` in
+`lib/export/ndjson-writer.ts` drops the `embedding` off every exported memory
+before it is serialised (commit `7189a968`, which landed before this bug was
+catalogued). `public/schemas/qtap-export.schema.json` documents the field as
+deliberately absent and the importer drops any embedding arriving from older
+archives. Pinned by `ndjson-roundtrip.test.ts` ("never writes an embedding, in
+any form" + "drops embeddings arriving from older archives"). v5 obligation:
+the same-round mirror is owed — v5 reproduced the bloat faithfully, and omitting
+the field moves the oracle.
+
 **Severity: High** in practice — the real characters `.qtap` is **789.6 MB**, of
 which 789.6 MB is memory embeddings (29,030 records at ~29.6 KB each, the
 `embedding` field 29,602 bytes of that).
@@ -1269,6 +1280,15 @@ across every case) — do not "fix" v5 unilaterally; that turns the family red.
 
 ## Bug 17 — oversize conversation chunks can never embed
 
+**FIXED in v4 (2026-08-06)** — the Scriptorium renderer
+(`lib/scriptorium/markdown-renderer.ts`) now splits any interchange whose
+rendered text exceeds a per-chunk char budget into several sequential in-context
+chunks (`enforceChunkBudget` / `splitInterchange`), and the boot reconcile
+(`lib/startup/reconcile-conversation-rendering.ts`) re-renders the existing
+oversize cohort once via a new arm (C). v5 obligation flagged loudly below — the
+chunk-shape change moves the oracle **significantly**; v5 inherits the
+sub-chunking and its landing owes a same-round mirror.
+
 **Severity: Medium.** 515 conversation chunks on the Friday copy are permanently
 unembeddable and re-attempted every boot.
 
@@ -1285,6 +1305,55 @@ empty/over-cap chunks both apps correctly exclude.)
 
 Renderer-side interchange sub-chunking, so a long interchange embeds as several
 in-context chunks. v4-side; v5 inherits it.
+
+### Decisions taken while fixing
+
+- **Char budget: `CHUNK_CHAR_BUDGET = 24,000` chars** (exported from
+  `lib/scriptorium/markdown-renderer.ts`). A deliberately conservative proxy for
+  ~6k tokens against the ~8,192-token model context (~31k chars at ~4 chars/tok),
+  leaving headroom for denser prose. Not a per-model token count — a single
+  named char constant with a comment tying it to the 8,192-token limit.
+
+- **Boundary scheme:** split at **message boundaries first** — whole message
+  blocks are packed greedily into sub-chunks up to the budget. Only when a
+  *single* message block alone exceeds the budget is that block split within, at
+  natural boundaries in preference order **paragraph (`\n\n`) → sentence
+  (`. `) → any whitespace → hard char cut** (the last only for a pathological
+  single token; never silently over budget). Concatenating the pieces reproduces
+  the message exactly.
+
+- **Chunk identity / ordering:** each emitted chunk gets its own **sequential
+  `interchangeIndex`** (a chunk ordinal, not the interchange ordinal), so the
+  `(chatId, interchangeIndex)` chunk key stays unique and `ORDER BY
+  interchangeIndex` still yields render order. In the common case (no interchange
+  over budget) each interchange is exactly one chunk and the chunk ordinal equals
+  the old interchange ordinal, so **output is byte-identical** to the previous
+  renderer — the oracle surface for normal history is untouched. `messageIds`
+  ride per sub-chunk (a message split across pieces repeats its id);
+  `participantNames` are the sub-chunk's own speakers. The `## Interchange N`
+  header keeps the interchange ordinal on the first sub-chunk; continuation
+  sub-chunks are labelled `(continued k)`. The metadata header stays on chunk 0
+  even when interchange 0 is itself split.
+
+- **Embedding preservation on re-key:** `ConversationChunksRepository.upsert`
+  now **NULLs a preserved embedding when a chunk's content changes** (and no new
+  embedding is supplied). Splitting a formerly-oversize interchange shifts every
+  downstream chunk onto new content at an existing index; without this, those
+  rows would keep the previous occupant's stale vector. Content-identical
+  re-renders (the normal case) still preserve the embedding, so no spurious
+  re-embed.
+
+- **Healing the existing cohort — one-shot startup reconcile (option 2).**
+  `reconcile-conversation-rendering.ts` gains **arm (C)**: a chat holding an
+  un-embedded chunk **over `CHUNK_CHAR_BUDGET` but within `EMBEDDING_MAX_CHARS`**
+  is re-rendered once (which now sub-chunks it). FAILED status is *not* excluded
+  here — these are exactly the chunks arm (B) skips. It is **self-limiting** (a
+  re-rendered chat has no over-budget chunk left, so it stops matching) and reuses
+  the existing **stale-chat gate** (Bug 6) in the enqueue loop, so a cold-tiered
+  chat is left for its reopen/next-played heal rather than resurrected at boot.
+  The >131,072-char / empty cohort (the 43 both apps correctly exclude) is left
+  untouched by arm (C) — it stays out of the transport cap window. Verified: the
+  cohort re-renders once, then the next boot finds nothing to do.
 
 ---
 
@@ -1475,6 +1544,15 @@ Register the action on the DELETE map (or move the client to POST).
 ---
 
 ## Bug 26 — `INSERT_RELATED` clobbers the related-memory links it just wrote
+
+**FIXED in v4 (2026-08-06)** — the `INSERT_RELATED` arm of
+`createMemoryWithGate` (`lib/memory/memory-service.ts`) now returns the
+**post-link** row (`{ ...memory, relatedMemoryIds: linkedIds }`) instead of the
+stale pre-link object, and the fold-episode pass's union comment
+(`lib/memory/fold-episode-pass.ts`) is corrected to name that dependency. Pinned
+by `memory-service.test.ts` ("returns the POST-LINK row so relatedMemoryIds
+carries the gate links"). v5 obligation: same-round mirror owed — v5 reproduces
+the clobber faithfully.
 
 **Severity: Medium.**
 

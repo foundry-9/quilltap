@@ -176,6 +176,15 @@ export class ConversationChunksRepository extends AbstractBaseRepository<Convers
           // Only overwrite embedding if explicitly provided (non-undefined)
           if (input.embedding !== undefined) {
             updateData.embedding = input.embedding;
+          } else if (existing.content !== input.content) {
+            // Content changed but no embedding supplied → the preserved vector is
+            // now stale for the new text. NULL it so the render handler re-embeds
+            // (its enqueue gate is `!chunk.embedding`). This is load-bearing for
+            // interchange sub-chunking (Bug 17): when a formerly-oversize
+            // interchange splits, every chunk at and after that point shifts to
+            // new content at an existing index, and each must be re-embedded, not
+            // left carrying the previous occupant's vector.
+            updateData.embedding = null;
           }
 
           const updated = await this._update(existing.id, updateData);

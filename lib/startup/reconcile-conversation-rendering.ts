@@ -53,6 +53,7 @@ import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRawDatabase } from '@/lib/database/backends/sqlite/client';
 import { enqueueConversationRender } from '@/lib/background-jobs/queue-service';
 import { EMBEDDING_MAX_CHARS } from '@/lib/embedding/embedding-service';
+import { CHUNK_CHAR_BUDGET } from '@/lib/scriptorium/markdown-renderer';
 import { getRepositories } from '@/lib/repositories/factory';
 import { isStale } from '@/lib/background-jobs/maintenance/collapse-stale-chat-assets';
 import {
@@ -74,7 +75,17 @@ const logger = createServiceLogger('Startup:ConversationRenderReconcile');
  * tokens ≈ ~31k chars for text-embedding-3-large). Those fail deterministically
  * — `isPermanentEmbeddingError` marks them FAILED without retry — so any chunk
  * with a FAILED embedding_status for the profile the re-embed would actually
- * use is excluded, or its chat would re-render and re-fail on every boot.
+ * use is excluded from arm (B), or its chat would re-render and re-fail on
+ * every boot.
+ *
+ * Arm (C) is the one exception that DOES pull those oversize chunks back in —
+ * but only now that the renderer sub-chunks them (Bug 17). A chunk over the
+ * per-chunk budget yet inside the transport cap predates interchange
+ * sub-chunking; re-rendering splits it into in-context chunks that embed. This
+ * is self-limiting (a re-rendered chat has no over-budget chunk left, so it
+ * stops matching) and, like everything here, is gated by the stale-chat check
+ * in the loop below — a cold-tiered chat is left for its reopen/next-played
+ * heal, never resurrected at boot.
  */
 const SELECT_INCOMPLETE_CHATS = `
   SELECT c."id" AS chatId, c."userId" AS userId, c."updatedAt" AS updatedAt
@@ -103,6 +114,17 @@ const SELECT_INCOMPLETE_CHATS = `
           AND es."profileId" = ?
           AND es."status" = 'FAILED'
       )
+  ) OR EXISTS (
+    -- (C) A sub-chunkable oversize chunk (Bug 17): un-embedded, over the
+    --     per-chunk budget but still within the transport cap. Re-rendering now
+    --     splits it into in-context chunks. FAILED status is deliberately NOT
+    --     excluded — these are exactly the chunks arm (B) skips, and a re-render
+    --     (not a re-embed) is what heals them. Self-limiting once split.
+    SELECT 1 FROM "conversation_chunks" cc2
+    WHERE cc2."chatId" = c."id"
+      AND cc2."embedding" IS NULL
+      AND LENGTH(cc2."content") > ?
+      AND LENGTH(cc2."content") <= ?
   )
 `;
 
@@ -164,7 +186,12 @@ export async function reconcileConversationRendering(): Promise<ConversationRend
   try {
     rows = db
       .prepare(SELECT_INCOMPLETE_CHATS)
-      .all(EMBEDDING_MAX_CHARS, defaultProfileId) as IncompleteChatRow[];
+      .all(
+        EMBEDDING_MAX_CHARS, // arm (B) size cap
+        defaultProfileId, // arm (B) FAILED-status profile scope
+        CHUNK_CHAR_BUDGET, // arm (C) lower bound (over the per-chunk budget)
+        EMBEDDING_MAX_CHARS, // arm (C) upper bound (within the transport cap)
+      ) as IncompleteChatRow[];
   } catch (err) {
     logger.warn('Failed to scan for incomplete conversations; skipping reconciliation', {
       error: err instanceof Error ? err.message : String(err),

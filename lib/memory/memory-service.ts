@@ -450,10 +450,16 @@ export async function createMemoryWithGate(
         data.characterId,
         decision.relatedMemories
       )
+      // Return the POST-LINK row. `createMemoryDirectWithEmbedding` persisted the
+      // memory with `relatedMemoryIds: []`, then `linkRelatedMemories` wrote
+      // `linkedIds` onto that row — but the in-memory `memory` object still holds
+      // the stale empty array. Downstream callers that union `memory.relatedMemoryIds`
+      // (the fold-episode pass) would otherwise start from [] and clobber the
+      // gate's links (Bug 26). Reflect the persisted state here.
       // Fire-and-forget watermark check. Never awaited — never blocks the write.
       void maybeEnqueueHousekeeping(data.characterId, options.userId)
       return {
-        memory,
+        memory: { ...memory, relatedMemoryIds: linkedIds },
         action: 'INSERT_RELATED',
         relatedMemoryIds: linkedIds,
       }
