@@ -372,6 +372,15 @@
   }
 
   /**
+   * Danger text color — alias of qt-text-destructive kept for the inline
+   * error sites (StartupProgress, ChatCreationProgressModal) that reach for
+   * the "danger" name. Same destructive token, so themes get one lever.
+   */
+  .qt-text-danger {
+    color: var(--color-destructive);
+  }
+
+  /**
    * Foreground intended for use on an accent-coloured surface
    * (e.g. text inside a qt-bg-accent pill).
    */

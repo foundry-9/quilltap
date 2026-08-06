@@ -44,6 +44,29 @@ describe('buildContentDisposition', () => {
     expect(header).toContain("filename*=UTF-8''%E6%97%A5%E6%9C%AC%E8%AA%9E.txt")
   })
 
+  it('percent-encodes an apostrophe alongside non-ASCII (bug 41)', () => {
+    // The apostrophe is RFC 8187's charset'lang'value delimiter — leaving it
+    // raw made browsers discard filename* and fall back to the mangled ASCII
+    // name. It must arrive as %27, and the non-ASCII must survive.
+    const header = buildContentDisposition("Wings Over Suparṇā's Quiet Governance.qtap", 'attachment')
+
+    expect(header).toContain("filename*=UTF-8''Wings%20Over%20Supar%E1%B9%87%C4%81%27s%20Quiet%20Governance.qtap")
+    expect(header).not.toMatch(/filename\*=UTF-8''[^;]*'/) // no raw apostrophe survives in the ext-value
+  })
+
+  it('escapes the RFC 8187 stray chars encodeURIComponent leaves', () => {
+    // ' ( ) * ! all sit outside attr-char; pair them with a non-ASCII char so
+    // the filename* branch is taken.
+    const header = buildContentDisposition("a'()*!—b.txt")
+
+    expect(header).toContain("filename*=UTF-8''a%27%28%29%2A%21%E2%80%94b.txt")
+  })
+
+  it('leaves plain-ASCII apostrophe names on the quoted form, untouched', () => {
+    // No non-ASCII → no filename* at all, so the apostrophe stays literal.
+    expect(buildContentDisposition("O'Brien.pdf")).toBe('inline; filename="O\'Brien.pdf"')
+  })
+
   it('treats an empty name as ASCII and emits the plain form', () => {
     expect(buildContentDisposition('')).toBe('inline; filename=""')
   })
