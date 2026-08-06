@@ -72,7 +72,7 @@ function renderToasts() {
         return (
           <div
             key={toast.id}
-            className={`${styles.bg} border ${styles.border} text-white px-4 py-3 rounded-lg shadow-lg pointer-events-auto animate-in fade-in slide-in-from-bottom-3 duration-300`}
+            className={`app-toast ${styles.bg} border ${styles.border} text-white px-4 py-3 rounded-lg shadow-lg pointer-events-auto`}
             style={{
               animation: 'slideInUp 0.3s ease-out',
             }}

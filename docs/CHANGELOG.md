@@ -4,6 +4,16 @@
 
 ### 4.8-dev
 
+#### Fix: UI polish — error color, search dialog, download filenames, toast animation (bugs 39, 40, 41, 42)
+
+**Inline error text now renders in the destructive color.** `.qt-text-danger` was referenced by `StartupProgress.tsx` and `ChatCreationProgressModal.tsx` but defined in no CSS file, so startup/creation errors ("Connection lost…") rendered in ordinary body color. Added `.qt-text-danger { color: var(--color-destructive) }` to `app/styles/qt-components/_utilities.css` and mirrored it into `packages/theme-storybook/src/css/qt-components.css` (patch bump to 1.0.57).
+
+**The toolbar search dialog now closes on an outside click.** `.qt-page-toolbar`'s `backdrop-filter` makes the toolbar the containing block for `position: fixed` descendants, so the dialog's full-screen backdrop resolved against the toolbar, not the viewport — nothing outside it to click, only Esc closed it. `SearchDialog` now renders through a `document.body` portal. Esc and input focus still work.
+
+**Downloads with an apostrophe and a non-ASCII character keep their real name.** `buildContentDisposition` built `filename*=UTF-8''…` with `encodeURIComponent`, which leaves `'` unescaped — but the apostrophe is RFC 8187's `charset'lang'value` delimiter, so browsers discarded the whole `filename*` and fell back to the underscore-substituted ASCII name. The ext-value now percent-encodes the stray characters `encodeURIComponent` leaves (`' ( ) * !`); the apostrophe arrives as `%27`. A chat titled `Wings Over Suparṇā's Quiet Governance` downloads under its real name. Plain-ASCII names are unchanged.
+
+**Toasts now animate on entry.** The toast markup named `slideInUp` keyframes that were defined nowhere, plus `animate-in …` classes from a Tailwind plugin the app doesn't load, so toasts appeared instantly. Defined the `slideInUp` keyframes in `app/globals.css`, removed the dead classes, and added a `prefers-reduced-motion` guard.
+
 #### Fix: Almanack ledger diagnostics (bugs 19, 20, 21)
 
 **The embedding "failed rows" census reports real numbers.** The phase-3 census (`lib/tools/almanack/phase3-ledgers.ts`) filtered `embedding_status.status = 'PERMANENTLY_FAILED'`, a value `EmbeddingStatusEnum` (PENDING/EMBEDDED/FAILED) can never hold, so the cell was structurally always 0. It now filters `FAILED` — the real terminal state — and the cell/label is renamed from "Permanently failed rows" to "Failed rows", noted as permanent for the current embedding profile. Type field renamed `permanentlyFailed` → `failed`.

@@ -2094,6 +2094,10 @@
   color: var(--color-destructive);
 }
 
+.qt-text-danger {
+  color: var(--color-destructive);
+}
+
 /* Border utilities */
 .qt-border-primary {
   border-color: var(--color-primary);

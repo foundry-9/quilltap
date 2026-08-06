@@ -4,9 +4,9 @@
 **Codebase**: Quilltap v4.8.0-dev (HEAD `3adefeba`)
 **Provenance**: the quilltap-v5 native port's differential harness, and its
 dogfood walks against a copy of real data
-**Status**: Bugs **1–21** plus **26, 38, and 43** are **fixed in v4** — each
+**Status**: Bugs **1–21** plus **26** and **38–43** are **fixed in v4** — each
 fixed bug's section below carries a **FIXED in v4** marker (see
-[Status](#status)). The remaining bugs **22–25, 27–37, and 39–42** are **NOT yet
+[Status](#status)). The remaining bugs **22–25 and 27–37** are **NOT yet
 fixed in v4** — they are the defects the port has surfaced in the weeks since.
 They are catalogued in
 [Bugs found since — not yet fixed in v4](#bugs-found-since--not-yet-fixed-in-v4),
@@ -1871,6 +1871,14 @@ attach-mount-file to hand the Librarian a document (it has `extractedText`).
 
 ## Bug 39 — `.qt-text-danger` is defined in no CSS, so error text is body-coloured
 
+**FIXED in v4 (2026-08-06)** — `.qt-text-danger { color: var(--color-destructive) }`
+now lives in `app/styles/qt-components/_utilities.css` (alongside its
+`qt-text-destructive` twin), mirrored into
+`packages/theme-storybook/src/css/qt-components.css` (patch-bumped, published).
+No bundled theme overrides `qt-text-destructive`, so none needs a
+`qt-text-danger` override either — the token is the single lever. v5 obligation:
+the `_utilities.css` corpus vector self-retires once v4 ships the rule.
+
 **Severity: Low (cosmetic).** Pinned.
 
 ### Root cause
@@ -1889,6 +1897,13 @@ Define `.qt-text-danger { color: var(--color-destructive) }`. v5 fixed it in
 ---
 
 ## Bug 40 — the toolbar search dialog won't close on an outside click
+
+**FIXED in v4 (2026-08-06)** — `SearchDialog` (`components/search/search-dialog.tsx`)
+now renders through `createPortal(…, document.body)`, so its `fixed inset-0`
+backdrop resolves against the viewport instead of the `backdrop-filter`
+containing block that `.qt-page-toolbar` establishes. Esc (document-level
+`useEscapeKey`) and input focus still work through the portal; the toolbar's
+`backdrop-filter` is untouched. v5 obligation (Faithful): mirror the portal.
 
 **Severity: Low.**
 
@@ -1909,6 +1924,16 @@ Portal the dialog host out of the toolbar (to `document.body`), as v5 does.
 ---
 
 ## Bug 41 — `Content-Disposition` mangles a filename with an apostrophe and non-ASCII
+
+**FIXED in v4 (2026-08-06)** — `buildContentDisposition`
+(`lib/api/content-disposition.ts`) now runs the ext-value through
+`encodeExtValue`, which percent-encodes the RFC 8187 stray characters
+`encodeURIComponent` leaves raw (`' ( ) * !`). The apostrophe arrives as `%27`,
+so `filename*=UTF-8''…` stays grammatical and browsers recover the real UTF-8
+name; plain-ASCII names are unchanged. Covered by the entry's own case in
+`__tests__/unit/lib/api/content-disposition.test.ts`. v5 obligation: the
+`content_disposition` corpus vector `ascii-apostrophe-with-non-ascii`
+self-retires once v4 ships.
 
 **Severity: Low.** Pinned.
 
@@ -1936,6 +1961,15 @@ loudly, so the carve-out self-retires when v4 ships.
 ---
 
 ## Bug 42 — toasts have no entry animation
+
+**FIXED in v4 (2026-08-06)** — the `slideInUp` keyframes are now defined as a
+plain app-level rule in `app/globals.css` (no `qt-*` class, so no theme-storybook
+mirror is owed), and `lib/toast.tsx` drops the dead `animate-in fade-in
+slide-in-from-bottom-3 duration-300` classes (that Tailwind plugin isn't loaded)
+while keeping the inline `animation: slideInUp 0.3s ease-out`. Toasts now fade
+and slide up on entry; a `prefers-reduced-motion` guard on the toast's
+`app-toast` class disables the animation. v5 obligation (Faithful): mirror the
+keyframes.
 
 **Severity: Low (cosmetic).**
 
@@ -2044,8 +2078,8 @@ faithfully on the v5 side.
 | 38 | Library picker lists markdown documents that 404 on attach | **Yes** (2026-08-06) | `app/api/v1/chats/[id]/files/route.ts` + `lib/chat-files-v2.ts` — serve native-text documents (no blob) as text attachments; `nativeTextAttachmentMime` in `lib/mount-index/path-utils.ts` | **Owed** (Faithful) — mirror the document-serving attach path |
 | 43 | Orphaned thumbnails never collected | **Yes** (2026-08-06) | `lib/background-jobs/maintenance/sweep-orphaned-thumbnails.ts` wired into `scheduled-maintenance.ts`; `parseThumbnailStorageKey` in `lib/files/thumbnail-utils.ts` | **Owed** (Faithful) — mirror the sweep **and** call `cleanupThumbnails` at v5's two skipped delete/overwrite sites (`api/files.rs:537`, `:1123`) |
 
-**Bugs 13–21, 26, 38, and 43 are now fixed in v4 (2026-08-06); bugs 22–25,
-27–37, 39–42 remain `No` — not yet fixed in v4** (bugs 8–12 and 18 fixed
+**Bugs 13–21, 26, and 38–43 are now fixed in v4 (2026-08-06); bugs 22–25 and
+27–37 remain `No` — not yet fixed in v4** (bugs 8–12 and 18 fixed
 earlier). Their
 per-bug fix sites and v5 status are in
 [Bugs found since](#bugs-found-since--not-yet-fixed-in-v4); they are not repeated
