@@ -600,7 +600,10 @@ export function renderAlmanackMarkdown(data: AlmanackReportData): string {
     `- **Help docs**: ${data.embeddingPipeline.helpDocs.total} ` +
       `(${data.embeddingPipeline.helpDocs.unembedded} unembedded)`,
   );
-  push(`- **Permanently failed rows**: ${data.embeddingPipeline.permanentlyFailed}`);
+  push(
+    `- **Failed rows**: ${data.embeddingPipeline.failed} ` +
+      '_(permanent for the current profile)_',
+  );
   push(
     `- **Active profile dimensions**: ${data.embeddingPipeline.activeProfileDimensions ?? 'Not configured'}`,
   );

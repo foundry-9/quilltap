@@ -180,10 +180,14 @@ export async function collectChatBreakdown(userId: string): Promise<ChatBreakdow
       'ledgers.chatsByType',
     ),
     mainRows<{ participants: number; chats: number }>(
+      // GROUP BY / ORDER BY the length *expression*, not the bare alias:
+      // SQLite binds the bare name `participants` to the raw JSON column, so a
+      // group-by on it buckets every distinct cast string separately instead of
+      // rolling up by cast size.
       `SELECT json_array_length("participants") AS participants, COUNT(*) AS chats
        FROM "chats"
        WHERE "userId" = ? AND "participants" IS NOT NULL AND json_valid("participants")
-       GROUP BY participants ORDER BY participants`,
+       GROUP BY json_array_length("participants") ORDER BY json_array_length("participants")`,
       [userId],
       'ledgers.participantHistogram',
     ),
@@ -398,8 +402,11 @@ export async function collectCharacterBreakdown(userId: string): Promise<Charact
             SUM(CASE WHEN "controlledBy" = 'user' THEN 1 ELSE 0 END)                     AS userControlled,
             SUM(CASE WHEN "canBeCarina" = 1 THEN 1 ELSE 0 END)                           AS carina,
             SUM(CASE WHEN "systemTransparency" = 1 THEN 1 ELSE 0 END)                    AS transparent,
-            SUM(CASE WHEN "canDressThemselves" = 1 THEN 1 ELSE 0 END)                    AS dress,
-            SUM(CASE WHEN "canCreateOutfits" = 1 THEN 1 ELSE 0 END)                      AS outfits,
+            -- Effective permission, matching the runtime null-safe check
+            -- (\`canDressThemselves !== false\` in pseudo-tool.service.ts): NULL and 1
+            -- both mean allowed, only an explicit 0 denies. \`IS NOT 0\` counts both.
+            SUM(CASE WHEN "canDressThemselves" IS NOT 0 THEN 1 ELSE 0 END)               AS dress,
+            SUM(CASE WHEN "canCreateOutfits" IS NOT 0 THEN 1 ELSE 0 END)                 AS outfits,
             SUM(CASE WHEN "coreWhisperEnabled" IS NOT NULL THEN 1 ELSE 0 END)            AS coreWhisper
      FROM "characters" WHERE "userId" = ?`,
     [userId],
@@ -722,8 +729,12 @@ export async function collectEmbeddingPipeline(userId: string): Promise<Embeddin
   const dimensionMismatch =
     activeDims !== null && storedDimensions.some(d => d.dimensions !== activeDims);
 
-  const permanentlyFailed = statusRows
-    .filter(r => r.status === 'PERMANENTLY_FAILED')
+  // `EmbeddingStatusEnum` only holds PENDING / EMBEDDED / FAILED — the old
+  // 'PERMANENTLY_FAILED' filter matched nothing and the cell was structurally
+  // always 0. FAILED is "permanent for the current profile": a maintenance
+  // sweep can drain it when the active embedding profile changes.
+  const failed = statusRows
+    .filter(r => r.status === 'FAILED')
     .reduce((sum, r) => sum + num(r.count), 0);
 
   return {
@@ -732,7 +743,7 @@ export async function collectEmbeddingPipeline(userId: string): Promise<Embeddin
       status: r.status,
       count: num(r.count),
     })),
-    permanentlyFailed,
+    failed,
     conversationChunks: { total: num(chunkRow?.total), unembedded: num(chunkRow?.unembedded) },
     helpDocs: { total: num(helpRow?.total), unembedded: num(helpRow?.unembedded) },
     storedDimensions,
