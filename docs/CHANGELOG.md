@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Fix: CI test failures from a fragile SQLite driver loader
+
+Two mount-index unit suites (`doc-mount-file-links-blobless-gc.test.ts`, `link-groups-reindex.test.ts`) loaded the real `better-sqlite3` binding through a fallback chain that tried a bare `better-sqlite3-multiple-ciphers` require before the absolute root path. In CI the nested `packages/quilltap/node_modules` path is absent, so the loader fell through to the bare require — which `jest.config`'s `moduleNameMapper` maps to the no-op mock (`get()`→`undefined`, `all()`→`[]`). Every query returned empty: `CREATE TABLE` was a no-op and the read-back after an insert found nothing ("Link disappeared immediately after upsert"). Both suites now load the driver by absolute root path (`process.cwd()/node_modules/better-sqlite3`), matching the canonical reference, which the mock mapper can't intercept.
+
 #### Fix: provider attachments and streaming (bugs 31, 32, 33, 34, 35)
 
 **OpenRouter now sends images on the non-streaming path.** On regenerate and continuation legs (`OpenRouterProvider.sendMessage`, non-streaming), `@openrouter/sdk` 1.2.2's `chat.send()` rejected the OpenAI `image_url` content parts at client-side Zod validation (it expects camelCase `imageUrl`), so the image never left the machine — streaming was fine, non-streaming sent nothing. Image sends now route around the SDK through a direct `POST /api/v1/chat/completions` (`stream:false`), the same escape hatch the streaming path already uses for image/tool requests; no-image sends keep the SDK path. The direct path forwards cache key, tools, web search, structured output, fallback models, provider preferences (including ZDR), and reasoning. (bug 31)

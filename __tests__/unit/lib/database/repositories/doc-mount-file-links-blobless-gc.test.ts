@@ -20,21 +20,14 @@ import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals
 import path from 'path';
 import { createHash } from 'crypto';
 
-function loadDriver(): any {
-  try {
-    return require(path.join(
-      __dirname, '..', '..', '..', '..', '..',
-      'packages', 'quilltap', 'node_modules', 'better-sqlite3-multiple-ciphers'
-    ));
-  } catch {
-    try {
-      return require('better-sqlite3-multiple-ciphers');
-    } catch {
-      return require(path.join(__dirname, '..', '..', '..', '..', '..', 'node_modules', 'better-sqlite3'));
-    }
-  }
-}
-const Database = loadDriver();
+// Root package.json aliases better-sqlite3-multiple-ciphers as better-sqlite3,
+// so the real binding lives at the root alias. Load it by ABSOLUTE root path:
+// jest.config's moduleNameMapper maps the bare module names to the no-op mock
+// (get()→undefined, all()→[]), and the ^name$ patterns don't match an absolute
+// path. A bare or nested (packages/quilltap/node_modules) require would fall
+// through to the mock in CI and every query would come back empty. See
+// project_jest_real_sqlite_driver_load.
+const Database = require(path.join(process.cwd(), 'node_modules', 'better-sqlite3'));
 
 import { logger } from '@/lib/logger';
 import { DocMountFileLinksRepository } from '@/lib/database/repositories/doc-mount-file-links.repository';
