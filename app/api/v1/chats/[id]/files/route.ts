@@ -17,7 +17,9 @@ import { postLibrarianAttachAnnouncement } from '@/lib/services/librarian-notifi
 import { generateImageDescription } from '@/lib/chat/file-attachment-fallback';
 import { isPhotosRelativePath } from '@/lib/photos/photos-paths';
 import { buildAttachDescriptionFromKeptImage } from '@/lib/photos/keep-image-markdown';
+import { nativeTextAttachmentMime } from '@/lib/mount-index/path-utils';
 import type { RepositoryContainer } from '@/lib/database/repositories';
+import type { DocMountFileLinkWithContent } from '@/lib/schemas/mount-index.types';
 import type { FileAttachment } from '@/lib/llm/base';
 
 /**
@@ -247,6 +249,67 @@ async function ensureImageDescription(
   return description;
 }
 
+/**
+ * Attach a native-text document (a `.md`/`.txt`/`.json` in a database store,
+ * held in doc_mount_documents with no blob). Posts the same Librarian
+ * announcement as the blob path — the Librarian catalogue entry, not the bytes,
+ * is what rides into chat history — carrying the link id so the assistant
+ * attachment walker and loadChatFilesForLLM can resolve it back to text.
+ */
+async function handleAttachMountDocument(
+  repos: RepositoryContainer,
+  chatId: string,
+  mountPointId: string,
+  relativePath: string,
+  mountFile: DocMountFileLinkWithContent,
+  mimeType: string,
+): Promise<NextResponse> {
+  const mountPoint = await repos.docMountPoints.findById(mountPointId);
+  const mountPointName = mountPoint?.name ?? null;
+  const displayTitle = mountFile.originalFileName || mountFile.fileName;
+
+  const announcement = await postLibrarianAttachAnnouncement({
+    chatId,
+    displayTitle,
+    filePath: relativePath,
+    mountPoint: mountPointName,
+    mountFileId: mountFile.id,
+    mimeType,
+    description: '',
+  });
+
+  if (!announcement) {
+    return serverError('Failed to post Librarian attachment announcement');
+  }
+
+  const url = `/api/v1/mount-points/${mountPointId}/files/${encodeURI(relativePath)}`;
+
+  logger.info('[Chats v1 Files] Mount-point document attached via Librarian', {
+    chatId,
+    mountFileId: mountFile.id,
+    mountPointId,
+    relativePath,
+    announcementMessageId: announcement.id,
+    mimeType,
+  });
+
+  return NextResponse.json({
+    file: {
+      id: mountFile.id,
+      filename: displayTitle,
+      filepath: url,
+      mimeType,
+      size: mountFile.fileSizeBytes,
+      url,
+      type: 'mountFile' as const,
+    },
+    announcement: {
+      id: announcement.id,
+      createdAt: announcement.createdAt,
+    },
+  });
+}
+
 async function handleAttachMountFile(
   req: NextRequest,
   repos: RepositoryContainer,
@@ -270,7 +333,19 @@ async function handleAttachMountFile(
 
   const blob = await repos.docMountBlobs.findByMountPointAndPath(mountPointId, relativePath);
   if (!blob) {
-    logger.warn('[Chats v1 Files] Mount file has no blob row, refusing to attach', {
+    // Native-text files (.md/.txt/.json) PUT into a database store become
+    // documents (doc_mount_documents, no blob row). The picker lists them, so a
+    // blob-only attach path 404'd on exactly those documents (Bug 38). Serve the
+    // document to the Librarian instead — its text is what the LLM needs, and
+    // loadMountFileAsAttachment resolves the same document back to bytes.
+    const textMime = nativeTextAttachmentMime(relativePath);
+    const document = textMime
+      ? await repos.docMountDocuments.findByFileId(mountFile.fileId)
+      : null;
+    if (document && textMime) {
+      return handleAttachMountDocument(repos, chatId, mountPointId, relativePath, mountFile, textMime);
+    }
+    logger.warn('[Chats v1 Files] Mount file has no blob or document row, refusing to attach', {
       chatId,
       mountPointId,
       relativePath,
@@ -402,14 +477,34 @@ export const GET = createContextParamsHandler<{ id: string }>(
             }
             if (!mountLink) continue;
             const blob = await repos.docMountBlobs.findByFileId(mountLink.fileId);
-            if (!blob) continue;
-            const url = `/api/v1/mount-points/${mountLink.mountPointId}/blobs/${encodeURI(mountLink.relativePath)}`;
+            if (blob) {
+              const url = `/api/v1/mount-points/${mountLink.mountPointId}/blobs/${encodeURI(mountLink.relativePath)}`;
+              allFiles.push({
+                id: mountLink.id,
+                filename: mountLink.originalFileName ?? mountLink.fileName,
+                filepath: url,
+                mimeType: blob.storedMimeType,
+                size: blob.sizeBytes,
+                url,
+                createdAt: event.createdAt,
+                type: 'mountFile',
+              });
+              seenIds.add(mountLink.id);
+              continue;
+            }
+            // No blob → native-text document (Bug 38). Surface it from the
+            // document row so the attached markdown shows in the chat file list.
+            const textMime = nativeTextAttachmentMime(mountLink.relativePath);
+            if (!textMime) continue;
+            const document = await repos.docMountDocuments.findByFileId(mountLink.fileId);
+            if (!document) continue;
+            const url = `/api/v1/mount-points/${mountLink.mountPointId}/files/${encodeURI(mountLink.relativePath)}`;
             allFiles.push({
               id: mountLink.id,
               filename: mountLink.originalFileName ?? mountLink.fileName,
               filepath: url,
-              mimeType: blob.storedMimeType,
-              size: blob.sizeBytes,
+              mimeType: textMime,
+              size: mountLink.fileSizeBytes,
               url,
               createdAt: event.createdAt,
               type: 'mountFile',

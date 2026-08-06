@@ -131,18 +131,37 @@ function fanOutGroupFileId(
  * would silently keep every payload forever. Deleting children first is a
  * no-op where the cascade does exist.
  *
+ * The payload tables are created lazily by their repositories on first access
+ * (`doc_mount_blobs` has no Zod schema, so `generateDDL` never mints it; a
+ * document-only or restored-from-old-backup index may likewise never have held
+ * a blob). Deleting from a table that has never been created throws
+ * `no such table` — a hard failure on the second write to any path. So each
+ * payload delete is guarded behind a table-existence check; a missing table has
+ * nothing to collect anyway.
+ *
  * Runs synchronously inside the caller's `db.transaction(...)`.
  *
  * @returns true when the row was collected
  */
+function tableExistsSync(db: SyncDb, name: string): boolean {
+  const row = db.prepare(
+    `SELECT name FROM sqlite_master WHERE type='table' AND name = ?`
+  ).get(name) as { name: string } | undefined;
+  return Boolean(row);
+}
+
 function gcOrphanedFileRow(db: SyncDb, fileId: string | null): boolean {
   if (!fileId) return false;
   const still = db.prepare(
     'SELECT COUNT(*) AS count FROM doc_mount_file_links WHERE fileId = ?'
   ).get(fileId) as { count: number } | undefined;
   if ((still?.count ?? 0) > 0) return false;
-  db.prepare('DELETE FROM doc_mount_documents WHERE fileId = ?').run(fileId);
-  db.prepare('DELETE FROM doc_mount_blobs WHERE fileId = ?').run(fileId);
+  if (tableExistsSync(db, 'doc_mount_documents')) {
+    db.prepare('DELETE FROM doc_mount_documents WHERE fileId = ?').run(fileId);
+  }
+  if (tableExistsSync(db, 'doc_mount_blobs')) {
+    db.prepare('DELETE FROM doc_mount_blobs WHERE fileId = ?').run(fileId);
+  }
   db.prepare('DELETE FROM doc_mount_files WHERE id = ?').run(fileId);
   return true;
 }
@@ -1316,6 +1335,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         l.conversionStatus, l.conversionError, l.plainTextLength,
         l.extractedText, l.extractedTextSha256, l.extractionStatus, l.extractionError,
         l.chunkCount, l.allowEmbed, l.allowCharacterRead, l.allowCharacterWrite,
+        l.linkGroupId,
         l.lastModified, l.createdAt, l.updatedAt,
         f.sha256, f.fileSizeBytes, f.fileType, f.source
       FROM doc_mount_file_links l
@@ -1348,6 +1368,10 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
       allowEmbed: coerceAllow(row.allowEmbed),
       allowCharacterRead: coerceAllow(row.allowCharacterRead),
       allowCharacterWrite: coerceAllow(row.allowCharacterWrite),
+      // Hard-link group id. Without this in the projection, every joined read
+      // reported linkGroupId: undefined and reindexLinkGroupSiblings dead-ended
+      // its early-out, so hard-linked siblings served stale chunks (Bug 15).
+      linkGroupId: row.linkGroupId ?? null,
       lastModified: row.lastModified,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,

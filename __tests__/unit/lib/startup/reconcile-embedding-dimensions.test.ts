@@ -117,14 +117,21 @@ function createMainDb(): any {
     CREATE TABLE embedding_status (
       id TEXT PRIMARY KEY, entityType TEXT, entityId TEXT, profileId TEXT, status TEXT
     );
-    CREATE TABLE doc_mount_points (id TEXT PRIMARY KEY, enabled INTEGER);
   `);
   return db;
 }
 
 function createMountDb(): any {
   const db = new RealDatabase(':memory:');
-  db.exec(`CREATE TABLE doc_mount_chunks (id TEXT PRIMARY KEY, mountPointId TEXT, embedding BLOB);`);
+  // doc_mount_points is a MOUNT-INDEX table, not a main-DB one. Placing it here
+  // (with the chunks) reproduces the real two-database layout — the reconcile
+  // must read the ENABLED filter from the mount-index handle, not the main DB
+  // (Bug 16). The prior fixture created it in the main DB and so passed for the
+  // wrong reason.
+  db.exec(`
+    CREATE TABLE doc_mount_points (id TEXT PRIMARY KEY, enabled INTEGER);
+    CREATE TABLE doc_mount_chunks (id TEXT PRIMARY KEY, mountPointId TEXT, embedding BLOB);
+  `);
   return db;
 }
 
@@ -226,8 +233,10 @@ describe('reconcileEmbeddingDimensions', () => {
 
   it('counts non-conforming mount chunks only for ENABLED mount points', async () => {
     insertDefaultProfile(mainDb);
-    mainDb.prepare(`INSERT INTO doc_mount_points (id, enabled) VALUES ('mp-on', 1)`).run();
-    mainDb.prepare(`INSERT INTO doc_mount_points (id, enabled) VALUES ('mp-off', 0)`).run();
+    // Mount config lives in the mount-index DB — inserting it there (not the
+    // main DB) is what makes this test exercise the real cross-DB read (Bug 16).
+    mountDb.prepare(`INSERT INTO doc_mount_points (id, enabled) VALUES ('mp-on', 1)`).run();
+    mountDb.prepare(`INSERT INTO doc_mount_points (id, enabled) VALUES ('mp-off', 0)`).run();
     const ins = mountDb.prepare('INSERT INTO doc_mount_chunks (id, mountPointId, embedding) VALUES (?, ?, ?)');
     ins.run('mc-on-old', 'mp-on', rawBlob(OLD_DIM));
     ins.run('mc-on-good', 'mp-on', goodBlob(TARGET_DIM));

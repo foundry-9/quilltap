@@ -1125,6 +1125,14 @@ first-generation archives (non-`mount-blob:` keys) still run the replay.
 
 ## Bug 13 — `gcOrphanedFileRow` throws on a mount index without the blobs table
 
+**FIXED in v4 (2026-08-06)** — `gcOrphanedFileRow` now guards each payload
+delete (`doc_mount_documents`, `doc_mount_blobs`) behind a `sqlite_master`
+table-existence check, so a document-only / restored / hand-built index that
+never held a blob no longer throws on the second write. v5 obligation
+(**Faithful**): mirror the guard in `gc_orphaned_file_row` in the same round.
+Fix site: `lib/database/repositories/doc-mount-file-links.repository.ts`
+(`tableExistsSync` + guarded deletes).
+
 **Severity: High** — a hard throw on the **second** write to any path, on any
 mount index that predates the lazily-created blobs table (a restore from an old
 backup, a hand-built index). It broke twenty of the port's own fixture families
@@ -1187,6 +1195,13 @@ oracle.
 
 ## Bug 15 — `reindexLinkGroupSiblings` is dead code; hard-linked siblings serve stale chunks
 
+**FIXED in v4 (2026-08-06)** — `queryJoined` now selects `l.linkGroupId` and its
+mapper carries it, so the joined read no longer reports `linkGroupId: undefined`
+and `reindexLinkGroupSiblings` fans the chunk reindex out to every group member.
+Retire the `CHUNK_DIVERGENCES` arm of `doc_mount_file_links_tier2_equivalence`
+(it goes red now that v4 renders fresh sibling chunks). Fix site:
+`lib/database/repositories/doc-mount-file-links.repository.ts` (`queryJoined`).
+
 **Severity: Medium.** The commit that introduced hard-link groups claims to keep
 siblings in sync; the chunk half of that sync never runs.
 
@@ -1219,6 +1234,15 @@ stale on v4; the moment v4 adds the column, the test fails.
 ---
 
 ## Bug 16 — the dimension reconcile counts mount chunks from the wrong database
+
+**FIXED in v4 (2026-08-06)** — `countNonconformingMountChunks` now reads
+`doc_mount_points` (the ENABLED filter) and the chunk scan from the mount-index
+handle, not the main DB; only the FAILED-status exclusion still comes from the
+main DB. The wrong `:351` comment is corrected, and the unit test now places
+`doc_mount_points` in the mount-index test DB (the real two-database layout), so
+it no longer passes for the wrong reason. Retire the v5 `mountChunks == 0`
+tripwire in `embedding_dimension_reconcile`. Fix site:
+`lib/startup/reconcile-embedding-dimensions.ts`.
 
 **Severity: Low** — the chunks are not permanently stranded (the reindex
 handler's phase 4 heals them whenever a reindex runs for any other reason), but
@@ -1708,6 +1732,15 @@ Either give the modal an opener (and project the fields it needs) or delete it.
 
 ## Bug 38 — the library picker lists markdown documents that 404 on attach
 
+**FIXED in v4 (2026-08-06)** — took the preferred path: `handleAttachMountFile`
+(`app/api/v1/chats/[id]/files/route.ts`) now serves a native-text document when
+no blob exists, and the LLM-side resolver `loadMountFileAsAttachment`
+(`lib/chat-files-v2.ts`) loads the document text as a text `FileAttachment`, so
+an attached `.md`/`.txt`/`.json` document actually reaches the model. The chat
+file-list GET was taught the same fallback. Clean-mime helper
+`nativeTextAttachmentMime` in `lib/mount-index/path-utils.ts`. v5 obligation
+(**Faithful**): mirror the document-serving attach path in the same round.
+
 **Severity: Low.** Affects both apps.
 
 ### Root cause
@@ -1813,6 +1846,17 @@ Define the `slideInUp` keyframes (or load the Tailwind plugin).
 
 ## Bug 43 — orphaned thumbnails are never collected
 
+**FIXED in v4 (2026-08-06)** — the daily maintenance pass now runs an
+orphan-thumbnail sweep (`lib/background-jobs/maintenance/sweep-orphaned-thumbnails.ts`,
+wired into `lib/background-jobs/scheduled-maintenance.ts` as step 7): it lists
+`_thumbnails/`, parses the leading `fileId` (`parseThumbnailStorageKey` in
+`lib/files/thumbnail-utils.ts`, the inverse of the key builder), and deletes
+entries whose `files` row is gone; unparseable names are skipped and logged, not
+deleted. **v5's half is still open**: v5 additionally skips v4's
+`cleanupThumbnails` on its four delete/overwrite paths (`api/files.rs:537`,
+`:1123`), so a v5-driven instance still leaves per-delete thumbnails behind —
+v5 must call `cleanupThumbnails` at those two sites *and* mirror this sweep.
+
 **Severity: Low (disk leak).** Partly a shared gap.
 
 ### Root cause
@@ -1884,10 +1928,15 @@ faithfully on the v5 side.
 | 10 | `conversation_annotations` on no delete path — privacy leak on delete-all, `UNIQUE constraint failed` on restore into a migrated instance | **Yes** (2026-08-06) | `lib/backup/restore/delete-service.ts` — added to `clearFormat3Entities` `mainTables` (covers `deleteUserData`); `lib/database/repositories/chats.repository.ts` `delete()` — per-chat `deleteAllForChat` sweep | **Owed** — retire `system_delete_data_equivalence` → `ANNOTATION_DIVERGENCE_KEY` (v5 = 0, oracle non-zero) |
 | 11 | `.qtap` import overwrite mishandles store identity three ways | **Yes** (2026-08-06) | `lib/import/quilltap-import/import-document-stores.ts` — clear folders on overwrite, match target by **id**, preserve archive id on create | **Owed** — retire `system_import_state` → `FOLDER_CLEAR_DIVERGENCE`, `STORE_ID_PRESERVED_ON_CREATE`, `execute_folder_overwrite`, four `store_identity_*` |
 | 12 | Second-generation restore loses archived link ids, re-duplicates store rows | **Yes** (2026-08-06) | `lib/backup/restore/carried-store-rows.ts` (`makeCarriedStoreRowsResolver`) consulted by the 22a-bis replay in `lib/backup/restore/restore.ts` — carried project-less store rows skip re-ingest | **Owed** — retire `system_restore_state` dedupe arms (ruled `REPLAY_DEDUPE`) |
+| 13 | `gcOrphanedFileRow` throws on a mount index without the blobs table | **Yes** (2026-08-06) | `lib/database/repositories/doc-mount-file-links.repository.ts` — payload deletes guarded behind a `sqlite_master` existence check (`tableExistsSync`) | **Owed** (Faithful) — mirror the guard in `gc_orphaned_file_row` |
+| 15 | `reindexLinkGroupSiblings` dead code; hard-linked siblings serve stale chunks | **Yes** (2026-08-06) | `lib/database/repositories/doc-mount-file-links.repository.ts` — `queryJoined` selects + maps `l.linkGroupId` | **Owed** — retire `doc_mount_file_links_tier2_equivalence` → `CHUNK_DIVERGENCES` |
+| 16 | Dimension reconcile counts mount chunks from the wrong database | **Yes** (2026-08-06) | `lib/startup/reconcile-embedding-dimensions.ts` — `doc_mount_points` + chunk scan read from the mount-index handle; comment + unit-test DB placement corrected | **Owed** — retire `embedding_dimension_reconcile` `mountChunks == 0` tripwire |
+| 38 | Library picker lists markdown documents that 404 on attach | **Yes** (2026-08-06) | `app/api/v1/chats/[id]/files/route.ts` + `lib/chat-files-v2.ts` — serve native-text documents (no blob) as text attachments; `nativeTextAttachmentMime` in `lib/mount-index/path-utils.ts` | **Owed** (Faithful) — mirror the document-serving attach path |
+| 43 | Orphaned thumbnails never collected | **Yes** (2026-08-06) | `lib/background-jobs/maintenance/sweep-orphaned-thumbnails.ts` wired into `scheduled-maintenance.ts`; `parseThumbnailStorageKey` in `lib/files/thumbnail-utils.ts` | **Owed** (Faithful) — mirror the sweep **and** call `cleanupThumbnails` at v5's two skipped delete/overwrite sites (`api/files.rs:537`, `:1123`) |
 
-**Bugs 13–17 and 19–43 are all `No` — not yet fixed in v4** (bugs 8–12 and 18
-fixed above, this session builds on HEAD `3adefeba`). Their per-bug
-fix sites and v5 status are in
+**Bugs 13, 15, 16, 38, 43 are now fixed in v4 (2026-08-06); bugs 14, 17, 19–37,
+39–42 remain `No` — not yet fixed in v4** (bugs 8–12 and 18 fixed earlier). Their
+per-bug fix sites and v5 status are in
 [Bugs found since](#bugs-found-since--not-yet-fixed-in-v4); they are not repeated
 row-by-row here. The coordination surface, when they are taken, is these
 tripwires the v5 side must retire the day v4 converges:

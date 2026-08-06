@@ -348,8 +348,10 @@ async function clearStaleChatNonconformingChunks(
 
 /**
  * Count non-conforming chunks in the mount index DB, limited to ENABLED
- * mount points (mount point config lives in the main DB; chunks live in the
- * separate mount-index DB, so no cross-DB JOIN — ids are carried over).
+ * mount points. Both `doc_mount_points` (config) and `doc_mount_chunks` are
+ * mount-index tables, so the ENABLED filter and the chunk scan both run against
+ * the mount-index handle. Only the FAILED-status exclusion set lives in the
+ * main DB (`embedding_status`), so `mainDb` is still consulted for that alone.
  */
 async function countNonconformingMountChunks(
   mainDb: DatabaseType,
@@ -357,19 +359,20 @@ async function countNonconformingMountChunks(
   profileId: string,
 ): Promise<number> {
   try {
-    if (!tableExists(mainDb, 'doc_mount_points')) return 0
+    const { getRawMountIndexDatabase } = await import(
+      '@/lib/database/backends/sqlite/mount-index-client'
+    )
+    const mountDb = getRawMountIndexDatabase()
+    if (!mountDb || !tableExists(mountDb, 'doc_mount_points')) return 0
+
     const enabledIds = (
-      mainDb.prepare(`SELECT id FROM doc_mount_points WHERE enabled = 1`).all() as Array<{
+      mountDb.prepare(`SELECT id FROM doc_mount_points WHERE enabled = 1`).all() as Array<{
         id: string
       }>
     ).map((r) => r.id)
     if (enabledIds.length === 0) return 0
 
-    const { getRawMountIndexDatabase } = await import(
-      '@/lib/database/backends/sqlite/mount-index-client'
-    )
-    const mountDb = getRawMountIndexDatabase()
-    if (!mountDb || !tableExists(mountDb, 'doc_mount_chunks')) return 0
+    if (!tableExists(mountDb, 'doc_mount_chunks')) return 0
 
     // FAILED-status rows live in the main DB, so pull that exclusion set out
     // and apply it in memory (it is small: only deterministic failures).

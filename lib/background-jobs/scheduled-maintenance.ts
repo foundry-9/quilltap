@@ -13,7 +13,8 @@
  *  4. orphaned store children (links/folders/documents whose mount point
  *     vanished — a pre-Bug-9 non-atomic delete, or a hand-built index);
  *  5. orphaned mount-index files (belt-and-suspenders after the collapse);
- *  6. closed terminal (Ariel) PTY sessions and their transcript files.
+ *  6. closed terminal (Ariel) PTY sessions and their transcript files;
+ *  7. orphaned thumbnail-cache entries whose source file is gone.
  *
  * ## Why parent-side, not a forked-child job
  * The asset collapse and orphan sweep bottom out in `deleteWithGC`, which opens
@@ -42,6 +43,7 @@ import {
 import { cleanupFinishedJobs } from './queue-service';
 import { collapseStaleChatAssets } from './maintenance/collapse-stale-chat-assets';
 import { collapseStaleChatCaches } from './maintenance/collapse-stale-chat-caches';
+import { sweepOrphanedThumbnails } from './maintenance/sweep-orphaned-thumbnails';
 import { CLOSED_TERMINAL_RETENTION_DAYS, retentionCutoff } from './maintenance/retention-constants';
 
 const moduleLogger = logger.child({ module: 'scheduled-maintenance' });
@@ -75,6 +77,7 @@ export interface MaintenanceSweepSummary {
   orphanedFilesSwept: number;
   orphanedStoreChildrenSwept: { links: number; folders: number; documents: number };
   terminals: { rows: number; transcripts: number };
+  orphanedThumbnailsSwept: { scanned: number; deleted: number; unparseable: number };
   /** Sweeps that threw (and were swallowed so the rest could run). */
   failures: string[];
 }
@@ -169,6 +172,7 @@ export async function runScheduledMaintenance(): Promise<MaintenanceSweepSummary
     orphanedFilesSwept: 0,
     orphanedStoreChildrenSwept: { links: 0, folders: 0, documents: 0 },
     terminals: { rows: 0, transcripts: 0 },
+    orphanedThumbnailsSwept: { scanned: 0, deleted: 0, unparseable: 0 },
     failures: [],
   };
 
@@ -245,6 +249,17 @@ export async function runScheduledMaintenance(): Promise<MaintenanceSweepSummary
   } catch (error) {
     summary.failures.push('terminals');
     moduleLogger.warn('Terminal-session cleanup failed — continuing', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  // 7. Orphaned thumbnail-cache entries whose source file is gone (derived,
+  //    regenerated on demand, so deletion is always safe).
+  try {
+    summary.orphanedThumbnailsSwept = await sweepOrphanedThumbnails();
+  } catch (error) {
+    summary.failures.push('orphan-thumbnails');
+    moduleLogger.warn('Orphaned-thumbnail sweep failed — continuing', {
       error: error instanceof Error ? error.message : String(error),
     });
   }

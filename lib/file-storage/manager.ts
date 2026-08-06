@@ -482,6 +482,37 @@ class FileStorageManager {
   }
 
   /**
+   * List every storage key under a prefix (recursively).
+   *
+   * Counterpart to uploadRaw()/deleteRaw() for derived-data housekeeping — e.g.
+   * enumerating `_thumbnails/` to reap entries whose source file is gone. A
+   * missing prefix directory yields an empty list rather than throwing.
+   *
+   * @param prefix - Key prefix to match (e.g. `_thumbnails`)
+   * @param maxKeys - Optional cap on the number of keys returned
+   * @returns Matching storage keys
+   * @throws {Error} If listing fails
+   */
+  async listRaw(prefix: string, maxKeys?: number): Promise<string[]> {
+    try {
+      const backend = await this.getBackend();
+      if (!backend.getMetadata().capabilities.list || !backend.list) {
+        return [];
+      }
+      return await backend.list(prefix, maxKeys);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown listing error';
+
+      logger.error('Raw list failed', {
+        prefix,
+        error: errorMsg,
+      });
+
+      throw new Error(`Failed to list raw content under '${prefix}': ${errorMsg}`);
+    }
+  }
+
+  /**
    * Delete content at an explicit storage key
    *
    * Counterpart to uploadRaw() — deletes data at a known key.
