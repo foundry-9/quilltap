@@ -343,7 +343,7 @@ export async function generateAlmanackData(
       'embeddingPipeline',
       {
         statusByEntityType: [],
-        permanentlyFailed: 0,
+        failed: 0,
         conversationChunks: { total: 0, unembedded: 0 },
         helpDocs: { total: 0, unembedded: 0 },
         storedDimensions: [],

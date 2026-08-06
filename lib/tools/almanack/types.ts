@@ -308,7 +308,8 @@ export interface EmbeddingPipelineInfo {
     status: string;
     count: number;
   }>;
-  permanentlyFailed: number;
+  /** Rows in the FAILED terminal state — permanent for the current embedding profile. */
+  failed: number;
   conversationChunks: { total: number; unembedded: number };
   helpDocs: { total: number; unembedded: number };
   /** Distinct stored vector widths, decoded from the self-describing BLOB header. */
