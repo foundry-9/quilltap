@@ -4,9 +4,9 @@
 **Codebase**: Quilltap v4.8.0-dev (HEAD `3adefeba`)
 **Provenance**: the quilltap-v5 native port's differential harness, and its
 dogfood walks against a copy of real data
-**Status**: Bugs 1–7 plus **8 and 18** are **fixed in v4** (see [Status](#status)).
-The remaining bugs 9–17 and 19–43 are **NOT yet fixed in v4** — they are the
-defects the port has surfaced in
+**Status**: Bugs 1–7 plus **8, 9, 10, 11, 12, and 18** are **fixed in v4** (see
+[Status](#status)). The remaining bugs 13–17 and 19–43 are **NOT yet fixed in
+v4** — they are the defects the port has surfaced in
 the weeks since, each one still live in `3adefeba`. They are catalogued in
 [Bugs found since — not yet fixed in v4](#bugs-found-since--not-yet-fixed-in-v4),
 and summarised in the [Status](#status) table with a **No** in the "Fixed in
@@ -987,6 +987,15 @@ v5's `store_delete_equivalence` (7 arms) pins this both ways — v5 → 0 orphan
 v4 → the measured 2/4/3. Each arm carries a "v4 has CONVERGED — retire this
 divergence" message that fires when v4 stops leaking.
 
+**Fixed 2026-08-06.** New `lib/mount-index/delete-store-cascade.ts` runs the whole
+teardown in one mount-index transaction (chunks → links → GC'd file/document/blob
+content → folders → project *and* group links → the store row), skipping tables a
+lean instance never created; wired at the DELETE route. Group links get a
+`GroupDocMountLinksRepository.deleteByMountPointId`. The reaper lives in
+`lib/mount-index/orphan-store-reaper.ts`, is exposed as
+`DocMountFileLinksRepository.sweepOrphanedStoreChildren`, and runs at boot
+(`instrumentation.ts` Phase 3.3b) and in the daily maintenance sweep.
+
 ---
 
 ## Bug 10 — `conversation_annotations` is wiped by no delete path
@@ -1025,6 +1034,23 @@ Add `conversation_annotations` to the delete-all table list. v5 does this via
 `ANNOTATION_DIVERGENCE_KEY` in `system_delete_data_equivalence` (v5 must be 0,
 the oracle must be non-zero — v4 converging fails the test).
 
+**Fixed 2026-08-06.** Added to `clearFormat3Entities`' `mainTables`
+(`lib/backup/restore/delete-service.ts`, which covers `deleteUserData` since it
+routes through it) and a per-chat sweep via `deleteAllForChat` in
+`chats.repository.ts#delete()`.
+
+**DDL drift confirmed (out of scope, noted per the session spec).** The
+`UNIQUE("chatId","messageIndex","characterName")` constraint and the
+`FOREIGN KEY … ON DELETE CASCADE` are declared only by the migrations
+(`sqlite-initial-schema.ts` / `create-conversation-tables.ts`), not by
+`generateDDL` — which builds `conversation_annotations` from the Zod field
+metadata and expresses neither a composite UNIQUE nor a foreign key. So a
+*migrated* instance hard-fails restore on the UNIQUE and gets FK-cascade cleanup
+on chat delete, while a *fresh* (generateDDL) instance has neither — which is
+exactly why the leak-on-delete bites every instance but the restore hard-fail
+only migrated ones. `DDL.md` documents the migrated shape and stays accurate;
+reconciling `generateDDL` to emit the same constraint is a separate follow-up.
+
 ---
 
 ## Bug 11 — `.qtap` import overwrite mishandles store identity three ways
@@ -1053,7 +1079,12 @@ archive's id on create. v5 does all three, pinned by `system_import_state`'s
 `execute_folder_overwrite` arm, and the four `store_identity_*` arms — each
 fails the day v4 converges.
 
----
+**Fixed 2026-08-06** in `lib/import/quilltap-import/import-document-stores.ts`:
+the overwrite path now also `docMountFolders.deleteByMountPointId(existing.id)`;
+the target store is matched via a `byId` map; create passes `{ id: mp.id }` when
+the id is free (a `duplicate` import onto an id clash still mints a fresh id).
+Preserving ids means a re-import of the same archive now takes the (now-correct)
+overwrite path.
 
 ## Bug 12 — a second-generation restore loses archived link ids
 
@@ -1085,7 +1116,12 @@ scope (this file, "Known residue from Bug 3's placement"). v5 does exactly this
 `system_restore_state`'s dedupe arms as evidence the check is small and needs no
 phase-order change.
 
----
+**Fixed 2026-08-06.** `lib/backup/restore/carried-store-rows.ts`
+(`makeCarriedStoreRowsResolver`) is consulted by the 22a-bis replay in
+`restore.ts`: a project-less file whose archived `storageKey` is a `mount-blob:`
+key pointing at a carried blob skips re-ingest and keeps the (remapped)
+storageKey, so the archived rows restore intact at 22b–22f. No phase reorder;
+first-generation archives (non-`mount-blob:` keys) still run the replay.
 
 ## Bug 13 — `gcOrphanedFileRow` throws on a mount index without the blobs table
 
@@ -1844,9 +1880,13 @@ faithfully on the v5 side.
 | 7 | Embedding outcomes never land — mark methods no-op without a status row nobody creates; reconcile re-attempts permanently-FAILED chunks every boot | **Yes** (2026-07-28) | `lib/database/repositories/embedding-status.repository.ts` — `markAsEmbedded`/`markAsFailed` upsert (required `userId`); `lib/background-jobs/handlers/embedding-generate.ts` — `job.userId` threaded at all 13 call sites; `lib/startup/reconcile-conversation-rendering.ts` — condition (B) excludes chunks FAILED for the current default profile | Inherit the fixed semantics — the status store's mark chokepoint must upsert, and the reconcile carries the per-profile FAILED exclusion from day one; see the entry's note |
 | 8 | Corrupt `properties.json` silently overwritten with defaults on next save — six fields lost | **Yes** (2026-08-06) | `lib/database/repositories/vault-overlay/vault-readers.ts` — new `readCharacterVaultPropertiesForWrite` returns null only on `NOT_FOUND`, throws `CharacterVaultUnavailableError` on unreadable/unparseable/schema-invalid; `lib/database/repositories/vault-overlay/managed-fields.ts` — RMW seed uses it (refuse, don't seed defaults), stale `:236` comment rewritten | **Owed** — retire the `corrupt` arm pin of `characters_update_tier2_equivalence`; v4 now refuses + writes nothing, so the arm converges to plain equality |
 | 18 | Whitespace-only help file wipes the whole `help_docs` table | **Yes** (2026-08-06) | `lib/help/help-doc-sync.ts` — prune guard extended from "no file exists" to "no file has usable content while the table is non-empty" | **Owed** — mirror the guard; pinned bidirectionally by `help_doc_sync_guards_equivalence` |
+| 9 | Deleting a store leaks orphan link/folder/document rows (non-atomic, dead steps, group-links never deleted) | **Yes** (2026-08-06) | `lib/mount-index/delete-store-cascade.ts` (single-transaction cascade, group-links included) wired at `app/api/v1/mount-points/[id]/route.ts` DELETE; `lib/mount-index/orphan-store-reaper.ts` + `DocMountFileLinksRepository.sweepOrphanedStoreChildren` joined to the daily sweep (`lib/background-jobs/scheduled-maintenance.ts`) and run at boot (`instrumentation.ts` Phase 3.3b); `GroupDocMountLinksRepository.deleteByMountPointId` added | **Owed** — retire the 7 `store_delete_equivalence` arms; v4 now leaks 0 |
+| 10 | `conversation_annotations` on no delete path — privacy leak on delete-all, `UNIQUE constraint failed` on restore into a migrated instance | **Yes** (2026-08-06) | `lib/backup/restore/delete-service.ts` — added to `clearFormat3Entities` `mainTables` (covers `deleteUserData`); `lib/database/repositories/chats.repository.ts` `delete()` — per-chat `deleteAllForChat` sweep | **Owed** — retire `system_delete_data_equivalence` → `ANNOTATION_DIVERGENCE_KEY` (v5 = 0, oracle non-zero) |
+| 11 | `.qtap` import overwrite mishandles store identity three ways | **Yes** (2026-08-06) | `lib/import/quilltap-import/import-document-stores.ts` — clear folders on overwrite, match target by **id**, preserve archive id on create | **Owed** — retire `system_import_state` → `FOLDER_CLEAR_DIVERGENCE`, `STORE_ID_PRESERVED_ON_CREATE`, `execute_folder_overwrite`, four `store_identity_*` |
+| 12 | Second-generation restore loses archived link ids, re-duplicates store rows | **Yes** (2026-08-06) | `lib/backup/restore/carried-store-rows.ts` (`makeCarriedStoreRowsResolver`) consulted by the 22a-bis replay in `lib/backup/restore/restore.ts` — carried project-less store rows skip re-ingest | **Owed** — retire `system_restore_state` dedupe arms (ruled `REPLAY_DEDUPE`) |
 
-**Bugs 9–17 and 19–43 are all `No` — not yet fixed in v4** (bugs 8 and 18 fixed
-above, HEAD `3adefeba`). Their per-bug
+**Bugs 13–17 and 19–43 are all `No` — not yet fixed in v4** (bugs 8–12 and 18
+fixed above, this session builds on HEAD `3adefeba`). Their per-bug
 fix sites and v5 status are in
 [Bugs found since](#bugs-found-since--not-yet-fixed-in-v4); they are not repeated
 row-by-row here. The coordination surface, when they are taken, is these

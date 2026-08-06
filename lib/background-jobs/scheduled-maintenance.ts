@@ -10,8 +10,10 @@
  *  3. regenerable caches of stale chats (compression cache, rendered
  *     markdown/HTML, raw provider payloads, thinking traces, memory-gate
  *     debug logs) plus cold-tiering of their conversation-chunk embeddings;
- *  4. orphaned mount-index files (belt-and-suspenders after the collapse);
- *  5. closed terminal (Ariel) PTY sessions and their transcript files.
+ *  4. orphaned store children (links/folders/documents whose mount point
+ *     vanished — a pre-Bug-9 non-atomic delete, or a hand-built index);
+ *  5. orphaned mount-index files (belt-and-suspenders after the collapse);
+ *  6. closed terminal (Ariel) PTY sessions and their transcript files.
  *
  * ## Why parent-side, not a forked-child job
  * The asset collapse and orphan sweep bottom out in `deleteWithGC`, which opens
@@ -71,6 +73,7 @@ export interface MaintenanceSweepSummary {
     chunkEmbeddingsCleared: number;
   };
   orphanedFilesSwept: number;
+  orphanedStoreChildrenSwept: { links: number; folders: number; documents: number };
   terminals: { rows: number; transcripts: number };
   /** Sweeps that threw (and were swallowed so the rest could run). */
   failures: string[];
@@ -164,6 +167,7 @@ export async function runScheduledMaintenance(): Promise<MaintenanceSweepSummary
       chunkEmbeddingsCleared: 0,
     },
     orphanedFilesSwept: 0,
+    orphanedStoreChildrenSwept: { links: 0, folders: 0, documents: 0 },
     terminals: { rows: 0, transcripts: 0 },
     failures: [],
   };
@@ -210,7 +214,20 @@ export async function runScheduledMaintenance(): Promise<MaintenanceSweepSummary
     });
   }
 
-  // 4. Orphaned mount-index files — run AFTER the collapse to mop up stragglers.
+  // 4. Orphaned store children — links/folders/documents whose mount point
+  //    vanished (a pre-Bug-9 non-atomic delete, or a hand-built index). Run
+  //    BEFORE the orphaned-file sweep so a reaped link can drop its file too.
+  try {
+    summary.orphanedStoreChildrenSwept =
+      await getRepositories().docMountFileLinks.sweepOrphanedStoreChildren();
+  } catch (error) {
+    summary.failures.push('orphan-store-children');
+    moduleLogger.warn('Orphaned store-children sweep failed — continuing', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  // 5. Orphaned mount-index files — run AFTER the collapse to mop up stragglers.
   try {
     summary.orphanedFilesSwept = await getRepositories().docMountFileLinks.sweepOrphanedFiles();
   } catch (error) {
@@ -220,7 +237,7 @@ export async function runScheduledMaintenance(): Promise<MaintenanceSweepSummary
     });
   }
 
-  // 5. Closed terminal sessions + transcript files.
+  // 6. Closed terminal sessions + transcript files.
   try {
     summary.terminals = await getRepositories().terminalSessions.cleanupClosedSessions(
       retentionCutoff(CLOSED_TERMINAL_RETENTION_DAYS),

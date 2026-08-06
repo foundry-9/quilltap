@@ -34,6 +34,12 @@ async function clearFormat3Entities(): Promise<void> {
   const mainTables = [
     'chat_documents',
     'conversation_chunks',
+    // Per-message annotations. On no delete path in v4, so "delete all my data"
+    // left them behind (a privacy leak) and a restore into a migrated instance
+    // hit `UNIQUE constraint failed: conversation_annotations` (Bug 10). Cleared
+    // in bulk here — the UNIQUE(chatId,messageIndex,characterName) exists only on
+    // migrated instances, so the leak-on-delete affects every instance.
+    'conversation_annotations',
     'tfidf_vocabularies',
     'embedding_status',
     'vector_entries',

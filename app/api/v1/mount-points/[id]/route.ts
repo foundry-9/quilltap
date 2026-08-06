@@ -31,6 +31,7 @@ import { deleteFolder, moveFolder } from '@/lib/mount-index/folder-ops';
 import { DatabaseStoreError } from '@/lib/mount-index/database-store';
 import { fileOpStatus } from '@/lib/mount-index/file-op-status';
 import { deriveMountCapabilities } from '@/lib/mount-index/capabilities';
+import { deleteStoreCascade } from '@/lib/mount-index/delete-store-cascade';
 
 // ============================================================================
 // Schemas
@@ -181,35 +182,23 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
         });
       });
 
-      // Delete associated chunks first
-      const chunksDeleted = await repos.docMountChunks.deleteByMountPointId(id);
-
-      // Delete associated files
-      const filesDeleted = await repos.docMountFiles.deleteByMountPointId(id);
-
-      // Delete DB-backed document bodies and blobs (no-ops on filesystem mounts).
-      const documentsDeleted = await repos.docMountDocuments.deleteByMountPointId(id);
-      const blobsDeleted = await repos.docMountBlobs.deleteByMountPointId(id);
-
-      // Delete folder hierarchy. Folder rows don't cascade from any other delete
-      // above (no FK to mount points or file_links), so they'd otherwise leak.
-      await repos.docMountFolders.deleteByMountPointId(id);
-
-      // Delete project links
-      const links = await repos.projectDocMountLinks.findByMountPointId(id);
-      for (const link of links) {
-        await repos.projectDocMountLinks.delete(link.id);
-      }
-
-      // Delete the mount point itself
-      await repos.docMountPoints.delete(id);
+      // Tear the store down in a single mount-index transaction: chunks, links,
+      // GC'd file/document/blob content, folders, and BOTH project and group
+      // links, then the mount-point row — a mid-cascade failure rolls the whole
+      // thing back rather than minting an orphan (Bug 9).
+      const deleted = deleteStoreCascade(id);
 
       logger.info('[Mount Points v1] Mount point deleted', {
         mountPointId: id,
         name: existing.name,
-        chunksDeleted,
-        filesDeleted,
-        linksDeleted: links.length,
+        chunksDeleted: deleted.chunks,
+        linksDeleted: deleted.links,
+        filesGC: deleted.files,
+        documentsDeleted: deleted.documents,
+        blobsDeleted: deleted.blobs,
+        foldersDeleted: deleted.folders,
+        projectLinksDeleted: deleted.projectLinks,
+        groupLinksDeleted: deleted.groupLinks,
         userId: user.id,
       });
 

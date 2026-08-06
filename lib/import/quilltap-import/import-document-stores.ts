@@ -45,7 +45,11 @@ export async function importDocumentStores(
   const idMap = idMaps.mountPoints;
 
   const existingStores = await globalRepos.docMountPoints.findAll();
-  const byName = new Map(existingStores.map(s => [s.name.toLowerCase(), s]));
+  // Identity is the store id, not its name (Bug 11 fix 2). Matching by name
+  // silently redirected an overwrite onto an unrelated store that happened to
+  // inherit the old name after a rename; matching by id targets the store the
+  // archive actually came from.
+  const byId = new Map(existingStores.map(s => [s.id, s]));
   // Store names are one case-insensitive namespace; track every name we see
   // (pre-existing + created this run) so neither a clash with an existing
   // store nor a duplicate inside the import payload mints a colliding name.
@@ -53,18 +57,21 @@ export async function importDocumentStores(
 
   for (const mp of mountPoints) {
     try {
-      const existing = byName.get(mp.name.toLowerCase());
+      const existing = byId.get(mp.id);
       if (existing) {
         if (options.conflictStrategy === 'skip') {
           idMap.set(mp.id, existing.id);
           continue;
         }
         if (options.conflictStrategy === 'overwrite') {
-          // Drop existing documents, blobs, files, chunks before replacing.
+          // Drop existing documents, blobs, files, chunks, AND folders before
+          // replacing. Folders were left standing pre-fix, so an identical
+          // re-import kept stale husks and logged UNIQUE warnings (Bug 11 fix 1).
           await globalRepos.docMountDocuments.deleteByMountPointId(existing.id);
           await globalRepos.docMountBlobs.deleteByMountPointId(existing.id);
           await globalRepos.docMountChunks.deleteByMountPointId(existing.id);
           await globalRepos.docMountFiles.deleteByMountPointId(existing.id);
+          await globalRepos.docMountFolders.deleteByMountPointId(existing.id);
           await globalRepos.docMountPoints.update(existing.id, {
             name: mp.name,
             basePath: mp.mountType === 'database' ? '' : mp.basePath,
@@ -78,7 +85,8 @@ export async function importDocumentStores(
           counts.mountPoints++;
           continue;
         }
-        // 'duplicate' — fall through to create a freshly-named mount point.
+        // 'duplicate' — fall through to create a freshly-named, freshly-id'd
+        // mount point (the archive id is already taken, so it can't be reused).
       }
 
       const name = nextUniqueMountPointName(
@@ -86,23 +94,31 @@ export async function importDocumentStores(
         existing && options.conflictStrategy === 'duplicate' ? `${mp.name} (imported)` : mp.name
       );
       takenNames.add(name);
-      const created = await globalRepos.docMountPoints.create({
-        name,
-        basePath: mp.mountType === 'database' ? '' : mp.basePath,
-        mountType: mp.mountType,
-        storeType: mp.storeType ?? 'documents',
-        includePatterns: mp.includePatterns,
-        excludePatterns: mp.excludePatterns,
-        enabled: mp.enabled,
-        lastScannedAt: null,
-        scanStatus: 'idle',
-        lastScanError: null,
-        conversionStatus: 'idle',
-        conversionError: null,
-        fileCount: 0,
-        chunkCount: 0,
-        totalSizeBytes: 0,
-      });
+      // Preserve the archive's store id on create (Bug 11 fix 3) so a later
+      // re-import is recognised as an overwrite of this store rather than
+      // stranger-cloned every time. Only when the id is free — a 'duplicate'
+      // import onto an id clash must mint a fresh id instead.
+      const preserveArchiveId = !existing;
+      const created = await globalRepos.docMountPoints.create(
+        {
+          name,
+          basePath: mp.mountType === 'database' ? '' : mp.basePath,
+          mountType: mp.mountType,
+          storeType: mp.storeType ?? 'documents',
+          includePatterns: mp.includePatterns,
+          excludePatterns: mp.excludePatterns,
+          enabled: mp.enabled,
+          lastScannedAt: null,
+          scanStatus: 'idle',
+          lastScanError: null,
+          conversionStatus: 'idle',
+          conversionError: null,
+          fileCount: 0,
+          chunkCount: 0,
+          totalSizeBytes: 0,
+        },
+        preserveArchiveId ? { id: mp.id } : undefined
+      );
       idMap.set(mp.id, created.id);
       counts.mountPoints++;
     } catch (error) {

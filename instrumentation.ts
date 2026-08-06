@@ -672,6 +672,24 @@ export async function register() {
       }
 
       // ================================================================
+      // PHASE 3.3b: Reap orphaned doc-store children (Bug 9)
+      // ================================================================
+      // Sweep links/folders/documents whose mount point no longer exists —
+      // orphans a pre-fix non-atomic store delete (or a hand-built index) left
+      // behind. Read connections keep FKs off, so these sit silent until a
+      // backup carries them into a restore that fails with a FK error. Cheap,
+      // synchronous, and idempotent; the daily maintenance sweep repeats it.
+      try {
+        const { getRepositories } = await import('./lib/repositories/factory');
+        await getRepositories().docMountFileLinks.sweepOrphanedStoreChildren();
+      } catch (reapError) {
+        logger.warn('Error reaping orphaned doc-store children, continuing startup', {
+          context: 'instrumentation.register',
+          error: reapError instanceof Error ? reapError.message : String(reapError),
+        });
+      }
+
+      // ================================================================
       // PHASE 3.4a: Project Store Backfill
       // ================================================================
       // For every project, ensure its official document store is populated

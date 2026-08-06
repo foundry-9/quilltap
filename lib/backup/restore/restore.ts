@@ -15,6 +15,7 @@ import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { writeUserUploadToMountStore } from '@/lib/file-storage/user-uploads-bridge';
+import { makeCarriedStoreRowsResolver } from './carried-store-rows';
 import { getNpmPluginsDir, getThemesDir } from '@/lib/paths';
 import { isLLMLogsDegraded } from '@/lib/database/backends/sqlite/llm-logs-client';
 import { rawQuery } from '@/lib/database/manager';
@@ -406,10 +407,50 @@ export async function restore(
     // the bridge, then record the row.
     // In new-account mode, file IDs are remapped but on-disk filenames use original IDs.
     // Use parsedData.files (original) for disk lookup, data.files (remapped) for DB records.
+    //
+    // Bug 12: a second-generation archive (a backup of an instance that was
+    // itself restored) already carries the doc-store rows (file/link/blob) for
+    // a project-less user file — its storageKey points at an archived mount
+    // blob that 22c–22f restore verbatim, and its link already sits at
+    // `restored/<name>`. Re-ingesting it below would mint a *new* blob + link
+    // at that same path (the replay gets there first), so 22d's archived link
+    // then collides on UNIQUE(mountPointId, relativePath) and loses its id, and
+    // the store rows duplicate one more copy per generation. So detect the
+    // carried rows and skip the replay: keep the (remapped) archived storageKey
+    // and let the archived rows restore intact. First-generation archives are
+    // unaffected — their files' bytes aren't yet in a mount blob, so the
+    // storageKey isn't a `mount-blob:` key and the replay runs as before.
+    const carriedStorageKeyFor = makeCarriedStoreRowsResolver(
+      parsedData.docMountBlobs || [],
+      data.docMountBlobs || [],
+      parsedData.docMountPoints || [],
+      data.docMountPoints || [],
+    );
+
     for (let i = 0; i < data.files.length; i++) {
       const file = data.files[i];
       const originalFile = parsedData.files[i]; // original IDs for disk lookup
       try {
+        // Carried store rows (Bug 12): skip the replay, preserve the archived
+        // storageKey. Project-bound files are handled separately below (their
+        // duplication is orthogonal, per found-bugs), so this only fires for
+        // project-less files.
+        const carriedStorageKey = !file.projectId
+          ? carriedStorageKeyFor(originalFile.storageKey)
+          : null;
+        if (carriedStorageKey) {
+          const { userId, createdAt, updatedAt, storageKey, ...fileData } = file as typeof file & Record<string, unknown>;
+          delete (fileData as Record<string, unknown>).s3Key;
+          delete (fileData as Record<string, unknown>).s3Bucket;
+          delete (fileData as Record<string, unknown>).mountPointId;
+          await repos.files.create(
+            { ...fileData, storageKey: carriedStorageKey },
+            { id: file.id }
+          );
+          filesRestored++;
+          continue;
+        }
+
         const fileBuffer = await getFileFromExtractedBackup(rootPath, originalFile, data.manifest?.backupFormat);
         if (fileBuffer) {
           // Project-bound files restore into the project mount (via FSM →

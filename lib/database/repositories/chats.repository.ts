@@ -336,6 +336,20 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
           });
         }
 
+        // Sweep this conversation's per-message annotations. They live on no
+        // FK cascade, so without this a deleted chat leaks its annotation rows
+        // — and a later restore of a migrated instance collides on the
+        // UNIQUE(chatId, messageIndex, characterName) constraint (Bug 10).
+        try {
+          const { getRepositories } = await import('@/lib/repositories/factory');
+          await getRepositories().conversationAnnotations.deleteAllForChat(id);
+        } catch (error) {
+          logger.warn('Failed to delete conversation annotations for chat', {
+            chatId: id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+
         // Sweep the conversation's summary file out of each participant vault.
         if (syncVaults && participantCharacterIds.length > 0) {
           try {

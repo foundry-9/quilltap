@@ -1368,7 +1368,7 @@
       "required": ["id", "name", "basePath", "mountType", "includePatterns", "excludePatterns", "enabled"],
       "additionalProperties": false,
       "properties": {
-        "id": { "$ref": "#/$defs/UUID" },
+        "id": { "allOf": [{ "$ref": "#/$defs/UUID" }], "description": "Durable store identity. Import preserves this id on create and matches an overwrite by it (not by name), so re-importing the same archive is recognised as an update of the same store rather than a stranger clone." },
         "name": { "type": "string", "minLength": 1 },
         "basePath": { "type": "string" },
         "mountType": { "enum": ["filesystem", "obsidian", "database"] },

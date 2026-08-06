@@ -34,6 +34,7 @@ import { generateDDL, extractSchemaMetadata } from '../schema-translator';
 import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
 import { ensureLinkNocaseUniqueIndex, ensureLinkGroupColumn } from './mount-index-case-repair';
 import { policyFromContent, DEFAULT_DOCUMENT_POLICY } from '@/lib/doc-edit/document-policy';
+import { reapOrphanedStoreChildren, type OrphanedStoreChildrenSwept } from '@/lib/mount-index/orphan-store-reaper';
 
 // Minimal subset of better-sqlite3's Database that the inline folder helper
 // uses. Avoids dragging the type into every link* method signature.
@@ -1254,6 +1255,40 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
       'Error sweeping orphaned files',
       {},
       0
+    );
+  }
+
+  /**
+   * Reaper for store children stranded when their mount point vanished — the
+   * orphans a pre-Bug-9 non-atomic store delete (or a hand-built index) minted.
+   * Read connections keep foreign keys off, so these `doc_mount_file_links` /
+   * `doc_mount_folders` / `doc_mount_documents` rows sit silent until a backup
+   * carries them into a restore where constraints are live, which then fails
+   * with `FOREIGN KEY constraint failed`. Runs at boot and joined to the daily
+   * maintenance sweep.
+   *
+   * Healthy rows (whose mount point still exists) are untouched. Documents are
+   * keyed by fileId, not mountPointId, so they are reaped once their file has
+   * no surviving link — which the link reap above may have just caused.
+   */
+  async sweepOrphanedStoreChildren(): Promise<OrphanedStoreChildrenSwept> {
+    return this.safeQuery(
+      async () => {
+        const db = getRawMountIndexDatabase();
+        if (!db) return { links: 0, folders: 0, documents: 0 };
+        await this.getCollection();
+
+        const swept = reapOrphanedStoreChildren(db);
+        if (swept.links > 0 || swept.folders > 0 || swept.documents > 0) {
+          logger.info('Swept orphaned doc-store children', swept);
+        } else {
+          logger.debug('Swept orphaned doc-store children (none found)');
+        }
+        return swept;
+      },
+      'Error sweeping orphaned store children',
+      {},
+      { links: 0, folders: 0, documents: 0 }
     );
   }
 
