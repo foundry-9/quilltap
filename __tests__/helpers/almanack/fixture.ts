@@ -331,10 +331,10 @@ export function makeAlmanackFixture(
     },
     embeddingPipeline: {
       statusByEntityType: [
-        { entityType: 'memory', status: 'COMPLETED', count: 31_900 },
-        { entityType: 'memory', status: 'PERMANENTLY_FAILED', count: 156 },
+        { entityType: 'memory', status: 'EMBEDDED', count: 31_900 },
+        { entityType: 'memory', status: 'FAILED', count: 156 },
       ],
-      permanentlyFailed: 156,
+      failed: 156,
       conversationChunks: { total: 9_000, unembedded: 40 },
       helpDocs: { total: 120, unembedded: 0 },
       storedDimensions: [

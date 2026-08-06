@@ -4,9 +4,9 @@
 **Codebase**: Quilltap v4.8.0-dev (HEAD `3adefeba`)
 **Provenance**: the quilltap-v5 native port's differential harness, and its
 dogfood walks against a copy of real data
-**Status**: Bugs **1–18** plus **26, 38, and 43** are **fixed in v4** — each
+**Status**: Bugs **1–21** plus **26, 38, and 43** are **fixed in v4** — each
 fixed bug's section below carries a **FIXED in v4** marker (see
-[Status](#status)). The remaining bugs **19–25, 27–37, and 39–42** are **NOT yet
+[Status](#status)). The remaining bugs **22–25, 27–37, and 39–42** are **NOT yet
 fixed in v4** — they are the defects the port has surfaced in the weeks since.
 They are catalogued in
 [Bugs found since — not yet fixed in v4](#bugs-found-since--not-yet-fixed-in-v4),
@@ -1386,6 +1386,16 @@ reproduces faithfully, pinned bidirectionally by
 
 ## Bug 19 — the `permanentlyFailed` embedding census is structurally always zero
 
+**FIXED in v4 (2026-08-06)** — `collectEmbeddingPipeline`
+(`lib/tools/almanack/phase3-ledgers.ts`) now filters `status === 'FAILED'` (the
+real terminal state) instead of the never-stored `'PERMANENTLY_FAILED'`. The
+cell/label is renamed from "Permanently failed rows" to "Failed rows" (noted as
+permanent for the current embedding profile), and the type field
+`EmbeddingPipelineInfo.permanentlyFailed` → `failed`. Pinned by
+`__tests__/unit/lib/tools/almanack/ledgers.test.ts` (real in-memory SQLite:
+FAILED rows are counted, PENDING/EMBEDDED are not). **Faithful** — v5 reproduces
+the always-zero cell, so the mirror is owed the same round.
+
 **Severity: Low** (a broken diagnostic, not user data).
 
 ### Root cause
@@ -1403,6 +1413,16 @@ Filter on a value the enum can hold (or drop the census). Worth a v4-side look.
 ---
 
 ## Bug 20 — Almanack "Cast sizes" histogram groups by the raw JSON column
+
+**FIXED in v4 (2026-08-06)** — `collectChatBreakdown`
+(`lib/tools/almanack/phase3-ledgers.ts`) now writes
+`GROUP BY json_array_length("participants")` and the matching `ORDER BY`, so the
+histogram rolls up by cast size. Pinned by
+`__tests__/unit/lib/tools/almanack/ledgers.test.ts` →
+`participant_histogram_rolls_up_by_cast_size` (real in-memory SQLite: three
+chats with the same cast size but different casts fold into one row). v5's
+`reconcile_ledger_divergences` self-retires now that v4's histogram is no longer
+per-cast.
 
 **Severity: Low** (dogfood #67). Pinned.
 
@@ -1432,6 +1452,18 @@ self-retires when v4's histogram is no longer per-cast (unit test
 ---
 
 ## Bug 21 — Almanack wardrobe-permission counts under-report
+
+**FIXED in v4 (2026-08-06)** — `collectCharacterBreakdown`
+(`lib/tools/almanack/phase3-ledgers.ts`) now counts the **effective** permission
+`"canDressThemselves" IS NOT 0` / `"canCreateOutfits" IS NOT 0`, matching the
+runtime null-safe check (`!== false`: NULL and 1 both mean allowed, only an
+explicit 0 denies). **Decision taken:** count the effective permission rather
+than keep explicit opt-in — the census should reflect what the runtime actually
+permits, and it now agrees with `pseudo-tool.service.ts:124` and with v5. The
+Core-whisper-override count is left untouched (genuinely explicit-only). Pinned
+by `__tests__/unit/lib/tools/almanack/ledgers.test.ts` →
+`dress_outfit_counts_are_effective_permission` (real in-memory SQLite: NULL and
+1 count, 0 does not). v5's `reconcile_ledger_divergences` self-retires.
 
 **Severity: Low** (dogfood #68). Pinned.
 
@@ -2044,8 +2076,8 @@ faithfully on the v5 side.
 | 29 | User-initiated tool card wears the last speaker's face | **Yes** (2026-08-06) | `app/salon/[id]/group-tool-messages.ts` — `resolveToolRowAttributionMessage` heads a `initiatedBy: 'user'` TOOL row as the operator (USER row), suppressing the positional borrow; character rows unchanged | **Owed** (Faithful) — mirror at `chat-view-model.ts::resolveToolAvatar` |
 | 30 | User-initiated private run renders "whispered to unknown" | **Yes** (2026-08-06) | `app/salon/[id]/whisper-visibility.ts` — `resolveWhisperTargetLabel` resolves the operator's own userId to "you"; threaded as `currentUserId` through `SalonView` → `VirtualizedMessageList` → `MessageRow` | **Owed** (Faithful) — mirror at `message-row.ts:490` |
 
-**Bugs 13, 15, 16, 28, 29, 30, 38, 43 are now fixed in v4 (2026-08-06); bugs 14,
-17, 19–27, 31–37, 39–42 remain `No` — not yet fixed in v4** (bugs 8–12 and 18
+**Bugs 13–21, 26, 28, 29, 30, 38, and 43 are now fixed in v4 (2026-08-06); bugs
+22–25, 27, 31–37, 39–42 remain `No` — not yet fixed in v4** (bugs 8–12 and 18
 fixed earlier). Their
 per-bug fix sites and v5 status are in
 [Bugs found since](#bugs-found-since--not-yet-fixed-in-v4); they are not repeated
