@@ -1346,6 +1346,7 @@ export function SalonView({ chatId }: SalonViewProps) {
           getFirstCharacter={participantsWithImpersonation.getFirstCharacter}
           getMessageAvatar={getMessageAvatar}
           participantNames={participantNames}
+          currentUserId={chat?.user?.id ?? null}
           userParticipantIdSet={userParticipantIdSet}
           isDangerousChat={isChatActiveDangerous(chat)}
           showThinking={chat?.showThinking ?? chatSettings?.thinkingDisplay?.defaultVisible ?? true}

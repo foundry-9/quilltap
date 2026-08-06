@@ -38,6 +38,20 @@ describe('resolveAnnouncerName', () => {
     expect(resolveAnnouncerName(undefined, NAMES)).toBeNull()
     expect(resolveAnnouncerName({ kind: 'custom', displayName: '   ' }, NAMES)).toBeNull()
   })
+
+  it('falls back to the staff display name when only a systemSender is present', () => {
+    // A `staff`-mode ad-hoc announcement carries no customAnnouncer — it must
+    // still reach the model named, not as an anonymous user turn (Bug 28).
+    expect(resolveAnnouncerName(null, NAMES, 'host')).toBe('The Host')
+    expect(resolveAnnouncerName(null, NAMES, 'suparna')).toBe('Suparṇā')
+    expect(resolveAnnouncerName(undefined, NAMES, 'prospero')).toBe('Prospero')
+  })
+
+  it('prefers customAnnouncer over systemSender when both are present', () => {
+    expect(resolveAnnouncerName({ kind: 'custom', displayName: 'The Narrator' }, NAMES, 'host')).toBe(
+      'The Narrator',
+    )
+  })
 })
 
 describe('collectAnnouncerCharacterIds', () => {
@@ -71,9 +85,47 @@ describe('attributeAdhocAnnouncements', () => {
   })
 
   it('leaves messages without an announcer untouched', () => {
-    // Staff name themselves in their prose; participants are tagged elsewhere.
+    // Participants are tagged elsewhere; a bare message has no speaker to name.
     const input = [{ content: 'Prospero opens his ledger.' }, { content: 'hi', customAnnouncer: null }]
     expect(attributeAdhocAnnouncements(input, NAMES)).toEqual(input)
+  })
+
+  it('tags a staff-signed ad-hoc announcement with the staff display name', () => {
+    const out = attributeAdhocAnnouncements(
+      [
+        { content: 'The house lights dim.', systemSender: 'host', systemKind: 'announcement' },
+        { content: 'A letter arrives.', systemSender: 'suparna', systemKind: 'announcement' },
+      ],
+      NAMES,
+    )
+    expect(out[0].content).toBe('[The Host] The house lights dim.')
+    expect(out[1].content).toBe('[Suparṇā] A letter arrives.')
+  })
+
+  it('does not tag ordinary staff whispers that merely carry a systemSender', () => {
+    // Only systemKind === 'announcement' takes the systemSender fallback; a
+    // Host nudge or image notice names itself in its own prose.
+    const input = [
+      { content: 'The Host summons Ariel.', systemSender: 'host', systemKind: 'nudge' },
+      { content: 'An image is ready.', systemSender: 'lantern', systemKind: 'image-generated' },
+    ]
+    expect(attributeAdhocAnnouncements(input, NAMES)).toEqual(input)
+  })
+
+  it('prefixes opaqueContent alongside content so the opaque-anywhere LLM copy is named too', () => {
+    const [msg] = attributeAdhocAnnouncements(
+      [
+        {
+          content: 'The Host, resplendent, raises a glass.',
+          opaqueContent: 'raises a glass.',
+          systemSender: 'host',
+          systemKind: 'announcement',
+        },
+      ],
+      NAMES,
+    )
+    expect(msg.content).toBe('[The Host] The Host, resplendent, raises a glass.')
+    expect(msg.opaqueContent).toBe('[The Host] raises a glass.')
   })
 
   it('leaves an unresolvable character announcement exactly as it was', () => {

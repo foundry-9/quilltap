@@ -15,6 +15,7 @@ import {
 import { AnnouncementChip, AnnouncementBarContents } from './AnnouncementChip'
 import { CourierBubble } from './CourierBubble'
 import { buildInterleavedLayout, resolveReasoningSegments } from '../intersperse-reasoning'
+import { resolveWhisperTargetLabel } from '../whisper-visibility'
 import { ThinkingBlock } from '@/components/chat/ThinkingBlock'
 import { MessageDesktopAvatar } from './message-row/MessageDesktopAvatar'
 import { MessageActionBar } from './message-row/MessageActionBar'
@@ -100,6 +101,9 @@ interface MessageRowProps {
   onReattribute?: (messageId: string) => void
   /** Mapping of participant IDs to display names for whisper labels */
   participantNames?: Record<string, string>
+  /** The operator's own userId — a private user-initiated run whispers to it,
+   * so the whisper label resolves it to "you" rather than "unknown" (Bug 30). */
+  currentUserId?: string | null
   /** Whether this message is a whisper being shown via "show all" and the user is not sender/target */
   isOverheardWhisper?: boolean
   /** Whether the Concierge has flagged this chat as dangerous */
@@ -168,6 +172,7 @@ function MessageRowInner({
   onHandleContinue,
   onReattribute,
   participantNames,
+  currentUserId,
   isOverheardWhisper = false,
   isDangerousChat = false,
   isSystemMessageCollapsed = false,
@@ -335,7 +340,7 @@ function MessageRowInner({
               {isWhisper && (
                 <div className="qt-chat-whisper-label">
                   whispered to {message.targetParticipantIds!.map(
-                    id => participantNames?.[id] || 'unknown'
+                    id => resolveWhisperTargetLabel(id, participantNames, currentUserId)
                   ).join(', ')}
                 </div>
               )}
@@ -589,6 +594,7 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
   // Whisper props
   if (prev.isOverheardWhisper !== next.isOverheardWhisper) return false
   if (prev.participantNames !== next.participantNames) return false
+  if (prev.currentUserId !== next.currentUserId) return false
 
   // Danger state
   if (prev.isDangerousChat !== next.isDangerousChat) return false

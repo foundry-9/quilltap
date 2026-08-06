@@ -1605,6 +1605,18 @@ waits for the v4 decision (covered by `chat_cast_routes_equivalence`).
 
 **Severity: Medium.** Ruled a bug in **both** apps (2026-08-02).
 
+**FIXED in v4 (2026-08-06)** — `resolveAnnouncerName`
+(`lib/chat/context/announcement-attribution.ts`) now falls back to the message's
+`systemSender`, resolved through `staffDisplayName`
+(`lib/chat/staff-display-names.ts`), when no `customAnnouncer` is present, and
+emits the same `[Name] ` prefix. The fallback is gated to `systemKind ===
+'announcement'` inside `attributeAdhocAnnouncements` so ordinary Staff whispers
+(which also carry a `systemSender` but name themselves in their prose) are not
+double-tagged, and the prefix is applied to `opaqueContent` as well so it
+survives the opaque-anywhere body swap in `normalizeWhisperRoles`. Pinned by
+`announcement-attribution.test.ts`. **Both-apps bug:** v5's `resolveAnnouncerName`
+must be *fixed* in the same round, not merely mirrored.
+
 ### Symptom
 
 An ad-hoc announcement signed as the Host / Suparṇā reaches the LLM as a bare
@@ -1635,6 +1647,14 @@ mirrors this exactly and must move in the same round.
 
 **Severity: Medium.**
 
+**FIXED in v4 (2026-08-06)** — the positional borrow is extracted into
+`resolveToolRowAttributionMessage` (`app/salon/[id]/group-tool-messages.ts`) and
+now heads a TOOL row with `initiatedBy: 'user'` as the operator (resolved as a
+USER row) instead of borrowing the nearest preceding assistant's participant;
+character-initiated rows keep the borrow. `VirtualizedMessageList.tsx` calls the
+helper. Pinned by `group-tool-messages.test.ts`. v5 obligation: same-round
+mirror at `chat-view-model.ts::resolveToolAvatar`.
+
 ### Symptom
 
 Run an RNG/tool from the composer. Its own line correctly reads "You ran rng.",
@@ -1662,6 +1682,15 @@ verbatim port; the two sides move together.
 ## Bug 30 — "whispered to unknown" for a user-initiated private run
 
 **Severity: Low.**
+
+**FIXED in v4 (2026-08-06)** — the whisper label resolves through
+`resolveWhisperTargetLabel` (`app/salon/[id]/whisper-visibility.ts`), which
+renders the operator's own userId as "you" (a participant id resolves to its
+name; anything else keeps the "unknown" fallback). The operator's userId is
+threaded as `currentUserId` through `SalonView` → `VirtualizedMessageList` →
+`MessageRow`. The route's userId targeting is unchanged. Pinned by
+`whisper-visibility.test.ts`. v5 obligation: same-round mirror at
+`message-row.ts:490`.
 
 ### Root cause
 
@@ -2011,9 +2040,13 @@ faithfully on the v5 side.
 | 16 | Dimension reconcile counts mount chunks from the wrong database | **Yes** (2026-08-06) | `lib/startup/reconcile-embedding-dimensions.ts` — `doc_mount_points` + chunk scan read from the mount-index handle; comment + unit-test DB placement corrected | **Owed** — retire `embedding_dimension_reconcile` `mountChunks == 0` tripwire |
 | 38 | Library picker lists markdown documents that 404 on attach | **Yes** (2026-08-06) | `app/api/v1/chats/[id]/files/route.ts` + `lib/chat-files-v2.ts` — serve native-text documents (no blob) as text attachments; `nativeTextAttachmentMime` in `lib/mount-index/path-utils.ts` | **Owed** (Faithful) — mirror the document-serving attach path |
 | 43 | Orphaned thumbnails never collected | **Yes** (2026-08-06) | `lib/background-jobs/maintenance/sweep-orphaned-thumbnails.ts` wired into `scheduled-maintenance.ts`; `parseThumbnailStorageKey` in `lib/files/thumbnail-utils.ts` | **Owed** (Faithful) — mirror the sweep **and** call `cleanupThumbnails` at v5's two skipped delete/overwrite sites (`api/files.rs:537`, `:1123`) |
+| 28 | Staff-signed ad-hoc announcement reaches the model anonymous | **Yes** (2026-08-06) | `lib/chat/context/announcement-attribution.ts` — `resolveAnnouncerName` falls back to `systemSender` (via `staffDisplayName`) when no `customAnnouncer`, gated to `systemKind === 'announcement'`; prefix also applied to `opaqueContent` | **Owed** (Faithful, both-apps) — this is a bug in v5 too; fix `resolveAnnouncerName` there in the same round, not merely mirror it |
+| 29 | User-initiated tool card wears the last speaker's face | **Yes** (2026-08-06) | `app/salon/[id]/group-tool-messages.ts` — `resolveToolRowAttributionMessage` heads a `initiatedBy: 'user'` TOOL row as the operator (USER row), suppressing the positional borrow; character rows unchanged | **Owed** (Faithful) — mirror at `chat-view-model.ts::resolveToolAvatar` |
+| 30 | User-initiated private run renders "whispered to unknown" | **Yes** (2026-08-06) | `app/salon/[id]/whisper-visibility.ts` — `resolveWhisperTargetLabel` resolves the operator's own userId to "you"; threaded as `currentUserId` through `SalonView` → `VirtualizedMessageList` → `MessageRow` | **Owed** (Faithful) — mirror at `message-row.ts:490` |
 
-**Bugs 13, 15, 16, 38, 43 are now fixed in v4 (2026-08-06); bugs 14, 17, 19–37,
-39–42 remain `No` — not yet fixed in v4** (bugs 8–12 and 18 fixed earlier). Their
+**Bugs 13, 15, 16, 28, 29, 30, 38, 43 are now fixed in v4 (2026-08-06); bugs 14,
+17, 19–27, 31–37, 39–42 remain `No` — not yet fixed in v4** (bugs 8–12 and 18
+fixed earlier). Their
 per-bug fix sites and v5 status are in
 [Bugs found since](#bugs-found-since--not-yet-fixed-in-v4); they are not repeated
 row-by-row here. The coordination surface, when they are taken, is these

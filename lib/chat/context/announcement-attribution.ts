@@ -23,6 +23,8 @@
  * so it reads as one convention rather than a second dialect.
  */
 
+import { staffDisplayName } from '@/lib/chat/staff-display-names'
+
 /** The `customAnnouncer` column's shape, structural so callers stay decoupled. */
 export interface CustomAnnouncer {
   kind: 'character' | 'custom'
@@ -32,7 +34,10 @@ export interface CustomAnnouncer {
 
 export interface AnnouncerAttributable {
   content?: string
+  opaqueContent?: string | null
   customAnnouncer?: CustomAnnouncer | null
+  systemSender?: string | null
+  systemKind?: string | null
 }
 
 /**
@@ -41,19 +46,32 @@ export interface AnnouncerAttributable {
  * A `character` announcer whose id resolves to nothing — deleted since the
  * announcement was posted — returns null rather than a placeholder: a wrong or
  * invented name is worse than no name, because the model treats a name as fact.
+ *
+ * When no `customAnnouncer` is present the announcement was signed as Staff
+ * (the Insert Announcement dialog's `staff` mode writes a `systemSender` and no
+ * `customAnnouncer`). Those still need a speaker: an operator-authored line
+ * signed as the Host is not prose the Host wrote, so it carries no self-naming,
+ * and without a fallback it reaches the model as an anonymous `user` turn. Fall
+ * back to the `systemSender`, resolved through the single staff-name table.
  */
 export function resolveAnnouncerName(
   announcer: CustomAnnouncer | null | undefined,
   characterNamesById: ReadonlyMap<string, string>,
+  systemSender?: string | null,
 ): string | null {
-  if (!announcer) return null
-
-  if (announcer.kind === 'character') {
-    if (!announcer.characterId) return null
-    return characterNamesById.get(announcer.characterId)?.trim() || null
+  if (announcer) {
+    if (announcer.kind === 'character') {
+      if (!announcer.characterId) return null
+      return characterNamesById.get(announcer.characterId)?.trim() || null
+    }
+    return announcer.displayName?.trim() || null
   }
 
-  return announcer.displayName?.trim() || null
+  if (systemSender) {
+    return staffDisplayName(systemSender).trim() || null
+  }
+
+  return null
 }
 
 /** Character ids an announcement references, for a single up-front name lookup. */
@@ -72,10 +90,18 @@ export function collectAnnouncerCharacterIds(
 /**
  * Prefix each ad-hoc announcement's body with its speaker.
  *
- * Messages without a `customAnnouncer` pass through untouched — Staff
- * announcements carry their identity in their prose already, and participant
- * messages are attributed by the multi-character path. An announcer that can't
- * be named also passes through unchanged.
+ * A `customAnnouncer` (character/custom mode) names the speaker directly. A
+ * `staff`-mode announcement carries a `systemSender` instead — but only ad-hoc
+ * announcements (`systemKind === 'announcement'`) take that fallback: ordinary
+ * Staff whispers (image notices, tool bubbles, memory recalls) also carry a
+ * `systemSender`, and they name themselves in their own prose, so prefixing
+ * them here would double-tag every one. A message with neither field, and an
+ * announcer that can't be named, both pass through unchanged.
+ *
+ * The prefix lands on `opaqueContent` too when present: an opaque-anywhere chat
+ * swaps that persona-free body into the LLM context in place of `content`
+ * (`normalizeWhisperRoles`), so tagging only `content` would leave the model's
+ * copy anonymous in exactly that mode.
  *
  * Pure: no repository access, so the name map is the caller's problem and this
  * stays trivially testable.
@@ -85,13 +111,19 @@ export function attributeAdhocAnnouncements<T extends AnnouncerAttributable>(
   characterNamesById: ReadonlyMap<string, string>,
 ): T[] {
   return messages.map(m => {
-    const name = resolveAnnouncerName(m.customAnnouncer, characterNamesById)
+    const systemSender = m.systemKind === 'announcement' ? m.systemSender : undefined
+    const name = resolveAnnouncerName(m.customAnnouncer, characterNamesById, systemSender)
     if (!name) return m
 
-    const body = m.content ?? ''
-    // Idempotent: re-running (a retry, a regenerate) must not stack tags.
-    if (body.startsWith(`[${name}]`)) return m
+    const tag = `[${name}]`
+    const prefix = (text: string) =>
+      // Idempotent: re-running (a retry, a regenerate) must not stack tags.
+      text.startsWith(tag) ? text : `${tag} ${text}`
 
-    return { ...m, content: `[${name}] ${body}` }
+    const next: T = { ...m, content: prefix(m.content ?? '') }
+    if (typeof m.opaqueContent === 'string') {
+      next.opaqueContent = prefix(m.opaqueContent)
+    }
+    return next
   })
 }
