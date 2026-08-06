@@ -63,6 +63,28 @@ export function isOperatorAuthoredAnnouncement(
   return msg.systemKind === 'announcement'
 }
 
+/**
+ * The display name shown after "whispered to" for one target id.
+ *
+ * A private user-initiated run — a Pascal custom-tool or a Run Tool call made
+ * with `private: true` — is whispered to the *operator's own userId*, chosen
+ * deliberately because it is not a participant id, so every character's context
+ * filter excludes it (see `app/api/v1/chats/[id]/custom-tools/route.ts`). That
+ * id is therefore never in `participantNames`, which is keyed only by character
+ * participants, so it used to fall to "unknown" — the operator's own private
+ * roll read as "whispered to unknown" (Bug 30). Resolve the operator's own id
+ * to "you"; a real participant id resolves to its name; anything else keeps the
+ * "unknown" fallback.
+ */
+export function resolveWhisperTargetLabel(
+  targetId: string,
+  participantNames: Record<string, string> | undefined,
+  currentUserId: string | null | undefined,
+): string {
+  if (currentUserId && targetId === currentUserId) return 'you'
+  return participantNames?.[targetId] || 'unknown'
+}
+
 interface WhisperAudience {
   /** The "All Whispers" toggle: when on, nothing is filtered. */
   showAllWhispers: boolean

@@ -12,6 +12,7 @@ import { Icon } from '@/components/ui/icon'
 import { MessageRow } from './MessageRow'
 import { AnnouncementGroup } from './AnnouncementChip'
 import { isOperatorAuthoredAnnouncement } from '../whisper-visibility'
+import { resolveToolRowAttributionMessage } from '../group-tool-messages'
 import { StreamingMessage } from './StreamingMessage'
 import type { StreamingToolBatch } from '../hooks/useSSEStreaming'
 import { useDeferredMeasureRef } from '../hooks/useDeferredMeasureRef'
@@ -97,6 +98,8 @@ interface VirtualizedMessageListProps {
   } | null
   /** Mapping of participant IDs to display names for whisper labels */
   participantNames?: Record<string, string>
+  /** The operator's own userId, for resolving a self-targeted whisper label to "you" (Bug 30). */
+  currentUserId?: string | null
   /** Set of participant IDs controlled by the user */
   userParticipantIdSet?: Set<string>
   /** Whether the Concierge has flagged this chat as dangerous */
@@ -157,6 +160,7 @@ export function VirtualizedMessageList({
   getFirstCharacter,
   getMessageAvatar,
   participantNames,
+  currentUserId,
   userParticipantIdSet,
   isDangerousChat = false,
   showThinking = false,
@@ -229,22 +233,11 @@ export function VirtualizedMessageList({
             const showResendButton = messageActions.canResendMessage(message.id)
 
             if (message.role === 'TOOL') {
-              // Fall back to the most recent ASSISTANT message's participant
-              // when this row has no participantId itself — historical TOOL
-              // rows persisted before character attribution was added are
-              // identifiable by position only.
-              const messageForAvatar = message.systemSender || message.participantId
-                ? message
-                : (() => {
-                    for (let k = messageIndex - 1; k >= 0; k--) {
-                      const prev = messages[k]
-                      if (prev.role === 'ASSISTANT' && prev.participantId) {
-                        return { ...message, participantId: prev.participantId }
-                      }
-                      if (prev.role === 'USER') break
-                    }
-                    return message
-                  })()
+              // Resolve which author heads this standalone tool card. A
+              // user-initiated (composer) run wears the operator's face; a
+              // character-initiated run borrows the calling character by
+              // position. See resolveToolRowAttributionMessage (Bug 29).
+              const messageForAvatar = resolveToolRowAttributionMessage(message, messageIndex, messages)
               const avatarData = getMessageAvatar(messageForAvatar)
               const headerAvatar = avatarData
                 ? {
@@ -355,6 +348,7 @@ export function VirtualizedMessageList({
                   showThinking={showThinking}
                   thinkingCollapsedByDefault={thinkingCollapsedByDefault}
                   participantNames={participantNames}
+                  currentUserId={currentUserId}
                   isOverheardWhisper={
                     !!(message.targetParticipantIds?.length) &&
                     // Staff whispers (Pascal, the Commonplace Book, …) are
