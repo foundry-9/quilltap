@@ -21,6 +21,24 @@ const GROK_SUPPORTED_MIME_TYPES = [
   'image/webp',
 ];
 
+/**
+ * A text-file attachment's `data` may hold either the raw text or a base64
+ * encoding of it. `Buffer.from(s, 'base64')` never throws — it silently mangles
+ * non-base64 input (`"hello"` → garbage, `"x=1"` → empty) — so a bare try/catch
+ * can't tell the two apart. Round-trip instead: decode, re-encode, and compare
+ * (normalizing padding/whitespace). A match means the input really was base64,
+ * so return the decoded text; a mismatch means it was plain text all along, so
+ * return it verbatim.
+ */
+function decodeBase64Text(data: string): string {
+  const normalize = (s: string): string => s.replace(/\s+/g, '').replace(/=+$/, '');
+  const decoded = Buffer.from(data, 'base64');
+  if (normalize(decoded.toString('base64')) === normalize(data)) {
+    return decoded.toString('utf-8');
+  }
+  return data;
+}
+
 // SDK types for the Responses API
 type ResponsesInputItem = OpenAI.Responses.ResponseInputItem;
 type ResponsesTool = OpenAI.Responses.Tool;
@@ -41,6 +59,20 @@ export class GrokProvider implements TextProvider {
   readonly supportsFileAttachments = true;
   readonly supportedMimeTypes = GROK_SUPPORTED_MIME_TYPES;
   readonly supportsWebSearch = true;
+
+  /**
+   * Whether an attachment MIME type has a handler behind the gate. Images send
+   * inline; `text/*` embeds inline; PDF reaches the honest "requires Grok Files
+   * API" arm. Anything else falls to the generic "unsupported" rejection. The
+   * previous gate was images-only, which made the text and PDF arms dead code.
+   */
+  private isHandledMimeType(mimeType: string): boolean {
+    return (
+      this.supportedMimeTypes.includes(mimeType) ||
+      mimeType.startsWith('text/') ||
+      mimeType === 'application/pdf'
+    );
+  }
 
   /**
    * Format messages from LLMMessage format to Responses API format.
@@ -114,10 +146,10 @@ export class GrokProvider implements TextProvider {
       // Add file attachments
       if (msg.attachments && msg.attachments.length > 0) {
         for (const attachment of msg.attachments) {
-          if (!this.supportedMimeTypes.includes(attachment.mimeType)) {
+          if (!this.isHandledMimeType(attachment.mimeType)) {
             failed.push({
               id: attachment.id,
-              error: `Unsupported file type: ${attachment.mimeType}. Grok supports: ${this.supportedMimeTypes.join(', ')}`,
+              error: `Unsupported file type: ${attachment.mimeType}. Grok supports: ${this.supportedMimeTypes.join(', ')}, text/*`,
             });
             continue;
           }
@@ -139,20 +171,15 @@ export class GrokProvider implements TextProvider {
             });
             sent.push(attachment.id);
           } else if (attachment.mimeType.startsWith('text/')) {
-            // For text files, embed as text content
-            try {
-              const textContent = Buffer.from(attachment.data, 'base64').toString('utf-8');
-              content.push({
-                type: 'input_text',
-                text: `[File: ${attachment.filename}]\n${textContent}`,
-              });
-              sent.push(attachment.id);
-            } catch {
-              failed.push({
-                id: attachment.id,
-                error: 'Failed to decode text file',
-              });
-            }
+            // For text files, embed as text content. `data` may be raw text or
+            // base64; decodeBase64Text round-trips to tell which (a bare decode
+            // would mangle already-plain text — see the helper).
+            const textContent = decodeBase64Text(attachment.data);
+            content.push({
+              type: 'input_text',
+              text: `[File: ${attachment.filename}]\n${textContent}`,
+            });
+            sent.push(attachment.id);
           } else {
             failed.push({
               id: attachment.id,

@@ -40,42 +40,55 @@ export const MIME_TYPE_CATEGORIES = {
 
 /**
  * Provider-specific attachment capabilities summary
- * This is a static reference - actual support is determined by the provider classes
+ * This is a static reference - actual support is determined by the provider classes.
+ *
+ * Each entry mirrors its provider plugin's `supportedMimeTypes`; keep them in
+ * sync with the plugin named in the trailing comment. (Deriving this map from
+ * plugin manifests would remove the drift risk, but the manifests aren't
+ * reachable from client code without pulling in the server-only registry —
+ * YAGNI until that changes.)
  */
 export const PROVIDER_ATTACHMENT_CAPABILITIES = {
+  // plugins/dist/qtap-plugin-openai
   OPENAI: {
     supportsAttachments: true,
     types: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
     description: 'Images only (JPEG, PNG, GIF, WebP)',
   },
+  // plugins/dist/qtap-plugin-anthropic
   ANTHROPIC: {
     supportsAttachments: true,
     types: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/plain'],
     description: 'Images (JPEG, PNG, GIF, WebP), PDF documents, and text files',
   },
+  // plugins/dist/qtap-plugin-google
   GOOGLE: {
     supportsAttachments: true,
     types: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
     description: 'Images only (JPEG, PNG, GIF, WebP)',
   },
+  // plugins/dist/qtap-plugin-grok — GROK_SUPPORTED_MIME_TYPES (text/PDF via inline/fallback)
   GROK: {
     supportsAttachments: true,
     types: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
     description: 'Images only (JPEG, PNG, GIF, WebP)',
     notes: 'Text and PDF files are handled via fallback system for better compatibility',
   },
+  // plugins/dist/qtap-plugin-ollama
   OLLAMA: {
     supportsAttachments: false,
     types: [],
     description: 'No file attachments supported',
     notes: 'Multimodal models like LLaVA may support images in the future',
   },
+  // plugins/dist/qtap-plugin-openrouter — SUPPORTED_IMAGE_MIME_TYPES
   OPENROUTER: {
-    supportsAttachments: false,
-    types: [],
-    description: 'No file attachments supported',
-    notes: 'Support depends on the underlying model being proxied',
+    supportsAttachments: true,
+    types: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+    description: 'Images (JPEG, PNG, GIF, WebP)',
+    notes: 'Images are forwarded inline to vision-capable models; support depends on the underlying model being proxied',
   },
+  // plugins/dist/qtap-plugin-openai-compatible
   OPENAI_COMPATIBLE: {
     supportsAttachments: false,
     types: [],

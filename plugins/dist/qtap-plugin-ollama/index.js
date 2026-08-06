@@ -11267,17 +11267,24 @@ var OllamaProvider = class {
       let totalContent = "";
       let toolCalls = [];
       let lastModel = params.model;
+      let buffer = "";
       try {
         while (true) {
           const { done, value } = await reader.read();
+          buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
+          let lines;
           if (done) {
-            break;
+            lines = buffer.split("\n");
+            buffer = "";
+          } else {
+            lines = buffer.split("\n");
+            buffer = lines.pop() ?? "";
           }
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split("\n").filter(Boolean);
           for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (!trimmedLine) continue;
             try {
-              const data = JSON.parse(line);
+              const data = JSON.parse(trimmedLine);
               if (data.model) {
                 lastModel = data.model;
               }
@@ -11332,14 +11339,24 @@ var OllamaProvider = class {
                 };
               }
             } catch (e) {
-              logger.warn("Failed to parse Ollama stream line", {
-                context: "OllamaProvider.streamMessage",
-                provider: "ollama",
-                line: line.substring(0, 100),
-                error: e instanceof Error ? e.message : String(e)
-              });
+              if (done) {
+                logger.debug("Discarding unparseable Ollama stream tail", {
+                  context: "OllamaProvider.streamMessage",
+                  provider: "ollama",
+                  line: trimmedLine.substring(0, 100),
+                  error: e instanceof Error ? e.message : String(e)
+                });
+              } else {
+                logger.warn("Failed to parse Ollama stream line", {
+                  context: "OllamaProvider.streamMessage",
+                  provider: "ollama",
+                  line: trimmedLine.substring(0, 100),
+                  error: e instanceof Error ? e.message : String(e)
+                });
+              }
             }
           }
+          if (done) break;
         }
       } finally {
         reader.releaseLock();

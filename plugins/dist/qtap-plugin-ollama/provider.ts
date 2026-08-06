@@ -230,19 +230,33 @@ export class OllamaProvider implements TextProvider {
       let totalContent = '';
       let toolCalls: any[] = [];
       let lastModel = params.model;
+      // Carries the trailing partial line between reads. Ollama streams NDJSON;
+      // a JSON object can straddle two network reads, so we hold the incomplete
+      // tail here until its terminating newline arrives instead of splitting
+      // each read in isolation (which silently dropped the straddling object).
+      let buffer = '';
 
       try {
         while (true) {
           const { done, value } = await reader.read();
+          // Append this read — or flush the decoder's own buffered bytes on the
+          // final read — then split on newlines. Mid-stream the trailing
+          // fragment (after the last newline) is carried forward in `buffer`;
+          // on the final read everything left is a complete line to flush.
+          buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
+          let lines: string[];
           if (done) {
-            break;
+            lines = buffer.split('\n');
+            buffer = '';
+          } else {
+            lines = buffer.split('\n');
+            buffer = lines.pop() ?? '';
           }
-
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n').filter(Boolean);
           for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (!trimmedLine) continue;
             try {
-              const data = JSON.parse(line);
+              const data = JSON.parse(trimmedLine);
 
               // Log parsed data structure
               // Track model name for raw response
@@ -321,15 +335,28 @@ export class OllamaProvider implements TextProvider {
                 };
               }
             } catch (e) {
-              // Skip invalid JSON lines
-              logger.warn('Failed to parse Ollama stream line', {
-                context: 'OllamaProvider.streamMessage',
-                provider: 'ollama',
-                line: line.substring(0, 100),
-                error: e instanceof Error ? e.message : String(e),
-              });
+              // A line that won't parse. At end-of-stream it's the final
+              // buffered tail — a partial or empty trailing fragment is normal,
+              // so log at debug. Mid-stream (now that reads are buffered) it's a
+              // genuinely malformed line, which stays at warn.
+              if (done) {
+                logger.debug('Discarding unparseable Ollama stream tail', {
+                  context: 'OllamaProvider.streamMessage',
+                  provider: 'ollama',
+                  line: trimmedLine.substring(0, 100),
+                  error: e instanceof Error ? e.message : String(e),
+                });
+              } else {
+                logger.warn('Failed to parse Ollama stream line', {
+                  context: 'OllamaProvider.streamMessage',
+                  provider: 'ollama',
+                  line: trimmedLine.substring(0, 100),
+                  error: e instanceof Error ? e.message : String(e),
+                });
+              }
             }
           }
+          if (done) break;
         }
       } finally {
         reader.releaseLock();

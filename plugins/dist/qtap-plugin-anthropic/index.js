@@ -23668,6 +23668,14 @@ var ANTHROPIC_SUPPORTED_MIME_TYPES = [
   "application/pdf",
   "text/plain"
 ];
+function decodeBase64Text(data) {
+  const normalize = (s) => s.replace(/\s+/g, "").replace(/=+$/, "");
+  const decoded = Buffer.from(data, "base64");
+  if (normalize(decoded.toString("base64")) === normalize(data)) {
+    return decoded.toString("utf-8");
+  }
+  return data;
+}
 var AnthropicProvider = class _AnthropicProvider {
   constructor() {
     this.supportsFileAttachments = true;
@@ -23847,11 +23855,7 @@ var AnthropicProvider = class _AnthropicProvider {
         } else if (attachment.mimeType === "text/plain") {
           let textContent = attachment.data;
           if (attachment.data && !attachment.data.includes("\n") && /^[A-Za-z0-9+/=]+$/.test(attachment.data)) {
-            try {
-              textContent = Buffer.from(attachment.data, "base64").toString("utf-8");
-            } catch {
-              textContent = attachment.data;
-            }
+            textContent = decodeBase64Text(attachment.data);
           }
           content.push({
             type: "document",
