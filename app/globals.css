@@ -288,6 +288,33 @@
 @import "./styles/qt-components/_index.css";
 
 /*
+ * Toast entry animation
+ *
+ * lib/toast.tsx applies `animation: slideInUp 0.3s ease-out` inline, but the
+ * keyframes lived nowhere (and the `animate-in …` classes it also named belong
+ * to tailwindcss-animate, which this app doesn't load), so toasts appeared
+ * instantly. Define the keyframes here as a plain app-level rule — no qt-*
+ * class, so no theme-storybook mirror is owed. Combines the intended fade with
+ * a short slide up from below (slide-in-from-bottom-3 ≈ 0.75rem).
+ */
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-toast {
+    animation: none !important;
+  }
+}
+
+/*
  * Mobile viewport overflow prevention
  * Uses overflow-x: clip to prevent horizontal scroll without breaking sticky positioning
  */

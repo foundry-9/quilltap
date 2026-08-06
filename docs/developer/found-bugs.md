@@ -4,9 +4,9 @@
 **Codebase**: Quilltap v4.8.0-dev (HEAD `3adefeba`)
 **Provenance**: the quilltap-v5 native port's differential harness, and its
 dogfood walks against a copy of real data
-**Status**: Bugs **1–18** plus **22–27, 36–38, and 43** are **fixed in v4** — each
+**Status**: Bugs **1–30** and **36–43** are **fixed in v4** — each
 fixed bug's section below carries a **FIXED in v4** marker (see
-[Status](#status)). The remaining bugs **19–21, 28–35, and 39–42** are **NOT yet
+[Status](#status)). The remaining bugs **31–35** are **NOT yet
 fixed in v4** — they are the defects the port has surfaced in the weeks since.
 They are catalogued in
 [Bugs found since — not yet fixed in v4](#bugs-found-since--not-yet-fixed-in-v4),
@@ -1386,6 +1386,16 @@ reproduces faithfully, pinned bidirectionally by
 
 ## Bug 19 — the `permanentlyFailed` embedding census is structurally always zero
 
+**FIXED in v4 (2026-08-06)** — `collectEmbeddingPipeline`
+(`lib/tools/almanack/phase3-ledgers.ts`) now filters `status === 'FAILED'` (the
+real terminal state) instead of the never-stored `'PERMANENTLY_FAILED'`. The
+cell/label is renamed from "Permanently failed rows" to "Failed rows" (noted as
+permanent for the current embedding profile), and the type field
+`EmbeddingPipelineInfo.permanentlyFailed` → `failed`. Pinned by
+`__tests__/unit/lib/tools/almanack/ledgers.test.ts` (real in-memory SQLite:
+FAILED rows are counted, PENDING/EMBEDDED are not). **Faithful** — v5 reproduces
+the always-zero cell, so the mirror is owed the same round.
+
 **Severity: Low** (a broken diagnostic, not user data).
 
 ### Root cause
@@ -1403,6 +1413,16 @@ Filter on a value the enum can hold (or drop the census). Worth a v4-side look.
 ---
 
 ## Bug 20 — Almanack "Cast sizes" histogram groups by the raw JSON column
+
+**FIXED in v4 (2026-08-06)** — `collectChatBreakdown`
+(`lib/tools/almanack/phase3-ledgers.ts`) now writes
+`GROUP BY json_array_length("participants")` and the matching `ORDER BY`, so the
+histogram rolls up by cast size. Pinned by
+`__tests__/unit/lib/tools/almanack/ledgers.test.ts` →
+`participant_histogram_rolls_up_by_cast_size` (real in-memory SQLite: three
+chats with the same cast size but different casts fold into one row). v5's
+`reconcile_ledger_divergences` self-retires now that v4's histogram is no longer
+per-cast.
 
 **Severity: Low** (dogfood #67). Pinned.
 
@@ -1432,6 +1452,18 @@ self-retires when v4's histogram is no longer per-cast (unit test
 ---
 
 ## Bug 21 — Almanack wardrobe-permission counts under-report
+
+**FIXED in v4 (2026-08-06)** — `collectCharacterBreakdown`
+(`lib/tools/almanack/phase3-ledgers.ts`) now counts the **effective** permission
+`"canDressThemselves" IS NOT 0` / `"canCreateOutfits" IS NOT 0`, matching the
+runtime null-safe check (`!== false`: NULL and 1 both mean allowed, only an
+explicit 0 denies). **Decision taken:** count the effective permission rather
+than keep explicit opt-in — the census should reflect what the runtime actually
+permits, and it now agrees with `pseudo-tool.service.ts:124` and with v5. The
+Core-whisper-override count is left untouched (genuinely explicit-only). Pinned
+by `__tests__/unit/lib/tools/almanack/ledgers.test.ts` →
+`dress_outfit_counts_are_effective_permission` (real in-memory SQLite: NULL and
+1 count, 0 does not). v5's `reconcile_ledger_divergences` self-retires.
 
 **Severity: Low** (dogfood #68). Pinned.
 
@@ -1660,6 +1692,18 @@ waits for the v4 decision (covered by `chat_cast_routes_equivalence`).
 
 **Severity: Medium.** Ruled a bug in **both** apps (2026-08-02).
 
+**FIXED in v4 (2026-08-06)** — `resolveAnnouncerName`
+(`lib/chat/context/announcement-attribution.ts`) now falls back to the message's
+`systemSender`, resolved through `staffDisplayName`
+(`lib/chat/staff-display-names.ts`), when no `customAnnouncer` is present, and
+emits the same `[Name] ` prefix. The fallback is gated to `systemKind ===
+'announcement'` inside `attributeAdhocAnnouncements` so ordinary Staff whispers
+(which also carry a `systemSender` but name themselves in their prose) are not
+double-tagged, and the prefix is applied to `opaqueContent` as well so it
+survives the opaque-anywhere body swap in `normalizeWhisperRoles`. Pinned by
+`announcement-attribution.test.ts`. **Both-apps bug:** v5's `resolveAnnouncerName`
+must be *fixed* in the same round, not merely mirrored.
+
 ### Symptom
 
 An ad-hoc announcement signed as the Host / Suparṇā reaches the LLM as a bare
@@ -1690,6 +1734,14 @@ mirrors this exactly and must move in the same round.
 
 **Severity: Medium.**
 
+**FIXED in v4 (2026-08-06)** — the positional borrow is extracted into
+`resolveToolRowAttributionMessage` (`app/salon/[id]/group-tool-messages.ts`) and
+now heads a TOOL row with `initiatedBy: 'user'` as the operator (resolved as a
+USER row) instead of borrowing the nearest preceding assistant's participant;
+character-initiated rows keep the borrow. `VirtualizedMessageList.tsx` calls the
+helper. Pinned by `group-tool-messages.test.ts`. v5 obligation: same-round
+mirror at `chat-view-model.ts::resolveToolAvatar`.
+
 ### Symptom
 
 Run an RNG/tool from the composer. Its own line correctly reads "You ran rng.",
@@ -1717,6 +1769,15 @@ verbatim port; the two sides move together.
 ## Bug 30 — "whispered to unknown" for a user-initiated private run
 
 **Severity: Low.**
+
+**FIXED in v4 (2026-08-06)** — the whisper label resolves through
+`resolveWhisperTargetLabel` (`app/salon/[id]/whisper-visibility.ts`), which
+renders the operator's own userId as "you" (a participant id resolves to its
+name; anything else keeps the "unknown" fallback). The operator's userId is
+threaded as `currentUserId` through `SalonView` → `VirtualizedMessageList` →
+`MessageRow`. The route's userId targeting is unchanged. Pinned by
+`whisper-visibility.test.ts`. v5 obligation: same-round mirror at
+`message-row.ts:490`.
 
 ### Root cause
 
@@ -1912,6 +1973,14 @@ attach-mount-file to hand the Librarian a document (it has `extractedText`).
 
 ## Bug 39 — `.qt-text-danger` is defined in no CSS, so error text is body-coloured
 
+**FIXED in v4 (2026-08-06)** — `.qt-text-danger { color: var(--color-destructive) }`
+now lives in `app/styles/qt-components/_utilities.css` (alongside its
+`qt-text-destructive` twin), mirrored into
+`packages/theme-storybook/src/css/qt-components.css` (patch-bumped, published).
+No bundled theme overrides `qt-text-destructive`, so none needs a
+`qt-text-danger` override either — the token is the single lever. v5 obligation:
+the `_utilities.css` corpus vector self-retires once v4 ships the rule.
+
 **Severity: Low (cosmetic).** Pinned.
 
 ### Root cause
@@ -1930,6 +1999,13 @@ Define `.qt-text-danger { color: var(--color-destructive) }`. v5 fixed it in
 ---
 
 ## Bug 40 — the toolbar search dialog won't close on an outside click
+
+**FIXED in v4 (2026-08-06)** — `SearchDialog` (`components/search/search-dialog.tsx`)
+now renders through `createPortal(…, document.body)`, so its `fixed inset-0`
+backdrop resolves against the viewport instead of the `backdrop-filter`
+containing block that `.qt-page-toolbar` establishes. Esc (document-level
+`useEscapeKey`) and input focus still work through the portal; the toolbar's
+`backdrop-filter` is untouched. v5 obligation (Faithful): mirror the portal.
 
 **Severity: Low.**
 
@@ -1950,6 +2026,16 @@ Portal the dialog host out of the toolbar (to `document.body`), as v5 does.
 ---
 
 ## Bug 41 — `Content-Disposition` mangles a filename with an apostrophe and non-ASCII
+
+**FIXED in v4 (2026-08-06)** — `buildContentDisposition`
+(`lib/api/content-disposition.ts`) now runs the ext-value through
+`encodeExtValue`, which percent-encodes the RFC 8187 stray characters
+`encodeURIComponent` leaves raw (`' ( ) * !`). The apostrophe arrives as `%27`,
+so `filename*=UTF-8''…` stays grammatical and browsers recover the real UTF-8
+name; plain-ASCII names are unchanged. Covered by the entry's own case in
+`__tests__/unit/lib/api/content-disposition.test.ts`. v5 obligation: the
+`content_disposition` corpus vector `ascii-apostrophe-with-non-ascii`
+self-retires once v4 ships.
 
 **Severity: Low.** Pinned.
 
@@ -1977,6 +2063,15 @@ loudly, so the carve-out self-retires when v4 ships.
 ---
 
 ## Bug 42 — toasts have no entry animation
+
+**FIXED in v4 (2026-08-06)** — the `slideInUp` keyframes are now defined as a
+plain app-level rule in `app/globals.css` (no `qt-*` class, so no theme-storybook
+mirror is owed), and `lib/toast.tsx` drops the dead `animate-in fade-in
+slide-in-from-bottom-3 duration-300` classes (that Tailwind plugin isn't loaded)
+while keeping the inline `animation: slideInUp 0.3s ease-out`. Toasts now fade
+and slide up on entry; a `prefers-reduced-motion` guard on the toast's
+`app-toast` class disables the animation. v5 obligation (Faithful): mirror the
+keyframes.
 
 **Severity: Low (cosmetic).**
 
@@ -2089,12 +2184,15 @@ faithfully on the v5 side.
 | 24 | `remove-participant` returns a stale chat | **Yes** (2026-08-06) | `app/api/v1/chats/[id]/actions/participants.ts` — return the post-cleanup chat from `repos.chats.update` | **Owed** (Faithful) — mirror; v5 `remove_impersonating_promotes` |
 | 25 | "Stop impersonating" unreachable (client sends DELETE) | **Yes** (2026-08-06) | `app/api/v1/chats/[id]/handlers/delete.ts` — register `stop-impersonate` on DELETE; removed the stale POST registration | Converged — v5 already models it correctly |
 | 27 | "Speak as an AI character" is a dead affordance | **Yes** (2026-08-06) | `app/api/v1/chats/[id]/actions/participants.ts` — `handleImpersonate`/`handleStopImpersonate` flip `controlledBy` (`user` ⇔ `llm`) + recompile stacks | **Owed** (Faithful) — the v4 decision `chat_cast_routes_equivalence` was waiting for |
+| 28 | Staff-signed ad-hoc announcement reaches the model anonymous | **Yes** (2026-08-06) | `lib/chat/context/announcement-attribution.ts` — `resolveAnnouncerName` falls back to `systemSender` (via `staffDisplayName`) when no `customAnnouncer`, gated to `systemKind === 'announcement'`; prefix also applied to `opaqueContent` | **Owed** (Faithful, both-apps) — this is a bug in v5 too; fix `resolveAnnouncerName` there in the same round, not merely mirror it |
+| 29 | User-initiated tool card wears the last speaker's face | **Yes** (2026-08-06) | `app/salon/[id]/group-tool-messages.ts` — `resolveToolRowAttributionMessage` heads a `initiatedBy: 'user'` TOOL row as the operator (USER row), suppressing the positional borrow; character rows unchanged | **Owed** (Faithful) — mirror at `chat-view-model.ts::resolveToolAvatar` |
+| 30 | User-initiated private run renders "whispered to unknown" | **Yes** (2026-08-06) | `app/salon/[id]/whisper-visibility.ts` — `resolveWhisperTargetLabel` resolves the operator's own userId to "you"; threaded as `currentUserId` through `SalonView` → `VirtualizedMessageList` → `MessageRow` | **Owed** (Faithful) — mirror at `message-row.ts:490` |
 | 36 | "Tools disabled by profile" warning box is dead code | **Yes** (2026-08-06) | `lib/services/chat-enrichment.service.ts` (+ `helpers.ts`) — project `allowToolUse` on the connection profile | **Owed** (Faithful) — mirror the projection; v5 keeps a gated box |
 | 37 | `AllLLMPauseModal` unreachable; the pause is silent | **Yes** (2026-08-06) | `handlers/get.ts` — project `isPaused` + `allLLMPauseTurnCount`; `app/salon/[id]/SalonView.tsx` — opener effect on `isPaused && isAllLLM` | **Owed** (Faithful) — mirror the projection + opener |
 
-**Bugs 22–25, 27, 36, 37 are now fixed in v4 (2026-08-06), joining 13, 15, 16, 38,
-43; bugs 14, 17, 19–21, 28–35, 39–42 remain `No` — not yet fixed in v4** (bugs
-8–12, 18, and 26 fixed earlier). Their
+**Bugs 22–25, 27, 36, 37 (this session) and 28–30 are now fixed in v4
+(2026-08-06), joining 13, 15, 16, 19–21, 38, 39–43; only bugs 31–35 remain `No` —
+not yet fixed in v4** (bugs 8–12, 18, and 26 fixed earlier). Their
 per-bug fix sites and v5 status are in
 [Bugs found since](#bugs-found-since--not-yet-fixed-in-v4); they are not repeated
 row-by-row here. The coordination surface, when they are taken, is these

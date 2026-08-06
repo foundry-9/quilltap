@@ -376,7 +376,7 @@ Cast sizes:
 
 - **Conversation chunks**: 9,000 (40 unembedded)
 - **Help docs**: 120 (0 unembedded)
-- **Permanently failed rows**: 156
+- **Failed rows**: 156 _(permanent for the current profile)_
 - **Active profile dimensions**: 1536
 
 | Table | Dimensions | Vectors |
@@ -386,8 +386,8 @@ Cast sizes:
 
 | Entity Type | Status | Rows |
 |-------------|--------|------|
-| memory | COMPLETED | 31,900 |
-| memory | PERMANENTLY_FAILED | 156 |
+| memory | EMBEDDED | 31,900 |
+| memory | FAILED | 156 |
 
 ### Ariel (Terminal)
 

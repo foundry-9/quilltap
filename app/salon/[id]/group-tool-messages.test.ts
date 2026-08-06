@@ -1,4 +1,7 @@
-import { groupToolMessagesIntoAssistants } from './group-tool-messages'
+import {
+  groupToolMessagesIntoAssistants,
+  resolveToolRowAttributionMessage,
+} from './group-tool-messages'
 import type { Message } from './types'
 
 let seq = 0
@@ -130,5 +133,52 @@ describe('groupToolMessagesIntoAssistants', () => {
 
     expect(result).toHaveLength(1)
     expect(result[0].attachedToolMessages![0].id).toBe(tool.id)
+  })
+})
+
+describe('resolveToolRowAttributionMessage', () => {
+  it('heads a user-initiated tool card with the operator, not the last speaker', () => {
+    // The pending TOOL row is persisted before the user's own message, so the
+    // nearest preceding assistant is an unrelated character (Bug 29).
+    const other = msg({ role: 'ASSISTANT', content: 'char B just spoke', participantId: 'pB' })
+    const userTool = msg({ role: 'TOOL', content: toolContent({ initiatedBy: 'user' }) })
+    const messages = [other, userTool]
+
+    const resolved = resolveToolRowAttributionMessage(userTool, 1, messages)
+
+    // Resolved as a USER row (operator's face) — it does NOT borrow pB.
+    expect(resolved.role).toBe('USER')
+    expect(resolved.participantId).toBeNull()
+  })
+
+  it('still borrows the calling character for a character-initiated tool row', () => {
+    const caller = msg({ role: 'ASSISTANT', content: 'I roll', participantId: 'pA' })
+    const charTool = msg({ role: 'TOOL', content: toolContent() })
+    const messages = [caller, charTool]
+
+    const resolved = resolveToolRowAttributionMessage(charTool, 1, messages)
+
+    expect(resolved.role).toBe('TOOL')
+    expect(resolved.participantId).toBe('pA')
+  })
+
+  it('does not borrow across a USER boundary for a character-initiated row', () => {
+    const caller = msg({ role: 'ASSISTANT', content: 'turn 1', participantId: 'pA' })
+    const user = msg({ role: 'USER', content: 'next' })
+    const charTool = msg({ role: 'TOOL', content: toolContent() })
+    const messages = [caller, user, charTool]
+
+    const resolved = resolveToolRowAttributionMessage(charTool, 2, messages)
+
+    // Walk stops at the USER boundary before reaching pA — row heads itself.
+    expect(resolved.participantId).toBeUndefined()
+  })
+
+  it('heads a TOOL row that already knows its author with itself', () => {
+    const sysTool = msg({ role: 'TOOL', content: toolContent(), systemSender: 'prospero' })
+    expect(resolveToolRowAttributionMessage(sysTool, 0, [sysTool])).toBe(sysTool)
+
+    const ownedTool = msg({ role: 'TOOL', content: toolContent(), participantId: 'pC' })
+    expect(resolveToolRowAttributionMessage(ownedTool, 0, [ownedTool])).toBe(ownedTool)
   })
 })
