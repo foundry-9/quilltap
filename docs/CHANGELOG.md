@@ -4,6 +4,18 @@
 
 ### 4.8-dev
 
+#### Fix: provider attachments and streaming (bugs 31, 32, 33, 34, 35)
+
+**OpenRouter now sends images on the non-streaming path.** On regenerate and continuation legs (`OpenRouterProvider.sendMessage`, non-streaming), `@openrouter/sdk` 1.2.2's `chat.send()` rejected the OpenAI `image_url` content parts at client-side Zod validation (it expects camelCase `imageUrl`), so the image never left the machine — streaming was fine, non-streaming sent nothing. Image sends now route around the SDK through a direct `POST /api/v1/chat/completions` (`stream:false`), the same escape hatch the streaming path already uses for image/tool requests; no-image sends keep the SDK path. The direct path forwards cache key, tools, web search, structured output, fallback models, provider preferences (including ZDR), and reasoning. (bug 31)
+
+**The client now offers image attachments on OpenRouter profiles.** `PROVIDER_ATTACHMENT_CAPABILITIES.OPENROUTER` in `lib/llm/attachment-support.ts` still declared OpenRouter unsupported for attachments while the plugin emitted image parts; it now reports the plugin's four image MIME types. Each map entry gained a comment pointing at its plugin. (bug 32)
+
+**Grok text and PDF attachments are no longer dead code.** Grok's supported-MIME gate was images-only and ran ahead of the `text/*` and PDF branches, so every text/PDF attachment fell to "Unsupported file type" and the "requires Grok Files API" arm was unreachable. The gate now admits `text/*` (sent inline) and `application/pdf` (routed to the Files-API message); a genuinely unsupported binary still gets the generic rejection. Actual Grok Files API support stays deferred. (bug 33)
+
+**Text attachments no longer arrive as mojibake.** For a newline-free, base64-charset text file attached to Anthropic or Grok, the decode was wrapped in a `try/catch` — but `Buffer.from(s, 'base64')` never throws; it silently mangles (`"hello"` → garbage). A new `decodeBase64Text` helper round-trips instead: decode, re-encode (normalizing whitespace/padding), and compare — a match keeps the decoded text, a mismatch treats the input as plain text and ships it verbatim. Applied in both provider plugins. (bug 34)
+
+**Ollama streaming no longer drops content split across network reads.** The stream decoder split each read on `\n` with no cross-read buffer, so a JSON object straddling two reads was silently lost. `OllamaProvider.streamMessage` now carries the trailing partial line in a buffer between reads and flushes any final tail at stream end. (bug 35)
+
 #### Fix: chat state projection, participant updates, and impersonation (bugs 22, 23, 24, 25, 27, 36, 37)
 
 **Four chat-settings selects now survive a reload.** The chat GET projection (`app/api/v1/chats/[id]/handlers/get.ts`) omitted `timelineMode` (Story's Clock), `alertCharactersOfLanternImages`, `showThinking`, and `answerConfirmationOverride`, though the client `Chat` type declared all four. A save landed in the database but the select snapped back to its default and a reload never showed the truth. The four fields are now projected (each defaulting to `null`).

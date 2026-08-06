@@ -23,6 +23,24 @@ const ANTHROPIC_SUPPORTED_MIME_TYPES = [
 
 type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
 
+/**
+ * A text-file attachment's `data` may hold either the raw text or a base64
+ * encoding of it. `Buffer.from(s, 'base64')` never throws — it silently mangles
+ * non-base64 input (`"hello"` → garbage, `"x=1"` → empty) — so a bare try/catch
+ * can't tell the two apart. Round-trip instead: decode, re-encode, and compare
+ * (normalizing padding/whitespace). A match means the input really was base64,
+ * so return the decoded text; a mismatch means it was plain text all along, so
+ * return it verbatim.
+ */
+function decodeBase64Text(data: string): string {
+  const normalize = (s: string): string => s.replace(/\s+/g, '').replace(/=+$/, '')
+  const decoded = Buffer.from(data, 'base64')
+  if (normalize(decoded.toString('base64')) === normalize(data)) {
+    return decoded.toString('utf-8')
+  }
+  return data
+}
+
 // Cache control type for prompt caching
 // TTL: '5m' = 5 minutes (default, 1.25x write cost), '1h' = 1 hour (2x write cost)
 // Reads are always 0.1x the base input token cost
@@ -280,17 +298,13 @@ export class AnthropicProvider implements TextProvider {
             },
           })
         } else if (attachment.mimeType === 'text/plain') {
-          // Plain text document - use text source type, not base64
-          // The data for text files should be the actual text content
+          // Plain text document - use text source type, not base64.
+          // `data` may be raw text or base64; only base64-charset, newline-free
+          // data is a decode candidate, and decodeBase64Text round-trips to
+          // confirm it (a bare decode would mangle already-plain text).
           let textContent = attachment.data
-          // If the data is base64 encoded, decode it
           if (attachment.data && !attachment.data.includes('\n') && /^[A-Za-z0-9+/=]+$/.test(attachment.data)) {
-            try {
-              textContent = Buffer.from(attachment.data, 'base64').toString('utf-8')
-            } catch {
-              // If decoding fails, use the data as-is
-              textContent = attachment.data
-            }
+            textContent = decodeBase64Text(attachment.data)
           }
           content.push({
             type: 'document',

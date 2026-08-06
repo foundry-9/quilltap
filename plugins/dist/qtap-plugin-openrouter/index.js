@@ -42920,6 +42920,9 @@ function resolveRequestTimeoutMs(params, defaultMs = DEFAULT_REQUEST_TIMEOUT_MS)
   const requested = params.requestTimeoutMs;
   return typeof requested === "number" && requested > 0 ? requested : defaultMs;
 }
+function buildRequestAbortSignal(params, defaultMs = DEFAULT_REQUEST_TIMEOUT_MS) {
+  return AbortSignal.timeout(resolveRequestTimeoutMs(params, defaultMs));
+}
 var rewriteLogger = createPluginLogger("host-rewrite");
 
 // provider.ts
@@ -42992,6 +42995,9 @@ var OpenRouterProvider = class {
   }
   async sendMessage(params, apiKey) {
     const attachmentResults = this.collectAttachmentResults(params);
+    if (this.hasImageAttachments(params)) {
+      return this.sendViaChatCompletions(params, apiKey, attachmentResults);
+    }
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || "http://localhost:3000",
@@ -43100,6 +43106,141 @@ var OpenRouterProvider = class {
       attachmentResults,
       cacheUsage,
       ...sendReasoningContent && typeof sendReasoningContent === "string" ? { reasoningContent: sendReasoningContent } : {}
+    };
+  }
+  /**
+   * Non-streaming send via the OpenAI Chat Completions endpoint using a direct
+   * fetch, bypassing the SDK's client-side validation that rejects image
+   * content-parts. Used for the vision (image attachment) send path — the
+   * non-streaming counterpart to {@link streamViaChatCompletions}. Feature
+   * parity with the SDK path in {@link sendMessage}: cache key, tools, web
+   * search, structured output, fallback models, provider preferences (incl.
+   * ZDR), and reasoning are all forwarded.
+   */
+  async sendViaChatCompletions(params, apiKey, attachmentResults) {
+    const messages = params.messages.filter((m) => !(m.role === "tool" && !m.toolCallId)).map((m) => {
+      if (m.role === "tool" && m.toolCallId) {
+        return { role: "tool", tool_call_id: m.toolCallId, content: m.content };
+      }
+      if (m.role === "assistant" && m.toolCalls && m.toolCalls.length > 0) {
+        return {
+          role: "assistant",
+          content: m.content || null,
+          tool_calls: m.toolCalls.map((tc) => ({ id: tc.id, type: tc.type, function: tc.function }))
+        };
+      }
+      return {
+        role: m.role,
+        content: this.buildMessageContent(m)
+      };
+    });
+    const body = {
+      model: params.model,
+      messages,
+      stream: false,
+      temperature: params.temperature ?? 0.7,
+      max_tokens: params.maxTokens ?? 4096,
+      top_p: params.topP ?? 1,
+      stop: params.stop
+    };
+    if (typeof params.cacheKey === "string" && params.cacheKey.length > 0) {
+      body.user = params.cacheKey;
+    }
+    if (params.tools && params.tools.length > 0) {
+      body.tools = params.tools;
+      body.tool_choice = "auto";
+    }
+    if (params.webSearchEnabled) {
+      body.plugins = [{ id: "web", max_results: 5 }];
+    }
+    if (params.responseFormat) {
+      if (params.responseFormat.type === "json_schema" && params.responseFormat.jsonSchema) {
+        body.response_format = {
+          type: "json_schema",
+          json_schema: {
+            name: params.responseFormat.jsonSchema.name,
+            strict: params.responseFormat.jsonSchema.strict ?? true,
+            schema: params.responseFormat.jsonSchema.schema
+          }
+        };
+      } else if (params.responseFormat.type !== "text") {
+        body.response_format = { type: params.responseFormat.type };
+      }
+    }
+    const profileParams = params.profileParameters;
+    if (profileParams?.fallbackModels?.length) {
+      body.models = [params.model, ...profileParams.fallbackModels];
+      body.route = "fallback";
+      delete body.model;
+    }
+    const providerPrefs = resolveProviderPrefs(profileParams);
+    if (providerPrefs) {
+      body.provider = {};
+      if (providerPrefs.order) body.provider.order = providerPrefs.order;
+      if (providerPrefs.allowFallbacks !== void 0) body.provider.allow_fallbacks = providerPrefs.allowFallbacks;
+      if (providerPrefs.requireParameters) body.provider.require_parameters = providerPrefs.requireParameters;
+      if (providerPrefs.dataCollection) body.provider.data_collection = providerPrefs.dataCollection;
+      if (providerPrefs.ignore) body.provider.ignore = providerPrefs.ignore;
+      if (providerPrefs.only) body.provider.only = providerPrefs.only;
+    }
+    const reasoningEffort = profileParams?.reasoningEffort;
+    if (typeof reasoningEffort === "string" && reasoningEffort.length > 0) {
+      body.reasoning = { effort: reasoningEffort, exclude: false };
+    } else {
+      body.reasoning = { exclude: false };
+    }
+    let response;
+    try {
+      response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+          "HTTP-Referer": process.env.BASE_URL || "http://localhost:3000",
+          "X-Title": "Quilltap",
+          "User-Agent": getQuilltapUserAgent()
+        },
+        body: JSON.stringify(body),
+        // Non-streaming: the whole exchange is one JSON blob, so bounding the
+        // entire request (headers + body) is correct.
+        signal: buildRequestAbortSignal(params)
+      });
+    } catch (error) {
+      logger.error("Error in sendViaChatCompletions", {
+        context: "OpenRouterProvider.sendViaChatCompletions"
+      }, error instanceof Error ? error : void 0);
+      throw error;
+    }
+    if (!response.ok) {
+      const errorText = await response.text();
+      logger.error("OpenRouter API error", {
+        context: "OpenRouterProvider.sendViaChatCompletions",
+        status: response.status,
+        error: errorText
+      });
+      throw new Error(`OpenRouter API error: ${response.status} - ${errorText}`);
+    }
+    const data = await response.json();
+    const choice = data.choices?.[0];
+    const content = choice?.message?.content;
+    const contentStr = typeof content === "string" ? content : "";
+    const finishReason = choice?.finish_reason || "stop";
+    const reasoningContent = choice?.message?.reasoning;
+    const cachedTokens = data.usage?.prompt_tokens_details?.cached_tokens;
+    const cacheUsage = cachedTokens !== void 0 && cachedTokens > 0 ? { cacheReadInputTokens: cachedTokens, cachedTokens } : void 0;
+    const cacheRead = cachedTokens ?? 0;
+    return {
+      content: contentStr,
+      finishReason,
+      usage: {
+        promptTokens: Math.max(0, (data.usage?.prompt_tokens ?? 0) - cacheRead),
+        completionTokens: data.usage?.completion_tokens ?? 0,
+        totalTokens: Math.max(0, (data.usage?.total_tokens ?? 0) - cacheRead)
+      },
+      raw: data,
+      attachmentResults,
+      ...cacheUsage ? { cacheUsage } : {},
+      ...reasoningContent && typeof reasoningContent === "string" ? { reasoningContent } : {}
     };
   }
   async *streamMessage(params, apiKey) {

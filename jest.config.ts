@@ -46,6 +46,7 @@ const config: Config = {
     '^@/(.*)$': '<rootDir>/$1',
     '^openid-client$': '<rootDir>/__mocks__/openid-client.ts',
     '^@openrouter/sdk$': '<rootDir>/__mocks__/@openrouter/sdk.ts',
+    '^@openrouter/sdk/lib/chat-compat$': '<rootDir>/__mocks__/@openrouter/sdk-chat-compat.ts',
     '^better-sqlite3$': '<rootDir>/__mocks__/better-sqlite3.ts',
     '^better-sqlite3-multiple-ciphers$': '<rootDir>/__mocks__/better-sqlite3.ts',
 

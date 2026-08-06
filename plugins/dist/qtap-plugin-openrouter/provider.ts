@@ -17,7 +17,7 @@ import type {
   LLMResponse,
   StreamChunk,
 } from './types';
-import { createPluginLogger, getQuilltapUserAgent, resolveRequestTimeoutMs } from '@quilltap/plugin-utils';
+import { buildRequestAbortSignal, createPluginLogger, getQuilltapUserAgent, resolveRequestTimeoutMs } from '@quilltap/plugin-utils';
 
 const logger = createPluginLogger('qtap-plugin-openrouter');
 
@@ -141,6 +141,16 @@ export class OpenRouterProvider implements TextProvider {
 
   async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
     const attachmentResults = this.collectAttachmentResults(params);
+
+    // Vision (image attachment) sends can't go through the SDK's non-streaming
+    // request path: @openrouter/sdk's chat.send() rejects OpenAI content-parts
+    // (image_url) messages at client-side input validation, so the image never
+    // reaches the model. Route those around the SDK through a direct Chat
+    // Completions fetch — the same escape hatch streamMessage() already uses for
+    // image/tool requests. No-image sends keep the SDK path unchanged.
+    if (this.hasImageAttachments(params)) {
+      return this.sendViaChatCompletions(params, apiKey, attachmentResults);
+    }
 
     const client = new OpenRouter({
       apiKey,
@@ -287,6 +297,175 @@ export class OpenRouterProvider implements TextProvider {
       attachmentResults,
       cacheUsage,
       ...(sendReasoningContent && typeof sendReasoningContent === 'string' ? { reasoningContent: sendReasoningContent } : {}),
+    };
+  }
+
+  /**
+   * Non-streaming send via the OpenAI Chat Completions endpoint using a direct
+   * fetch, bypassing the SDK's client-side validation that rejects image
+   * content-parts. Used for the vision (image attachment) send path — the
+   * non-streaming counterpart to {@link streamViaChatCompletions}. Feature
+   * parity with the SDK path in {@link sendMessage}: cache key, tools, web
+   * search, structured output, fallback models, provider preferences (incl.
+   * ZDR), and reasoning are all forwarded.
+   */
+  private async sendViaChatCompletions(
+    params: LLMParams,
+    apiKey: string,
+    attachmentResults: { sent: string[]; failed: { id: string; error: string }[] }
+  ): Promise<LLMResponse> {
+    // Build messages in OpenAI Chat Completions format, formatting image
+    // attachments inline as content parts (buildMessageContent).
+    const messages = params.messages
+      .filter(m => !(m.role === 'tool' && !m.toolCallId))
+      .map((m) => {
+        if (m.role === 'tool' && m.toolCallId) {
+          return { role: 'tool' as const, tool_call_id: m.toolCallId, content: m.content };
+        }
+        if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
+          return {
+            role: 'assistant' as const,
+            content: m.content || null,
+            tool_calls: m.toolCalls.map(tc => ({ id: tc.id, type: tc.type, function: tc.function })),
+          };
+        }
+        return {
+          role: m.role,
+          content: this.buildMessageContent(m) as any,
+        };
+      });
+
+    const body: any = {
+      model: params.model,
+      messages,
+      stream: false,
+      temperature: params.temperature ?? 0.7,
+      max_tokens: params.maxTokens ?? 4096,
+      top_p: params.topP ?? 1,
+      stop: params.stop,
+    };
+
+    // Forward Quilltap's per-character cache identifier as `user` (sticky
+    // routing hint), matching the SDK path.
+    if (typeof params.cacheKey === 'string' && params.cacheKey.length > 0) {
+      body.user = params.cacheKey;
+    }
+
+    if (params.tools && params.tools.length > 0) {
+      body.tools = params.tools;
+      body.tool_choice = 'auto';
+    }
+
+    if (params.webSearchEnabled) {
+      body.plugins = [{ id: 'web', max_results: 5 }];
+    }
+
+    if (params.responseFormat) {
+      if (params.responseFormat.type === 'json_schema' && params.responseFormat.jsonSchema) {
+        body.response_format = {
+          type: 'json_schema',
+          json_schema: {
+            name: params.responseFormat.jsonSchema.name,
+            strict: params.responseFormat.jsonSchema.strict ?? true,
+            schema: params.responseFormat.jsonSchema.schema,
+          },
+        };
+      } else if (params.responseFormat.type !== 'text') {
+        body.response_format = { type: params.responseFormat.type };
+      }
+    }
+
+    const profileParams = params.profileParameters as OpenRouterProfileParams | undefined;
+
+    // Model fallbacks (`models` + `route: 'fallback'`; can't send both `model`
+    // and `models`).
+    if (profileParams?.fallbackModels?.length) {
+      body.models = [params.model, ...profileParams.fallbackModels];
+      body.route = 'fallback';
+      delete body.model;
+    }
+
+    // Provider preferences (snake_case wire shape). ZDR is load-bearing here:
+    // dropping data_collection on the vision path would leak prompts.
+    const providerPrefs = resolveProviderPrefs(profileParams);
+    if (providerPrefs) {
+      body.provider = {};
+      if (providerPrefs.order) body.provider.order = providerPrefs.order;
+      if (providerPrefs.allowFallbacks !== undefined) body.provider.allow_fallbacks = providerPrefs.allowFallbacks;
+      if (providerPrefs.requireParameters) body.provider.require_parameters = providerPrefs.requireParameters;
+      if (providerPrefs.dataCollection) body.provider.data_collection = providerPrefs.dataCollection;
+      if (providerPrefs.ignore) body.provider.ignore = providerPrefs.ignore;
+      if (providerPrefs.only) body.provider.only = providerPrefs.only;
+    }
+
+    // Enable reasoning output for models that support it.
+    const reasoningEffort = profileParams?.reasoningEffort;
+    if (typeof reasoningEffort === 'string' && reasoningEffort.length > 0) {
+      body.reasoning = { effort: reasoningEffort, exclude: false };
+    } else {
+      body.reasoning = { exclude: false };
+    }
+
+    let response: Response;
+    try {
+      response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+          'HTTP-Referer': process.env.BASE_URL || 'http://localhost:3000',
+          'X-Title': 'Quilltap',
+          'User-Agent': getQuilltapUserAgent(),
+        },
+        body: JSON.stringify(body),
+        // Non-streaming: the whole exchange is one JSON blob, so bounding the
+        // entire request (headers + body) is correct.
+        signal: buildRequestAbortSignal(params),
+      });
+    } catch (error) {
+      logger.error('Error in sendViaChatCompletions', {
+        context: 'OpenRouterProvider.sendViaChatCompletions',
+      }, error instanceof Error ? error : undefined);
+      throw error;
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      logger.error('OpenRouter API error', {
+        context: 'OpenRouterProvider.sendViaChatCompletions',
+        status: response.status,
+        error: errorText,
+      });
+      throw new Error(`OpenRouter API error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    const choice = data.choices?.[0];
+    const content = choice?.message?.content;
+    const contentStr = typeof content === 'string' ? content : '';
+    const finishReason = choice?.finish_reason || 'stop';
+    const reasoningContent = choice?.message?.reasoning;
+
+    // Exclude cache-read tokens from prompt/total so cached input is not charged
+    // against budgets or cost; cacheUsage still reports them for display.
+    const cachedTokens = data.usage?.prompt_tokens_details?.cached_tokens;
+    const cacheUsage = cachedTokens !== undefined && cachedTokens > 0
+      ? { cacheReadInputTokens: cachedTokens, cachedTokens }
+      : undefined;
+    const cacheRead = cachedTokens ?? 0;
+
+    return {
+      content: contentStr,
+      finishReason,
+      usage: {
+        promptTokens: Math.max(0, (data.usage?.prompt_tokens ?? 0) - cacheRead),
+        completionTokens: data.usage?.completion_tokens ?? 0,
+        totalTokens: Math.max(0, (data.usage?.total_tokens ?? 0) - cacheRead),
+      },
+      raw: data,
+      attachmentResults,
+      ...(cacheUsage ? { cacheUsage } : {}),
+      ...(reasoningContent && typeof reasoningContent === 'string' ? { reasoningContent } : {}),
     };
   }
 

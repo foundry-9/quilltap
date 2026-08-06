@@ -70,9 +70,14 @@ describe('LLM Attachment Support', () => {
       expect(mimeTypes).toEqual([])
     })
 
-    it('should return empty array for OpenRouter', () => {
+    it('should return image MIME types for OpenRouter (vision via inline image parts)', () => {
       const mimeTypes = getSupportedMimeTypes('OPENROUTER')
-      expect(mimeTypes).toEqual([])
+      expect(mimeTypes).toEqual([
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp',
+      ])
     })
 
   })
@@ -83,11 +88,18 @@ describe('LLM Attachment Support', () => {
       expect(supportsFileAttachments('ANTHROPIC')).toBe(true)
       expect(supportsFileAttachments('GOOGLE')).toBe(true)
       expect(supportsFileAttachments('GROK')).toBe(true)
+      // OpenRouter forwards images inline to vision-capable models.
+      expect(supportsFileAttachments('OPENROUTER')).toBe(true)
     })
 
     it('should return false for providers without attachment support', () => {
       expect(supportsFileAttachments('OLLAMA', 'http://localhost:11434')).toBe(false)
-      expect(supportsFileAttachments('OPENROUTER')).toBe(false)
+    })
+
+    it('should report OpenRouter supporting image MIME types', () => {
+      expect(supportsMimeType('OPENROUTER', 'image/png')).toBe(true)
+      expect(supportsMimeType('OPENROUTER', 'image/webp')).toBe(true)
+      expect(supportsMimeType('OPENROUTER', 'application/pdf')).toBe(false)
     })
   })
 

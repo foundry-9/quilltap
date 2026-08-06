@@ -4,14 +4,11 @@
 **Codebase**: Quilltap v4.8.0-dev (HEAD `3adefeba`)
 **Provenance**: the quilltap-v5 native port's differential harness, and its
 dogfood walks against a copy of real data
-**Status**: Bugs **1–30** and **36–43** are **fixed in v4** — each
-fixed bug's section below carries a **FIXED in v4** marker (see
-[Status](#status)). The remaining bugs **31–35** are **NOT yet
-fixed in v4** — they are the defects the port has surfaced in the weeks since.
-They are catalogued in
-[Bugs found since — not yet fixed in v4](#bugs-found-since--not-yet-fixed-in-v4),
-and summarised in the [Status](#status) table with a **No** in the "Fixed in
-v4?" column.
+**Status**: All catalogued bugs — **1–43** — are now **fixed in v4**. Each fixed
+bug's section below carries a **FIXED in v4** marker, and the [Status](#status)
+table records the per-bug fix site and v5 status. The
+[Bugs found since](#bugs-found-since--not-yet-fixed-in-v4) catalogue is retained
+for its root-cause write-ups and the v5 coordination notes.
 
 **Fix plan:** the open bugs are batched into nine session-sized, dependency-
 ordered specs under [bugfix-sessions/](bugfix-sessions/README.md) — hand a
@@ -1798,7 +1795,8 @@ When a `targetParticipantId` equals the operator's own userId, render "you" /
 
 ## Bug 31 — OpenRouter's non-streaming path refuses vision sends
 
-**Severity: Medium.** Re-confirmed at `@openrouter/sdk` **1.2.2**.
+**Severity: Medium.** Re-confirmed at `@openrouter/sdk` **1.2.2**. **FIXED in v4
+(2026-08-06).**
 
 ### Root cause
 
@@ -1808,15 +1806,31 @@ validation, client-side — so v4 sends **nothing** and the image never reaches 
 model. (The streaming path is fine.) v5 reproduces the refusal; pinned by two
 entries in `EXPECTED_REFUSALS` in the request-builder differential.
 
+Confirmed against the live SDK: `chat.send()` validates content parts with a Zod
+schema that expects camelCase `imageUrl` objects and rejects the OpenAI
+`image_url` snake_case parts v4 builds (`invalid_union` → "expected string,
+received array" at the message-content node).
+
 ### The fix
 
-A v4-side SDK/message-shape reconciliation for the non-streaming vision path.
+**Approach (b) — route the non-streaming vision path around the SDK.** When a
+send carries image attachments, `OpenRouterProvider.sendMessage` now calls a new
+`sendViaChatCompletions` that hits `POST /api/v1/chat/completions` directly with
+`stream:false` and the standard OpenAI `image_url` parts — the exact escape
+hatch `streamMessage` already uses for image/tool requests. No-image sends keep
+the SDK path unchanged. The direct path has feature parity with the SDK send:
+cache key (`user`), tools, web search, structured output, fallback models,
+provider preferences (including ZDR `data_collection`), and reasoning are all
+forwarded; the response's `raw`/usage/cache/`reasoning` are surfaced identically.
+Approaches (a) reshape-to-camelCase and (c) collect-the-stream were rejected as
+riskier and higher-churn respectively. Fix site:
+`plugins/dist/qtap-plugin-openrouter/provider.ts`.
 
 ---
 
 ## Bug 32 — a stale client capability map hides OpenRouter vision
 
-**Severity: Low.**
+**Severity: Low.** **FIXED in v4 (2026-08-06).**
 
 ### Root cause
 
@@ -1827,13 +1841,18 @@ v5 was not bent to match the stale map.
 
 ### The fix
 
-Update the map to match the plugin (or derive it from the plugin manifest).
+`PROVIDER_ATTACHMENT_CAPABILITIES.OPENROUTER` now reports the plugin's four image
+MIME types (`supportsAttachments: true`), landed alongside Bug 31 so the gate
+opens onto a working send path. Deriving the map from plugin manifests stays
+YAGNI (the manifests aren't reachable from client code without the server-only
+registry); each map entry now carries a comment pointing at its plugin instead.
+Fix site: `lib/llm/attachment-support.ts`.
 
 ---
 
 ## Bug 33 — Grok's text and PDF attachment branches are dead code
 
-**Severity: Low.**
+**Severity: Low.** **FIXED in v4 (2026-08-06).**
 
 ### Root cause
 
@@ -1844,11 +1863,20 @@ unreachable. Ported as written per the vestigial-cruft rule; pinned by the grok
 `unsupported-attachment` vector. (Grok Files API support remains v4's own
 deferral.)
 
+### The fix
+
+The gate is now a `isHandledMimeType` check that admits images, `text/*`, and
+`application/pdf` — so `text/*` proceeds to the inline-embed branch and PDF
+reaches the honest "requires Grok Files API" message, while a genuinely
+unsupported binary (e.g. `application/zip`) still gets the generic rejection.
+Actual Files API support stays deferred. Fix site:
+`plugins/dist/qtap-plugin-grok/provider.ts`.
+
 ---
 
 ## Bug 34 — a dead base64 `catch` ships text attachments as mojibake
 
-**Severity: Low.**
+**Severity: Low.** **FIXED in v4 (2026-08-06).**
 
 ### Root cause
 
@@ -1861,13 +1889,21 @@ byte-for-byte (via `node_lenient_base64`, pinned by
 
 ### The fix
 
-Detect the mangle (round-trip check) rather than relying on a throw.
+A `decodeBase64Text` helper replaces the throw-reliance with a round-trip check:
+decode, re-encode, and compare (normalizing whitespace and trailing padding). A
+match means the input really was base64 (return the decoded text); a mismatch
+means it was plain text all along (return it verbatim). Applied at both sites —
+`plugins/dist/qtap-plugin-anthropic/provider.ts` and
+`plugins/dist/qtap-plugin-grok/provider.ts`. The helper is kept local to each
+plugin rather than shared through `@quilltap/plugin-utils`: it is a ~10-line pure
+function, and each plugin bundles its own deps, so a published-package round-trip
+(with its manual-publish gate) would be disproportionate.
 
 ---
 
 ## Bug 35 — the Ollama SSE splitter drops JSON split across reads
 
-**Severity: Low.**
+**Severity: Low.** **FIXED in v4 (2026-08-06).**
 
 ### Root cause
 
@@ -1878,7 +1914,10 @@ reproduces the boundary-sensitivity (Rust-side unit test).
 
 ### The fix
 
-Buffer the tail of each read until the next newline.
+`OllamaProvider.streamMessage` now carries the trailing partial line in a
+`buffer` between reads (`buffer.split('\n')`, keep the last fragment) and flushes
+any final non-empty tail at stream end — an unparseable tail is logged at debug,
+not warn. Fix site: `plugins/dist/qtap-plugin-ollama/provider.ts`.
 
 ---
 
@@ -2177,6 +2216,11 @@ faithfully on the v5 side.
 | 13 | `gcOrphanedFileRow` throws on a mount index without the blobs table | **Yes** (2026-08-06) | `lib/database/repositories/doc-mount-file-links.repository.ts` — payload deletes guarded behind a `sqlite_master` existence check (`tableExistsSync`) | **Owed** (Faithful) — mirror the guard in `gc_orphaned_file_row` |
 | 15 | `reindexLinkGroupSiblings` dead code; hard-linked siblings serve stale chunks | **Yes** (2026-08-06) | `lib/database/repositories/doc-mount-file-links.repository.ts` — `queryJoined` selects + maps `l.linkGroupId` | **Owed** — retire `doc_mount_file_links_tier2_equivalence` → `CHUNK_DIVERGENCES` |
 | 16 | Dimension reconcile counts mount chunks from the wrong database | **Yes** (2026-08-06) | `lib/startup/reconcile-embedding-dimensions.ts` — `doc_mount_points` + chunk scan read from the mount-index handle; comment + unit-test DB placement corrected | **Owed** — retire `embedding_dimension_reconcile` `mountChunks == 0` tripwire |
+| 31 | OpenRouter non-streaming path refuses vision sends (SDK client-side validation) | **Yes** (2026-08-06) | `plugins/dist/qtap-plugin-openrouter/provider.ts` — `sendViaChatCompletions` direct-fetch escape hatch for image sends (approach b) | **Owed** — retire the two `EXPECTED_REFUSALS` entries in the request-builder differential |
+| 32 | Stale client capability map hides OpenRouter vision | **Yes** (2026-08-06) | `lib/llm/attachment-support.ts` — `OPENROUTER` reports the plugin's four image MIME types | **Owed** — mirror the map so v5's client offers OpenRouter images |
+| 33 | Grok text/PDF attachment branches are dead code (images-only gate runs first) | **Yes** (2026-08-06) | `plugins/dist/qtap-plugin-grok/provider.ts` — `isHandledMimeType` admits `text/*` + PDF | **Owed** (Faithful) — mirror the widened gate; retire the grok `unsupported-attachment` vector |
+| 34 | Dead base64 `catch` ships text attachments as mojibake | **Yes** (2026-08-06) | `plugins/dist/qtap-plugin-anthropic/provider.ts` + `plugins/dist/qtap-plugin-grok/provider.ts` — `decodeBase64Text` round-trip check | **Owed** — retire the `text-attachment-mangled-b64` pin (`node_lenient_base64`) |
+| 35 | Ollama SSE splitter drops JSON split across reads | **Yes** (2026-08-06) | `plugins/dist/qtap-plugin-ollama/provider.ts` — cross-read `buffer` + final-tail flush | **Owed** (Faithful) — mirror the cross-read buffer; retire the Rust-side boundary-sensitivity test |
 | 38 | Library picker lists markdown documents that 404 on attach | **Yes** (2026-08-06) | `app/api/v1/chats/[id]/files/route.ts` + `lib/chat-files-v2.ts` — serve native-text documents (no blob) as text attachments; `nativeTextAttachmentMime` in `lib/mount-index/path-utils.ts` | **Owed** (Faithful) — mirror the document-serving attach path |
 | 43 | Orphaned thumbnails never collected | **Yes** (2026-08-06) | `lib/background-jobs/maintenance/sweep-orphaned-thumbnails.ts` wired into `scheduled-maintenance.ts`; `parseThumbnailStorageKey` in `lib/files/thumbnail-utils.ts` | **Owed** (Faithful) — mirror the sweep **and** call `cleanupThumbnails` at v5's two skipped delete/overwrite sites (`api/files.rs:537`, `:1123`) |
 | 22 | Chat GET omits four controlled-select fields | **Yes** (2026-08-06) | `app/api/v1/chats/[id]/handlers/get.ts` — project `timelineMode`, `alertCharactersOfLanternImages`, `showThinking`, `answerConfirmationOverride` | **Owed** (Faithful) — re-port the projection |
@@ -2190,9 +2234,8 @@ faithfully on the v5 side.
 | 36 | "Tools disabled by profile" warning box is dead code | **Yes** (2026-08-06) | `lib/services/chat-enrichment.service.ts` (+ `helpers.ts`) — project `allowToolUse` on the connection profile | **Owed** (Faithful) — mirror the projection; v5 keeps a gated box |
 | 37 | `AllLLMPauseModal` unreachable; the pause is silent | **Yes** (2026-08-06) | `handlers/get.ts` — project `isPaused` + `allLLMPauseTurnCount`; `app/salon/[id]/SalonView.tsx` — opener effect on `isPaused && isAllLLM` | **Owed** (Faithful) — mirror the projection + opener |
 
-**Bugs 22–25, 27, 36, 37 (this session) and 28–30 are now fixed in v4
-(2026-08-06), joining 13, 15, 16, 19–21, 38, 39–43; only bugs 31–35 remain `No` —
-not yet fixed in v4** (bugs 8–12, 18, and 26 fixed earlier). Their
+**All catalogued bugs — 1–43 — are now fixed in v4; the last batch, bugs 31–35,
+on 2026-08-06** (bugs 8–12, 18, and 26 fixed earlier). Their
 per-bug fix sites and v5 status are in
 [Bugs found since](#bugs-found-since--not-yet-fixed-in-v4); they are not repeated
 row-by-row here. The coordination surface, when they are taken, is these

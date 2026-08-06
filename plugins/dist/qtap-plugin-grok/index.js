@@ -11098,12 +11098,29 @@ var GROK_SUPPORTED_MIME_TYPES = [
   "image/gif",
   "image/webp"
 ];
+function decodeBase64Text(data) {
+  const normalize = (s) => s.replace(/\s+/g, "").replace(/=+$/, "");
+  const decoded = Buffer.from(data, "base64");
+  if (normalize(decoded.toString("base64")) === normalize(data)) {
+    return decoded.toString("utf-8");
+  }
+  return data;
+}
 var GrokProvider = class {
   constructor() {
     this.baseUrl = "https://api.x.ai/v1";
     this.supportsFileAttachments = true;
     this.supportedMimeTypes = GROK_SUPPORTED_MIME_TYPES;
     this.supportsWebSearch = true;
+  }
+  /**
+   * Whether an attachment MIME type has a handler behind the gate. Images send
+   * inline; `text/*` embeds inline; PDF reaches the honest "requires Grok Files
+   * API" arm. Anything else falls to the generic "unsupported" rejection. The
+   * previous gate was images-only, which made the text and PDF arms dead code.
+   */
+  isHandledMimeType(mimeType) {
+    return this.supportedMimeTypes.includes(mimeType) || mimeType.startsWith("text/") || mimeType === "application/pdf";
   }
   /**
    * Format messages from LLMMessage format to Responses API format.
@@ -11161,10 +11178,10 @@ var GrokProvider = class {
       }
       if (msg.attachments && msg.attachments.length > 0) {
         for (const attachment of msg.attachments) {
-          if (!this.supportedMimeTypes.includes(attachment.mimeType)) {
+          if (!this.isHandledMimeType(attachment.mimeType)) {
             failed.push({
               id: attachment.id,
-              error: `Unsupported file type: ${attachment.mimeType}. Grok supports: ${this.supportedMimeTypes.join(", ")}`
+              error: `Unsupported file type: ${attachment.mimeType}. Grok supports: ${this.supportedMimeTypes.join(", ")}, text/*`
             });
             continue;
           }
@@ -11183,20 +11200,13 @@ var GrokProvider = class {
             });
             sent.push(attachment.id);
           } else if (attachment.mimeType.startsWith("text/")) {
-            try {
-              const textContent = Buffer.from(attachment.data, "base64").toString("utf-8");
-              content.push({
-                type: "input_text",
-                text: `[File: ${attachment.filename}]
+            const textContent = decodeBase64Text(attachment.data);
+            content.push({
+              type: "input_text",
+              text: `[File: ${attachment.filename}]
 ${textContent}`
-              });
-              sent.push(attachment.id);
-            } catch {
-              failed.push({
-                id: attachment.id,
-                error: "Failed to decode text file"
-              });
-            }
+            });
+            sent.push(attachment.id);
           } else {
             failed.push({
               id: attachment.id,
