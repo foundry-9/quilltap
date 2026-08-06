@@ -1493,6 +1493,108 @@ describe('CharacterVaultPhysicalPromptsSchema', () => {
   });
 });
 
+describe('applyDocumentStoreWriteOverlay — corrupt properties.json (Bug 8)', () => {
+  // The six fields properties.json owns (pronouns, aliases, title, firstMessage,
+  // talkativeness, canChooseOutfit) live ONLY in that file post-4.6. A
+  // read-modify-write save that treated a present-but-corrupt file as absent
+  // would seed empty defaults over it and clobber all six, permanently and
+  // silently. The write path must refuse instead — matching the vault's
+  // established "no silent hollow" failure semantics.
+  const CHAR_ID = 'char-corrupt';
+  const MOUNT_ID = 'mount-corrupt';
+
+  function wireVaultCharacter() {
+    getRepositoriesMock.mockReturnValue({
+      characters: {
+        findByIdRaw: jest.fn().mockResolvedValue({
+          id: CHAR_ID,
+          name: 'Tess',
+          characterDocumentMountPointId: MOUNT_ID, // → hasLinkedVault() === true
+        }),
+      },
+    });
+  }
+
+  function propsWrites() {
+    return writeDatabaseDocumentMock.mock.calls.filter(
+      ([, relPath]) => relPath === CHARACTER_PROPERTIES_JSON_PATH,
+    );
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    wireVaultCharacter();
+  });
+
+  it('refuses the write when properties.json is truncated mid-token — throws, file untouched', async () => {
+    // A real iCloud-conflict / interrupted-write artifact: a valid JSON prefix,
+    // then nothing.
+    readDatabaseDocumentMock.mockResolvedValue({
+      content: '{ "pronouns": { "subject": "she", "objec',
+      mtime: 0,
+      size: 40,
+    });
+
+    await expect(
+      applyDocumentStoreWriteOverlay(CHAR_ID, { title: 'A New Title' }),
+    ).rejects.toBeInstanceOf(CharacterVaultUnavailableError);
+
+    // The six-field file was NOT overwritten with seeded defaults.
+    expect(propsWrites()).toHaveLength(0);
+  });
+
+  it('names the file and calls it unparseable in the error', async () => {
+    readDatabaseDocumentMock.mockResolvedValue({ content: '{ broken', mtime: 0, size: 8 });
+    await expect(
+      applyDocumentStoreWriteOverlay(CHAR_ID, { title: 'X' }),
+    ).rejects.toThrow(/properties\.json unparseable/);
+  });
+
+  it('refuses when the body fails schema validation (talkativeness out of range)', async () => {
+    readDatabaseDocumentMock.mockResolvedValue({
+      content: JSON.stringify({ ...VALID_VAULT_PROPS, talkativeness: 5 }),
+      mtime: 0,
+      size: 80,
+    });
+    await expect(
+      applyDocumentStoreWriteOverlay(CHAR_ID, { title: 'X' }),
+    ).rejects.toBeInstanceOf(CharacterVaultUnavailableError);
+    expect(propsWrites()).toHaveLength(0);
+  });
+
+  it('still seeds defaults when the file is genuinely absent (NOT_FOUND)', async () => {
+    readDatabaseDocumentMock.mockRejectedValue(
+      new (DatabaseStoreError as any)('not found', 'NOT_FOUND'),
+    );
+    const dbPatch = await applyDocumentStoreWriteOverlay(CHAR_ID, { title: 'Seeded Title' });
+    // The patch was routed to the vault and stripped from the DB-bound patch.
+    expect('title' in dbPatch).toBe(false);
+    const [call] = propsWrites();
+    expect(call).toBeDefined();
+    const written = JSON.parse(call![2] as string);
+    expect(written.title).toBe('Seeded Title');
+    // Unspecified fields fall to their fresh-vault defaults.
+    expect(written.talkativeness).toBe(0.5);
+    expect(written.canChooseOutfit).toBe(false);
+  });
+
+  it('merges the patch over a healthy present file, preserving untouched fields', async () => {
+    readDatabaseDocumentMock.mockResolvedValue({
+      content: JSON.stringify(VALID_VAULT_PROPS),
+      mtime: 0,
+      size: 120,
+    });
+    await applyDocumentStoreWriteOverlay(CHAR_ID, { title: 'Merged Title' });
+    const [call] = propsWrites();
+    const written = JSON.parse(call![2] as string);
+    expect(written.title).toBe('Merged Title');
+    // Everything else survives from the file, not reset to defaults.
+    expect(written.aliases).toEqual(VALID_VAULT_PROPS.aliases);
+    expect(written.firstMessage).toBe(VALID_VAULT_PROPS.firstMessage);
+    expect(written.talkativeness).toBe(VALID_VAULT_PROPS.talkativeness);
+  });
+});
+
 describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
   beforeEach(() => {
     jest.clearAllMocks();

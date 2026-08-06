@@ -180,6 +180,46 @@ describe('help-doc-sync', () => {
       expect(result.deleted).toBe(0)
       expect(mockHelpDocs.delete).not.toHaveBeenCalled()
     })
+
+    it('never wipes the table when the only file on disk is whitespace-only (Bug 18)', async () => {
+      // files.length is 1 here, so the empty-directory guard does not fire; the
+      // file trims to nothing, produces no usable content, and the prune would
+      // delete every populated row (measured: totalOnDisk 1, deleted 3, rows
+      // left 0). An all-blank help set against a populated table is suspicious,
+      // not an instruction to wipe.
+      givenHelpDirContains({ 'aurora.md': '   \n\t\n  ' })
+      mockHelpDocs.findAll.mockResolvedValue([
+        helpDocRow({ id: 'a', path: 'help/aurora.md' }),
+        helpDocRow({ id: 'b', path: 'help/brahma-console.md' }),
+        helpDocRow({ id: 'c', path: 'help/carina.md' }),
+      ])
+
+      const result = await syncHelpDocs()
+
+      expect(result.totalOnDisk).toBe(1)
+      expect(result.deleted).toBe(0)
+      expect(mockHelpDocs.delete).not.toHaveBeenCalled()
+      expect(mockEmbeddingStatus.deleteByEntity).not.toHaveBeenCalled()
+    })
+
+    it('still prunes stale rows when at least one file has usable content', async () => {
+      // The guard only trips when NOTHING parses; a real doc alongside a blank
+      // one must still reconcile the genuinely-gone row.
+      givenHelpDirContains({
+        'aurora.md': '# Aurora\n\nReal content.',
+        'blank.md': '   \n  ',
+      })
+      mockHelpDocs.findAll.mockResolvedValue([
+        helpDocRow({ id: 'keep', path: 'help/aurora.md' }),
+        helpDocRow({ id: 'gone-id', path: 'help/retired.md' }),
+      ])
+
+      const result = await syncHelpDocs()
+
+      expect(result.deleted).toBe(1)
+      expect(mockHelpDocs.delete).toHaveBeenCalledWith('gone-id')
+      expect(mockHelpDocs.delete).not.toHaveBeenCalledWith('keep')
+    })
   })
 
   describe('ensureHelpDocsSynced', () => {

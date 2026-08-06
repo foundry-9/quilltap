@@ -4,8 +4,9 @@
 **Codebase**: Quilltap v4.8.0-dev (HEAD `3adefeba`)
 **Provenance**: the quilltap-v5 native port's differential harness, and its
 dogfood walks against a copy of real data
-**Status**: Bugs 1–7 are **fixed in v4** (see [Status](#status)). **Bugs 8
-onward are NOT yet fixed in v4** — they are the defects the port has surfaced in
+**Status**: Bugs 1–7 plus **8 and 18** are **fixed in v4** (see [Status](#status)).
+The remaining bugs 9–17 and 19–43 are **NOT yet fixed in v4** — they are the
+defects the port has surfaced in
 the weeks since, each one still live in `3adefeba`. They are catalogued in
 [Bugs found since — not yet fixed in v4](#bugs-found-since--not-yet-fixed-in-v4),
 and summarised in the [Status](#status) table with a **No** in the "Fixed in
@@ -864,6 +865,13 @@ faithfully-ported-but-dead v4 code paths that bite no user today.
 
 ## Bug 8 — a corrupt `properties.json` is silently overwritten, losing six fields
 
+**FIXED in v4 (2026-08-06)** — `readCharacterVaultPropertiesForWrite` in
+`lib/database/repositories/vault-overlay/vault-readers.ts` distinguishes a
+genuinely absent file from a present-but-corrupt one; the RMW seed in
+`managed-fields.ts` refuses the write (throws `CharacterVaultUnavailableError`)
+rather than seeding defaults over a corrupt sidecar. v5 obligation: retire the
+`corrupt` arm pin of `characters_update_tier2_equivalence`.
+
 **Severity: Critical** — silent, permanent data loss against live data. This is
 the most urgent item on the page. Surfaced by a dogfood pass (finding #47) and
 **ruled URGENT, not post-5.0** (2026-07-31).
@@ -1221,6 +1229,11 @@ in-context chunks. v4-side; v5 inherits it.
 ---
 
 ## Bug 18 — a whitespace-only help file wipes the whole `help_docs` table
+
+**FIXED in v4 (2026-08-06)** — the prune guard in `lib/help/help-doc-sync.ts`
+now refuses the destructive pass when no file on disk parsed to usable content
+while the table is non-empty, not only when the directory is literally empty.
+v5 obligation: mirror the guard (pinned by `help_doc_sync_guards_equivalence`).
 
 **Severity: Medium (latent).** Measured: a `help/` directory whose single `.md`
 is whitespace-only produced `totalOnDisk 1`, `deleted 3`, rows left 0 — the
@@ -1829,8 +1842,11 @@ faithfully on the v5 side.
 | 5 | Composer run consults the first participant's sheet | **Yes** (2026-07-27) | `app/api/v1/chats/[id]/custom-tools/route.ts` — `operatorCharacterIds` + `preferOperator`, applied at the single-variant listing and at POST's fallback | **Owed** — reproduced faithfully on purpose (finding #30); the mirror change is due in the same round |
 | 6 | Boot reconcile re-embeds the cold tier every restart | **Yes** (2026-07-28) | `lib/startup/reconcile-conversation-rendering.ts` — stale chats skipped via the shared `isStale` gate; `isStale` param narrowed in `lib/background-jobs/maintenance/collapse-stale-chat-assets.ts`; follow-up: `clearEmbeddingsForChat` age guard in `lib/database/repositories/conversation-chunks.repository.ts` + `lib/background-jobs/maintenance/collapse-stale-chat-caches.ts` so reopen re-embeds survive the sweep | Inherit the fixed semantics when the reconcile is ported — see the entry's note |
 | 7 | Embedding outcomes never land — mark methods no-op without a status row nobody creates; reconcile re-attempts permanently-FAILED chunks every boot | **Yes** (2026-07-28) | `lib/database/repositories/embedding-status.repository.ts` — `markAsEmbedded`/`markAsFailed` upsert (required `userId`); `lib/background-jobs/handlers/embedding-generate.ts` — `job.userId` threaded at all 13 call sites; `lib/startup/reconcile-conversation-rendering.ts` — condition (B) excludes chunks FAILED for the current default profile | Inherit the fixed semantics — the status store's mark chokepoint must upsert, and the reconcile carries the per-profile FAILED exclusion from day one; see the entry's note |
+| 8 | Corrupt `properties.json` silently overwritten with defaults on next save — six fields lost | **Yes** (2026-08-06) | `lib/database/repositories/vault-overlay/vault-readers.ts` — new `readCharacterVaultPropertiesForWrite` returns null only on `NOT_FOUND`, throws `CharacterVaultUnavailableError` on unreadable/unparseable/schema-invalid; `lib/database/repositories/vault-overlay/managed-fields.ts` — RMW seed uses it (refuse, don't seed defaults), stale `:236` comment rewritten | **Owed** — retire the `corrupt` arm pin of `characters_update_tier2_equivalence`; v4 now refuses + writes nothing, so the arm converges to plain equality |
+| 18 | Whitespace-only help file wipes the whole `help_docs` table | **Yes** (2026-08-06) | `lib/help/help-doc-sync.ts` — prune guard extended from "no file exists" to "no file has usable content while the table is non-empty" | **Owed** — mirror the guard; pinned bidirectionally by `help_doc_sync_guards_equivalence` |
 
-**Bugs 8–43 are all `No` — not yet fixed in v4** (HEAD `3adefeba`). Their per-bug
+**Bugs 9–17 and 19–43 are all `No` — not yet fixed in v4** (bugs 8 and 18 fixed
+above, HEAD `3adefeba`). Their per-bug
 fix sites and v5 status are in
 [Bugs found since](#bugs-found-since--not-yet-fixed-in-v4); they are not repeated
 row-by-row here. The coordination surface, when they are taken, is these

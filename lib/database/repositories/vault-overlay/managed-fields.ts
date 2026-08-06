@@ -44,6 +44,7 @@ import { hasLinkedVault, stableUuidFromString } from './parsers';
 import {
   readVaultTextFile,
   readCharacterVaultProperties,
+  readCharacterVaultPropertiesForWrite,
   readCharacterVaultMetadata,
   readCharacterVaultPhysicalPrompts,
   readCharacterVaultSystemPrompts,
@@ -235,12 +236,19 @@ export async function writeCharacterVaultManagedFields(
 
   // The fact sheet — projected ONLY when the caller actually has one.
   //
-  // Every other field above has a DB column, so "the caller passed nothing"
-  // safely reads as "the value is empty". `metadata` has no column: a raw
-  // character row simply cannot carry it. Writing `{}` on its absence would let
-  // any caller holding a raw row — the startup backfill's repopulate path does
-  // exactly that — silently erase a fact sheet it never saw. So absence here
-  // means "no opinion", not "empty", and the file is left alone.
+  // `metadata` has no DB column and no schema default: a raw character row
+  // simply cannot carry it, so "the caller passed nothing" means "no opinion",
+  // NOT "empty". Writing `{}` on its absence would let any caller holding a raw
+  // row — the startup backfill's repopulate path does exactly that — silently
+  // erase a fact sheet it never saw. So absence here leaves the file alone.
+  //
+  // (The six properties.json fields written above likewise have no DB column
+  // post-4.6 — they live only in that file. This full-projection writer is
+  // always handed a fully-overlaid character, so it can write them wholesale.
+  // But the *patch* path in applyDocumentStoreWriteOverlay must never seed
+  // empty defaults over an unreadable properties.json, since there is nowhere
+  // else to recover the six from — see readCharacterVaultPropertiesForWrite,
+  // which refuses that write. Bug 8.)
   //
   // Nothing is lost by the skip: a fresh vault's `metadata.json` is seeded by
   // the scaffold, and the startup backfill seeds any older vault still lacking
@@ -411,7 +419,19 @@ export async function applyDocumentStoreWriteOverlay(
         if (touched.length === 0) break;
         // Read-modify-write so a partial patch doesn't blow away unspecified
         // fields in the same JSON file.
-        const current = (await readCharacterVaultProperties(mountPointId, characterId)) ?? {
+        //
+        // `readCharacterVaultPropertiesForWrite` returns null ONLY when
+        // properties.json is genuinely absent (a fresh vault — seeding the
+        // defaults below is correct); it THROWS when the file exists but is
+        // unreadable/unparseable. That refusal is the whole fix for Bug 8: the
+        // six fields this file owns (pronouns, aliases, title, firstMessage,
+        // talkativeness, canChooseOutfit) live NOWHERE else post-4.6, so
+        // seeding empty defaults over a corrupt-but-present file would clobber
+        // them permanently and silently. Fail the save loudly instead — the
+        // user repairs or deletes the file. (Established vault failure
+        // semantics: reads already throw CharacterVaultUnavailableError on a
+        // broken vault; there is no "silent hollow" character.)
+        const current = (await readCharacterVaultPropertiesForWrite(mountPointId, characterId)) ?? {
           pronouns: character.pronouns ?? null,
           aliases: character.aliases ?? [],
           title: character.title ?? null,

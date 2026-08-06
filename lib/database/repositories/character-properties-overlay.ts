@@ -106,6 +106,7 @@ export {
 export {
   readVaultTextFile,
   readCharacterVaultProperties,
+  readCharacterVaultPropertiesForWrite,
   readCharacterVaultMetadata,
   readCharacterVaultIdentity,
   readCharacterVaultDescription,

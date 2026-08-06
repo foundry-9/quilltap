@@ -218,26 +218,48 @@ export async function syncHelpDocs(): Promise<HelpDocSyncResult> {
     }
   }
 
-  // Prune rows whose file is gone from disk. Only reached once we know the
-  // help directory exists and produced at least one readable file, so a
-  // missing/unreadable help/ can never empty the table.
-  for (const doc of existingDocs) {
-    if (pathsOnDisk.has(doc.path)) {
-      continue
-    }
-
-    try {
-      await repos.helpDocs.delete(doc.id)
-      await repos.embeddingStatus.deleteByEntity('HELP_DOC', doc.id)
-      result.deleted++
-    } catch (error) {
-      result.failed++
-      logger.error('[HelpDocSync] Failed to prune deleted help doc', {
+  // Refuse the destructive prune when NOTHING on disk parsed to usable content
+  // yet the table is populated. `pathsOnDisk` holds exactly the docs that
+  // survived the `if (!rawContent) continue` guard above — i.e. every file with
+  // usable (non-whitespace) content. The `files.length === 0` early return only
+  // covers a literally empty directory; a directory whose only `.md` is
+  // whitespace-only slips past it (`totalOnDisk 1`) but produces no usable
+  // content, and the prune below would then delete every row (measured:
+  // `deleted 3, rows left 0`). An all-empty help set on disk against a
+  // populated table is suspicious — an interrupted checkout, a half-written
+  // file — not an instruction to wipe the Guide. Skip the prune and leave the
+  // rows in place; the next healthy sync reconciles them.
+  if (pathsOnDisk.size === 0 && existingDocs.length > 0) {
+    logger.warn(
+      '[HelpDocSync] No help docs on disk have usable content but the table is populated — skipping the destructive prune',
+      {
         context: 'syncHelpDocs',
-        docId: doc.id,
-        path: doc.path,
-        error: error instanceof Error ? error.message : String(error),
-      })
+        totalOnDisk: result.totalOnDisk,
+        existingRows: existingDocs.length,
+      },
+    )
+  } else {
+    // Prune rows whose file is gone from disk. Only reached once we know the
+    // help directory exists and produced at least one file with usable content,
+    // so a missing/unreadable/blank help/ can never empty the table.
+    for (const doc of existingDocs) {
+      if (pathsOnDisk.has(doc.path)) {
+        continue
+      }
+
+      try {
+        await repos.helpDocs.delete(doc.id)
+        await repos.embeddingStatus.deleteByEntity('HELP_DOC', doc.id)
+        result.deleted++
+      } catch (error) {
+        result.failed++
+        logger.error('[HelpDocSync] Failed to prune deleted help doc', {
+          context: 'syncHelpDocs',
+          docId: doc.id,
+          path: doc.path,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
     }
   }
 
