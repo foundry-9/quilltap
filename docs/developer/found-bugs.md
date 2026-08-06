@@ -4,9 +4,9 @@
 **Codebase**: Quilltap v4.8.0-dev (HEAD `3adefeba`)
 **Provenance**: the quilltap-v5 native port's differential harness, and its
 dogfood walks against a copy of real data
-**Status**: Bugs **1–21** plus **26** and **38–43** are **fixed in v4** — each
+**Status**: Bugs **1–30** and **36–43** are **fixed in v4** — each
 fixed bug's section below carries a **FIXED in v4** marker (see
-[Status](#status)). The remaining bugs **22–25 and 27–37** are **NOT yet
+[Status](#status)). The remaining bugs **31–35** are **NOT yet
 fixed in v4** — they are the defects the port has surfaced in the weeks since.
 They are catalogued in
 [Bugs found since — not yet fixed in v4](#bugs-found-since--not-yet-fixed-in-v4),
@@ -1493,6 +1493,13 @@ pin + unit test `dress_outfit_counts_are_effective_permission`.
 
 ## Bug 22 — chat GET omits four controlled-select fields
 
+**FIXED in v4 (2026-08-06)** — the chat GET projection
+(`app/api/v1/chats/[id]/handlers/get.ts`) now emits `timelineMode`,
+`alertCharactersOfLanternImages`, `showThinking`, and
+`answerConfirmationOverride` (each `?? null`), so the controlled selects survive
+a reload. Pinned by `handlers/get.test.ts` ("projects the four controlled-select
+fields"). v5 obligation (**Faithful**): re-port the projection in the same round.
+
 **Severity: Medium.** The write lands; the display never reflects it.
 
 ### Symptom
@@ -1521,6 +1528,15 @@ grows the projection, v5 re-ports it.
 
 ## Bug 23 — a `controlledBy` patch returns early, skipping the identity recompile
 
+**FIXED in v4 (2026-08-06)** — `handleParticipantUpdate` (`helpers.ts`) no longer
+returns inside the `controlledBy !== undefined` block; it falls through to the
+shared tail so the status/`isActive` back-compat sync and
+`compileAllIdentityStacks(finalChat)` run for a `controlledBy` patch too, fed by
+the post-write re-read. Pinned by `helpers.participant-update.test.ts`. v5
+obligation (**Faithful**): the v5 ruling
+`update_controlled_by_with_status_early_return` — which pins the early-return
+behaviour — must be re-ruled when this lands; mirror in the same round.
+
 **Severity: Medium.**
 
 ### Symptom
@@ -1540,6 +1556,13 @@ with `update_controlled_by_with_status_early_return`.
 
 ## Bug 24 — `remove-participant` returns a stale chat
 
+**FIXED in v4 (2026-08-06)** — `handleRemoveParticipantAction`
+(`actions/participants.ts`) now captures the chat returned by the impersonation
+clean-up `repos.chats.update` and returns that, so the response no longer lists
+the removed participant in `impersonatingParticipantIds`. Pinned by
+`participants-impersonation.test.ts`. v5 obligation (**Faithful**): mirror in the
+same round (v5 diffs this as `remove_impersonating_promotes`).
+
 **Severity: Low.**
 
 ### Symptom
@@ -1557,6 +1580,12 @@ captured, so the returned object predates the cleanup. v5 diffs this with
 ---
 
 ## Bug 25 — "stop impersonating" is unreachable from v4's own client
+
+**FIXED in v4 (2026-08-06)** — the `stop-impersonate` action is now registered on
+the **DELETE** map (`handlers/delete.ts`), matching the verb the client already
+sends; the stale **POST** registration was removed (nothing else called it).
+Pinned by `handlers/delete.test.ts`. v5 already models it correctly — nothing to
+change there.
 
 **Severity: Medium.** v5 already models it correctly — nothing to change there;
 this is purely a v4-side defect.
@@ -1605,6 +1634,32 @@ Have the gate return the post-link row (or have the fold pass re-read it) on
 ---
 
 ## Bug 27 — "Speak as an AI character" is a dead affordance
+
+**FIXED in v4 (2026-08-06) — decision: the preferred path (wire "Speak as"
+through impersonation, honoured for real).**
+
+*Investigation.* "Speak as" was already wired to the impersonation start path
+(`onImpersonate` → `POST ?action=impersonate` → `addImpersonation`), but
+`addImpersonation` never flipped `controlledBy`. The connection-profile "User
+(you type)" option, by contrast, goes through `handleParticipantUpdate`, which
+**couples** `controlledBy: 'user'` ⇔ impersonation. And the client's
+stop-impersonate flow prompts for an LLM profile to hand the character back —
+which only makes sense if starting impersonation had made the character
+user-controlled. So the intended design is `impersonate ⇔ controlledBy: 'user'`;
+the impersonate **action** simply forgot to flip it. This was not genuinely
+ambiguous, so the preferred fix was taken (no user prompt needed).
+
+*Fix.* `handleImpersonate` now sets the participant to `controlledBy: 'user'`
+(and `handleStopImpersonate` hands it back to `'llm'`), restoring that invariant.
+Both recompile the identity stacks (`controlledBy` alters `{{user}}`/`{{persona}}`
+for everyone). This leaves the differential-verified `findActiveUserParticipant`
+**untouched** — attribution now works because the seat is genuinely
+user-controlled while impersonated, and the "You"/"Speaking as" badge becomes
+truthful without further change. Pinned by `participants-impersonation.test.ts`
+(the action flips control) and `turn-manager.test.ts` ("honours a formerly-LLM
+character once impersonation flips it to user-controlled"). v5 obligation
+(**Faithful**): mirror in the same round; this is the v4 decision that
+`chat_cast_routes_equivalence` was waiting for.
 
 **Severity: Medium** — the UI offers an action it does not perform.
 
@@ -1829,6 +1884,15 @@ Buffer the tail of each read until the next newline.
 
 ## Bug 36 — the "tools disabled by profile" warning box is dead code
 
+**FIXED in v4 (2026-08-06)** — `getConnectionProfile`
+(`lib/services/chat-enrichment.service.ts`) now projects `allowToolUse` (and the
+mirror `getEnrichedConnectionProfile` in `helpers.ts` does too), so
+`ChatModals.tsx`'s `allowToolUse === false` condition can finally be true and the
+warning box fires for a tools-forbidding profile. The box was kept, not deleted.
+Pinned by `chat-enrichment.service.test.ts` ("projects allowToolUse when the
+profile forbids tools"). v5 obligation (**Faithful**, v5 keeps a gated box):
+mirror the projection in the same round.
+
 **Severity: Low.** No v4 user has ever seen it.
 
 ### Root cause
@@ -1849,6 +1913,15 @@ grows the projection.
 ---
 
 ## Bug 37 — `AllLLMPauseModal` is unreachable; the pause is silent
+
+**FIXED in v4 (2026-08-06)** — the chat GET projection now emits `isPaused` and
+`allLLMPauseTurnCount` (`handlers/get.ts`), and `SalonView` gained an opener
+effect that opens `AllLLMPauseModal` whenever `chat.isPaused && isAllLLM`. Because
+the chain-complete SSE event already triggers `fetchChat`, that one effect covers
+both a live pause and loading an already-paused all-LLM room — no new SSE event,
+the transport is left alone. The modal was kept, not deleted. Pinned by
+`handlers/get.test.ts` ("projects isPaused and allLLMPauseTurnCount"). v5
+obligation (**Faithful**): mirror the projection + opener in the same round.
 
 **Severity: Low.**
 
@@ -2106,13 +2179,20 @@ faithfully on the v5 side.
 | 16 | Dimension reconcile counts mount chunks from the wrong database | **Yes** (2026-08-06) | `lib/startup/reconcile-embedding-dimensions.ts` — `doc_mount_points` + chunk scan read from the mount-index handle; comment + unit-test DB placement corrected | **Owed** — retire `embedding_dimension_reconcile` `mountChunks == 0` tripwire |
 | 38 | Library picker lists markdown documents that 404 on attach | **Yes** (2026-08-06) | `app/api/v1/chats/[id]/files/route.ts` + `lib/chat-files-v2.ts` — serve native-text documents (no blob) as text attachments; `nativeTextAttachmentMime` in `lib/mount-index/path-utils.ts` | **Owed** (Faithful) — mirror the document-serving attach path |
 | 43 | Orphaned thumbnails never collected | **Yes** (2026-08-06) | `lib/background-jobs/maintenance/sweep-orphaned-thumbnails.ts` wired into `scheduled-maintenance.ts`; `parseThumbnailStorageKey` in `lib/files/thumbnail-utils.ts` | **Owed** (Faithful) — mirror the sweep **and** call `cleanupThumbnails` at v5's two skipped delete/overwrite sites (`api/files.rs:537`, `:1123`) |
+| 22 | Chat GET omits four controlled-select fields | **Yes** (2026-08-06) | `app/api/v1/chats/[id]/handlers/get.ts` — project `timelineMode`, `alertCharactersOfLanternImages`, `showThinking`, `answerConfirmationOverride` | **Owed** (Faithful) — re-port the projection |
+| 23 | `controlledBy` patch returns early, skipping the recompile | **Yes** (2026-08-06) | `app/api/v1/chats/[id]/helpers.ts` — `handleParticipantUpdate` falls through to the shared sync + `compileAllIdentityStacks` tail | **Owed** (Faithful) — re-rule `update_controlled_by_with_status_early_return` |
+| 24 | `remove-participant` returns a stale chat | **Yes** (2026-08-06) | `app/api/v1/chats/[id]/actions/participants.ts` — return the post-cleanup chat from `repos.chats.update` | **Owed** (Faithful) — mirror; v5 `remove_impersonating_promotes` |
+| 25 | "Stop impersonating" unreachable (client sends DELETE) | **Yes** (2026-08-06) | `app/api/v1/chats/[id]/handlers/delete.ts` — register `stop-impersonate` on DELETE; removed the stale POST registration | Converged — v5 already models it correctly |
+| 27 | "Speak as an AI character" is a dead affordance | **Yes** (2026-08-06) | `app/api/v1/chats/[id]/actions/participants.ts` — `handleImpersonate`/`handleStopImpersonate` flip `controlledBy` (`user` ⇔ `llm`) + recompile stacks | **Owed** (Faithful) — the v4 decision `chat_cast_routes_equivalence` was waiting for |
 | 28 | Staff-signed ad-hoc announcement reaches the model anonymous | **Yes** (2026-08-06) | `lib/chat/context/announcement-attribution.ts` — `resolveAnnouncerName` falls back to `systemSender` (via `staffDisplayName`) when no `customAnnouncer`, gated to `systemKind === 'announcement'`; prefix also applied to `opaqueContent` | **Owed** (Faithful, both-apps) — this is a bug in v5 too; fix `resolveAnnouncerName` there in the same round, not merely mirror it |
 | 29 | User-initiated tool card wears the last speaker's face | **Yes** (2026-08-06) | `app/salon/[id]/group-tool-messages.ts` — `resolveToolRowAttributionMessage` heads a `initiatedBy: 'user'` TOOL row as the operator (USER row), suppressing the positional borrow; character rows unchanged | **Owed** (Faithful) — mirror at `chat-view-model.ts::resolveToolAvatar` |
 | 30 | User-initiated private run renders "whispered to unknown" | **Yes** (2026-08-06) | `app/salon/[id]/whisper-visibility.ts` — `resolveWhisperTargetLabel` resolves the operator's own userId to "you"; threaded as `currentUserId` through `SalonView` → `VirtualizedMessageList` → `MessageRow` | **Owed** (Faithful) — mirror at `message-row.ts:490` |
+| 36 | "Tools disabled by profile" warning box is dead code | **Yes** (2026-08-06) | `lib/services/chat-enrichment.service.ts` (+ `helpers.ts`) — project `allowToolUse` on the connection profile | **Owed** (Faithful) — mirror the projection; v5 keeps a gated box |
+| 37 | `AllLLMPauseModal` unreachable; the pause is silent | **Yes** (2026-08-06) | `handlers/get.ts` — project `isPaused` + `allLLMPauseTurnCount`; `app/salon/[id]/SalonView.tsx` — opener effect on `isPaused && isAllLLM` | **Owed** (Faithful) — mirror the projection + opener |
 
-**Bugs 13–21, 26, 28–30, and 38–43 are now fixed in v4 (2026-08-06); bugs 22–25,
-27, and 31–37 remain `No` — not yet fixed in v4** (bugs 8–12 and 18 fixed
-earlier). Their
+**Bugs 22–25, 27, 36, 37 (this session) and 28–30 are now fixed in v4
+(2026-08-06), joining 13, 15, 16, 19–21, 38, 39–43; only bugs 31–35 remain `No` —
+not yet fixed in v4** (bugs 8–12, 18, and 26 fixed earlier). Their
 per-bug fix sites and v5 status are in
 [Bugs found since](#bugs-found-since--not-yet-fixed-in-v4); they are not repeated
 row-by-row here. The coordination surface, when they are taken, is these

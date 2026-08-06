@@ -334,6 +334,21 @@ describe('findActiveUserParticipant (Speaking As)', () => {
   it('returns null when there are no user-controlled participants', () => {
     expect(findActiveUserParticipant([abigail], 'anything')).toBeNull()
   })
+
+  // Bug 27: "Speak as an AI character" routes through impersonation, which now
+  // flips the chosen character to controlledBy: 'user'. Once flipped, attribution
+  // must honour it as the active speaker — otherwise the operator's next message
+  // still lands under their original character. This pins the attribution side of
+  // that fix (chat_cast_routes_equivalence).
+  it('honours a formerly-LLM character once impersonation flips it to user-controlled', () => {
+    const beforeImpersonation = makeCharacterParticipant('p-abigail', 'char-abigail', { displayOrder: 1 })
+    // Selecting the still-LLM character is not honoured (the pre-fix dead affordance).
+    expect(findActiveUserParticipant([jackie, beforeImpersonation], 'p-abigail')).toBe(jackie)
+
+    // After impersonation flips controlledBy to 'user', the same seat IS honoured.
+    const afterImpersonation = makeUserControlledParticipant('p-abigail', 'char-abigail', { displayOrder: 1 })
+    expect(findActiveUserParticipant([jackie, afterImpersonation], 'p-abigail')).toBe(afterImpersonation)
+  })
 })
 
 describe('turn manager rapid sequential messages', () => {
