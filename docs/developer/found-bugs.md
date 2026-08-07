@@ -1,12 +1,14 @@
 # Found Bugs — defects surfaced by the v5 port
 
-**Last Updated**: 2026-08-06
+**Last Updated**: 2026-08-07
 **Codebase**: Quilltap v4.8.0-dev (HEAD `3adefeba`)
 **Provenance**: the quilltap-v5 native port's differential harness, and its
 dogfood walks against a copy of real data
-**Status**: Bugs **1–43** are **fixed in v4**; **Bug 44 is OPEN** (a
-mechanism correction to Bug 27's fix, ruled 2026-08-06 — the defect stays
-fixed, the mechanism is to move to the impersonation overlay). Each fixed
+**Status**: Bugs **1–44** are **fixed in v4** (Bug 44, the impersonation
+overlay, landed 2026-08-07); **Bug 45 is OPEN** (an impersonated seat's
+just-sent message flickers to the wrong author before the refetch corrects
+it — surfaced on the 2026-08-07 v5 dogfood walk of the overlay; cosmetic,
+both apps share the code). Each fixed
 bug's section below carries a **FIXED in v4** marker, and the [Status](#status)
 table records the per-bug fix site and v5 status. The
 [Bugs found since](#bugs-found-since--not-yet-fixed-in-v4) catalogue is retained
@@ -2326,6 +2328,58 @@ on this corrected foundation.
 
 ---
 
+## Bug 45 — an impersonated seat's message flickers to the wrong author before correcting
+
+**OPEN.** Surfaced 2026-08-07 on a v5 dogfood walk of the Bug 44 overlay; v4
+shares the code and the behaviour. **Severity: Low (cosmetic, self-correcting).**
+
+### Symptom
+
+While impersonating a character, a message you send first renders (optimistically)
+attributed to your *own* default user character, then, when the server response
+lands, re-renders attributed to the character you are impersonating — a visible
+authorship jump on the just-sent bubble.
+
+### Root cause
+
+The optimistic user bubble is attributed to the raw `activeTypingParticipantId`
+(`app/salon/[id]/hooks/useSSEStreaming.ts:648` — `participantId:
+activeTypingParticipantIdRef.current`). The **server's** final attribution runs
+through `findActiveUserParticipant(participants, activeTypingParticipantId,
+impersonatingParticipantIds)` (`lib/services/chat-message/user-identity-resolver.service.ts:47`),
+which is impersonation-aware. When `activeTypingParticipantId` does not already
+point at the seat the server resolves the message onto — the ordinary case,
+because `handleImpersonate` only sets `activeTypingParticipantId` when it was
+previously empty (`chat.activeTypingParticipantId || participantId`), so
+impersonating while you already have an active user seat leaves it pointing at
+the old seat — the optimistic guess and the persisted row disagree, and the
+refetch corrects the bubble. The two attribution paths (client-optimistic vs
+server-authoritative) are simply not reconciled for the impersonation overlay.
+
+### Why it survived
+
+Cosmetic and self-correcting, and only visible during impersonation when the
+active typing seat differs from the seat the server attributes the message to.
+The port reproduces it exactly (v5 `makeTempUserMessage` uses the same
+`activeTypingParticipantId`), which is how it was noticed (v5
+`dogfood-findings.md` #71).
+
+### The fix
+
+Reconcile the optimistic attribution with the server's resolution — attribute the
+optimistic bubble to the same seat `findActiveUserParticipant` would pick
+(consulting `impersonatingParticipantIds`), not the bare `activeTypingParticipantId`.
+A focused repro to pin the exact divergence (which seat each path chooses, for a
+given `activeTypingParticipantId` + impersonation state) should precede the fix.
+
+### Verification
+
+Impersonate a character while an ordinary user seat is active, send a message, and
+confirm the optimistic bubble is authored by the impersonated character from the
+first paint (no re-attribution on refetch).
+
+---
+
 ## Inert dead code
 
 These are dead or unreachable v4 code paths that cost no user anything today —
@@ -2397,6 +2451,7 @@ faithfully on the v5 side.
 | 36 | "Tools disabled by profile" warning box is dead code | **Yes** (2026-08-06) | `lib/services/chat-enrichment.service.ts` (+ `helpers.ts`) — project `allowToolUse` on the connection profile | **Owed** (Faithful) — mirror the projection; v5 keeps a gated box |
 | 37 | `AllLLMPauseModal` unreachable; the pause is silent | **Yes** (2026-08-06) | `handlers/get.ts` — project `isPaused` + `allLLMPauseTurnCount`; `app/salon/[id]/SalonView.tsx` — opener effect on `isPaused && isAllLLM` | **Owed** (Faithful) — mirror the projection + opener |
 | 44 | Bug 27's fix mutates `controlledBy` (mutate-and-restore) instead of overlaying impersonation | **Yes** (2026-08-07, v4-first) | `actions/participants.ts` — both writes + recompiles removed; shared `isUserDrivenSeat` in `lib/chat/turn-manager/utils.ts` consulted at attribution (`findActiveUserParticipant`, `findUserParticipantName`, `resolveUserIdentity`) + who-responds (`selectNextSpeaker`, `resolveRespondingParticipant` filter, `turn-orchestrator` pause, `turn.ts` skip); owner-seat readers keep the column; tests + API.md rewritten | **v4-FIRST (inverse direction)** — v5 still mirrors the SHIPPED flips; absorbs this as a drift re-port (`salon_mutations` / `chat_cast_routes` / turn-chain families move; impersonation e2e re-gestures — Stop button returns to the card) |
+| 45 | An impersonated seat's just-sent message flickers to the wrong author before the refetch corrects it | **No** (OPEN, 2026-08-07) | client `app/salon/[id]/hooks/useSSEStreaming.ts:648` (optimistic bubble) vs server `lib/services/chat-message/user-identity-resolver.service.ts:47` (`findActiveUserParticipant`) | Reproduced faithfully — v5 `dogfood-findings.md` #71; both apps share the optimistic-attribution code, so a fix is a v4-first product decision |
 
 **Bugs 1–43 are fixed in v4; Bug 44 is OPEN. The 1–43 close-out: the last batch, bugs 31–35,
 on 2026-08-06** (bugs 8–12, 18, and 26 fixed earlier). Their
