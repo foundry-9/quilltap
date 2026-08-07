@@ -67,7 +67,34 @@ export function getSelectionExplanation(result: TurnSelectionResult): string {
 }
 
 /**
+ * True when the human is driving this seat right now — either because they own
+ * it (`controlledBy === 'user'`) or because they are impersonating it this
+ * session (its id is in `impersonatingParticipantIds`).
+ *
+ * Impersonation is an OVERLAY on top of ownership (Bug 44): the seat's durable
+ * `controlledBy` column is left untouched, so any reader that means "who is
+ * typing right now / who does NOT get an LLM turn / whose voice a typed message
+ * carries" must consult this helper rather than the bare column. Readers that
+ * mean "who OWNS this seat" (the stable user seat, `isAllLLM`, the identity
+ * stacks) deliberately keep reading `controlledBy` — that stability is what
+ * keeps the seat from moving mid-conversation.
+ */
+export function isUserDrivenSeat(
+  participant: Pick<ChatParticipantBase, 'id' | 'controlledBy'>,
+  impersonatingParticipantIds?: readonly string[] | null
+): boolean {
+  if (participant.controlledBy === 'user') return true;
+  return Array.isArray(impersonatingParticipantIds)
+    && impersonatingParticipantIds.includes(participant.id);
+}
+
+/**
  * Finds the first user-controlled participant in the participants list.
+ *
+ * This is an OWNERSHIP reader — it intentionally reads `controlledBy` only and
+ * ignores the impersonation overlay, because the "user seat" must stay put while
+ * an impersonation comes and goes (Bug 44). Callers that need the seat the human
+ * is currently speaking *as* want {@link findActiveUserParticipant} instead.
  * @deprecated Use findUserControlledParticipants for multi-impersonation support
  */
 export function findUserParticipant(
@@ -91,16 +118,24 @@ export function findUserParticipant(
  *
  * Prefer this over {@link findUserParticipant}, which always returns the first
  * user-controlled participant and silently mis-attributes in multi-speaker chats.
+ *
+ * Honours the impersonation overlay (Bug 44): when the selected
+ * `activeTypingParticipantId` is a seat the human is currently impersonating,
+ * it is returned even though its durable `controlledBy` is still `'llm'`. The
+ * fallback stays on {@link findUserParticipant} (a genuine owner seat) — during
+ * a solo impersonation there is no owner seat, but `addImpersonation` always
+ * sets `activeTypingParticipantId`, so the selected branch resolves.
  */
 export function findActiveUserParticipant(
   participants: ChatParticipantBase[],
-  activeTypingParticipantId?: string | null
+  activeTypingParticipantId?: string | null,
+  impersonatingParticipantIds?: readonly string[] | null
 ): ChatParticipantBase | null {
   if (activeTypingParticipantId) {
     const selected = participants.find(p =>
       p.id === activeTypingParticipantId &&
       isParticipantPresent(p.status) &&
-      p.controlledBy === 'user'
+      isUserDrivenSeat(p, impersonatingParticipantIds)
     );
     if (selected) return selected;
   }

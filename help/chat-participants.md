@@ -411,9 +411,9 @@ If impersonating multiple characters:
 
 ### Stopping Impersonation
 
-1. Click **Stop Impersonate** on the character's card
-2. Select a connection profile for AI control
-3. Character returns to LLM control
+1. Click **Stop Impersonate** on the character's card — always present there, so you are never stranded mid-impersonation
+2. If the character has no connection profile of its own, you'll be asked to pick one so it can answer under its own steam again
+3. The character resumes speaking for itself; nothing else about the seat is disturbed
 
 ## Pause and Resume
 

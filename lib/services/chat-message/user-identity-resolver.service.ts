@@ -46,7 +46,8 @@ export async function resolveUserIdentity(
   // matches the active speaker rather than the first participant in order.
   const userControlledParticipant = findActiveUserParticipant(
     chat.participants,
-    activeTypingParticipantId
+    activeTypingParticipantId,
+    chat.impersonatingParticipantIds
   )
 
   if (userControlledParticipant?.characterId) {

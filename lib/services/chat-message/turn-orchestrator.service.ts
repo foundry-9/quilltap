@@ -5,6 +5,7 @@ import {
   getActiveCharacterParticipants,
   isAllLLMChat,
   shouldPauseForAllLLM,
+  isUserDrivenSeat,
 } from '@/lib/chat/turn-manager'
 import type { Character, MessageEvent } from '@/lib/schemas/types'
 import type { getRepositories } from '@/lib/repositories/factory'
@@ -178,7 +179,8 @@ export async function shouldChainNext(
       freshChat.participants,
       charactersMap,
       turnState,
-      userParticipantId
+      userParticipantId,
+      freshChat.impersonatingParticipantIds
     )
 
     nextParticipantId = result.nextSpeakerId
@@ -200,9 +202,12 @@ export async function shouldChainNext(
     return { chain: false, reason: 'error' }
   }
 
-  if (nextParticipant.controlledBy === 'user') {
+  if (isUserDrivenSeat(nextParticipant, freshChat.impersonatingParticipantIds)) {
     // Surface which user character is "up" so the salon UI can label the
-    // pause and offer a Skip button targeted at that participant.
+    // pause and offer a Skip button targeted at that participant. A seat the
+    // human is impersonating (Bug 44 overlay — `controlledBy` still `'llm'`)
+    // pauses the chain just like a genuine user seat, so the operator types
+    // the character's line instead of the model generating it.
     let characterName: string | undefined
     if (nextParticipant.characterId) {
       const char = await repos.characters.findById(nextParticipant.characterId)

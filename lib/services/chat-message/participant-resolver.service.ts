@@ -13,6 +13,7 @@ import {
   getActiveCharacterParticipants,
   selectNextSpeaker,
   calculateTurnStateFromHistory,
+  isUserDrivenSeat,
 } from '@/lib/chat/turn-manager'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type {
@@ -71,7 +72,11 @@ export async function resolveRespondingParticipant(
   // Get user participant (user-controlled character) for turn management.
   // Honor the human's "Speaking As" selection so typed messages are attributed
   // to the chosen character, not merely the first user-controlled participant.
-  const userParticipant = findActiveUserParticipant(chat.participants, activeUserParticipantId)
+  const userParticipant = findActiveUserParticipant(
+    chat.participants,
+    activeUserParticipantId,
+    chat.impersonatingParticipantIds,
+  )
   const userParticipantId = userParticipant?.id ?? null
 
   // Get character participant - use specified participant for continue mode, otherwise first active character
@@ -110,15 +115,18 @@ export async function resolveRespondingParticipant(
     }
   } else {
     // Normal mode or continue mode without specific participant — pick the
-    // next LLM responder by weighted talkativeness. Excludes user-controlled
-    // characters from the candidate set (those wait for the human to type),
-    // and respects the persisted `spokenThisCycleParticipantIds` so the cycle
-    // is preserved across turns.
+    // next LLM responder by weighted talkativeness. Excludes user-driven seats
+    // from the candidate set (those wait for the human to type) — both genuine
+    // owner seats and seats the human is impersonating this session (Bug 44:
+    // impersonation is an overlay, `controlledBy` stays `'llm'`, so an
+    // impersonated seat must be excluded via the overlay, not the column) — and
+    // respects the persisted `spokenThisCycleParticipantIds` so the cycle is
+    // preserved across turns.
     const llmCandidates = chat.participants.filter(
       p => p.type === 'CHARACTER'
         && isParticipantPresent(p.status)
         && !!p.characterId
-        && p.controlledBy !== 'user'
+        && !isUserDrivenSeat(p, chat.impersonatingParticipantIds)
     )
 
     if (llmCandidates.length === 0) {
@@ -155,7 +163,8 @@ export async function resolveRespondingParticipant(
         llmCandidates,
         charactersMap,
         turnState,
-        userParticipantId
+        userParticipantId,
+        chat.impersonatingParticipantIds,
       )
 
       if (selection.nextSpeakerId) {

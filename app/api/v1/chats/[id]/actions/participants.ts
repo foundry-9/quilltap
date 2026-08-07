@@ -25,7 +25,7 @@ import {
   postHostRemoveAnnouncement,
   postHostJoinScenarioAnnouncement,
 } from '@/lib/services/host-notifications/writer';
-import { compileIdentityStackForParticipant, compileAllIdentityStacks } from '@/lib/services/system-prompt-compiler/compiler';
+import { compileIdentityStackForParticipant } from '@/lib/services/system-prompt-compiler/compiler';
 import {
   applyOutfitSelections,
   buildCheapLLMConfig,
@@ -53,27 +53,17 @@ export async function handleImpersonate(
     return badRequest('Participant is not active or silent');
   }
 
-  // Impersonation means the operator now speaks as this character, so flip it to
-  // user-controlled — the same invariant handleParticipantUpdate maintains when
-  // the "User (you type)" connection-profile option is chosen. Without this the
-  // attribution resolvers (findActiveUserParticipant) never honour the selection
-  // and the operator's next message lands under their own character (Bug 27).
-  await repos.chats.updateParticipant(chatId, participantId, { controlledBy: 'user' });
-
+  // Impersonation is a BEHAVIOR change, not a state change (Bug 44): the seat's
+  // durable ownership (`controlledBy`) and connection profile stay exactly where
+  // they were. `addImpersonation` — which records the id in
+  // `impersonatingParticipantIds` and sets `activeTypingParticipantId` — is the
+  // whole state change. The attribution and turn-taking resolvers honour that
+  // overlay (see `isUserDrivenSeat`), so no column moves and no identity stack
+  // recompiles. Not mutating `controlledBy` is what keeps the "user seat" stable
+  // and the card's own Stop button reachable.
   const updatedChat = await repos.chats.addImpersonation(chatId, participantId);
   if (!updatedChat) {
     return serverError('Failed to start impersonation');
-  }
-
-  // controlledBy changed, which alters {{user}}/{{persona}} for everyone — recompile
-  // the identity stacks. Non-fatal (read-through fallback on failure).
-  try {
-    await compileAllIdentityStacks(updatedChat);
-  } catch (error) {
-    logger.warn('[Chats v1] Failed to recompile identity stacks after impersonation start', {
-      chatId, participantId,
-      error: error instanceof Error ? error.message : String(error),
-    });
   }
 
   const characterName = await resolveParticipantCharacterName(participant, repos);
@@ -106,15 +96,22 @@ export async function handleStopImpersonate(
     return notFound('Participant');
   }
 
+  // Impersonation is an overlay (Bug 44): the seat was never disturbed on start,
+  // so there is nothing to restore. `removeImpersonation` — which drops the id
+  // from `impersonatingParticipantIds` and re-points `activeTypingParticipantId`
+  // — is the whole state change. No `controlledBy` write, no identity-stack
+  // recompile.
   let updatedChat = await repos.chats.removeImpersonation(chatId, participantId);
   if (!updatedChat) {
     return serverError('Failed to stop impersonation');
   }
 
-  // Hand the character back to the LLM — the mirror of the controlledBy flip in
-  // handleImpersonate. A new profile may accompany the hand-back (the client's
-  // stop flow prompts for one when the character has none); otherwise the
-  // character keeps its existing connection profile.
+  // A new connection profile may accompany the hand-back — the client's stop
+  // flow offers one when the character has none, so a formerly-impersonated seat
+  // isn't left LLM-controlled with no way to answer. This is a DELIBERATE seat
+  // reassignment, a separate concern from stopping the impersonation: route it
+  // through a plain participant update (profile only — `controlledBy` never
+  // moved, so there is nothing to flip and nothing to recompile).
   if (newConnectionProfileId) {
     const profile = await repos.connections.findById(newConnectionProfileId);
     if (!profile) {
@@ -123,22 +120,7 @@ export async function handleStopImpersonate(
 
     updatedChat = await repos.chats.updateParticipant(chatId, participantId, {
       connectionProfileId: newConnectionProfileId,
-      controlledBy: 'llm',
     }) ?? updatedChat;
-  } else {
-    updatedChat = await repos.chats.updateParticipant(chatId, participantId, {
-      controlledBy: 'llm',
-    }) ?? updatedChat;
-  }
-
-  // controlledBy changed back — recompile identity stacks. Non-fatal.
-  try {
-    await compileAllIdentityStacks(updatedChat);
-  } catch (error) {
-    logger.warn('[Chats v1] Failed to recompile identity stacks after impersonation stop', {
-      chatId, participantId,
-      error: error instanceof Error ? error.message : String(error),
-    });
   }
 
   const characterName = await resolveParticipantCharacterName(participant, repos);

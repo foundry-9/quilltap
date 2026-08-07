@@ -2176,9 +2176,29 @@ Add the orphan-thumbnail sweep neither app has; on the v5 side, also call
 
 ## Bug 44 — Bug 27's fix chose the wrong mechanism: impersonation mutates `controlledBy` instead of overlaying it
 
-**OPEN. Ruled 2026-08-06 (human, at the v5 port's finding-#39 re-ruling):
-the overlay design stands; the mutate-and-restore mechanism Bug 27's fix
-shipped is a mistake and is to be corrected here, v4-first.** Bug 27's
+**FIXED (2026-08-07, v4-first).** The mutate-and-restore mechanism is
+replaced by the ruled overlay. `handleImpersonate`/`handleStopImpersonate`
+(`app/api/v1/chats/[id]/actions/participants.ts`) no longer write
+`controlledBy` or recompile identity stacks — `addImpersonation` /
+`removeImpersonation` alone are the state change. A shared
+`isUserDrivenSeat(participant, impersonatingParticipantIds)`
+(`lib/chat/turn-manager/utils.ts`) is consulted at the two gates:
+attribution (`findActiveUserParticipant`, `findUserParticipantName`,
+`resolveUserIdentity`) and who-responds (`selectNextSpeaker` /
+`buildResult`, the `llmCandidates` filter in `resolveRespondingParticipant`,
+the `turn-orchestrator` pause, and `turn.ts`'s `skipUserTurn` gate). The
+owner-seat readers (`findUserParticipant` / `userParticipantId`,
+`isAllLLMChat`) deliberately keep reading the column, which heals the
+hidden-Stop-button hole with no client change. The stop flow's
+`newConnectionProfileId` arm is now a plain profile reassignment.
+Regression tests rewritten to the overlay semantics
+(`participants-impersonation.test.ts`, `turn-manager.test.ts`); API.md and
+the CHANGELOG updated; transition data left alone per the ruling.
+
+**Original ruling (OPEN. Ruled 2026-08-06, human, at the v5 port's
+finding-#39 re-ruling): the overlay design stands; the mutate-and-restore
+mechanism Bug 27's fix shipped is a mistake and is to be corrected here,
+v4-first.** Bug 27's
 DEFECT was real and stays fixed — "Speak as" must be honoured — but the
 mechanism that fixed it (write `controlledBy:'user'` on impersonate,
 write `'llm'` back on a profile-less stop) is the wrong one. Ruling
@@ -2370,13 +2390,13 @@ faithfully on the v5 side.
 | 23 | `controlledBy` patch returns early, skipping the recompile | **Yes** (2026-08-06) | `app/api/v1/chats/[id]/helpers.ts` — `handleParticipantUpdate` falls through to the shared sync + `compileAllIdentityStacks` tail | **Owed** (Faithful) — re-rule `update_controlled_by_with_status_early_return` |
 | 24 | `remove-participant` returns a stale chat | **Yes** (2026-08-06) | `app/api/v1/chats/[id]/actions/participants.ts` — return the post-cleanup chat from `repos.chats.update` | **Owed** (Faithful) — mirror; v5 `remove_impersonating_promotes` |
 | 25 | "Stop impersonating" unreachable (client sends DELETE) | **Yes** (2026-08-06) | `app/api/v1/chats/[id]/handlers/delete.ts` — register `stop-impersonate` on DELETE; removed the stale POST registration | Converged — v5 already models it correctly |
-| 27 | "Speak as an AI character" is a dead affordance | **Yes** (2026-08-06) | `app/api/v1/chats/[id]/actions/participants.ts` — `handleImpersonate`/`handleStopImpersonate` flip `controlledBy` (`user` ⇔ `llm`) + recompile stacks | **Owed** (Faithful) — the v4 decision `chat_cast_routes_equivalence` was waiting for |
+| 27 | "Speak as an AI character" is a dead affordance | **Yes** (2026-08-06; mechanism corrected by Bug 44, 2026-08-07) | `app/api/v1/chats/[id]/actions/participants.ts` — ~~`handleImpersonate`/`handleStopImpersonate` flip `controlledBy` (`user` ⇔ `llm`) + recompile stacks~~ **superseded**: impersonation now overlays the seat (see Bug 44); the defect stays fixed, the mechanism changed | **Owed** (Faithful) — the v4 decision `chat_cast_routes_equivalence` was waiting for; the overlay correction re-ports with Bug 44 |
 | 28 | Staff-signed ad-hoc announcement reaches the model anonymous | **Yes** (2026-08-06) | `lib/chat/context/announcement-attribution.ts` — `resolveAnnouncerName` falls back to `systemSender` (via `staffDisplayName`) when no `customAnnouncer`, gated to `systemKind === 'announcement'`; prefix also applied to `opaqueContent` | **Owed** (Faithful, both-apps) — this is a bug in v5 too; fix `resolveAnnouncerName` there in the same round, not merely mirror it |
 | 29 | User-initiated tool card wears the last speaker's face | **Yes** (2026-08-06) | `app/salon/[id]/group-tool-messages.ts` — `resolveToolRowAttributionMessage` heads a `initiatedBy: 'user'` TOOL row as the operator (USER row), suppressing the positional borrow; character rows unchanged | **Owed** (Faithful) — mirror at `chat-view-model.ts::resolveToolAvatar` |
 | 30 | User-initiated private run renders "whispered to unknown" | **Yes** (2026-08-06) | `app/salon/[id]/whisper-visibility.ts` — `resolveWhisperTargetLabel` resolves the operator's own userId to "you"; threaded as `currentUserId` through `SalonView` → `VirtualizedMessageList` → `MessageRow` | **Owed** (Faithful) — mirror at `message-row.ts:490` |
 | 36 | "Tools disabled by profile" warning box is dead code | **Yes** (2026-08-06) | `lib/services/chat-enrichment.service.ts` (+ `helpers.ts`) — project `allowToolUse` on the connection profile | **Owed** (Faithful) — mirror the projection; v5 keeps a gated box |
 | 37 | `AllLLMPauseModal` unreachable; the pause is silent | **Yes** (2026-08-06) | `handlers/get.ts` — project `isPaused` + `allLLMPauseTurnCount`; `app/salon/[id]/SalonView.tsx` — opener effect on `isPaused && isAllLLM` | **Owed** (Faithful) — mirror the projection + opener |
-| 44 | Bug 27's fix mutates `controlledBy` (mutate-and-restore) instead of overlaying impersonation | **No — OPEN** (ruled 2026-08-06) | `actions/participants.ts` — remove both writes + recompiles; widen `findActiveUserParticipant` + who-responds to consult `impersonatingParticipantIds`; rewrite the Bug-27 tests + API.md | **v4-FIRST (inverse direction)** — v5 mirrors the SHIPPED flips until this lands, then absorbs it as a drift re-port (`salon_mutations` / `chat_cast_routes` / turn-chain families move) |
+| 44 | Bug 27's fix mutates `controlledBy` (mutate-and-restore) instead of overlaying impersonation | **Yes** (2026-08-07, v4-first) | `actions/participants.ts` — both writes + recompiles removed; shared `isUserDrivenSeat` in `lib/chat/turn-manager/utils.ts` consulted at attribution (`findActiveUserParticipant`, `findUserParticipantName`, `resolveUserIdentity`) + who-responds (`selectNextSpeaker`, `resolveRespondingParticipant` filter, `turn-orchestrator` pause, `turn.ts` skip); owner-seat readers keep the column; tests + API.md rewritten | **v4-FIRST (inverse direction)** — v5 still mirrors the SHIPPED flips; absorbs this as a drift re-port (`salon_mutations` / `chat_cast_routes` / turn-chain families move; impersonation e2e re-gestures — Stop button returns to the card) |
 
 **Bugs 1–43 are fixed in v4; Bug 44 is OPEN. The 1–43 close-out: the last batch, bugs 31–35,
 on 2026-08-06** (bugs 8–12, 18, and 26 fixed earlier). Their

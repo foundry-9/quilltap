@@ -25,6 +25,8 @@ jest.mock('@/lib/chat/turn-manager', () => ({
   getActiveCharacterParticipants: jest.fn().mockReturnValue([]),
   isAllLLMChat: jest.fn().mockReturnValue(false),
   shouldPauseForAllLLM: jest.fn().mockReturnValue(false),
+  isUserDrivenSeat: (p: { id?: string; controlledBy?: string } | null | undefined, ids?: readonly string[] | null) =>
+    p?.controlledBy === 'user' || (Array.isArray(ids) && !!p?.id && ids.includes(p.id)),
 }));
 
 jest.mock('@/lib/services/chat-message/streaming.service', () => ({

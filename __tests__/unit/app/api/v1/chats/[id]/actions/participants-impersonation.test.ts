@@ -44,30 +44,33 @@ const {
 const chatId = '33333333-3333-4333-8333-333333333333'
 const partA = '11111111-1111-4111-8111-111111111111'
 const partB = '22222222-2222-4222-8222-222222222222'
+const profile9 = '99999999-9999-4999-8999-999999999999'
 
 function makeRequest(body: unknown): any {
   return { json: async () => body }
 }
 
-describe('impersonation actions flip controlledBy (Bug 27)', () => {
+describe('impersonation actions overlay controlledBy without moving it (Bug 44)', () => {
   beforeEach(() => jest.clearAllMocks())
 
-  it('handleImpersonate makes the character user-controlled so attribution is honoured', async () => {
+  it('handleImpersonate records the overlay and leaves controlledBy untouched', async () => {
     const chat = {
       id: chatId,
       participants: [{ id: partA, type: 'CHARACTER', characterId: 'char-1', controlledBy: 'llm', status: 'active' }],
       impersonatingParticipantIds: [],
       activeTypingParticipantId: null,
     }
+    // addImpersonation records the id + sets the active typing participant. The
+    // seat's `controlledBy` stays exactly where it was — impersonation is a
+    // behavior overlay, not an ownership change (Bug 44).
     const updatedChat = {
       ...chat,
-      participants: [{ ...chat.participants[0], controlledBy: 'user' }],
       impersonatingParticipantIds: [partA],
       activeTypingParticipantId: partA,
     }
     const repos: any = {
       chats: {
-        updateParticipant: jest.fn().mockResolvedValue(updatedChat),
+        updateParticipant: jest.fn(),
         addImpersonation: jest.fn().mockResolvedValue(updatedChat),
       },
     }
@@ -75,39 +78,75 @@ describe('impersonation actions flip controlledBy (Bug 27)', () => {
     const res = await handleImpersonate(makeRequest({ participantId: partA }), chatId, chat, { user: { id: 'u1' }, repos })
     const body = await res.json()
 
-    // The dead-affordance fix: impersonation flips control to the operator.
-    expect(repos.chats.updateParticipant).toHaveBeenCalledWith(chatId, partA, { controlledBy: 'user' })
     expect(repos.chats.addImpersonation).toHaveBeenCalledWith(chatId, partA)
-    expect(compileAllIdentityStacks).toHaveBeenCalledWith(updatedChat)
+    // No column moves, no identity-stack churn.
+    expect(repos.chats.updateParticipant).not.toHaveBeenCalled()
+    expect(compileAllIdentityStacks).not.toHaveBeenCalled()
+    // The seat is still LLM-owned; only the overlay records who is typing.
+    expect(updatedChat.participants[0].controlledBy).toBe('llm')
     expect(body.impersonatingParticipantIds).toEqual([partA])
+    expect(body.activeTypingParticipantId).toBe(partA)
   })
 
-  it('handleStopImpersonate hands the character back to the LLM', async () => {
+  it('handleStopImpersonate clears the overlay with nothing to restore', async () => {
+    // The seat stayed LLM-owned throughout the impersonation (Bug 44 overlay).
     const chat = {
       id: chatId,
-      participants: [{ id: partA, type: 'CHARACTER', characterId: 'char-1', controlledBy: 'user', status: 'active' }],
+      participants: [{ id: partA, type: 'CHARACTER', characterId: 'char-1', controlledBy: 'llm', status: 'active' }],
       impersonatingParticipantIds: [partA],
       activeTypingParticipantId: partA,
     }
     const afterRemove = { ...chat, impersonatingParticipantIds: [], activeTypingParticipantId: null }
-    const afterRevert = {
-      ...afterRemove,
-      participants: [{ ...chat.participants[0], controlledBy: 'llm' }],
-    }
     const repos: any = {
       chats: {
         removeImpersonation: jest.fn().mockResolvedValue(afterRemove),
-        updateParticipant: jest.fn().mockResolvedValue(afterRevert),
+        updateParticipant: jest.fn(),
       },
       connections: { findById: jest.fn() },
     }
 
     const res = await handleStopImpersonate(makeRequest({ participantId: partA }), chatId, chat, { user: { id: 'u1' }, repos })
+    const body = await res.json()
+
+    expect(repos.chats.removeImpersonation).toHaveBeenCalledWith(chatId, partA)
+    // Nothing to hand back: no controlledBy write, no recompile.
+    expect(repos.chats.updateParticipant).not.toHaveBeenCalled()
+    expect(compileAllIdentityStacks).not.toHaveBeenCalled()
+    expect(body.impersonatingParticipantIds).toEqual([])
+  })
+
+  it('handleStopImpersonate with a chosen profile reassigns the seat (profile only, no controlledBy)', async () => {
+    const chat = {
+      id: chatId,
+      participants: [{ id: partA, type: 'CHARACTER', characterId: 'char-1', controlledBy: 'llm', status: 'active' }],
+      impersonatingParticipantIds: [partA],
+      activeTypingParticipantId: partA,
+    }
+    const afterRemove = { ...chat, impersonatingParticipantIds: [], activeTypingParticipantId: null }
+    const afterReassign = {
+      ...afterRemove,
+      participants: [{ ...chat.participants[0], connectionProfileId: profile9 }],
+    }
+    const repos: any = {
+      chats: {
+        removeImpersonation: jest.fn().mockResolvedValue(afterRemove),
+        updateParticipant: jest.fn().mockResolvedValue(afterReassign),
+      },
+      connections: { findById: jest.fn().mockResolvedValue({ id: profile9 }) },
+    }
+
+    const res = await handleStopImpersonate(
+      makeRequest({ participantId: partA, newConnectionProfileId: profile9 }),
+      chatId,
+      chat,
+      { user: { id: 'u1' }, repos },
+    )
     await res.json()
 
     expect(repos.chats.removeImpersonation).toHaveBeenCalledWith(chatId, partA)
-    expect(repos.chats.updateParticipant).toHaveBeenCalledWith(chatId, partA, { controlledBy: 'llm' })
-    expect(compileAllIdentityStacks).toHaveBeenCalledWith(afterRevert)
+    // A deliberate seat reassignment — profile only, controlledBy never moves.
+    expect(repos.chats.updateParticipant).toHaveBeenCalledWith(chatId, partA, { connectionProfileId: profile9 })
+    expect(compileAllIdentityStacks).not.toHaveBeenCalled()
   })
 })
 

@@ -717,7 +717,8 @@ export async function calculateNextSpeaker(
     chat.participants,
     charactersMap,
     turnState,
-    userParticipantId
+    userParticipantId,
+    chat.impersonatingParticipantIds
   )
 
   return {

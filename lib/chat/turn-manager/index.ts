@@ -63,6 +63,7 @@ export {
   getSelectionExplanation,
   findUserParticipant,
   findActiveUserParticipant,
+  isUserDrivenSeat,
   findUserControlledParticipants,
   getActiveCharacterParticipants,
   getActiveLLMParticipants,

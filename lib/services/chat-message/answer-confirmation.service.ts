@@ -26,6 +26,7 @@ import type { UncensoredFallbackOptions, CheapLLMTaskResult } from '@/lib/memory
 import type { LLMMessage } from '@/lib/llm/base'
 import type { ConnectionProfile, MessageEvent, ChatMetadataBase, Character, ChatParticipantBase } from '@/lib/schemas/types'
 import { getParticipantName } from '@/lib/chat/context/message-attribution'
+import { isUserDrivenSeat } from '@/lib/chat/turn-manager/utils'
 import type { ToolMessage } from './types'
 
 const logger = createServiceLogger('AnswerConfirmation')
@@ -134,11 +135,13 @@ export function isUserDrivenTurn(
   chat: Pick<ChatMetadataBase, 'participants' | 'impersonatingParticipantIds'>,
   participantId: string,
 ): boolean {
-  if (Array.isArray(chat.impersonatingParticipantIds) && chat.impersonatingParticipantIds.includes(participantId)) {
-    return true
-  }
   const participant = chat.participants?.find((p) => p.id === participantId)
-  return participant?.controlledBy === 'user'
+  if (!participant) {
+    // No participant record: fall back to the raw overlay membership check.
+    return Array.isArray(chat.impersonatingParticipantIds)
+      && chat.impersonatingParticipantIds.includes(participantId)
+  }
+  return isUserDrivenSeat(participant, chat.impersonatingParticipantIds)
 }
 
 /** Compactly serialize an in-scope tool result for the reference block. */

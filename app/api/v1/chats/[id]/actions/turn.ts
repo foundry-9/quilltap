@@ -21,6 +21,7 @@ import {
   computeSkipEligibility,
   qualifiesForTurnSkipping,
   isUsersTurn,
+  isUserDrivenSeat,
 } from '@/lib/chat/turn-manager';
 import { postHostTurnPassAnnouncement } from '@/lib/services/host-notifications/writer';
 import { turnActionSchema } from '../schemas';
@@ -51,7 +52,9 @@ export async function handleTurnAction(
     if (!isParticipantPresent(participant.status)) {
       return badRequest('Participant is not active');
     }
-    if (turnAction === 'skipUserTurn' && participant.controlledBy !== 'user') {
+    if (turnAction === 'skipUserTurn' && !isUserDrivenSeat(participant, chat.impersonatingParticipantIds)) {
+      // A seat the human is impersonating (Bug 44 overlay) is skippable too,
+      // even though its durable `controlledBy` is still `'llm'`.
       return badRequest('Only user-controlled participants can be skipped');
     }
   }
@@ -170,7 +173,7 @@ export async function handleTurnAction(
     }
   }
 
-  const nextSpeakerResult = selectNextSpeaker(chat.participants, charactersMap, turnState, userParticipantId);
+  const nextSpeakerResult = selectNextSpeaker(chat.participants, charactersMap, turnState, userParticipantId, chat.impersonatingParticipantIds);
 
   // Persist turn queue and last turn participant for state-modifying actions
   if (turnAction !== 'query') {

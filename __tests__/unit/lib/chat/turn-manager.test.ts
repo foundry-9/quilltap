@@ -215,6 +215,23 @@ describe('turn manager state', () => {
     expect(selection.reason).toBe('user_turn')
   })
 
+  it('treats an impersonated LLM seat as a user turn via the overlay (Bug 44)', () => {
+    // The seat's controlledBy is 'llm'; only impersonatingParticipantIds marks it.
+    const impersonated = makeCharacterParticipant('p1', 'char-1')
+    const characters = new Map<string, Character>([['char-1', makeCharacter('char-1')]])
+    const state = createInitialTurnState()
+
+    // Without the overlay it is an ordinary LLM speaker.
+    const llmTurn = selectNextSpeaker([impersonated], characters, state, null)
+    expect(llmTurn.reason).toBe('only_character')
+
+    // With the overlay it pauses for the human, without the column moving.
+    const userTurn = selectNextSpeaker([impersonated], characters, state, null, ['p1'])
+    expect(userTurn.nextSpeakerId).toBe('p1')
+    expect(userTurn.reason).toBe('user_turn')
+    expect(impersonated.controlledBy).toBe('llm')
+  })
+
   it('single-character all-LLM chat continues in monologue mode', () => {
     const participant = makeCharacterParticipant('p1', 'char-1')
     const characters = new Map<string, Character>([['char-1', makeCharacter('char-1')]])
@@ -335,19 +352,20 @@ describe('findActiveUserParticipant (Speaking As)', () => {
     expect(findActiveUserParticipant([abigail], 'anything')).toBeNull()
   })
 
-  // Bug 27: "Speak as an AI character" routes through impersonation, which now
-  // flips the chosen character to controlledBy: 'user'. Once flipped, attribution
-  // must honour it as the active speaker — otherwise the operator's next message
-  // still lands under their original character. This pins the attribution side of
-  // that fix (chat_cast_routes_equivalence).
-  it('honours a formerly-LLM character once impersonation flips it to user-controlled', () => {
-    const beforeImpersonation = makeCharacterParticipant('p-abigail', 'char-abigail', { displayOrder: 1 })
-    // Selecting the still-LLM character is not honoured (the pre-fix dead affordance).
-    expect(findActiveUserParticipant([jackie, beforeImpersonation], 'p-abigail')).toBe(jackie)
+  // Bug 44: "Speak as an AI character" routes through impersonation, which is an
+  // OVERLAY — the chosen seat's `controlledBy` stays 'llm'; only the chat's
+  // `impersonatingParticipantIds` records it. Attribution must honour the
+  // overlaid seat as the active speaker without the column ever moving.
+  it('honours an impersonated LLM seat via the overlay, without moving controlledBy', () => {
+    const abigailSeat = makeCharacterParticipant('p-abigail', 'char-abigail', { displayOrder: 1 })
+    // Without the overlay, selecting the LLM character is not honoured.
+    expect(findActiveUserParticipant([jackie, abigailSeat], 'p-abigail')).toBe(jackie)
 
-    // After impersonation flips controlledBy to 'user', the same seat IS honoured.
-    const afterImpersonation = makeUserControlledParticipant('p-abigail', 'char-abigail', { displayOrder: 1 })
-    expect(findActiveUserParticipant([jackie, afterImpersonation], 'p-abigail')).toBe(afterImpersonation)
+    // With the seat listed in impersonatingParticipantIds, the SAME still-LLM
+    // seat IS honoured as the active speaker.
+    expect(findActiveUserParticipant([jackie, abigailSeat], 'p-abigail', ['p-abigail'])).toBe(abigailSeat)
+    // The column was never touched.
+    expect(abigailSeat.controlledBy).toBe('llm')
   })
 })
 

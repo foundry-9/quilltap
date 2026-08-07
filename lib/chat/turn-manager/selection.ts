@@ -9,6 +9,7 @@ import { turnManagerLogger as logger } from './logger';
 import type { TurnState, TurnSelectionResult } from './types';
 import type { ChatParticipantBase, Character } from '@/lib/schemas/types';
 import { isParticipantPresent } from '@/lib/schemas/types';
+import { isUserDrivenSeat } from './utils';
 
 /**
  * Selects the next speaker based on turn state and talkativeness weights.
@@ -29,7 +30,8 @@ export function selectNextSpeaker(
   participants: ChatParticipantBase[],
   characters: Map<string, Character>,
   turnState: TurnState,
-  _userParticipantId: string | null
+  _userParticipantId: string | null,
+  impersonatingParticipantIds?: readonly string[] | null
 ): TurnSelectionResult {
   // Step 1: Check queue first
   if (turnState.queue.length > 0) {
@@ -61,7 +63,7 @@ export function selectNextSpeaker(
   // pointless with nobody else to alternate with.
   if (activeCharacterParticipants.length === 1) {
     const onlyCharacter = activeCharacterParticipants[0];
-    return buildResult(onlyCharacter, 'only_character', false);
+    return buildResult(onlyCharacter, 'only_character', false, impersonatingParticipantIds);
   }
 
   // Step 2: Weighted-random pick from eligible (not last speaker, not yet
@@ -74,7 +76,7 @@ export function selectNextSpeaker(
 
   if (eligibleParticipants.length > 0) {
     const pick = pickWeighted(eligibleParticipants, characters);
-    return buildResult(pick.participant, 'weighted_selection', false, {
+    return buildResult(pick.participant, 'weighted_selection', false, impersonatingParticipantIds, {
       eligibleSpeakers: eligibleParticipants.map(p => p.id),
       weights: pick.weights,
       randomValue: pick.randomValue,
@@ -98,7 +100,7 @@ export function selectNextSpeaker(
   }
 
   const wrapPick = pickWeighted(newCycleParticipants, characters);
-  return buildResult(wrapPick.participant, 'weighted_selection', true, {
+  return buildResult(wrapPick.participant, 'weighted_selection', true, impersonatingParticipantIds, {
     eligibleSpeakers: newCycleParticipants.map(p => p.id),
     weights: wrapPick.weights,
     randomValue: wrapPick.randomValue,
@@ -110,12 +112,18 @@ function buildResult(
   participant: ChatParticipantBase,
   reason: TurnSelectionResult['reason'],
   cycleComplete: boolean,
+  impersonatingParticipantIds?: readonly string[] | null,
   debug?: TurnSelectionResult['debug'],
 ): TurnSelectionResult {
-  const isUserControlled = participant.controlledBy === 'user';
+  // A seat the human owns OR is impersonating this session takes a *user* turn —
+  // the orchestrator pauses the chain so the human types or skips. Impersonation
+  // is an overlay (Bug 44): `controlledBy` stays `'llm'`, so consult the overlay
+  // rather than the bare column, otherwise a weighted pick would try to generate
+  // an LLM response as the character the human is speaking for.
+  const isUserDriven = isUserDrivenSeat(participant, impersonatingParticipantIds);
   return {
     nextSpeakerId: participant.id,
-    reason: isUserControlled ? 'user_turn' : reason,
+    reason: isUserDriven ? 'user_turn' : reason,
     cycleComplete,
     debug,
   };

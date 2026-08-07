@@ -2283,7 +2283,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   if (newUserMessage) {
     let newUserMsgName: string | undefined
     if (isMultiCharacter && allParticipants && participantCharacters) {
-      newUserMsgName = findUserParticipantName(allParticipants, participantCharacters, activeUserParticipantId)
+      newUserMsgName = findUserParticipantName(allParticipants, participantCharacters, activeUserParticipantId, chat.impersonatingParticipantIds)
     }
 
     const trailingContextSections: string[] = []

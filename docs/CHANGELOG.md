@@ -4,6 +4,14 @@
 
 ### 4.8-dev
 
+#### Fix: impersonation overlays the seat instead of mutating it (bug 44)
+
+"Speak as an AI character" no longer rewrites the participant's `controlledBy`. Bug 27's fix flipped the seat to `controlledBy: 'user'` on impersonate and back to `'llm'` on stop; that restore arm left a seat permanently user-controlled if the stop never came (browser closed mid-impersonation), could hand the seat back on a different connection profile, and — because it made the impersonated character the chat's first user-controlled participant — resolved the "user seat" to her, which hid the card's own Stop button in solo-shaped casts.
+
+Impersonation is now a pure overlay: `addImpersonation`/`removeImpersonation` (recording the id in `impersonatingParticipantIds` and moving `activeTypingParticipantId`) are the whole state change, and `controlledBy` is never written. Two turn-resolution gates read the overlay instead of the bare column, via a shared `isUserDrivenSeat(participant, impersonatingParticipantIds)` helper: message attribution (`findActiveUserParticipant`, `findUserParticipantName`, `resolveUserIdentity`) and who-responds resolution (`selectNextSpeaker`, the LLM-candidate filter in `resolveRespondingParticipant`, the turn-orchestrator pause, and the `skipUserTurn` gate). The stable "user seat" (`findUserParticipant`/`userParticipantId`) keeps reading the column, which restores the Stop button with no client change. The stop flow's optional `newConnectionProfileId` is now a plain profile reassignment (no `controlledBy` write, no identity-stack recompile).
+
+Seats flipped by the old mechanism while an impersonation was active at upgrade time stay `controlledBy: 'user'` — the overlay stop restores nothing, and a blind repair can't tell a legacy flip from a genuinely user-owned seat. Fix a stuck seat in one click from the participant editor.
+
 #### Docs: Bug 44 catalogued — Bug 27's impersonation mechanism ruled a mistake
 
 The fix for Bug 27 ("Speak as" honoured for real) chose the wrong
