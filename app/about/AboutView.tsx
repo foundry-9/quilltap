@@ -5,6 +5,9 @@ import packageJson from '@/package.json'
 import { BrandName } from '@/components/ui/brand-name'
 import { Icon } from '@/components/ui/icon'
 import { useTheme } from '@/components/providers/theme-provider'
+import { useReportWorkspaceBackdrop } from '@/components/workspace/workspace-backdrop'
+
+const ABOUT_BACKGROUND_URL = '/images/about.webp'
 
 export function AboutView() {
   const currentYear = new Date().getFullYear()
@@ -14,12 +17,18 @@ export function AboutView() {
   // doesn't play against default styling and then visibly re-skin underneath.
   const { isLoading: themeLoading } = useTheme()
 
+  // Inside the workspace, the per-view `::before` background layer is
+  // suppressed in favour of the one arbitrated backdrop, so report our
+  // background there. No-op on the legacy /about route, whose `::before`
+  // (driven by --story-background-url below) still paints it.
+  useReportWorkspaceBackdrop(ABOUT_BACKGROUND_URL, false)
+
   return (
     <div
       className="qt-page-container qt-about-intro"
       data-theme-ready={themeLoading ? undefined : 'true'}
       style={{
-        '--story-background-url': "url('/images/about.webp')",
+        '--story-background-url': `url('${ABOUT_BACKGROUND_URL}')`,
         '--story-background-position': 'right center',
       } as React.CSSProperties}
     >

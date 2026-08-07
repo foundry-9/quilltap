@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Fix: About page lost its background image inside the workspace
+
+The About surface set its background only through the inline `--story-background-url` variable, which drives the per-view `.qt-page-container::before` layer. That layer is suppressed inside `.qt-workspace` in favor of the single arbitrated backdrop (`components/workspace/workspace-backdrop.tsx`), and About — unlike the Salon — never reported to it, so once About rendered as a workspace tab the image vanished. `AboutView` now calls `useReportWorkspaceBackdrop('/images/about.webp', false)`; it stays a no-op on the legacy `/about` route, where the `::before` layer still paints. The background URL is now a single `ABOUT_BACKGROUND_URL` constant shared by both paths.
+
 #### Fix: impersonation overlays the seat instead of mutating it (bug 44)
 
 "Speak as an AI character" no longer rewrites the participant's `controlledBy`. Bug 27's fix flipped the seat to `controlledBy: 'user'` on impersonate and back to `'llm'` on stop; that restore arm left a seat permanently user-controlled if the stop never came (browser closed mid-impersonation), could hand the seat back on a different connection profile, and — because it made the impersonated character the chat's first user-controlled participant — resolved the "user seat" to her, which hid the card's own Stop button in solo-shaped casts.
