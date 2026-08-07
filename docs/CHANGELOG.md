@@ -4,6 +4,19 @@
 
 ### 4.8-dev
 
+#### Docs: Bug 44 catalogued — Bug 27's impersonation mechanism ruled a mistake
+
+The fix for Bug 27 ("Speak as" honoured for real) chose the wrong
+mechanism: it rewrites the participant's `controlledBy` on impersonate and
+restores it on stop, where the ruled design overlays the already-persisted
+impersonation state at the two turn-resolution gates and never touches the
+seat. The defect stays fixed; the mechanism correction is catalogued as
+Bug 44 in `docs/developer/found-bugs.md` with the full account: the
+restore-arm failure modes, the two-sources-of-truth hazard, the measured
+hidden-Stop-button casualty, the exact fix sites, the test rewrites, the
+transition note, and the v5 sequencing (v4-first — the port mirrors the
+shipped behavior until this lands). No code changed in this commit.
+
 #### Fix: CI test failures from a fragile SQLite driver loader
 
 Two mount-index unit suites (`doc-mount-file-links-blobless-gc.test.ts`, `link-groups-reindex.test.ts`) loaded the real `better-sqlite3` binding through a fallback chain that tried a bare `better-sqlite3-multiple-ciphers` require before the absolute root path. In CI the nested `packages/quilltap/node_modules` path is absent, so the loader fell through to the bare require — which `jest.config`'s `moduleNameMapper` maps to the no-op mock (`get()`→`undefined`, `all()`→`[]`). Every query returned empty: `CREATE TABLE` was a no-op and the read-back after an insert found nothing ("Link disappeared immediately after upsert"). Both suites now load the driver by absolute root path (`process.cwd()/node_modules/better-sqlite3`), matching the canonical reference, which the mock mapper can't intercept.

@@ -4,7 +4,9 @@
 **Codebase**: Quilltap v4.8.0-dev (HEAD `3adefeba`)
 **Provenance**: the quilltap-v5 native port's differential harness, and its
 dogfood walks against a copy of real data
-**Status**: All catalogued bugs — **1–43** — are now **fixed in v4**. Each fixed
+**Status**: Bugs **1–43** are **fixed in v4**; **Bug 44 is OPEN** (a
+mechanism correction to Bug 27's fix, ruled 2026-08-06 — the defect stays
+fixed, the mechanism is to move to the impersonation overlay). Each fixed
 bug's section below carries a **FIXED in v4** marker, and the [Status](#status)
 table records the per-bug fix site and v5 status. The
 [Bugs found since](#bugs-found-since--not-yet-fixed-in-v4) catalogue is retained
@@ -1635,6 +1637,15 @@ Have the gate return the post-link row (or have the fold pass re-read it) on
 **FIXED in v4 (2026-08-06) — decision: the preferred path (wire "Speak as"
 through impersonation, honoured for real).**
 
+> **⚠ MECHANISM CORRECTION RULED (2026-08-06) — see [Bug 44](#bug-44--bug-27s-fix-chose-the-wrong-mechanism-impersonation-mutates-controlledby-instead-of-overlaying-it).**
+> The defect this entry describes stays fixed, but the mechanism below
+> (flipping `controlledBy` and restoring it on stop) was ruled a mistake at
+> the v5 port's finding-#39 re-ruling: impersonation is to be honoured by
+> OVERLAYING the already-persisted impersonation state at the two gate
+> sites, never by mutating the seat's `controlledBy`/`connectionProfileId`.
+> The "intended design is `impersonate ⇔ controlledBy: 'user'`" inference
+> below is the part the ruling overturns.
+
 *Investigation.* "Speak as" was already wired to the impersonation start path
 (`onImpersonate` → `POST ?action=impersonate` → `addImpersonation`), but
 `addImpersonation` never flipped `controlledBy`. The connection-profile "User
@@ -2163,6 +2174,138 @@ Add the orphan-thumbnail sweep neither app has; on the v5 side, also call
 
 ---
 
+## Bug 44 — Bug 27's fix chose the wrong mechanism: impersonation mutates `controlledBy` instead of overlaying it
+
+**OPEN. Ruled 2026-08-06 (human, at the v5 port's finding-#39 re-ruling):
+the overlay design stands; the mutate-and-restore mechanism Bug 27's fix
+shipped is a mistake and is to be corrected here, v4-first.** Bug 27's
+DEFECT was real and stays fixed — "Speak as" must be honoured — but the
+mechanism that fixed it (write `controlledBy:'user'` on impersonate,
+write `'llm'` back on a profile-less stop) is the wrong one. Ruling
+record: the v5 repo's `docs/developer/porting/status-log.md` → "Ruling —
+the #39 impersonation mechanism"; the design it re-affirms is v5's
+dogfood finding #39 (2026-07-29): *impersonation is a BEHAVIOR change,
+not a state change — do not mutate the participant's `controlledBy` or
+`connectionProfileId`.*
+
+**Severity: Medium** — a design regression with one measured UX
+casualty and a persisted-state-corruption class.
+
+### What is wrong with the shipped mechanism, exactly
+
+1. **It encodes a temporary mode by rewriting durable state.**
+   `controlledBy` is seat OWNERSHIP — who this participant belongs to,
+   durable across sessions. Impersonation is a temporary mode the chat
+   already persists separately (`chats.impersonatingParticipantIds` +
+   `activeTypingParticipantId`). Writing the mode into the ownership
+   column forces a RESTORE arm, and restore arms have failure modes the
+   overlay simply does not have:
+   - a stop that never comes (browser closed, session abandoned
+     mid-impersonation) leaves the seat **permanently user-controlled**
+     — silent persisted corruption indistinguishable from a deliberate
+     setting, discoverable only when the character mysteriously stops
+     answering;
+   - the profile-picking stop arm rewrites `connectionProfileId` too, so
+     "hand it back" can land the seat on a **different profile** than it
+     had before the impersonation ever started.
+2. **Two sources of truth that can now disagree.** The same fact ("this
+   seat is being spoken for by the human") lives in BOTH
+   `impersonatingParticipantIds` and `controlledBy`. Any partial write,
+   crash between the two updates, or future code path that touches one
+   without the other mints a contradictory state neither reader expects.
+3. **A measured UX casualty (2026-08-06, the v5 unification's e2e
+   re-gesture).** The flip makes the impersonated character the chat's
+   first present user-controlled participant in solo-shaped casts, so
+   `findUserParticipant` (`lib/chat/turn-manager/utils.ts:73-80`)
+   resolves the USER SEAT to *her*, and `ParticipantCard`'s
+   `!isUserParticipant` gate (`components/chat/ParticipantCard.tsx:600`)
+   hides the card's own Speak/Stop button — **stop-impersonate becomes
+   unreachable from the card** in that shape, in both apps. The stop
+   still works by verb, which is exactly the tell that the UI state
+   model and the persisted state model have come apart.
+4. **Collateral churn on every flip.** Because the seat itself moves,
+   both actions must recompile every identity stack
+   (`{{user}}`/`{{persona}}` shift for everyone), and every
+   `userParticipantId`-derived feature — `isAllLLM`, the all-LLM pause
+   opener, next-speaker resolution — changes meaning mid-conversation.
+   Under the overlay none of that state moves, so none of it recomputes.
+
+### What Bug 27 got right (keep all of it)
+
+The defect diagnosis, the DELETE registration (Bug 25), the client
+flow, and the requirement that attribution and turn-taking genuinely
+honour the impersonated seat. The overlay preserves every one of those
+outcomes; only the mechanism changes.
+
+### The fix (the ruled overlay design)
+
+1. **`handleImpersonate`** (`app/api/v1/chats/[id]/actions/
+   participants.ts:61`): remove the `updateParticipant({controlledBy:
+   'user'})` write and the `compileAllIdentityStacks` call (`:69-77`).
+   `addImpersonation` alone is the state change.
+2. **`handleStopImpersonate`**: remove the profile-less else-arm's
+   `{controlledBy:'llm'}` write (`:120-131`) and its recompile
+   (`:133-141`). `removeImpersonation` alone is the state change —
+   there is nothing to restore, because nothing was disturbed. The
+   profile-picking stop arm is now a SEPARATE concern (a deliberate
+   seat reassignment, not part of stopping an impersonation): keep the
+   dialog if the product wants it, but route it through the ordinary
+   participant-update path so its semantics are the explicit ones.
+3. **Widen the two gates** the #39 design names, so impersonation is
+   honoured WITHOUT the column moving:
+   - **message attribution** — `findActiveUserParticipant`
+     (`lib/chat/turn-manager/utils.ts:99-107`): honour
+     `activeTypingParticipantId` when that participant is
+     `controlledBy === 'user'` **or** is in
+     `impersonatingParticipantIds`;
+   - **who-responds resolution** — the turn manager treats a
+     participant in `impersonatingParticipantIds` as a user turn
+     (excluded from LLM auto-response) regardless of `controlledBy`.
+   Then audit the remaining `controlledBy === 'user'` readers and sort
+   each by what it MEANS: "who owns this seat" keeps reading the column
+   (`findUserParticipant` / `userParticipantId` — that stability is
+   what heals the hidden-Stop-button hole with zero client changes);
+   "who is typing right now" consults the overlay.
+4. **Rewrite the Bug-27 regression tests to the overlay semantics** —
+   `participants-impersonation.test.ts` (currently asserts the flips;
+   should assert `controlledBy` UNCHANGED through impersonate → stop)
+   and `turn-manager.test.ts:337-351` ("honours a formerly-LLM
+   character once impersonation flips it to user-controlled" → once
+   impersonation OVERLAYS it).
+5. **Docs**: rewrite the `docs/developer/API.md` lines Bug 27's commit
+   added ("Starting impersonation also flips the participant to
+   `controlledBy: 'user'` …"); this entry and Bug 27's carry the
+   correction.
+6. **Transition** (the shipped window's residue): seats flipped by the
+   old mechanism while an impersonation was ACTIVE at upgrade time stay
+   `controlledBy:'user'` after the change (the overlay stop restores
+   nothing). Already-stopped impersonations left no residue (the old
+   stop arm restored them). Recommended disposition: **leave the data
+   alone** and note it in the release notes — the exposure window is
+   days old, and a one-time repair keyed on `id ∈
+   impersonatingParticipantIds ∧ controlledBy === 'user'` cannot
+   distinguish a legacy flip from a genuinely user-controlled seat that
+   is currently impersonated, so a "repair" can corrupt the case it
+   cannot see. The participant editor already fixes a stuck seat in one
+   click.
+
+### v5 coordination (the oracle note — sequencing is BINDING)
+
+This change lands on differential-verified core turn resolution, so it
+is **v4-first by design** (the inverse of the usual Faithful mirror
+direction): v5 currently mirrors the SHIPPED flips exactly (its
+P4.D53), and its `salon_mutations_equivalence` diffs the impersonate /
+stop response bodies **plus the `chats` table dump** — participants
+JSON and `compiledIdentityStacks` included — so this fix will move
+`salon_mutations`, `chat_cast_routes`, and the turn-chain families the
+moment it lands. Land it between v5 rounds and tell the port; v5
+absorbs it as an ordinary drift re-port (its impersonation e2e beat
+re-gestures back — the Stop button returns to the card). The multi-turn
+"speak as" feature itself (v5 finding #39) remains post-5.0 and builds
+on this corrected foundation.
+
+---
+
 ## Inert dead code
 
 These are dead or unreachable v4 code paths that cost no user anything today —
@@ -2233,8 +2376,9 @@ faithfully on the v5 side.
 | 30 | User-initiated private run renders "whispered to unknown" | **Yes** (2026-08-06) | `app/salon/[id]/whisper-visibility.ts` — `resolveWhisperTargetLabel` resolves the operator's own userId to "you"; threaded as `currentUserId` through `SalonView` → `VirtualizedMessageList` → `MessageRow` | **Owed** (Faithful) — mirror at `message-row.ts:490` |
 | 36 | "Tools disabled by profile" warning box is dead code | **Yes** (2026-08-06) | `lib/services/chat-enrichment.service.ts` (+ `helpers.ts`) — project `allowToolUse` on the connection profile | **Owed** (Faithful) — mirror the projection; v5 keeps a gated box |
 | 37 | `AllLLMPauseModal` unreachable; the pause is silent | **Yes** (2026-08-06) | `handlers/get.ts` — project `isPaused` + `allLLMPauseTurnCount`; `app/salon/[id]/SalonView.tsx` — opener effect on `isPaused && isAllLLM` | **Owed** (Faithful) — mirror the projection + opener |
+| 44 | Bug 27's fix mutates `controlledBy` (mutate-and-restore) instead of overlaying impersonation | **No — OPEN** (ruled 2026-08-06) | `actions/participants.ts` — remove both writes + recompiles; widen `findActiveUserParticipant` + who-responds to consult `impersonatingParticipantIds`; rewrite the Bug-27 tests + API.md | **v4-FIRST (inverse direction)** — v5 mirrors the SHIPPED flips until this lands, then absorbs it as a drift re-port (`salon_mutations` / `chat_cast_routes` / turn-chain families move) |
 
-**All catalogued bugs — 1–43 — are now fixed in v4; the last batch, bugs 31–35,
+**Bugs 1–43 are fixed in v4; Bug 44 is OPEN. The 1–43 close-out: the last batch, bugs 31–35,
 on 2026-08-06** (bugs 8–12, 18, and 26 fixed earlier). Their
 per-bug fix sites and v5 status are in
 [Bugs found since](#bugs-found-since--not-yet-fixed-in-v4); they are not repeated
@@ -2259,6 +2403,12 @@ simply disagree once v4 is fixed. Each must be mirrored on the v5 side **in the
 same round** v4 lands it, or the port falls out of step with its own oracle. Bug
 8 is the exception that is also urgent: it is live data loss against real
 instances, and should not wait for a convenient round.
+
+**Bug 44 runs the OTHER way**: v5 already mirrors the shipped (wrong)
+mechanism faithfully, so there is no v5 tripwire and nothing for v5 to do
+first — v4 lands the overlay correction between v5 rounds and tells the
+port, whose `salon_mutations` / `chat_cast_routes` / turn-chain families
+then move as ordinary drift.
 
 Bugs 1–4 had been ruled deliberate divergences on the v5 side (2026-07-24 and
 2026-07-25) rather than being reproduced bug-for-bug, on the grounds that they
