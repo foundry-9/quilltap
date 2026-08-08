@@ -5,7 +5,7 @@ integrity, and the bugs interlock — Bug 9's orphans are what make Bug 10's and
 Bug 12's restores fail. Fix in the order given. Run before Session 3.
 
 Read the standing rules in [README.md](README.md). Full root causes:
-`../found-bugs.md` → Bugs 9–12, plus the "Known residue from Bug 3's
+`../bugs.md` → Bugs 9–12, plus the "Known residue from Bug 3's
 placement" section (it is Bug 12's design note).
 
 **All four are Pinned** — v5 has already taken each fix and asserts v4's defect
@@ -83,7 +83,7 @@ exists only on migrated instances (declared by
 `migrations/scripts/sqlite-initial-schema.ts` / `create-conversation-tables.ts`
 but not by `generateDDL`), which is why only migrated instances hard-fail on
 restore. The fix here is the delete paths; reconciling the DDL drift is out of
-scope — but note it in `found-bugs.md` if you confirm it, and check DDL.md
+scope — but note it in `bugs.md` if you confirm it, and check DDL.md
 stays accurate for whatever you touch.
 
 ### Verification
@@ -132,7 +132,7 @@ that needs wording updates.
 ## Bug 12 — a second-generation restore loses archived link ids
 
 **Severity: Medium.** The residue Bug 3's fix explicitly deferred (see
-"Known residue from Bug 3's placement" in `found-bugs.md` — read it; it
+"Known residue from Bug 3's placement" in `bugs.md` — read it; it
 explains why the phase order must NOT be reshuffled again).
 
 ### What happens
@@ -169,6 +169,6 @@ archives (paths `chat/`, `images/`, …) must be unaffected.
       errors, second-generation restore stable
 - [ ] Debug logging on all touched backend paths
 - [ ] `npx tsc`, `npm run lint`, full `npm run test:unit` green
-- [ ] `docs/CHANGELOG.md` entries; DDL.md checked; `found-bugs.md` Status rows
+- [ ] `docs/CHANGELOG.md` entries; DDL.md checked; `bugs.md` Status rows
       flipped with dates + fix sites
 - [ ] Final report lists all four tripwire families for the v5 side to retire

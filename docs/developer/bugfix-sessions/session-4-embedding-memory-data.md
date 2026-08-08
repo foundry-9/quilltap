@@ -6,7 +6,7 @@ memory-link clobber in the extraction fold. Bug 17 is the design-heavy one —
 budget most of the session for it.
 
 Read the standing rules in [README.md](README.md). Full root causes:
-`../found-bugs.md` → Bugs 14, 17, 26. Background for 17: the fixes for Bugs 6
+`../bugs.md` → Bugs 14, 17, 26. Background for 17: the fixes for Bugs 6
 and 7 (Status table) — the reconcile now skips stale chats and excludes
 FAILED-for-profile chunks; 17 is the *remaining* cohort those fixes correctly
 stopped retrying but cannot heal.
@@ -126,9 +126,9 @@ real-binding Jest conventions (node environment docblock, absolute-path
 
 - [ ] Three fixes with regression tests failing pre-fix
 - [ ] Bug 17's char budget, boundary scheme, and healing decision written into
-      `found-bugs.md` ("decisions taken while fixing")
+      `bugs.md` ("decisions taken while fixing")
 - [ ] `public/schemas/qtap-export.schema.json` updated if needed (Bug 14)
 - [ ] `npx tsc`, `npm run lint`, full `npm run test:unit` green
-- [ ] `docs/CHANGELOG.md` entries; `found-bugs.md` Status rows flipped
+- [ ] `docs/CHANGELOG.md` entries; `bugs.md` Status rows flipped
 - [ ] Final report: all three are Faithful — v5 mirrors owed in the same
       round, with Bug 17 flagged as a large oracle move

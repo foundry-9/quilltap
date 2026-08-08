@@ -433,7 +433,7 @@ export async function restore(
       try {
         // Carried store rows (Bug 12): skip the replay, preserve the archived
         // storageKey. Project-bound files are handled separately below (their
-        // duplication is orthogonal, per found-bugs), so this only fires for
+        // duplication is orthogonal, per docs/developer/bugs.md), so this only fires for
         // project-less files.
         const carriedStorageKey = !file.projectId
           ? carriedStorageKeyFor(originalFile.storageKey)

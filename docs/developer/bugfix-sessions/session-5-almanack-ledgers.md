@@ -6,7 +6,7 @@ session; all three are broken diagnostics in the Almanack (the system report,
 `capabilities-report-*` names).
 
 Read the standing rules in [README.md](README.md). Full root causes:
-`../found-bugs.md` → Bugs 19, 20, 21.
+`../bugs.md` → Bugs 19, 20, 21.
 
 ---
 
@@ -56,7 +56,7 @@ opt-in), but the runtime permission is null-safe: `!== false`
 (`lib/services/chat-message/pseudo-tool.service.ts:124`) — NULL means
 allowed. Every default-state character is permitted at runtime and uncounted.
 
-**Fix (decision recommended in found-bugs and taken here):** count the
+**Fix (decision recommended in the bug catalogue and taken here):** count the
 **effective** permission — `IS NOT 0` — matching both the runtime check and
 v5. Do not touch the Core-whisper-override count (it is genuinely correct as
 explicit-only). Unit test mirroring v5's
@@ -72,7 +72,7 @@ explicit-only). Unit test mirroring v5's
 - [ ] Check the Almanack help doc (`help/*.md`) — if it names the affected
       cells, make sure the wording still matches (especially 19's relabel)
 - [ ] `npx tsc`, `npm run lint`, full `npm run test:unit` green
-- [ ] `docs/CHANGELOG.md` entries; `found-bugs.md` Status rows flipped, with
+- [ ] `docs/CHANGELOG.md` entries; `bugs.md` Status rows flipped, with
       the Bug 21 "effective permission" decision recorded
 - [ ] Final report: v5 self-retiring pins for 20/21 will fire; Bug 19 is
       Faithful — mirror owed same round

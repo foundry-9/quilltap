@@ -1,12 +1,12 @@
 # Session 1 — Corrupt-input guards (Bugs 8, 18)
 
-**Run first.** Bug 8 is the most urgent item in `found-bugs.md`: silent,
+**Run first.** Bug 8 is the most urgent item in `bugs.md`: silent,
 permanent data loss against live data. Bug 18 is batched here because it is
 the same defect shape — *present-but-unusable input treated as absent, followed
 by a destructive default* — so the same reviewer mindset covers both.
 
 Read the standing rules in [README.md](README.md) before starting. Full root
-causes: `../found-bugs.md` → "Bug 8" and "Bug 18".
+causes: `../bugs.md` → "Bug 8" and "Bug 18".
 
 ---
 
@@ -116,6 +116,6 @@ v5 reproduces the wipe faithfully, pinned bidirectionally by
 - [ ] Both fixes in, with regression tests verified failing on pre-fix code
 - [ ] `npx tsc` and `npm run lint` clean; full `npm run test:unit` green
 - [ ] `docs/CHANGELOG.md` entries (plain voice)
-- [ ] `found-bugs.md` Status rows for 8 and 18 flipped to Yes with date + fix site
+- [ ] `bugs.md` Status rows for 8 and 18 flipped to Yes with date + fix site
 - [ ] Final report names the v5 obligations: retire the `corrupt` arm pins
       (Bug 8) and mirror the help-sync guard (Bug 18) in the same round

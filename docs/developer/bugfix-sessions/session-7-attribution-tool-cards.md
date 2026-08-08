@@ -4,7 +4,7 @@ Three bugs about **who a message or tool run appears to come from** — one on
 the LLM-context side, two on the Salon rendering side.
 
 Read the standing rules in [README.md](README.md). Full root causes:
-`../found-bugs.md` → Bugs 28, 29, 30. **All three are Faithful** — same-round
+`../bugs.md` → Bugs 28, 29, 30. **All three are Faithful** — same-round
 v5 mirrors owed (the entries name the exact v5 sites).
 
 ⚠️ Salon client files — ask before editing if the user is mid-chat in dev.
@@ -94,7 +94,7 @@ fallback. Fails pre-fix.
       composer tool card wears the operator's face; private run says
       "whispered to you"
 - [ ] `npx tsc`, `npm run lint`, full `npm run test:unit` green
-- [ ] `docs/CHANGELOG.md` entries; `found-bugs.md` Status rows flipped
+- [ ] `docs/CHANGELOG.md` entries; `bugs.md` Status rows flipped
 - [ ] Final report: all three Faithful — same-round v5 mirrors owed at the
       named sites; Bug 28 is explicitly a both-apps bug, so the v5 half is a
       fix there too, not just a mirror

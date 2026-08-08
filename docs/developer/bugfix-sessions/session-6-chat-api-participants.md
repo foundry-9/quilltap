@@ -7,7 +7,7 @@ is why they share a session. If the session runs long, the clean split point
 is after Bug 25 (projections + impersonation first; 27/36/37 later).
 
 Read the standing rules in [README.md](README.md). Full root causes:
-`../found-bugs.md` → Bugs 22–25, 27, 36, 37. **All seven are Faithful** — no
+`../bugs.md` → Bugs 22–25, 27, 36, 37. **All seven are Faithful** — no
 tripwires; every fix owes a same-round v5 mirror. Bug 27 touches
 differential-verified turn resolution: flag it loudest.
 
@@ -103,7 +103,7 @@ its plumbing). So:
    so it reflects reality.
 3. **Fallback (minimal correct fix):** restrict the affordance to participants
    attribution can honour (user-controlled ones), removing the dead option.
-4. Record whichever call you make in `found-bugs.md`; if genuinely ambiguous
+4. Record whichever call you make in `bugs.md`; if genuinely ambiguous
    after the investigation, stop and ask the user rather than guessing.
 
 ---
@@ -157,7 +157,7 @@ wired, and computes `nextPauseAt`):
 - [ ] `npx tsc`, `npm run lint`, full `npm run test:unit` green
 - [ ] Help docs checked for impersonation / pause / chat-settings pages —
       update where behaviour now matches the docs again or is newly visible
-- [ ] `docs/CHANGELOG.md` entries; `found-bugs.md` Status rows flipped, with
+- [ ] `docs/CHANGELOG.md` entries; `bugs.md` Status rows flipped, with
       the Bug 27 decision recorded
 - [ ] Final report: all seven are Faithful — same-round v5 mirrors owed;
       Bug 23's v5 ruling `update_controlled_by_with_status_early_return` and

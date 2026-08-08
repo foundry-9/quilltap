@@ -8,7 +8,7 @@ adds, and Bug 13 matters most on exactly the restored indexes Session 2 makes
 healthy.
 
 Read the standing rules in [README.md](README.md). Full root causes:
-`../found-bugs.md` → Bugs 13, 15, 16, 38, 43.
+`../bugs.md` → Bugs 13, 15, 16, 38, 43.
 
 ---
 
@@ -97,7 +97,7 @@ it fails.
 document when no blob exists — the document row already carries
 `extractedText`, which is what the Librarian needs. **Fallback (if that
 balloons):** filter native-text documents out of the picker's store browse and
-record the decision in `found-bugs.md`. Either way the user must stop seeing
+record the decision in `bugs.md`. Either way the user must stop seeing
 "Mount-point file blob not found".
 
 **Verification:** attach a `.md` document from a database store via the
@@ -134,6 +134,6 @@ v5's to close; name it so it isn't forgotten.
       without the blobs table; 16's with the corrected DB layout)
 - [ ] Debug logging on touched backend paths
 - [ ] `npx tsc`, `npm run lint`, full `npm run test:unit` green
-- [ ] `docs/CHANGELOG.md` entries; `found-bugs.md` Status rows flipped
+- [ ] `docs/CHANGELOG.md` entries; `bugs.md` Status rows flipped
 - [ ] Final report: tripwires to retire (15, 16), same-round mirrors owed
       (13, 38), and v5's own `cleanupThumbnails` half of 43

@@ -11,7 +11,7 @@ ask the human to `npm publish` before committing. Plan the session so that
 gate lands once, at the end.
 
 Read the standing rules in [README.md](README.md). Full root causes:
-`../found-bugs.md` → Bugs 39–42.
+`../bugs.md` → Bugs 39–42.
 
 ---
 
@@ -109,6 +109,6 @@ so it doesn't.
       before the commit** (the gate)
 - [ ] `npx tsc`, `npm run lint`, full `npm run test:unit` green
 - [ ] Visual pass in light + dark, a couple of bundled themes
-- [ ] `docs/CHANGELOG.md` entries; `found-bugs.md` Status rows flipped
+- [ ] `docs/CHANGELOG.md` entries; `bugs.md` Status rows flipped
 - [ ] Final report: pins retiring for 39/41; same-round v5 mirrors owed for
       40/42

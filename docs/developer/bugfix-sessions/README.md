@@ -1,6 +1,6 @@
-# Bugfix sessions — specs for working down `found-bugs.md`
+# Bugfix sessions — specs for working down `bugs.md`
 
-**Source:** [../found-bugs.md](../found-bugs.md) (bugs 8–43, all open at HEAD
+**Source:** [../bugs.md](../bugs.md) (bugs 8–43, all open at HEAD
 `3adefeba`). Bugs 1–7 are already fixed and are not covered here.
 
 Each file in this directory is a **self-contained spec for one working
@@ -8,7 +8,7 @@ session**. Bugs are batched by subsystem and shared files so one session fixes
 as many bugs as possible without context-switching, and the sessions are
 ordered so dependencies land first. Hand a session file to a fresh Claude
 session ("please execute docs/developer/bugfix-sessions/session-N-….md") and it
-has everything it needs; `found-bugs.md` remains the authority for full root
+has everything it needs; `bugs.md` remains the authority for full root
 causes and measured evidence — each spec cites the relevant entries.
 
 ## Session order
@@ -44,7 +44,7 @@ to it.
    tripwires/mirrors; do not skip the coordination note in the final report.
 2. **`docs/CHANGELOG.md`** gets an entry per fix (plain American English, no
    steampunk voice; find the existing section header, don't duplicate it).
-3. **`found-bugs.md` bookkeeping:** flip each fixed bug's Status-table row to
+3. **`bugs.md` bookkeeping:** flip each fixed bug's Status-table row to
    **Yes** with the date and fix site, mirroring how Bugs 1–7 are recorded,
    and add any "decisions taken while fixing" notes there.
 4. **Tests:** every fix gets a regression test checked against the pre-fix

@@ -5,7 +5,7 @@ a dead base64 guard, and the Ollama SSE splitter. Most of the work lives in
 provider **plugins**, so the plugin rules apply throughout.
 
 Read the standing rules in [README.md](README.md). Full root causes:
-`../found-bugs.md` → Bugs 31–35. **All five are Faithful** (31 is pinned via
+`../bugs.md` → Bugs 31–35. **All five are Faithful** (31 is pinned via
 `EXPECTED_REFUSALS` in the request-builder differential) — v5 mirrors owed in
 the same round.
 
@@ -42,7 +42,7 @@ validation to see what it objects to. Likely resolutions, in preference
 order: (a) reshape the content parts to the schema the SDK validates,
 (b) use the SDK's raw/underlying request path for non-streaming when parts are
 present, (c) route non-streaming through the streaming path and collect. Pick
-the smallest that ships the image; record the choice in `found-bugs.md`.
+the smallest that ships the image; record the choice in `bugs.md`.
 
 **Verification:** a regenerate/continuation leg with an image attachment
 reaches OpenRouter carrying the image (assert on the built request in a unit
@@ -138,7 +138,7 @@ unchopped feed. Fails pre-fix.
 - [ ] One manual smoke per provider touched (OpenRouter image regenerate,
       Grok text attachment, Ollama streaming) if profiles are available;
       otherwise say so in the report
-- [ ] `docs/CHANGELOG.md` entries; `found-bugs.md` Status rows flipped, with
+- [ ] `docs/CHANGELOG.md` entries; `bugs.md` Status rows flipped, with
       the Bug 31 approach recorded
 - [ ] Final report: v5 mirrors owed for all five; Bug 31's
       `EXPECTED_REFUSALS` and Bug 34's `text-attachment-mangled-b64` pins

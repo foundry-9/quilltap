@@ -28,6 +28,24 @@ The project is **"Quilltap"** (quill + tap), **never** "Quilttap" (quilt + tap).
 - Linting, testing, type-checking, and version bumps are handled by the [/commit](/.claude/commands/commit.md) command. The `.githooks/pre-commit` hook kills the dev server, cleans `.next`, stops watchman, and stages dependency artifacts.
 - Check TypeScript with **`npx tsc`**, not `npm run build`.
 
+### Filing bugs
+
+Defects worth recording live in the bug catalogue, indexed by
+[docs/developer/bugs.md](docs/developer/bugs.md).
+
+- **One bug, one file.** Open: `docs/developer/bugs/bug-<n>-<short-title>.md`.
+  Fixed: the same file `git mv`d into `docs/developer/bugs/fixed/`, keeping its
+  number. `<short-title>` is a two-or-three-word dashed description of the
+  *problem* (`bug-9-store-delete-orphans.md`).
+- **Numbers are permanent and sequential** — a new bug takes the next unused one.
+- **Each file opens with a metadata table** (Status, Found, Fixed, Severity, Who
+  it bites, Provenance, Fix site, v5 status, link back to the index), then states
+  symptom, root cause with file and line, why it survived, the fix, and how to
+  verify. A fixed entry keeps its full write-up plus a leading
+  **`FIXED in v4 (date)`** paragraph.
+- **The index's Status table is the register.** Filing or fixing a bug means
+  updating *both* the bug's file and its row there. Never delete an entry.
+
 ### Hard stops (ask first / never work around)
 
 - **`packages/` changes:** bump the version, then **stop and ask the human to `npm publish`** before installing. Never hand-copy package contents into place. If publish fails, fix the npm problem — don't work around it. **Exception — `packages/quilltap` (the CLI):** still bump its version, but don't ask for a manual `npm publish`; it publishes automatically at release.

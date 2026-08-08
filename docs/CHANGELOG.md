@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Docs: bug catalogue split into one file per bug; `found-bugs.md` renamed to `bugs.md`
+
+`docs/developer/found-bugs.md` is now `docs/developer/bugs.md` and holds only the index: the filing convention, the provenance vocabulary (Pinned/Faithful/Inert), the v5 oracle-coordination notes and tripwire tables, the Inert dead-code appendix, and a single Status table with one row per bug — date found, date fixed, severity, what goes wrong, fix site, v5 status, and a link to the entry. Each of the 47 bugs moved to its own file: the open one at `docs/developer/bugs/bug-<n>-<short-title>.md`, the 46 fixed ones at `docs/developer/bugs/fixed/bug-<n>-<short-title>.md`, each opening with a metadata table and keeping its full root-cause write-up unchanged. Numbers are permanent; a fix moves the file into `fixed/` and updates both the file and its index row. The convention is recorded in CLAUDE.md. Bug 14, 17, 19–21, 26, 39–42 — fixed in the 2026-08-06 batch but never given Status rows — now have their fix sites and v5 obligations recorded. No code changed beyond one comment reference in `lib/backup/restore/restore.ts`.
+
 #### Feature: "speaking as" avatar beside the composer + impersonation cue fixes (bugs 45, 46)
 
 A persistent portrait of the character you're currently speaking as now sits inside the composer, directly left of the action-button cluster (announcement/attach/custom-tools), standing the full height of the composer row. It renders at full brightness when you can type and dims to near-dark while a reply is in flight, so you can always tell both who you're speaking as and whether the floor is yours. Hidden on the narrowest viewports where there's no room. New component `app/salon/[id]/components/SpeakingAsAvatar.tsx`, rendered by `ChatComposer` via a new `speakingAs` prop; the seat is resolved with `findActiveUserParticipant` (impersonation-overlay aware) so it matches server attribution.
