@@ -4,7 +4,13 @@
 
 ### 4.8-dev
 
-#### Feature: configurable Brahma Console turn budget
+#### Feature: "speaking as" avatar beside the composer + impersonation cue fixes (bugs 45, 46)
+
+A persistent portrait of the character you're currently speaking as now sits inside the composer, directly left of the action-button cluster (announcement/attach/custom-tools), standing the full height of the composer row. It renders at full brightness when you can type and dims to near-dark while a reply is in flight, so you can always tell both who you're speaking as and whether the floor is yours. Hidden on the narrowest viewports where there's no room. New component `app/salon/[id]/components/SpeakingAsAvatar.tsx`, rendered by `ChatComposer` via a new `speakingAs` prop; the seat is resolved with `findActiveUserParticipant` (impersonation-overlay aware) so it matches server attribution.
+
+Bug 46 (b): the user-turn banner is now impersonation-overlay aware. It previously keyed on the raw `controlledBy` column, so an impersonated seat's own turn (`controlledBy` stays `'llm'` under the Bug 44 overlay) was never announced and offered no Skip. `SalonView.tsx` now gates the banner on the shared `isUserDrivenSeat(participant, impersonatingParticipantIds)` helper, so when the rotation lands on an impersonated seat the banner names it and offers Skip — matching what `help/chat-turn-manager.md` already described.
+
+Bug 45: the optimistic user bubble no longer flickers to the wrong author while impersonating. `useSSEStreaming.ts` attributed the just-sent bubble to the bare `activeTypingParticipantId`, which diverged from the server's `findActiveUserParticipant` resolution and re-attributed on refetch. The client now resolves the optimistic author with the same overlay-aware helper (threaded `impersonatingParticipantIds` into the hook), so the bubble is authored correctly from the first paint.
 
 The Brahma Console's agent-turn cap is now an instance setting instead of a hardcoded 25, and the default is raised to 50. On a deep search — especially when the Console is hunting for something in the database — 25 turns could run out mid-investigation. Settings → Chat → Brahma Console exposes a numeric field (5–200, default 50) stored in `instance_settings['brahmaConsole']`; both the streaming orchestrator (`lib/services/brahma-console/orchestrator.service.ts`) and the one-shot `@Brahma` path (`one-shot.service.ts`) read it through the shared `resolveBrahmaMaxAgentTurns` resolver (`lib/services/brahma-console/turn-budget.ts`). The duplicate/stale-query guard (`MAX_DUPLICATE_TOOL_CALLS = 2`) is unchanged and independent, so a loop that repeats the same query still stops early regardless of the budget. New API route `GET/PUT /api/v1/settings/brahma-console`.
 

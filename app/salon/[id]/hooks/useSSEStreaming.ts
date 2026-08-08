@@ -5,6 +5,7 @@ import { showSuccessToast, showErrorToast, showWarningToast, showInfoToast } fro
 import { getErrorMessage } from '@/lib/error-utils'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import type { ChatParticipantBase } from '@/lib/schemas/types'
+import { findActiveUserParticipant } from '@/lib/chat/turn-manager'
 import type { Message, MessageAttachment, Chat, PendingToolResult } from '../types'
 import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
 
@@ -139,6 +140,8 @@ interface UseSSEStreamingParams {
   setRespondingParticipantId: (id: string | null) => void
   /** The user-controlled participant the human is currently "Speaking As" (null = default) */
   activeTypingParticipantId: string | null
+  /** Seats the human is impersonating this session (overlay; `controlledBy` stays `'llm'`) */
+  impersonatingParticipantIds: string[]
   fetchChat: () => Promise<void>
   scrollOnUserMessage: () => void
   scrollOnStreamComplete: () => void
@@ -175,6 +178,7 @@ export function useSSEStreaming({
   respondingParticipantId,
   setRespondingParticipantId,
   activeTypingParticipantId,
+  impersonatingParticipantIds,
   fetchChat,
   scrollOnUserMessage,
   scrollOnStreamComplete,
@@ -193,6 +197,18 @@ export function useSSEStreaming({
   useEffect(() => {
     activeTypingParticipantIdRef.current = activeTypingParticipantId
   }, [activeTypingParticipantId])
+  // Mirror the impersonation overlay and the participant roster so the optimistic
+  // user bubble can resolve its author exactly the way the server will (Bug 45) —
+  // the send callback deliberately does not re-create on every roster/overlay
+  // change, so it reads these through refs rather than stale closure captures.
+  const impersonatingParticipantIdsRef = useRef(impersonatingParticipantIds)
+  useEffect(() => {
+    impersonatingParticipantIdsRef.current = impersonatingParticipantIds
+  }, [impersonatingParticipantIds])
+  const participantsAsBaseRef = useRef(participantsAsBase)
+  useEffect(() => {
+    participantsAsBaseRef.current = participantsAsBase
+  }, [participantsAsBase])
   // Live cumulative reasoning ("thinking") for the in-progress turn. DISPLAY ONLY.
   const [streamingReasoning, setStreamingReasoning] = useState('')
   const [waitingForResponse, setWaitingForResponse] = useState(false)
@@ -638,15 +654,26 @@ export function useSSEStreaming({
     }))
 
     const tempUserMessageId = `temp-user-${Date.now()}`
+    // Attribute the optimistic bubble to the seat the *server* will resolve this
+    // message onto — `findActiveUserParticipant`, which honours the impersonation
+    // overlay and falls back to the owner user seat when the active-typing id is
+    // not itself a user-driven seat. Using the bare `activeTypingParticipantId`
+    // here diverged from the persisted row and made the bubble flicker to the
+    // wrong author on refetch (Bug 45).
+    const optimisticAuthor = findActiveUserParticipant(
+      participantsAsBaseRef.current,
+      activeTypingParticipantIdRef.current,
+      impersonatingParticipantIdsRef.current,
+    )
     const tempUserMessage: Message = {
       id: tempUserMessageId,
       role: 'USER',
       content: displayContent,
       createdAt: new Date().toISOString(),
       attachments: messageAttachments.length > 0 ? messageAttachments : undefined,
-      // Attribute the optimistic bubble to the active speaker so it renders with
-      // the chosen character's name/avatar immediately (not the default user).
-      participantId: activeTypingParticipantIdRef.current ?? undefined,
+      // Renders with the chosen character's name/avatar immediately (not the
+      // default user), matching what the server persists.
+      participantId: optimisticAuthor?.id ?? activeTypingParticipantIdRef.current ?? undefined,
     }
     setMessages((prev) => [...prev, ...toolMessages, tempUserMessage])
     scrollOnUserMessage()

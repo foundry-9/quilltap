@@ -4,6 +4,8 @@ import { useRef, useState, useCallback } from 'react'
 import { Icon } from '@/components/ui/icon'
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
 import ComposerGutterTools from '@/components/chat/ComposerGutterTools'
+import { SpeakingAsAvatar } from './SpeakingAsAvatar'
+import type { AvatarImageSource } from '@/components/ui/Avatar'
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import { LexicalComposerWrapper } from '@/components/chat/lexical'
 import type { ComposerEditorHandle } from '@/components/chat/lexical'
@@ -90,6 +92,16 @@ interface ChatComposerProps {
   onOpenTerminalClick?: () => void
   /** Whether Terminal Mode is currently active (hides the open-terminal button) */
   isTerminalModeActive?: boolean
+  /**
+   * The character the human is currently speaking as — rendered as a persistent
+   * full-height portrait directly left of the toolbar cluster. Null when the
+   * human plays no character (e.g. an all-LLM room).
+   */
+  speakingAs?: {
+    name: string
+    title?: string | null
+    character?: AvatarImageSource | null
+  } | null
 }
 
 export function ChatComposer({
@@ -137,6 +149,7 @@ export function ChatComposer({
   narrationDelimiters,
   onOpenTerminalClick,
   isTerminalModeActive,
+  speakingAs,
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const sourceTextareaRef = useRef<HTMLTextAreaElement>(null)
@@ -337,6 +350,21 @@ export function ChatComposer({
             accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/markdown,text/csv"
             className="hidden"
           />
+
+          {/* "Speaking as" portrait — full-height, directly left of the toolbar
+              cluster; hidden on the narrowest viewports where there's no room.
+              The outer wrapper owns the responsive show/hide so it doesn't
+              collide with the avatar's own display utility. */}
+          {speakingAs && (
+            <div className="hidden sm:flex self-stretch flex-shrink-0">
+              <SpeakingAsAvatar
+                name={speakingAs.name}
+                title={speakingAs.title}
+                src={speakingAs.character}
+                canType={hasActiveCharacters && !sending && !streaming && !waitingForResponse}
+              />
+            </div>
+          )}
 
           {/* Left side toolbar - gutter tools, then main toolbar buttons */}
           <div className="qt-chat-toolbar-row">

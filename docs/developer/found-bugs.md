@@ -4,15 +4,17 @@
 **Codebase**: Quilltap v4.8.0-dev (HEAD `3adefeba`)
 **Provenance**: the quilltap-v5 native port's differential harness, and its
 dogfood walks against a copy of real data
-**Status**: Bugs **1–44** are **fixed in v4** (Bug 44, the impersonation
-overlay, landed 2026-08-07); **Bugs 45 and 46 are OPEN** — both surfaced on
-the 2026-08-07 v5 dogfood walk of the overlay and both are shared by v4 and
-the port: 45 (an impersonated seat's just-sent message flickers to the wrong
-author before the refetch corrects it; cosmetic) and 46 (impersonation and
-the composer turn banner don't reconcile, so you can't tell your typed
-message will be attributed to the impersonated character). Each fixed
-bug's section below carries a **FIXED in v4** marker, and the [Status](#status)
-table records the per-bug fix site and v5 status. The
+**Status**: Bugs **1–46** are **fixed in v4** (Bug 44, the impersonation
+overlay, landed 2026-08-07; Bugs 45 and 46 landed 2026-08-07). Bugs 45 and 46
+both surfaced on the 2026-08-07 v5 dogfood walk of the overlay and both were
+shared by v4 and the port: 45 (an impersonated seat's just-sent message
+flickered to the wrong author before the refetch corrected it; cosmetic) and
+46 (impersonation and the composer turn banner didn't reconcile, so you
+couldn't tell your typed message would be attributed to the impersonated
+character). The 46 fix took the "announce the impersonated seat's own turn"
+option **and** added a persistent "speaking as" avatar beside the composer.
+Each fixed bug's section below carries a **FIXED in v4** marker, and the
+[Status](#status) table records the per-bug fix site and v5 status. The
 [Bugs found since](#bugs-found-since--not-yet-fixed-in-v4) catalogue is retained
 for its root-cause write-ups and the v5 coordination notes.
 
@@ -2332,6 +2334,18 @@ on this corrected foundation.
 
 ## Bug 45 — an impersonated seat's message flickers to the wrong author before correcting
 
+**FIXED in v4 (2026-08-07).** The optimistic user bubble now resolves its author
+through `findActiveUserParticipant` — the same overlay-aware helper the server
+uses — instead of the bare `activeTypingParticipantId`, so the client guess and
+the persisted row agree and the bubble no longer re-attributes on refetch.
+`app/salon/[id]/hooks/useSSEStreaming.ts` gained an `impersonatingParticipantIds`
+param (threaded from `SalonView`) and computes `optimisticAuthor` at the send
+site. v5 obligation: mirror the reconciliation on the optimistic-attribution path
+(`makeTempUserMessage`) and retire the `dogfood-findings.md` #71 faithful-repro
+note. **Severity: Low (cosmetic, self-correcting).**
+
+Original ruling below.
+
 **OPEN.** Surfaced 2026-08-07 on a v5 dogfood walk of the Bug 44 overlay; v4
 shares the code and the behaviour. **Severity: Low (cosmetic, self-correcting).**
 
@@ -2383,6 +2397,33 @@ first paint (no re-attribution on refetch).
 ---
 
 ## Bug 46 — impersonation and the composer turn banner don't reconcile; you can't tell who you're speaking as
+
+**FIXED in v4 (2026-08-07).** Two changes, per the human's design call (option
+(b) plus a new always-on cue):
+
+1. **The turn banner is now overlay-aware.** `app/salon/[id]/SalonView.tsx`
+   gates the user-turn banner on the shared
+   `isUserDrivenSeat(participant, impersonatingParticipantIds)` helper instead of
+   the bare `controlledBy !== 'user'` check, so when the rotation lands on an
+   impersonated seat the banner announces *its* turn and offers Skip — the
+   behaviour `help/chat-turn-manager.md` already described.
+2. **A persistent "speaking as" avatar** (`app/salon/[id]/components/SpeakingAsAvatar.tsx`,
+   rendered by `ChatComposer` via a new `speakingAs` prop) sits inside the
+   composer, directly left of the action-button cluster and standing the full
+   height of the composer row (hidden on the narrowest viewports). It is resolved
+   via `findActiveUserParticipant` so it always names the seat a typed message
+   will be attributed to, and renders bright when the human may type, dimming to
+   near-dark while a reply is in flight — the on-screen cue whose absence (the
+   `SpeakerSelector` hides below two controlled characters) was the core
+   complaint.
+
+v5 obligation: this is a v4-first design decision the port now mirrors — light
+the banner for impersonated seats via the overlay (the divergence v5 briefly
+took then reverted), add the composer-side cue, and retire the
+`dogfood-findings.md` #72 faithful-repro note. Related to (but distinct from)
+Bug 45. **Severity: Low–Medium (confusing; you can post as the wrong character).**
+
+Original ruling below.
 
 **OPEN.** Surfaced 2026-08-07 on a v5 dogfood walk of the Bug 44 overlay; v4
 shares the code and the behaviour. Related to (but distinct from) Bug 45.
@@ -2519,10 +2560,11 @@ faithfully on the v5 side.
 | 36 | "Tools disabled by profile" warning box is dead code | **Yes** (2026-08-06) | `lib/services/chat-enrichment.service.ts` (+ `helpers.ts`) — project `allowToolUse` on the connection profile | **Owed** (Faithful) — mirror the projection; v5 keeps a gated box |
 | 37 | `AllLLMPauseModal` unreachable; the pause is silent | **Yes** (2026-08-06) | `handlers/get.ts` — project `isPaused` + `allLLMPauseTurnCount`; `app/salon/[id]/SalonView.tsx` — opener effect on `isPaused && isAllLLM` | **Owed** (Faithful) — mirror the projection + opener |
 | 44 | Bug 27's fix mutates `controlledBy` (mutate-and-restore) instead of overlaying impersonation | **Yes** (2026-08-07, v4-first) | `actions/participants.ts` — both writes + recompiles removed; shared `isUserDrivenSeat` in `lib/chat/turn-manager/utils.ts` consulted at attribution (`findActiveUserParticipant`, `findUserParticipantName`, `resolveUserIdentity`) + who-responds (`selectNextSpeaker`, `resolveRespondingParticipant` filter, `turn-orchestrator` pause, `turn.ts` skip); owner-seat readers keep the column; tests + API.md rewritten | **v4-FIRST (inverse direction)** — v5 still mirrors the SHIPPED flips; absorbs this as a drift re-port (`salon_mutations` / `chat_cast_routes` / turn-chain families move; impersonation e2e re-gestures — Stop button returns to the card) |
-| 45 | An impersonated seat's just-sent message flickers to the wrong author before the refetch corrects it | **No** (OPEN, 2026-08-07) | client `app/salon/[id]/hooks/useSSEStreaming.ts:648` (optimistic bubble) vs server `lib/services/chat-message/user-identity-resolver.service.ts:47` (`findActiveUserParticipant`) | Reproduced faithfully — v5 `dogfood-findings.md` #71; both apps share the optimistic-attribution code, so a fix is a v4-first product decision |
-| 46 | Impersonation and the composer turn banner don't reconcile — the banner announces a genuine user seat's turn while attribution follows the impersonated seat, with no on-screen cue | **No** (OPEN, 2026-08-07) | banner `app/salon/[id]/SalonView.tsx:1388-1396` (keys raw `controlledBy`); `SpeakerSelector` gated at `:1374` (`>= 2`); attribution follows `activeTypingParticipantId` | Reproduced faithfully — v5 `dogfood-findings.md` #72; the v5 port briefly diverged (banner lit for impersonated seats) and reverted it. v4-first design decision |
+| 45 | An impersonated seat's just-sent message flickers to the wrong author before the refetch corrects it | **Yes** (2026-08-07) | `app/salon/[id]/hooks/useSSEStreaming.ts` — optimistic bubble resolves its author via `findActiveUserParticipant` (overlay-aware), matching the server; `impersonatingParticipantIds` threaded from `SalonView` | **Owed** (Faithful) — mirror the optimistic-attribution reconciliation; retire `dogfood-findings.md` #71 |
+| 46 | Impersonation and the composer turn banner don't reconcile — the banner announces a genuine user seat's turn while attribution follows the impersonated seat, with no on-screen cue | **Yes** (2026-08-07, v4-first design call: option (b) + new cue) | banner `app/salon/[id]/SalonView.tsx` now gates on `isUserDrivenSeat` (announces impersonated seats' own turns + Skip); new `app/salon/[id]/components/SpeakingAsAvatar.tsx` persistent "speaking as" cue left of the composer (bright when typable, dim while a reply is in flight) | **Owed** (Faithful, v4-first) — light the banner via the overlay (the divergence v5 reverted), add the composer cue; retire `dogfood-findings.md` #72 |
 
-**Bugs 1–43 are fixed in v4; Bug 44 is OPEN. The 1–43 close-out: the last batch, bugs 31–35,
+**Bugs 1–46 are fixed in v4. Bug 44 (the impersonation overlay) landed
+2026-08-07; Bugs 45 and 46 landed 2026-08-07. The 1–43 close-out: the last batch, bugs 31–35,
 on 2026-08-06** (bugs 8–12, 18, and 26 fixed earlier). Their
 per-bug fix sites and v5 status are in
 [Bugs found since](#bugs-found-since--not-yet-fixed-in-v4); they are not repeated

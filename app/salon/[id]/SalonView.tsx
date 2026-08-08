@@ -28,6 +28,8 @@ import {
   isAllLLMChat,
   computeSkipEligibility,
   qualifiesForTurnSkipping,
+  isUserDrivenSeat,
+  findActiveUserParticipant,
 } from '@/lib/chat/turn-manager'
 import type { ChatEvent, ChatParticipantBase, Character } from '@/lib/schemas/types'
 import type { RenderingPattern, DialogueDetection, NarrationDelimiters } from '@/lib/schemas/template.types'
@@ -461,6 +463,7 @@ export function SalonView({ chatId }: SalonViewProps) {
     respondingParticipantId,
     setRespondingParticipantId,
     activeTypingParticipantId: impersonation.activeTypingParticipantId,
+    impersonatingParticipantIds: impersonation.impersonatingParticipantIds,
     fetchChat,
     scrollOnUserMessage: () => scrollOnUserMessage(),
     scrollOnStreamComplete: () => scrollOnStreamComplete(),
@@ -501,6 +504,35 @@ export function SalonView({ chatId }: SalonViewProps) {
   // Keep refs in sync with SSE streaming state
   triggerContinueModeRef.current = sseStreaming.triggerContinueMode
   streamingRef.current = sseStreaming.streaming || sseStreaming.waitingForResponse
+
+  // The character the human is currently speaking as — resolved exactly the way
+  // the server attributes a typed message (`findActiveUserParticipant`, honouring
+  // the impersonation overlay), then hydrated with its avatar for the composer-side
+  // cue. Null when the human plays no character (e.g. an all-LLM room).
+  const speakingAsSeat = useMemo(() => {
+    const resolved = findActiveUserParticipant(
+      participantsWithImpersonation.participantsAsBase,
+      impersonation.activeTypingParticipantId,
+      impersonation.impersonatingParticipantIds,
+    )
+    const seatId = resolved?.id ?? impersonation.activeTypingParticipantId
+    if (!seatId) return null
+    const p = participantsWithImpersonation.participantData.find(pp => pp.id === seatId)
+    if (!p?.character) return null
+    return {
+      name: p.character.name,
+      title: p.character.title ?? null,
+      character: {
+        defaultImage: p.character.defaultImage ?? null,
+        avatarUrl: p.character.avatarUrl ?? null,
+      },
+    }
+  }, [
+    participantsWithImpersonation.participantsAsBase,
+    participantsWithImpersonation.participantData,
+    impersonation.activeTypingParticipantId,
+    impersonation.impersonatingParticipantIds,
+  ])
 
   // --- Outfit hook ---
   // Collect all character IDs from participants so we can fetch wardrobe for all of them
@@ -1382,15 +1414,18 @@ export function SalonView({ chatId }: SalonViewProps) {
           </div>
         )}
 
-        {/* User-turn indicator: shown when the rotation has landed on a
-            user-controlled character. The human can type as them, or Skip to
-            let the rotation move on to the next LLM character. */}
+        {/* User-turn indicator: shown when the rotation has landed on a seat the
+            human drives — a genuine user-controlled character OR a seat they are
+            impersonating this session (Bug 46: impersonation is an overlay,
+            `controlledBy` stays `'llm'`, so an impersonated seat's own turn must
+            be announced via the overlay, not the bare column). The human can type
+            as them, or Skip to let the rotation move on to the next LLM character. */}
         {(() => {
           if (sseStreaming.streaming || sseStreaming.waitingForResponse) return null
           const nextId = turnSelectionResult?.nextSpeakerId
           if (!nextId) return null
           const next = participantsWithImpersonation.participantData.find(p => p.id === nextId)
-          if (!next || next.controlledBy !== 'user') return null
+          if (!next || !isUserDrivenSeat({ id: next.id, controlledBy: next.controlledBy ?? 'llm' }, impersonation.impersonatingParticipantIds)) return null
           const name = next.character?.name ?? 'this character'
 
           // Must-speak guard: when every other active character has passed since
@@ -1451,6 +1486,7 @@ export function SalonView({ chatId }: SalonViewProps) {
         {/* Chat Composer */}
         <ChatComposer
           id={id}
+          speakingAs={speakingAsSeat}
           input={input}
           setInput={setInput}
           hasContent={hasComposerContent}

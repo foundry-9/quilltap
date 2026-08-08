@@ -221,6 +221,7 @@ Impersonation lets you control a character directly, typing their responses your
 ### While Impersonating
 
 - The input field shows which character you're typing as
+- A portrait of your borrowed self stands within the composer itself, just to the left of the row of tool buttons and rising the full height of the writing box, so you are never in doubt as to whose pen you hold. It burns bright when the floor is yours to type upon, and dims to a shadow while another soul holds forth — a glance tells you both *who* you are and *whether* it is your moment. (On the narrowest of windows, where there is simply no room, it steps aside.)
 - Your message appears as that character, with their avatar
 - Other characters respond to what you wrote as that character
 - You can switch between impersonating different characters
