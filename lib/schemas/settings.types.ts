@@ -227,6 +227,38 @@ export const DataRetentionSettingsSchema = z.object({
 export type DataRetentionSettings = z.infer<typeof DataRetentionSettingsSchema>;
 
 // ============================================================================
+// BRAHMA CONSOLE (agentic tool-use loop budget)
+// ============================================================================
+
+/**
+ * How many agent turns the Brahma Console (and its one-shot Salon `@Brahma`
+ * cousin) may take before it is forced to answer with what it has. Each turn is
+ * one round of the tool-use loop — a search, a `run_sql` query, a document read.
+ * A generous budget lets the Console chase something deep in the ledgers; the
+ * duplicate/stale-query guard still short-circuits a genuinely stuck loop long
+ * before this cap, so raising it costs nothing when the model is making real
+ * progress.
+ *
+ * Stored instance-wide in `instance_settings['brahmaConsole']` (single-user
+ * model — same class as `dataRetention`), NOT on the column-per-field
+ * `chat_settings` table, so adding it needs no migration. Accessors:
+ * `getBrahmaConsoleSettings` / `setBrahmaConsoleSettings` in
+ * `lib/instance-settings`; resolved for the services by
+ * `resolveBrahmaMaxAgentTurns` in
+ * `lib/services/brahma-console/turn-budget.ts`.
+ */
+export const BrahmaConsoleSettingsSchema = z.object({
+  /**
+   * Maximum tool-use turns per query before the Console is made to give its
+   * final answer. Independent of the duplicate/stale-query guard, which still
+   * stops a loop that repeats itself regardless of this number.
+   */
+  maxAgentTurns: z.number().int().min(5).max(200).default(50),
+});
+
+export type BrahmaConsoleSettings = z.infer<typeof BrahmaConsoleSettingsSchema>;
+
+// ============================================================================
 // TABOO (instance-wide forbidden phrases)
 // ============================================================================
 

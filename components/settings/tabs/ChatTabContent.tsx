@@ -19,6 +19,7 @@ import { ThinkingDisplaySettings } from '@/components/settings/chat-settings/Thi
 import { AnswerConfirmationSettings } from '@/components/settings/chat-settings/AnswerConfirmationSettings'
 import { DangerousContentSettings } from '@/components/settings/chat-settings/DangerousContentSettings'
 import { DataRetentionSettings } from '@/components/settings/chat-settings/DataRetentionSettings'
+import { BrahmaConsoleSettings } from '@/components/settings/chat-settings/BrahmaConsoleSettings'
 import { TabooSettings } from '@/components/settings/chat-settings/TabooSettings'
 import { AutonomousRoomSettingsComponent } from '@/components/settings/chat-settings/AutonomousRoomSettings'
 import { AutonomousRoomsCard } from '@/components/tools/autonomous-rooms-card'
@@ -202,6 +203,10 @@ export function ChatTabContent() {
 
         <CollapsibleCard title="Data Retention" description="How long inactive chats keep their regenerable working data" sectionId="data-retention" forceOpen={activeSection === 'data-retention'}>
           <DataRetentionSettings />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Brahma Console" description="How many tool-use turns the Console may take before it must answer" sectionId="brahma-console" forceOpen={activeSection === 'brahma-console'}>
+          <BrahmaConsoleSettings />
         </CollapsibleCard>
 
         <CollapsibleCard title="Autonomous Rooms" description="Defaults for private character-to-character rooms" sectionId="autonomous-rooms" forceOpen={activeSection === 'autonomous-rooms'}>

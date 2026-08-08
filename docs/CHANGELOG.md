@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Feature: configurable Brahma Console turn budget
+
+The Brahma Console's agent-turn cap is now an instance setting instead of a hardcoded 25, and the default is raised to 50. On a deep search — especially when the Console is hunting for something in the database — 25 turns could run out mid-investigation. Settings → Chat → Brahma Console exposes a numeric field (5–200, default 50) stored in `instance_settings['brahmaConsole']`; both the streaming orchestrator (`lib/services/brahma-console/orchestrator.service.ts`) and the one-shot `@Brahma` path (`one-shot.service.ts`) read it through the shared `resolveBrahmaMaxAgentTurns` resolver (`lib/services/brahma-console/turn-budget.ts`). The duplicate/stale-query guard (`MAX_DUPLICATE_TOOL_CALLS = 2`) is unchanged and independent, so a loop that repeats the same query still stops early regardless of the budget. New API route `GET/PUT /api/v1/settings/brahma-console`.
+
 #### Fix: About page lost its background image inside the workspace
 
 The About surface set its background only through the inline `--story-background-url` variable, which drives the per-view `.qt-page-container::before` layer. That layer is suppressed inside `.qt-workspace` in favor of the single arbitrated backdrop (`components/workspace/workspace-backdrop.tsx`), and About — unlike the Salon — never reported to it, so once About rendered as a workspace tab the image vanished. `AboutView` now calls `useReportWorkspaceBackdrop('/images/about.webp', false)`; it stays a no-op on the legacy `/about` route, where the `::before` layer still paints. The background URL is now a single `ABOUT_BACKGROUND_URL` constant shared by both paths.

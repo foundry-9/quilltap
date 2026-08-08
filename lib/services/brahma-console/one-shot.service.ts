@@ -63,11 +63,10 @@ import {
 } from '@/lib/services/chat-message/agent-mode-resolver.service'
 import { buildBrahmaSystemPrompt } from '@/lib/brahma-console/system-prompt-builder'
 import { resolveBrahmaConnectionProfile, normalizeToolCallSignature } from './orchestrator.service'
+import { resolveBrahmaMaxAgentTurns } from './turn-budget'
 
 const logger = createServiceLogger('BrahmaOneShot')
 
-/** Same turn cap the standalone console uses. */
-const MAX_AGENT_TURNS = 25
 /** Consecutive duplicate / stale tool iterations before forcing a final answer. */
 const MAX_DUPLICATE_TOOL_CALLS = 2
 
@@ -166,7 +165,10 @@ export async function runBrahmaQuery(opts: RunBrahmaQueryOptions): Promise<Brahm
     toolInstructions = buildNativeToolSystemInstructions()
   }
 
-  const agentInstructions = buildAgentModeInstructions(MAX_AGENT_TURNS)
+  // Operator-set turn budget (Settings → Chat → Brahma Console); shared with the
+  // standalone console. The stuck-loop guard below is independent of it.
+  const maxAgentTurns = await resolveBrahmaMaxAgentTurns()
+  const agentInstructions = buildAgentModeInstructions(maxAgentTurns)
   toolInstructions = toolInstructions ? `${toolInstructions}\n\n${agentInstructions}` : agentInstructions
 
   const systemPrompt = buildBrahmaSystemPrompt({
@@ -196,10 +198,10 @@ export async function runBrahmaQuery(opts: RunBrahmaQueryOptions): Promise<Brahm
   let staleIterations = 0
   let lastToolResultText = ''
 
-  while (agentTurnCount <= MAX_AGENT_TURNS) {
+  while (agentTurnCount <= maxAgentTurns) {
     agentTurnCount++
 
-    if (agentTurnCount === MAX_AGENT_TURNS) {
+    if (agentTurnCount === maxAgentTurns) {
       conversationMessages.push({ role: 'user', content: buildForceFinalMessage() })
     }
 
@@ -268,7 +270,7 @@ export async function runBrahmaQuery(opts: RunBrahmaQueryOptions): Promise<Brahm
       }
     }
 
-    if (hasToolCalls && !isSubmitFinal && toolCallsToProcess && agentTurnCount < MAX_AGENT_TURNS) {
+    if (hasToolCalls && !isSubmitFinal && toolCallsToProcess && agentTurnCount < maxAgentTurns) {
       const callSignature = normalizeToolCallSignature(toolCallsToProcess)
       const duplicateCount = toolCallHistory.filter((sig) => sig === callSignature).length
       toolCallHistory.push(callSignature)

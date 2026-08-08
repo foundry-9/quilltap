@@ -21,6 +21,7 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { requiresApiKey } from '@/lib/plugins/provider-validation'
+import { resolveBrahmaMaxAgentTurns } from './turn-budget'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
 import type { ToolExecutionContext } from '@/lib/chat/tool-executor'
@@ -257,8 +258,10 @@ async function processBrahmaResponse(
     toolInstructions = buildNativeToolSystemInstructions()
   }
 
-  // Agent mode instructions (always enabled)
-  const maxAgentTurns = 25
+  // Agent mode instructions (always enabled). The turn budget is operator-set
+  // (Settings → Chat → Brahma Console); the stuck-loop guard below still stops
+  // a repeating loop well before this cap.
+  const maxAgentTurns = await resolveBrahmaMaxAgentTurns()
   const agentInstructions = buildAgentModeInstructions(maxAgentTurns)
   toolInstructions = toolInstructions
     ? `${toolInstructions}\n\n${agentInstructions}`

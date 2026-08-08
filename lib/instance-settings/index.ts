@@ -19,6 +19,8 @@
 import { rawQuery } from '@/lib/database/manager';
 import { logger } from '@/lib/logger';
 import {
+  BrahmaConsoleSettingsSchema,
+  type BrahmaConsoleSettings,
   DataRetentionSettingsSchema,
   type DataRetentionSettings,
   MemoryExtractionLimitsSchema,
@@ -38,6 +40,7 @@ const KEY_USER_UPLOADS_MOUNT_POINT_ID = 'userUploadsMountPointId';
 const KEY_GENERAL_MOUNT_POINT_ID = 'generalMountPointId';
 const KEY_LAST_MAINTENANCE_SWEEP_AT = 'lastMaintenanceSweepAt';
 const KEY_DATA_RETENTION = 'dataRetention';
+const KEY_BRAHMA_CONSOLE = 'brahmaConsole';
 const KEY_TABOO = 'taboo';
 
 /** Key the version guard writes (see `lib/startup/version-guard.ts`). */
@@ -84,6 +87,9 @@ const DEFAULT_MEMORY_RECALL_SETTINGS: MemoryRecallSettings = {
 };
 const DEFAULT_DATA_RETENTION_SETTINGS: DataRetentionSettings = {
   staleChatDays: 30,
+};
+const DEFAULT_BRAHMA_CONSOLE_SETTINGS: BrahmaConsoleSettings = {
+  maxAgentTurns: 50,
 };
 const DEFAULT_TABOO_SETTINGS: TabooSettings = {
   phrases: [],
@@ -228,6 +234,32 @@ export async function getDataRetentionSettings(): Promise<DataRetentionSettings>
 export async function setDataRetentionSettings(value: DataRetentionSettings): Promise<void> {
   const validated = DataRetentionSettingsSchema.parse(value);
   await writeSetting(KEY_DATA_RETENTION, JSON.stringify(validated));
+}
+
+/**
+ * Read the per-instance Brahma Console settings (the agent-turn budget that
+ * caps how many tool-use rounds a Console query may take before it is forced to
+ * answer). Returns the documented default (50 turns) when the setting hasn't
+ * been written yet. The duplicate/stale-query guard is independent of this
+ * value and still short-circuits a stuck loop regardless.
+ */
+export async function getBrahmaConsoleSettings(): Promise<BrahmaConsoleSettings> {
+  const raw = await readSetting(KEY_BRAHMA_CONSOLE);
+  if (raw === null) return DEFAULT_BRAHMA_CONSOLE_SETTINGS;
+  try {
+    const parsed = JSON.parse(raw);
+    return BrahmaConsoleSettingsSchema.parse(parsed);
+  } catch (error) {
+    logger.warn('[InstanceSettings] brahmaConsole failed to parse — using defaults', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return DEFAULT_BRAHMA_CONSOLE_SETTINGS;
+  }
+}
+
+export async function setBrahmaConsoleSettings(value: BrahmaConsoleSettings): Promise<void> {
+  const validated = BrahmaConsoleSettingsSchema.parse(value);
+  await writeSetting(KEY_BRAHMA_CONSOLE, JSON.stringify(validated));
 }
 
 /**
@@ -402,12 +434,14 @@ export async function writeInstanceSetting(key: string, value: string): Promise<
 
 // Re-export the schema for callers that want to validate independently.
 export {
+  BrahmaConsoleSettingsSchema,
   DataRetentionSettingsSchema,
   MemoryExtractionLimitsSchema,
   MemoryRecallSettingsSchema,
   TabooSettingsSchema,
 };
 export type {
+  BrahmaConsoleSettings,
   DataRetentionSettings,
   MemoryExtractionLimits,
   MemoryRecallSettings,
