@@ -5,10 +5,12 @@
 **Provenance**: the quilltap-v5 native port's differential harness, and its
 dogfood walks against a copy of real data
 **Status**: Bugs **1–44** are **fixed in v4** (Bug 44, the impersonation
-overlay, landed 2026-08-07); **Bug 45 is OPEN** (an impersonated seat's
-just-sent message flickers to the wrong author before the refetch corrects
-it — surfaced on the 2026-08-07 v5 dogfood walk of the overlay; cosmetic,
-both apps share the code). Each fixed
+overlay, landed 2026-08-07); **Bugs 45 and 46 are OPEN** — both surfaced on
+the 2026-08-07 v5 dogfood walk of the overlay and both are shared by v4 and
+the port: 45 (an impersonated seat's just-sent message flickers to the wrong
+author before the refetch corrects it; cosmetic) and 46 (impersonation and
+the composer turn banner don't reconcile, so you can't tell your typed
+message will be attributed to the impersonated character). Each fixed
 bug's section below carries a **FIXED in v4** marker, and the [Status](#status)
 table records the per-bug fix site and v5 status. The
 [Bugs found since](#bugs-found-since--not-yet-fixed-in-v4) catalogue is retained
@@ -2380,6 +2382,72 @@ first paint (no re-attribution on refetch).
 
 ---
 
+## Bug 46 — impersonation and the composer turn banner don't reconcile; you can't tell who you're speaking as
+
+**OPEN.** Surfaced 2026-08-07 on a v5 dogfood walk of the Bug 44 overlay; v4
+shares the code and the behaviour. Related to (but distinct from) Bug 45.
+**Severity: Low–Medium (confusing; you can post as the wrong character).**
+
+### Symptom
+
+While impersonating a character X, the composer-area "user turn" banner announces
+a **different** seat's turn — your usual user seat Y, whom the rotation actually
+selected — while a message you type is attributed to **X**. You read "Y's turn,"
+type expecting Y, and it comes out as X. There is no on-screen cue that you are
+locked into speaking as X. (When it is X's *own* turn, the banner announces
+nothing at all — see the related facet below — so you again can't tell it is your
+turn to type as X, or Skip it.)
+
+### Root cause
+
+Two decoupled mechanisms:
+
+- **The turn banner** (`app/salon/[id]/SalonView.tsx:1388-1396`) announces the turn
+  only for a genuine user-controlled seat: `next.controlledBy !== 'user'` over the
+  **non-overlaid** `participantData`. Bug 44's overlay leaves an impersonated seat
+  at `controlledBy: 'llm'`, so the banner never announces an impersonated seat's
+  turn, and it announces the genuine user seat's turn when the rotation lands
+  there.
+- **Message attribution** follows `activeTypingParticipantId` (who you are
+  "speaking as"), which impersonation set to X (`handleImpersonate` →
+  `chat.activeTypingParticipantId || participantId`). So on Y's turn, with
+  `activeTypingParticipantId === X`, the message is attributed to X.
+
+The two never reconcile, and the only widget that shows who you're speaking as —
+the `SpeakerSelector` — renders solely when `controlledCharacters.length >= 2`
+(`SalonView.tsx:1374`), so with a single genuine user seat plus impersonation
+there is no "speaking as X" cue on screen at all.
+
+### Related facet
+
+Because the banner keys on the raw `controlledBy`, an impersonated seat's **own**
+turn is never announced and offers no Skip in the composer either. (The v5 port
+briefly "fixed" this by consulting the overlay in its banner, then reverted it as
+a unilateral divergence — v4 is the reference and does not show it, so the port
+must not either until v4 decides to.)
+
+### Why it survived
+
+Impersonation is a niche path, and the one cue that would disambiguate
+(`SpeakerSelector`) is hidden in the common single-user-seat case.
+
+### The fix
+
+A design decision for v4. Options: (a) reflect who you are actually speaking as in
+the banner and reconcile it with the turn; (b) announce the impersonated seat's
+own turn (and offer Skip) via the overlay; and/or (c) scope impersonation's active
+speaking seat to the impersonated seat's own turn, so a genuine user seat's turn is
+not silently hijacked to the impersonated character. Whichever v4 picks, the v5
+port mirrors it in a drift catch-up.
+
+### Verification
+
+Impersonate a character while your usual user seat is also present; when the
+rotation lands on the usual seat, confirm the UI makes unmistakable which character
+your typed message will be attributed to.
+
+---
+
 ## Inert dead code
 
 These are dead or unreachable v4 code paths that cost no user anything today —
@@ -2452,6 +2520,7 @@ faithfully on the v5 side.
 | 37 | `AllLLMPauseModal` unreachable; the pause is silent | **Yes** (2026-08-06) | `handlers/get.ts` — project `isPaused` + `allLLMPauseTurnCount`; `app/salon/[id]/SalonView.tsx` — opener effect on `isPaused && isAllLLM` | **Owed** (Faithful) — mirror the projection + opener |
 | 44 | Bug 27's fix mutates `controlledBy` (mutate-and-restore) instead of overlaying impersonation | **Yes** (2026-08-07, v4-first) | `actions/participants.ts` — both writes + recompiles removed; shared `isUserDrivenSeat` in `lib/chat/turn-manager/utils.ts` consulted at attribution (`findActiveUserParticipant`, `findUserParticipantName`, `resolveUserIdentity`) + who-responds (`selectNextSpeaker`, `resolveRespondingParticipant` filter, `turn-orchestrator` pause, `turn.ts` skip); owner-seat readers keep the column; tests + API.md rewritten | **v4-FIRST (inverse direction)** — v5 still mirrors the SHIPPED flips; absorbs this as a drift re-port (`salon_mutations` / `chat_cast_routes` / turn-chain families move; impersonation e2e re-gestures — Stop button returns to the card) |
 | 45 | An impersonated seat's just-sent message flickers to the wrong author before the refetch corrects it | **No** (OPEN, 2026-08-07) | client `app/salon/[id]/hooks/useSSEStreaming.ts:648` (optimistic bubble) vs server `lib/services/chat-message/user-identity-resolver.service.ts:47` (`findActiveUserParticipant`) | Reproduced faithfully — v5 `dogfood-findings.md` #71; both apps share the optimistic-attribution code, so a fix is a v4-first product decision |
+| 46 | Impersonation and the composer turn banner don't reconcile — the banner announces a genuine user seat's turn while attribution follows the impersonated seat, with no on-screen cue | **No** (OPEN, 2026-08-07) | banner `app/salon/[id]/SalonView.tsx:1388-1396` (keys raw `controlledBy`); `SpeakerSelector` gated at `:1374` (`>= 2`); attribution follows `activeTypingParticipantId` | Reproduced faithfully — v5 `dogfood-findings.md` #72; the v5 port briefly diverged (banner lit for impersonated seats) and reverted it. v4-first design decision |
 
 **Bugs 1–43 are fixed in v4; Bug 44 is OPEN. The 1–43 close-out: the last batch, bugs 31–35,
 on 2026-08-06** (bugs 8–12, 18, and 26 fixed earlier). Their
