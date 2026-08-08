@@ -244,6 +244,7 @@ Characters you're impersonating sit in the same weighted rotation as the LLM cha
 - Or hit **Skip** to record their turn as taken (no message) and let the next character respond
 - Talkativeness applies to user characters too — a chatty user character will come up more often than a quiet one
 - Other LLM characters continue their turns normally; you can still queue an impersonated character with the sidebar's Queue button if you want them up sooner
+- When the rotation reaches a seat you're driving, the composer defaults the voice above the input to *that* seat, so you're already speaking as whoever's turn it is. Taking up a character's pen also hands them the floor at once, rather than making you wait for the rotation to come round. A voice you pick by hand for the turn still stands; the composer only re-defaults as the turn moves on.
 
 ### All-LLM Chats
 

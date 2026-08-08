@@ -350,7 +350,23 @@ export async function runBrahmaQuery(opts: RunBrahmaQueryOptions): Promise<Brahm
   // Models that output submit_final_response as JSON text.
   fullResponse = extractSubmitFinalResponseFromText(fullResponse)
 
-  const finalAnswer = fullResponse.trim()
+  let finalAnswer = fullResponse.trim()
+
+  // Budget-exhaustion salvage (Bug 47) — the mirror of the standalone
+  // orchestrator's. The forced final turn runs no tools, so a model that answers
+  // it with another native tool call instead of `submit_final_response` leaves
+  // `fullResponse` empty. Rather than report a bare failure to Carina after
+  // spending real budget, synthesise an explanatory answer from the last tool
+  // result we captured. With no tool data at all there is genuinely nothing to
+  // return, so fall through to the empty-response failure below.
+  if (!finalAnswer && lastToolResultText) {
+    finalAnswer = `I reached my ${maxAgentTurns}-turn budget before I could compose a final answer.\n\nHere is what I gathered before I stopped:\n\n${lastToolResultText}`
+    logger.warn('Brahma one-shot exhausted its turn budget without a final response', {
+      chatId,
+      maxAgentTurns,
+    })
+  }
+
   if (!finalAnswer) {
     logger.debug('Brahma one-shot produced an empty answer', { chatId })
     return { ok: false, detail: 'empty response' }

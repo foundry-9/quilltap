@@ -2,18 +2,40 @@
 
 | | |
 |---|---|
-| **Status** | **OPEN** |
+| **Status** | **FIXED in v4** |
 | **Found** | 2026-08-08 |
+| **Fixed** | 2026-08-08 |
 | **Severity** | Low (rare at the default budget of 50, but it burns real API spend and returns nothing) |
 | **Who it bites** | any Brahma Console run that exhausts its turn budget |
 | **Provenance** | Faithful — v5 dogfood walk (finding #73) |
 | **Defect site** | `lib/services/brahma-console/orchestrator.service.ts:539` (+ `one-shot.service.ts`) — the `if (fullResponse)` finalizer has no `else`, so an empty forced-turn response saves nothing and enqueues no completion |
-| **v5 status** | Faithful in v5 (`brahma_console/orchestrator.rs:651`/`:661`); recorded as `dogfood-findings.md` #73, absorb when v4 fixes it |
+| **Fix site** | `lib/services/brahma-console/orchestrator.service.ts` + `one-shot.service.ts` — budget-exhaustion salvage before the finalizer |
+| **v5 status** | Faithful in v5 (`brahma_console/orchestrator.rs:651`/`:661`); recorded as `dogfood-findings.md` #73, retire the finding when v5 absorbs the fix |
 | **Index** | [bugs.md](../bugs.md) |
 
 ---
 
-**OPEN.** Surfaced 2026-08-08 on a v5 dogfood walk of the new Brahma Console
+**FIXED in v4 (2026-08-08).** Both Brahma Console paths now salvage an exhausted
+budget instead of ending in silence. When the agent loop exits with an empty
+`fullResponse` — the forced final turn ran no tools and the model answered it
+with another native tool call (which carries no prose) — the code synthesises a
+short *"I reached my {maxAgentTurns}-turn budget before I could compose a final
+answer"* message and folds in the last tool result it captured
+(`lastToolResultText`). The streaming orchestrator
+(`orchestrator.service.ts`) then falls into its existing `if (fullResponse)`
+finalizer, so the salvage message is persisted **and** the `done` event is always
+enqueued — no more silent hang. The one-shot path (`one-shot.service.ts`, which
+backs `@Brahma` from the Salon) returns the salvaged text as its answer when it
+has tool data, falling back to the pre-existing `{ ok: false, detail: 'empty
+response' }` only when there was genuinely nothing to report. Regression tests
+added to both suites (`__tests__/orchestrator.service.test.ts`,
+`__tests__/one-shot.service.test.ts`), each driving a budget of 2 where the
+forced turn only calls a tool. **v5 owes a drift catch-up** (retire
+`dogfood-findings.md` #73); the fix moves the oracle baseline.
+
+---
+
+**Surfaced 2026-08-08** on a v5 dogfood walk of the new Brahma Console
 turn-budget setting (`6452e2c3`), with the budget set to its floor (5). v4 shares
 the code and the behaviour. **Severity: Low (rare at the default budget of 50, but
 it burns real API spend and returns nothing).**

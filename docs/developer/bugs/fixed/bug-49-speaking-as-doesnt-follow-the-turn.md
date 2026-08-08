@@ -2,18 +2,40 @@
 
 | | |
 |---|---|
-| **Status** | **OPEN** |
+| **Status** | **FIXED in v4** |
 | **Severity** | Low–Medium (confusing; on an impersonated seat's own turn you default to the wrong character) |
 | **Found** | 2026-08-08 |
+| **Fixed** | 2026-08-08 |
 | **Who it bites** | anyone impersonating a character in a multi-character chat, when the rotation reaches the impersonated seat's turn |
 | **Provenance** | Faithful — v5 dogfood walk (the impersonation Part B pass) |
 | **Defect site** | `app/salon/[id]/hooks/useImpersonation.ts` — `activeTypingParticipantId` is set only by the impersonate/stop/select handlers and the chat-sync effect (`:37`); nothing reconciles it with the current turn |
-| **v5 status** | Faithful in v5 (`salon-conversation.ts` `activeSpeakerId` = the persistent speaking-as selection, with no turn coupling). Recorded on the v5 side as `dogfood-findings.md` (the Part B walk); absorb when v4 fixes it |
+| **Fix site** | `app/salon/[id]/SalonView.tsx` — a turn-follow effect that defaults the speaking-as to the current user-driven turn seat |
+| **v5 status** | Faithful in v5 (`salon-conversation.ts` `activeSpeakerId` = the persistent speaking-as selection, with no turn coupling). Recorded on the v5 side as `dogfood-findings.md` (the Part B walk); absorb the fix as drift |
 | **Index** | [bugs.md](../bugs.md) |
 
 ---
 
-**OPEN.** Surfaced 2026-08-08 on the v5 dogfood walk. v4 shares the code and the
+**FIXED in v4 (2026-08-08).** The composer's speaking-as now follows the current
+user-driven turn. A new effect in `SalonView.tsx` watches
+`turnSelectionResult.nextSpeakerId`: when it lands on a seat the human drives —
+their own character OR one they are impersonating (via the shared
+`isUserDrivenSeat`) — and that seat *changes*, it defaults
+`activeTypingParticipantId` to it. It is keyed on the turn seat, not the
+speaking-as value (a `lastFollowedTurnSeatRef` guard), so a deliberate
+SpeakerSelector choice made on the same turn still sticks; the follow only
+re-defaults when the rotation moves to a different user-driven seat. It is a
+per-turn client default — it sets only the client speaking-as, which the send
+path already forwards as `speakingAsParticipantId`, so a typed message is
+attributed in turn without persisting a per-turn write to the record.
+**Design calls settled:** auto-follow as the default but let an explicit
+same-turn choice win; follow any user-driven seat (owner or impersonated);
+per-turn presentation default, not persisted. Designed together with
+[Bug 48](bug-48-impersonate-doesnt-take-the-turn.md). **v5 owes a drift
+catch-up.**
+
+---
+
+**Surfaced 2026-08-08** on the v5 dogfood walk. v4 shares the code and the
 behaviour. The **sibling of [Bug 48](bug-48-impersonate-doesnt-take-the-turn.md)** —
 both are facets of the turn ↔ speaking-as decoupling for impersonated seats.
 

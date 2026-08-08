@@ -543,6 +543,13 @@ export async function handleGet(
       roleplayTemplateId: chatMetadata.roleplayTemplateId,
       imageProfileId: chatMetadata.imageProfileId ?? null,
       lastTurnParticipantId: chatMetadata.lastTurnParticipantId ?? null,
+      // Impersonation overlay state — projected so a reload (or a mid-session
+      // server restart) restores the "speaking as" selection and the impersonated
+      // seats instead of snapping every seat back to LLM-controlled. Without these
+      // the client's useImpersonation sync reads `undefined` and shows an
+      // impersonated character as not impersonated.
+      impersonatingParticipantIds: chatMetadata.impersonatingParticipantIds ?? [],
+      activeTypingParticipantId: chatMetadata.activeTypingParticipantId ?? null,
       isPaused: chatMetadata.isPaused ?? false,
       // All-LLM-pause bookkeeping — surfaced so the client can explain a silent
       // pause (opens AllLLMPauseModal on load / mid-session).

@@ -2,18 +2,40 @@
 
 | | |
 |---|---|
-| **Status** | **OPEN** |
+| **Status** | **FIXED in v4** |
 | **Found** | 2026-08-08 |
+| **Fixed** | 2026-08-08 |
 | **Severity** | Low–Medium (confusing; you opt to speak as a character but it is still someone else's turn) |
 | **Who it bites** | anyone who impersonates a character mid-conversation while a *different* seat's turn is active |
 | **Provenance** | Faithful — v5 dogfood walk (the impersonation Part B pass) |
 | **Defect site** | `app/api/v1/chats/[id]/actions/participants.ts` (`handleImpersonate` → `addImpersonation`) + `app/salon/[id]/hooks/useImpersonation.ts` — impersonation writes `impersonatingParticipantIds` / `activeTypingParticipantId` but never touches turn selection |
-| **v5 status** | Faithful in v5 (`api/salon.rs` `chat_impersonate` → `add_impersonation`; the turn is queried separately and unchanged). Recorded on the v5 side as `dogfood-findings.md` (the Part B walk); absorb when v4 fixes it |
+| **Fix site** | `app/salon/[id]/SalonView.tsx` (`handleImpersonateAndTakeTurn`) — moves the current turn to the newly impersonated seat |
+| **v5 status** | Faithful in v5 (`api/salon.rs` `chat_impersonate` → `add_impersonation`; the turn is queried separately and unchanged). Recorded on the v5 side as `dogfood-findings.md` (the Part B walk); absorb the fix as drift |
 | **Index** | [bugs.md](../bugs.md) |
 
 ---
 
-**OPEN.** Surfaced 2026-08-08 on the v5 dogfood walk of the impersonation
+**FIXED in v4 (2026-08-08).** Starting an impersonation now hands the current
+turn to the newly impersonated seat. Rather than touch the server-side turn
+persistence (a far riskier change in this already-delicate area), the fix wraps
+the client's impersonation start in `SalonView.tsx`'s
+`handleImpersonateAndTakeTurn`: after `handleStartImpersonation` resolves, and
+**unless an LLM is mid-generation** (`streamingRef.current`), it moves the client
+turn to the impersonated participant
+(`setTurnSelectionResult({ nextSpeakerId, reason: 'queue', … })`). This is a
+client presentation of the rotation — the same shape `turnSelectionResult`
+already holds, recomputed from history once a message is sent — so the banner now
+names the impersonated seat and, via the [Bug 49](bug-49-speaking-as-doesnt-follow-the-turn.md)
+follow, the composer speaks as it, so a typed message lands in turn. Both entry
+points (the cast card's `onImpersonate` and the all-LLM take-over) route through
+the wrapper. **Design calls settled:** move the turn on impersonate *unless* an
+LLM is streaming; do not persist the turn move server-side; "stop impersonating"
+does not restore the displaced turn (the rotation recomputes from history on the
+next message). Designed together with Bug 49. **v5 owes a drift catch-up.**
+
+---
+
+**Surfaced 2026-08-08** on the v5 dogfood walk of the impersonation
 surface. v4 shares the code and the behaviour. **Severity: Low–Medium.**
 
 ### Symptom

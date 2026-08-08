@@ -3,6 +3,7 @@ import {
   createInitialTurnState,
   calculateTurnStateFromHistory,
   selectNextSpeaker,
+  selectNextSpeakerAfterUserMessage,
   updateTurnStateAfterMessage,
   addToQueue,
   removeFromQueue,
@@ -908,5 +909,87 @@ describe('computeSpokenThisCycleAfterSkip', () => {
   it('wraps the cycle when the skip completes the active set', () => {
     const result = computeSpokenThisCycleAfterSkip('u1', participants, JSON.stringify(['p1']))
     expect(JSON.parse(result!)).toEqual(['u1'])
+  })
+})
+
+describe('selectNextSpeakerAfterUserMessage — fair rotation with 2+ user-driven seats', () => {
+  // The reported bug: human plays Charlie (user) AND impersonates Lorian (an LLM
+  // seat, controlledBy still 'llm' under the Bug 44 overlay), with Kumar the sole
+  // real LLM. The first-responder picker used an LLM-only shortlist, so Kumar
+  // answered EVERY human turn: Charlie→Kumar→Lorian→Kumar… This helper projects
+  // the rotation one step past the human's just-typed (unpersisted) message so the
+  // send path can pause for the OTHER human seat instead of forcing Kumar.
+  const charlie = makeUserControlledParticipant('charlie', 'char-charlie')
+  const lorian = makeCharacterParticipant('lorian', 'char-lorian') // controlledBy 'llm'
+  const kumar = makeCharacterParticipant('kumar', 'char-kumar')
+  const participants = [charlie, lorian, kumar]
+  const impersonating = ['lorian'] // Lorian is impersonated → user-driven overlay
+
+  const characters = new Map<string, Character>([
+    ['char-charlie', makeCharacter('char-charlie')],
+    ['char-lorian', makeCharacter('char-lorian')],
+    ['char-kumar', makeCharacter('char-kumar')],
+  ])
+
+  it('after Charlie posts, hands the floor to impersonated Lorian (pause), not Kumar', () => {
+    // Kumar already spoke this cycle; Charlie is posting now. The only eligible
+    // seat left is Lorian — and Lorian is user-driven, so the send path pauses.
+    const result = selectNextSpeakerAfterUserMessage(
+      participants,
+      characters,
+      'charlie',                 // poster
+      JSON.stringify(['kumar']), // persisted spokenThisCycle
+      '[]',                      // no queue
+      'charlie',                 // userParticipantId
+      impersonating,
+    )
+    expect(result.nextSpeakerId).toBe('lorian')
+    expect(result.reason).toBe('user_turn') // overlay-aware → the caller pauses
+  })
+
+  it('after Lorian posts, lets Kumar answer (no pause) when he is the eligible seat', () => {
+    // Charlie already spoke this cycle; the human just typed as Lorian. The only
+    // eligible seat is Kumar (a real LLM) — the send path must NOT pause.
+    const result = selectNextSpeakerAfterUserMessage(
+      participants,
+      characters,
+      'lorian',                    // poster (impersonated)
+      JSON.stringify(['charlie']), // persisted spokenThisCycle
+      '[]',
+      'charlie',
+      impersonating,
+    )
+    expect(result.nextSpeakerId).toBe('kumar')
+    expect(result.reason).not.toBe('user_turn')
+  })
+
+  it('wraps the cycle when the poster completes it, then picks from the fresh set', () => {
+    // Kumar and Lorian have spoken; Charlie posting completes the 3-seat cycle,
+    // so it wraps and the next speaker is drawn from {Lorian, Kumar} (not Charlie).
+    const result = selectNextSpeakerAfterUserMessage(
+      participants,
+      characters,
+      'charlie',
+      JSON.stringify(['kumar', 'lorian']),
+      '[]',
+      'charlie',
+      impersonating,
+    )
+    expect(result.nextSpeakerId).not.toBe('charlie')
+    expect(['lorian', 'kumar']).toContain(result.nextSpeakerId)
+  })
+
+  it('honours the queue ahead of the rotation', () => {
+    const result = selectNextSpeakerAfterUserMessage(
+      participants,
+      characters,
+      'charlie',
+      JSON.stringify(['kumar']),
+      JSON.stringify(['kumar']), // Kumar explicitly queued
+      'charlie',
+      impersonating,
+    )
+    expect(result.nextSpeakerId).toBe('kumar')
+    expect(result.reason).toBe('queue')
   })
 })

@@ -225,6 +225,7 @@ Impersonation lets you control a character directly, typing their responses your
 - Your message appears as that character, with their avatar
 - Other characters respond to what you wrote as that character
 - You can switch between impersonating different characters
+- **The moment you take up a character's pen, the floor becomes theirs.** Declaring an impersonation is a declaration that you mean to speak *now*, so the turn is handed straight to the borrowed seat — the banner names them, and the very next line you type lands squarely in turn, rather than languishing as someone else's moment. (The one courtesy observed: should a character be mid-utterance, their sentence is allowed to finish before the floor changes hands.)
 
 ### Multiple Impersonations
 
@@ -235,6 +236,10 @@ You can impersonate multiple characters:
 3. Click the character's name/avatar above the input to switch
 
 Whoever you've chosen above the input is the voice your next message carries: the message is filed under that character, shown with their name and avatar, and presented to the other characters as having come from them. Switch the selection and the very next line you send changes hands accordingly — no need to touch a character's card.
+
+When you hold the pens of several characters at once, the composer keeps step with the rotation on your behalf: as each of your borrowed seats comes round to its own turn, the voice above the input quietly defaults to *that* seat — so on Lorian's turn you speak as Lorian, and on your own character's turn you speak as them, with never a manual switch. Should you deliberately choose a different voice for the turn at hand, your choice stands; the composer only re-defaults when the rotation moves on to the next seat.
+
+Every seat you drive keeps its own place in the weighted rotation, each apart from the machine players. So when you play two of the three souls at the table and a lone automaton plays the third, the floor passes round evenly — your first character, then perhaps the automaton, then your second character — rather than the machine seizing every second turn. When the rotation comes to one of your seats, the house simply pauses for you to write; it does not put words in a borrowed mouth on your behalf.
 
 ### Stopping Impersonation
 

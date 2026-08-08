@@ -25,7 +25,7 @@ export {
 } from './state';
 
 // Turn selection
-export { selectNextSpeaker } from './selection';
+export { selectNextSpeaker, selectNextSpeakerAfterUserMessage } from './selection';
 
 // "Nothing to add" turn-skipping — shared pure logic
 export {

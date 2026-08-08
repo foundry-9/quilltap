@@ -534,6 +534,64 @@ export function SalonView({ chatId }: SalonViewProps) {
     impersonation.impersonatingParticipantIds,
   ])
 
+  // Bug 49: the composer's speaking-as follows the current user-driven turn.
+  // When the rotation lands on a seat the human drives — their own character OR
+  // one they are impersonating (Bug 44 overlay) — and that seat *changes*,
+  // default the speaking-as to it, so on the impersonated character's own turn
+  // you are speaking as them without a manual switch. Keyed on the turn seat, not
+  // on the speaking-as value, so a deliberate SpeakerSelector choice made on the
+  // same turn still sticks (it moves `activeTypingParticipantId` without moving
+  // the turn, and the ref guard below leaves it alone until the turn moves on).
+  // Per-turn presentation default: it sets only the client speaking-as, which the
+  // send path forwards as `speakingAsParticipantId`, so a typed message is
+  // attributed in turn without persisting a per-turn churn to the record.
+  const lastFollowedTurnSeatRef = useRef<string | null>(null)
+  const {
+    impersonatingParticipantIds: impersonatingIdsForFollow,
+    activeTypingParticipantId: activeTypingForFollow,
+    setActiveTypingParticipantId: setActiveTypingForFollow,
+  } = impersonation
+  useEffect(() => {
+    const nextId = turnSelectionResult?.nextSpeakerId
+    if (!nextId) {
+      lastFollowedTurnSeatRef.current = null
+      return
+    }
+    const next = participantsWithImpersonation.participantsAsBase.find(p => p.id === nextId)
+    if (!next || !isUserDrivenSeat(next, impersonatingIdsForFollow)) {
+      lastFollowedTurnSeatRef.current = null
+      return
+    }
+    // Only react when the user-driven turn seat itself changes — not when the
+    // human re-picks the speaking-as on the same turn.
+    if (lastFollowedTurnSeatRef.current === nextId) return
+    lastFollowedTurnSeatRef.current = nextId
+    if (activeTypingForFollow !== nextId) {
+      setActiveTypingForFollow(nextId)
+    }
+  }, [
+    turnSelectionResult,
+    participantsWithImpersonation.participantsAsBase,
+    impersonatingIdsForFollow,
+    activeTypingForFollow,
+    setActiveTypingForFollow,
+  ])
+
+  // Bug 48: starting an impersonation hands the current turn to the newly
+  // impersonated seat. Impersonating is an explicit "I'll take this character
+  // now", so — unless an LLM is mid-generation — move the current turn to that
+  // seat. The turn banner then reads its turn and, via the Bug 49 follow above,
+  // the composer speaks as it, so a typed message lands in turn. This is a client
+  // presentation of the rotation (the same shape `turnSelectionResult` already
+  // holds, recomputed from history once a message is sent); an LLM mid-stream is
+  // left undisturbed so we never interrupt a generation in flight.
+  const handleImpersonateAndTakeTurn = useCallback(async (participantId: string) => {
+    await impersonation.handleStartImpersonation(participantId)
+    if (!streamingRef.current) {
+      setTurnSelectionResult({ nextSpeakerId: participantId, reason: 'queue', cycleComplete: false })
+    }
+  }, [impersonation])
+
   // --- Outfit hook ---
   // Collect all character IDs from participants so we can fetch wardrobe for all of them
   // (including user-controlled characters that may not have equipped outfits yet)
@@ -1275,8 +1333,8 @@ export function SalonView({ chatId }: SalonViewProps) {
 
   const handleAllLLMTakeOver = useCallback(async (participantId: string) => {
     modals.setAllLLMPauseModalOpen(false)
-    await impersonation.handleStartImpersonation(participantId)
-  }, [modals, impersonation])
+    await handleImpersonateAndTakeTurn(participantId)
+  }, [modals, handleImpersonateAndTakeTurn])
 
   // --- Early returns ---
   if (awaitingTagInfo) {
@@ -1764,7 +1822,7 @@ export function SalonView({ chatId }: SalonViewProps) {
           onRemoveCharacter={chatControls.handleRemoveCharacter}
           impersonatingParticipantIds={impersonation.impersonatingParticipantIds}
           activeTypingParticipantId={impersonation.activeTypingParticipantId}
-          onImpersonate={impersonation.handleStartImpersonation}
+          onImpersonate={handleImpersonateAndTakeTurn}
           onStopImpersonate={impersonation.handleStopImpersonation}
           connectionProfiles={chatControls.connectionProfiles}
           onConnectionProfileChange={chatControls.handleConnectionProfileChange}

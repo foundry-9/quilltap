@@ -535,6 +535,28 @@ async function processBrahmaResponse(
   // Handle models that output submit_final_response as JSON text
   fullResponse = extractSubmitFinalResponseFromText(fullResponse)
 
+  // Budget-exhaustion salvage (Bug 47). The forced final turn (pushed at
+  // `agentTurnCount === maxAgentTurns`) executes no tools, so a model that
+  // answers it with yet another native tool call instead of
+  // `submit_final_response` leaves `fullResponse` empty — native tool calls
+  // carry no prose. Without this, the run would end having spent real API budget
+  // with NO assistant message and NO `done` event: a silent hang that looks
+  // exactly like a crash. Synthesise a short explanatory answer (folding in the
+  // last tool result we captured) so a run that did work always finalises with
+  // something and always signals completion below.
+  if (!fullResponse.trim()) {
+    const digest = lastToolResultText
+      ? `\n\nHere is what I gathered before I stopped:\n\n${lastToolResultText}`
+      : ''
+    fullResponse = `I reached my ${maxAgentTurns}-turn budget before I could compose a final answer.${digest}`
+    logger.warn('Brahma Console exhausted its turn budget without a final response', {
+      chatId,
+      maxAgentTurns,
+      hadToolData: !!lastToolResultText,
+    })
+    safeEnqueue(controller, encodeContentChunk(encoder, fullResponse))
+  }
+
   // Save the final assistant message
   if (fullResponse) {
     const assistantMessage: MessageEvent = {

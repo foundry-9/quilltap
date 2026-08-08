@@ -14,12 +14,16 @@ import {
   detectSkipSentinel,
   computeSpokenThisCycleAfterSkip,
   qualifiesForTurnSkipping,
+  findActiveUserParticipant,
+  isUserDrivenSeat,
+  selectNextSpeakerAfterUserMessage,
 } from '@/lib/chat/turn-manager'
+import { isParticipantPresent } from '@/lib/schemas/chat.types'
 import { postHostTurnPassAnnouncement, postHostNudgeAnnouncement } from '@/lib/services/host-notifications/writer'
 import { z } from 'zod'
 
 import type { getRepositories } from '@/lib/repositories/factory'
-import type { MessageEvent, ConnectionProfile } from '@/lib/schemas/types'
+import type { MessageEvent, ConnectionProfile, Character, ChatMetadataBase } from '@/lib/schemas/types'
 
 import type { SendMessageOptions, ToolMessage, GeneratedImage, ProcessMessageResult, StreamingState } from './types'
 
@@ -55,6 +59,7 @@ import {
   encodeCarinaAnswerEvent,
   encodeHostAnnouncementEvent,
   encodePascalResultEvent,
+  encodeChainCompleteEvent,
   safeEnqueue,
   safeClose,
 } from './streaming.service'
@@ -288,6 +293,38 @@ async function processMessage(
   // composer takes precedence over the persisted chat field (avoids a read-back
   // race where the set-active-speaker write hasn't landed yet).
   const speakingAsParticipantId = options.speakingAsParticipantId ?? chat.activeTypingParticipantId ?? null
+
+  // Fair-rotation guard for rooms where the human drives two or more seats.
+  // The first responder after a human post used to be picked from an LLM-ONLY
+  // shortlist (participant-resolver), so a room with a single LLM had that LLM
+  // answer EVERY human turn — collapsing the rotation to e.g.
+  // Charlie→Kumar→Lorian→Kumar… when the human plays both Charlie and an
+  // impersonated Lorian. When the rotation's next speaker after this post is
+  // ANOTHER seat the human drives, the floor is theirs: persist the message and
+  // pause for that seat (the client shows its turn banner) instead of forcing the
+  // sole LLM to speak out of turn. A whisper, a nudge, an explicit responding
+  // participant, or a continue-mode turn all bypass this (they name their own
+  // speaker), as does any single-user-seat room (the common case is untouched).
+  if (
+    !isContinueMode &&
+    !options.respondingParticipantId &&
+    !(options.targetParticipantIds && options.targetParticipantIds.length > 0) &&
+    !options.nudge &&
+    !!options.content &&
+    isMultiCharacterChat(chat.participants)
+  ) {
+    const pauseResult = await maybePauseForUserSeatTurn(
+      repos,
+      chatId,
+      chat,
+      userId,
+      options,
+      speakingAsParticipantId,
+      controller,
+      encoder,
+    )
+    if (pauseResult) return pauseResult
+  }
 
   const participantResult = await resolveRespondingParticipant(
     repos,
@@ -1660,6 +1697,154 @@ async function processMessage(
       userParticipantId,
       isPaused: chat.isPaused,
     }
+  }
+}
+
+/**
+ * Fair-rotation pause for rooms where the human drives two or more seats.
+ *
+ * Called on a fresh, non-whisper user send before any responder is resolved.
+ * Returns a terminal `ProcessMessageResult` (so the caller returns immediately
+ * and the turn chain does not run) when the rotation's next speaker after this
+ * post is ANOTHER seat the human drives — persisting the user's message and
+ * pausing for that seat. Returns `null` in every other case (single user seat,
+ * or an LLM is genuinely up next), letting the normal generation path proceed
+ * untouched.
+ */
+async function maybePauseForUserSeatTurn(
+  repos: ReturnType<typeof getRepositories>,
+  chatId: string,
+  chat: ChatMetadataBase,
+  userId: string,
+  options: SendMessageOptions,
+  speakingAsParticipantId: string | null,
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  encoder: TextEncoder,
+): Promise<ProcessMessageResult | null> {
+  // Which seat is the human speaking as? (overlay-aware — an impersonated seat
+  // counts, Bug 44.)
+  const posterSeat = findActiveUserParticipant(
+    chat.participants,
+    speakingAsParticipantId,
+    chat.impersonatingParticipantIds,
+  )
+  if (!posterSeat) return null
+
+  // Only relevant when the human drives 2+ seats; otherwise the LLM answering a
+  // human post is exactly right and this guard must not change anything.
+  // NB: `getActiveCharacterParticipants` is a misnomer — it returns LLM seats
+  // only — so filter the full roster here; a user-controlled seat (and the
+  // impersonated overlay) must both count.
+  const activeChars = chat.participants.filter(p =>
+    p.type === 'CHARACTER' && isParticipantPresent(p.status) && !!p.characterId,
+  )
+  const userDrivenSeatCount = activeChars.filter(p =>
+    isUserDrivenSeat(p, chat.impersonatingParticipantIds),
+  ).length
+  if (userDrivenSeatCount < 2) return null
+
+  // Talkativeness lives on the character record — build the weight map.
+  const charactersMap = new Map<string, Character>()
+  for (const p of activeChars) {
+    if (!p.characterId) continue
+    const char = await repos.characters.findById(p.characterId)
+    if (char) charactersMap.set(p.characterId, char)
+  }
+
+  const next = selectNextSpeakerAfterUserMessage(
+    chat.participants,
+    charactersMap,
+    posterSeat.id,
+    chat.spokenThisCycleParticipantIds,
+    chat.turnQueue,
+    posterSeat.id,
+    chat.impersonatingParticipantIds,
+  )
+  const nextSeat = next.nextSpeakerId
+    ? chat.participants.find(p => p.id === next.nextSpeakerId)
+    : null
+
+  const nextIsUserDriven = !!nextSeat && isUserDrivenSeat(nextSeat, chat.impersonatingParticipantIds)
+  logger.debug('[TurnFairness] Evaluated first-responder rotation after user post', {
+    chatId,
+    posterParticipantId: posterSeat.id,
+    userDrivenSeatCount,
+    nextSpeakerId: next.nextSpeakerId,
+    nextReason: next.reason,
+    willPause: nextIsUserDriven,
+  })
+
+  // An LLM (or nobody) is up next — let the normal path generate its reply.
+  if (!nextSeat || !nextIsUserDriven) {
+    return null
+  }
+
+  // The floor after this post belongs to another seat the human drives. Persist
+  // the message (which advances the persisted cycle via addMessage) and pause.
+  const userMessageId = crypto.randomUUID()
+  const now = new Date().toISOString()
+  await repos.chats.addMessage(chatId, {
+    id: userMessageId,
+    type: 'message' as const,
+    role: 'USER' as const,
+    content: options.content ?? '',
+    createdAt: now,
+    attachments: options.fileIds || [],
+    participantId: posterSeat.id,
+    targetParticipantIds: null,
+  })
+  for (const fileId of options.fileIds || []) {
+    try {
+      await repos.files.addLink(fileId, userMessageId)
+    } catch (error) {
+      logger.warn('[TurnFairness] Failed to link attachment on paused user turn', {
+        chatId, fileId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  // Inline @Name / @Name? queries are a side effect and still fire, even though
+  // no character takes the floor this turn (mirrors the main path).
+  if (options.content) {
+    await runCarinaMarkupQuery({
+      userId,
+      chatId,
+      text: options.content,
+      askerParticipantId: posterSeat.id,
+      operatorInitiated: true,
+      logLabels: { detected: 'user message', failed: 'user-message' },
+      onConsulting: (characterName) => safeEnqueue(controller, encodeStatusEvent(encoder, {
+        stage: 'gathering',
+        message: `Consulting ${characterName}...`,
+      })),
+      onPosted: (msg) => safeEnqueue(controller, encodeCarinaAnswerEvent(encoder, msg)),
+      onPublicAnswer: () => { /* no character responds this turn to hear it */ },
+    })
+  }
+
+  // Persist the pending turn and tell the client whose floor it is. The client's
+  // own recompute (from the freshly-saved history) lands on the same seat; the
+  // event settles its streaming state and refreshes the banner immediately.
+  await repos.chats.update(chatId, { lastTurnParticipantId: nextSeat.id })
+  safeEnqueue(controller, encodeChainCompleteEvent(encoder, {
+    reason: 'user_turn',
+    nextSpeakerId: nextSeat.id,
+    chainDepth: 0,
+  }))
+
+  logger.info('[TurnFairness] User post pauses for another user-driven seat', {
+    chatId,
+    posterParticipantId: posterSeat.id,
+    nextSpeakerId: nextSeat.id,
+  })
+
+  return {
+    isMultiCharacter: true,
+    hasContent: false,
+    messageId: userMessageId,
+    userParticipantId: posterSeat.id,
+    isPaused: chat.isPaused === true,
   }
 }
 

@@ -7,9 +7,10 @@
 
 import { turnManagerLogger as logger } from './logger';
 import type { TurnState, TurnSelectionResult } from './types';
-import type { ChatParticipantBase, Character } from '@/lib/schemas/types';
+import type { ChatEvent, ChatParticipantBase, Character } from '@/lib/schemas/types';
 import { isParticipantPresent } from '@/lib/schemas/types';
 import { isUserDrivenSeat } from './utils';
+import { computeSpokenThisCycleAfterMessage } from './state';
 
 /**
  * Selects the next speaker based on turn state and talkativeness weights.
@@ -106,6 +107,76 @@ export function selectNextSpeaker(
     randomValue: wrapPick.randomValue,
     allLLMNewCycle: true,
   });
+}
+
+/**
+ * Who speaks next *after* a user's just-typed message — projected one step past
+ * a post that has NOT been persisted yet.
+ *
+ * The first-responder decision on a fresh user send happens before the message
+ * is written to history, so `calculateTurnStateFromHistory` would still resolve
+ * to the poster (whose turn it currently is), not the seat that follows them.
+ * This helper advances the persisted cycle exactly the way the message write will
+ * (via {@link computeSpokenThisCycleAfterMessage}, so the projection and the
+ * eventual persisted state agree), sets the poster as `lastSpeakerId`, then runs
+ * the normal full-rotation {@link selectNextSpeaker} over ALL participants.
+ *
+ * The caller uses this to detect when the floor after a human's post belongs to
+ * ANOTHER seat the human drives — in which case the chat pauses for that seat
+ * instead of forcing an LLM to answer every human turn (the fair-rotation fix for
+ * rooms where the human drives two or more seats alongside a single LLM).
+ */
+export function selectNextSpeakerAfterUserMessage(
+  participants: ChatParticipantBase[],
+  characters: Map<string, Character>,
+  posterParticipantId: string,
+  persistedSpokenThisCycleJson: string | null | undefined,
+  turnQueueJson: string | null | undefined,
+  userParticipantId: string | null,
+  impersonatingParticipantIds?: readonly string[] | null,
+): TurnSelectionResult {
+  const syntheticPost = {
+    type: 'message',
+    role: 'USER',
+    participantId: posterParticipantId,
+  } as unknown as ChatEvent;
+
+  const advancedJson = computeSpokenThisCycleAfterMessage(
+    syntheticPost,
+    participants,
+    persistedSpokenThisCycleJson ?? null,
+  );
+
+  const parseIds = (json: string | null | undefined): string[] => {
+    if (!json) return [];
+    try {
+      const parsed = JSON.parse(json);
+      return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
+    } catch {
+      return [];
+    }
+  };
+
+  // `advancedJson === null` means the write is a no-op (poster already recorded,
+  // no wrap) — keep the persisted set as-is.
+  const spokenSinceUserTurn = advancedJson !== null
+    ? parseIds(advancedJson)
+    : parseIds(persistedSpokenThisCycleJson);
+
+  const turnState: TurnState = {
+    spokenSinceUserTurn,
+    lastSpeakerId: posterParticipantId,
+    queue: parseIds(turnQueueJson),
+    currentTurnParticipantId: null,
+  };
+
+  return selectNextSpeaker(
+    participants,
+    characters,
+    turnState,
+    userParticipantId,
+    impersonatingParticipantIds,
+  );
 }
 
 function buildResult(

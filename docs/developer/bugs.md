@@ -4,11 +4,17 @@
 **Codebase**: Quilltap v4.8.0-dev (HEAD `1bed814f`)
 **Provenance**: the quilltap-v5 native port's differential harness, and its
 dogfood walks against a copy of real data
-**Status**: Bugs **1–46** are **fixed in v4**; **Bugs 47–49 are OPEN** — the
-Brahma Console gives up silently when its turn budget is exhausted, and two
-sibling impersonation turn/speaking-as facets (impersonating does not hand the
-character the current turn; the speaking-as seat does not follow the current
-user-driven turn) — all surfaced on the 2026-08-08 v5 dogfood walk.
+**Status**: Bugs **1–51** are **fixed in v4**. Bug 51 (chat GET omitting
+impersonation state, so a reload showed an impersonated seat as not impersonated)
+was found and fixed 2026-08-08 while verifying Bug 50. Bugs 47–49 — the Brahma Console
+giving up silently when its turn budget is exhausted, and two sibling
+impersonation turn/speaking-as facets (impersonating does not hand the character
+the current turn; the speaking-as seat does not follow the current user-driven
+turn), all surfaced on the 2026-08-08 v5 dogfood walk — were fixed 2026-08-08.
+Bug 50 (found the same day dogfooding a real roleplay: with two user-driven seats
+and a single LLM, that LLM answered every human turn) was fixed 2026-08-08 too.
+Each is **Owed** to the v5 side as a drift catch-up (the fixes move the oracle
+baseline; Bug 47 also retires `dogfood-findings.md` #73).
 
 **This page is the index.** Every bug lives in its own file under
 [`bugs/`](bugs/); what stays here is the [Status](#status) table that points at
@@ -180,9 +186,11 @@ One row per bug, newest last. **Bug** links to the entry; **Fix site** and
 | 44 | [Bug 27's fix chose the wrong mechanism: impersonation mutates `controlledBy` instead of overlaying it](bugs/fixed/bug-44-impersonation-overlay.md) | 2026-08-06 | 2026-08-07 | Medium | Bug 27's fix mutates `controlledBy` (mutate-and-restore) instead of overlaying impersonation | `app/api/v1/chats/[id]/actions/participants.ts` +2 more | v4-FIRST (inverse direction) |
 | 45 | [an impersonated seat's message flickers to the wrong author before correcting](bugs/fixed/bug-45-impersonated-author-flicker.md) | 2026-08-07 | 2026-08-07 | Low (cosmetic, self-correcting) | An impersonated seat's just-sent message flickers to the wrong author before the refetch corrects it | `app/salon/[id]/hooks/useSSEStreaming.ts` | Owed (Faithful) |
 | 46 | [impersonation and the composer turn banner don't reconcile; you can't tell who you're speaking as](bugs/fixed/bug-46-composer-turn-banner.md) | 2026-08-07 | 2026-08-07 | Low–Medium (confusing; you can post as the wrong character) | Impersonation and the composer turn banner don't reconcile — the banner announces a genuine user seat's turn while attribution follows the impersonated seat, with no on-screen cue | `app/salon/[id]/SalonView.tsx` +1 more | Owed (Faithful, v4-first) |
-| 47 | [the Brahma Console gives up silently when the turn budget is exhausted](bugs/bug-47-silent-budget-exhaustion.md) | 2026-08-08 | — | Low (rare at the default budget of 50, but it burns real API spend and returns nothing) | Brahma Console gives up silently when the turn budget is exhausted — an expensive run ends with no answer and no `done` event | `lib/services/brahma-console/orchestrator.service.ts:539` +1 more | Faithful in v5 (`brahma_console/orchestrator.rs:651`/`:661`) |
-| 48 | [impersonating a character does not hand them the current turn](bugs/bug-48-impersonate-doesnt-take-the-turn.md) | 2026-08-08 | — | Low–Medium (confusing; you opt to speak as a character but it is still someone else's turn) | Impersonating a seat writes `impersonatingParticipantIds` / `activeTypingParticipantId` but never moves the turn, so the banner stays on the previously selected seat | `app/api/v1/chats/[id]/actions/participants.ts` (`handleImpersonate`) | Faithful in v5 (`api/salon.rs` `chat_impersonate` → `add_impersonation`) |
-| 49 | [the speaking-as seat does not follow the current user-driven turn](bugs/bug-49-speaking-as-doesnt-follow-the-turn.md) | 2026-08-08 | — | Low–Medium (confusing; on an impersonated seat's own turn you default to the wrong character) | On the impersonated character's own turn the composer stays on the previously selected seat, so you default to the wrong character (sibling of Bug 48) | `app/salon/[id]/hooks/useImpersonation.ts` (no turn reconciliation) | Faithful in v5 (`salon-conversation.ts` `activeSpeakerId`, no turn coupling) |
+| 47 | [the Brahma Console gives up silently when the turn budget is exhausted](bugs/fixed/bug-47-silent-budget-exhaustion.md) | 2026-08-08 | 2026-08-08 | Low (rare at the default budget of 50, but it burns real API spend and returns nothing) | Brahma Console gives up silently when the turn budget is exhausted — an expensive run ends with no answer and no `done` event | `lib/services/brahma-console/orchestrator.service.ts` + `one-shot.service.ts` (budget-exhaustion salvage) | Owed (Faithful) — retire `dogfood-findings.md` #73 |
+| 48 | [impersonating a character does not hand them the current turn](bugs/fixed/bug-48-impersonate-doesnt-take-the-turn.md) | 2026-08-08 | 2026-08-08 | Low–Medium (confusing; you opt to speak as a character but it is still someone else's turn) | Impersonating a seat writes `impersonatingParticipantIds` / `activeTypingParticipantId` but never moves the turn, so the banner stays on the previously selected seat | `app/salon/[id]/SalonView.tsx` (`handleImpersonateAndTakeTurn`) | Owed (Faithful) |
+| 49 | [the speaking-as seat does not follow the current user-driven turn](bugs/fixed/bug-49-speaking-as-doesnt-follow-the-turn.md) | 2026-08-08 | 2026-08-08 | Low–Medium (confusing; on an impersonated seat's own turn you default to the wrong character) | On the impersonated character's own turn the composer stays on the previously selected seat, so you default to the wrong character (sibling of Bug 48) | `app/salon/[id]/SalonView.tsx` (turn-follow effect) | Owed (Faithful) |
+| 50 | [the sole LLM answers every human turn when you drive two seats](bugs/fixed/bug-50-sole-llm-answers-every-human-turn.md) | 2026-08-08 | 2026-08-08 | Medium (unfair rotation; one LLM takes half the turns) | With 2+ user-driven seats and exactly one LLM, the first responder is picked from an LLM-only shortlist, so that LLM answers every human turn (Charlie→Kumar→Lorian→Kumar…) | `lib/chat/turn-manager/selection.ts` + `lib/services/chat-message/orchestrator.service.ts` | Owed (Faithful) |
+| 51 | [chat GET omits impersonation state, so a reload shows an impersonated seat as not impersonated](bugs/fixed/bug-51-chat-get-omits-impersonation-state.md) | 2026-08-08 | 2026-08-08 | Medium (reload-only; breaks impersonation + speaking-as until re-impersonated) | GET's field allowlist omits `impersonatingParticipantIds` / `activeTypingParticipantId`, so a reload drops the overlay; restoring the latter also required a once-only client re-sync | `app/api/v1/chats/[id]/handlers/get.ts` + `app/salon/[id]/hooks/useImpersonation.ts` | Owed (Faithful) |
 
 ### Families and reading order
 
