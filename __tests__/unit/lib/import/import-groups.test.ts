@@ -39,6 +39,7 @@ function emptyIdMaps(): IdMappingState {
     projects: new Map(),
     groups: new Map(),
     mountPoints: new Map(),
+    docMountFileLinks: new Map(),
   }
 }
 

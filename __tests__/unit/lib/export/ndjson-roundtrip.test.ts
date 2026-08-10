@@ -514,9 +514,12 @@ describe('NDJSON export → import round-trip — new export types', () => {
       updatedAt: new Date().toISOString(),
     };
     const backupFile = { ...file, id: 'file-backup', category: 'BACKUP', folderPath: '/backups' };
+    // A character archive bundle is a `.qtap` in its own right and is excluded
+    // for the same reason a backup is.
+    const archiveFile = { ...file, id: 'file-archive', category: 'ARCHIVE', folderPath: '/archives' };
 
     (getUserRepositories as jest.Mock).mockReturnValue({
-      files: { findAll: jest.fn(async () => [file, backupFile]) },
+      files: { findAll: jest.fn(async () => [file, backupFile, archiveFile]) },
     });
     (getRepositories as jest.Mock).mockReturnValue({
       folders: {
@@ -531,7 +534,7 @@ describe('NDJSON export → import round-trip — new export types', () => {
       createNdjsonStream(testUserId, {
         type: 'files',
         scope: 'selected',
-        selectedIds: ['file-1', 'file-backup'],
+        selectedIds: ['file-1', 'file-backup', 'file-archive'],
       })
     );
     const result = await assembleExportFromStream(ndjsonToRecords(text));
@@ -547,7 +550,7 @@ describe('NDJSON export → import round-trip — new export types', () => {
       folders?: Array<{ path: string }>;
     };
 
-    // Backup files never travel — the same rule the backup service applies.
+    // Neither backups nor character-archive bundles travel inside an export.
     expect(data.files).toHaveLength(1);
     expect(data.files[0].id).toBe('file-1');
     expect(data.folders).toEqual([

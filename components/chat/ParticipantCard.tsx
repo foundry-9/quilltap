@@ -37,6 +37,8 @@ export interface ParticipantData {
     name: string
     title?: string | null
     avatarUrl?: string | null
+    /** Set when the character is archived — seat is absent until rehydration. */
+    archivedAt?: string | null
     talkativeness: number
     defaultImage?: {
       id: string
@@ -380,6 +382,14 @@ export function ParticipantCard({
             )}
             {participantStatus === 'absent' && (
               <span className="qt-badge-absent text-xs">Absent</span>
+            )}
+            {participant.character?.archivedAt && (
+              <span
+                className="qt-badge-absent text-xs"
+                title="Resting in the archive — rehydrate them from their character page to let them speak again"
+              >
+                Archived
+              </span>
             )}
           </div>
 

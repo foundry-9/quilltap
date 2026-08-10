@@ -40,6 +40,9 @@ export async function handleGetMailbox(
   if (!character) {
     return notFound('Character');
   }
+  if (character.archivedAt) {
+    return badRequest('That character is archived; rehydrate it to continue.');
+  }
 
   const { mountPointId } = await ensureCharacterVault(character);
   const letters = await listMailbox(mountPointId);

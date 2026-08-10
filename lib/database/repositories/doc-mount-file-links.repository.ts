@@ -291,6 +291,15 @@ interface LinkBlobInput {
   extractedText?: string | null;
   extractedTextSha256?: string | null;
   extractionStatus?: DocMountFileLink['extractionStatus'];
+  /**
+   * Explicit row ids for `preserveIds` imports (archive/rehydrate, spec F4).
+   * Honored only when the row in question is actually being *created*; an
+   * existing row found by sha256 or (mountPointId, relativePath) keeps its
+   * own id — the content-addressed dedup and path-upsert invariants win.
+   */
+  fileId?: string;
+  blobId?: string;
+  linkId?: string;
 }
 
 interface LinkDocumentInput {
@@ -307,6 +316,15 @@ interface LinkDocumentInput {
   allowEmbed?: boolean;
   allowCharacterRead?: boolean;
   allowCharacterWrite?: boolean;
+  /**
+   * Explicit row ids for `preserveIds` imports (archive/rehydrate, spec F4).
+   * Honored only when the row in question is actually being *created*; an
+   * existing row found by sha256 or (mountPointId, relativePath) keeps its
+   * own id — the content-addressed dedup and path-upsert invariants win.
+   */
+  fileId?: string;
+  documentId?: string;
+  linkId?: string;
 }
 
 interface LinkFilesystemFileInput {
@@ -833,7 +851,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
 
     const tx = db.transaction(() => {
       if (!fileRow) {
-        const id = randomUUID();
+        const id = input.fileId ?? randomUUID();
         db.prepare(
           `INSERT INTO doc_mount_files (id, sha256, fileSizeBytes, fileType, source, createdAt, updatedAt)
            VALUES (?, ?, ?, ?, 'database', ?, ?)`
@@ -876,7 +894,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
       if (existingBlob) {
         blobId = existingBlob.id;
       } else {
-        blobId = randomUUID();
+        blobId = input.blobId ?? randomUUID();
         db.prepare(
           `INSERT INTO doc_mount_blobs (id, fileId, sha256, sizeBytes, storedMimeType, data, createdAt, updatedAt)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
@@ -926,7 +944,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
           gcOrphanedFileRow(db, existingLink.fileId);
         }
       } else {
-        linkId = randomUUID();
+        linkId = input.linkId ?? randomUUID();
         db.prepare(
           `INSERT INTO doc_mount_file_links (
              id, fileId, mountPointId, relativePath, fileName, folderId,
@@ -998,7 +1016,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
 
     const tx = db.transaction(() => {
       if (!fileRow) {
-        const id = randomUUID();
+        const id = input.fileId ?? randomUUID();
         db.prepare(
           `INSERT INTO doc_mount_files (id, sha256, fileSizeBytes, fileType, source, createdAt, updatedAt)
            VALUES (?, ?, ?, ?, 'database', ?, ?)`
@@ -1021,7 +1039,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
       if (existingDoc) {
         documentId = existingDoc.id;
       } else {
-        documentId = randomUUID();
+        documentId = input.documentId ?? randomUUID();
         db.prepare(
           `INSERT INTO doc_mount_documents (
              id, fileId, content, contentSha256, plainTextLength, createdAt, updatedAt
@@ -1090,7 +1108,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
           gcOrphanedFileRow(db, existingLink.fileId);
         }
       } else {
-        linkId = randomUUID();
+        linkId = input.linkId ?? randomUUID();
         db.prepare(
           `INSERT INTO doc_mount_file_links (
              id, fileId, mountPointId, relativePath, fileName, folderId,

@@ -435,6 +435,15 @@ export interface RestoreOptions {
 
   /** UUID of the target user for restoration */
   targetUserId: string;
+
+  /**
+   * Replace mode only: when true (the default), archived-character `.qtap`
+   * bundles (`files` rows of category `ARCHIVE` and their on-disk bytes)
+   * survive the pre-restore wipe as loose bundles — importable, not
+   * rehydratable, since the tombstone character rows are replaced like any
+   * others. Pass `false` to wipe them with everything else.
+   */
+  keepArchivedCharacterBundles?: boolean;
 }
 
 // ============================================================================

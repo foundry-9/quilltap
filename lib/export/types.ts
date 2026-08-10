@@ -82,6 +82,8 @@ export interface QuilltapExportSettings {
   scope: 'all' | 'selected';
   /** List of entity IDs to export (only used when scope is 'selected') */
   selectedIds: string[];
+  /** Whether to restore the archive at its original IDs (refuse on collision) */
+  preserveIds?: boolean;
 }
 
 /**
@@ -316,6 +318,13 @@ export interface ExportedDocumentStore {
 }
 
 export interface ExportedDocumentStoreFolder {
+  /**
+   * Optional source-row id, carried so a `preserveIds` import (archive /
+   * rehydrate) can restore the folder at its original id. Optional for the
+   * same back-compat reason as the document/blob id fields (§2.3): an
+   * additive field on a known record kind, ignored by older builds.
+   */
+  id?: string | null;
   mountPointId: string;
   parentId?: string | null;
   name: string;
@@ -332,6 +341,10 @@ export interface ExportedDocumentStoreDocument {
   plainTextLength: number;
   lastModified: string;
   folderId?: string | null;
+  /** Optional source-row id carried for cross-instance link remapping. */
+  fileId?: string | null;
+  /** Optional source link id carried for cross-instance avatar remapping. */
+  linkId?: string | null;
   /**
    * Deliberate hard-link group (see doc_mount_file_links.linkGroupId). Carried
    * through so a file linked into two stores comes back linked rather than as
@@ -352,6 +365,12 @@ export interface ExportedDocumentStoreBlob {
   sha256: string;
   description: string;
   descriptionUpdatedAt?: string | null;
+  /** Optional source-row id carried for cross-instance link remapping. */
+  fileId?: string | null;
+  /** Optional source link id carried for cross-instance avatar remapping. */
+  linkId?: string | null;
+  /** Optional source blob id carried for cross-instance link remapping. */
+  blobId?: string | null;
   /** Plain-text representation for pdf/docx uploads. Omitted for blobs with no converter. */
   extractedText?: string | null;
   extractedTextSha256?: string | null;
@@ -685,7 +704,7 @@ export interface QtapDocMountPointRecord {
 
 export interface QtapDocMountFolderRecord {
   kind: 'doc_mount_folder';
-  data: any;
+  data: ExportedDocumentStoreFolder;
 }
 
 export interface QtapDocMountDocumentRecord {
@@ -845,6 +864,8 @@ export interface ExportOptions {
   selectedIds?: string[];
   /** Whether to include related memories */
   includeMemories?: boolean;
+  /** Whether to preserve source IDs during import/re-hydration */
+  preserveIds?: boolean;
 }
 
 /**
@@ -861,6 +882,24 @@ export interface ExportPreview {
   }>;
   /** Number of memories that will be included (if applicable) */
   memoryCount?: number;
+  /**
+   * Character vaults riding along in the bundle. Set only for the `characters`
+   * type, where each character's document store now travels with it (WP A2).
+   */
+  vaults?: {
+    /** Character vaults included (one per character that has one). */
+    stores: number;
+    /** Text documents across those vaults (properties, mail, notes). */
+    documents: number;
+    /** Binary files across those vaults (photos, attachments). */
+    blobs: number;
+    /**
+     * Rough size of the finished `.qtap`, in bytes. Blob bytes dominate and
+     * are counted base64-inflated (4/3); everything else is a small constant
+     * beside them. An estimate, deliberately not a promise.
+     */
+    estimatedBytes: number;
+  };
 }
 
 // ============================================================================
@@ -882,6 +921,8 @@ export interface ImportOptions {
   includeMemories: boolean;
   /** Whether to import related entities (profiles, templates, etc.) */
   includeRelatedEntities: boolean;
+  /** Whether to preserve source IDs and fail on collisions */
+  preserveIds?: boolean;
 }
 
 /**

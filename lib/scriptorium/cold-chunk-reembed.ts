@@ -69,10 +69,12 @@ export async function maybeEnqueueColdChunkReembed(
     return 0;
   }
 
+  // Default profile only — never an arbitrary fallback: every vector in the
+  // instance must come from the same profile.
   const embeddingProfiles = await repos.embeddingProfiles.findAll();
-  const defaultProfile = embeddingProfiles.find((p) => p.isDefault) || embeddingProfiles[0];
+  const defaultProfile = embeddingProfiles.find((p) => p.isDefault);
   if (!defaultProfile) {
-    moduleLogger.debug('Cold chat detected but no embedding profile configured — skipping re-embed', {
+    moduleLogger.debug('Cold chat detected but no default embedding profile configured — skipping re-embed', {
       chatId,
     });
     return 0;

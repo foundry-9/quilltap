@@ -27,6 +27,15 @@ SQLite columns are **camelCase**, mirroring the Zod/TypeScript types (`createdAt
 - `npx quilltap db memories --character <name|id> [--about <name|id>] [--source AUTO|MANUAL]`
 - `npx quilltap db characters status [--id <name|id>] [--diverged] [--blocked]` — per-character vault readiness (vault present, files N/8, prompt/scenario/wardrobe counts, DB-vs-vault divergence)
 
+### Character archive (`db characters archives|archive|rehydrate|export`)
+
+- `npx quilltap db characters archives [--json]` — list archived characters and the `ARCHIVE` bundle files on the shelf, flagging **loose** bundles (survivors of a "keep archived bundles" wipe: importable, not rehydratable). Read-only.
+- `npx quilltap db characters archive <name|id> --write [--port N]` — archive a character. Runs **through the running server's API** (default port 3000): the export pipeline and the unlocked passphrase live only in the server process, so the server must be up (and it, not the CLI, holds the instance lock). `--write` is still required as the explicit opt-in.
+- `npx quilltap db characters rehydrate <name|id> --write [--port N]` — wake an archived character, same transport: the server decrypts the bundle, restores the pruned material at its original ids (skip-if-present), clears the tombstone, and queues re-embedding. Reports what came back and notes that the bundle stays in the file library as a spare copy. On failure (wrong-era passphrase, missing bundle, import refusal) the character stays archived and re-running is safe.
+- `npx quilltap db characters export <name|id> [--out <path>] [--port N]` — write a **plaintext** `.qtap` for a character. For an **archived** character this decrypts the bundle straight off the disk, offline (tries the internal no-passphrase key, then `QUILLTAP_DB_PASSPHRASE`, then prompts) — the only way to reach packed-away mail, photographs and summaries without rehydrating. For a **live** character it runs the server's export pipeline, so the server must be up. Read-only; no `--write`.
+
+  **Pre-emptive, not recovery:** exporting an archive needs an instance that can still decrypt it. It does not help someone holding only a restored backup and a forgotten passphrase — which is also why a passphrase *change* rewrites every archive bundle (see the settings card's warning); a bundle reported left behind by a partial rewrite still wants the old passphrase.
+
 ### Single records
 
 - `npx quilltap db message <id>` and `npx quilltap db log <id>` — full content/request/response.

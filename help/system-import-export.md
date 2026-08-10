@@ -56,7 +56,7 @@ cellar with no bell-pull:
 
 5. **Choose export options:**
    - **Include Memories:** Whether to include associated memories
-   - Shows how many memories will be included
+   - Shows how many memories will be included — and, for character exports, what the characters' vaults add to the luggage (documents, images, and an estimated size)
 
 6. **Review your selection**
    - Verify the items you're exporting
@@ -230,9 +230,17 @@ When using the "Create New" conflict strategy, all internal references are autom
 
 ## What Travels, and What Stays Behind
 
-A few things are deliberately left on the platform when an export departs. None
-of this is an oversight, and in each case the receiving instance rebuilds or
-already owns what was withheld.
+First, a recent and welcome addition to the manifest: **a character's vault now
+travels with the character.** A character export used to carry the dossier but
+not the steamer trunk — the portrait, the photograph album, the correspondence
+in `Mail/`, the wardrobe, the conversation summaries all stayed home, and the
+character stepped off the train faceless. The whole vault now rides along, and
+on arrival the avatar and every photograph resolve exactly as they did at the
+point of departure.
+
+A few things, however, are deliberately left on the platform when an export
+departs. None of this is an oversight, and in each case the receiving instance
+rebuilds or already owns what was withheld.
 
 **Memories arrive without their search indexes.** A memory's embedding — the
 numerical impression by which semantic search finds it — is meaningful only
@@ -288,6 +296,7 @@ instance cannot reach the outside world; otherwise a refresh knows better.
 - A trailing footer line carries authoritative record counts
 - Relationships stored as references that are remapped on import
 - Because every line is independently valid JSON, a `.qtap` file can be browsed or grepped with any text tool
+- The manifest may carry a `preserveIds` flag, under which every record is restored at its original ID (refusing outright, before any writes, if a preserved ID would collide with something already in residence). This flag is set by Quilltap's own archive machinery; the wizard offers no such option and never sets it
 
 **Compatibility:**
 

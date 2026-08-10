@@ -53,10 +53,16 @@ export async function executeSendMailTool(
     if (!sender) {
       return fail('The Post Office cannot find your own postbox; your character seems to have gone astray.');
     }
+    if (sender.archivedAt) {
+      return fail('That character is archived; rehydrate it to continue.');
+    }
 
     const recipient = await resolveCharacterByNameOrId(context.userId, parsed.character);
     if (!recipient) {
       return fail('No soul by that name keeps a postbox here.');
+    }
+    if (recipient.archivedAt) {
+      return fail('That recipient is archived; rehydrate them to continue.');
     }
 
     // Compose + deliver via the shared Post Office service (the same path the

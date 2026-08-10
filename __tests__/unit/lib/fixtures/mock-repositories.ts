@@ -173,10 +173,34 @@ export interface MockUserRepositories {
   files: MockFilesRepository;
 }
 
+/**
+ * Generic mock for the doc-mount repositories the preserveIds preflight
+ * consults (mount points, folders, files, links, blobs) and the document-store
+ * importer writes through. One loose shape covers all five repos; individual
+ * tests configure the lookups per repo, and everything defaults to
+ * "not found" / no-op.
+ */
+export interface MockDocMountLookupRepository {
+  findById: jest.Mock<(id: string) => Promise<any | null>>;
+  findByFileId: jest.Mock<(fileId: string) => Promise<any[]>>;
+  findAll: jest.Mock<() => Promise<any[]>>;
+  create: jest.Mock<(data: any, options?: { id?: string }) => Promise<any>>;
+  update: jest.Mock<(id: string, data: any) => Promise<any | null>>;
+  deleteByMountPointId: jest.Mock<(mountPointId: string) => Promise<number>>;
+  linkDocumentContent: jest.Mock<(input: any) => Promise<any>>;
+  bindLinkGroup: jest.Mock<(anchorId: string, memberId: string) => Promise<void>>;
+  updateExtractedText: jest.Mock<(id: string, data: any) => Promise<void>>;
+}
+
 export interface MockGlobalRepositories {
   roleplayTemplates: MockRoleplayTemplatesRepository;
   promptTemplates: MockPromptTemplatesRepository;
   files: MockFilesRepository;
+  docMountPoints: MockDocMountLookupRepository;
+  docMountFolders: MockDocMountLookupRepository;
+  docMountFiles: MockDocMountLookupRepository;
+  docMountFileLinks: MockDocMountLookupRepository;
+  docMountBlobs: MockDocMountLookupRepository;
 }
 
 // ============================================================================
@@ -421,11 +445,44 @@ export function createMockUserRepositories(): MockUserRepositories {
 /**
  * Create global repositories (equivalent to getRepositories() return)
  */
+let mockDocMountIdSeq = 0;
+const generateMockId = () => `mock-doc-mount-id-${++mockDocMountIdSeq}`;
+
+function createMockDocMountLookupRepository(): MockDocMountLookupRepository {
+  return {
+    findById: jest.fn<(id: string) => Promise<any | null>>().mockResolvedValue(null),
+    findByFileId: jest.fn<(fileId: string) => Promise<any[]>>().mockResolvedValue([]),
+    findAll: jest.fn<() => Promise<any[]>>().mockResolvedValue([]),
+    create: jest.fn<(data: any, options?: { id?: string }) => Promise<any>>()
+      .mockImplementation(async (data: any, options?: { id?: string }) => ({
+        id: options?.id ?? generateMockId(),
+        linkId: generateMockId(),
+        ...data,
+      })),
+    update: jest.fn<(id: string, data: any) => Promise<any | null>>().mockResolvedValue(null),
+    deleteByMountPointId: jest.fn<(mountPointId: string) => Promise<number>>().mockResolvedValue(0),
+    linkDocumentContent: jest.fn<(input: any) => Promise<any>>()
+      .mockImplementation(async (input: any) => ({
+        link: { id: input.linkId ?? generateMockId() },
+        file: { id: input.fileId ?? generateMockId() },
+        documentId: input.documentId ?? generateMockId(),
+        groupSiblings: [],
+      })),
+    bindLinkGroup: jest.fn<(anchorId: string, memberId: string) => Promise<void>>().mockResolvedValue(undefined),
+    updateExtractedText: jest.fn<(id: string, data: any) => Promise<void>>().mockResolvedValue(undefined),
+  };
+}
+
 export function createMockGlobalRepositories(): MockGlobalRepositories {
   return {
     roleplayTemplates: createMockRoleplayTemplatesRepository(),
     promptTemplates: createMockPromptTemplatesRepository(),
     files: createMockFilesRepository(),
+    docMountPoints: createMockDocMountLookupRepository(),
+    docMountFolders: createMockDocMountLookupRepository(),
+    docMountFiles: createMockDocMountLookupRepository(),
+    docMountFileLinks: createMockDocMountLookupRepository(),
+    docMountBlobs: createMockDocMountLookupRepository(),
   };
 }
 

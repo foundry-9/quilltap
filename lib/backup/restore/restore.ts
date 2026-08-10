@@ -54,9 +54,13 @@ export async function restore(
   try {
     let data = parsedData;
 
-    // For replace mode, delete existing data first
+    // For replace mode, delete existing data first. Archived-character
+    // bundles survive by default (spec §4.7) — the restore replaces the
+    // tombstone rows, so what's kept is a loose, importable bundle.
     if (mode === 'replace') {
-      await deleteUserData(targetUserId);
+      await deleteUserData(targetUserId, {
+        keepArchivedCharacterBundles: options.keepArchivedCharacterBundles !== false,
+      });
     }
 
     // For new-account mode, remap all UUIDs

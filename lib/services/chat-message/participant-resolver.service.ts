@@ -24,6 +24,7 @@ import type {
   MessageEvent,
 } from '@/lib/schemas/types'
 import { isParticipantPresent } from '@/lib/schemas/chat.types'
+import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository'
 
 const logger = createServiceLogger('ParticipantResolverService')
 
@@ -193,6 +194,9 @@ export async function resolveRespondingParticipant(
   const character = await repos.characters.findById(characterParticipant.characterId)
   if (!character) {
     throw new Error('Character not found')
+  }
+  if (character.archivedAt) {
+    throw new CharacterArchivedError(character.id)
   }
 
   logger.info('Selected responding character', {

@@ -282,6 +282,9 @@ export async function assembleExportFromStream(
             sha256: blobRec.data.sha256,
             description: blobRec.data.description,
             descriptionUpdatedAt: blobRec.data.descriptionUpdatedAt ?? null,
+            fileId: blobRec.data.fileId ?? null,
+            linkId: blobRec.data.linkId ?? null,
+            blobId: blobRec.data.blobId ?? null,
             extractedText: blobRec.data.extractedText ?? null,
             extractedTextSha256: blobRec.data.extractedTextSha256 ?? null,
             extractionStatus: blobRec.data.extractionStatus ?? 'none',
@@ -540,6 +543,11 @@ function buildExportDataForType(
       return {
         characters: c.characters,
         ...(c.memories.length > 0 && { memories: c.memories }),
+        ...(c.mountPoints.length > 0 && { mountPoints: c.mountPoints }),
+        ...(c.folders.length > 0 && { folders: c.folders }),
+        ...(c.documents.length > 0 && { documents: c.documents }),
+        ...(c.blobs.length > 0 && { blobs: c.blobs }),
+        ...(c.projectLinks.length > 0 && { projectLinks: c.projectLinks }),
       };
     case 'chats':
       return {

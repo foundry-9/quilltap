@@ -717,6 +717,20 @@ Subcommands (high-level shortcuts; auto-pick the right database):
                               Prompts/ and Scenarios/ folder counts, and any
                               divergence between DB columns and vault content.
                               (flags: --id <id|name> --diverged --blocked --limit N)
+  characters archives         List archived characters and ARCHIVE bundles on
+                              the shelf, loose bundles included. Read-only.
+  characters archive <name|id> --write [--port N]
+                              Archive a character via the RUNNING server (it
+                              holds the export pipeline and the passphrase).
+  characters rehydrate <name|id> --write [--port N]
+                              Wake an archived character via the running server.
+  characters export <name|id> [--out <path>] [--port N]
+                              Write a PLAINTEXT .qtap for a character. Archived:
+                              decrypts the bundle offline (prompts for the
+                              passphrase on protected instances) — the only way
+                              to reach packed-away mail/photos/summaries without
+                              rehydrating. Live: runs the server's export
+                              pipeline (server must be up). Read-only.
   optimize [target...]        Run maintenance (VACUUM + ANALYZE + PRAGMA optimize)
                               on the named databases, or all of them if no
                               target is given. Targets: main, llm-logs,

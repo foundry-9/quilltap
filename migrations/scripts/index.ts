@@ -221,6 +221,8 @@ import { alignAboutCharacterIdV2Migration } from './align-about-character-id-v2'
 import { addCharacterIdentityFieldMigration } from './add-character-identity-field';
 // Add manifesto field to characters table
 import { addCharacterManifestoFieldMigration } from './add-character-manifesto-field';
+// Add archive fields to characters for tombstone support
+import { addCharacterArchiveFieldsMigration } from './add-character-archive-fields';
 // Re-absorb leftover project files into database-backed official store
 import { reabsorbLeftoverProjectFilesMigration } from './reabsorb-leftover-project-files';
 // Relink legacy files.storageKey rows to mount-blob shims (Stage-1 follow-up)
@@ -581,6 +583,8 @@ export const migrations: Migration[] = [
   addCharacterIdentityFieldMigration,
   // Add manifesto field to characters table
   addCharacterManifestoFieldMigration,
+  // Add archive-tombstone fields to characters table
+  addCharacterArchiveFieldsMigration,
   // Re-absorb leftover project files into database-backed official store
   reabsorbLeftoverProjectFilesMigration,
   // Relink legacy files.storageKey rows to mount-blob shims (Stage-1 follow-up)

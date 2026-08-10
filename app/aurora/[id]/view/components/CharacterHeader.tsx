@@ -21,6 +21,11 @@ interface CharacterHeaderProps {
   onSearchReplace?: () => void
   onOptimize?: () => void
   onGenerateExternalPrompt?: () => void
+  /** Opens the archive confirm dialog (live characters only). */
+  onArchive?: () => void
+  /** Attempts rehydration (archived characters only). */
+  onRehydrate?: () => void
+  rehydrating?: boolean
   togglingNpc?: boolean
   togglingFavorite?: boolean
   togglingControlledBy?: boolean
@@ -41,6 +46,9 @@ export function CharacterHeader({
   onSearchReplace,
   onOptimize,
   onGenerateExternalPrompt,
+  onArchive,
+  onRehydrate,
+  rehydrating = false,
   togglingNpc = false,
   togglingFavorite = false,
   togglingControlledBy = false,
@@ -142,7 +150,18 @@ export function CharacterHeader({
         {/* Top-aligned: name + favorite/control on one row, title + pronouns on the next */}
         <div className="space-y-1">
           <div className="flex items-start justify-between gap-4">
-            <h1 className="qt-heading-1 min-w-0">{character?.name || 'Loading...'}</h1>
+            <h1 className="qt-heading-1 min-w-0 flex items-center gap-3">
+              {character?.name || 'Loading...'}
+              {character?.archivedAt && (
+                <span
+                  className="inline-flex flex-shrink-0 items-center rounded-full border qt-border-default qt-bg-muted px-2.5 py-0.5 text-sm font-medium qt-text-secondary"
+                  title={`Resting in the archive since ${new Date(character.archivedAt).toLocaleDateString()}`}
+                >
+                  Archived
+                </span>
+              )}
+            </h1>
+            {!character?.archivedAt && (
             <div className="flex flex-shrink-0 items-center gap-2">
               <button
                 onClick={onToggleFavorite}
@@ -169,6 +188,7 @@ export function CharacterHeader({
                 <Icon name="user" className="w-6 h-6" />
               </button>
             </div>
+            )}
           </div>
           {(character?.title || character?.pronouns) && (
             <div className="flex items-baseline justify-between gap-4">
@@ -239,6 +259,20 @@ export function CharacterHeader({
           )}
         </div>
       </div>
+      {character?.archivedAt ? (
+        <div className="flex flex-shrink-0 flex-col gap-2">
+          {onRehydrate && (
+            <button
+              onClick={onRehydrate}
+              disabled={rehydrating}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:qt-bg-primary/90 disabled:opacity-50"
+              title="Restore this character from their archive bundle and wake them"
+            >
+              {rehydrating ? 'Rehydrating…' : 'Rehydrate'}
+            </button>
+          )}
+        </div>
+      ) : (
       <div className="flex flex-shrink-0 flex-col gap-2">
         <button
           onClick={onStartChat}
@@ -283,7 +317,18 @@ export function CharacterHeader({
             Search & Replace
           </button>
         )}
+        {onArchive && (
+          <button
+            onClick={onArchive}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border qt-border-default qt-bg-card px-4 py-2 qt-label qt-text-secondary qt-shadow-sm hover:qt-bg-muted"
+            title="Pack this character's effects into a sealed bundle and set them resting in the archive"
+          >
+            <Icon name="folder" className="w-4 h-4" />
+            Archive
+          </button>
+        )}
       </div>
+      )}
     </div>
   )
 }

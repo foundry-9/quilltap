@@ -33,11 +33,13 @@ jest.mock('@/lib/paths', () => ({
 
 const projectsFindByIdMock = jest.fn<(id: string) => Promise<{ id: string; officialMountPointId: string | null } | null>>();
 const docMountPointsFindByIdMock = jest.fn<(id: string) => Promise<unknown>>();
+const charactersFindByIdRawMock = jest.fn<(id: string) => Promise<unknown>>();
 
 jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: () => ({
     projects: { findById: projectsFindByIdMock },
     docMountPoints: { findById: docMountPointsFindByIdMock },
+    characters: { findByIdRaw: charactersFindByIdRawMock },
   }),
 }));
 
@@ -51,7 +53,11 @@ jest.mock('@/lib/mount-index/database-store', () => ({
   },
 }));
 
-import { resolveDocEditPath, PathResolutionError } from '@/lib/doc-edit/path-resolver';
+import {
+  resolveDocEditPath,
+  resolveSelfVaultMountPointId,
+  PathResolutionError,
+} from '@/lib/doc-edit/path-resolver';
 
 const PROJECT_ID = 'proj-1234';
 
@@ -274,5 +280,35 @@ describe('resolveDocEditPath — general scope under a symlinked data directory'
     expect(resolved.scope).toBe('general');
     const contents = await fs.readFile(resolved.absolutePath, 'utf-8');
     expect(contents).toBe('character notes');
+  });
+});
+
+describe('resolveSelfVaultMountPointId — archived characters', () => {
+  afterEach(() => {
+    charactersFindByIdRawMock.mockReset();
+  });
+
+  it('resolves a live character to its vault mount', async () => {
+    charactersFindByIdRawMock.mockResolvedValue({
+      id: 'char-1',
+      archivedAt: null,
+      characterDocumentMountPointId: 'mount-1',
+    });
+
+    await expect(resolveSelfVaultMountPointId('char-1')).resolves.toBe('mount-1');
+  });
+
+  it('refuses an archived character even though its vault survives the prune (§4.2a)', async () => {
+    // Archiving keeps a live vault behind the character, so the old
+    // "tombstone has no pointer → tools degrade" safety no longer happens on
+    // its own. The explicit check must refuse, or an archived character could
+    // edit its own vault through doc_edit while read-only.
+    charactersFindByIdRawMock.mockResolvedValue({
+      id: 'char-1',
+      archivedAt: '2026-08-10T00:00:00.000Z',
+      characterDocumentMountPointId: 'mount-1',
+    });
+
+    await expect(resolveSelfVaultMountPointId('char-1')).resolves.toBeNull();
   });
 });

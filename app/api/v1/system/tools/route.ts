@@ -42,6 +42,7 @@ import {
   listPortableInstanceSettings,
 } from '@/lib/instance-settings';
 import { previewExport } from '@/lib/export/quilltap-export-service';
+import { isFileExcludedFromExport } from '@/lib/export/excluded-files';
 import { createNdjsonStream, QTAP_NDJSON_CONTENT_TYPE } from '@/lib/export/ndjson-writer';
 import { previewImport, executeImport, type QuilltapExport, type ConflictStrategy } from '@/lib/import/quilltap-import-service';
 import { peekFormat, readNdjsonLines, collectLegacyJson } from '@/lib/import/ndjson-reader';
@@ -176,9 +177,16 @@ async function handleDeleteData(req: NextRequest, context: any) {
       return badRequest('Confirmation required. Send { "confirm": "DELETE_ALL_MY_DATA" }');
     }
 
-    logger.info('[System Tools v1] Starting complete data deletion', { userId: user.id });
+    // Archived-character bundles are kept unless the client explicitly opts
+    // into wiping them (spec §4.7 — the destructive choice must be explicit).
+    const keepArchivedCharacterBundles = body.keepArchivedCharacterBundles !== false;
 
-    const summary = await deleteAllUserData(user.id);
+    logger.info('[System Tools v1] Starting complete data deletion', {
+      userId: user.id,
+      keepArchivedCharacterBundles,
+    });
+
+    const summary = await deleteAllUserData(user.id, { keepArchivedCharacterBundles });
 
     logger.info('[System Tools v1] Complete data deletion finished', { userId: user.id, summary });
 
@@ -474,7 +482,10 @@ async function handleExportEntities(req: NextRequest, context: any) {
 
     switch (type) {
       case 'characters': {
-        const characters = await repos.characters.findAll();
+        // Archived characters don't appear in the export picker: a tombstone
+        // export would carry the pruned vault only, and the full bundle
+        // already exists as an ARCHIVE file (spec §4.1 — "block it").
+        const characters = (await repos.characters.findAll()).filter((c) => !c.archivedAt);
         for (const char of characters) {
           const memories = await repos.memories.findByCharacterId(char.id);
           const charMemoryCount = memories.length;
@@ -563,10 +574,9 @@ async function handleExportEntities(req: NextRequest, context: any) {
       }
 
       case 'files': {
-        // Backups are never offered — mirrors the backup service's own rule.
-        const files = (await repos.files.findAll()).filter(
-          (f) => f.category !== 'BACKUP' && f.folderPath !== '/backups'
-        );
+        // Backups and character-archive bundles are never offered — they are
+        // `.qtap` files themselves and don't nest inside another export.
+        const files = (await repos.files.findAll()).filter((f) => !isFileExcludedFromExport(f));
         entities = files.map((f) => ({ id: f.id, name: f.originalFilename }));
         break;
       }

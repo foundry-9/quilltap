@@ -174,8 +174,11 @@ export async function reconcileConversationRendering(): Promise<ConversationRend
   // bind a sentinel that matches no rows (the exclusion becomes a no-op).
   let defaultProfileId = '';
   try {
+    // Match the enqueue sites: only the marked default counts. A profiles[0]
+    // fallback here would exclude FAILED rows under a profile nothing embeds
+    // with any more.
     const profiles = await getRepositories().embeddingProfiles.findAll();
-    defaultProfileId = (profiles.find(p => p.isDefault) || profiles[0])?.id ?? '';
+    defaultProfileId = profiles.find(p => p.isDefault)?.id ?? '';
   } catch (err) {
     logger.warn('Failed to resolve default embedding profile; FAILED-status exclusion disabled', {
       error: err instanceof Error ? err.message : String(err),

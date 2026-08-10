@@ -188,7 +188,10 @@ describe('enqueueEmbeddingJobsForMountPoint', () => {
     )
   })
 
-  it('falls back to the first profile when no default is set', async () => {
+  it('skips enqueueing when no profile is marked default — never an arbitrary one', async () => {
+    // Everything embedded must use the same (default) profile; embedding
+    // under whichever profile happens to sort first would silently mix
+    // vector spaces. With no default, chunks wait for the startup reconcile.
     const profiles = [
       { id: 'first-profile', name: 'First', isDefault: false },
       { id: 'second-profile', name: 'Second', isDefault: false },
@@ -196,12 +199,10 @@ describe('enqueueEmbeddingJobsForMountPoint', () => {
     const repos = makeRepos([makeChunk('chunk-1', false)], profiles)
     mockGetRepositories.mockReturnValue(repos as ReturnType<typeof getRepositories>)
 
-    await enqueueEmbeddingJobsForMountPoint('mp-1')
+    const enqueued = await enqueueEmbeddingJobsForMountPoint('mp-1')
 
-    expect(mockEnqueueEmbeddingGenerate).toHaveBeenCalledWith(
-      'user-1',
-      expect.objectContaining({ profileId: 'first-profile' })
-    )
+    expect(enqueued).toBe(0)
+    expect(mockEnqueueEmbeddingGenerate).not.toHaveBeenCalled()
   })
 
   it('does not count already-enqueued jobs (isNew: false)', async () => {

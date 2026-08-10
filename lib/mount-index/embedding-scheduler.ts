@@ -68,12 +68,17 @@ export async function enqueueEmbeddingJobsForMountPoint(mountPointId: string): P
     return 0;
   }
 
-  // Get the user's default embedding profile
+  // The **default** embedding profile, and only the default: every vector in
+  // the instance — memories, conversation chunks, help docs, mount chunks —
+  // must come from the same profile, or semantic search silently compares
+  // apples to oranges. No fallback to an arbitrary profile: with no default
+  // marked, these chunks wait (the startup reconcile re-enqueues them once
+  // one is configured), exactly as memories do.
   const profiles = await repos.embeddingProfiles.findAll();
-  const defaultProfile = profiles.find(p => p.isDefault) || profiles[0];
+  const defaultProfile = profiles.find(p => p.isDefault);
 
   if (!defaultProfile) {
-    logger.warn('No embedding profile configured, skipping mount chunk embedding', {
+    logger.warn('No default embedding profile configured, skipping mount chunk embedding', {
       mountPointId,
       unembeddedCount: unembeddedChunks.length,
     });

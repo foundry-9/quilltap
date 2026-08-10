@@ -21,9 +21,14 @@
             "required": ["characters"],
             "properties": {
               "characters": { "type": "array", "items": { "$ref": "#/$defs/ExportedCharacter" } },
-              "memories": { "type": "array", "items": { "$ref": "#/$defs/Memory" } }
+              "memories": { "type": "array", "items": { "$ref": "#/$defs/Memory" } },
+              "mountPoints": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStore" } },
+              "folders": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreFolder" } },
+              "documents": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreDocument" } },
+              "blobs": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreBlob" } }
             },
-            "additionalProperties": false
+            "additionalProperties": false,
+            "description": "From 4.8 a characters export carries each character's vault as well: its mount point, folders, documents and blobs appear here exactly as they would in a document-stores export. That is what makes avatars, photographs and correspondence survive a cross-instance import. Project links never appear — a character vault has none."
           }
         }
       }
@@ -169,6 +174,7 @@
             "required": ["mountPoints", "documents", "blobs"],
             "properties": {
               "mountPoints": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStore" } },
+              "folders": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreFolder" } },
               "documents": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreDocument" } },
               "blobs": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreBlob" } },
               "projectLinks": { "type": "array", "items": { "$ref": "#/$defs/ExportedProjectDocMountLink" } }
@@ -337,6 +343,10 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "Entity IDs that were selected for export (empty when scope is 'all')"
+        },
+        "preserveIds": {
+          "type": "boolean",
+          "description": "Import this bundle at its original row ids rather than minting fresh ones. Written by the character-archive tooling, whose whole premise is that chat participants, group memberships and project rosters keep resolving without a reconcile pass. An importer honouring it must refuse the entire import on any id collision rather than silently reminting — a partial application is worse than no import. Absent on ordinary exports."
         }
       }
     },
@@ -424,6 +434,18 @@
         },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
         "updatedAt": { "$ref": "#/$defs/Timestamp" },
+        "archivedAt": {
+          "type": ["string", "null"],
+          "description": "When set, this character is a tombstone: archived to a bundle in the file library, with its vault, memories and vectors torn down. The row survives so old conversations still render a name and a face. Archived characters are read-only until rehydrated."
+        },
+        "archiveFileId": {
+          "type": ["string", "null"],
+          "description": "`files.id` of the ARCHIVE-category `.qtap` bundle holding everything the archive removed. Null unless archivedAt is set."
+        },
+        "archivedAvatarFileId": {
+          "type": ["string", "null"],
+          "description": "`files.id` of the avatar thumbnail copied out of the vault before it was deleted, so a tombstone still has a face in old chats. Null unless archivedAt is set."
+        },
         "_linkedPersonaNames": {
           "type": "array",
           "items": { "type": "string" },
@@ -1379,6 +1401,20 @@
       }
     },
 
+    "ExportedDocumentStoreFolder": {
+      "type": "object",
+      "description": "A folder inside a database-backed document store. Emitted parent-first (shortest path first) so an importer can build the tree in stream order. Character vaults are largely folders — `photos/`, `Mail/`, `Wardrobe/` — so these travel in a `characters` export too.",
+      "required": ["mountPointId", "name", "path"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "oneOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }], "description": "Source folder-row id, carried so a preserveIds import (archive/rehydrate) can restore the folder at its original id. Optional: older exports omit it, and older builds ignore it." },
+        "mountPointId": { "$ref": "#/$defs/UUID" },
+        "parentId": { "oneOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }] },
+        "name": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 }
+      }
+    },
+
     "ExportedDocumentStoreDocument": {
       "type": "object",
       "description": "Text document inside a database-backed document store. Instance-wide GENERAL STATE (the bottom tier of the state cascade) is not a separate export record: it lives as a `state.json` document (fileType 'json') at the root of the singleton \"Quilltap General\" mount, and therefore rides in the `documentStores` dump exactly like any other store document — but only when that mount is included in a selective document-stores export. Chat, project, and group state travel with their own entities.",
@@ -1394,6 +1430,14 @@
         "plainTextLength": { "type": "integer", "minimum": 0 },
         "lastModified": { "$ref": "#/$defs/Timestamp" },
         "folderId": { "oneOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }] },
+        "fileId": {
+          "description": "Source-instance `doc_mount_files.id` for this document's content row. Optional and additive: exports before 4.8 omit it, and an importer that does not recognise it simply mints fresh ids as before. Carried so a bundle can restore identity rather than only content — see `linkId`.",
+          "oneOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }]
+        },
+        "linkId": {
+          "description": "Source-instance `doc_mount_file_links.id` — the id a character's `defaultImageId` and `avatarOverrides[].imageId` actually point at. Without it a character exported with its vault imports faceless, because those pointers have nothing to be remapped through.",
+          "oneOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }]
+        },
         "linkGroupId": {
           "description": "Deliberate hard-link group. Documents sharing a linkGroupId are one file at several paths: a write through any of them repoints all of them. Absent/null for ordinary independent documents. Note that two documents with identical content are NOT linked — content rows are deduplicated by sha256, and only this field records intent.",
           "oneOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }]
@@ -1426,6 +1470,18 @@
           "enum": ["none", "pending", "converted", "failed", "skipped"]
         },
         "extractionError": { "type": ["string", "null"] },
+        "fileId": {
+          "description": "Source-instance `doc_mount_files.id` for this blob's content row. Optional and additive, exactly as on ExportedDocumentStoreDocument.",
+          "oneOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }]
+        },
+        "linkId": {
+          "description": "Source-instance `doc_mount_file_links.id`. This is what a character avatar pointer resolves to, so a vault-bearing character bundle depends on it.",
+          "oneOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }]
+        },
+        "blobId": {
+          "description": "Source-instance `doc_mount_blobs.id`.",
+          "oneOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }]
+        },
         "dataBase64": { "type": "string", "contentEncoding": "base64" }
       }
     },
@@ -1463,7 +1519,7 @@
 
     "ExportedFile": {
       "type": "object",
-      "description": "A general-library file: metadata plus base64 bytes. `userId` and `storageKey` never travel — a storage key names a location inside the exporting instance's own storage (commonly 'mount-blob:<mountPointId>:<blobId>'). It rides as `_sourceStorageKey` provenance and the importer discards it, recording whatever key its own upload bridge returns. Backup files (category 'BACKUP' or folderPath '/backups') are never exported.",
+      "description": "A general-library file: metadata plus base64 bytes. `userId` and `storageKey` never travel — a storage key names a location inside the exporting instance's own storage (commonly 'mount-blob:<mountPointId>:<blobId>'). It rides as `_sourceStorageKey` provenance and the importer discards it, recording whatever key its own upload bridge returns. Backup files (category 'BACKUP' or folderPath '/backups') and character-archive bundles (category 'ARCHIVE' or folderPath '/archives') are never exported — both are `.qtap` archives in their own right and do not nest inside another export.",
       "required": ["id", "sha256", "originalFilename", "mimeType", "size", "source", "category"],
       "additionalProperties": true,
       "properties": {
@@ -1473,7 +1529,7 @@
         "mimeType": { "type": "string" },
         "size": { "type": "integer", "minimum": 0 },
         "source": { "type": "string" },
-        "category": { "type": "string", "description": "Never 'BACKUP' — backup files are excluded from exports" },
+        "category": { "type": "string", "description": "Never 'BACKUP' or 'ARCHIVE' — backup files and character-archive bundles are excluded from exports" },
         "projectId": { "anyOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }] },
         "folderPath": { "type": ["string", "null"] },
         "linkedTo": {

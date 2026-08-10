@@ -88,6 +88,9 @@ export interface Character {
   aliases?: string[]
   pronouns?: { subject: string; object: string; possessive: string } | null
   characterDocumentMountPointId?: string | null
+  /** Set when the character is archived (tombstone with a pruned vault). */
+  archivedAt?: string | null
+  archiveFileId?: string | null
   defaultImage?: {
     id: string
     filepath: string

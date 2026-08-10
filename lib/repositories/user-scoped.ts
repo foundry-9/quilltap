@@ -47,6 +47,7 @@ import type {
   Group,
   LLMLog,
   LLMLogType,
+  ParticipantStatus,
 } from '@/lib/schemas/types';
 
 // ============================================================================
@@ -199,6 +200,16 @@ class UserScopedChatsRepository extends UserScopedTaggableRepository<ChatMetadat
     const chat = await this.findById(chatId);
     if (!chat) throw new Error('Chat not found or access denied');
     return this.baseRepo.addMessage(chatId, message);
+  }
+
+  async setParticipantStatus(
+    chatId: string,
+    participantId: string,
+    newStatus: ParticipantStatus
+  ): Promise<{ chat: ChatMetadata | null; oldStatus: ParticipantStatus }> {
+    const chat = await this.findById(chatId);
+    if (!chat) throw new Error('Chat not found or access denied');
+    return this.baseRepo.setParticipantStatus(chatId, participantId, newStatus);
   }
 
   async clearMessages(chatId: string): Promise<boolean> {

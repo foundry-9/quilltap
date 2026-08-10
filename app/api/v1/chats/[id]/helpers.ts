@@ -63,6 +63,8 @@ export async function getEnrichedCharacter(characterId: string, repos: Repos) {
     defaultImageId: charData.defaultImageId,
     defaultImage,
     defaultConnectionProfileId: charData.defaultConnectionProfileId,
+    // Participant chips badge archived seats (character-archive spec §5.2).
+    archivedAt: charData.archivedAt ?? null,
   };
 }
 

@@ -57,6 +57,13 @@ export async function importDocumentStores(
 
   for (const mp of mountPoints) {
     try {
+      // Skip-if-present rehydrate (spec §6/F4): the mount survived the prune.
+      // Resolve source → target as identity and leave its settings untouched.
+      if (options.preserveIds && idMaps.preserveIdsSkips.has(mp.id)) {
+        idMap.set(mp.id, mp.id);
+        continue;
+      }
+
       const existing = byId.get(mp.id);
       if (existing) {
         if (options.conflictStrategy === 'skip') {
@@ -99,26 +106,48 @@ export async function importDocumentStores(
       // stranger-cloned every time. Only when the id is free — a 'duplicate'
       // import onto an id clash must mint a fresh id instead.
       const preserveArchiveId = !existing;
-      const created = await globalRepos.docMountPoints.create(
-        {
-          name,
-          basePath: mp.mountType === 'database' ? '' : mp.basePath,
-          mountType: mp.mountType,
-          storeType: mp.storeType ?? 'documents',
-          includePatterns: mp.includePatterns,
-          excludePatterns: mp.excludePatterns,
-          enabled: mp.enabled,
-          lastScannedAt: null,
-          scanStatus: 'idle',
-          lastScanError: null,
-          conversionStatus: 'idle',
-          conversionError: null,
-          fileCount: 0,
-          chunkCount: 0,
-          totalSizeBytes: 0,
-        },
-        preserveArchiveId ? { id: mp.id } : undefined
-      );
+      const createOptions = options.preserveIds ? { id: mp.id } : undefined;
+      const created = options.preserveIds
+        ? await globalRepos.docMountPoints.create(
+            {
+              name,
+              basePath: mp.mountType === 'database' ? '' : mp.basePath,
+              mountType: mp.mountType,
+              storeType: mp.storeType ?? 'documents',
+              includePatterns: mp.includePatterns,
+              excludePatterns: mp.excludePatterns,
+              enabled: mp.enabled,
+              lastScannedAt: null,
+              scanStatus: 'idle',
+              lastScanError: null,
+              conversionStatus: 'idle',
+              conversionError: null,
+              fileCount: 0,
+              chunkCount: 0,
+              totalSizeBytes: 0,
+            },
+            createOptions
+          )
+        : await globalRepos.docMountPoints.create(
+            {
+              name,
+              basePath: mp.mountType === 'database' ? '' : mp.basePath,
+              mountType: mp.mountType,
+              storeType: mp.storeType ?? 'documents',
+              includePatterns: mp.includePatterns,
+              excludePatterns: mp.excludePatterns,
+              enabled: mp.enabled,
+              lastScannedAt: null,
+              scanStatus: 'idle',
+              lastScanError: null,
+              conversionStatus: 'idle',
+              conversionError: null,
+              fileCount: 0,
+              chunkCount: 0,
+              totalSizeBytes: 0,
+            },
+            preserveArchiveId ? { id: mp.id } : undefined
+          );
       idMap.set(mp.id, created.id);
       counts.mountPoints++;
     } catch (error) {
@@ -130,30 +159,91 @@ export async function importDocumentStores(
 
   // Folders — database-backed only; filesystem/obsidian sources don't export folders.
   // Import folders before documents so document folderId FKs resolve correctly.
+  //
+  // Two lookup maps let later records resolve their folder in the target store:
+  //  - folderIdBySourceId: source folder id → created folder id (exports carry
+  //    `id` on folder records since F4; older bundles omit it);
+  //  - folderIdByPath: (target mount, path) → created folder id, used to
+  //    resolve parentId (folders arrive parent-first, shortest path first) and
+  //    as the fallback for bundles that predate carried folder ids.
+  // The folder namespace is case-insensitive, so path keys are lowercased.
+  const folderIdBySourceId = new Map<string, string>();
+  const folderIdByPath = new Map<string, string>();
+  const folderPathKey = (mountId: string, path: string) => `${mountId}::${path.toLowerCase()}`;
+
   for (const folder of folders) {
     const targetMountId = idMap.get(folder.mountPointId);
     if (!targetMountId) continue;
-    try {
-      // Remap parentId if it exists
-      let remappedParentId = folder.parentId;
-      if (folder.parentId) {
-        // Parent ID remapping: not applicable here since folder IDs are assigned new ones
-        // For now, we'll create the folder structure but leave parentId as imported
-        // The backfill process will handle this on first access
-      }
 
-      await globalRepos.docMountFolders.create({
-        mountPointId: targetMountId,
-        parentId: remappedParentId,
-        name: folder.name,
-        path: folder.path,
-      });
+    const rememberFolder = (createdId: string) => {
+      if (folder.id) folderIdBySourceId.set(folder.id, createdId);
+      folderIdByPath.set(folderPathKey(targetMountId, folder.path), createdId);
+    };
+
+    // Skip-if-present rehydrate (spec §6/F4): the folder survived the prune
+    // at exactly this id — record it for path/parent resolution and move on.
+    if (options.preserveIds && folder.id && idMaps.preserveIdsSkips.has(folder.id)) {
+      rememberFolder(folder.id);
+      continue;
+    }
+
+    try {
+      // Under preserveIds the bundle's folder ids ARE the created ids, so the
+      // verbatim parentId is simply correct — the parent row was created at
+      // exactly that id one iteration earlier. Without preserveIds the source
+      // parentId means nothing here; resolve the parent by path instead
+      // (parent-first ordering guarantees it is already in the map).
+      const preserveFolderId =
+        options.preserveIds && folder.id ? { id: folder.id as string } : undefined;
+      const parentPath = folder.path.includes('/')
+        ? folder.path.slice(0, folder.path.lastIndexOf('/'))
+        : '';
+      const parentId = preserveFolderId
+        ? folder.parentId ?? null
+        : parentPath
+          ? folderIdByPath.get(folderPathKey(targetMountId, parentPath)) ?? null
+          : null;
+
+      const created = await globalRepos.docMountFolders.create(
+        {
+          mountPointId: targetMountId,
+          parentId,
+          name: folder.name,
+          path: folder.path,
+        },
+        preserveFolderId
+      );
+      rememberFolder(created.id);
       counts.folders++;
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       warnings.push(`Failed to import folder "${folder.path}": ${msg}`);
     }
   }
+
+  /**
+   * Resolve a record's folder in the *target* store. The bundle's folderId is
+   * a source-instance row id: it maps through folderIdBySourceId when the
+   * bundle carried folder ids, and falls back to the containing directory of
+   * the record's relativePath for older bundles. linkDocumentContent /
+   * linkBlobContent derive folderId from relativePath as the single source of
+   * truth regardless — this keeps the caller's value honest so the "caller
+   * folderId disagrees" warning stays meaningful.
+   */
+  const resolveTargetFolderId = (
+    sourceFolderId: string | null | undefined,
+    relativePath: string,
+    targetMountId: string
+  ): string | null => {
+    if (sourceFolderId) {
+      const mapped = folderIdBySourceId.get(sourceFolderId);
+      if (mapped) return mapped;
+    }
+    const dir = relativePath.includes('/')
+      ? relativePath.slice(0, relativePath.lastIndexOf('/'))
+      : '';
+    return dir ? folderIdByPath.get(folderPathKey(targetMountId, dir)) ?? null : null;
+  };
 
   // Documents — database-backed only; filesystem/obsidian sources keep their
   // documents on disk.
@@ -168,19 +258,35 @@ export async function importDocumentStores(
   for (const doc of documents) {
     const targetMountId = idMap.get(doc.mountPointId);
     if (!targetMountId) continue;
+
+    // Skip-if-present rehydrate (spec §6/F4): this link survived the prune —
+    // the live row wins over the bundle's copy.
+    if (options.preserveIds && doc.linkId && idMaps.preserveIdsSkips.has(doc.linkId)) {
+      idMaps.docMountFileLinks.set(doc.linkId, doc.linkId);
+      continue;
+    }
+
     try {
-      // linkDocumentContent handles file + document + link in one shot.
+      // linkDocumentContent handles file + document + link in one shot. Under
+      // preserveIds the bundle's carried row ids are claimed (they are only
+      // honored for rows actually created — content-addressed dedup wins).
       const { link } = await globalRepos.docMountFileLinks.linkDocumentContent({
         mountPointId: targetMountId,
         relativePath: doc.relativePath,
         fileName: doc.fileName,
-        folderId: doc.folderId ?? null,
+        folderId: resolveTargetFolderId(doc.folderId, doc.relativePath, targetMountId),
         fileType: doc.fileType,
         content: doc.content,
         contentSha256: doc.contentSha256,
         plainTextLength: doc.plainTextLength,
         fileSizeBytes: Buffer.byteLength(doc.content, 'utf-8'),
+        ...(options.preserveIds
+          ? { fileId: doc.fileId ?? undefined, linkId: doc.linkId ?? undefined }
+          : {}),
       });
+      if (doc.linkId) {
+        idMaps.docMountFileLinks.set(doc.linkId, link.id);
+      }
       if (doc.linkGroupId) {
         const existing = membersByExportedGroup.get(doc.linkGroupId);
         if (existing) existing.push(link.id);
@@ -212,6 +318,14 @@ export async function importDocumentStores(
   for (const blob of blobs) {
     const targetMountId = idMap.get(blob.mountPointId);
     if (!targetMountId) continue;
+
+    // Skip-if-present rehydrate (spec §6/F4): the avatar blob and its link
+    // survived the prune — the live rows win over the bundle's copy.
+    if (options.preserveIds && blob.linkId && idMaps.preserveIdsSkips.has(blob.linkId)) {
+      idMaps.docMountFileLinks.set(blob.linkId, blob.linkId);
+      continue;
+    }
+
     try {
       const data = Buffer.from(blob.dataBase64, 'base64');
       const created = await globalRepos.docMountBlobs.create({
@@ -223,7 +337,17 @@ export async function importDocumentStores(
         sha256: blob.sha256,
         description: blob.description,
         data,
+        ...(options.preserveIds
+          ? {
+              fileId: blob.fileId ?? undefined,
+              linkId: blob.linkId ?? undefined,
+              blobId: blob.blobId ?? undefined,
+            }
+          : {}),
       });
+      if (blob.linkId) {
+        idMaps.docMountFileLinks.set(blob.linkId, created.linkId);
+      }
       // Restore the extractedText sidecar on imports from 4.3-dev+ exports.
       // Older exports omit these fields; keep the blob in the default 'none'
       // state so on-upload extraction has nothing to re-run.

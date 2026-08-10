@@ -21,6 +21,7 @@
 
 import { getRepositories } from '@/lib/repositories/factory';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
+import { CharacterArchivedError } from '../characters.repository';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import { detectComponentCycles } from '@/lib/wardrobe/expand-composites';
 import { readCharacterVaultWardrobe } from './vault-readers';
@@ -73,6 +74,13 @@ export async function resolveWardrobeMount(
   }
   const repos = getRepositories();
   const character = await repos.characters.findByIdRaw(characterId);
+  // Archived characters keep a live vault (§4.2a prunes in place), so the old
+  // null-mount skip no longer fires for them. Throw rather than return null:
+  // a null here sends the caller down the DB-fallback write path, which would
+  // silently mutate an archived character's wardrobe instead of refusing.
+  if (character?.archivedAt) {
+    throw new CharacterArchivedError(characterId);
+  }
   const mountPointId = character?.characterDocumentMountPointId;
   if (!mountPointId) return null;
   return { mountPointId, scopeId: characterId, characterId, scope: 'character' };

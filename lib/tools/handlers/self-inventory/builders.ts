@@ -675,12 +675,12 @@ export async function buildCarinaSection(
   const rawCharacters = await repos.characters.findAllRaw();
 
   const selfEnabled = rawCharacters.some(
-    (c) => c.id === characterId && c.canBeCarina === true
+    (c) => c.id === characterId && !c.archivedAt && c.canBeCarina === true
   );
 
   // A Carina line opens when EITHER side is an answerer. So an enabled self can
   // reach EVERY other character; a non-enabled self can reach only the answerers.
-  const others = rawCharacters.filter((c) => c.id !== characterId);
+  const others = rawCharacters.filter((c) => c.id !== characterId && !c.archivedAt);
   const pool = selfEnabled ? others : others.filter((c) => c.canBeCarina === true);
 
   const reachable = pool

@@ -271,6 +271,9 @@ CREATE TABLE "characters" (
   "canDressThemselves" INTEGER DEFAULT NULL,
   "canCreateOutfits" INTEGER DEFAULT NULL,
   "characterDocumentMountPointId" TEXT DEFAULT NULL,
+  "archivedAt" TEXT DEFAULT NULL,            -- ISO timestamp when the character was archived into a tombstone.
+  "archiveFileId" TEXT DEFAULT NULL,         -- File row holding the archived character bundle export.
+  "archivedAvatarFileId" TEXT DEFAULT NULL,  -- File row holding the archived avatar thumbnail copy.
   "systemTransparency" INTEGER DEFAULT NULL,  -- when 1 (true), this character may inspect "the Staff" — the chat-level toggles for self_inventory, Staff messages (Lantern/Aurora/Librarian/Prospero/Host), and character vaults still apply. When NULL or 0 (false), the character cannot see Staff messages, the self_inventory tool is withheld, and all character vaults (own + peers) are hidden from doc_* tools — a hard override on top of chat/project settings. Default NULL (opaque).
   "coreWhisperEnabled" INTEGER DEFAULT NULL,  -- per-character override of the global coreWhisper.enabled setting (Aurora's Core whisper). NULL = inherit from global. Resolution: chat → character → global.
   "canBeCarina" INTEGER DEFAULT NULL          -- Carina (inline LLM queries): when 1 (true), this character can answer @Name queries / ask_carina calls as an isolated reference answer (identity only, no history, no memory). NULL/0 = not an answerer. Added by add-carina-flag-v1.

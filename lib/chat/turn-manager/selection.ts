@@ -47,9 +47,11 @@ export function selectNextSpeaker(
   // All present CHARACTER participants are in the rotation — including
   // user-controlled ones. Their talkativeness biases ordering; when picked, the
   // orchestrator pauses the chain so the human can type or skip.
-  const activeCharacterParticipants = participants.filter(
-    p => p.type === 'CHARACTER' && isParticipantPresent(p.status) && p.characterId,
-  );
+  const activeCharacterParticipants = participants.filter((p) => {
+    if (p.type !== 'CHARACTER' || !isParticipantPresent(p.status) || !p.characterId) return false;
+    const character = characters.get(p.characterId);
+    return !character?.archivedAt;
+  });
 
   if (activeCharacterParticipants.length === 0) {
     return {

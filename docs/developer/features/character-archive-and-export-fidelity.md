@@ -1,6 +1,14 @@
 # Character archive, rehydration, and export fidelity
 
-> **Status:** Plan. Not yet implemented. Not yet scheduled.
+> **Status:** Largely implemented; design revised. The operative document is the
+> [implementation spec](character-archive-spec.md) — Deliverable A and the archive core
+> (schema, guards, prune, encryption) have shipped; surfaces (B3) and rehydration (B4) remain.
+> **Revision (2026-08-10, spec §4.2a): archiving prunes the vault in place rather than
+> deleting it.** The managed-field documents, the avatar and its link row, and the wardrobe
+> stay live, so a tombstone is a fully readable character page and every id old chats
+> reference keeps resolving. Passages below describing a deleted vault, a hollow tombstone,
+> an overlay short-circuit, or the `archivedAvatarFileId` thumbnail are **superseded** and
+> marked where they occur; where this document and spec §4.2a disagree, §4.2a wins.
 > **Author of plan:** Ariadne (research/scoping pass), for Charlie.
 > **Scope:** Two deliverables sharing one bundle format. **(A)** Make the `characters`
 > `.qtap` export *faithful* — carry the character's vault documents and blobs (including
@@ -15,7 +23,7 @@
 
 ## 1. The feature in one paragraph
 
-A character today is a slim DB row plus a document-store vault (`characters.characterDocumentMountPointId`), and the `characters` export only carries the row *after* the vault overlay has flattened the managed fields onto it. Everything else in the vault — `Mail/`, `photos/`, free notes, image history, the avatar bytes themselves — is silently left behind, and `defaultImageId` exports as a dangling link id. **Deliverable A** teaches `streamCharacters` to emit the character's own store (folders, files, links, documents) and its blobs using the chunking protocol that already exists for the `document-stores` and `files` export types, so a character round-trips with its face and its papers intact. **Deliverable B** builds on that: *archiving* a character writes the same bundle to the library, deletes the live vault and all derived data, and leaves the `characters` row behind as a read-only **tombstone** (`archivedAt`, name, cached avatar thumbnail, `archiveFileId`); *rehydrating* restores the bundle at its original ids. Because the tombstone is a real row, every one of the ~265 existing `repos.characters.*` call sites keeps working without a virtual-overlay layer.
+A character today is a slim DB row plus a document-store vault (`characters.characterDocumentMountPointId`), and the `characters` export only carries the row *after* the vault overlay has flattened the managed fields onto it. Everything else in the vault — `Mail/`, `photos/`, free notes, image history, the avatar bytes themselves — is silently left behind, and `defaultImageId` exports as a dangling link id. **Deliverable A** teaches `streamCharacters` to emit the character's own store (folders, files, links, documents) and its blobs using the chunking protocol that already exists for the `document-stores` and `files` export types, so a character round-trips with its face and its papers intact. **Deliverable B** builds on that: *archiving* a character writes the same bundle to the library (encrypted under the instance passphrase), **prunes** the live vault down to the managed-field documents, the avatar, and the wardrobe (spec §4.2a — the original design deleted the vault outright), deletes the derived data and the character's own memories, and leaves the `characters` row behind as a read-only **tombstone** that still renders a full character page; *rehydrating* restores the pruned material back into the surviving mount at its original ids. Because the tombstone is a real row with a real vault, every one of the ~265 existing `repos.characters.*` call sites keeps working without a virtual-overlay layer.
 
 ---
 
@@ -38,7 +46,7 @@ Measured against a real export (`quilltap-characters-2026-08-09.qtap`, one chara
 4. **Embeddings never travel.** `stripEmbedding()` stays, on both the export and archive paths, at the writer and again in the stream reader. The 791 MB → 2.5 MB measurement in `docs/developer/features/complete/import_export_update.md` settled this, and a foreign vector silently corrupts semantic search. Rehydration re-embeds through `enqueueImportedMemoryEmbeddings` and the boot reconcile.
 5. **Chats never travel in a character bundle.** Archiving a character does not archive its conversations. The conversations keep their messages and keep rendering against the tombstone.
 6. **Secrets stay redacted** on both paths (`sanitizeProfile`, `resolveSecretConfigKeys`). An archive is a library file the operator may hand to anyone.
-7. **Archiving is destructive to derived data and to the vault, and to nothing else.** It never deletes chats, chat messages, or annotations.
+7. **Archiving is destructive to derived data and to the vault's heavy contents, and to nothing else.** *(Revised by spec §4.2a: the vault itself survives — the managed-field documents, avatar, and wardrobe are kept; mail, photographs, summaries, memories, and embeddings move into the bundle and are deleted.)* It never deletes chats, chat messages, or annotations.
 8. **Archiving and rehydration are both operator-only.** No tool, no character, no background job, no maintenance sweep may archive or rehydrate. (Mirrors the wardrobe-archive precedent: "restoring is a human-only UI action.") See §11.4.
 9. **Forward compatibility is free and must be preserved.** The NDJSON reader warns-and-skips unknown record *kinds* but throws on an unknown `manifest.exportType`. Adding record kinds to the existing `characters` type therefore degrades gracefully on older builds — no format version bump, no migration of existing `.qtap` files. Do not introduce a new `exportType` for this.
 
@@ -115,28 +123,27 @@ A faithful character bundle is no longer 18 KB — a character with a populated 
 
 A character is **live** (`archivedAt IS NULL`) or **archived** (`archivedAt` set, `archiveFileId` set). There is no third state. A failed archive rolls back to live; a failed rehydration leaves the character archived with the bundle intact.
 
-### 6.2 The tombstone row
+### 6.2 The tombstone row *(rewritten 2026-08-10 per spec §4.2a)*
 
-Archiving **keeps** the `characters` row and clears it down to:
+Archiving **keeps** the `characters` row — and, under the revision, keeps it **readable**:
 
-- **Kept:** `id`, `userId`, `name`, `createdAt`, `archivedAt`, `archiveFileId`, a cached avatar thumbnail (see below), and tags.
-- **Cleared:** `characterDocumentMountPointId` (the vault is gone), `defaultImageId`, `avatarOverrides`, and the `default*` FKs.
-- **Vault-managed fields** (`identity`, `description`, `manifesto`, `personality`, `exampleDialogues`, `systemPrompts`, `scenarios`, `physicalDescription`, `metadata`, and the `properties.json` fields) come back **empty**, because the overlay has no vault to read.
+- **Kept:** `id`, `userId`, `name`, `createdAt`, `archivedAt`, `archiveFileId`, tags, **`characterDocumentMountPointId`** (the vault survives, pruned), **`defaultImageId` and `avatarOverrides`** (the avatar blobs and their link rows are in the prune's keep-set, so old messages keep their faces with no pointer patching).
+- **Cleared:** the `default*` FKs (`defaultPartnerId`, `defaultConnectionProfileId`, `defaultImageProfileId`, `defaultRoleplayTemplateId`).
+- **Vault-managed fields** hydrate normally from the kept managed documents — an archived character renders a full character page, not a hollow row.
 
-This is the crux of the design: `applyDocumentStoreOverlay` currently treats a character with no readable `properties.json` as an error — it **throws** `CharacterVaultUnavailableError` in `applyDocumentStoreOverlayOne` and **drops the character from the list** in `applyDocumentStoreOverlay`. An archived character must instead be recognized *before* the vault lookup (`archivedAt != null` ⇒ skip the overlay, return the tombstone) so it neither throws nor disappears. **This is the single most important code change in Deliverable B.**
+The original design's "single most important change in Deliverable B" — an `archivedAt` short-circuit in the vault overlay so a tombstone with no vault neither throws nor disappears — is **struck**. Nothing deletes the vault any more, so the overlay must run for archived characters exactly as for live ones; the short-circuit would hollow a character the prune deliberately preserved. A genuinely broken archived vault throws/drops like a live one's: a real fault, surfaced as one.
 
-**Avatar thumbnail.** So archived characters still have a face in chat transcripts and the roster, archiving copies the avatar image into the general library as an ordinary `files` row and points a new `archivedAvatarFileId` at it. Do **not** attempt to keep a `doc_mount_file_links.id` alive after its mount is gone.
+There is **no avatar thumbnail copy**. `archivedAvatarFileId` existed because deleting the vault killed the avatar blob; prune-in-place keeps the blob and its link row, so `defaultImageId` keeps resolving. The column has shipped and stays, unwritten — a non-null value marks a tombstone from before the revision.
 
-### 6.3 What archiving deletes
+### 6.3 What archiving deletes *(revised 2026-08-10 per spec §4.2a — prune, not teardown)*
 
-In one transaction where the storage layer allows it, and in a documented order where it does not:
+In a documented order (the main DB and the mount index cannot share a transaction; see spec §4.2d for the operative sequence):
 
-1. Write the bundle (§5) to the general library as a `files` row, category `ARCHIVE` (new category — mirror how `BACKUP` is excluded from `files` exports, and exclude `ARCHIVE` too).
-2. Copy out the avatar thumbnail.
-3. Delete the character's vault: `doc_mount_chunks`, `doc_mount_blobs`, `doc_mount_file_links`, `doc_mount_files`, `doc_mount_documents`, `doc_mount_folders`, the `doc_mount_points` row — through the **existing** store-delete chokepoint, not a bare repository delete, so link-group orphan GC runs.
-4. Delete derived data: `vector_indices` / `vector_entries` for the character, `embedding_status` rows, conversation-summary chunks the character owns.
-5. Delete the character's own `memories` — **after** verifying they are present in the written bundle — through `deleteMemoriesWithUnlinkBatch` (`lib/memory/memory-gate.ts`), never `repos.memories.delete*` directly (§11.1). Memories *about* this character, held by others, are left untouched (§11.2).
-6. Null the row's vault/image FKs, set `archivedAt` and `archiveFileId`.
+1. Write the bundle (§5) to the general library as a `files` row, category `ARCHIVE` (excluded from exports the way `BACKUP` is), **encrypted under the instance passphrase** (spec §4.2c).
+2. Verify the bundle by decrypting and reading it back — the hard gate before anything is deleted.
+3. Commit the tombstone (set `archivedAt`/`archiveFileId`, null the `default*` FKs, flip chat seats to absent).
+4. **Prune** the vault — do **not** tear it down. Delete every link outside the keep-set (the ten managed-field documents, the avatar links, `wardrobe.json` and `Wardrobe/`) through the per-link GC delete path so link-group orphan GC runs; the mount point, its keep-set contents, and the pointer survive. Delete the vector store, the `embedding_status` rows of what was deleted, and emptied folders.
+5. Delete the character's own `memories` — verified present in the bundle first — through `deleteMemoriesWithUnlinkBatch` (`lib/memory/memory-gate.ts`), never `repos.memories.delete*` directly (§11.1). Memories *about* this character, held by others, are left untouched (§11.2).
 
 It does **not** touch chats, chat messages, annotations, `group_character_members`, `projects.characterRoster`, or any other character's memories. Membership rows survive so that rehydration restores the character to the groups and rosters it belonged to; the pickers filter archived characters out by state, not by deleting the edges — and the membership *counts* continue to include them (§11.5).
 
@@ -153,27 +160,26 @@ The tombstone must be inert everywhere without a per-call-site audit of all ~265
 
 **Ownership note:** `UserScopedMemoriesRepository` gates every memory operation on `charactersRepo.findById(characterId)`. Because the tombstone still resolves, that gate keeps working — one more reason not to delete the row.
 
-### 6.5 Inspection (read-only viewing)
+### 6.5 Inspection (read-only viewing) *(simplified by spec §4.2a)*
 
-Archived characters are inspectable, never editable:
+Archived characters are inspectable, never editable — and under prune-in-place they read like any other character, so no bundle-streaming inspector is needed:
 
-- The roster shows them under an "Archived" filter with the cached thumbnail and an `archived` badge.
-- A detail view renders **from the bundle**, streamed and parsed on demand — not hydrated into the DB, not cached beyond the request. Every field renders disabled.
-- Conversations containing an archived participant render normally from the tombstone (name + thumbnail) with the badge on the participant chip.
+- The roster shows them under an "Archived" filter with their **normal** avatar and an `archived` badge — no thumbnail special case.
+- The detail view is the **ordinary character page** with every field disabled and a banner; the kept vault supplies all managed fields. (The only content it cannot show is the pruned material — mail, photographs, summaries — which is what the CLI export escape hatch is for.)
+- Conversations containing an archived participant render normally — `defaultImageId` and `avatarOverrides` still resolve — with the badge on the participant chip.
 
-### 6.6 Rehydration
+### 6.6 Rehydration *(reframed by spec §4.2a and §6 — restore into an existing mount)*
 
-`rehydrate(characterId)`:
+Rehydration is no longer "import a bundle into an empty space": the mount point, its folders, the managed documents, the avatar and the wardrobe all still exist and must be left exactly as they are. `rehydrate(characterId)`:
 
-1. Load the bundle from `archiveFileId`; validate the manifest and that its character id equals the tombstone's id.
-2. Refuse if a **live** character already holds that id (impossible via this flow, possible after a restore or a hand-edited library).
-3. Run the import path with `preserveIds`, restoring the store at its original mount-point/file/link/blob ids and the memories at theirs.
-4. Re-link `characters.characterDocumentMountPointId`; restore `defaultImageId` / `avatarOverrides` from the bundle's link ids.
-5. Clear `archivedAt` / `archiveFileId` / `archivedAvatarFileId`; delete the thumbnail copy.
-6. Enqueue re-embedding: memories via the existing `EMBEDDING_GENERATE` fan-out, vault chunks via `enqueueEmbeddingJobsForMountPoint`.
-7. Leave the bundle file in the library by default (cheap insurance); offer deletion.
+1. Load the bundle from `archiveFileId` and **decrypt** it; validate the manifest and that its character id equals this character's id.
+2. Collision pre-scan in **skip-if-present** mode: an id that already exists inside this character's own vault is skipped (the surviving row wins); an id existing anywhere else refuses the whole operation atomically, exactly as the ordinary `preserveIds` rule demands.
+3. Import with `preserveIds`: the pruned documents, blobs, `Mail/`, summaries and memories land at their original ids inside the existing mount. Nothing repoints — the pointer, `defaultImageId` and `avatarOverrides` never changed.
+4. Clear `archivedAt` / `archiveFileId`; flip participant rows back to present. A non-null `archivedAvatarFileId` (pre-revision tombstone) has its thumbnail row deleted and the column nulled.
+5. Enqueue re-embedding: memories via the existing `EMBEDDING_GENERATE` fan-out, vault chunks via `enqueueEmbeddingJobsForMountPoint`. The keep-set documents keep the chunks they never lost.
+6. Leave the bundle file in the library by default (cheap insurance); offer deletion.
 
-Because ids are preserved, every chat participant, memory, group membership, and roster entry re-resolves with no reconcile pass.
+Because ids are preserved — and most of them never stopped resolving — every chat participant, memory, group membership, and roster entry resolves with no reconcile pass.
 
 ---
 

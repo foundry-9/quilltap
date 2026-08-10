@@ -30,7 +30,12 @@ import {
   DescriptionsTab,
   ExternalPromptDialog,
   ExternalPromptResultDialog,
+  ArchiveCharacterDialog,
+  RehydrateBundleDialog,
 } from './components'
+import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/query/keys'
+import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { CHARACTER_TABS } from './constants'
 import { SearchReplaceModal } from '@/components/tools/search-replace'
 import type { SearchReplaceResult } from '@/components/tools/search-replace/types'
@@ -117,6 +122,64 @@ export function CharacterDetailView({ characterId: id, onBack, openChatOnMount =
   } = useCharacterView(id)
 
   const { stats, groups, fetchStats } = useCharacterStats(id)
+
+  const queryClient = useQueryClient()
+  const [showArchiveDialog, setShowArchiveDialog] = useState(false)
+  const [rehydrating, setRehydrating] = useState(false)
+  // Set after a successful rehydrate: the ARCHIVE bundle left on the shelf,
+  // whose disposal the user gets to decide (spec §6 step 6).
+  const [leftoverBundleFileId, setLeftoverBundleFileId] = useState<string | null>(null)
+  const isArchived = Boolean(character?.archivedAt)
+
+  const handleArchiveConfirm = async () => {
+    try {
+      const res = await fetch(`/api/v1/characters/${id}?action=archive`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to archive character')
+      }
+      setShowArchiveDialog(false)
+      await fetchCharacter()
+      setDataRefreshKey((prev) => prev + 1) // header stats: memory count just changed
+      await queryClient.invalidateQueries({ queryKey: queryKeys.characters.all })
+      showSuccessToast(
+        data.pruneComplete === false
+          ? `${character?.name || 'The character'} is archived, but some effects resisted packing — archive them again to finish the sweep.`
+          : `${character?.name || 'The character'} rests in the archive, bundle sealed and shelved.`
+      )
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to archive character')
+    }
+  }
+
+  const handleRehydrate = async () => {
+    setRehydrating(true)
+    try {
+      const res = await fetch(`/api/v1/characters/${id}?action=rehydrate`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to rehydrate character')
+      }
+      await fetchCharacter()
+      setDataRefreshKey((prev) => prev + 1)
+      await queryClient.invalidateQueries({ queryKey: queryKeys.characters.all })
+      const restored = data.restored as
+        | { memories: number; documents: number; blobs: number }
+        | undefined
+      showSuccessToast(
+        restored
+          ? `${character?.name || 'The character'} is awake again — ${restored.memories} memories, ${restored.documents} papers and ${restored.blobs} photographs unpacked.`
+          : `${character?.name || 'The character'} is awake again.`
+      )
+      if (typeof data.archiveBundleFileId === 'string' && data.archiveBundleFileId) {
+        setLeftoverBundleFileId(data.archiveBundleFileId)
+      }
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to rehydrate character')
+    } finally {
+      setRehydrating(false)
+    }
+  }
 
   const characterTagIds = character?.tags || []
 
@@ -355,6 +418,23 @@ export function CharacterDetailView({ characterId: id, onBack, openChatOnMount =
           ← Back to Characters
         </button>
 
+        {isArchived && (
+          <div className="mb-6 rounded-2xl border qt-border-default qt-bg-muted/60 p-4 flex items-start gap-3">
+            <span className="text-2xl" aria-hidden>🗄️</span>
+            <div className="flex-1">
+              <p className="qt-text-label text-foreground">
+                {character?.name || 'This character'} rests in the archive.
+              </p>
+              <p className="qt-text-small qt-text-secondary mt-1">
+                Their effects — memories, correspondence, photographs, summaries — are
+                packed into a sealed bundle on the shelf. What you see below is kept for
+                the record and may be read but not altered; rehydrate them to pick up the
+                pen again. Old conversations keep their words and their face throughout.
+              </p>
+            </div>
+          </div>
+        )}
+
         <CharacterHeader
           character={character}
           style={style}
@@ -366,20 +446,50 @@ export function CharacterDetailView({ characterId: id, onBack, openChatOnMount =
           onToggleFavorite={handleToggleFavorite}
           onToggleControlledBy={handleToggleControlledBy}
           onToggleCarina={handleToggleCarina}
-          onOptimize={() => setShowOptimizerModal(true)}
-          onSearchReplace={() => setShowSearchReplaceModal(true)}
-          onGenerateExternalPrompt={() => setShowExternalPromptDialog(true)}
+          onOptimize={isArchived ? undefined : () => setShowOptimizerModal(true)}
+          onSearchReplace={isArchived ? undefined : () => setShowSearchReplaceModal(true)}
+          onGenerateExternalPrompt={isArchived ? undefined : () => setShowExternalPromptDialog(true)}
+          onArchive={isArchived ? undefined : () => setShowArchiveDialog(true)}
+          onRehydrate={isArchived ? handleRehydrate : undefined}
+          rehydrating={rehydrating}
           togglingNpc={togglingNpc}
           togglingFavorite={togglingFavorite}
           togglingControlledBy={togglingControlledBy}
           togglingCarina={togglingCarina}
         />
 
-        {/* Tabbed Content */}
+        {/* Tabbed Content. For an archived character the content renders inside a
+            disabled fieldset: every form control inert, the page still readable.
+            The repository write guard is the real lock — this is the courtesy. */}
         <EntityTabs tabs={CHARACTER_TABS} defaultTab={initialTab ?? 'details'}>
-          {renderTabContent}
+          {isArchived
+            ? (activeTab: string) => (
+                <fieldset disabled className="opacity-90">
+                  {renderTabContent(activeTab)}
+                </fieldset>
+              )
+            : renderTabContent}
         </EntityTabs>
       </div>
+
+      {/* Archive Confirmation */}
+      {showArchiveDialog && character && (
+        <ArchiveCharacterDialog
+          characterName={character.name}
+          onConfirm={handleArchiveConfirm}
+          onCancel={() => setShowArchiveDialog(false)}
+        />
+      )}
+
+      {/* Post-rehydrate bundle disposal (spec §6 step 6) */}
+      {leftoverBundleFileId && character && (
+        <RehydrateBundleDialog
+          characterName={character.name}
+          bundleFileId={leftoverBundleFileId}
+          onClose={() => setLeftoverBundleFileId(null)}
+          onDeleted={() => showSuccessToast('The bundle is off the shelf.')}
+        />
+      )}
 
       {/* Chat Creation Modal */}
       {showChatDialog && character && (

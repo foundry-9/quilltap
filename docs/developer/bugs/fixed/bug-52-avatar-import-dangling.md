@@ -2,18 +2,31 @@
 
 | | |
 |---|---|
-| **Status** | **OPEN** |
+| **Status** | **FIXED in v4** |
 | **Found** | 2026-08-09 |
-| **Fixed** | — |
+| **Fixed** | 2026-08-10 |
 | **Severity** | Medium (silent data loss on every cross-instance character import; the avatar bytes never travel and the reference dangles) |
 | **Who it bites** | anyone importing a `characters` `.qtap` into a different instance — sharing a character with another person, or moving one between their own instances |
 | **Provenance** | Faithful — found by inspection during the archive/export-fidelity scoping pass (a real 4.8.0-dev.186 export measured 18 KB with no vault records), not by the v5 harness |
 | **Defect site** | `lib/export/ndjson-writer.ts:143` (`streamCharacters` exports no vault records or bytes) + `lib/import/quilltap-import/reconcile.ts:46–129` (`reconcileRelationships` never remaps or nulls `defaultImageId` / `avatarOverrides[].imageId`) |
-| **Fix site** | WP A2 of [character-archive-spec.md](../features/character-archive-spec.md) — export the character's vault via a shared `streamOneStore`, carry link ids, remap avatars in reconcile |
+| **Fix site** | WP A2 of [character-archive-spec.md](../../features/character-archive-spec.md) — export the character's vault via a shared `streamOneStore`, carry link ids, remap avatars in reconcile |
 | **v5 status** | Owed (Faithful) — v5 reproduces the omission; it inherits the A2 fix as a drift catch-up |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
+
+**FIXED in v4 (2026-08-10).** WP A2 shipped as described below.
+`streamCharacters` emits the character's whole vault through a shared
+`streamOneStore` (mount point, folders, documents, blobs and chunks, carrying
+file/link row ids), the importer keeps the bundle's vault whole-store and
+cascade-deletes the scaffold `characters.create()` provisions, and
+`reconcileRelationships` remaps `defaultImageId` and every
+`avatarOverrides[].imageId` through the link-id map — dropping an override it
+cannot remap rather than writing a `null` `imageId`, and only rewriting the
+override array when something changed. Regression tests:
+[`__tests__/unit/lib/export/character-vault-export.test.ts`](../../../../__tests__/unit/lib/export/character-vault-export.test.ts),
+[`__tests__/unit/lib/import/quilltap-import/import-characters-vault.test.ts`](../../../../__tests__/unit/lib/import/quilltap-import/import-characters-vault.test.ts),
+[`__tests__/unit/lib/import/quilltap-import/reconcile-avatar-remap.test.ts`](../../../../__tests__/unit/lib/import/quilltap-import/reconcile-avatar-remap.test.ts).
 
 ### Symptom
 
@@ -59,7 +72,7 @@ is invisible unless you go looking for the files.
 ### The fix
 
 Deliverable A of the archive/export-fidelity plan
-([character-archive-spec.md](../features/character-archive-spec.md), WP A2):
+([character-archive-spec.md](../../features/character-archive-spec.md), WP A2):
 
 - Extract the per-store body of `streamDocumentStores` into a shared
   `streamOneStore(mountPointId)` generator and have `streamCharacters` emit the

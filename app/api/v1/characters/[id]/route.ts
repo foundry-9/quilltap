@@ -22,6 +22,8 @@
  * - optimize-stream - Stream character optimization progress
  * - generate-external-prompt - Generate standalone system prompt for external tools
  * - refresh-archive - Re-render and re-embed all conversations for this character
+ * - archive - Pack the character into an encrypted bundle and prune the vault
+ * - rehydrate - Bring an archived character back (refuses until rehydration ships)
  */
 
 import { createContextParamsHandler } from '@/lib/api/middleware';

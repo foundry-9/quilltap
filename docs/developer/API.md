@@ -1005,6 +1005,7 @@ List all characters.
 - `npc=true|false` - Filter by NPC status (omit for regular characters)
 - `controlledBy=llm|user` - Filter by control mode (LLM-controlled or user-controlled)
 - `tagId` - Filter by tag
+- `archived=exclude|include|only` - Archived-character filter (default `exclude`). Every picker uses the default, so archived characters never appear as chat/group/mail/image candidates; the Aurora roster's "Show Archived" opts into `include`. Each row carries `archivedAt` (null for live characters).
 
 **Response**: `200 OK`
 
@@ -1124,6 +1125,24 @@ Export character in SillyTavern-compatible format.
 
 **Query Parameters**:
 - `format=json|png` - Export format (JSON for data, PNG for character card image)
+
+Returns `400` for an archived character — a tombstone export would carry only the pruned vault, and the full bundle already exists as an `ARCHIVE` file. Rehydrate first, or use `quilltap db characters export`.
+
+#### `POST /api/v1/characters/[id]?action=archive`
+
+Archive the character: write the encrypted `.qtap` bundle (an `ARCHIVE` file row), verify it, commit the tombstone (`archivedAt` + `archiveFileId`, chat seats flipped to absent), then prune the vault in place — mail, non-avatar photos, conversation summaries, own memories and their embeddings go; managed fields, avatar, and wardrobe stay readable.
+
+**Response**: `{ "archived": true, "archiveFileId": "file-uuid", "pruneComplete": true }`. A `pruneComplete: false` means the tombstone committed but some prune step failed; calling the action again re-runs only the prune. Returns `400` when the passphrase hasn't been seen by this server process (unlock first).
+
+#### `POST /api/v1/characters/[id]?action=rehydrate`
+
+Bring an archived character back: decrypt the bundle (verifying the plaintext against the file row's recorded sha256), import it with `preserveIds` in skip-if-present mode (ids already inside the character's own vault are skipped; ids anywhere else refuse atomically), clear the tombstone, flip absent chat seats back to active, re-chunk the restored documents, and enqueue re-embedding. The bundle file stays in the library afterwards. A pre-bundle tombstone (no `archiveFileId`) just un-flags.
+
+**Response**: `{ "rehydrated": true, "archived": false, "archiveBundleFileId": "file-uuid", "restored": { "memories": 12, "documents": 8, "blobs": 3 }, "warnings": [] }` (`restored` is absent for a bundle-less tombstone; `archiveBundleFileId` is `null` there).
+
+Returns `400` with the named diagnosis when the bundle predates a passphrase change or the process hasn't seen the passphrase yet, or when the bundle file is missing / the import fails — in every failure the character stays archived and re-running is safe. Returns `500` when the bundle fails digest, format, or integrity verification.
+
+Deleting a leftover bundle goes through `DELETE /api/v1/files/[id]`, which refuses (400, code `ARCHIVE_BUNDLE_HELD`) to delete a bundle a **still-archived** character points at unless `force=true` is passed.
 
 #### `POST /api/v1/characters/[id]?action=favorite`
 
@@ -4265,6 +4284,7 @@ Restore data from a backup file.
 - `file` (required) - The backup ZIP file
 - `mode` (required) - `"replace"` (overwrite existing data) or `"new-account"` (import as new)
 - `preview` (optional) - Set to `"true"` for preview mode
+- `keepArchivedCharacterBundles` (optional, default `true`) - Replace mode only: spare archived-character `.qtap` bundles (`files` rows of category `ARCHIVE` and their bytes) from the pre-restore wipe. The tombstone character rows are replaced like everything else, so a spared bundle is loose — importable, not rehydratable. Pass `false` to wipe them too.
 
 **Response**: `200 OK`
 
@@ -4902,6 +4922,21 @@ Pause a job.
 #### `POST /api/v1/system/jobs/[id]?action=resume`
 
 Resume a paused job.
+
+#### `POST /api/v1/system/tools?action=delete-data`
+
+Delete all user data (the Delete All Data card).
+
+**Body:**
+```json
+{ "confirm": "DELETE_ALL_MY_DATA", "keepArchivedCharacterBundles": true }
+```
+
+`confirm` is required verbatim. `keepArchivedCharacterBundles` (optional, default `true`) spares archived-character `.qtap` bundles (`files` rows of category `ARCHIVE` and their on-disk bytes) from the wipe; the character rows themselves are deleted, so what survives is a loose, importable bundle. Pass `false` to wipe the bundles too. The response `summary` includes `archiveBundles` (bundles present) and `archiveBundlesKept`; `files` counts only the files actually deleted.
+
+#### `GET /api/v1/system/tools?action=delete-data-preview`
+
+Count-only preview for the deletion above; the summary's `archiveBundles` reports the bundles on hand (nothing is deleted).
 
 #### `GET /api/v1/system/tools?action=tasks-queue`
 

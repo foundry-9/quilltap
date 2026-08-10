@@ -146,6 +146,9 @@ problem: a thin pipe, a full disc, a mail attachment that will not have it.
 
 7. **Confirm and start restore**
    - For "Replace" mode, you must confirm the deletion warning
+   - "Replace" mode also offers to spare archived-character bundles from the
+     preceding wipe (ticked by default — see "Replace Mode and the Archive
+     Shelf" below)
    - Click "Start Restore"
 
 8. **Wait for restore to complete**
@@ -195,6 +198,22 @@ to inspect.
 - Use to merge data from another instance
 - Use to duplicate content for testing
 - Existing data remains untouched
+
+## Replace Mode and the Archive Shelf
+
+A "Replace" restore begins by clearing out your current data, and archived
+characters' encrypted `.qtap` bundles would ordinarily be swept out with it.
+The mode step therefore offers a checkbox — **ticked by default** — to leave
+those bundles on the shelf while the wipe proceeds.
+
+What survives is the bundle *file* alone. The archived character's record is
+replaced along with everything else by the backup's contents, so a spared
+bundle cannot simply be woken afterward with the Rehydrate action — it is a
+loose bundle, importable through the ordinary character import. Each bundle is
+sealed under your passphrase rather than under anything kept in the databases
+being replaced, so it opens perfectly well on the restored instance.
+
+Untick the box to have the wipe take the archive shelf too.
 
 ## Understanding Backup Timing
 

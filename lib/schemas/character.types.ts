@@ -196,6 +196,13 @@ export const CharacterSchema = z.object({
   /** Linked character document store (mountType='database', storeType='character'); null = not linked */
   characterDocumentMountPointId: UUIDSchema.nullable().optional(),
 
+  /** Tombstone marker; when set the character is archived and should not accept writes. */
+  archivedAt: TimestampSchema.nullable().optional(),
+  /** Archive bundle file row for this character's tombstone export. */
+  archiveFileId: UUIDSchema.nullable().optional(),
+  /** Thumbnail copy of the archived avatar for tombstone rendering. */
+  archivedAvatarFileId: UUIDSchema.nullable().optional(),
+
   /** Whether this character can change their own outfit using wardrobe tools (null = enabled by default) */
   canDressThemselves: z.boolean().nullable().optional(),
 

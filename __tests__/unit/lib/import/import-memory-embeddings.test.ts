@@ -9,9 +9,11 @@
  * next restart's reconcile sweep happened to notice.
  *
  * These tests pin the repair: one targeted `EMBEDDING_GENERATE` per created
- * memory (never a blanket `EMBEDDING_REINDEX_ALL`, which walks every
- * character's entire corpus plus conversation chunks, help docs and mount
- * chunks), and a plain warning when there is no usable embedding profile.
+ * memory against the **system default profile whatever its provider** (never
+ * a blanket `EMBEDDING_REINDEX_ALL`, which walks every character's entire
+ * corpus plus conversation chunks, help docs and mount chunks), a debounced
+ * vocabulary refit when that default is the corpus-derived BUILTIN TF-IDF
+ * one, and a plain warning only when no default profile exists at all.
  */
 
 import {
@@ -53,6 +55,10 @@ jest.mock('@/lib/embedding/embedding-service', () => ({
   getDefaultEmbeddingProfile: jest.fn(),
 }));
 
+jest.mock('@/lib/embedding/embedding-job-scheduler', () => ({
+  scheduleRefit: jest.fn(),
+}));
+
 import { executeImport } from '@/lib/import/quilltap-import-service';
 import { getUserRepositories, getRepositories } from '@/lib/repositories/factory';
 import {
@@ -60,6 +66,7 @@ import {
   enqueueEmbeddingReindexAll,
 } from '@/lib/background-jobs/queue-service';
 import { getDefaultEmbeddingProfile } from '@/lib/embedding/embedding-service';
+import { scheduleRefit } from '@/lib/embedding/embedding-job-scheduler';
 
 describe('import → memory re-embedding', () => {
   const mockUserRepos = createMockUserRepositories();
@@ -154,7 +161,7 @@ describe('import → memory re-embedding', () => {
     expect(result.imported.memories).toBe(2);
   });
 
-  it('warns rather than enqueueing when the profile is the built-in TF-IDF one', async () => {
+  it('embeds under a BUILTIN default too, and schedules the vocabulary refit', async () => {
     const character = createMockCharacter();
     configureFindById(mockUserRepos.characters.findById, []);
     (getDefaultEmbeddingProfile as jest.Mock).mockResolvedValue({
@@ -162,10 +169,32 @@ describe('import → memory re-embedding', () => {
       provider: 'BUILTIN',
     });
 
-    const result = await executeImport(testUserId, buildExport(character, 1) as never, importOptions);
+    const result = await executeImport(testUserId, buildExport(character, 2) as never, importOptions);
 
-    expect(enqueueEmbeddingGenerate).not.toHaveBeenCalled();
-    expect(result.warnings.some((w) => w.includes('TF-IDF'))).toBe(true);
+    // The system default embeds everything — a BUILTIN default is no
+    // exception. The corpus just grew, so the debounced refit (whose reindex
+    // also heals any row embedded before the vocabulary was first fitted)
+    // rides along, exactly as manual memory creation does.
+    expect(enqueueEmbeddingGenerate).toHaveBeenCalledTimes(2);
+    expect(enqueueEmbeddingGenerate).toHaveBeenCalledWith(
+      testUserId,
+      expect.objectContaining({ entityType: 'MEMORY', profileId: 'profile-builtin' })
+    );
+    expect(scheduleRefit).toHaveBeenCalledWith(testUserId, 'profile-builtin');
+    expect(result.warnings.some((w) => w.includes('TF-IDF'))).toBe(false);
+  });
+
+  it('does not schedule a refit for an API-backed default profile', async () => {
+    const character = createMockCharacter();
+    configureFindById(mockUserRepos.characters.findById, []);
+    (getDefaultEmbeddingProfile as jest.Mock).mockResolvedValue({
+      id: 'profile-1',
+      provider: 'OPENAI',
+    });
+
+    await executeImport(testUserId, buildExport(character, 1) as never, importOptions);
+
+    expect(scheduleRefit).not.toHaveBeenCalled();
   });
 
   it('does not fail the import when enqueueing throws', async () => {

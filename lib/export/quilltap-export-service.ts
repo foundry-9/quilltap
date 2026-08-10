@@ -53,6 +53,47 @@ async function collectChatMemories(
   }
 }
 
+/**
+ * Summarize the character vaults a `characters` export will carry (WP A2), so
+ * the wizard can warn that a bundle with photos in it is not a small file.
+ *
+ * Best-effort by design: a store that fails to read is left out of the totals
+ * rather than failing the preview — this only ever feeds a UI hint.
+ */
+async function summarizeCharacterVaults(
+  mountPointIds: string[]
+): Promise<ExportPreview['vaults']> {
+  const summary = { stores: 0, documents: 0, blobs: 0, estimatedBytes: 0 };
+  if (mountPointIds.length === 0) return summary;
+
+  const globalRepos = getRepositories();
+  for (const mountPointId of mountPointIds) {
+    try {
+      summary.stores++;
+
+      const documents = await globalRepos.docMountDocuments.findByMountPointId(mountPointId);
+      summary.documents += documents.length;
+      for (const doc of documents) {
+        summary.estimatedBytes += doc.plainTextLength ?? doc.content?.length ?? 0;
+      }
+
+      const blobs = await globalRepos.docMountBlobs.listByMountPoint(mountPointId);
+      summary.blobs += blobs.length;
+      for (const blob of blobs) {
+        // Blob bytes travel base64-encoded, which costs a third more.
+        summary.estimatedBytes += Math.ceil((blob.sizeBytes ?? 0) * (4 / 3));
+      }
+    } catch (error) {
+      logger.warn('Failed to summarize a character vault for export preview', {
+        mountPointId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return summary;
+}
+
 // ============================================================================
 // PUBLIC API FUNCTIONS
 // ============================================================================
@@ -69,6 +110,7 @@ export async function previewExport(
     const repos = getUserRepositories(userId);
     const entities: Array<{ id: string; name: string }> = [];
     let memoryCount = 0;
+    let vaults: ExportPreview['vaults'];
 
     const entityIds = options.scope === 'all' ? [] : (options.selectedIds ?? []);
 
@@ -81,16 +123,21 @@ export async function previewExport(
           ? allCharacters.map(c => c.id)
           : entityIds;
 
+        const vaultMountIds: string[] = [];
         for (const id of ids) {
           const char = await repos.characters.findById(id);
           if (char) {
             entities.push({ id: char.id, name: char.name });
+            if (char.characterDocumentMountPointId) {
+              vaultMountIds.push(char.characterDocumentMountPointId);
+            }
             if (options.includeMemories) {
               const memories = await collectCharacterMemories(repos, id);
               memoryCount += memories.length;
             }
           }
         }
+        vaults = await summarizeCharacterVaults(vaultMountIds);
         break;
       }
 
@@ -334,6 +381,7 @@ export async function previewExport(
       type: options.type,
       entities,
       ...(memoryCount > 0 && { memoryCount }),
+      ...(vaults && vaults.stores > 0 && { vaults }),
     };
   } catch (error) {
     logger.error('Error previewing export', { userId, type: options.type }, error as Error);

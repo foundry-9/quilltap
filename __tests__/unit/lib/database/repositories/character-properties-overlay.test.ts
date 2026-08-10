@@ -1220,6 +1220,40 @@ describe('applyDocumentStoreOverlayOne', () => {
     const result = await applyDocumentStoreOverlayOne(char);
     expect(result?.title).toBe(VALID_VAULT_PROPS.title);
   });
+
+  it('overlays archived characters from their kept vault (§4.2a — no hollow tombstones)', async () => {
+    // Archiving prunes the vault but keeps every managed-field document, so an
+    // archived character must hydrate exactly like a live one. The old
+    // archived short-circuit here would hand back a hollow row — the very
+    // outcome prune-in-place exists to avoid.
+    mockRepoPaths({
+      [CHARACTER_PROPERTIES_JSON_PATH]: [
+        { mountPointId: 'mp-1', content: JSON.stringify(VALID_VAULT_PROPS) },
+      ],
+    });
+    const char = makeCharacter({
+      id: 'a',
+      characterDocumentMountPointId: 'mp-1',
+      archivedAt: '2026-08-10T00:00:00.000Z',
+    });
+    const result = await applyDocumentStoreOverlayOne(char);
+    expect(result?.title).toBe(VALID_VAULT_PROPS.title);
+    expect(result?.archivedAt).toBe('2026-08-10T00:00:00.000Z');
+  });
+
+  it('still throws for an archived character whose vault is genuinely broken', async () => {
+    // A broken archived vault is a real fault and surfaces as one — it is not
+    // silently hollowed the way the old short-circuit did.
+    mockRepoPaths({ [CHARACTER_PROPERTIES_JSON_PATH]: [] });
+    const char = makeCharacter({
+      id: 'a',
+      characterDocumentMountPointId: 'mp-1',
+      archivedAt: '2026-08-10T00:00:00.000Z',
+    });
+    await expect(applyDocumentStoreOverlayOne(char)).rejects.toThrow(
+      CharacterVaultUnavailableError,
+    );
+  });
 });
 
 describe('readCharacterVaultProperties', () => {

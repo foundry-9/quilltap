@@ -14,9 +14,14 @@ export async function handleGet(
     const projectId = searchParams.get('projectId');
     const folderPath = searchParams.get('folderPath');
     const filter = searchParams.get('filter');
+    const category = searchParams.get('category');
 
     const allFiles = await ctx.repos.files.findByUserId(ctx.user.id);
     let files = allFiles;
+
+    if (category) {
+      files = files.filter(file => file.category === category);
+    }
 
     if (filter === 'general') {
       files = files.filter(file => file.projectId === null || file.projectId === undefined);

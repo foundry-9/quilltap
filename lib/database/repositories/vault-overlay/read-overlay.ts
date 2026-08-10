@@ -133,6 +133,11 @@ async function loadVaultFileMaps(mountPointIds: string[]): Promise<VaultFileMaps
  *   caller catches and drops; the single caller lets it propagate.
  */
 function hydrateOne(character: Character, maps: VaultFileMaps): Character {
+  // No archivedAt short-circuit here, deliberately (§4.2a): archiving prunes
+  // the vault but keeps every managed-field document, so an archived character
+  // hydrates exactly like a live one. Skipping would hand back a hollow row —
+  // the very outcome the prune-in-place revision exists to avoid. A *broken*
+  // archived vault is a real fault and surfaces as one, like any other.
   if (!hasLinkedVault(character)) {
     return character;
   }
@@ -371,6 +376,9 @@ export async function applyDocumentStoreOverlayOne(
   if (!character) {
     return character;
   }
+  // Archived characters are NOT short-circuited (§4.2a): their vault survives
+  // the prune and must be overlaid like any other. Pre-revision tombstones
+  // (vault deleted, pointer nulled) fall through hasLinkedVault unhollowed.
   if (!hasLinkedVault(character)) {
     return character;
   }

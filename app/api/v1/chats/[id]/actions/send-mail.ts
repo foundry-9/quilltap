@@ -45,9 +45,15 @@ export async function handleSendMail(
   if (!sender) {
     return notFound('Sender character');
   }
+  if (sender.archivedAt) {
+    return badRequest('That character is archived; rehydrate it to continue.');
+  }
   const recipient = await repos.characters.findByIdRaw(validated.toCharacterId);
   if (!recipient) {
     return notFound('Recipient character');
+  }
+  if (recipient.archivedAt) {
+    return badRequest('That recipient is archived; rehydrate them to continue.');
   }
 
   const result = await composeAndDeliverLetter({

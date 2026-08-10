@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { exists } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
-import { notFound, serverError, successResponse } from '@/lib/api/responses';
+import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
 import { addCharacterSchema, removeCharacterSchema } from '../schemas';
 import type { RequestContext } from '@/lib/api/middleware';
 
@@ -70,6 +70,12 @@ export async function handleAddCharacter(
   const character = await repos.characters.findById(characterId);
   if (!character) {
     return notFound('Character');
+  }
+
+  // Archived characters can't join a roster — but existing roster edges are
+  // never removed by archiving, so removal below stays unguarded (spec §5.1).
+  if (character.archivedAt) {
+    return badRequest('That character is archived; rehydrate them before adding them to a roster.');
   }
 
   // Add to roster if not already there

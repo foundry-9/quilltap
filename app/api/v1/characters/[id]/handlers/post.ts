@@ -11,6 +11,8 @@
  * POST /api/v1/characters/[id]?action=generate-external-prompt - Generate standalone system prompt
  * POST /api/v1/characters/[id]?action=refresh-archive - Re-render and re-embed all conversations
  * POST /api/v1/characters/[id]?action=rename - Bulk rename/replace across character data, memories, and chats
+ * POST /api/v1/characters/[id]?action=archive - Pack the character into an encrypted bundle and prune the vault
+ * POST /api/v1/characters/[id]?action=rehydrate - Bring an archived character back (refuses until WP B4)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -25,6 +27,18 @@ import type { OptimizerProgressEvent } from '@/lib/services/character-optimizer.
 import { generateExternalPrompt } from '@/lib/services/external-prompt-generator.service';
 import { enqueueConversationRender } from '@/lib/background-jobs/queue-service';
 import { runCharacterRename } from '@/lib/services/character-rename.service';
+import {
+  archiveCharacter,
+  rehydrateCharacter,
+  CharacterRehydrationError,
+  ArchiveVerificationError,
+} from '@/lib/characters/archive-service';
+import {
+  ArchiveKeyUnavailableError,
+  ArchivePassphraseMismatchError,
+  ArchiveIntegrityError,
+  ArchiveFormatError,
+} from '@/lib/characters/archive-crypto';
 import type { RequestContext } from '@/lib/api/middleware';
 
 const avatarSchema = z.object({
@@ -72,7 +86,7 @@ const renameSchema = z.object({
   dryRun: z.boolean().default(true),
 });
 
-const CHARACTER_POST_ACTIONS = ['favorite', 'avatar', 'add-tag', 'remove-tag', 'toggle-controlled-by', 'toggle-carina', 'set-default-partner', 'optimize-stream', 'generate-external-prompt', 'refresh-archive', 'rename'] as const;
+const CHARACTER_POST_ACTIONS = ['favorite', 'avatar', 'add-tag', 'remove-tag', 'toggle-controlled-by', 'toggle-carina', 'set-default-partner', 'optimize-stream', 'generate-external-prompt', 'refresh-archive', 'rename', 'archive', 'rehydrate'] as const;
 type CharacterPostAction = typeof CHARACTER_POST_ACTIONS[number];
 
 async function handleOptimizeStream(
@@ -352,6 +366,59 @@ export async function handlePost(
       } catch (error) {
         logger.error('[Characters v1] Error refreshing conversation archive', { characterId: id }, error instanceof Error ? error : undefined);
         return serverError('Failed to refresh conversation archive');
+      }
+    },
+
+    archive: async () => {
+      try {
+        const result = await archiveCharacter(user.id, id);
+        logger.info('[Characters v1] Character archived', {
+          characterId: id,
+          archiveFileId: result.archiveFileId,
+          pruneComplete: result.pruneComplete,
+        });
+        return NextResponse.json(result);
+      } catch (error) {
+        if (error instanceof ArchiveKeyUnavailableError) {
+          return badRequest(
+            'The archive cannot be sealed: your passphrase has not been entered since Quilltap started. Unlock once (or restart and unlock), then archive again.'
+          );
+        }
+        if (error instanceof ArchiveVerificationError) {
+          logger.error('[Characters v1] Archive bundle failed verification', { characterId: id }, error);
+          return serverError(error.message);
+        }
+        logger.error('[Characters v1] Error archiving character', { characterId: id }, error instanceof Error ? error : undefined);
+        return serverError(error instanceof Error ? error.message : 'Failed to archive character');
+      }
+    },
+
+    rehydrate: async () => {
+      try {
+        const result = await rehydrateCharacter(user.id, id);
+        logger.info('[Characters v1] Character rehydrated', {
+          characterId: id,
+          archiveBundleFileId: result.archiveBundleFileId,
+          restored: result.restored,
+          warningCount: result.warnings.length,
+        });
+        return NextResponse.json(result);
+      } catch (error) {
+        // Operator-fixable conditions are 400s with the named diagnosis: the
+        // passphrase this bundle was sealed under (predates a change), or a
+        // process that hasn't seen the passphrase yet.
+        if (error instanceof ArchivePassphraseMismatchError || error instanceof ArchiveKeyUnavailableError) {
+          return badRequest(error.message);
+        }
+        if (error instanceof CharacterRehydrationError) {
+          return badRequest(error.message);
+        }
+        if (error instanceof ArchiveVerificationError || error instanceof ArchiveIntegrityError || error instanceof ArchiveFormatError) {
+          logger.error('[Characters v1] Archive bundle failed rehydration verification', { characterId: id }, error);
+          return serverError(error.message);
+        }
+        logger.error('[Characters v1] Error rehydrating character', { characterId: id }, error instanceof Error ? error : undefined);
+        return serverError(error instanceof Error ? error.message : 'Failed to rehydrate character');
       }
     },
 

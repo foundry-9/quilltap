@@ -216,6 +216,16 @@ describe('turn manager state', () => {
     expect(selection.reason).toBe('user_turn')
   })
 
+  it('ignores archived characters when selecting the next speaker', () => {
+    const participant = makeCharacterParticipant('p1', 'char-1')
+    const characters = new Map<string, Character>([['char-1', makeCharacter('char-1', { archivedAt: '2026-08-10T00:00:00.000Z' })]])
+    const state = createInitialTurnState()
+
+    const selection = selectNextSpeaker([participant], characters, state, null)
+    expect(selection.nextSpeakerId).toBeNull()
+    expect(selection.reason).toBe('user_turn')
+  })
+
   it('treats an impersonated LLM seat as a user turn via the overlay (Bug 44)', () => {
     // The seat's controlledBy is 'llm'; only impersonatingParticipantIds marks it.
     const impersonated = makeCharacterParticipant('p1', 'char-1')

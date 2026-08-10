@@ -55,6 +55,7 @@ interface Character {
   controlledBy: 'llm' | 'user'
   canBeCarina?: boolean
   npc: boolean
+  archivedAt?: string | null
   defaultPartnerName?: string | null
   createdAt: string
   tags?: string[]
@@ -107,9 +108,16 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
   }
 
   const queryClient = useQueryClient()
+  // "Show archived" opts into the tombstones the API hides by default; the two
+  // filter states cache under distinct keys so they never cross-contaminate.
+  const [showArchived, setShowArchived] = useState(false)
   const { data, isLoading: loading, error: loadError } = useQuery({
-    queryKey: queryKeys.characters.list(),
-    queryFn: ({ signal }) => apiFetch<{ characters: Character[] }>('/api/v1/characters', { signal }),
+    queryKey: queryKeys.characters.list(showArchived ? { archived: 'include' } : undefined),
+    queryFn: ({ signal }) =>
+      apiFetch<{ characters: Character[] }>(
+        showArchived ? '/api/v1/characters?archived=include' : '/api/v1/characters',
+        { signal }
+      ),
   })
   // Shim preserving SWR's `mutate` signature so the handlers below stay
   // unchanged: with an updater it writes optimistically (revalidating unless
@@ -119,16 +127,18 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
       updater?: (prev: { characters: Character[] } | undefined) => { characters: Character[] } | undefined,
       opts?: { revalidate?: boolean }
     ): Promise<void> => {
+      const activeKey = queryKeys.characters.list(showArchived ? { archived: 'include' } : undefined)
       if (updater) {
-        queryClient.setQueryData<{ characters: Character[] }>(queryKeys.characters.list(), updater)
+        queryClient.setQueryData<{ characters: Character[] }>(activeKey, updater)
         if (opts?.revalidate !== false) {
-          await queryClient.invalidateQueries({ queryKey: queryKeys.characters.list() })
+          // Prefix invalidation so the other archived-filter variant refreshes too.
+          await queryClient.invalidateQueries({ queryKey: queryKeys.characters.all })
         }
         return
       }
-      await queryClient.invalidateQueries({ queryKey: queryKeys.characters.list() })
+      await queryClient.invalidateQueries({ queryKey: queryKeys.characters.all })
     },
-    [queryClient]
+    [queryClient, showArchived]
   )
   const characters = useMemo(() => data?.characters ?? [], [data])
   const error = loadError ? (loadError instanceof Error ? loadError.message : 'An error occurred') : null
@@ -137,6 +147,12 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
     () => characters
       .filter(character => !shouldHideByIds(character.tags || []))
       .sort((a, b) => {
+        // 0. Archived characters at the very end of the shelf
+        const aArchived = Boolean(a.archivedAt)
+        const bArchived = Boolean(b.archivedAt)
+        if (aArchived !== bArchived) {
+          return aArchived ? 1 : -1
+        }
         // 1. NPCs last
         if (a.npc !== b.npc) {
           return a.npc ? 1 : -1
@@ -385,6 +401,14 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
         <h1 className="qt-page-title">Characters</h1>
         <div className="flex flex-wrap gap-3">
           <button
+            onClick={() => setShowArchived((v) => !v)}
+            className={`qt-button character-toolbar__button inline-flex items-center gap-1.5 rounded-lg border qt-border-default px-4 py-2 text-sm qt-shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${showArchived ? 'qt-bg-primary/20 qt-text-primary' : 'qt-bg-muted/70 qt-text-primary hover:qt-bg-muted'}`}
+            title={showArchived ? 'Tuck the archived characters back out of sight' : 'Show characters resting in the archive'}
+          >
+            <Icon name="folder" className="w-4 h-4" />
+            {showArchived ? 'Hide Archived' : 'Show Archived'}
+          </button>
+          <button
             onClick={() => setResetBuiltinsDialogOpen(true)}
             className="qt-button character-toolbar__button inline-flex items-center rounded-lg border qt-border-default qt-bg-muted/70 px-4 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             title="Reset built-in characters to first-run defaults"
@@ -470,7 +494,17 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
                     </div>
                   )}
                   <div className="flex-grow">
-                    <h2 className="qt-heading-3 text-foreground">{character.name}</h2>
+                    <h2 className="qt-heading-3 text-foreground flex items-center gap-2">
+                      {character.name}
+                      {character.archivedAt && (
+                        <span
+                          className="qt-badge inline-flex items-center rounded-full border qt-border-default qt-bg-muted px-2 py-0.5 text-xs font-medium qt-text-secondary"
+                          title={`Resting in the archive since ${new Date(character.archivedAt).toLocaleDateString()}`}
+                        >
+                          Archived
+                        </span>
+                      )}
+                    </h2>
                     {character.title && (
                       <p className="qt-text-small">{character.title}</p>
                     )}
@@ -485,29 +519,31 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
                     })()}
                   </div>
                 </div>
-                <div className="flex items-center gap-1 ml-2">
-                  <button
-                    onClick={(e) => toggleFavorite(e, character.id)}
-                    className="text-2xl qt-text-favorite transition-transform hover:scale-110"
-                    title={character.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                  >
-                    {character.isFavorite ? '⭐' : '☆'}
-                  </button>
-                  <button
-                    onClick={(e) => toggleCarina(e, character.id)}
-                    className={`transition hover:scale-110 ${character.canBeCarina ? 'qt-text-favorite' : 'qt-text-secondary'}`}
-                    title={character.canBeCarina ? 'Disable Carina answers (@-queries)' : 'Enable Carina answers (@-queries)'}
-                  >
-                    <Icon name="monitor" className="w-6 h-6" />
-                  </button>
-                  <button
-                    onClick={(e) => toggleControlledBy(e, character.id)}
-                    className={`transition hover:scale-110 ${character.controlledBy === 'user' ? 'qt-text-favorite' : 'qt-text-secondary'}`}
-                    title={character.controlledBy === 'user' ? 'Switch to LLM control' : 'Switch to user control'}
-                  >
-                    <Icon name="user" className="w-6 h-6" />
-                  </button>
-                </div>
+                {!character.archivedAt && (
+                  <div className="flex items-center gap-1 ml-2">
+                    <button
+                      onClick={(e) => toggleFavorite(e, character.id)}
+                      className="text-2xl qt-text-favorite transition-transform hover:scale-110"
+                      title={character.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                    >
+                      {character.isFavorite ? '⭐' : '☆'}
+                    </button>
+                    <button
+                      onClick={(e) => toggleCarina(e, character.id)}
+                      className={`transition hover:scale-110 ${character.canBeCarina ? 'qt-text-favorite' : 'qt-text-secondary'}`}
+                      title={character.canBeCarina ? 'Disable Carina answers (@-queries)' : 'Enable Carina answers (@-queries)'}
+                    >
+                      <Icon name="monitor" className="w-6 h-6" />
+                    </button>
+                    <button
+                      onClick={(e) => toggleControlledBy(e, character.id)}
+                      className={`transition hover:scale-110 ${character.controlledBy === 'user' ? 'qt-text-favorite' : 'qt-text-secondary'}`}
+                      title={character.controlledBy === 'user' ? 'Switch to LLM control' : 'Switch to user control'}
+                    >
+                      <Icon name="user" className="w-6 h-6" />
+                    </button>
+                  </div>
+                )}
               </div>
 
               <p className="line-clamp-3 qt-text-small">
@@ -520,26 +556,37 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
               </p>
 
               <div className="qt-entity-card-actions character-card-actions">
-                <Link
-                  href={`/aurora/${character.id}/view?action=chat`}
-                  onClick={inTab ? (e) => {
-                    e.preventDefault()
-                    setOpenChatForSelected(true)
-                    setSelectedCharacterId(character.id)
-                  } : undefined}
-                  className="character-card__action character-card__action--chat inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-semibold qt-text-success-foreground qt-shadow-sm transition hover:qt-bg-success/90"
-                  title="Start a chat with this character"
-                >
-                  <Icon name="chat" className="w-5 h-5" />
-                  Chat
-                </Link>
-                <a
-                  href={`/api/v1/characters/${character.id}?action=export&format=json`}
-                  className="character-card__action inline-flex items-center justify-center gap-2 rounded-lg border qt-border-default qt-bg-muted/80 px-3 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted"
-                  title="Export character data"
-                >
-                  <Icon name="download" className="w-5 h-5" />
-                </a>
+                {character.archivedAt ? (
+                  <span
+                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border qt-border-default qt-bg-muted/50 px-4 py-2 text-sm qt-text-secondary"
+                    title="An archived character neither chats nor exports; open their page to rehydrate them."
+                  >
+                    Resting in the archive
+                  </span>
+                ) : (
+                  <>
+                    <Link
+                      href={`/aurora/${character.id}/view?action=chat`}
+                      onClick={inTab ? (e) => {
+                        e.preventDefault()
+                        setOpenChatForSelected(true)
+                        setSelectedCharacterId(character.id)
+                      } : undefined}
+                      className="character-card__action character-card__action--chat inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-semibold qt-text-success-foreground qt-shadow-sm transition hover:qt-bg-success/90"
+                      title="Start a chat with this character"
+                    >
+                      <Icon name="chat" className="w-5 h-5" />
+                      Chat
+                    </Link>
+                    <a
+                      href={`/api/v1/characters/${character.id}?action=export&format=json`}
+                      className="character-card__action inline-flex items-center justify-center gap-2 rounded-lg border qt-border-default qt-bg-muted/80 px-3 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted"
+                      title="Export character data"
+                    >
+                      <Icon name="download" className="w-5 h-5" />
+                    </a>
+                  </>
+                )}
                 <button
                   onClick={() => openDeleteDialog(character)}
                   className="character-card__action qt-button-destructive qt-shadow-sm"

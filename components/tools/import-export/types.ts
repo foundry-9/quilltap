@@ -74,8 +74,22 @@ export interface ExportState {
   loadingEntities: boolean
   includeMemories: boolean
   memoryCount: number
+  /**
+   * What the selected characters' vaults add to the bundle — photographs,
+   * correspondence and the like now travel with the character. Null until the
+   * options step has asked, and for every type but `characters`.
+   */
+  vaultPreview: VaultPreview | null
   exporting: boolean
   error: string | null
+}
+
+// Character vaults riding along in a `characters` export
+export interface VaultPreview {
+  stores: number
+  documents: number
+  blobs: number
+  estimatedBytes: number
 }
 
 // Import state

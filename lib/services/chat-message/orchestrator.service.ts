@@ -889,7 +889,7 @@ async function processMessage(
   let askCarinaEnabled = false
   try {
     const rawCharacters = await repos.characters.findAllRaw()
-    const anyCanBeCarina = rawCharacters.some(c => c.canBeCarina === true)
+    const anyCanBeCarina = rawCharacters.some(c => !c.archivedAt && c.canBeCarina === true)
     askCarinaEnabled = anyCanBeCarina || characterIsTransparent
   } catch (carinaProbeError) {
     logger.warn('Failed to probe for Carina answerers; ask_carina tool withheld', {

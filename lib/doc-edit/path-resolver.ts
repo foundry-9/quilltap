@@ -56,6 +56,16 @@ export async function resolveSelfVaultMountPointId(
   try {
     const repos = getRepositories();
     const acting = await repos.characters.findByIdRaw(characterId);
+    // Archived characters keep a live vault (§4.2a prunes in place rather than
+    // deleting), so the old "tombstone has no pointer → tools degrade" safety
+    // no longer happens on its own. Refuse explicitly: an archived character
+    // is read-only and must not reach its own vault through doc_edit or the
+    // list/grep/blob handlers. Returning null degrades with the same
+    // no-vault sentence those tools have always produced.
+    if (acting?.archivedAt) {
+      logger.debug('Refusing self-vault resolution for archived character', { characterId });
+      return null;
+    }
     return acting?.characterDocumentMountPointId ?? null;
   } catch (error) {
     logger.warn('Failed to resolve self-vault mount point id', {

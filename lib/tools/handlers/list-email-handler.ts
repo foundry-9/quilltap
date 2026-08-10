@@ -50,6 +50,9 @@ export async function executeListEmailTool(
     if (!me) {
       return fail('The Post Office cannot find your postbox; your character seems to have gone astray.');
     }
+    if (me.archivedAt) {
+      return fail('That character is archived; rehydrate it to continue.');
+    }
 
     const { mountPointId: myVaultId } = await ensureCharacterVault(me);
     const letters = await listMailbox(myVaultId);

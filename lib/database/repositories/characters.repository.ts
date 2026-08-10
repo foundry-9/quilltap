@@ -18,6 +18,42 @@ import {
 } from './character-properties-overlay';
 import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
 
+export class CharacterArchivedError extends Error {
+  constructor(characterId: string, message = 'this character is archived; rehydrate it to continue') {
+    super(message);
+    this.name = 'CharacterArchivedError';
+    this.message = `Character ${characterId} is archived: ${message}`;
+  }
+}
+
+/**
+ * Guard every write to an archived character.
+ *
+ * Archiving prunes the vault in place (§4.2a): an archived character keeps a
+ * live, writable vault, and this guard — running before the write overlay — is
+ * what stands between that vault and an edit arriving through the repository.
+ *
+ * A tombstone is read-only with exactly one exception: **unarchive**, the
+ * single-key patch that clears `archivedAt`. Nothing else is sanctioned — in
+ * particular, nulling `characterDocumentMountPointId` (the old
+ * archive-finalization patch) is refused, because nothing legitimately nulls
+ * the pointer any more: the vault survives the archive.
+ */
+export function validateCharacterArchivePatch(existing: Partial<Character> | null, data: Partial<Character>): void {
+  if (!existing?.archivedAt) {
+    return;
+  }
+
+  const keys = Object.keys(data);
+
+  const isSanctionedUnarchive = keys.length === 1 && 'archivedAt' in data && data.archivedAt === null;
+  if (isSanctionedUnarchive) {
+    return;
+  }
+
+  throw new CharacterArchivedError(existing.id ?? 'unknown');
+}
+
 /**
  * Characters Repository
  * Implements CRUD operations for characters with support for tags, personas, favorites, and physical descriptions.
@@ -284,6 +320,13 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   async update(id: string, data: Partial<Character>): Promise<Character | null> {
     return this.safeQuery(
       async () => {
+        const existing = await this.findByIdRaw(id);
+        validateCharacterArchivePatch(existing, data);
+
+        if (existing?.archivedAt && data.archivedAt === null) {
+          logger.info('Rehydrating archived character', { characterId: id });
+        }
+
         const dbPatch = await applyDocumentStoreWriteOverlay(id, data);
         const hasDbWork = Object.keys(dbPatch).length > 0;
         const result = hasDbWork ? await this._update(id, dbPatch) : await this._findById(id);

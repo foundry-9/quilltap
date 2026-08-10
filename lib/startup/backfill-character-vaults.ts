@@ -60,6 +60,13 @@ export async function backfillCharacterVaults(): Promise<BackfillResult> {
 
   let index = 0;
   for (const character of characters) {
+    if (character.archivedAt) {
+      index++;
+      startupProgress.setSubProgress([
+        { current: index, total: characters.length, unit: 'characters' },
+      ]);
+      continue;
+    }
     index++;
     startupProgress.setSubProgress([
       { current: index, total: characters.length, unit: 'characters' },

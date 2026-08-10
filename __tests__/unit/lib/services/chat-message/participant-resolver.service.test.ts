@@ -7,6 +7,7 @@ jest.mock('@/lib/chat/connection-resolver', () => ({
 }))
 
 import { resolveRespondingParticipant, getRoleplayTemplate } from '@/lib/services/chat-message/participant-resolver.service'
+import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository'
 import type { ChatMetadataBase, ChatParticipantBase, Character } from '@/lib/schemas/types'
 
 const now = new Date().toISOString()
@@ -28,7 +29,7 @@ const makeCharParticipant = (id: string, characterId: string, overrides: Partial
   ...overrides,
 })
 
-const makeChar = (id: string, talkativeness = 0.5): Character => ({
+const makeChar = (id: string, talkativeness = 0.5, archivedAt: string | null = null): Character => ({
   id,
   userId: 'user-1',
   name: `Character ${id}`,
@@ -51,6 +52,7 @@ const makeChar = (id: string, talkativeness = 0.5): Character => ({
   physicalDescriptions: [],
   createdAt: now,
   updatedAt: now,
+  archivedAt,
 } as unknown as Character)
 
 const buildChat = (participants: ChatParticipantBase[], spokenJson: string | null = null): ChatMetadataBase => ({
@@ -93,6 +95,14 @@ describe('resolveRespondingParticipant — first-responder selection', () => {
 
     const result = await resolveRespondingParticipant(repos, chat, 'user-1', 'p2')
     expect(result.characterParticipant.id).toBe('p2')
+  })
+
+  it('refuses to resolve an archived character as a responder', async () => {
+    const participant = makeCharParticipant('p1', 'char-1')
+    const chat = buildChat([participant])
+    const repos = buildRepos(new Map([['char-1', makeChar('char-1', 0.5, '2026-08-10T00:00:00.000Z')]]))
+
+    await expect(resolveRespondingParticipant(repos, chat, 'user-1')).rejects.toThrow(CharacterArchivedError)
   })
 
   it('uses weighted selection for multiple LLM candidates and respects spokenThisCycle', async () => {

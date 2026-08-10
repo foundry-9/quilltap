@@ -335,7 +335,7 @@ describe('enqueueEmbeddingJobsScoped', () => {
     });
     mockGetRepositories.mockReturnValue(repos as unknown as ReturnType<typeof getRepositories>);
 
-    await expect(enqueueEmbeddingJobsScoped(mp())).rejects.toThrow(/No embedding profile/);
+    await expect(enqueueEmbeddingJobsScoped(mp())).rejects.toThrow(/No default embedding profile/);
   });
 
   it('returns zero queued (all-skipped) when there are no unembedded chunks', async () => {

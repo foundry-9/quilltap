@@ -29,6 +29,7 @@ import {
   ChatEvent,
   ChatParticipantBase,
   ChatParticipantBaseInput,
+  ParticipantStatus,
 } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { TypedQueryFilter, QueryFilter, DatabaseCollection } from '../interfaces';
@@ -415,6 +416,14 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
 
   async removeParticipant(chatId: string, participantId: string): Promise<ChatMetadata | null> {
     return this.participantsOps.removeParticipant(chatId, participantId);
+  }
+
+  async setParticipantStatus(
+    chatId: string,
+    participantId: string,
+    newStatus: ParticipantStatus
+  ): Promise<{ chat: ChatMetadata | null; oldStatus: ParticipantStatus }> {
+    return this.participantsOps.setParticipantStatus(chatId, participantId, newStatus);
   }
 
   getCharacterParticipants(chat: ChatMetadata): ChatParticipantBase[] {

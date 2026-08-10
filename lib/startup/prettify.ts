@@ -100,6 +100,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-character-system-transparency-field-v1': 'Adding system transparency to characters',
   'add-character-identity-field-v1': 'Adding the identity field to characters',
   'add-character-manifesto-field-v1': 'Adding the manifesto field to characters',
+  'add-character-archive-fields-v1': 'Preparing archive tombstones for your characters',
   'add-help-tools-field-v1': 'Granting characters help-tool access',
   'add-character-avatars-fields-v1': 'Adding per-character avatar fields to chats',
   'add-project-avatar-generation-default-v1': 'Adding avatar-generation default to projects',

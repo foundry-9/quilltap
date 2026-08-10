@@ -74,6 +74,12 @@ export function GroupMembersCard({
             <h3 className="qt-heading-4 text-foreground">Members</h3>
             <p className="qt-text-small qt-text-secondary">
               {members.length} member{members.length !== 1 ? 's' : ''}
+              {(() => {
+                const archivedCount = members.filter((m) => m.archivedAt).length
+                return archivedCount > 0
+                  ? ` / ${members.length - archivedCount} can speak (${archivedCount} archived)`
+                  : ''
+              })()}
             </p>
           </div>
         </div>
@@ -97,8 +103,16 @@ export function GroupMembersCard({
                   key={member.id}
                   className="flex items-center justify-between p-3 rounded-lg hover:qt-bg-muted transition-colors"
                 >
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 flex items-center gap-2">
                     <p className="qt-label truncate">{member.name}</p>
+                    {member.archivedAt && (
+                      <span
+                        className="inline-flex flex-shrink-0 items-center rounded-full border qt-border-default qt-bg-muted px-2 py-0.5 text-xs qt-text-secondary"
+                        title="Resting in the archive — still a member, but takes no turns until rehydrated"
+                      >
+                        Archived
+                      </span>
+                    )}
                   </div>
                   <button
                     onClick={() => handleRemove(member.id)}

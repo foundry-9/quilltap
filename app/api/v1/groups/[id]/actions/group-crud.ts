@@ -61,6 +61,9 @@ export async function handleGetMembers(
       return {
         id: character.id,
         name: character.name,
+        // Archiving never removes membership edges; the badge lets the list
+        // reconcile "6 members / 4 can speak" (spec §5.2).
+        archivedAt: character.archivedAt ?? null,
       };
     })
   );
@@ -138,6 +141,12 @@ export async function handleAddMember(
   const character = await repos.characters.findById(validatedData.characterId);
   if (!character) {
     return badRequest('Character not found');
+  }
+
+  // Archived characters can't join a group; existing memberships are never
+  // removed by archiving (spec §5.1).
+  if (character.archivedAt) {
+    return badRequest('That character is archived; rehydrate them before adding them to a group.');
   }
 
   await repos.groupCharacterMembers.addMember(groupId, validatedData.characterId);

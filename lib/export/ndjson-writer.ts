@@ -27,6 +27,7 @@ import type {
 } from './types';
 import type { MessageEvent, Memory } from '@/lib/schemas/types';
 import { fileStorageManager } from '@/lib/file-storage/manager';
+import { isFileExcludedFromExport } from './excluded-files';
 import { getPlugin } from '@/lib/plugins/registry';
 import { listPortableInstanceSettings } from '@/lib/instance-settings';
 
@@ -126,6 +127,7 @@ function buildManifest(
       includeMemories: options.includeMemories ?? false,
       scope: options.scope,
       selectedIds: options.selectedIds ?? [],
+      preserveIds: options.preserveIds ?? false,
     },
     counts,
   };
@@ -203,6 +205,30 @@ async function* streamCharacters(
         characterId: id,
         error: error instanceof Error ? error.message : String(error),
       });
+    }
+
+    // The character's vault travels with the character (WP A2). Without it a
+    // cross-instance import lands a faceless, mail-less, photo-less character:
+    // `defaultImageId` and every `avatarOverrides[].imageId` are
+    // `doc_mount_file_links.id` values in *this* instance's vault, so with no
+    // store records to remap through they dangle (Bug 52).
+    //
+    // Doc-store records are parented by `mountPointId`, not `characterId`, so
+    // their position relative to the `character` line is free; they sit here
+    // for readability. `skipProjectLinks` because a character vault never has
+    // any — the flag just keeps the bundle clean.
+    if (character.characterDocumentMountPointId) {
+      try {
+        yield* streamOneStore(globalRepos, character.characterDocumentMountPointId, counts, {
+          skipProjectLinks: true,
+        });
+      } catch (error) {
+        logger.warn('Failed to export character vault', {
+          characterId: id,
+          mountPointId: character.characterDocumentMountPointId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
 
     // Memories for this character — emitted right after, so the importer
@@ -509,17 +535,33 @@ async function* streamGroups(
   }
 }
 
-async function* streamDocumentStores(
-  _userId: string,
-  ids: string[],
-  counts: QuilltapExportCounts
+/**
+ * Emit one document store in full: the mount-point row, then — for
+ * database-backed mounts — parent-first folders and text documents, then every
+ * blob header with its ordered chunks, and finally the store's project links.
+ *
+ * Extracted from `streamDocumentStores` so a character vault can be emitted
+ * inline by `streamCharacters` (WP A2). The body closes over nothing but its
+ * arguments, so both callers get identical records.
+ *
+ * Chunking invariants live with `BLOB_CHUNK_BYTES` and must not be disturbed:
+ * each chunk is base64-encoded separately, the reader rejoins the *encoded*
+ * strings and detects completion by counting chunks, and a `doc_mount_blob`
+ * always precedes its chunks.
+ *
+ * @param opts.skipProjectLinks omit `project_doc_mount_link` records. Character
+ * vaults never carry project links, so the characters path passes this to keep
+ * bundles clean.
+ */
+async function* streamOneStore(
+  repos: ReturnType<typeof getRepositories>,
+  mountPointId: string,
+  counts: QuilltapExportCounts,
+  opts?: { skipProjectLinks?: boolean }
 ): AsyncGenerator<QtapRecord> {
-  // Document stores are instance-scoped — use global repos on purpose.
-  const repos = getRepositories();
-
-  for (const id of ids) {
-    const mp = await repos.docMountPoints.findById(id);
-    if (!mp) continue;
+  {
+    const mp = await repos.docMountPoints.findById(mountPointId);
+    if (!mp) return;
 
     yield {
       kind: 'doc_mount_point',
@@ -545,6 +587,7 @@ async function* streamDocumentStores(
         yield {
           kind: 'doc_mount_folder',
           data: {
+            id: folder.id,
             mountPointId: folder.mountPointId,
             parentId: folder.parentId,
             name: folder.name,
@@ -578,6 +621,8 @@ async function* streamDocumentStores(
             plainTextLength: d.plainTextLength,
             lastModified: d.lastModified,
             folderId: d.folderId,
+            fileId: d.fileId,
+            linkId: d.linkId,
             linkGroupId: d.linkGroupId ?? null,
           },
         };
@@ -604,6 +649,9 @@ async function* streamDocumentStores(
           sha256: meta.sha256,
           description: meta.description,
           descriptionUpdatedAt: meta.descriptionUpdatedAt ?? null,
+          fileId: meta.fileId,
+          linkId: meta.linkId,
+          blobId: meta.id,
           extractedText: meta.extractedText ?? null,
           extractedTextSha256: meta.extractedTextSha256 ?? null,
           extractionStatus: meta.extractionStatus ?? 'none',
@@ -628,14 +676,29 @@ async function* streamDocumentStores(
       }
     }
 
-    const links = await repos.projectDocMountLinks.findByMountPointId(mp.id);
-    for (const link of links) {
-      yield {
-        kind: 'project_doc_mount_link',
-        data: { projectId: link.projectId, mountPointId: link.mountPointId },
-      };
-      bump(counts, 'documentStoreProjectLinks');
+    if (!opts?.skipProjectLinks) {
+      const links = await repos.projectDocMountLinks.findByMountPointId(mp.id);
+      for (const link of links) {
+        yield {
+          kind: 'project_doc_mount_link',
+          data: { projectId: link.projectId, mountPointId: link.mountPointId },
+        };
+        bump(counts, 'documentStoreProjectLinks');
+      }
     }
+  }
+}
+
+async function* streamDocumentStores(
+  _userId: string,
+  ids: string[],
+  counts: QuilltapExportCounts
+): AsyncGenerator<QtapRecord> {
+  // Document stores are instance-scoped — use global repos on purpose.
+  const repos = getRepositories();
+
+  for (const id of ids) {
+    yield* streamOneStore(repos, id, counts);
   }
 }
 
@@ -686,10 +749,13 @@ async function* streamFiles(
   for (const file of allFiles) {
     if (!idSet.has(file.id)) continue;
 
-    // Backups are excluded exactly as the backup service excludes them —
-    // nobody wants last month's archive riding inside this month's.
-    if (file.category === 'BACKUP' || file.folderPath === '/backups') {
-      logger.debug('Skipping backup file in export', { fileId: file.id });
+    // Backups and character-archive bundles are both `.qtap` files in their
+    // own right; neither rides inside another export.
+    if (isFileExcludedFromExport(file)) {
+      logger.debug('Skipping excluded file in export', {
+        fileId: file.id,
+        category: file.category,
+      });
       continue;
     }
 
@@ -890,8 +956,7 @@ async function resolveExportIds(
       return (await globalRepos.docMountPoints.findAll()).map((s) => s.id);
     case 'files':
       return (await repos.files.findAll())
-        // Backups are never exported (mirrors the backup service's own rule).
-        .filter((f) => f.category !== 'BACKUP' && f.folderPath !== '/backups')
+        .filter((f) => !isFileExcludedFromExport(f))
         .map((f) => f.id);
     case 'prompt-templates':
       return (await globalRepos.promptTemplates.findAll())

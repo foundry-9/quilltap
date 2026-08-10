@@ -18,7 +18,7 @@ import { readCharacterAvatarBuffer } from '@/lib/photos/resolve-character-avatar
 import { isPhotosRelativePath } from '@/lib/photos/photos-paths';
 import { SINGLE_FILE_OVERLAY_PATHS } from '@/lib/database/repositories/vault-overlay/schema';
 import { logger } from '@/lib/logger';
-import { notFound, serverError, successResponse } from '@/lib/api/responses';
+import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
 import type { RequestContext } from '@/lib/api/middleware';
 import { readStoreFile, DEPICTION_GUIDELINES_FILENAME } from '@/lib/image-gen/aesthetic';
 
@@ -62,6 +62,12 @@ export async function handleGet(
   const actionHandlers: Record<CharacterGetAction, () => Promise<NextResponse>> = {
     export: async () => {
       try {
+        // A tombstone export would be a pruned shell, and the full bundle
+        // already sits in the library as an ARCHIVE file (spec §4.1).
+        if (character.archivedAt) {
+          return badRequest('This character is archived; rehydrate them to export, or use their archive bundle.');
+        }
+
         const { searchParams } = req.nextUrl;
         const format = searchParams.get('format') || 'json';
 

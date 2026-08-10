@@ -3,7 +3,7 @@ import type { RequestContext } from '@/lib/api/middleware';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { logger } from '@/lib/logger';
 import { getFileAssociations } from '@/lib/files/get-file-associations';
-import { getUserRepositories } from '@/lib/repositories/factory';
+import { getRepositories, getUserRepositories } from '@/lib/repositories/factory';
 import { canGenerateThumbnail, cleanupThumbnails } from '@/lib/files/thumbnail-utils';
 import { badRequest, forbidden, notFound, serverError, successResponse } from '@/lib/api/responses';
 import { dissociateFileFromAll } from '../shared';
@@ -30,6 +30,21 @@ export async function handleDeleteFile(
 
     const force = request.nextUrl.searchParams.get('force') === 'true';
     const dissociate = request.nextUrl.searchParams.get('dissociate') === 'true';
+
+    // A held archive bundle is the only copy of an archived character's pruned
+    // material (character-archive spec §4.2a) — deleting it leaves a tombstone
+    // that can never be rehydrated. Raw read: a broken vault must not let the
+    // holder slip past the guard.
+    if (fileEntry.category === 'ARCHIVE' && !force) {
+      const holders = await getRepositories().characters.findAllRaw();
+      const holder = holders.find((c) => c.archiveFileId === fileId);
+      if (holder) {
+        return badRequest(
+          `This bundle holds the only copy of ${holder.name}'s archived effects. Rehydrate them first, or pass force=true to discard the bundle regardless.`,
+          { code: 'ARCHIVE_BUNDLE_HELD', characterId: holder.id }
+        );
+      }
+    }
 
     if (dissociate && fileEntry.linkedTo.length > 0) {
       await dissociateFileFromAll(fileId, fileEntry, ctx.repos);
