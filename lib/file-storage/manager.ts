@@ -39,6 +39,7 @@ interface UploadRawParams {
 }
 
 import { createLogger } from '@/lib/logging/create-logger';
+import { FileContentMissingError } from './errors';
 import { getFilesDir } from '@/lib/paths';
 import {
   getProjectDocumentStore,
@@ -385,7 +386,10 @@ class FileStorageManager {
       if (isMountBlobStorageKey(effectiveStorageKey)) {
         const bytes = await readMountBlob(effectiveStorageKey);
         if (!bytes) {
-          throw new Error(`Mount-blob not found for storageKey: ${effectiveStorageKey}`);
+          throw new FileContentMissingError(
+            effectiveStorageKey,
+            `Mount-blob not found for storageKey: ${effectiveStorageKey}`
+          );
         }
         return bytes;
       }
@@ -397,6 +401,18 @@ class FileStorageManager {
     } catch (error) {
       const errorMsg =
         error instanceof Error ? error.message : 'Unknown download error';
+
+      // A row that outlived its bytes is a "gone" condition, not a fault:
+      // pass the typed error through un-wrapped so the HTTP layer can answer
+      // 404, and log it as a warning rather than crying error on every render
+      // of a dangling avatar.
+      if (error instanceof FileContentMissingError) {
+        logger.warn('File content is missing; the row outlived its bytes', {
+          fileId: file.id,
+          storageKey: error.storageKey,
+        });
+        throw error;
+      }
 
       logger.error('File download failed', {
         fileId: file.id,

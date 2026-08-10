@@ -4,6 +4,20 @@
 
 ### 4.8-dev
 
+#### Fix: a file whose bytes are gone now answers 404 instead of 500 (bug 55)
+
+A `files` row can outlive its content — a dangling avatar pointing into a mount point deleted long ago, an attachment whose blob is gone. Serving it produced a 500 on every render, which tells the client the server is at fault and the request is worth retrying; neither is true, and the repeated error-level pairs bury real storage faults in the log. The distinction was destroyed before any caller could see it: `fileStorageManager.downloadFile` caught everything and rethrew a fresh generic `Error`, so both file routes mapped "no such object" and "the read blew up" alike to `serverError`.
+
+A typed `FileContentMissingError` (`lib/file-storage/errors.ts`) now carries that one distinction. The manager throws it for a missing mount-blob and passes it through its catch un-wrapped, logging a warning rather than an error; the local backend throws it on `ENOENT`; `GET /api/v1/files/[id]` and the proxy route both answer 404 for it. Every other failure — permissions, corruption, a backend that is down — stays generic and still produces a 500.
+
+#### Fix: rehydrate refused any character who shared a document with another vault (bug 54)
+
+Archiving a character out of a group chat made them unrehydratable. `doc_mount_files` rows are content-addressed — a conversation summary written into every participant's vault is one row with one link per participant — and the archive prune deletes only the target's link, leaving the row standing on its co-owners'. The rehydrate preflight decided whether an existing id was "inside the target" by asking whether the row had a link in the target's vault, which for exactly this content is no, so it refused the whole import atomically: `Preserve IDs collision for document store file <id>`.
+
+That was also stricter than the writer it guards. `linkDocumentContent` and `linkBlobContent` find-or-create the content row by sha256 and honor the carried `fileId` only when they actually insert, so the import would have deduped onto the existing row and simply recreated the character's link. Both content-addressed kinds now settle it by content hash: a live row whose `sha256` matches the hash the bundle carries for that id is dedup and passes, a same-id/different-bytes row is a real clash and still refuses, and the link-membership test stays as the fallback. `skippable` is consulted only in skip-if-present mode, so the ordinary import wizard is untouched.
+
+Rehydrate also logs its own failures now. The importer's warning names only the import module, so a failed rehydrate left no log line that searching for "rehydrate" would find.
+
 #### Fix: the Archive button looked disabled
 
 The Archive action on a character's page rendered its label and folder icon in `qt-text-secondary` (`--color-muted-foreground`) while every sibling button in the cluster used `text-foreground`. That is the same muted token disabled controls use, so the one enabled action that packs a character away read as unavailable. It now carries the same classes as Convert to NPC, Non-Quilltap Prompt, Refine from Memories, and Search & Replace.

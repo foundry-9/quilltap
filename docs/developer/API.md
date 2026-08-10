@@ -3521,6 +3521,8 @@ Download a file by ID. Returns the file content with appropriate headers.
 
 **Response**: File binary with `Content-Type` and `Content-Disposition` headers.
 
+Returns `404` both when the row is absent and when the row exists but its content does not — a dangling pointer into a deleted mount point or a storage key with nothing behind it. That condition is permanent, so the client should fall back rather than retry. `500` is reserved for reads that genuinely failed (permissions, corruption, a backend that is down). The same rule applies to `GET /api/v1/files/proxy/[...key]`.
+
 #### `DELETE /api/v1/files/[id]`
 
 Delete a file.

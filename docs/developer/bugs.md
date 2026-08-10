@@ -1,13 +1,17 @@
 # Bugs — defects surfaced by the v5 port
 
-**Last Updated**: 2026-08-09
-**Codebase**: Quilltap v4.8.0-dev (HEAD `915f3875`)
+**Last Updated**: 2026-08-10
+**Codebase**: Quilltap v4.8.0-dev (HEAD `d69287d9`)
 **Provenance**: the quilltap-v5 native port's differential harness, and its
 dogfood walks against a copy of real data
-**Status**: Bugs **1–51** are **fixed in v4**. Bug **52** (cross-instance
-character imports lose the vault and dangle the avatar id, found 2026-08-09
-during the character-archive scoping pass) is **open**; its fix is WP A2 of
-[features/character-archive-spec.md](features/character-archive-spec.md). Bug 51 (chat GET omitting
+**Status**: Bugs **1–55** are **fixed in v4**; none are open. Bugs 52–55 all
+came out of the character-archive work: 52 (cross-instance character imports
+lost the vault and dangled the avatar id) was fixed 2026-08-10 by WP A2's
+vault-carrying export; 53 (reconciliation clobbering and deleting archive
+bundle rows), 54 (rehydrate refusing any character who shared a content row
+with another vault) and 55 (a file row that outlived its bytes serving 500
+instead of 404) were all found and fixed the same day, 54 and 55 by dogfooding
+the merged feature on real data. Bug 51 (chat GET omitting
 impersonation state, so a reload showed an impersonated seat as not impersonated)
 was found and fixed 2026-08-08 while verifying Bug 50. Bugs 47–49 — the Brahma Console
 giving up silently when its turn budget is exhausted, and two sibling
@@ -196,6 +200,8 @@ One row per bug, newest last. **Bug** links to the entry; **Fix site** and
 | 51 | [chat GET omits impersonation state, so a reload shows an impersonated seat as not impersonated](bugs/fixed/bug-51-chat-get-omits-impersonation-state.md) | 2026-08-08 | 2026-08-08 | Medium (reload-only; breaks impersonation + speaking-as until re-impersonated) | GET's field allowlist omits `impersonatingParticipantIds` / `activeTypingParticipantId`, so a reload drops the overlay; restoring the latter also required a once-only client re-sync | `app/api/v1/chats/[id]/handlers/get.ts` + `app/salon/[id]/hooks/useImpersonation.ts` | Owed (Faithful) |
 | 52 | [a cross-instance character import produces a faceless character with a dangling avatar id](bugs/fixed/bug-52-avatar-import-dangling.md) | 2026-08-09 | 2026-08-10 | Medium (silent loss on every cross-instance character import) | `streamCharacters` exports no vault records or bytes, and reconcile never remaps `defaultImageId` / `avatarOverrides[].imageId` — the avatar (and the whole vault: photos, mail, notes) stays behind and the id dangles | WP A2 of `features/character-archive-spec.md` (`lib/export/ndjson-writer.ts` + `lib/import/quilltap-import/reconcile.ts`) | Owed (Faithful) |
 | 53 | [filesystem reconciliation clobbers and can delete archive bundle rows](bugs/fixed/bug-53-reconciliation-archive-clobber.md) | 2026-08-10 | 2026-08-10 | High (a boot can delete a bundle row and dangle `archiveFileId`; at minimum every boot strips the `/archives` folderPath) | Reconciliation "corrects" ARCHIVE rows' curated folderPath to `/`, its preservation set never read `archiveFileId` (and the plaintext-sha row can't sha-match encrypted bytes), and the watcher could adopt a freshly-written bundle as an orphaned DOCUMENT | `lib/file-storage/reconciliation.ts` + `lib/characters/archive-service.ts` (`createArchiveFileRecord`) | Owed (Faithful) |
+| 54 | [rehydrate refuses any character who shared a content row with another vault](bugs/fixed/bug-54-rehydrate-shared-content-collision.md) | 2026-08-10 | 2026-08-10 | High (rehydration unreachable for any character archived out of a multi-character chat; no data loss, but the archive is one-way) | Content rows are shared across vaults (a group chat's summary is one row, one link per participant); the prune deletes the target's link, so the preflight's "is it linked in the target vault?" test reads legitimately-owned content as living elsewhere and refuses atomically — stricter than the writer, which dedups by sha256 and discards the carried id | `lib/import/quilltap-import/execute.ts` (`document store file` / `document store blob` skip classifiers) | Owed (Faithful) |
+| 55 | [a file row that outlived its bytes serves 500 instead of 404](bugs/fixed/bug-55-missing-file-content-500.md) | 2026-08-10 | 2026-08-10 | Low (mislabels permanent loss as a server fault; invites endless client retries and buries real storage faults in the error log) | `downloadFile` re-wraps every failure in a generic Error, so both file routes map "no such object" and "the read blew up" alike to `serverError` | new `lib/file-storage/errors.ts` + `app/api/v1/files/[id]/actions/download.ts` and `app/api/v1/files/proxy/[...key]/route.ts` | Owed (Faithful) |
 
 ### Families and reading order
 

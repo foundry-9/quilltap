@@ -13,6 +13,7 @@ import { createContextParamsHandler, type RequestContext } from '@/lib/api/middl
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, serverError } from '@/lib/api/responses';
 import { fileStorageManager } from '@/lib/file-storage/manager';
+import { FileContentMissingError } from '@/lib/file-storage/errors';
 import { buildContentDisposition } from '@/lib/api/content-disposition';
 
 /**
@@ -46,6 +47,14 @@ async function handleGet(
     try {
       buffer = await fileStorageManager.downloadFile(fileEntry);
     } catch (downloadError) {
+      // Same rule as the by-id download: an absent object is 404, not 500.
+      if (downloadError instanceof FileContentMissingError) {
+        logger.warn('[Files v1] Proxy: file row has no stored content', {
+          fileId: fileEntry.id,
+          storageKey,
+        });
+        return notFound('File content');
+      }
       logger.error('[Files v1] Proxy: Failed to download file from storage', {
         fileId: fileEntry.id,
         storageKey,

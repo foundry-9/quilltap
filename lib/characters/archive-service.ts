@@ -392,6 +392,14 @@ async function restoreArchiveBundle(
     // character stays archived, the bundle stays put, and because the import
     // is additive at preserved ids a re-run skips whatever did land.
     const detail = result.warnings.length > 0 ? result.warnings.join('; ') : 'unknown import error';
+    // Say "rehydrate" in the log. The importer's own warning names only the
+    // import module, so a failed rehydrate otherwise leaves no log line that
+    // grepping for the operation would ever find.
+    logger.error('Rehydrate failed: the archive bundle import was refused', {
+      characterId,
+      archiveFileId,
+      detail,
+    });
     throw new CharacterRehydrationError(characterId, `the bundle import failed: ${detail}`);
   }
 

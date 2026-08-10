@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { RequestContext } from '@/lib/api/middleware';
 import { fileStorageManager } from '@/lib/file-storage/manager';
+import { FileContentMissingError } from '@/lib/file-storage/errors';
 import { logger } from '@/lib/logger';
 import { notFound, serverError } from '@/lib/api/responses';
 import { buildContentDisposition } from '../shared';
@@ -33,6 +34,16 @@ export async function handleDownloadFile(
       },
     });
   } catch (error) {
+    // The row outlived its bytes (a dangling avatar, a deleted mount point).
+    // That is permanent and the client's job to fall back from, so answer 404
+    // rather than 500 — a server error invites a retry that can never work.
+    if (error instanceof FileContentMissingError) {
+      logger.warn('[Files v1] File row has no stored content', {
+        fileId,
+        storageKey: error.storageKey,
+      });
+      return notFound('File content');
+    }
     logger.error('[Files v1] Error serving file', { fileId }, error instanceof Error ? error : undefined);
     return serverError('Failed to serve file');
   }

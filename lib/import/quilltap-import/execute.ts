@@ -117,6 +117,23 @@ async function preflightPreserveIds(
     .map((folder: { id?: string | null }) => folder.id)
     .filter(isNonEmpty);
 
+  // Content hashes the bundle claims for each carried content id. The two
+  // content-addressed tables are found-or-created **by sha256**
+  // (`linkDocumentContent` / `linkBlobContent`), so when a row for these exact
+  // bytes already exists the writer reuses it and never honors the carried id
+  // — dedup, not a claim. See the skip classifiers below.
+  const carriedContentSha = new Map<string, string>();
+  for (const doc of documents) {
+    if (doc.fileId && doc.contentSha256) carriedContentSha.set(doc.fileId, doc.contentSha256);
+  }
+  for (const blob of blobs) {
+    if (blob.fileId && blob.sha256) carriedContentSha.set(blob.fileId, blob.sha256);
+  }
+  const carriedBlobSha = new Map<string, string>();
+  for (const blob of blobs) {
+    if (blob.blobId && blob.sha256) carriedBlobSha.set(blob.blobId, blob.sha256);
+  }
+
   const seenIds = new Map<string, string>();
   const checks: Array<{
     kind: string;
@@ -210,9 +227,21 @@ async function preflightPreserveIds(
       kind: 'document store file',
       ids: carriedFileIds,
       exists: async (id) => Boolean(await globalRepos.docMountFiles.findById(id)),
-      // Content rows are content-addressed and shared; the row is "inside"
-      // the target vault when any of its links lives there.
-      skippable: async (id) => fileLinkedInTargetVault(id),
+      // Content rows are content-addressed and shared across every vault
+      // holding the same bytes — a conversation summary from a group chat
+      // lives on one row with one link per participant. Archiving deletes the
+      // target's link but leaves the row standing on its co-owners' links, so
+      // "is it linked in the target vault?" answers no for content the target
+      // legitimately owned. Matching bytes settle it instead: the writer
+      // find-or-creates by sha256 and discards the carried id, so an id whose
+      // content is already present is dedup rather than a collision. A
+      // same-id/different-bytes row is a real clash and still refuses.
+      skippable: async (id) => {
+        const existing = await globalRepos.docMountFiles.findById(id);
+        const carriedSha = carriedContentSha.get(id);
+        if (existing && carriedSha && existing.sha256 === carriedSha) return true;
+        return fileLinkedInTargetVault(id);
+      },
     },
     {
       kind: 'document store link',
@@ -227,9 +256,15 @@ async function preflightPreserveIds(
       kind: 'document store blob',
       ids: carriedBlobIds,
       exists: async (id) => Boolean(await globalRepos.docMountBlobs.findById(id)),
+      // Same reasoning as the content row above: a blob row is 1:1 with its
+      // content row, which `linkBlobContent` resolves by sha256 before reusing
+      // whatever blob row already hangs off it.
       skippable: async (id) => {
         const blob = await globalRepos.docMountBlobs.findById(id);
-        return blob ? fileLinkedInTargetVault(blob.fileId) : false;
+        if (!blob) return false;
+        const carriedSha = carriedBlobSha.get(id);
+        if (carriedSha && blob.sha256 === carriedSha) return true;
+        return fileLinkedInTargetVault(blob.fileId);
       },
     },
   ];

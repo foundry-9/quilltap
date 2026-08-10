@@ -1008,6 +1008,57 @@ describe('quilltap-import-service', () => {
       expect(result.warnings.some((w) => w.includes('memory mem-1'))).toBe(true);
     });
 
+    // Bug 54 — a content row shared with vaults outside the rehydrate target.
+    // Archiving deletes the target's link but leaves the row standing on its
+    // co-owners' links (a group chat's conversation summary is one row with one
+    // link per participant), so "linked in the target vault?" answers no for
+    // content the target legitimately owned.
+    it('skip-if-present accepts a content row whose surviving links all live in other vaults, when the bytes match', async () => {
+      const exportData = createVaultBundle();
+      configureFullKeepSetCollision();
+      // The content row survived the prune on someone else's link, carrying
+      // the same bytes the bundle claims. The target's own link is gone.
+      configureFindById(mockGlobalRepos.docMountFiles.findById as any, [
+        { id: 'file-1', sha256: 'sha-1' },
+        { id: 'file-2', sha256: 'sha-2' },
+      ]);
+      configureFindById(mockGlobalRepos.docMountBlobs.findById as any, [
+        { id: 'blob-1', fileId: 'file-2', sha256: 'sha-2' },
+      ]);
+      configureFindById(mockGlobalRepos.docMountFileLinks.findById as any, []);
+      mockGlobalRepos.docMountFileLinks.findByFileId.mockImplementation(async () => [
+        { mountPointId: 'vault-SOMEONE-ELSE' },
+      ]);
+
+      const result = await executeImport(testUserId, exportData as any, skipIfPresentOptions);
+
+      expect(result.success).toBe(true);
+      expect(result.warnings.filter((w) => w.includes('Preserve IDs collision'))).toHaveLength(0);
+      // Crucially the link IS restored: skipping the content id must not
+      // suppress the record, or the summary silently never comes back.
+      expect(mockGlobalRepos.docMountFileLinks.linkDocumentContent).toHaveBeenCalled();
+      expect(mockGlobalRepos.docMountBlobs.create).toHaveBeenCalled();
+    });
+
+    it('skip-if-present still refuses a content row carrying different bytes at the same id', async () => {
+      const exportData = createVaultBundle();
+      configureFullKeepSetCollision();
+      // Same id, different content: a real id clash, not dedup.
+      configureFindById(mockGlobalRepos.docMountFiles.findById as any, [
+        { id: 'file-1', sha256: 'sha-DIFFERENT' },
+      ]);
+      configureFindById(mockGlobalRepos.docMountFileLinks.findById as any, []);
+      mockGlobalRepos.docMountFileLinks.findByFileId.mockImplementation(async () => [
+        { mountPointId: 'vault-SOMEONE-ELSE' },
+      ]);
+
+      const result = await executeImport(testUserId, exportData as any, skipIfPresentOptions);
+
+      expect(result.success).toBe(false);
+      expect(result.warnings.some((w) => w.includes('document store file file-1'))).toBe(true);
+      expect(mockGlobalRepos.docMountFileLinks.linkDocumentContent).not.toHaveBeenCalled();
+    });
+
     it('does not treat a hard-link group\'s shared fileId as a duplicate claim', async () => {
       const exportData = createMockQuilltapExport({ characters: [createMockExportedCharacter({ id: 'char-B', name: 'Fresh' })] });
       Object.assign(exportData.data as any, {
