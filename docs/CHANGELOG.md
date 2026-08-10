@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Docs: character archive implementation spec; bug 52 filed (dangling avatar on cross-instance import)
+
+New `docs/developer/features/character-archive-spec.md`: the implementation plan for the character archive / export-fidelity design (`character-archive-and-export-fidelity.md`), verified against the code. Six work packages (A1 bug filing, A2 export fidelity, B1 `preserveIds`, B2 archive core, B3 surfaces, B4 rehydration), the full raw-call-site audit the design doc required before implementation (7 sites need changes out of ~30; the biggest hazard class is vault resurrection via `ensureCharacterVault` in the startup backfill and mail paths), a crash-safe archive ordering, and eight verified corrections to the design doc. Also filed bug 52 (`docs/developer/bugs/bug-52-avatar-import-dangling.md` + index row): a `characters` `.qtap` export carries neither the vault nor the avatar bytes, and import never remaps `defaultImageId`/`avatarOverrides[].imageId`, so every cross-instance character import arrives faceless with a dangling id; the fix is WP A2 of the spec. No code changed.
+
 #### Fix: the sole LLM answered every human turn when you drove two seats (bug 50)
 
 In a multi-character chat where you drive two seats and there is exactly one LLM — e.g. you play Charlie and impersonate Lorian while Kumar is the AI — the rotation collapsed to Charlie → Kumar → Lorian → Kumar…, giving Kumar half the turns instead of a fair third. The cause: after you post, the first responder was chosen from an **LLM-only** shortlist (`resolveRespondingParticipant`), so the sole LLM answered every one of your turns; the full rotation (which correctly includes all seats) only governed the turns *between* LLM responses. The two paths disagreed.

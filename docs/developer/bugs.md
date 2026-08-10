@@ -1,10 +1,13 @@
 # Bugs — defects surfaced by the v5 port
 
-**Last Updated**: 2026-08-08
-**Codebase**: Quilltap v4.8.0-dev (HEAD `1bed814f`)
+**Last Updated**: 2026-08-09
+**Codebase**: Quilltap v4.8.0-dev (HEAD `915f3875`)
 **Provenance**: the quilltap-v5 native port's differential harness, and its
 dogfood walks against a copy of real data
-**Status**: Bugs **1–51** are **fixed in v4**. Bug 51 (chat GET omitting
+**Status**: Bugs **1–51** are **fixed in v4**. Bug **52** (cross-instance
+character imports lose the vault and dangle the avatar id, found 2026-08-09
+during the character-archive scoping pass) is **open**; its fix is WP A2 of
+[features/character-archive-spec.md](features/character-archive-spec.md). Bug 51 (chat GET omitting
 impersonation state, so a reload showed an impersonated seat as not impersonated)
 was found and fixed 2026-08-08 while verifying Bug 50. Bugs 47–49 — the Brahma Console
 giving up silently when its turn budget is exhausted, and two sibling
@@ -191,6 +194,7 @@ One row per bug, newest last. **Bug** links to the entry; **Fix site** and
 | 49 | [the speaking-as seat does not follow the current user-driven turn](bugs/fixed/bug-49-speaking-as-doesnt-follow-the-turn.md) | 2026-08-08 | 2026-08-08 | Low–Medium (confusing; on an impersonated seat's own turn you default to the wrong character) | On the impersonated character's own turn the composer stays on the previously selected seat, so you default to the wrong character (sibling of Bug 48) | `app/salon/[id]/SalonView.tsx` (turn-follow effect) | Owed (Faithful) |
 | 50 | [the sole LLM answers every human turn when you drive two seats](bugs/fixed/bug-50-sole-llm-answers-every-human-turn.md) | 2026-08-08 | 2026-08-08 | Medium (unfair rotation; one LLM takes half the turns) | With 2+ user-driven seats and exactly one LLM, the first responder is picked from an LLM-only shortlist, so that LLM answers every human turn (Charlie→Kumar→Lorian→Kumar…) | `lib/chat/turn-manager/selection.ts` + `lib/services/chat-message/orchestrator.service.ts` | Owed (Faithful) |
 | 51 | [chat GET omits impersonation state, so a reload shows an impersonated seat as not impersonated](bugs/fixed/bug-51-chat-get-omits-impersonation-state.md) | 2026-08-08 | 2026-08-08 | Medium (reload-only; breaks impersonation + speaking-as until re-impersonated) | GET's field allowlist omits `impersonatingParticipantIds` / `activeTypingParticipantId`, so a reload drops the overlay; restoring the latter also required a once-only client re-sync | `app/api/v1/chats/[id]/handlers/get.ts` + `app/salon/[id]/hooks/useImpersonation.ts` | Owed (Faithful) |
+| 52 | [a cross-instance character import produces a faceless character with a dangling avatar id](bugs/bug-52-avatar-import-dangling.md) | 2026-08-09 | — | Medium (silent loss on every cross-instance character import) | `streamCharacters` exports no vault records or bytes, and reconcile never remaps `defaultImageId` / `avatarOverrides[].imageId` — the avatar (and the whole vault: photos, mail, notes) stays behind and the id dangles | WP A2 of `features/character-archive-spec.md` (`lib/export/ndjson-writer.ts` + `lib/import/quilltap-import/reconcile.ts`) | Owed (Faithful) |
 
 ### Families and reading order
 
