@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Fix: the Archive button looked disabled
+
+The Archive action on a character's page rendered its label and folder icon in `qt-text-secondary` (`--color-muted-foreground`) while every sibling button in the cluster used `text-foreground`. That is the same muted token disabled controls use, so the one enabled action that packs a character away read as unavailable. It now carries the same classes as Convert to NPC, Non-Quilltap Prompt, Refine from Memories, and Search & Replace.
+
 #### Everything embedded now uses the one default embedding profile
 
 Two paths could diverge from the system default. The import/rehydrate memory fan-out skipped enqueueing entirely when the default profile was the built-in TF-IDF one, stranding imported memories unembedded indefinitely (a rehydrated character's memories were invisible to semantic search until something else happened to trigger a reindex). It now enqueues per-memory embedding jobs against the default profile regardless of provider — exactly mirroring the backfill sweeper — and, when that default is BUILTIN, also schedules the same debounced vocabulary refit-with-reindex that manual memory creation triggers, since the corpus just grew; the reindex additionally heals any row embedded before the vocabulary was first fitted. Verified live: a rehydrate on a TF-IDF instance now ends with 22/22 memories embedded, where before it was 0/22.

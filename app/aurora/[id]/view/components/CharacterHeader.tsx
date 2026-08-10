@@ -320,7 +320,7 @@ export function CharacterHeader({
         {onArchive && (
           <button
             onClick={onArchive}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg border qt-border-default qt-bg-card px-4 py-2 qt-label qt-text-secondary qt-shadow-sm hover:qt-bg-muted"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border qt-border-default qt-bg-card px-4 py-2 qt-label text-foreground qt-shadow-sm hover:qt-bg-muted"
             title="Pack this character's effects into a sealed bundle and set them resting in the archive"
           >
             <Icon name="folder" className="w-4 h-4" />
