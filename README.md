@@ -8,7 +8,7 @@ No subscriptions. No data harvested. No forgetting between sessions. No landlord
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap-server?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap-server/releases/latest)
-[![This Version](https://img.shields.io/badge/version-4.8.0--dev.195-yellow.svg?logo=github)](package.json)
+[![This Version](https://img.shields.io/badge/version-4.8.0--dev.196-yellow.svg?logo=github)](package.json)
 [![Docker Hub](https://img.shields.io/docker/v/foundry9/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/foundry9/quilltap)
 [![npm](https://img.shields.io/npm/v/quilltap?logo=npm)](https://www.npmjs.com/package/quilltap)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/6enCeQxY)
@@ -84,7 +84,7 @@ curl -fsSL https://raw.githubusercontent.com/foundry-9/quilltap-server/refs/head
 irm https://raw.githubusercontent.com/foundry-9/quilltap-server/refs/heads/main/scripts/start-quilltap.ps1 | iex
 ```
 
-The scripts auto-detect your platform, set the correct data directory, and find local services like Ollama — forwarding their ports into the container automatically.
+The scripts auto-detect your platform, set the correct data directory, and find local services like Ollama — forwarding their ports into the container automatically. They also bind any **filesystem or Obsidian document stores** you've set up into the container at their own host paths, so a store's folder means the same thing inside and out. (Binds are fixed when a container is created, so a store added later needs `--recreate`; run the script against an existing container and it will name any store that has become unreachable.)
 
 Or run directly:
 
@@ -190,6 +190,8 @@ A per-character switch flips the character's source of truth from the database r
 Characters aren't limited to a single personality template. Each can have multiple named system prompts and scenarios, letting you shift context — the same character in different settings, or different facets of the same relationship. The AI Character Import wizard can generate a complete character from source material (wiki pages, documents, freeform text). The **Non-Quilltap Prompt generator** exports any character as a standalone system prompt for use in other AI tools — taking your collaborator with you when you need to. Plugins can store per-character metadata for their own use via the character plugin data API.
 
 The **wardrobe system** gives characters a persistent closet — tops, bottoms, footwear, and accessories that the LLM knows about and can reference. Items live as Markdown files in the character's vault (`Wardrobe/<title>.md`); outfit presets live in `Outfits/`. Create items manually, generate them from the AI Wizard or lore, or **import from an image** using vision AI to analyze a photo and propose wardrobe items. Save outfit presets, gift items between characters, and let the LLM choose what to wear when a chat starts. Aurora announces outfit changes automatically, debounced so fiddling with all four slots collapses to a single notification once you stop touching the closet.
+
+**Characters can be archived rather than deleted.** When a collaborator's story has ended but you don't want to erase them, archiving packs everything heavy and private — memories, mail, conversation summaries, non-avatar photographs, and their embeddings — into a single encrypted `.qtap` bundle in your file library, then prunes that material from the live instance. What stays is the character: fields, portrait, wardrobe, and every chat she appears in, so old messages keep their faces and her page still renders. An archived character takes no turns and appears in no picker; **Rehydrate** unpacks the bundle and restores everything at its original identities, with nothing repointed. The bundle is sealed with your instance passphrase (changing it re-seals every archive on the shelf) and stays in the library afterwards as a spare copy. Available from a character's page in Aurora, from the API, and from the CLI (`npx quilltap db characters archives|archive|rehydrate|export`).
 
 **Provider limits should not decide which collaborators you get to keep.** The Concierge system treats a provider's refusal as a routing problem, not as permission to erase the collaborator or confiscate the relationship — detecting content type and, when configured, sending the request to a provider equipped to handle that kind of work. The default behavior keeps you on your primary provider; the routing kicks in only when you've configured it to. You set the boundaries. The software respects them.
 

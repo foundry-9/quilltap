@@ -134,11 +134,15 @@ export function AboutView() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Docker runtime</strong> &ndash; toggle between VM and Docker from the splash screen, or run standalone via Docker Hub</span>
+            <span><strong>Docker runtime</strong> &ndash; toggle between VM and Docker from the splash screen, or run standalone via Docker Hub, with filesystem document stores bound through to the container</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Aurora &ndash; Characters</strong> &ndash; detailed profiles with pronouns, aliases, clothing records, personalities, and multi-character turn management</span>
+            <span><strong>The Workspace</strong> &ndash; a two-pane shell of kept-alive tabs where a chat, a document, a terminal, and a settings panel all stay mounted at once; a streaming conversation keeps streaming while you work beside it, and any tab can be dragged into the other pane</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-1">&#8226;</span>
+            <span><strong>Aurora &ndash; Characters</strong> &ndash; detailed profiles with pronouns, aliases, clothing records, personalities, multi-character turn management, and archiving into an encrypted bundle you can rehydrate later</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
@@ -162,7 +166,7 @@ export function AboutView() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Pascal the Croupier &ndash; Gaming</strong> &ndash; persistent chat state, dice rolls, coin flips, inventories, stats, and game tracking</span>
+            <span><strong>Pascal the Croupier &ndash; Gaming</strong> &ndash; persistent state across four registers, dice rolls, coin flips, inventories and stats, plus user-authored custom tools with honest server-side rolls, outcome tables, side effects, and a visual workbench to build them</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
@@ -206,7 +210,7 @@ export function AboutView() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>The Foundry &ndash; Architecture</strong> &ndash; unified settings hub, plugin system for themes, providers, templates, tools, search, and storage</span>
+            <span><strong>The Foundry &ndash; Architecture</strong> &ndash; unified settings hub, plugin system for themes, providers, templates, tools, search, and storage, and the Almanack: a full system report on what this instance can actually do</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>

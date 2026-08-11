@@ -4,6 +4,31 @@
 
 ### 4.8-dev
 
+#### Docs: 4.8.0 release notes take in the character archive and the fourth batch of post-draft work
+
+Fourth catch-up pass over `docs/releases/4.8.0.md`, covering everything that landed after the 2026-08-05 pass. `pubDate` and the closing signature move to 2026-08-11. Features and user-visible fixes only; docs-only commits, the bug-catalogue reorganization, and the CI/test work are deliberately not in the notes.
+
+- **Added — "A Character May Be Packed Away":** a new top-level section on the character archive — what the bundle takes and what stays, the verify-then-commit ordering and idempotent re-run, rehydration at original IDs, the guards around a tombstone, bundle encryption under the instance passphrase (and the re-seal on a passphrase change), the Aurora/API/CLI surfaces, archive-sparing data wipes, and the faults found on the way (character exports carrying the vault, reconciliation clobbering bundle rows, the shared-document and twice-linked-blob rehydrate refusals, the 404-not-500 file read, the muted Archive button, the export wizard's vault size reporting, and the one-default-embedding-profile fix across all six paths).
+- **Added — "Taking Up a Character's Seat":** impersonation as an overlay rather than a seat rewrite, the turn handoff and speaking-as turn-follow, the overlay-aware turn banner and optimistic bubble, stop-impersonate reaching the server, impersonation surviving a reload, fair rotation in two-human-seat rooms, and the composer's speaking-as portrait.
+- **Added to "Documents, Everywhere You Left Them":** filesystem document stores bound into Docker automatically, the bind plan with its new flags, warnings, and outright Windows refusal, and the unreachable-base-path folder-create fix.
+- **Added to "A New Generation of Models":** OpenRouter non-streaming image sends and client attachment capability, Grok text/PDF attachments, base64 text mojibake, and the Ollama cross-read stream loss.
+- **Added to "The Almanack":** the three phase-3 ledger diagnostics (failed-row status, cast-size histogram, effective wardrobe permissions).
+- **Added to "The Archive Can Be Read Back":** the store-delete cascade and its orphan reaper, conversation annotations on the wipe/restore and per-chat delete paths, all three import-overwrite store-identity defects, the dangling imported folder pointers, and the second-generation restore link-id race.
+- **Added to "A Lighter Database":** oversize interchange sub-chunking with its boot re-render, the mount-chunk dimension reconcile reading the wrong database, and the memory-gate links overwritten by the fold pass.
+- **Added to "Under the Floorboards":** the corrupt `properties.json` character-field clobber, the blank help-file table wipe, the blobless-store GC throw, stale hard-link sibling chunks, attaching a native-text document, the orphan-thumbnail sweep, and the About page's workspace backdrop.
+- **Added to "Selected Fixes":** the four unprojected chat settings and their siblings, the three attribution faults, the Brahma Console turn budget and its exhaustion salvage, and the UI polish round.
+- **Added to "Upgrading from 4.7":** the archive columns and the passphrase's relationship to a bundle, and that Docker users with filesystem stores must re-create the container.
+
+#### Docs: release-freshness pass over README, About, CLAUDE.md, and DEVELOPMENT.md
+
+The About page's Key Features list had not kept up with the cycle: it named no tabbed workspace at all, described Pascal as dice-and-inventories with no mention of custom tools or the Workbench, and said nothing about character archiving or the Almanack. All four are now listed, and the Docker entry notes that filesystem document stores are bound through to the container.
+
+The README gained a paragraph on character archiving in its Characters section (what is packed away, what stays, how to rehydrate, and the passphrase seal), and its Docker section now says the startup scripts bind filesystem and Obsidian stores into the container — with the caveat that binds are fixed at creation, so a store added later needs `--recreate`.
+
+DEVELOPMENT.md's project-structure listing had drifted: `app/custom-tools/`, `app/workspace/`, `app/photos/`, `app/scenarios/`, `components/workspace/`, and `lib/{brahma-console,characters,pascal,post-office,query,workspace}/` were all missing. Its Docker section explained none of the store-bind problem and now does.
+
+CLAUDE.md gained two chokepoint entries the archive work introduced: archived characters are tombstones whose only sanctioned patch is `{ archivedAt: null }` (via `validateCharacterArchivePatch`), with the vault resolvers that must respect them named; and `.qtap` export exclusions go through the single predicate in `lib/export/excluded-files.ts` rather than a hand-rolled category check at each of its three call sites.
+
 #### Fix: shell completions missing the character-archive CLI subcommands
 
 Tab completion for `quilltap db characters` stopped at the verb itself. Bash, zsh, and fish now complete `status`, `archives`, `archive`, `rehydrate`, and `export`, plus their flags (`--write`, `--port`, `--out`).

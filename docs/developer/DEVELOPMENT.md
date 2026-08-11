@@ -12,21 +12,25 @@ quilltap/
 │   ├── aurora/               # Character UI (was /characters)
 │   ├── characters/           # Legacy redirect to /aurora
 │   ├── chats/                # Legacy redirect to /salon
+│   ├── custom-tools/         # Pascal's Workbench (custom pseudo-tool editor)
 │   ├── dashboard/            # Dashboard / home
 │   ├── files/                # Files browser
 │   ├── foundry/              # Legacy redirect to /settings
 │   ├── generate-image/       # Standalone image-generation page
 │   ├── personas/             # User persona management
+│   ├── photos/               # Character photo gallery
 │   ├── profile/              # User profile
 │   ├── projects/             # Legacy redirect to /prospero
 │   ├── prospero/             # Projects / agentic UI (was /projects)
 │   ├── salon/                # Chat UI (was /chats)
+│   ├── scenarios/            # Scenario editing surface
 │   ├── scriptorium/          # Document stores UI
 │   ├── settings/             # Tabbed settings hub (Foundry)
 │   ├── setup/                # First-run setup wizard
 │   ├── styles/               # qt-* utility class stylesheets
 │   ├── tools/                # Tools admin / inspection
 │   ├── unlock/               # Locked-mode unlock screen
+│   ├── workspace/            # Tabbed two-pane workspace shell (the default surface)
 │   ├── globals.css           # Root styles and Tailwind imports
 │   ├── layout.tsx            # Root layout (providers, themes, fonts)
 │   └── page.tsx              # Public landing page
@@ -60,13 +64,16 @@ quilltap/
 │   ├── tags/                 # Tag UI
 │   ├── tools/                # Tool palette / tool admin
 │   ├── ui/                   # Generic UI primitives (Avatar, Badge, Button, …)
-│   └── wardrobe/             # Wardrobe / outfit pieces
+│   ├── wardrobe/             # Wardrobe / outfit pieces
+│   └── workspace/            # Workspace shell: panes, tab strip, toolbar bridge
 ├── lib/                      # Domain logic and utilities (large; see lib/ for full list)
 │   ├── api/                  # Middleware + response helpers (createContextHandler, withActionDispatch, etc.)
 │   ├── api-keys/             # Pepper Vault API-key storage (Saquel)
 │   ├── auth/                 # Single-user session
 │   ├── background-jobs/      # Job queue + forked child worker (see BACKGROUND_JOBS_CHILD.md)
 │   ├── backup/               # Backup / restore logic
+│   ├── brahma-console/       # Brahma: character-less LLM surface + read-only SQL
+│   ├── characters/           # Character services: vault sync, archive/rehydrate, archive-crypto
 │   ├── chat/                 # Salon: context-manager, turn-manager, tool execution
 │   ├── database/             # SQLite/SQLCipher connection management
 │   ├── doc-edit/             # Document Mode core (open / save / rename / delete)
@@ -82,8 +89,11 @@ quilltap/
 │   ├── logger.ts, logging/   # Centralized logger
 │   ├── memory/               # Commonplace Book (memory + embeddings)
 │   ├── mount-index/          # Scriptorium mount-points and document-store index
+│   ├── pascal/               # Pascal the Croupier: custom-tool loading, rolls, side effects
 │   ├── plugins/              # Plugin registry and loader
+│   ├── post-office/          # Suparṇā: inter-character mail
 │   ├── prompts/              # Built-in system-prompt templates
+│   ├── query/                # TanStack Query keys, fetcher, provider
 │   ├── repositories/         # DB repositories (single source of truth for tables)
 │   ├── schemas/              # Zod schemas and TS types
 │   ├── scriptorium/          # Document-store helpers
@@ -93,7 +103,8 @@ quilltap/
 │   ├── tags/, tokens/, validation/  # Misc utilities
 │   ├── themes/               # Theme registry + bundle loader + Ed25519 crypto
 │   ├── tools/                # LLM tool definitions and handlers (doc_*, self_inventory, search, …)
-│   └── wardrobe/             # Wardrobe / outfit logic
+│   ├── wardrobe/             # Wardrobe / outfit logic
+│   └── workspace/            # Workspace tab model, deep-link → tab resolution
 ├── help/                     # User documentation (Markdown, built to MessagePack)
 ├── migrations/               # Database migration scripts and migration-only files
 ├── plugins/                  # Plugin source code
@@ -171,6 +182,24 @@ docker run -d --name quilltap -p 3000:3000 -v ~/.quilltap:/app/quilltap foundry9
 # View logs
 docker logs -f quilltap
 ```
+
+A container can only see host paths bound into it at creation. Database-backed
+document stores live in the data directory and ride along, but **filesystem and
+Obsidian stores point anywhere on the host and need their own binds** — without
+them the store lists its folders (that listing comes from the cached mount index)
+while every operation touching real bytes fails. `npm run start:docker`
+enumerates the instance's filesystem stores and binds each path-identically;
+`--instance NAME` resolves the data directory from the instance registry (and
+unlocks an encrypted instance for enumeration), `--recreate` replaces an existing
+container (binds are fixed at creation, so this is the only way to change them),
+and `--no-store-mounts` opts out. To inspect or hand-assemble the plan:
+
+```bash
+npx quilltap docs docker-mounts --format args
+```
+
+See [CLI.md](CLI.md) for the planner's rules (collapsed duplicates, nested-path
+drops, skipped non-existent paths, and the Windows refusal).
 
 ### Running with the Desktop App (Electron)
 
