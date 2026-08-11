@@ -4,6 +4,14 @@
 
 ### 4.8-dev
 
+#### Fix: rehydrate refused any vault that links the same bytes twice (bug 57)
+
+Archiving a character whose vault holds one blob linked at two paths — what an ordinary content-addressed save produces, such as the same image saved into the gallery twice — made them unrehydratable. Every attempt failed identically with `Preserve IDs collision for document store blob <id> (also seen as document store blob)`.
+
+The export's blob leg iterates `listByMountPoint`, whose SQL joins from `doc_mount_file_links`, so it emits one record per link. A blob row linked twice therefore appears twice in the bundle under one `blobId`. The rehydrate preflight collected `carriedBlobIds` without deduping and threw on any repeated id, before the sha-match skip classifier added for bug 54 could sanction the rows — the within-bundle duplicate killed the import first. The list directly above it, `carriedFileIds`, already deduped for the same reason.
+
+`carriedBlobIds` is now deduped first-occurrence. A repeated `blobId` within one bundle can only come from the per-link join over a single database row, so the repeats are identical claims; a genuine same-id/different-bytes clash is a cross-bundle concern and still refuses. The change is reader-side only, so bundles already written — all of which carry the duplicates — rehydrate correctly against the fixed reader.
+
 #### Filesystem document stores are passed through to Docker automatically
 
 A container can only see host paths bound into it at creation. Database-backed stores live in the data directory and ride along; filesystem and Obsidian stores point anywhere on the host and were simply absent inside the container. The failure was misleading: the store listed its folders normally (that listing comes from the cached mount index in the database) while every operation touching real bytes failed.

@@ -2,18 +2,28 @@
 
 | | |
 |---|---|
-| **Status** | **OPEN** |
+| **Status** | **FIXED in v4** |
 | **Found** | 2026-08-11 |
-| **Fixed** | — |
+| **Fixed** | 2026-08-11 |
 | **Severity** | Medium (High for anyone it hits: rehydrate is permanently unusable for the affected character — every attempt fails identically — and the workaround, importing the bundle as an ordinary `.qtap`, mints fresh ids and so severs the id continuity rehydration exists to preserve) |
 | **Who it bites** | anyone who archives a character whose vault holds one blob linked at two or more paths — which is what an ordinary sha-deduped save produces: save the same image into the gallery twice, or link the same file into two folders of the store, and the content-addressed writer gives you two links over one blob row |
 | **Provenance** | Found by the v5 port's round-2 unification wire test (`characters_action_route.rs`), whose fixture vault genuinely carries a twice-linked blob; v5 had reproduced the failure faithfully until that run |
 | **Defect site** | `lib/import/quilltap-import/execute.ts:115` (`carriedBlobIds` not deduped) composing with `lib/database/repositories/doc-mount-blobs.repository.ts:439` (`listByMountPoint` joins from the links — one row per link) |
 | **Fix site** | `lib/import/quilltap-import/execute.ts` — one line |
-| **v5 status** | **Fixed ahead (deliberate divergence, 2026-08-11)** — v5's preflight already dedupes (`quilltap_import/mod.rs`), pinned by a live test; converges when this fix lands |
-| **Index** | [bugs.md](../bugs.md) |
+| **v5 status** | **Converged (2026-08-11)** — v5's preflight already deduped (`quilltap_import/mod.rs`) as a pinned divergence; this fix lands the same behaviour in v4, so the divergence marker retires at the next drift catch-up |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
+
+**FIXED in v4 (2026-08-11).** `carriedBlobIds` is now deduped first-occurrence
+(`Array.from(new Set(...))`), mirroring `carriedFileIds` one list up, so the
+export's per-link repetition of a single blob row no longer reads as a
+duplicate claim and the sha-match skip classifier below it is reached as
+intended. Reader-side only — bundles already written carry the duplicates and
+rehydrate correctly against the fixed reader. Regression test: *"does not treat
+a twice-linked blob's shared blobId as a duplicate claim"* in
+[`__tests__/unit/lib/import/quilltap-import-service.test.ts`](../../../../__tests__/unit/lib/import/quilltap-import-service.test.ts),
+which reproduces the collision against the pre-fix line.
 
 ## Symptom
 

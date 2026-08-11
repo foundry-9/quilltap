@@ -1,14 +1,14 @@
 # Bugs — defects surfaced by the v5 port
 
-**Last Updated**: 2026-08-10
-**Codebase**: Quilltap v4.8.0-dev (HEAD `d69287d9`)
+**Last Updated**: 2026-08-11
+**Codebase**: Quilltap v4.8.0-dev (HEAD `0472cf6c`)
 **Provenance**: the quilltap-v5 native port's differential harness, and its
 dogfood walks against a copy of real data
-**Status**: Bugs **1–56** are **fixed in v4**; **Bug 57 is OPEN** (filed
-2026-08-11 by the v5 port's round-2 unification: the preserveIds preflight
-refuses a rehydrate bundle whose store carries one blob linked at two paths —
-the per-link export duplication meets an undeduped `carriedBlobIds`; v5
-already ships the one-line dedupe as a pinned divergence). Bug 56 came out of
+**Status**: Bugs **1–57** are **fixed in v4**; none open. Bug 57 (filed and
+fixed 2026-08-11 by the v5 port's round-2 unification: the preserveIds preflight
+refused a rehydrate bundle whose store carries one blob linked at two paths —
+the per-link export duplication meeting an undeduped `carriedBlobIds`) converges
+v4 onto the dedupe v5 had been carrying as a pinned divergence. Bug 56 came out of
 dogfooding under Docker: folder creation in a filesystem store ran a recursive
 `mkdir` without first checking the store's own base path existed. Bugs 52–55 all
 came out of the character-archive work: 52 (cross-instance character imports
@@ -209,7 +209,7 @@ One row per bug, newest last. **Bug** links to the entry; **Fix site** and
 | 54 | [rehydrate refuses any character who shared a content row with another vault](bugs/fixed/bug-54-rehydrate-shared-content-collision.md) | 2026-08-10 | 2026-08-10 | High (rehydration unreachable for any character archived out of a multi-character chat; no data loss, but the archive is one-way) | Content rows are shared across vaults (a group chat's summary is one row, one link per participant); the prune deletes the target's link, so the preflight's "is it linked in the target vault?" test reads legitimately-owned content as living elsewhere and refuses atomically — stricter than the writer, which dedups by sha256 and discards the carried id | `lib/import/quilltap-import/execute.ts` (`document store file` / `document store blob` skip classifiers) | Owed (Faithful) |
 | 55 | [a file row that outlived its bytes serves 500 instead of 404](bugs/fixed/bug-55-missing-file-content-500.md) | 2026-08-10 | 2026-08-10 | Low (mislabels permanent loss as a server fault; invites endless client retries and buries real storage faults in the error log) | `downloadFile` re-wraps every failure in a generic Error, so both file routes map "no such object" and "the read blew up" alike to `serverError` | new `lib/file-storage/errors.ts` + `app/api/v1/files/[id]/actions/download.ts` and `app/api/v1/files/proxy/[...key]/route.ts` | Owed (Faithful) |
 | 56 | [folder creation mkdir -p's its way up an absent mount root](bugs/fixed/bug-56-unguarded-recursive-mkdir.md) | 2026-08-10 | 2026-08-10 | Medium (an opaque 500 as observed; a silent success fabricating a directory tree divorced from the store wherever the process can write to the missing ancestors) | `createFilesystemFolder` runs `fs.mkdir(target, {recursive: true})` without checking the mount's own `basePath` exists, so a store on an unreachable path (an unmounted volume, or a host path never bound into a container) sends mkdir walking up to the topmost missing ancestor | new `lib/mount-index/base-path-availability.ts` + `lib/mount-index/scanner.ts` and both mount-point routes | Owed (Faithful) |
-| 57 | [rehydrate refuses any vault that links the same bytes twice](bugs/bug-57-rehydrate-duplicate-blob-claim.md) | 2026-08-11 | — | Medium (High for anyone it hits: rehydrate permanently unusable for that character; the ordinary-import workaround severs id continuity) | The export's blob leg emits one record per LINK (`listByMountPoint` joins from the links), so a twice-linked sha-deduped blob appears twice in the bundle with one `blobId` — and the preflight's `carriedBlobIds` is not deduped (unlike `carriedFileIds` one list up), so the within-bundle repeat throws before Bug 54's sha-match skip is ever consulted | `lib/import/quilltap-import/execute.ts:115` — one-line `Set` dedupe | **Fixed ahead in v5** (pinned divergence, 2026-08-11) — converges when this lands |
+| 57 | [rehydrate refuses any vault that links the same bytes twice](bugs/fixed/bug-57-rehydrate-duplicate-blob-claim.md) | 2026-08-11 | 2026-08-11 | Medium (High for anyone it hits: rehydrate permanently unusable for that character; the ordinary-import workaround severs id continuity) | The export's blob leg emits one record per LINK (`listByMountPoint` joins from the links), so a twice-linked sha-deduped blob appears twice in the bundle with one `blobId` — and the preflight's `carriedBlobIds` is not deduped (unlike `carriedFileIds` one list up), so the within-bundle repeat throws before Bug 54's sha-match skip is ever consulted | `lib/import/quilltap-import/execute.ts:115` — one-line `Set` dedupe | Converged (2026-08-11) — v5's pinned divergence becomes plain equality; the marker retires at the next drift catch-up |
 
 ### Families and reading order
 

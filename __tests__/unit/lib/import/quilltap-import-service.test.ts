@@ -1098,6 +1098,51 @@ describe('quilltap-import-service', () => {
       expect(result.warnings.filter((w) => w.includes('Preserve IDs collision'))).toHaveLength(0);
       expect(mockGlobalRepos.docMountFileLinks.linkDocumentContent).toHaveBeenCalledTimes(2);
     });
+
+    // Bug 57 — the export's blob leg emits one record per LINK, so an ordinary
+    // sha-deduped blob linked at two paths (the same image saved into the
+    // gallery twice) arrives as two records over one blobId. That repeat is
+    // one row claimed twice, not two claims on one id.
+    it('does not treat a twice-linked blob\'s shared blobId as a duplicate claim', async () => {
+      const exportData = createMockQuilltapExport({ characters: [createMockExportedCharacter({ id: 'char-C', name: 'Fresh' })] });
+      Object.assign(exportData.data as any, {
+        mountPoints: [{
+          id: 'store-C', name: 'Ada Vault', basePath: '', mountType: 'database',
+          storeType: 'character', includePatterns: [], excludePatterns: [], enabled: true,
+        }],
+        blobs: [
+          {
+            mountPointId: 'store-C', relativePath: 'photos/ada.webp', originalFileName: 'ada.webp',
+            originalMimeType: 'image/webp', storedMimeType: 'image/webp', sizeBytes: 3, sha256: 'sha-b',
+            description: '', fileId: 'file-shared', linkId: 'link-a', blobId: 'blob-shared',
+            dataBase64: Buffer.from('abc').toString('base64'),
+          },
+          {
+            mountPointId: 'store-C', relativePath: 'Gallery/ada.webp', originalFileName: 'ada.webp',
+            originalMimeType: 'image/webp', storedMimeType: 'image/webp', sizeBytes: 3, sha256: 'sha-b',
+            description: '', fileId: 'file-shared', linkId: 'link-b', blobId: 'blob-shared',
+            dataBase64: Buffer.from('abc').toString('base64'),
+          },
+        ],
+      });
+
+      mockUserRepos.characters.create.mockImplementation(async (data: any, options?: { id?: string }) => ({
+        ...data,
+        id: options?.id ?? data.id ?? 'generated-id',
+      }));
+
+      const result = await executeImport(testUserId, exportData as any, {
+        conflictStrategy: 'skip',
+        includeMemories: false,
+        includeRelatedEntities: false,
+        preserveIds: true,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.warnings.filter((w) => w.includes('Preserve IDs collision'))).toHaveLength(0);
+      // Both links come back — the writer resolves the shared content by sha256.
+      expect(mockGlobalRepos.docMountBlobs.create).toHaveBeenCalledTimes(2);
+    });
   });
 
   // ============================================================================

@@ -112,7 +112,12 @@ async function preflightPreserveIds(
     new Set([...documents.map((d) => d.fileId), ...blobs.map((b) => b.fileId)].filter(isNonEmpty))
   );
   const carriedLinkIds = [...documents.map((d) => d.linkId), ...blobs.map((b) => b.linkId)].filter(isNonEmpty);
-  const carriedBlobIds = blobs.map((b) => b.blobId).filter(isNonEmpty);
+  // The blob leg of the export emits one record per LINK (`listByMountPoint`
+  // joins from `doc_mount_file_links`), so a content-addressed blob linked at
+  // two paths appears twice under one blobId — identical claims over a single
+  // row, not a duplicate claim. Dedupe, as with `carriedFileIds` above; the
+  // sha-match skip below still refuses a genuine same-id/different-bytes clash.
+  const carriedBlobIds = Array.from(new Set(blobs.map((b) => b.blobId).filter(isNonEmpty)));
   const carriedFolderIds = (data.folders ?? [])
     .map((folder: { id?: string | null }) => folder.id)
     .filter(isNonEmpty);
