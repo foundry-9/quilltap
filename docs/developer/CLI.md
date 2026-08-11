@@ -48,13 +48,15 @@ SQLite columns are **camelCase**, mirroring the Zod/TypeScript types (`createdAt
 
 ## Document-store CLI (`npx quilltap docs`)
 
-Read-only verbs: `list`, `show`, `files`, `ls`/`dir`, `tree` (ASCII folder hierarchy), `read`, `export`, `find` (substring on filename), `grep` (substring on extracted text), `status` (per-mount extraction + embedding rollup).
+Read-only verbs: `list`, `show`, `files`, `ls`/`dir`, `tree` (ASCII folder hierarchy), `read`, `export`, `find` (substring on filename), `grep` (substring on extracted text), `status` (per-mount extraction + embedding rollup), `docker-mounts` (bind mounts filesystem stores need under Docker).
 
 Server-required verbs: `scan`, `reindex` (re-extract + re-chunk), `embed` (enqueue embedding jobs — `--wait` polls to completion), `grep --semantic`, and the write verbs (`write`/`delete`/`mkdir`/`move`/`copy`/`link`/`rmdir`/`mvdir`). `reindex` and `embed` are explicit triggers for the two background pipelines; they refuse to run when the server is unreachable.
 
 **`link` vs `copy`:** `docs link` makes two addresses into one document — it shares the content row *and* enrols both link rows in a `linkGroupId`, so a later write through either path repoints both and re-chunks the sibling. `docs copy` produces an independent document that merely shares a deduped content row until the first write. The `links` column in `ls` counts group members, not rows sharing a `fileId` (identical bytes are not a link). See [DDL.md](DDL.md#doc_mount_file_links).
 
 **Semantic search:** `npx quilltap docs grep --semantic [--mount <name|id|all>] [--top N] [--threshold 0..1] <query>` runs an embedding search over indexed chunks instead of a substring match (defaults: `--top 20`, `--threshold 0.5`, `--port 3000`). It goes through `POST /api/v1/mount-points?action=semantic-search` because the embedding provider lives in the server, so the server must be up.
+
+**Docker binds:** `npx quilltap docs docker-mounts [--format args|json]` reports the bind mounts an instance's filesystem/Obsidian stores need to be reachable inside a container. Binds are path-identical (`-v /host/vault:/host/vault`) so the `basePath` in the database resolves the same inside and out. The planner (`packages/quilltap/lib/docker-mounts.js`, pure and unit-tested) collapses stores sharing a path to one bind, drops paths nested inside another bind, **skips** non-existent paths rather than letting Docker fabricate an empty source, warns for macOS paths outside Docker Desktop's default shares and for Linux uid mismatch, and refuses on Windows (no path-identical binds). `--format args` puts only flags on stdout and all advice on stderr. `scripts/start-quilltap-docker.ts` consumes it; see [Docker startup](#docker-startup-scripts-start-quilltap-dockerts).
 
 ### Addressing documents with `qtap://` URIs
 
@@ -71,6 +73,21 @@ The URI authority is matched name-first, UUID as fallback — the same rule as a
 **CLI limitation:** the CLI addresses document stores only. `qtap://self/…` needs a character context (there is none at the shell) and is rejected with guidance; `qtap://project/…` and `qtap://general/…` are likewise not CLI-addressable — pass a store name or UUID instead.
 
 **Emitting URIs:** `--json` output for `find`, `grep`, `ls`, `files`, and `tree` carries a `uri` field per row/node. `--uri` switches the text output of `find`, `grep`, and `files` to show the canonical `qtap://` URI as the locator (name form, UUID when the store name is ambiguous).
+
+## Docker startup (`scripts/start-quilltap-docker.ts`)
+
+`npm run start:docker` builds and runs the container. Beyond the data-directory bind it also passes through every filesystem/Obsidian document store, so their `basePath` values resolve inside the container.
+
+| Flag | Effect |
+|---|---|
+| `-i, --instance NAME` | Resolve the data dir from the instance registry, and let the CLI unlock an encrypted instance when enumerating stores |
+| `--recreate` | `docker rm -f` the existing container and build a new one (the only way to change binds) |
+| `--no-store-mounts` | Skip store enumeration entirely |
+| `--dry-run` | Print the `docker run` argv without executing |
+
+Store enumeration shells out to `quilltap docs docker-mounts --format json`. **A failure there is non-fatal** — it warns and starts without store binds, because an unreadable store list is a poor reason to refuse to start Quilltap. The usual cause is an encrypted instance reached by `--data-dir`; pass `--instance` instead.
+
+Because binds are fixed at container creation, a store added later is invisible to a running container. When the container already exists, the script diffs its `.Mounts` against the current plan and names the stores that are unreachable, pointing at `--recreate`.
 
 ## Memories CLI (`npx quilltap memories`)
 

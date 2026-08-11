@@ -10,9 +10,10 @@ import { z } from 'zod';
 import { createContextParamsHandler } from '@/lib/api/middleware';
 import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
-import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
+import { badRequest, errorResponse, notFound, serverError, successResponse } from '@/lib/api/responses';
 import { createDatabaseFolder } from '@/lib/mount-index/database-store';
 import { createFilesystemFolder } from '@/lib/mount-index/scanner';
+import { BasePathUnavailableError } from '@/lib/mount-index/base-path-availability';
 
 const createFolderSchema = z.object({
   path: z.string().min(1).max(1024),
@@ -75,6 +76,19 @@ export const POST = createContextParamsHandler<{ id: string }>(
       try {
         await createFilesystemFolder(baseDir, id, rel);
       } catch (folderErr) {
+        if (folderErr instanceof BasePathUnavailableError) {
+          // The store's own root is unreachable, so this is a configuration
+          // problem rather than a bad request or a server fault. Hand back the
+          // diagnosis — it names the remedy, which a bare 500 never could.
+          logger.warn('[Mount Points v1] Folder creation refused — base path unavailable', {
+            mountPointId: id,
+            basePath: baseDir,
+            reason: folderErr.reason,
+            containerized: folderErr.containerized,
+            userId: user.id,
+          });
+          return errorResponse(folderErr.message, 409);
+        }
         if (folderErr instanceof Error && folderErr.message.includes('escapes')) {
           return badRequest('Folder path escapes mount point boundary');
         }

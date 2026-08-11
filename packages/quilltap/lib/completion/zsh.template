@@ -168,6 +168,7 @@ _quilltap_docs() {
     'find:Substring search'
     'grep:Pattern search inside text'
     'status:Per-mount status'
+    'docker-mounts:Bind mounts needed under Docker'
     'reindex:Re-extract and re-chunk'
     'embed:Enqueue embedding jobs'
     'write:Write a file'

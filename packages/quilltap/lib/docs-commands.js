@@ -71,6 +71,8 @@ Read subcommands:
   grep [--mount <name|id|all>] [--ignore-case] [-l] [--max N] [--context N] <pattern>
                                          Substring search inside extracted text
   status [--mount <name|id>] [--top N]   Per-mount extraction + embedding rollup
+  docker-mounts [--format args|json]     Bind mounts this instance's filesystem
+                                         stores need to be visible in Docker
 
 Server-required subcommands (background-job queue lives in the running server):
   grep --semantic [--mount <name|id|all>] [--top N] [--threshold 0..1] <query>
@@ -210,6 +212,8 @@ function parseFlags(args) {
     threshold: -1,
     // base64 read/write flag
     base64: false,
+    // docker-mounts output shape: table (human), args (docker run flags), json
+    format: '',
   };
   const positional = [];
   let i = 0;
@@ -229,6 +233,7 @@ function parseFlags(args) {
         break;
       }
       case '--json': flags.json = true; break;
+      case '--format': flags.format = args[++i]; break;
       case '--uri': flags.uri = true; break;
       case '--rendered': flags.rendered = true; break;
       case '--folder': flags.folder = args[++i]; break;
@@ -485,6 +490,95 @@ async function handleList(flags) {
   } finally {
     db.close();
   }
+}
+
+// ----------------------------------------------------------------------------
+// docker-mounts
+// ----------------------------------------------------------------------------
+
+/**
+ * Report the bind mounts this instance's filesystem-backed stores need in
+ * order to be reachable from inside a container.
+ *
+ * `--format args` prints only the flags, one per line, so a start script can
+ * splice them into a `docker run` argv without parsing prose. Everything
+ * advisory goes to stderr for exactly that reason: stdout stays machine-clean
+ * even when there are warnings worth a human's attention.
+ */
+async function handleDockerMounts(flags) {
+  const { planStoreMounts, toDockerArgs } = require('./docker-mounts');
+  const { db } = await openDb(flags);
+
+  let rows;
+  try {
+    rows = db.prepare(`
+      SELECT id, name, mountType, storeType, basePath, enabled
+      FROM doc_mount_points
+      WHERE mountType != 'database'
+      ORDER BY name COLLATE NOCASE
+    `).all();
+  } finally {
+    db.close();
+  }
+
+  const plan = planStoreMounts(rows);
+  const format = flags.format || (flags.json ? 'json' : 'table');
+
+  if (format === 'json') {
+    process.stdout.write(JSON.stringify(plan, null, 2) + '\n');
+    return;
+  }
+
+  if (format === 'args') {
+    for (const arg of toDockerArgs(plan)) {
+      process.stdout.write(arg + '\n');
+    }
+    for (const warning of plan.warnings) {
+      process.stderr.write(`warning: ${warning}\n`);
+    }
+    return;
+  }
+
+  if (plan.unsupported) {
+    for (const warning of plan.warnings) {
+      console.log(`${YELLOW}${warning}${RESET}`);
+    }
+    return;
+  }
+
+  if (plan.binds.length === 0 && plan.skipped.length === 0) {
+    console.log('(no filesystem-backed document stores — nothing to bind)');
+    return;
+  }
+
+  if (plan.binds.length > 0) {
+    console.log(`${BOLD}Bind mounts required:${RESET}`);
+    console.table(
+      plan.binds.map((b) => ({
+        'host path': b.hostPath,
+        stores: b.stores.join(', '),
+      }))
+    );
+  }
+
+  if (plan.skipped.length > 0) {
+    console.log(`${BOLD}Skipped:${RESET}`);
+    console.table(
+      plan.skipped.map((s) => ({
+        'host path': s.hostPath,
+        stores: s.stores.join(', '),
+        reason: s.reason,
+      }))
+    );
+  }
+
+  for (const warning of plan.warnings) {
+    console.log(`${YELLOW}warning:${RESET} ${warning}`);
+  }
+
+  console.log('');
+  console.log(`${DIM}Binds are applied when a container is created. Re-run the start script`);
+  console.log(`with --recreate to rebuild the container with these stores included.${RESET}`);
 }
 
 // ----------------------------------------------------------------------------
@@ -3032,6 +3126,9 @@ async function docsCommand(args) {
         break;
       case 'status':
         await handleStatus(flags);
+        break;
+      case 'docker-mounts':
+        await handleDockerMounts(flags);
         break;
       case 'find':
         await handleFind(flags, positional);

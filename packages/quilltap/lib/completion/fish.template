@@ -136,6 +136,7 @@ complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'scan' -d 'Trig
 complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'find' -d 'Substring search'
 complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'grep' -d 'Pattern search in text'
 complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'status' -d 'Per-mount status'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'docker-mounts' -d 'Binds needed under Docker'
 complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'reindex' -d 'Re-extract and chunk'
 complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'embed' -d 'Enqueue embeddings'
 complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'write' -d 'Write a file'

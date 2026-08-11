@@ -126,7 +126,7 @@ _quilltap_complete() {
       fi
       ;;
     docs)
-      local docs_verbs="list show files ls dir tree read export scan write delete mkdir move copy link rmdir mvdir status find grep reindex embed"
+      local docs_verbs="list show files ls dir tree read export scan write delete mkdir move copy link rmdir mvdir status docker-mounts find grep reindex embed"
       local docs_flags="--mount --instance --data-dir --passphrase --port --json --help \
         --force --rendered --links --folder --type --ext --limit --max --context --top --threshold \
         --ignore-case -l --wait -R --recursive --sort -r --reverse --depth --max-nodes --long --semantic"

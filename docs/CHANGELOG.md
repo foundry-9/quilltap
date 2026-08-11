@@ -4,6 +4,24 @@
 
 ### 4.8-dev
 
+#### Filesystem document stores are passed through to Docker automatically
+
+A container can only see host paths bound into it at creation. Database-backed stores live in the data directory and ride along; filesystem and Obsidian stores point anywhere on the host and were simply absent inside the container. The failure was misleading: the store listed its folders normally (that listing comes from the cached mount index in the database) while every operation touching real bytes failed.
+
+`npm run start:docker` now enumerates the instance's filesystem stores before creating a container and binds each at its own host path, so a store's `basePath` means the same thing inside and outside. New flags: `--instance NAME` (resolve the data dir from the instance registry, and unlock an encrypted instance for enumeration), `--recreate` (replace an existing container — the only way to change binds), and `--no-store-mounts`. Enumeration failure is non-fatal; it warns and starts without store binds.
+
+The planning is not just a list of paths: stores sharing a vault collapse to one bind, a store nested inside another bind is dropped (binding both would shadow the parent's view), and a path that does not exist is skipped and reported rather than passed through — Docker would otherwise create the missing source as a root-owned empty directory and present a hollow store as a healthy one. macOS paths outside Docker Desktop's default shares and Linux uid mismatch both warn. Windows is refused outright: container paths cannot mirror Windows host paths.
+
+Because binds are fixed at creation, a store added later is invisible until the container is rebuilt. Running the start script against an existing container now diffs its mounts against the current stores and names the ones that are unreachable.
+
+New CLI subcommand `quilltap docs docker-mounts [--format args|json]` reports the same plan, for hand-assembled `docker run` commands or for inspecting the arrangement before making it.
+
+#### Fix: creating a folder in a store with an unreachable path (bug 56)
+
+`createFilesystemFolder` ran `fs.mkdir(target, { recursive: true })` without checking that the store's own `basePath` existed. Against an unreachable mount root — an unmounted volume, or a host path never bound into a container — mkdir walked up to the topmost missing ancestor and tried to create the entire chain. Observed as `EACCES: permission denied, mkdir '/Users'` for a store rooted five levels below that, surfaced to the UI as a bare "Failed to create folder". Where the process can write to those ancestors it is worse: the folder is created inside a fabricated tree unrelated to the user's store, and reported as success.
+
+A new `lib/mount-index/base-path-availability.ts` answers "is this base path reachable, and is a container why not" for every caller. It distinguishes missing (ENOENT) from denied (EACCES/EPERM) from not-a-directory, and reports whether the process is containerized. Folder creation asserts before the mkdir and the route returns 409 with the diagnosis; store creation uses the same check for its warning, replacing the narrower `verifyBasePath`. When the path is missing inside a container, the message names the actual remedy — bind the path in and recreate the container — instead of leaving ENOENT to be interpreted.
+
 #### Fix: a file whose bytes are gone now answers 404 instead of 500 (bug 55)
 
 A `files` row can outlive its content — a dangling avatar pointing into a mount point deleted long ago, an attachment whose blob is gone. Serving it produced a 500 on every render, which tells the client the server is at fault and the request is worth retrying; neither is true, and the repeated error-level pairs bury real storage faults in the log. The distinction was destroyed before any caller could see it: `fileStorageManager.downloadFile` caught everything and rethrew a fresh generic `Error`, so both file routes mapped "no such object" and "the read blew up" alike to `serverError`.

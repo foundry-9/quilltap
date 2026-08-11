@@ -294,6 +294,20 @@ quilltap docs status --json                           # structured output
 
 Each mount block reports counts of text-native files, extracted files, files still pending extraction, files where extraction failed, plus chunk totals and embedding state. When any "pending" or "failed" rows exist, the oldest few are listed by relative path and timestamp — the same data that drives the `~` and `!` marks in `docs ls`, lifted up to instance-wide scale.
 
+## Container Passages — `docker-mounts`
+
+A container sees only the host paths it was handed at creation. Database-backed stores ride along inside the data directory; filesystem and Obsidian stores point elsewhere on your drive and must be passed through expressly, or they are simply absent within the container.
+
+```bash
+quilltap docs docker-mounts --instance friday              # a table for human eyes
+quilltap docs docker-mounts --instance friday --format args # -v flags, one per line
+quilltap docs docker-mounts --instance friday --format json # the whole plan, structured
+```
+
+The reckoning is more considered than a list of paths. Several stores sharing one vault earn a single passage between them; a store nested inside another already passed through is left alone, as binding both would shadow the parent's view of the child. A path that does not exist on this host is *skipped and reported* rather than passed through — Docker would otherwise conjure an empty directory in its place and present a hollow store as a healthy one. On macOS, a path outside Docker Desktop's shared regions earns a warning; on Linux, so does the matter of file ownership. Windows, where container paths cannot mirror host paths, is declined outright rather than half-served.
+
+With `--format args`, only the flags reach standard output and every remark goes to standard error, so a start script may splice the result straight into its command without sifting prose from instruction. This is precisely what `npm run start:docker` does on your behalf; the subcommand exists for those who prefer to see the arrangements before they are made, or who assemble their own `docker run` by hand.
+
 ## SQL Against the Mount-Index Database
 
 For ad-hoc queries that go beyond what `docs` exposes, point the existing `db` subcommand at the mount-index database with `--mount-points`:

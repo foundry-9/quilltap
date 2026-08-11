@@ -12,7 +12,7 @@ import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { created, serverError, badRequest, conflict, successResponse } from '@/lib/api/responses';
 import { attachMountPoint } from '@/lib/mount-index/watcher';
-import { verifyBasePath } from '@/lib/mount-index/scanner';
+import { checkBasePathAvailability } from '@/lib/mount-index/base-path-availability';
 import { scaffoldCharacterMount } from '@/lib/mount-index/character-scaffold';
 import { searchDocumentChunks } from '@/lib/mount-index/document-search';
 import {
@@ -198,13 +198,14 @@ export const POST = createContextHandler(async (req: NextRequest, { user, repos 
   // or the blob API once the user starts writing.
   let warning: string | undefined;
   if (validatedData.mountType !== 'database') {
-    const accessible = await verifyBasePath(validatedData.basePath);
-    if (accessible) {
-    } else {
-      warning = `Base path '${validatedData.basePath}' is not currently accessible. The mount point was created but scanning will fail until the path is available.`;
+    const availability = await checkBasePathAvailability(validatedData.basePath);
+    if (!availability.available) {
+      warning = `${availability.message} The store was created, but scanning will fail until the path is reachable.`;
       logger.warn('[Mount Points v1] Base path not accessible', {
         basePath: validatedData.basePath,
         mountPointId: mountPoint.id,
+        reason: availability.reason,
+        containerized: availability.containerized,
       });
     }
   }
