@@ -121,6 +121,15 @@ _quilltap_complete() {
         else
           COMPREPLY=($(compgen -W "$db_verbs" -- "$cur"))
         fi
+      elif [[ "$subverb" == "characters" ]]; then
+        local char_verbs="status archives archive rehydrate export"
+        local char_flags="--instance --data-dir --passphrase --json --limit --diverged --blocked --id \
+          --write -p --port --out --help"
+        if [[ "$cur" == -* ]]; then
+          COMPREPLY=($(compgen -W "$char_flags" -- "$cur"))
+        else
+          COMPREPLY=($(compgen -W "$char_verbs" -- "$cur"))
+        fi
       else
         COMPREPLY=($(compgen -W "$db_flags" -- "$cur"))
       fi

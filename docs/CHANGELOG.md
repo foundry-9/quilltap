@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Fix: shell completions missing the character-archive CLI subcommands
+
+Tab completion for `quilltap db characters` stopped at the verb itself. Bash, zsh, and fish now complete `status`, `archives`, `archive`, `rehydrate`, and `export`, plus their flags (`--write`, `--port`, `--out`).
+
 #### Fix: rehydrate refused any vault that links the same bytes twice (bug 57)
 
 Archiving a character whose vault holds one blob linked at two paths — what an ordinary content-addressed save produces, such as the same image saved into the gallery twice — made them unrehydratable. Every attempt failed identically with `Preserve IDs collision for document store blob <id> (also seen as document store blob)`.

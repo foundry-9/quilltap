@@ -93,6 +93,14 @@ complete -c quilltap -n '__quilltap_using_subcommand db' -f -a 'optimize' -d 'Op
 complete -c quilltap -n '__quilltap_using_subcommand db' -f -a 'backup' -d 'Backup database'
 complete -c quilltap -n '__quilltap_using_subcommand db' -f -a 'integrity' -d 'Check integrity'
 
+# db characters sub-subverbs
+complete -c quilltap -n '__quilltap_using_subverb db characters' -f -a 'status' -d 'Per-character vault status report'
+complete -c quilltap -n '__quilltap_using_subverb db characters' -f -a 'archives' -d 'List archived characters and bundles'
+complete -c quilltap -n '__quilltap_using_subverb db characters' -f -a 'archive' -d 'Archive a character (server required)'
+complete -c quilltap -n '__quilltap_using_subverb db characters' -f -a 'rehydrate' -d 'Wake an archived character (server required)'
+complete -c quilltap -n '__quilltap_using_subverb db characters' -f -a 'export' -d 'Write a plaintext .qtap for a character'
+complete -c quilltap -n '__quilltap_using_subverb db characters' -l 'port' -s 'p' -d 'Server port' -x
+
 # db flags
 complete -c quilltap -n '__quilltap_using_subcommand db' -l 'limit' -d 'Result limit' -x
 complete -c quilltap -n '__quilltap_using_subcommand db' -l 'grep' -d 'Substring search' -x
