@@ -2,7 +2,7 @@
 
 ## Recent Changes
 
-### 4.8-dev
+### 4.8.0
 
 #### Fix: streaming thinking indicator crowded the tool block above it
 
