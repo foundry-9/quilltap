@@ -6,11 +6,15 @@
  * such as `__quil<t>tapDbKeyState` silently reads/writes the wrong key, so identifiers
  * matter as much as user-visible strings.
  *
+ * The rule only sees files ESLint parses — JS and TS. Markdown, JSON, YAML and
+ * shell files are swept by `scripts/check-quilltap-spelling.mjs` instead, off the
+ * same pattern.
+ *
  * This file is exempted from its own rule in eslint.config.mjs, since it necessarily
  * spells the forbidden word.
  */
 
-const MISSPELLING = /quilttap(?!ap)/i
+const { MISSPELLING } = require('./quilltap-spelling.js')
 
 module.exports = {
   rules: {

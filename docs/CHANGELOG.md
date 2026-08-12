@@ -4,6 +4,14 @@
 
 ### 4.8.1
 
+#### Fix: the spelling lint rule never looked at documentation
+
+The project is spelled Quilltap, and an ESLint rule has flagged the doubled-t misspelling since 2.9. That rule only ever saw files ESLint parses. The flat config supplies no configuration for `.md`, `.json`, `.yml`, or shell files, so `eslint .` skipped each one with a "no matching configuration" warning and `npm run lint` stayed green while the misspelling sat in `docs/`.
+
+`npm run lint` and `npm run lint:fix` now run `scripts/check-quilltap-spelling.mjs` after ESLint. It sweeps every tracked and new-but-not-ignored text file, using the same pattern as the ESLint rule — both now read it from `quilltap-spelling.js`, so the two enforcers cannot drift. Deliberate occurrences are declared in an `ALLOWED_PATHS` list in the script, or exempted per line with a `quilltap-spelling-exception` marker.
+
+The misspelling itself was corrected in `docs/developer/features/complete/restore-rootfs-builds.md`, which had it in the release asset names, the download URLs, and the prose. Every other occurrence in `docs/` is deliberate: documents that state the spelling rule have to quote the wrong spelling, and the shipped changelogs and release notes record the misspelling being caught and fixed. Those are on the allowlist, unchanged.
+
 #### Fix: the documented way to back up your encryption key copied nothing (bug 60)
 
 The backup instructions in BACKUP-RESTORE.md and DEPLOYMENT.md gave the wrong path for the `.dbkey` file. The key file lives in the `data/` subdirectory alongside the database files, and the documented commands pointed one level above it, so `cp` failed and copied nothing. Anyone who followed the procedure had no backup of their encryption key — which is the one file that, if lost, makes the databases permanently unopenable. The same wrong path appeared in the Docker restore steps, and the in-app help called the file `.dbkey` instead of `quilltap.dbkey`. All of these now give the real path, and the help page warns specifically about aiming a backup one directory too high.

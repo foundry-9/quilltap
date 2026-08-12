@@ -48,8 +48,9 @@ const eslintConfig = defineConfig([
     },
   },
   {
-    // The rule's own implementation has to spell the forbidden word to match it.
-    files: ['eslint-quilltap-plugin.js'],
+    // The rule's own implementation, and the pattern it shares with the
+    // repo-wide sweep, have to spell the forbidden word in order to match it.
+    files: ['eslint-quilltap-plugin.js', 'quilltap-spelling.js'],
     rules: {
       'quilltap/no-quilltap-misspelling': 'off',
     },
