@@ -367,18 +367,6 @@ export function getDbKeyPath(): string {
 }
 
 /**
- * Get the LLM logs database key file path
- *
- * Separate .dbkey file for the LLM logs database, using the same pepper
- * but stored independently for operational isolation.
- *
- * @returns LLM logs database key file path (<base>/data/quilltap-llm-logs.dbkey)
- */
-export function getLLMLogsDbKeyPath(): string {
-  return path.join(getDataDir(), 'quilltap-llm-logs.dbkey');
-}
-
-/**
  * Get the physical database backups directory path
  *
  * Physical backups are stored alongside the database file under data/backups/.

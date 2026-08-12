@@ -54,7 +54,6 @@ async function importDbKey() {
 }
 
 const MOCK_DBKEY_PATH = '/mock/data/quilltap.dbkey';
-const MOCK_LLM_DBKEY_PATH = '/mock/data/quilltap-llm-logs.dbkey';
 
 describe('Database Key Manager (dbkey)', () => {
   let mockExit: jest.SpyInstance;
@@ -88,15 +87,18 @@ describe('Database Key Manager (dbkey)', () => {
   // Path helpers
   // ---------------------------------------------------------------------------
 
-  describe('getDbKeyPath() / getLLMLogsDbKeyPath()', () => {
+  describe('getDbKeyPath()', () => {
     it('returns the path to quilltap.dbkey under getDataDir()', async () => {
       const { getDbKeyPath } = await importDbKey();
       expect(getDbKeyPath()).toBe(MOCK_DBKEY_PATH);
     });
 
-    it('returns the path to quilltap-llm-logs.dbkey under getDataDir()', async () => {
-      const { getLLMLogsDbKeyPath } = await importDbKey();
-      expect(getLLMLogsDbKeyPath()).toBe(MOCK_LLM_DBKEY_PATH);
+    // Bug 60: an instance has one pepper and one .dbkey file. The second copy at
+    // quilltap-llm-logs.dbkey was the remnant of a per-database-key design that
+    // was never built — nothing read it, and it could hold a stale wrapping.
+    it('exposes no per-database key path', async () => {
+      const dbkey = await importDbKey();
+      expect('getLLMLogsDbKeyPath' in dbkey).toBe(false);
     });
   });
 
@@ -521,6 +523,22 @@ describe('Database Key Manager (dbkey)', () => {
 
       expect(result.success).toBe(true);
       expect(cachedPassphrase()).toBe('new-secret');
+    });
+
+    // Bug 60: changing the passphrase was the one path that wrote a second key
+    // file at quilltap-llm-logs.dbkey. Nothing read it, and because the other
+    // two write paths never updated it, it could sit on disk holding an
+    // out-of-date wrapping while looking like a valid spare. Assert the write
+    // itself, not merely the absence of the path helper.
+    it('changePassphrase writes only quilltap.dbkey', async () => {
+      const dbkey = await importDbKey();
+      await dbkey.provisionDbKey();
+      dbkey.setupDbKey('old-secret');
+
+      const result = dbkey.changePassphrase('old-secret', 'new-secret');
+
+      expect(result.success).toBe(true);
+      expect(Object.keys(mockFiles)).toEqual([MOCK_DBKEY_PATH]);
     });
 
     it('lockDbKey clears the cached passphrase alongside the pepper', async () => {

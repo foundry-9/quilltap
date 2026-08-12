@@ -11,10 +11,12 @@ All Quilltap databases are encrypted at rest using **SQLCipher** via the `better
 | Term | Description |
 |------|-------------|
 | **Pepper** | A 32-byte random value (44-char base64 string) used as the SQLCipher database key. Lives in `process.env.ENCRYPTION_MASTER_PEPPER` at runtime. |
-| **`.dbkey` file** | A JSON file on disk that stores the pepper, encrypted with AES-256-GCM. Located at `<data-dir>/quilltap.dbkey` and `<data-dir>/quilltap-llm-logs.dbkey`. |
+| **`.dbkey` file** | A JSON file on disk that stores the pepper, encrypted with AES-256-GCM. Located at `<data-dir>/quilltap.dbkey`. One per instance. |
 | **Passphrase** | An optional user-supplied string used to derive the AES key that wraps the pepper inside the `.dbkey` file. When omitted, an internal sentinel (`__quilltap_no_passphrase__`) is used instead — the `.dbkey` file is always encrypted. |
 
-Both the main database (`quilltap.db`) and the LLM logs database (`quilltap-llm-logs.db`) use the same pepper but have separate `.dbkey` files for operational independence.
+All three databases — main (`quilltap.db`), LLM logs (`quilltap-llm-logs.db`), and mount index (`quilltap-mount-index.db`) — open with the same pepper, unwrapped from the one `quilltap.dbkey`. Each client module reads `ENCRYPTION_MASTER_PEPPER` rather than a key file of its own.
+
+> **Historical note.** Before 4.8.1, `changePassphrase()` also wrote a byte-identical copy to `quilltap-llm-logs.dbkey` — the remnant of a per-database-key design that was never built. Nothing ever read it, and because the other two writers of the main key file (`setupDbKey`, `storeEnvPepperInDbKey`) did not touch it, it could hold a stale wrapping. The write was removed; the file is inert wherever it still exists. See [Bug 60](bugs/fixed/bug-60-phantom-per-database-key-files.md).
 
 ## Architecture
 

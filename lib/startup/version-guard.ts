@@ -20,7 +20,7 @@
 
 import semver from 'semver';
 import { logger } from '@/lib/logger';
-import { getDbKeyPath, getLLMLogsDbKeyPath } from '@/lib/startup/dbkey';
+import { getDbKeyPath } from '@/lib/startup/dbkey';
 
 /** Version assumed for databases without an instance_settings table */
 const LEGACY_ASSUMED_VERSION = '3.3.0-dev.127';
@@ -212,11 +212,10 @@ function patchDbKeyFileVersion(filePath: string, version: string, log: ReturnTyp
 }
 
 /**
- * Write `minServerVersion` into both the main and LLM logs .dbkey files.
+ * Write `minServerVersion` into the instance's .dbkey file.
  */
 function storeMinServerVersionInDbKeys(version: string, log: ReturnType<typeof logger.child>): void {
   patchDbKeyFileVersion(getDbKeyPath(), version, log);
-  patchDbKeyFileVersion(getLLMLogsDbKeyPath(), version, log);
 }
 
 /**

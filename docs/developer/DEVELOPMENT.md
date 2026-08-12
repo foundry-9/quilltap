@@ -141,6 +141,7 @@ quilltap/
 ├── tailwind.config.ts        # Tailwind CSS configuration
 ├── eslint.config.mjs         # ESLint configuration
 ├── eslint-quilltap-plugin.js # Project-local ESLint rules (e.g., the "Quilltap" spelling rule)
+├── quilltap-spelling.js      # The "Quilltap" misspelling pattern, shared by the ESLint rule and the repo-wide sweep
 ├── knip.json                 # Knip dead-code config
 ├── tsconfig.json             # TypeScript configuration
 └── package.json              # Dependencies and npm scripts
@@ -246,6 +247,13 @@ npm run lint
 # Fix auto-fixable lint errors
 npm run lint:fix
 ```
+
+Both scripts run ESLint and then `scripts/check-quilltap-spelling.mjs`, a
+repo-wide sweep for the "Quilltap" misspelling. ESLint only sees files it parses
+(JS/TS), so the sweep is what covers markdown, JSON, YAML, shell, and CSS — where
+the ESLint rule reports nothing at all. It scans tracked and new-but-not-ignored
+files; deliberate occurrences go in `ALLOWED_PATHS` in that script, or carry a
+`quilltap-spelling-exception` marker on the line.
 
 ### Building Plugins
 

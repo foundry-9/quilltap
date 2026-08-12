@@ -110,7 +110,7 @@ Files are stored on the local filesystem:
 
 **Important:**
 
-- `quilltap.dbkey` and `quilltap-llm-logs.dbkey` in the data directory — these `.dbkey` files contain the encrypted database key (pepper). Without them, the databases cannot be opened. See [Database Encryption](DATABASE_ENCRYPTION.md) for details.
+- `data/quilltap.dbkey` — the one `.dbkey` file, holding the encrypted database key (pepper). All three databases open with it; without it, none of them can be opened. Note the `data/` subdirectory: the key file sits alongside the `.db` files, not in the base directory. See [Database Encryption](DATABASE_ENCRYPTION.md) for details.
 - SQLite database file path configuration
 - File storage directory path
 
@@ -225,7 +225,7 @@ openssl enc -aes-256-cbc -in quilltap-backup.zip -out quilltap-backup.zip.enc
 sha256sum quilltap-backup.zip > quilltap-backup.zip.sha256
 ```
 
-**Important:** Always back up the `.dbkey` files alongside your database files. Without the `.dbkey` file (or the passphrase used to protect it), physical database backups are unrecoverable.
+**Important:** Always back up `data/quilltap.dbkey` alongside your database files. Without it (or the passphrase used to protect it), physical database backups are unrecoverable.
 
 ## Restore Procedures
 
@@ -326,13 +326,13 @@ sha256sum -c quilltap-backup-YYYYMMDD.db.sha256
 
 ### Test Restore (Optional Environment)
 
-Before restoring to production, test with a separate data directory. Both the `.dbkey` files and database files must be present:
+Before restoring to production, test with a separate data directory. Both the `.dbkey` file and the database file must be present, and both live under `data/`:
 
 ```bash
 # Create a test directory with copies of the backup
-mkdir /tmp/quilltap-test
+mkdir -p /tmp/quilltap-test/data
 cp quilltap-backup-YYYYMMDD.db /tmp/quilltap-test/data/quilltap.db
-cp quilltap.dbkey /tmp/quilltap-test/quilltap.dbkey
+cp quilltap.dbkey /tmp/quilltap-test/data/quilltap.dbkey
 
 # Verify data
 npx quilltap db --data-dir /tmp/quilltap-test "SELECT COUNT(*) FROM users;"
@@ -357,11 +357,13 @@ If the `.dbkey` file is lost or corrupted and you don't have a backup of it, the
 **Prevention:**
 
 ```bash
-# Back up the .dbkey files alongside your database
-cp ~/Library/Application\ Support/Quilltap/quilltap.dbkey /secure/location/
-cp ~/Library/Application\ Support/Quilltap/quilltap-llm-logs.dbkey /secure/location/
-chmod 600 /secure/location/*.dbkey
+# Back up the .dbkey file alongside your database.
+# Note the data/ subdirectory — the key file lives beside the .db files.
+cp ~/Library/Application\ Support/Quilltap/data/quilltap.dbkey /secure/location/
+chmod 600 /secure/location/quilltap.dbkey
 ```
+
+There is one `.dbkey` file per instance, and every database opens with it. If you find a `quilltap-llm-logs.dbkey` beside it, that is a leftover from before 4.8.1 — nothing reads it, and it may hold an out-of-date copy of the key, so do not treat it as a spare. Back up `quilltap.dbkey`.
 
 If you set a custom passphrase on the `.dbkey` file, you must also remember the passphrase. See [Database Encryption](DATABASE_ENCRYPTION.md) for details.
 
@@ -489,12 +491,11 @@ echo "Latest backup is current: $AGE days old"
    docker stop quilltap
    ```
 
-3. **Restore `.dbkey` files (if needed):**
+3. **Restore the `.dbkey` file (if needed):**
 
    ```bash
-   cp /secure/location/quilltap.dbkey /app/quilltap/quilltap.dbkey
-   cp /secure/location/quilltap-llm-logs.dbkey /app/quilltap/quilltap-llm-logs.dbkey
-   chmod 600 /app/quilltap/*.dbkey
+   cp /secure/location/quilltap.dbkey /app/quilltap/data/quilltap.dbkey
+   chmod 600 /app/quilltap/data/quilltap.dbkey
    ```
 
 4. **Restore SQLite database:**

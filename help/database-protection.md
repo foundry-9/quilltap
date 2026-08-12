@@ -18,9 +18,11 @@ Your databases are not merely tucked away in a drawer, as one might store a perf
 
 ### The Key File
 
-The encryption key is stored in a file called **`.dbkey`** in the `data/` subdirectory of your data directory — for example, `~/Library/Application Support/Quilltap/data/.dbkey` on macOS. This file is managed entirely by Quilltap; you need not concern yourself with its contents under ordinary circumstances.
+The encryption key is stored in a file called **`quilltap.dbkey`**, in the `data/` subdirectory of your data directory — for example, `~/Library/Application Support/Quilltap/data/quilltap.dbkey` on macOS. Note the `data/` part particularly: the key file keeps company with the database files themselves, not with the folder above them, and a backup command aimed one level too high will copy nothing at all while appearing to succeed. This file is managed entirely by Quilltap; you need not concern yourself with its contents under ordinary circumstances.
 
-> **Back up your `.dbkey` file alongside your database.** If you copy your database to another machine without the `.dbkey` file, the database will be as useful as a very expensive paperweight. When backing up your data directory, ensure the `.dbkey` file travels with it.
+There is exactly **one** key file per instance, and all three databases open with it. Should you find a `quilltap-llm-logs.dbkey` sitting beside it, that is a relic of an older arrangement: nothing reads it, it may hold an out-of-date copy of the key, and it is safe to delete. Do not mistake it for a spare.
+
+> **Back up your `quilltap.dbkey` file alongside your database.** If you copy your database to another machine without it, the database will be as useful as a very expensive paperweight. When backing up your data directory, ensure the key file travels with it.
 
 ### Locked Mode (Optional Passphrase Protection)
 
@@ -137,6 +139,32 @@ This separation means that even if one database becomes corrupted, the others re
 ### Integrity Check on Startup
 
 Every time Quilltap starts, it runs a quick integrity check on all three databases. If corruption is detected in the main database, you'll see a warning in the application logs. The app will still start so you can access your data and restore from a backup if needed. If corruption is detected in the LLM logs database or the mount-index database, that database enters "degraded mode" — its feature goes quiet but everything else works normally.
+
+### One Instance at a Time
+
+Two Quilltaps writing to the same data directory is the one arrangement SQLite will not forgive — the Write-Ahead Log is a shared ledger, and two hands writing in it at once produce a document neither can read. Quilltap therefore keeps a lock file, `data/quilltap.lock`, naming the process that currently holds your instance. Every part of the application asks that lock's permission before opening the database, including the migration step that runs at startup to bring your data up to date with a new version.
+
+Should a second Quilltap arrive to find your instance already spoken for — a Docker container and a desktop app pointed at the same folder is the usual way this happens — it declines to start rather than write over the first one's work. The logs will name the offending party: its process ID, its hostname, and whether it is running under Docker.
+
+Two situations are worth recognizing:
+
+**The other instance is genuinely running.** Stop it, and the newcomer will start normally. This is nearly always the answer.
+
+**The other instance is long gone but left its lock behind.** A process killed outright — a container stopped abruptly, a laptop closed mid-thought — has no opportunity to tidy up after itself. Quilltap can usually tell: if the lock names a process on this same machine and that process is no longer running, the lock is claimed automatically and you will never know it happened. A lock left by a *Docker container*, however, names a process inside a machine that no longer exists, and no amount of squinting from outside will confirm its demise. For that case:
+
+```bash
+# See who holds the lock, and how long since they last drew breath
+npx quilltap db --lock-status
+
+# Remove a lock whose owner is demonstrably dead
+npx quilltap db --lock-clean
+```
+
+`--lock-status` reports the holder's last heartbeat, which is the useful tell: a live instance updates it continuously, while a stale one's grows steadily older. Should you find yourself reaching for `--lock-override`, pause — it seizes the lock regardless of who holds it, and if that party is in fact alive, you have arranged precisely the collision the lock was built to prevent.
+
+### The Empty-House Rule
+
+On a genuinely new instance, Quilltap furnishes the place: a starter character or two, a default embedding profile, the built-in roleplay templates. It only does this for a house it can see is empty — and, crucially, it distinguishes an empty house from a house it simply cannot get into. If the database cannot be read at that moment (a lock held elsewhere, a file the operating system has not finished fetching from the cloud), Quilltap declines to furnish anything and says so in the log. An unanswered question is not a yes.
 
 ### WAL Checkpoints
 

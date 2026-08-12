@@ -13,7 +13,7 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 
 ### Spelling — non-negotiable
 
-The project is **"Quilltap"** (quill + tap), **never** "Quilttap" (quilt + tap). A lint rule enforces this. Never write "quilttap" anywhere.
+The project is **"Quilltap"** (quill + tap), **never** "Quilttap" (quilt + tap). An ESLint rule enforces this in JS/TS, and `npm run lint` also sweeps every other tracked file — docs included. Never write "quilttap" anywhere.
 
 ### Writing voice
 
