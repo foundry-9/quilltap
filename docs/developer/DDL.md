@@ -15,11 +15,9 @@ All three databases live in `<data-dir>/data/`. Alongside them:
 ```
 <data-dir>/data/
 ├── quilltap.db
-├── quilltap.dbkey            # Encryption key file (main DB)
+├── quilltap.dbkey            # Encryption key file — one per instance, all three DBs
 ├── quilltap-llm-logs.db
-├── quilltap-llm-logs.dbkey   # Encryption key file (LLM logs DB)
 ├── quilltap-mount-index.db
-├── quilltap-mount-index.dbkey # Encryption key file (mount index DB)
 ├── quilltap.lock             # Instance lock (prevents dual-instance corruption)
 └── backups/                  # Physical backups
 ```
@@ -43,7 +41,7 @@ All three databases are encrypted with **SQLCipher** (AES-256-CBC with HMAC-SHA5
 ### How the key works
 
 1. A 32-byte random **pepper** (base64-encoded) is the actual SQLCipher key
-2. The pepper is wrapped with AES-256-GCM + PBKDF2 (600,000 iterations, SHA-256) and stored in `.dbkey` files
+2. The pepper is wrapped with AES-256-GCM + PBKDF2 (600,000 iterations, SHA-256) and stored in the instance's single `data/quilltap.dbkey` file
 3. An optional user passphrase protects the `.dbkey` wrapper; without one, a sentinel value is used
 4. At runtime, the pepper lands in `process.env.ENCRYPTION_MASTER_PEPPER`
 5. SQLCipher receives it as a raw hex key: `PRAGMA key = "x'<hex>'"`
@@ -1397,7 +1395,7 @@ CREATE TABLE sqlite_stat4(tbl, idx, neq, nlt, ndlt, sample);
 
 ## LLM Logs Database Schema (`quilltap-llm-logs.db`)
 
-This database uses the same encryption mechanism as the main database (same pepper, separate `.dbkey` file).
+This database uses the same encryption mechanism as the main database — the same pepper, unwrapped from the same `quilltap.dbkey`.
 
 ### llm_logs
 
@@ -1451,7 +1449,7 @@ CREATE TABLE sqlite_stat4(tbl, idx, neq, nlt, ndlt, sample);
 
 ## Mount Index Database Schema (`quilltap-mount-index.db`)
 
-This database uses the same encryption mechanism as the main database (same pepper, separate `.dbkey` file). Foreign keys are **enabled** (unlike the LLM logs DB).
+This database uses the same encryption mechanism as the main database — the same pepper, unwrapped from the same `quilltap.dbkey`. Foreign keys are **enabled** (unlike the LLM logs DB).
 
 Tables are auto-created on first access by their respective repositories via `CREATE TABLE IF NOT EXISTS`.
 

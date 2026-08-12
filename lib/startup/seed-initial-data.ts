@@ -62,10 +62,24 @@ export async function seedInitialData(): Promise<void> {
       });
     }
 
-    // Check if any characters exist for the default user
-    const existingCharacters = await repos.characters.findByUserId(SINGLE_USER_ID);
+    // Is this actually a first startup? Probe with countOrThrow, never with a
+    // find: the find* family returns [] on *any* failure, so a database that
+    // is merely unreachable (another instance holding the instance lock, a
+    // half-materialised iCloud file) reads as "no characters" and sends a
+    // fully-populated instance down the seeding path. Seeding must fail
+    // closed — an unanswerable question is not a yes.
+    let existingCharacterCount: number;
+    try {
+      existingCharacterCount = await repos.characters.countOrThrow({ userId: SINGLE_USER_ID });
+    } catch (probeError) {
+      logger.error('Skipping initial-data seeding — could not determine whether the database is empty', {
+        context,
+        error: probeError instanceof Error ? probeError.message : String(probeError),
+      });
+      return;
+    }
 
-    if (existingCharacters.length > 0) {
+    if (existingCharacterCount > 0) {
       // Database already has characters, no need to seed
       return;
     }
@@ -134,10 +148,20 @@ async function seedEmbeddingProfiles(
   context: string
 ): Promise<void> {
   try {
-    // Check if any embedding profiles exist
-    const existingProfiles = await repos.embeddingProfiles.findAll();
+    // Same fail-closed probe as the character check above — a failed read must
+    // not read as "no profiles exist" and mint a duplicate default.
+    let existingProfileCount: number;
+    try {
+      existingProfileCount = await repos.embeddingProfiles.countOrThrow();
+    } catch (probeError) {
+      logger.error('Skipping embedding-profile seeding — could not determine whether any profiles exist', {
+        context,
+        error: probeError instanceof Error ? probeError.message : String(probeError),
+      });
+      return;
+    }
 
-    if (existingProfiles.length > 0) {
+    if (existingProfileCount > 0) {
       // Embedding profiles already exist, no need to seed
       return;
     }

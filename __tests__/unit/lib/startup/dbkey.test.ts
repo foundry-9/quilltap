@@ -54,7 +54,6 @@ async function importDbKey() {
 }
 
 const MOCK_DBKEY_PATH = '/mock/data/quilltap.dbkey';
-const MOCK_LLM_DBKEY_PATH = '/mock/data/quilltap-llm-logs.dbkey';
 
 describe('Database Key Manager (dbkey)', () => {
   let mockExit: jest.SpyInstance;
@@ -88,15 +87,18 @@ describe('Database Key Manager (dbkey)', () => {
   // Path helpers
   // ---------------------------------------------------------------------------
 
-  describe('getDbKeyPath() / getLLMLogsDbKeyPath()', () => {
+  describe('getDbKeyPath()', () => {
     it('returns the path to quilltap.dbkey under getDataDir()', async () => {
       const { getDbKeyPath } = await importDbKey();
       expect(getDbKeyPath()).toBe(MOCK_DBKEY_PATH);
     });
 
-    it('returns the path to quilltap-llm-logs.dbkey under getDataDir()', async () => {
-      const { getLLMLogsDbKeyPath } = await importDbKey();
-      expect(getLLMLogsDbKeyPath()).toBe(MOCK_LLM_DBKEY_PATH);
+    // Bug 60: an instance has one pepper and one .dbkey file. The second copy at
+    // quilltap-llm-logs.dbkey was the remnant of a per-database-key design that
+    // was never built — nothing read it, and it could hold a stale wrapping.
+    it('exposes no per-database key path', async () => {
+      const dbkey = await importDbKey();
+      expect('getLLMLogsDbKeyPath' in dbkey).toBe(false);
     });
   });
 

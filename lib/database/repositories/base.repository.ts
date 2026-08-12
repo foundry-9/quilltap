@@ -417,6 +417,10 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
 
   /**
    * Count entities matching a filter
+   *
+   * Returns 0 when the query fails, so a caller cannot distinguish "no rows"
+   * from "the database was unreachable". Use {@link countOrThrow} when that
+   * difference matters.
    */
   async count(filter?: TypedQueryFilter<T>): Promise<number> {
     return this.safeQuery(
@@ -427,6 +431,29 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
       'Error counting entities',
       {},
       0,
+    );
+  }
+
+  /**
+   * Count entities matching a filter, throwing if the query fails
+   *
+   * The emptiness probe for callers that take a destructive branch on "the
+   * table is empty" — seeding being the motivating case. `count()` and the
+   * `find*` family all collapse an infrastructure failure into `0`/`[]`, which
+   * makes a locked or unopenable database indistinguishable from a virgin one.
+   * Counting also runs beneath row validation and any document-store overlay,
+   * so a row that fails to hydrate still registers as present.
+   *
+   * @throws whatever the underlying query threw
+   */
+  async countOrThrow(filter?: TypedQueryFilter<T>): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        return collection.countDocuments(filter);
+      },
+      'Error counting entities (strict)',
+      {},
     );
   }
 

@@ -54,7 +54,7 @@ A complete backup includes everything needed to recreate your Quilltap environme
 Certain data is intentionally excluded from backups:
 
 - **API keys** — encrypted with device-specific keys and cannot be transferred between instances. You will need to re-enter your API keys in your connection, image, and embedding profiles after a restore.
-- **Encryption key (.dbkey file)** — the master encryption key for your database is not included for security. Keep your `.dbkey` file backed up separately if you use database encryption.
+- **Encryption key (`data/quilltap.dbkey`)** — the master encryption key for your database is not included for security. Keep that file backed up separately if you use database encryption, and mind the `data/` subdirectory when you copy it.
 - **Nothing about your search indexes, ordinarily** — a full backup carries every embedding and search index intact, so semantic search is working the moment a restore finishes. This is precisely why a backup is not the same article as a portable `.qtap` export, which leaves embeddings behind on purpose. Tick **Compact backup** and the indexes are the one thing left out; see below.
 - **Background jobs** — any in-flight or queued tasks (embedding generation, memory extraction, etc.) are not preserved. They will be re-triggered as needed.
 - **Built-in plugins** — these ship with Quilltap and do not need backing up.

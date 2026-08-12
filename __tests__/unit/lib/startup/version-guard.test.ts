@@ -52,10 +52,8 @@ jest.mock('fs', () => ({
 
 // Mock dbkey path functions
 const MOCK_DBKEY_PATH = '/mock/data/quilltap.dbkey';
-const MOCK_LLM_DBKEY_PATH = '/mock/data/quilltap-llm-logs.dbkey';
 jest.mock('@/lib/startup/dbkey', () => ({
   getDbKeyPath: () => MOCK_DBKEY_PATH,
-  getLLMLogsDbKeyPath: () => MOCK_LLM_DBKEY_PATH,
 }));
 
 // ============================================================================
@@ -321,10 +319,11 @@ describe('Version Guard', () => {
 
         versionGuard.storeCurrentVersion();
 
-        // Should have written to both .dbkey files
-        expect(mockWriteFileSync).toHaveBeenCalledTimes(2);
+        // Bug 60: one pepper, one .dbkey file — the version stamp goes to it and
+        // nowhere else. The former second write to quilltap-llm-logs.dbkey kept
+        // a file alive that nothing ever read.
+        expect(mockWriteFileSync).toHaveBeenCalledTimes(1);
 
-        // Check main .dbkey
         const [mainPath, mainContent, mainOpts] = mockWriteFileSync.mock.calls[0];
         expect(mainPath).toBe(MOCK_DBKEY_PATH);
         const mainData = JSON.parse(mainContent as string);
@@ -332,12 +331,6 @@ describe('Version Guard', () => {
         expect(mainData.version).toBe(1);
         expect(mainData.algorithm).toBe('aes-256-gcm');
         expect((mainOpts as { mode: number }).mode).toBe(0o600);
-
-        // Check LLM logs .dbkey
-        const [llmPath, llmContent] = mockWriteFileSync.mock.calls[1];
-        expect(llmPath).toBe(MOCK_LLM_DBKEY_PATH);
-        const llmData = JSON.parse(llmContent as string);
-        expect(llmData.minServerVersion).toBe('3.4.0');
       });
 
       it('should skip .dbkey files that do not exist', () => {

@@ -30,7 +30,11 @@ export function isSQLiteBackend(): boolean {
 
 import Database, { Database as DatabaseType } from 'better-sqlite3';
 import fs from 'fs';
-import { getSQLiteDatabasePath, getDataDir } from '../../lib/paths';
+import { getSQLiteDatabasePath, getDataDir, getInstanceLockPath } from '../../lib/paths';
+import {
+  acquireInstanceLock,
+  InstanceLockError,
+} from '../../lib/database/backends/sqlite/instance-lock';
 
 let sqliteDb: DatabaseType | null = null;
 
@@ -63,6 +67,20 @@ export function ensureSQLiteDataDir(): void {
 
 /**
  * Get SQLite database instance for migrations
+ *
+ * Acquires the instance lock before opening, exactly as the repository-layer
+ * backend does (`lib/database/backends/sqlite/backend.ts`). Migrations are the
+ * heaviest writers in the codebase — they rewrite whole tables — so letting
+ * them open the database while another process holds the lock is the precise
+ * WAL-corruption scenario the lock exists to prevent. Acquisition is
+ * re-entrant for the same PID, so the backend connecting later in startup
+ * simply re-claims the lock this call already took.
+ *
+ * The lock is deliberately NOT released by `closeSQLite()`: in the server the
+ * migration runner closes its connection and the process keeps running under
+ * the same lock. Release happens through the normal shutdown handlers, and a
+ * process that dies without releasing leaves a same-host lock that the next
+ * acquisition reaps as stale.
  */
 export function getSQLiteDatabase(): DatabaseType {
   if (sqliteDb) {
@@ -70,6 +88,23 @@ export function getSQLiteDatabase(): DatabaseType {
   }
 
   ensureSQLiteDataDir();
+
+  try {
+    acquireInstanceLock(getInstanceLockPath());
+  } catch (lockError) {
+    if (lockError instanceof InstanceLockError) {
+      logger.error('Cannot run migrations: another instance holds the database lock', {
+        context: 'migrations.database-utils',
+        conflictPid: lockError.lockInfo.pid,
+        conflictHostname: lockError.lockInfo.hostname,
+        conflictStartedAt: lockError.lockInfo.startedAt,
+        conflictEnvironment: lockError.lockInfo.environment,
+        lockPath: lockError.lockPath,
+      });
+    }
+    throw lockError;
+  }
+
   const dbPath = getSQLitePath();
   const db = new Database(dbPath);
 

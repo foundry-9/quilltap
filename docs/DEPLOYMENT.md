@@ -64,7 +64,7 @@ docker run -d \
 
 **CRITICAL SECURITY NOTES:**
 
-1. **Backup the `.dbkey` file** — The encryption pepper is auto-generated on first run and stored in `quilltap.dbkey` (and `quilltap-llm-logs.dbkey` for LLM logs) inside your data directory. Without this file, your encrypted databases cannot be decrypted. Use a persistent volume so the key file survives container rebuilds.
+1. **Backup the `.dbkey` file** — The encryption pepper is auto-generated on first run and stored in `data/quilltap.dbkey` inside your data directory. There is one key file per instance, and all three databases open with it. Without this file, your encrypted databases cannot be decrypted. Use a persistent volume so the key file survives container rebuilds.
 2. **Optional passphrase protection** — You can protect the `.dbkey` file with a passphrase via the setup wizard or settings. If set, the passphrase is required on every startup (or after an auto-lock timeout). If the `.dbkey` file is lost and a passphrase was set, the database is unrecoverable.
 3. **Auto-lock** — Passphrase-protected instances support an idle timer that automatically locks the database after a configurable period of inactivity, requiring the passphrase to resume.
 
