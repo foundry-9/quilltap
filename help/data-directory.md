@@ -13,7 +13,7 @@ The Data Directory section on your profile page shows you where Quilltap stores 
 Quilltap stores all your data in a single directory on your system. This includes:
 
 - **data/** - Your SQLite database containing all characters, chats, memories, and settings
-  - **data/.dbkey** - The database encryption key file (encrypted at rest using SQLCipher); keep this file safe and back it up alongside your database — without it, your database cannot be opened
+  - **data/quilltap.dbkey** - The database encryption key file (encrypted at rest using SQLCipher); one per instance, opening all three databases. Keep this file safe and back it up alongside your database — without it, your database cannot be opened
 - **files/** - Uploaded files, images, and attachments
 - **logs/** - Application logs for troubleshooting
 - **plugins/npm/** - Any npm-installed plugins

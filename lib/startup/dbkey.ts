@@ -114,11 +114,18 @@ const PBKDF2_DIGEST = 'sha256';
  */
 export const INTERNAL_PASSPHRASE = '__quilltap_no_passphrase__';
 
-/** .dbkey file name for the main database */
+/**
+ * The instance's one and only .dbkey file.
+ *
+ * There is a single pepper per instance, wrapped once here. Every database —
+ * main, LLM logs, and mount index — opens with it. Quilltap once wrote a second
+ * copy at `quilltap-llm-logs.dbkey`, the remnant of a per-database-key design
+ * that was never built; nothing ever read it, and it could hold a stale
+ * wrapping, so the write was removed in 4.8.1. Instances that changed a
+ * passphrase before then may still have that file on disk; it is inert and safe
+ * to delete.
+ */
 const DBKEY_FILENAME = 'quilltap.dbkey';
-
-/** .dbkey file name for the LLM logs database */
-const LLM_LOGS_DBKEY_FILENAME = 'quilltap-llm-logs.dbkey';
 
 const log = migrationLogger.child({ context: 'dbkey' });
 
@@ -274,24 +281,12 @@ export function getDbKeyState(): DbKeyState {
 }
 
 /**
- * Get the path to the main database .dbkey file.
+ * Get the path to the instance's .dbkey file.
  *
  * @returns Absolute path to `quilltap.dbkey` in the data directory
  */
 export function getDbKeyPath(): string {
   return path.join(getDataDir(), DBKEY_FILENAME);
-}
-
-/**
- * Get the path to the LLM logs database .dbkey file.
- *
- * The LLM logs database uses the same pepper but stored in a separate
- * .dbkey file for operational independence.
- *
- * @returns Absolute path to `quilltap-llm-logs.dbkey` in the data directory
- */
-export function getLLMLogsDbKeyPath(): string {
-  return path.join(getDataDir(), LLM_LOGS_DBKEY_FILENAME);
 }
 
 /**
@@ -546,13 +541,12 @@ export function changePassphrase(
   const actualNewPassphrase = hasNewUserPassphrase ? newPassphrase : INTERNAL_PASSPHRASE;
   const newFileData = encryptPepper(pepper, actualNewPassphrase);
 
-  // Write both .dbkey files (main + LLM logs) with the new wrapping
+  // One pepper per instance, one .dbkey file. All three databases (main, LLM
+  // logs, mount index) open with the same key, unwrapped from this file alone —
+  // see the client modules under lib/database/backends/sqlite/, which each read
+  // ENCRYPTION_MASTER_PEPPER rather than a key file of their own.
   writeDbKeyFile(dbKeyPath, newFileData);
-  log.info('Main .dbkey file updated with new passphrase', { dbKeyPath });
-
-  const llmLogsDbKeyPath = getLLMLogsDbKeyPath();
-  writeDbKeyFile(llmLogsDbKeyPath, newFileData);
-  log.info('LLM logs .dbkey file updated with new passphrase', { path: llmLogsDbKeyPath });
+  log.info('.dbkey file updated with new passphrase', { dbKeyPath });
 
   // Update the cached passphrase state
   global.__quilltapHasUserPassphrase = hasNewUserPassphrase;

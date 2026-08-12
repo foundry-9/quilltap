@@ -2,6 +2,36 @@
 
 ## Recent Changes
 
+### 4.8.1
+
+#### Fix: the spelling lint rule never looked at documentation
+
+The project is spelled Quilltap, and an ESLint rule has flagged the doubled-t misspelling since 2.9. That rule only ever saw files ESLint parses. The flat config supplies no configuration for `.md`, `.json`, `.yml`, or shell files, so `eslint .` skipped each one with a "no matching configuration" warning and `npm run lint` stayed green while the misspelling sat in `docs/`.
+
+`npm run lint` and `npm run lint:fix` now run `scripts/check-quilltap-spelling.mjs` after ESLint. It sweeps every tracked and new-but-not-ignored text file, using the same pattern as the ESLint rule — both now read it from `quilltap-spelling.js`, so the two enforcers cannot drift. Deliberate occurrences are declared in an `ALLOWED_PATHS` list in the script, or exempted per line with a `quilltap-spelling-exception` marker.
+
+The misspelling itself was corrected in `docs/developer/features/complete/restore-rootfs-builds.md`, which had it in the release asset names, the download URLs, and the prose. Every other occurrence in `docs/` is deliberate: documents that state the spelling rule have to quote the wrong spelling, and the shipped changelogs and release notes record the misspelling being caught and fixed. Those are on the allowlist, unchanged.
+
+#### Fix: the documented way to back up your encryption key copied nothing (bug 60)
+
+The backup instructions in BACKUP-RESTORE.md and DEPLOYMENT.md gave the wrong path for the `.dbkey` file. The key file lives in the `data/` subdirectory alongside the database files, and the documented commands pointed one level above it, so `cp` failed and copied nothing. Anyone who followed the procedure had no backup of their encryption key — which is the one file that, if lost, makes the databases permanently unopenable. The same wrong path appeared in the Docker restore steps, and the in-app help called the file `.dbkey` instead of `quilltap.dbkey`. All of these now give the real path, and the help page warns specifically about aiming a backup one directory too high.
+
+The docs also described per-database key files that do not exist. An instance has one pepper and one `quilltap.dbkey`; all three databases open with it. `quilltap-mount-index.dbkey` was documented but never written by any version. `quilltap-llm-logs.dbkey` was written in exactly one place — changing your passphrase — and read by nothing, so it appeared only on instances whose passphrase was changed after setup. Because the other two paths that write the main key file never updated that copy, it could end up holding an out-of-date key while looking like a valid spare.
+
+That write is now removed. If your data directory has a `quilltap-llm-logs.dbkey`, it is inert and safe to delete; Quilltap does not delete it for you, since removing key material on your behalf is not a decision the app should make. Back up `data/quilltap.dbkey`.
+
+#### Fix: migrations ran without the instance lock (bug 58)
+
+Every database read and write in the app goes through the SQLite backend, which acquires the instance lock before opening the database. The migration runner used its own connection and skipped that step, so migrations — the heaviest writers in the codebase — could rewrite whole tables while another Quilltap process held the lock. This was found on an instance where a Docker container held the lock and a second Quilltap ran ten migrations against the same database anyway, rewriting 20,037 embeddings and 9,212 memory rows, before discovering it could not open the database at all.
+
+The migration runner now acquires the lock before opening, and refuses to run when another live process holds it. Acquisition is re-entrant for the same process, so a normal single-instance startup behaves exactly as before. A migration that cannot get the lock fails startup rather than proceeding, which is already how migration failures are handled.
+
+#### Fix: a failed database read could start new-install seeding on a populated instance (bug 59)
+
+The repository layer returns an empty list when a query fails, so "this table is empty" and "the database could not be read" arrive as the same value. Startup seeding asked whether any characters existed and treated an empty answer as a first startup — which meant a transient read failure could send an established instance down the new-install path: default characters, a default embedding profile, and a full `.qtap` import. On the instance where this was found, the seeding writes failed for the same reason the read did, so nothing was actually written, but only by coincidence.
+
+Seeding now determines emptiness with a strict count that raises the underlying error instead of hiding it, and skips seeding entirely when the question cannot be answered. Counting also runs beneath row validation and the document-store overlay, so a character whose vault is temporarily unreachable no longer subtracts from the total. Both the character check and the embedding-profile check were affected and both are fixed. Ordinary list queries keep their existing empty-list behavior.
+
 ### 4.8.0
 
 #### Fix: streaming thinking indicator crowded the tool block above it
