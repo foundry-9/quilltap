@@ -525,6 +525,22 @@ describe('Database Key Manager (dbkey)', () => {
       expect(cachedPassphrase()).toBe('new-secret');
     });
 
+    // Bug 60: changing the passphrase was the one path that wrote a second key
+    // file at quilltap-llm-logs.dbkey. Nothing read it, and because the other
+    // two write paths never updated it, it could sit on disk holding an
+    // out-of-date wrapping while looking like a valid spare. Assert the write
+    // itself, not merely the absence of the path helper.
+    it('changePassphrase writes only quilltap.dbkey', async () => {
+      const dbkey = await importDbKey();
+      await dbkey.provisionDbKey();
+      dbkey.setupDbKey('old-secret');
+
+      const result = dbkey.changePassphrase('old-secret', 'new-secret');
+
+      expect(result.success).toBe(true);
+      expect(Object.keys(mockFiles)).toEqual([MOCK_DBKEY_PATH]);
+    });
+
     it('lockDbKey clears the cached passphrase alongside the pepper', async () => {
       const dbkey = await importDbKey();
       await dbkey.provisionDbKey();
