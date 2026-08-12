@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Fix: streaming thinking indicator crowded the tool block above it
+
+When a streaming turn paused on a tool call with no prose after it, the "still working" quill rendered inline immediately below the tool block. The quill glyph paints slightly above its own layout box, so the two appeared to touch. The indicator now takes its own line with the same top spacing the tool block uses above itself. Inline placement mid-prose is unchanged.
+
 #### Docs: 4.8.0 release notes take in the character archive and the fourth batch of post-draft work
 
 Fourth catch-up pass over `docs/releases/4.8.0.md`, covering everything that landed after the 2026-08-05 pass. `pubDate` and the closing signature move to 2026-08-11. Features and user-visible fixes only; docs-only commits, the bug-catalogue reorganization, and the CI/test work are deliberately not in the notes.
