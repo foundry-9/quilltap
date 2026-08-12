@@ -15,7 +15,7 @@ Each drawer attends to a different aspect of running the conversation:
 - **Participants** — the cast of characters, who's speaking, who's queued, and every dial for tuning their behaviour. (This page treats that drawer in considerable detail; the rest are sketched briefly below with cross-references.)
 - **Chat** — the per-chat dials. Agent Mode, Roleplay Template, Project assignment, Image Provider, Lantern announcements, automatic avatar generation, and the gateways to the Tools and Run Tool modals. Regenerate Background lives here too, when story backgrounds are switched on.
 - **Visibility** — only present in multi-character chats. Two toggles: **All Whispers** (show or hide private asides) and **Shared Vaults** (whether characters may read one another's vaults).
-- **Organize** — the chat as an object. Rename, State editor, Continue Elsewhere, Export, and Gallery (when there are photos to display).
+- **Organize** — the chat as an object. Copy ID, Rename, State editor, Continue Elsewhere, Export, and Gallery (when there are photos to display).
 - **Edit Content** — the heavier instruments. Replace, Bulk Replace, Re-extract Memories, and Delete Memories.
 
 Only one drawer stands open at a time, in the manner of a well-mannered campaign desk; opening another closes the previous. Participants is open by default whenever the sidebar is expanded.
@@ -126,7 +126,7 @@ Each character card includes a **connection profile dropdown** that lets you cha
 - **Dropdown selector** shows the current model (e.g., "gpt-4-turbo", "claude-3-opus")
 - **"User (you type)"** option switches the character to user control (impersonation)
 - **Change immediately** — selecting a different profile saves automatically
-- Only shown for CHARACTER participants, not personas
+- Present on **every** participant card — including the seat you are presently typing as. The card you've claimed as your own ("You") carries the very same dropdown, so any participant may be handed off to an LLM, and any LLM reclaimed for your own pen, all from the one control. Pass your own seat to a model and the room can carry on without you (you may still slip back in by impersonating); pick a model for a character and they answer for themselves once more.
 
 This makes switching models the fastest possible action — no need to open a settings modal.
 
@@ -411,9 +411,9 @@ If impersonating multiple characters:
 
 ### Stopping Impersonation
 
-1. Click **Stop Impersonate** on the character's card
-2. Select a connection profile for AI control
-3. Character returns to LLM control
+1. Click **Stop Impersonate** on the character's card — always present there, so you are never stranded mid-impersonation
+2. If the character has no connection profile of its own, you'll be asked to pick one so it can answer under its own steam again
+3. The character resumes speaking for itself; nothing else about the seat is disturbed
 
 ## Pause and Resume
 
@@ -462,13 +462,14 @@ The per-chat dials, formerly scattered across a Tools palette popover and a Chat
 
 Only present in chats with two or more characters. Two toggles:
 
-- **All Whispers** — show or hide the private asides characters send to one another, plus the various Staff whispers the system itself drops
+- **All Whispers** — show or hide the private asides characters send to one another, along with the Staff's own whispers to your cast: the Commonplace Book's murmured recollections, Prospero's notes to a character on which shelves they may read, Carina's quiet answers, and the rest. A short list never hides, on the grounds that these are your machinery rather than the scene's: Pascal's private rolls, your own private Run Tool results, and the failure notices belonging to each — a tool that went wrong, or a question Carina could not answer. The house does not conceal the dice from the person who called for them, nor the news that a die failed to land. Anything you wrote yourself — an announcement you whispered from the composer — likewise always stays in your view.
 - **Shared Vaults** — let characters in this chat peek at one another's vaults (read-only) via the `doc_*` tools; off by default, in which case vault reads remain whispered to the caller
 
 ### Organize
 
 The chat as an object, rather than a conversation:
 
+- **Copy ID** — spirits the conversation's unique identifier onto the clipboard, ready to be pasted to the CLI or handed to a colleague; the button flashes a check-mark once the deed is done
 - **Rename** — give it a different title
 - **State…** — open the chat state editor; see [Chat State](chat-state.md)
 - **Continue Elsewhere** — fork this conversation into a new chat with a different scenario or project

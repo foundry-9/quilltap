@@ -330,9 +330,16 @@ export async function getFileFromExtractedBackup(
   file: FileEntry,
   backupFormat?: number
 ): Promise<Buffer | null> {
-  // New format (backupFormat: 2): files stored by storageKey path
-  if (backupFormat === 2 && file.storageKey) {
-    const newFormatPath = path.join(rootPath, 'files', file.storageKey);
+  // New format (backupFormat 2 and up): files stored by storageKey path.
+  // The test is a floor, not an equality — the format number has been bumped
+  // several times since this layout landed, and an `=== 2` check quietly
+  // excluded every archive newer than the one it was written for, sending each
+  // lookup down the pre-format-2 fallback that modern archives don't use.
+  const usesStorageKeyLayout = (backupFormat ?? 1) >= 2 && Boolean(file.storageKey);
+  const oldFormatRelPath = path.join('files', file.category, `${file.id}_${file.originalFilename}`);
+
+  if (usesStorageKeyLayout) {
+    const newFormatPath = path.join(rootPath, 'files', file.storageKey!);
     try {
       await fs.promises.access(newFormatPath);
       return await fs.promises.readFile(newFormatPath);
@@ -342,16 +349,16 @@ export async function getFileFromExtractedBackup(
   }
 
   // Old format (backupFormat: 1 or unset): files/{CATEGORY}/{fileId}_{originalFilename}
-  const oldFormatPath = path.join(rootPath, 'files', file.category, `${file.id}_${file.originalFilename}`);
+  const oldFormatPath = path.join(rootPath, oldFormatRelPath);
   try {
     await fs.promises.access(oldFormatPath);
     return await fs.promises.readFile(oldFormatPath);
   } catch {
     moduleLogger.warn('File not found in extracted backup', {
       fileId: file.id,
-      triedPaths: backupFormat === 2
-        ? [path.join('files', file.storageKey || ''), path.join('files', file.category, `${file.id}_${file.originalFilename}`)]
-        : [path.join('files', file.category, `${file.id}_${file.originalFilename}`)],
+      triedPaths: usesStorageKeyLayout
+        ? [path.join('files', file.storageKey!), oldFormatRelPath]
+        : [oldFormatRelPath],
     });
     return null;
   }

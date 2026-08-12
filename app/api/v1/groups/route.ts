@@ -6,7 +6,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { created, successResponse } from '@/lib/api/responses';
@@ -26,7 +26,7 @@ const createGroupSchema = z.object({
 // GET Handler
 // ============================================================================
 
-export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
+export const GET = createContextHandler(async (req: NextRequest, { user, repos }) => {
   let groups = await repos.groups.findAll();
 
   // Sort by createdAt descending
@@ -52,7 +52,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
 // POST Handler
 // ============================================================================
 
-export const POST = createAuthenticatedHandler(async (req: NextRequest, { repos }) => {
+export const POST = createContextHandler(async (req: NextRequest, { repos }) => {
   const body = await req.json();
   const validatedData = createGroupSchema.parse(body);
 

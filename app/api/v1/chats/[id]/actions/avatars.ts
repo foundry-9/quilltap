@@ -10,14 +10,14 @@ import { notFound, serverError } from '@/lib/api/responses';
 import { resolveCharacterAvatar } from '@/lib/photos/resolve-character-avatar';
 import { getPhotoLinkSummaryBySha256 } from '@/lib/photos/photo-link-summary';
 import { avatarOverrideSchema, removeAvatarSchema } from '../schemas';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 /**
  * Get all avatar overrides for a chat
  */
 export async function handleGetAvatars(
   chatId: string,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   try {
 
@@ -69,7 +69,7 @@ export async function handleGetAvatars(
 export async function handleSetAvatar(
   req: NextRequest,
   chatId: string,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const { characterId, imageId } = avatarOverrideSchema.parse(body);
@@ -130,7 +130,7 @@ export async function handleSetAvatar(
 export async function handleRemoveAvatar(
   req: NextRequest,
   chatId: string,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const { characterId } = removeAvatarSchema.parse(body);

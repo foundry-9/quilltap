@@ -99,6 +99,7 @@ Subcommands:
   maintenance                   Run retention / cleanup sweeps (status / run)
   file-verify                   Force-download cloud-evicted data files (iCloud, etc.)
   memory-diff <chatId>          Dump existing memories and dry-run re-extraction for a chat
+  recall-replay <chatId>        Replay a turn's memory recall, old vs episodic ranking
   completion <shell>            Generate a shell completion script (bash / zsh / fish)
 
 Options:
@@ -716,6 +717,20 @@ Subcommands (high-level shortcuts; auto-pick the right database):
                               Prompts/ and Scenarios/ folder counts, and any
                               divergence between DB columns and vault content.
                               (flags: --id <id|name> --diverged --blocked --limit N)
+  characters archives         List archived characters and ARCHIVE bundles on
+                              the shelf, loose bundles included. Read-only.
+  characters archive <name|id> --write [--port N]
+                              Archive a character via the RUNNING server (it
+                              holds the export pipeline and the passphrase).
+  characters rehydrate <name|id> --write [--port N]
+                              Wake an archived character via the running server.
+  characters export <name|id> [--out <path>] [--port N]
+                              Write a PLAINTEXT .qtap for a character. Archived:
+                              decrypts the bundle offline (prompts for the
+                              passphrase on protected instances) — the only way
+                              to reach packed-away mail/photos/summaries without
+                              rehydrating. Live: runs the server's export
+                              pipeline (server must be up). Read-only.
   optimize [target...]        Run maintenance (VACUUM + ANALYZE + PRAGMA optimize)
                               on the named databases, or all of them if no
                               target is given. Targets: main, llm-logs,
@@ -1108,7 +1123,7 @@ async function dbCommand(args) {
 // to the subcommand. Each subcommand parses these flags position-independently,
 // so they behave the same before or after the verb.
 const SUBCOMMANDS = new Set([
-  'db', 'themes', 'docs', 'memories', 'instances', 'memory-diff', 'completion', 'logs', 'migrations', 'maintenance', 'file-verify',
+  'db', 'themes', 'docs', 'memories', 'instances', 'memory-diff', 'recall-replay', 'completion', 'logs', 'migrations', 'maintenance', 'file-verify',
 ]);
 // Global flags that consume the following token as their value.
 const GLOBAL_VALUE_FLAGS = new Set(['-p', '--port', '-d', '--data-dir', '-i', '--instance', '--passphrase']);
@@ -1165,6 +1180,12 @@ if (subName === 'db') {
 } else if (subName === 'memory-diff') {
   const { memoryDiffCommand } = require('../lib/memory-diff-command');
   memoryDiffCommand(subArgs).catch(err => {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  });
+} else if (subName === 'recall-replay') {
+  const { recallReplayCommand } = require('../lib/recall-replay-command');
+  recallReplayCommand(subArgs).catch(err => {
     console.error(`Error: ${err.message}`);
     process.exit(1);
   });

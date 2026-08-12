@@ -133,6 +133,10 @@ export const ICON_REGISTRY = {
   'dice':          { defaultFile: '/images/icons/dice.svg',          defaultMode: 'mask' },
   'sparkles':      { defaultFile: '/images/icons/sparkles.svg',      defaultMode: 'mask' },
   'wand':          { defaultFile: '/images/icons/wand.svg',          defaultMode: 'mask' },
+  // The rocking quill shown while a reply is awaited or streaming. The MOTION
+  // is a separate theme hook (`.qt-thinking-indicator` in _chat.css) so a theme
+  // can change the glyph and the animation independently.
+  'thinking':      { defaultFile: '/images/icons/thinking.svg',      defaultMode: 'mask', ariaLabel: 'Writing' },
 
   // --- system & tooling ---
   'wrench':        { defaultFile: '/images/icons/wrench.svg',        defaultMode: 'mask' },
@@ -160,9 +164,6 @@ export const ICON_REGISTRY = {
 
 /** Union of every canonical icon name — derived from {@link ICON_REGISTRY}. */
 export type IconName = keyof typeof ICON_REGISTRY;
-
-/** Every canonical icon name as a runtime array (e.g. for storybook / soft validation). */
-export const ICON_NAMES = Object.keys(ICON_REGISTRY) as IconName[];
 
 /** Type guard: is `name` a known canonical icon? */
 export function isIconName(name: string): name is IconName {

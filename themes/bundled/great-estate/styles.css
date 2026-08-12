@@ -187,7 +187,7 @@
   /* Chat: Whisper messages — dusty plum, like a whispered secret in the library */
   --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 55%, hsl(280 25% 35%) 45%);
   --qt-chat-whisper-border: hsl(280 30% 42%);
-  --qt-chat-whisper-label-fg: hsl(280 25% 50%);
+  --qt-chat-whisper-label-fg: hsl(280 35% 26%);
 
   /* Chat: Silent messages — rich garden green for estate aesthetic */
   --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, hsl(158 25% 42%) 35%);
@@ -375,6 +375,13 @@
   --qt-tab-active-fg: var(--estate-gold-dark);
 
   --qt-tab-group-gap: 0.25rem;
+
+  /* ==========================================================================
+     WORKSPACE VARIABLES (the tabbed workspace — see _workspace.css)
+     Estate gold leaf: one --qt-workspace-accent gilds the active tab's border/
+     bar/fill, the pane divider on hover, and the split drop-zone.
+     ========================================================================== */
+  --qt-workspace-accent: var(--estate-gold);
 
   /* ==========================================================================
      OVERLAY VARIABLES

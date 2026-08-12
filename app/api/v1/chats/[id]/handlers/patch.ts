@@ -8,14 +8,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { notFound, badRequest } from '@/lib/api/responses';
 import { persistTurnSchema } from '../schemas';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 /**
  * PATCH handler for persisting turn state
  */
 export async function handlePatch(
   req: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   chatId: string
 ): Promise<NextResponse> {
   const { user, repos } = ctx;

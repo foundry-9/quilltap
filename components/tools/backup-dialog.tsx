@@ -15,6 +15,10 @@ interface BackupDialogProps {
 export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialogProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Full fidelity is the default: a backup restores the same instance, so its
+  // search indexes are still valid on arrival and rebuilding them costs real
+  // time and money exactly when the user is recovering from something.
+  const [compact, setCompact] = useState(false)
 
   if (!isOpen) return null
 
@@ -26,7 +30,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
       const response = await fetch('/api/v1/system/backup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ compact }),
       })
 
       const data = await response.json()
@@ -111,6 +115,23 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
                 <li>Plugin configurations and npm plugins</li>
               </ul>
             </div>
+
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={compact}
+                onChange={(e) => setCompact(e.target.checked)}
+                disabled={loading}
+                className="w-4 h-4 mt-0.5"
+              />
+              <span>
+                <span className="text-sm qt-text-primary">Compact backup</span>
+                <span className="block qt-text-small qt-text-secondary">
+                  A considerably slimmer archive — the search indexes are left behind and
+                  rebuilt after restoring. Everything you have written travels either way.
+                </span>
+              </span>
+            </label>
 
             {/* Error Display */}
             {error && (

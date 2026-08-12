@@ -14,9 +14,11 @@ interface GroupsGridProps {
   groups: Group[]
   onCreateClick: () => void
   onDeleteClick: (groupId: string) => void
+  /** When provided (workspace tab), open the group in place instead of routing. */
+  onOpenGroup?: (groupId: string) => void
 }
 
-export function GroupsGrid({ groups, onCreateClick, onDeleteClick }: GroupsGridProps) {
+export function GroupsGrid({ groups, onCreateClick, onDeleteClick, onOpenGroup }: GroupsGridProps) {
   const router = useRouter()
 
   const handleCardClick = (e: React.MouseEvent, groupId: string) => {
@@ -24,7 +26,8 @@ export function GroupsGrid({ groups, onCreateClick, onDeleteClick }: GroupsGridP
     if (target.closest('button') || target.closest('a')) {
       return
     }
-    router.push(`/aurora/groups/${groupId}`)
+    if (onOpenGroup) onOpenGroup(groupId)
+    else router.push(`/aurora/groups/${groupId}`)
   }
 
   if (groups.length === 0) {
@@ -49,6 +52,7 @@ export function GroupsGrid({ groups, onCreateClick, onDeleteClick }: GroupsGridP
           group={group}
           onClick={(e) => handleCardClick(e, group.id)}
           onDelete={() => onDeleteClick(group.id)}
+          onOpen={onOpenGroup}
         />
       ))}
     </div>

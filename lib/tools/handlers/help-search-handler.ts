@@ -115,7 +115,8 @@ export async function executeHelpSearchTool(
 ): Promise<HelpSearchToolOutput> {
   try {
     // Validate input
-    if (!validateHelpSearchInput(input)) {
+    const parsed = validateHelpSearchInput(input)
+    if (!parsed) {
       logger.warn('Help search validation failed', {
         context: 'help-search-handler',
         userId: context.userId,
@@ -129,7 +130,7 @@ export async function executeHelpSearchTool(
       }
     }
 
-    const { query, limit = 3 } = input
+    const { query, limit = 3 } = parsed
 
     // Ensure help docs are loaded
     const helpSearch = getHelpSearch()

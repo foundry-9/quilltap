@@ -18,6 +18,7 @@ export function useRestoreData(isOpen: boolean) {
     loadingPreview: false,
     restoreMode: 'import',
     confirmReplace: false,
+    keepArchiveBundles: true,
     restoring: false,
     restoreSummary: null,
     error: null,
@@ -178,6 +179,7 @@ export function useRestoreData(isOpen: boolean) {
           body: JSON.stringify({
             uploadId: state.uploadId,
             mode: state.restoreMode === 'replace' ? 'replace' : 'new-account',
+            keepArchivedCharacterBundles: state.keepArchiveBundles,
           }),
         })
 
@@ -206,7 +208,7 @@ export function useRestoreData(isOpen: boolean) {
         setState((prev) => ({ ...prev, restoring: false }))
       }
     },
-    [state.restoreMode, state.confirmReplace, state.uploadId]
+    [state.restoreMode, state.confirmReplace, state.keepArchiveBundles, state.uploadId]
   )
 
   const resetDialog = useCallback(() => {
@@ -217,6 +219,7 @@ export function useRestoreData(isOpen: boolean) {
       loadingPreview: false,
       restoreMode: 'import',
       confirmReplace: false,
+      keepArchiveBundles: true,
       restoring: false,
       restoreSummary: null,
       error: null,
@@ -241,6 +244,8 @@ export function useRestoreData(isOpen: boolean) {
         setState((prev) => ({ ...prev, restoreMode: mode, confirmReplace: false })),
       setConfirmReplace: (confirm: boolean) =>
         setState((prev) => ({ ...prev, confirmReplace: confirm })),
+      setKeepArchiveBundles: (keep: boolean) =>
+        setState((prev) => ({ ...prev, keepArchiveBundles: keep })),
     },
   }
 }

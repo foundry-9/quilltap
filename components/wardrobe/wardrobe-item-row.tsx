@@ -13,7 +13,7 @@
  *    targets the item's only slot directly; for multi-slot items it opens
  *    a small popover that lets the user pick.
  *  - `⋮` kebab menu with secondary actions: Edit, toggle the default-outfit
- *    flag, Duplicate, and Delete.
+ *    flag, Duplicate, Move, Copy, and Delete.
  *
  * Composite items keep a `▶/▼` expander on the left so the user can peek at
  * the components without entering the editor.
@@ -39,6 +39,8 @@ interface WardrobeItemRowProps {
   onToggleDefault: (item: WardrobeItem) => void
   onEdit: (item: WardrobeItem) => void
   onDuplicate: (item: WardrobeItem) => void
+  onMove: (item: WardrobeItem) => void
+  onCopy: (item: WardrobeItem) => void
   onDelete: (item: WardrobeItem) => void
   onEquip?: (item: WardrobeItem) => void
   onAddToSlot?: (item: WardrobeItem, slot: WardrobeItemType) => void
@@ -70,6 +72,8 @@ export function WardrobeItemRow({
   onToggleDefault,
   onEdit,
   onDuplicate,
+  onMove,
+  onCopy,
   onDelete,
   onEquip,
   onAddToSlot,
@@ -264,9 +268,8 @@ export function WardrobeItemRow({
             </div>
           )}
 
-          {/* Kebab menu — Edit, Delete, default toggle */}
-          {!isShared && (
-            <div className="relative" ref={kebabRef}>
+          {/* Kebab menu — item actions */}
+          <div className="relative" ref={kebabRef}>
               <button
                 type="button"
                 onClick={() => setKebabOpen((v) => !v)}
@@ -284,33 +287,63 @@ export function WardrobeItemRow({
                   className="absolute right-0 top-full mt-1 z-30 min-w-[14rem] rounded border qt-border-default qt-bg-default shadow-md"
                 >
                   <ul className="divide-y qt-border-default">
+                    {!isShared && (
+                      <>
+                        <li>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setKebabOpen(false)
+                              onEdit(item)
+                            }}
+                            className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
+                          >
+                            Edit
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            disabled={isUpdatingDefault}
+                            onClick={() => {
+                              setKebabOpen(false)
+                              onToggleDefault(item)
+                            }}
+                            className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted disabled:opacity-50"
+                          >
+                            {item.isDefault
+                              ? '☆ Unmark as default'
+                              : '★ Mark as default outfit item'}
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setKebabOpen(false)
+                              onDuplicate(item)
+                            }}
+                            className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
+                          >
+                            Duplicate
+                          </button>
+                        </li>
+                      </>
+                    )}
                     <li>
                       <button
                         type="button"
                         role="menuitem"
                         onClick={() => {
                           setKebabOpen(false)
-                          onEdit(item)
+                          onMove(item)
                         }}
                         className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
                       >
-                        Edit
-                      </button>
-                    </li>
-                    <li>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        disabled={isUpdatingDefault}
-                        onClick={() => {
-                          setKebabOpen(false)
-                          onToggleDefault(item)
-                        }}
-                        className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted disabled:opacity-50"
-                      >
-                        {item.isDefault
-                          ? '☆ Unmark as default'
-                          : '★ Mark as default outfit item'}
+                        Move
                       </button>
                     </li>
                     <li>
@@ -319,31 +352,32 @@ export function WardrobeItemRow({
                         role="menuitem"
                         onClick={() => {
                           setKebabOpen(false)
-                          onDuplicate(item)
+                          onCopy(item)
                         }}
                         className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
                       >
-                        Duplicate
+                        Copy
                       </button>
                     </li>
-                    <li>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          setKebabOpen(false)
-                          onDelete(item)
-                        }}
-                        className="block w-full text-left px-3 py-2 text-sm qt-text-destructive hover:qt-bg-muted"
-                      >
-                        Delete
-                      </button>
-                    </li>
+                    {!isShared && (
+                      <li>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setKebabOpen(false)
+                            onDelete(item)
+                          }}
+                          className="block w-full text-left px-3 py-2 text-sm qt-text-destructive hover:qt-bg-muted"
+                        >
+                          Delete
+                        </button>
+                      </li>
+                    )}
                   </ul>
                 </div>
               )}
             </div>
-          )}
         </div>
       </div>
 
@@ -364,6 +398,8 @@ export function WardrobeItemRow({
                 onToggleDefault={onToggleDefault}
                 onEdit={onEdit}
                 onDuplicate={onDuplicate}
+                onMove={onMove}
+                onCopy={onCopy}
                 onDelete={onDelete}
                 depth={depth + 1}
               />

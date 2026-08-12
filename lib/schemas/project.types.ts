@@ -68,6 +68,15 @@ export const ProjectPropertiesSchema = z.object({
   /** When an image is generated (Lantern background, avatar, or character-invoked), inject an assistant message announcing it to characters (null = inherit from global, default false) */
   defaultAlertCharactersOfLanternImages: z.boolean().nullable().optional(),
 
+  /**
+   * Per-project answer-confirmation override for chats in this project.
+   * 'ON' = force the consistency check on for the project's chats; 'OFF' =
+   * force it off; null/undefined = inherit the global setting. A chat's own
+   * `answerConfirmationOverride` still wins over this. See
+   * `isAnswerConfirmationActive`.
+   */
+  answerConfirmationOverride: z.enum(['ON', 'OFF']).nullable().optional(),
+
   // Story backgrounds
   /** Whether story backgrounds are enabled for this project (null = inherit from global, true/false = override) */
   storyBackgroundsEnabled: z.boolean().nullable().optional(),
@@ -152,6 +161,7 @@ export const PROJECT_STORE_MANAGED_FIELDS: ReadonlySet<keyof Project> = new Set<
   'defaultImageProfileId',
   'defaultRoleplayTemplateId',
   'defaultAlertCharactersOfLanternImages',
+  'answerConfirmationOverride',
   'storyBackgroundsEnabled',
   'staticBackgroundImageId',
   'storyBackgroundImageId',

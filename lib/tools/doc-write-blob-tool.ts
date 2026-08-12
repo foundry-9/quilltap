@@ -53,8 +53,9 @@ export const docWriteBlobToolDefinition = {
   },
 };
 
-export function validateDocWriteBlobInput(input: unknown): input is DocWriteBlobInput {
-  return docWriteBlobToolInputSchema.safeParse(input).success;
+export function validateDocWriteBlobInput(input: unknown): DocWriteBlobInput | null {
+  const parsed = docWriteBlobToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 

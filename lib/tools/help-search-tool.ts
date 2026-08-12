@@ -8,6 +8,7 @@
 
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
+import { llmNumber } from './llm-number'
 
 /**
  * Zod schema for the help search tool's input.
@@ -23,13 +24,15 @@ export const helpSearchToolInputSchema = z.object({
     .describe(
       'What to search for in the help documentation. Be specific about the feature, setting, or topic. Examples: "how to configure embedding profiles", "image generation settings", "memory search", "project files"'
     ),
-  limit: z
-    .number()
-    .int()
-    .min(1)
-    .max(10)
+  limit: llmNumber(
+    z
+      .number()
+      .int()
+      .min(1)
+      .max(10)
+      .describe('Maximum number of help documents to retrieve. Default is 3.')
+  )
     .default(3)
-    .describe('Maximum number of help documents to retrieve. Default is 3.')
     .optional(),
 })
 
@@ -79,6 +82,7 @@ export const helpSearchToolDefinition = {
  */
 export function validateHelpSearchInput(
   input: unknown
-): input is HelpSearchToolInput {
-  return helpSearchToolInputSchema.safeParse(input).success
+): HelpSearchToolInput | null {
+  const parsed = helpSearchToolInputSchema.safeParse(input)
+  return parsed.success ? parsed.data : null
 }

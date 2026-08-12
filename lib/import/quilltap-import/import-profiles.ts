@@ -73,11 +73,18 @@ export async function importConnectionProfiles(
             });
           }
           takenNames.add(normalizeProfileName(uniqueName));
-          const newProfile = await repos.connections.create({
-            ...profileData,
-            apiKeyId: null, // Don't restore API keys
-            name: uniqueName,
-          });
+          const createOptions = options.preserveIds ? { id: profile.id } : undefined;
+          const newProfile = options.preserveIds
+            ? await repos.connections.create({
+                ...profileData,
+                apiKeyId: null, // Don't restore API keys
+                name: uniqueName,
+              }, createOptions)
+            : await repos.connections.create({
+                ...profileData,
+                apiKeyId: null, // Don't restore API keys
+                name: uniqueName,
+              });
           imported++;
           continue;
         }
@@ -92,11 +99,18 @@ export async function importConnectionProfiles(
         });
       }
       takenNames.add(normalizeProfileName(uniqueName));
-      const newProfile = await repos.connections.create({
-        ...profileData,
-        apiKeyId: null, // Don't restore API keys
-        name: uniqueName,
-      });
+      const createOptions = options.preserveIds ? { id: profile.id } : undefined;
+      const newProfile = options.preserveIds
+        ? await repos.connections.create({
+            ...profileData,
+            apiKeyId: null, // Don't restore API keys
+            name: uniqueName,
+          }, createOptions)
+        : await repos.connections.create({
+            ...profileData,
+            apiKeyId: null, // Don't restore API keys
+            name: uniqueName,
+          });
       idMaps.connectionProfiles.set(profile.id, newProfile.id);
       imported++;
     } catch (error) {
@@ -139,21 +153,34 @@ export async function importImageProfiles(
           const newId = randomUUID();
           idMaps.imageProfiles.set(profile.id, newId);
           const { id: _, userId: __, createdAt, updatedAt, ...profileData } = profile;
-          const newProfile = await repos.imageProfiles.create({
-            ...profileData,
-            apiKeyId: null, // Don't restore API keys
-            name: `${profileData.name} (imported)`,
-          });
+          const createOptions = options.preserveIds ? { id: profile.id } : undefined;
+          const newProfile = options.preserveIds
+            ? await repos.imageProfiles.create({
+                ...profileData,
+                apiKeyId: null, // Don't restore API keys
+                name: `${profileData.name} (imported)`,
+              }, createOptions)
+            : await repos.imageProfiles.create({
+                ...profileData,
+                apiKeyId: null, // Don't restore API keys
+                name: `${profileData.name} (imported)`,
+              });
           imported++;
           continue;
         }
       }
 
       const { id: _, userId: __, createdAt, updatedAt, ...profileData } = profile;
-      const newProfile = await repos.imageProfiles.create({
-        ...profileData,
-        apiKeyId: null, // Don't restore API keys
-      });
+      const createOptions = options.preserveIds ? { id: profile.id } : undefined;
+      const newProfile = options.preserveIds
+        ? await repos.imageProfiles.create({
+            ...profileData,
+            apiKeyId: null, // Don't restore API keys
+          }, createOptions)
+        : await repos.imageProfiles.create({
+            ...profileData,
+            apiKeyId: null, // Don't restore API keys
+          });
       idMaps.imageProfiles.set(profile.id, newProfile.id);
       imported++;
     } catch (error) {
@@ -196,21 +223,34 @@ export async function importEmbeddingProfiles(
           const newId = randomUUID();
           idMaps.embeddingProfiles.set(profile.id, newId);
           const { id: _, userId: __, createdAt, updatedAt, ...profileData } = profile;
-          const newProfile = await repos.embeddingProfiles.create({
-            ...profileData,
-            apiKeyId: null, // Don't restore API keys
-            name: `${profileData.name} (imported)`,
-          });
+          const createOptions = options.preserveIds ? { id: profile.id } : undefined;
+          const newProfile = options.preserveIds
+            ? await repos.embeddingProfiles.create({
+                ...profileData,
+                apiKeyId: null, // Don't restore API keys
+                name: `${profileData.name} (imported)`,
+              }, createOptions)
+            : await repos.embeddingProfiles.create({
+                ...profileData,
+                apiKeyId: null, // Don't restore API keys
+                name: `${profileData.name} (imported)`,
+              });
           imported++;
           continue;
         }
       }
 
       const { id: _, userId: __, createdAt, updatedAt, ...profileData } = profile;
-      const newProfile = await repos.embeddingProfiles.create({
-        ...profileData,
-        apiKeyId: null, // Don't restore API keys
-      });
+      const createOptions = options.preserveIds ? { id: profile.id } : undefined;
+      const newProfile = options.preserveIds
+        ? await repos.embeddingProfiles.create({
+            ...profileData,
+            apiKeyId: null, // Don't restore API keys
+          }, createOptions)
+        : await repos.embeddingProfiles.create({
+            ...profileData,
+            apiKeyId: null, // Don't restore API keys
+          });
       idMaps.embeddingProfiles.set(profile.id, newProfile.id);
       imported++;
     } catch (error) {

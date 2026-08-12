@@ -13,27 +13,8 @@ import { createContextParamsHandler, type RequestContext } from '@/lib/api/middl
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, serverError } from '@/lib/api/responses';
 import { fileStorageManager } from '@/lib/file-storage/manager';
-
-/**
- * Build Content-Disposition header value with proper Unicode support
- * Uses RFC 5987 encoding for non-ASCII filenames
- */
-function buildContentDisposition(filename: string, disposition: 'inline' | 'attachment' = 'inline'): string {
-  // Check if filename contains non-ASCII characters
-  const hasNonAscii = /[^\x00-\x7F]/.test(filename);
-
-  if (!hasNonAscii) {
-    // Simple ASCII filename
-    return `${disposition}; filename="${filename}"`;
-  }
-
-  // For non-ASCII filenames, use RFC 5987 encoding
-  // Include both filename (ASCII fallback) and filename* (UTF-8 encoded)
-  const asciiFilename = filename.replace(/[^\x00-\x7F]/g, '_');
-  const encodedFilename = encodeURIComponent(filename);
-
-  return `${disposition}; filename="${asciiFilename}"; filename*=UTF-8''${encodedFilename}`;
-}
+import { FileContentMissingError } from '@/lib/file-storage/errors';
+import { buildContentDisposition } from '@/lib/api/content-disposition';
 
 /**
  * GET /api/v1/files/proxy/[...key]
@@ -66,6 +47,14 @@ async function handleGet(
     try {
       buffer = await fileStorageManager.downloadFile(fileEntry);
     } catch (downloadError) {
+      // Same rule as the by-id download: an absent object is 404, not 500.
+      if (downloadError instanceof FileContentMissingError) {
+        logger.warn('[Files v1] Proxy: file row has no stored content', {
+          fileId: fileEntry.id,
+          storageKey,
+        });
+        return notFound('File content');
+      }
       logger.error('[Files v1] Proxy: Failed to download file from storage', {
         fileId: fileEntry.id,
         storageKey,

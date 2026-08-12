@@ -195,6 +195,21 @@ export {
   type RngToolContext,
 } from './handlers/rng-handler';
 
+// Run Custom Tool (Pascal's table — user-authored pseudo-tools)
+export {
+  runCustomToolDefinition,
+  validateRunCustomInput,
+  buildRunCustomDescription,
+  type RunCustomToolInput,
+  type RunCustomToolOutput,
+} from './run-custom-tool';
+
+export {
+  executeRunCustomTool,
+  formatRunCustomResults,
+  type RunCustomToolContext,
+} from './handlers/run-custom-handler';
+
 // Whisper Tool (Private Messages in Multi-Character Chats)
 export {
   whisperToolDefinition,

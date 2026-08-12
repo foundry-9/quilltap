@@ -142,6 +142,29 @@ export const ReasoningSegmentSchema = z.object({
 });
 export type ReasoningSegment = z.infer<typeof ReasoningSegmentSchema>;
 
+/**
+ * The personified features ("the Staff") that may author a message in lieu of a
+ * participant. THE authoritative list — adding a member means extending this
+ * enum, the matching `chat_messages` column, the `getMessageAvatar` branch, the
+ * display-name table in `lib/chat/staff-display-names.ts`, and the value list in
+ * `public/schemas/qtap-export.schema.json`. Per-member responsibilities are
+ * documented on `MessageEventSchema.systemSender` below.
+ */
+export const SystemSenderEnum = z.enum([
+  'lantern',
+  'aurora',
+  'librarian',
+  'concierge',
+  'prospero',
+  'host',
+  'commonplaceBook',
+  'ariel',
+  'carina',
+  'suparna',
+  'pascal',
+]);
+export type SystemSender = z.infer<typeof SystemSenderEnum>;
+
 export const MessageEventSchema = z.object({
   type: z.literal('message'),
   id: UUIDSchema,
@@ -193,12 +216,33 @@ export const MessageEventSchema = z.object({
   provider: z.string().nullable().optional(),
   /** Model name that generated this message (e.g., 'gpt-4o', 'claude-sonnet-4-20250514') */
   modelName: z.string().nullable().optional(),
+  /**
+   * Answer-confirmation result. true = consistent (or successfully revised),
+   * false = character affirmed a flagged answer unchanged, null = the check
+   * could not run (error/timeout) or was not applicable (e.g. a user-driven
+   * turn, where the system cannot vouch for out-of-band sourcing). undefined =
+   * the feature was off / there was nothing to check (no field written).
+   */
+  confirmed: z.boolean().nullable().optional(),
+  /** Whether a confirmation check actually ran for this message. Distinguishes a
+   *  persisted "unverified" (`confirmed:null`, but checked) from "never checked"
+   *  (no fields) — both of which store as SQL NULL for `confirmed`, so the
+   *  boolean here is what survives a reload to keep the "Unvetted" badge. */
+  confirmationChecked: z.boolean().nullable().optional(),
+  /** Whether the shown `content` is a re-affirmation rewrite of the original. */
+  confirmationRevised: z.boolean().nullable().optional(),
+  /** The cheap-LLM discrepancy explanation (what looked inconsistent). Surfaced
+   *  on the badge hover; null when confirmed:true on the first pass or not applicable. */
+  confirmationNotes: z.string().nullable().optional(),
+  /** The character's original pre-revision text, retained for the logs when
+   *  `confirmationRevised` is true. Null otherwise. */
+  confirmationOriginalContent: z.string().nullable().optional(),
   /** Target participant IDs for whisper messages (null = public message, array = private to sender and targets) */
   targetParticipantIds: z.array(UUIDSchema).nullable().optional(),
   /** Whether this message was generated while the character was in silent mode */
   isSilentMessage: z.boolean().nullable().optional(),
-  /** Identifies a personified feature ("the Staff") that authored this message in lieu of a participant. 'lantern' = Lantern image announcements; 'aurora' = character-avatar refreshes; 'librarian' = Document Mode open/save announcements; 'concierge' = dangerous-content classification announcements; 'prospero' = agent / connection-profile change announcements; 'host' = Salon participation announcements; 'commonplaceBook' = memory recall whispers (recap, relevant memories, inter-character memories); 'ariel' = terminal session announcements (PTY open/close); 'carina' = inline-query reference answers (Carina); 'suparna' = Suparṇā's Post Office mail-delivery announcements (new letters arrived in the character's vault Mail/ folder). Note: a 'carina' message renders with the ANSWERER character's own avatar (resolved via `carinaMeta.answererId`), not a dedicated Staff avatar — the tag exists for memory suppression and the compact reference-card UI hook. */
-  systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host', 'commonplaceBook', 'ariel', 'carina', 'suparna']).nullable().optional(),
+  /** Identifies a personified feature ("the Staff") that authored this message in lieu of a participant. 'lantern' = Lantern image announcements; 'aurora' = character-avatar refreshes; 'librarian' = Document Mode open/save announcements; 'concierge' = dangerous-content classification announcements; 'prospero' = agent / connection-profile change announcements; 'host' = Salon participation announcements; 'commonplaceBook' = memory recall whispers (recap, relevant memories, inter-character memories); 'ariel' = terminal session announcements (PTY open/close); 'carina' = inline-query reference answers (Carina); 'suparna' = Suparṇā's Post Office mail-delivery announcements (new letters arrived in the character's vault Mail/ folder); 'pascal' = Pascal the Croupier's custom-tool (pseudo-tool) roll outcomes, posted server-side so a model cannot fudge a failure into a success. Note: a 'carina' message renders with the ANSWERER character's own avatar (resolved via `carinaMeta.answererId`), not a dedicated Staff avatar — the tag exists for memory suppression and the compact reference-card UI hook. */
+  systemSender: SystemSenderEnum.nullable().optional(),
   /**
    * Neutral, persona-free rewrite of `content` for Staff-authored messages
    * (systemSender != null). When the chat has any non-user-character
@@ -297,6 +341,96 @@ export const MessageEventSchema = z.object({
   carinaMeta: z.object({
     answererId: UUIDSchema,
     question: z.string(),
+  }).nullable().optional(),
+  /**
+   * Pascal the Croupier (custom pseudo-tools) roll record, set on
+   * `systemSender = 'pascal'` messages. The whole point of the column is that
+   * the *server* rolled and the *server* chose the outcome: the model asked for
+   * `tool` with `params` and got back whatever the table dealt, so nothing here
+   * is a model's account of its own luck.
+   *
+   * `definitionTier` / `definitionMountId` record which store the definition was
+   * resolved from (tiers shadow one another, so the same tool name can mean
+   * different things in different rooms). `rollForm` says which roll shape ran:
+   * 'range' (uniform, optionally transformed) or 'dice' (`notation` + the
+   * individual `diceRolls`). `raw` is the untransformed roll; `value` is what
+   * the outcome table was tested against; `outcomeIndex` names the winning
+   * entry and `state` its semantic verdict. `metadataTested` records the
+   * invoking character's metadata as the winning row read it. `invokedBy`
+   * distinguishes a model's reach for the tool from a user's own Run-Tool, and
+   * `callerParticipantId` names the participant who rolled, when there was one.
+   *
+   * NULL on every non-Pascal message.
+   */
+  pascalMeta: z.object({
+    tool: z.string(),
+    /**
+     * The tool's display title at the moment it ran (`displayTitle()`), so the
+     * Salon can label the outcome with the tool rather than a generic "roll
+     * outcome". Optional: messages posted before this field existed have none,
+     * and the UI falls back to `tool` — the declaration name, which is the
+     * identity and always present.
+     */
+    toolTitle: z.string().optional(),
+    /**
+     * The definition's `chipLabel` template, rendered at roll time with the
+     * run's own subjects — the per-run name of the deal ("Agent lambda —
+     * Jackie"). The Salon chip and the bubble heading both read this one
+     * string. Absent on rows from before the field existed and on tools that
+     * declare no label; readers fall back to `toolTitle`, then `tool`.
+     */
+    chipLabel: z.string().optional(),
+    definitionTier: z.enum(['character', 'participant', 'group', 'project', 'global']),
+    definitionMountId: z.string(),
+    params: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])),
+    rollForm: z.enum(['range', 'dice']),
+    notation: z.string().optional(),
+    raw: z.number(),
+    diceRolls: z.array(z.number()).optional(),
+    value: z.number(),
+    state: z.enum(['success', 'partial', 'failure', 'info']),
+    outcomeIndex: z.number(),
+    /**
+     * The metadata keys the winning outcome consulted, and what the invoking
+     * character's `metadata.json` held for them at the moment of the roll — so
+     * the transcript records what the table actually saw rather than requiring
+     * a reader to guess at a fact sheet that has since been edited. Only the
+     * keys that row tested, primitives only; absent when it tested none.
+     */
+    metadataTested: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])).optional(),
+    /**
+     * The LLM consult, when the definition declared one: what was asked
+     * (`prompt`, fully rendered), whether it was answered (`ok`), and the
+     * `output` the table tested — the model's trimmed answer, or the author's
+     * `errorMessage` when the consult failed. `reason` is the technical
+     * failure cause, recorded here for the operator and never spoken in the
+     * fiction. Absent on tools with no `llm` block.
+     */
+    llm: z.object({
+      ok: z.boolean(),
+      output: z.string(),
+      prompt: z.string(),
+      reason: z.string().optional(),
+      provider: z.string().optional(),
+      model: z.string().optional(),
+    }).optional(),
+    /**
+     * The side effects this run actually applied — the audit trail of the
+     * definition's `effects` array. Each entry names the raw target
+     * ("state.encounter.count" / "metadata.lockpick"), what the store held
+     * before (absent when it held nothing), what was written, and — for state
+     * targets only — which tier the write landed in. The Salon body shows none
+     * of this; the bubble stays the author's message. Absent when the run
+     * declared or applied no effects.
+     */
+    effects: z.array(z.object({
+      target: z.string(),
+      previous: z.unknown().optional(),
+      next: z.unknown(),
+      tier: z.enum(['chat', 'project', 'group', 'general']).optional(),
+    })).optional(),
+    invokedBy: z.enum(['llm', 'user']),
+    callerParticipantId: UUIDSchema.optional(),
   }).nullable().optional(),
   /**
    * The Courier: when non-null, this message is a placeholder for a manual /
@@ -685,6 +819,14 @@ export const ChatMetadataSchema = z.object({
    */
   conciergeOverride: z.enum(['OFF']).nullable().optional(),
 
+  /**
+   * Per-chat answer-confirmation override. NULL means inherit (from the chat's
+   * project override, then the global setting). 'ON' forces the consistency
+   * check on for this chat; 'OFF' forces it off. See
+   * `isAnswerConfirmationActive`.
+   */
+  answerConfirmationOverride: z.enum(['ON', 'OFF']).nullable().optional(),
+
   /** Scene state tracker: structured summary of current scene (location, character actions, appearance, clothing) */
   sceneState: JsonSchema.nullable().optional(),
 
@@ -753,9 +895,32 @@ export const ChatMetadataSchema = z.object({
    * Courier delta) doesn't carry the same several-hundred-token wardrobe
    * prose every turn. The cache is updated only after the new whisper has
    * been durably posted. Null on chats that have not yet emitted a
-   * Commonplace Book whisper.
+   * Commonplace Book whisper. Ephemeral, instance-local, regenerable per-chat
+   * UX state — NOT part of the .qtap export.
    */
   commonplaceSceneCache: JsonSchema.nullable().optional(),
+
+  /**
+   * The Commonplace Book — recall anti-repetition ring buffer. JSON shape:
+   *   string[][]  — one inner array of whispered memory IDs per recent turn,
+   *   most recent last, capped to the last few turns. The recall path unions
+   *   these IDs into a "recently whispered" set and applies a bounded
+   *   penalty (see lib/memory/recall-tags.ts `recentlyWhispered`) so the same
+   *   memory doesn't get whispered turn after turn. Ephemeral per-chat UX
+   *   state — NOT part of .qtap export. Null until the first whisper.
+   */
+  commonplaceRecallHistory: JsonSchema.nullable().optional(),
+
+  /**
+   * Which clock this chat's story runs on (episodic recall overhaul):
+   *  - 'realtime' (the default; NULL reads as realtime): events happen at
+   *    wall-clock time, and retrospective queries ("last week") resolve
+   *    against real dates.
+   *  - 'narrative': the chat runs a fictional timeline; memory extraction
+   *    fills `narrativeTime` on episodic memories and retrospective
+   *    time-range resolution prefers in-story phrasing over wall-clock dates.
+   */
+  timelineMode: z.enum(['realtime', 'narrative']).nullable().optional(),
 
   // ==========================================================================
   // 4.6 Private Character Rooms — autonomous-room runtime + scheduling
@@ -841,6 +1006,14 @@ export const ChatMetadataSchema = z.object({
    * global default.
    */
   coreWhisperInterval: z.number().int().min(1).nullable().optional(),
+
+  /**
+   * "Nothing to add" turn-skipping — per-chat toggle for the multi-character
+   * pass option. NULL = enabled (the default); false = disabled. When enabled,
+   * every LLM character is offered a per-turn option to pass by replying with
+   * a sentinel, and the human Skip button feeds the same stall guard.
+   */
+  turnSkippingEnabled: z.boolean().nullable().optional(),
 
   /**
    * Per-chat override for showing reasoning models' thinking in the Salon.
@@ -1000,6 +1173,14 @@ export const ChatMetadataBaseSchema = z.object({
    */
   conciergeOverride: z.enum(['OFF']).nullable().optional(),
 
+  /**
+   * Per-chat answer-confirmation override. NULL means inherit (from the chat's
+   * project override, then the global setting). 'ON' forces the consistency
+   * check on for this chat; 'OFF' forces it off. See
+   * `isAnswerConfirmationActive`.
+   */
+  answerConfirmationOverride: z.enum(['ON', 'OFF']).nullable().optional(),
+
   /** Scene state tracker: structured summary of current scene (location, character actions, appearance, clothing) */
   sceneState: JsonSchema.nullable().optional(),
 
@@ -1049,6 +1230,12 @@ export const ChatMetadataBaseSchema = z.object({
   /** The Commonplace Book — per-target scene-state emission cache. See ChatMetadataSchema for the contract. */
   commonplaceSceneCache: JsonSchema.nullable().optional(),
 
+  /** The Commonplace Book — recall anti-repetition ring buffer (string[][]). See ChatMetadataSchema for the contract. */
+  commonplaceRecallHistory: JsonSchema.nullable().optional(),
+
+  /** Timeline clock ('realtime' | 'narrative'; NULL = realtime). See ChatMetadataSchema for the contract. */
+  timelineMode: z.enum(['realtime', 'narrative']).nullable().optional(),
+
   // ==========================================================================
   // 4.6 Private Character Rooms — autonomous-room runtime + scheduling.
   // See ChatMetadataSchema for the per-field contract.
@@ -1080,6 +1267,9 @@ export const ChatMetadataBaseSchema = z.object({
   coreWhisperEnabled: z.boolean().nullable().optional(),
   /** Aurora Core whisper — per-chat override of the global `coreWhisper.interval` setting (assistant turns between periodic whispers). NULL = inherit. */
   coreWhisperInterval: z.number().int().min(1).nullable().optional(),
+
+  /** "Nothing to add" turn-skipping — per-chat toggle. NULL = enabled (default); false = disabled. */
+  turnSkippingEnabled: z.boolean().nullable().optional(),
 
   /** Per-chat override for showing reasoning models' thinking. NULL = inherit global `chat.thinkingDisplay.defaultVisible`; true = show; false = hide. DISPLAY ONLY. */
   showThinking: z.boolean().nullable().optional(),

@@ -214,7 +214,7 @@ async function postHostMessage(
   content: string,
   opaqueContent: string | null,
   kindLabel: string,
-  hostEvent: { participantId: string; toStatus: ParticipantStatus } | null = null,
+  hostEvent: { participantId?: string; toStatus?: ParticipantStatus } | null = null,
 ): Promise<MessageEvent | null> {
   try {
     const repos = getRepositories();
@@ -311,6 +311,101 @@ export async function postHostStatusChangeAnnouncement(
   return postHostMessage(params.chatId, content, opaqueContent, `status:${params.oldStatus}->${params.newStatus}`, {
     participantId: params.participantId,
     toStatus: params.newStatus,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Turn-pass announcements ("nothing to add").
+//
+// When a character (or the human, via the Skip button) passes their turn, the
+// Host notes it and the rotation moves on. The persona content NEVER contains
+// the `[NOTHING TO ADD]` sentinel — otherwise the announcement would sit in
+// history and teach later turns the very phrase we detect. `systemKind` is
+// `turn-pass`; `hostEvent.participantId` records who passed so the turn-state
+// derivations (last speaker, stall guard) can reconstruct the pass from history.
+// ---------------------------------------------------------------------------
+
+const HOST_KIND_TURN_PASS = 'turn-pass';
+
+export function buildTurnPassContent(name: string): string {
+  return `The Host inclines his head as ${name} waves the turn graciously by — nothing to add for the moment, it seems. The floor passes on.`;
+}
+
+export function buildUserTurnPassContent(name: string): string {
+  return `The Host observes ${name} declining the floor with a courteous wave; the turn passes on.`;
+}
+
+export function buildTurnPassOpaqueContent(name: string): string {
+  return `${name} has nothing to add right now. The conversation moves on.`;
+}
+
+export interface HostTurnPassAnnouncement {
+  chatId: string;
+  characterName: string;
+  /** Participant ID of the character (or user-controlled participant) who passed. */
+  participantId: string;
+  /** Whether an LLM character passed via the sentinel, or the human hit Skip. */
+  source: 'llm' | 'user';
+}
+
+/**
+ * Post the Host's turn-pass announcement. Errors are swallowed (the existing
+ * Host-notification contract): a pass must never fail the turn. Returns the
+ * persisted MessageEvent so the caller can surface it live over SSE.
+ */
+export async function postHostTurnPassAnnouncement(
+  params: HostTurnPassAnnouncement,
+): Promise<MessageEvent | null> {
+  const content = params.source === 'user'
+    ? buildUserTurnPassContent(params.characterName)
+    : buildTurnPassContent(params.characterName);
+  const opaqueContent = buildTurnPassOpaqueContent(params.characterName);
+  return postHostMessage(params.chatId, content, opaqueContent, HOST_KIND_TURN_PASS, {
+    participantId: params.participantId,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Nudge announcements ("invited to speak").
+//
+// When the human summons a specific character to take the floor (the Nudge
+// button), the Host notes the invitation so it persists in the transcript
+// rather than living as a client-only ephemeral note that vanishes on reload.
+// `systemKind` is `nudge`; `hostEvent.participantId` records who was summoned.
+// The persona `content` is what the household reads; `opaqueContent` is the
+// persona-free steering swapped into an opaque room so the summoned voice knows
+// the floor is theirs.
+// ---------------------------------------------------------------------------
+
+const HOST_KIND_NUDGE = 'nudge';
+
+export function buildNudgeContent(name: string): string {
+  return `The Host turns to ${name} with an encouraging nod and invites them to take the floor.`;
+}
+
+export function buildNudgeOpaqueContent(name: string): string {
+  return `${name} has been invited to take the floor and speak next.`;
+}
+
+export interface HostNudgeAnnouncement {
+  chatId: string;
+  characterName: string;
+  /** Participant ID of the summoned character. */
+  participantId: string;
+}
+
+/**
+ * Post the Host's nudge announcement. Errors are swallowed (the existing
+ * Host-notification contract): a summon must never fail the turn. Returns the
+ * persisted MessageEvent so the caller can surface it live over SSE.
+ */
+export async function postHostNudgeAnnouncement(
+  params: HostNudgeAnnouncement,
+): Promise<MessageEvent | null> {
+  const content = buildNudgeContent(params.characterName);
+  const opaqueContent = buildNudgeOpaqueContent(params.characterName);
+  return postHostMessage(params.chatId, content, opaqueContent, HOST_KIND_NUDGE, {
+    participantId: params.participantId,
   });
 }
 
@@ -904,6 +999,114 @@ export async function postHostContinuationToAnnouncement(
     buildContinuationToContent(params.newChatId, params.newTitle ?? null),
     buildContinuationToOpaqueContent(params.newChatId, params.newTitle ?? null),
     HOST_KIND_CONTINUATION_TO,
+    null,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Merge announcements.
+//
+// When a second Salon conversation is folded *into* this one (the Organize
+// sidebar's "Merge In…"), the Host posts a public recap bubble at the tail of
+// the receiving chat — it links back to the source and carries the source
+// chat's rolling summary so both the operator and every character pick up the
+// newcomers' thread. A reciprocal back-link bubble is posted in the source
+// chat. Unlike a continuation (which replays the source tail into a fresh
+// chat), a merge does not replay turns — the recap stands in for the history.
+// Both are public — no targetParticipantIds.
+// ---------------------------------------------------------------------------
+
+const HOST_KIND_MERGE_FROM = 'merge-from';
+const HOST_KIND_MERGE_TO = 'merge-to';
+
+function buildMergeFromContent(
+  sourceChatId: string,
+  sourceTitle: string | null,
+  summaryText: string | null,
+): string {
+  const trimmedTitle = sourceTitle?.trim() ?? '';
+  const linkText = trimmedTitle.length > 0 ? `"${trimmedTitle}"` : 'another conversation';
+  const trimmedSummary = summaryText?.trim() ?? '';
+  const lines = [
+    `The Host raises a hand for attention: the company of [${linkText}](/salon/${sourceChatId}) joins these proceedings, their thread woven into ours.`,
+    '',
+  ];
+  if (trimmedSummary.length > 0) {
+    lines.push('Where they left off:', '', trimmedSummary);
+  } else {
+    lines.push('Their earlier thread carries no recorded summary as yet — carry on regardless.');
+  }
+  return lines.join('\n');
+}
+
+function buildMergeFromOpaqueContent(
+  sourceChatId: string,
+  sourceTitle: string | null,
+  summaryText: string | null,
+): string {
+  const trimmedTitle = sourceTitle?.trim() ?? '';
+  const linkText = trimmedTitle.length > 0 ? `"${trimmedTitle}"` : 'another conversation';
+  const trimmedSummary = summaryText?.trim() ?? '';
+  const lines = [
+    `The company of [${linkText}](/salon/${sourceChatId}) has been merged into this conversation. Where they left off:`,
+    '',
+  ];
+  if (trimmedSummary.length > 0) {
+    lines.push(trimmedSummary);
+  } else {
+    lines.push('(No recorded summary from that conversation yet.)');
+  }
+  return lines.join('\n');
+}
+
+function buildMergeToContent(targetChatId: string, targetTitle: string | null): string {
+  const trimmedTitle = targetTitle?.trim() ?? '';
+  const linkText = trimmedTitle.length > 0 ? `"${trimmedTitle}"` : 'another conversation';
+  return `The Host clears their throat: this conversation's company and thread have been merged into [${linkText}](/salon/${targetChatId}). The proceedings continue there.`;
+}
+
+function buildMergeToOpaqueContent(targetChatId: string, targetTitle: string | null): string {
+  const trimmedTitle = targetTitle?.trim() ?? '';
+  const linkText = trimmedTitle.length > 0 ? `"${trimmedTitle}"` : 'another conversation';
+  return `This conversation's company and thread have been merged into [${linkText}](/salon/${targetChatId}). The proceedings continue there.`;
+}
+
+export interface HostMergeFromAnnouncement {
+  /** The receiving chat (where newcomers and their summary land). */
+  chatId: string;
+  sourceChatId: string;
+  sourceTitle?: string | null;
+  /** The source chat's rolling context summary, embedded as the recap. */
+  summaryText?: string | null;
+}
+
+export async function postHostMergeFromAnnouncement(
+  params: HostMergeFromAnnouncement,
+): Promise<MessageEvent | null> {
+  return postHostMessageWithTargets(
+    params.chatId,
+    buildMergeFromContent(params.sourceChatId, params.sourceTitle ?? null, params.summaryText ?? null),
+    buildMergeFromOpaqueContent(params.sourceChatId, params.sourceTitle ?? null, params.summaryText ?? null),
+    HOST_KIND_MERGE_FROM,
+    null,
+  );
+}
+
+export interface HostMergeToAnnouncement {
+  /** The source chat (whose company/thread were merged away). */
+  chatId: string;
+  targetChatId: string;
+  targetTitle?: string | null;
+}
+
+export async function postHostMergeToAnnouncement(
+  params: HostMergeToAnnouncement,
+): Promise<MessageEvent | null> {
+  return postHostMessageWithTargets(
+    params.chatId,
+    buildMergeToContent(params.targetChatId, params.targetTitle ?? null),
+    buildMergeToOpaqueContent(params.targetChatId, params.targetTitle ?? null),
+    HOST_KIND_MERGE_TO,
     null,
   );
 }

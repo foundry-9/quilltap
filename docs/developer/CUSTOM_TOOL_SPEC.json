@@ -1,0 +1,131 @@
+{
+  "$schema": "/schemas/qtap-custom-tool.schema.json",
+  "name": "force_the_lock",
+  "title": "Force the Lock",
+  "description": "Attempt to force a lock, quietly or otherwise. Reference specimen: exercises every key the custom-tool format understands. Copy it to Tools/force-the-lock.tool.json in any document store, then cut it down to what you actually need — every key here except name, description and outcomes is optional. `title` is what Pascal announces and what the popup lists; omit it and the name is title-cased instead, as CUSTOM_TOOL_SPEC_DICE.json does. The model never sees it — it calls the tool by `name`.",
+  "disabled": false,
+  "withheldWhen": { "metadata": { "specimenOptOut": { "eq": true } } },
+  "revealOdds": true,
+  "defaultVisibility": "public",
+  "parameters": {
+    "bonus": {
+      "type": "number",
+      "default": 0,
+      "description": "Skill bonus added to the score. Demonstrates: a number parameter, bounds, and a $param reference used as the roll's offset. Note the knock-on: at the default 0 the score tops out at exactly the ceiling, so the first outcome (> 100) only fires when a bonus is supplied — which is rather the point of a bonus. Run-time values are clamped into 0-10 before the roll ever sees them.",
+      "min": 0,
+      "max": 10
+    },
+    "ceiling": {
+      "type": "number",
+      "default": 100,
+      "description": "Top of the difficulty scale. Demonstrates: a $param reference used as the roll's multiplier, so the 0-1 draw is scaled into 0-ceiling.",
+      "min": 1,
+      "max": 1000
+    },
+    "attempts": {
+      "type": "integer",
+      "default": 1,
+      "description": "How many times you try. Demonstrates: an integer parameter (run-time values are rounded) and {{params.attempts}} in a message.",
+      "min": 1,
+      "max": 5
+    },
+    "label": {
+      "type": "string",
+      "default": "the lock",
+      "description": "What you are forcing. Demonstrates: a string parameter. Strings cannot be referenced by $param — only numbers and integers can."
+    },
+    "loudly": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether you are past caring about the noise. Demonstrates: a boolean parameter. Booleans cannot be referenced by $param either."
+    }
+  },
+  "roll": {
+    "min": 0,
+    "max": 1,
+    "multiplier": { "$param": "ceiling" },
+    "offset": { "$param": "bonus" },
+    "round": true
+  },
+  "llm": {
+    "prompt": "A lockpicking attempt on {{params.label}} scored {{value}} against a ceiling of {{params.ceiling}} (raw draw {{roll}}). In one word, YES or NO: was it elegant? — Demonstrates the llm consult: this prompt is rendered with the same placeholders a message takes ({{llm}} excepted — the oracle cannot quote an answer it has not yet given) and posed to the instance's cheap utility model once per run, after the roll and before the outcome table.",
+    "errorMessage": "The oracle of locks is not answering today. (Demonstrates errorMessage: the consult's output when the call fails — the author's words, never the provider's. The technical failure reason goes to the roll record and the logs, not the fiction.)"
+  },
+  "outcomes": [
+    {
+      "when": { "roll": { "lt": 0.02 } },
+      "message": "The pick shears off in {{params.label}}. Demonstrates the `roll` subject: this tests the RAW 0-1 draw ({{roll}}), not the scaled score ({{value}}), so it means the same thing however the ceiling and bonus move the value about — which is a thing `value` alone cannot express. It sits first because a draw that low would otherwise be swallowed by the lt:5 band below.",
+      "state": "failure"
+    },
+    {
+      "when": { "gt": { "$param": "ceiling" } },
+      "message": "{{params.label}} does not so much open as capitulate. The score was {{value}} — past the ceiling of {{params.ceiling}} entirely, which is what a bonus of {{params.bonus}} will do for a person. (Raw draw: {{roll}}.) Demonstrates a $param operand: the test is against a number the caller supplied, not one fixed here. This is how an opposed check is written.",
+      "state": "success"
+    },
+    {
+      "when": { "gte": 40, "metadata": { "hasSkeletonKey": { "eq": true } } },
+      "message": "{{params.label}} opens to the skeleton key before the score of {{value}} is properly consulted. Demonstrates the `metadata` subject: this tests the INVOKING character's metadata.json fact sheet (hasSkeletonKey = {{metadata.hasSkeletonKey}}), whose keys this file never declares — so the loader checks only the comparator's shape. A character without the key is not an error: the test simply fails, soft, and the roll falls through to the rows below. eq/neq address strings and booleans; ordering comparators need the sheet to hold a number, as the nerve row demonstrates further down.",
+      "state": "success"
+    },
+    {
+      "when": { "llm": { "ok": false } },
+      "message": "{{llm}} — Demonstrates the consult's failure path, and where {{llm}} gets its words when the oracle is silent: the answer BECOMES the llm block's errorMessage, ok goes false, and the run itself never errors. A table that keeps an oracle should decide what silence means; an ok:false row like this is one way, trusting the catch-all is the other.",
+      "state": "info"
+    },
+    {
+      "when": { "gte": 40, "llm": { "ok": true, "eq": "YES" } },
+      "message": "\"{{llm}},\" pronounces the oracle, and {{params.label}} concedes the point at {{value}}. Demonstrates the `llm` subject: eq/neq compare the trimmed answer without regard to case (a trailing full stop is forgiven — a model that says \"yes.\" has still said yes), ordering comparators apply when the answer reads as a number and otherwise decline the row fail-soft, and `ok` — the one non-comparator key — tests whether the consult produced an answer at all.",
+      "state": "success"
+    },
+    {
+      "when": { "gte": 70, "lte": 100, "params": { "loudly": { "eq": true } } },
+      "message": "{{params.label}} gives up at {{value}}, and so does any pretence of discretion — that noise was heard three streets over. Demonstrates the `params` subject ANDed with a value band: score 70-100 AND loudly=true. It must sit BEFORE the quiet band below, which it would otherwise never outrank.",
+      "state": "partial"
+    },
+    {
+      "when": { "gte": 70, "lte": 100 },
+      "message": "{{params.label}} clicks open on attempt {{params.attempts}}. Score {{value}}. Demonstrates an AND band: gte and lte in one object mean 70 <= value <= 100. There is no OR — order the table instead.",
+      "state": "success"
+    },
+    {
+      "when": { "eq": 42 },
+      "message": "The tumblers settle on exactly {{value}}, which you choose to find significant. Demonstrates the eq comparator.",
+      "state": "info"
+    },
+    {
+      "when": { "neq": 42, "gte": 40, "lte": 50 },
+      "message": "{{params.label}} shifts, then thinks better of it. Score {{value}}. Demonstrates neq composed with a band — 40 to 50, but never 42, which the outcome above already claimed.",
+      "state": "partial"
+    },
+    {
+      "when": { "lt": 5, "metadata": { "nerve": { "gte": 8 } } },
+      "message": "A dreadful draw — {{value}} — salvaged by sheer nerve ({{metadata.nerve}} of a possible 10). Demonstrates an ORDERING comparator on metadata: gte needs a number on both sides, and since the sheet cannot be known at load time the check waits for the roll — a character whose nerve is absent, a string, or a list simply does not match, fail-soft, no error, and the draw falls through to the failures below. And {{metadata.limerick}}, a key this character surely lacks, stays exactly as written — metadata placeholders for missing keys render verbatim, like any unknown placeholder.",
+      "state": "partial"
+    },
+    {
+      "when": { "lt": 5, "params": { "label": { "eq": "the safe" } } },
+      "message": "The safe declines to notice you at all. Score {{value}}. Demonstrates eq against a STRING parameter: ordering comparators (gt/gte/lt/lte) need numbers on both sides, but eq and neq will address a string or a boolean. A mismatch — eq: 5 against a string parameter — is rejected when the file loads rather than quietly never firing.",
+      "state": "failure"
+    },
+    {
+      "when": { "lt": 5, "params": { "label": { "contains": "door" } } },
+      "message": "Whatever {{params.label}} is, it is door-shaped enough to lean on, and it does not move. Score {{value}}. Demonstrates contains against a STRING parameter: the test holds when the parameter's text holds the substring, case-sensitively; ncontains is its complement, and an empty substring is rejected at load (everything contains \"\"). The substring may itself be a { \"$param\": \"...\" } reference to another string parameter, so one input can be sought inside another. metadata and llm subjects take contains too — fail-soft on a key that is not a string, and, on the consult's answer, trimmed and case-insensitive like eq there.",
+      "state": "failure"
+    },
+    {
+      "when": { "lt": 5 },
+      "message": "Something inside {{params.label}} snaps, and it was not the lock. Score {{value}}. Demonstrates the lt comparator.",
+      "state": "failure"
+    },
+    {
+      "when": { "lte": 10 },
+      "message": "{{params.label}} holds, smugly. Score {{value}}. Demonstrates lte, and why order matters: this must sit AFTER lt:5, or lt:5 could never be reached.",
+      "state": "failure"
+    },
+    {
+      "when": true,
+      "message": "{{params.label}} is giving way — slowly, and (loudly: {{params.loudly}}) not discreetly. Score {{value}} from a raw draw of {{roll}}. This is the mandatory catch-all: the LAST outcome must be `true`, and no earlier one may be, so every roll lands somewhere and nothing below is unreachable.",
+      "state": "partial"
+    }
+  ]
+}

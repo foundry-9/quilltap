@@ -1,4 +1,10 @@
-import { handleAutonomousRoomTurn } from '@/lib/background-jobs/handlers/autonomous-room-turn'
+import {
+  handleAutonomousRoomTurn,
+  computeAutonomousContextCap,
+  DEFAULT_AUTONOMOUS_TARGET_TURNS,
+  MIN_AUTONOMOUS_CONTEXT_TOKENS,
+} from '@/lib/background-jobs/handlers/autonomous-room-turn'
+import type { ChatMetadataBase } from '@/lib/schemas/types'
 import { getRepositories } from '@/lib/repositories/factory'
 import { handleSendMessage } from '@/lib/services/chat-message/orchestrator.service'
 import {
@@ -693,5 +699,97 @@ describe('handleAutonomousRoomTurn — grace turn on budget exhaustion', () => {
     expect(graceMessages(state.messageAdds as never)).toHaveLength(0)
     expect(state.chatUpdates.filter((u) => u.runState === 'budgetExhausted')).toHaveLength(1)
     expect(mockEnqueueAutonomousRoomTurn).not.toHaveBeenCalled()
+  })
+})
+
+describe('computeAutonomousContextCap — per-turn budget slice', () => {
+  const chat = (overrides: Record<string, unknown> = {}) =>
+    baseChat(overrides) as unknown as ChatMetadataBase
+
+  it('returns undefined when the room has no token budget (unchanged behavior)', () => {
+    expect(computeAutonomousContextCap(chat({ budgetMaxTokens: null }))).toBeUndefined()
+  })
+
+  it('slices the full budget across the default turns target at run start', () => {
+    // Fresh run: runTokensConsumed reset to 0, no explicit turn budget.
+    const cap = computeAutonomousContextCap(
+      chat({ budgetMaxTokens: 250_000, runTokensConsumed: 0, budgetMaxTurns: null }),
+    )
+    expect(cap).toBe(Math.floor(250_000 / DEFAULT_AUTONOMOUS_TARGET_TURNS))
+  })
+
+  it('slices the remaining budget (not the original) as the run progresses', () => {
+    const cap = computeAutonomousContextCap(
+      chat({ budgetMaxTokens: 250_000, runTokensConsumed: 100_000, budgetMaxTurns: null }),
+    )
+    // remaining 150k / 6 = 25k
+    expect(cap).toBe(Math.floor(150_000 / DEFAULT_AUTONOMOUS_TARGET_TURNS))
+  })
+
+  it('cooperates with budgetMaxTurns: divides remaining by turns left, not the default', () => {
+    const cap = computeAutonomousContextCap(
+      chat({ budgetMaxTokens: 240_000, runTokensConsumed: 0, budgetMaxTurns: 8, runTurnsConsumed: 2 }),
+    )
+    // turnsLeft = 8 - 2 = 6 → 240k / 6 = 40k (not 240k / DEFAULT)
+    expect(cap).toBe(40_000)
+  })
+
+  it('floors at MIN_AUTONOMOUS_CONTEXT_TOKENS so a nearly-spent run still ships a usable turn', () => {
+    const cap = computeAutonomousContextCap(
+      chat({ budgetMaxTokens: 250_000, runTokensConsumed: 249_000, budgetMaxTurns: null }),
+    )
+    // remaining 1k / 6 = 166 → clamped up to the floor
+    expect(cap).toBe(MIN_AUTONOMOUS_CONTEXT_TOKENS)
+  })
+
+  it('never goes negative when the counter has overshot the budget', () => {
+    const cap = computeAutonomousContextCap(
+      chat({ budgetMaxTokens: 250_000, runTokensConsumed: 650_000, budgetMaxTurns: null }),
+    )
+    expect(cap).toBe(MIN_AUTONOMOUS_CONTEXT_TOKENS)
+  })
+
+  it('clamps turnsLeft to at least 1 once the turn budget is spent', () => {
+    const cap = computeAutonomousContextCap(
+      chat({ budgetMaxTokens: 90_000, runTokensConsumed: 0, budgetMaxTurns: 5, runTurnsConsumed: 9 }),
+    )
+    // turnsLeft = max(1, 5 - 9) = 1 → whole remaining 90k
+    expect(cap).toBe(90_000)
+  })
+})
+
+describe('handleAutonomousRoomTurn — autonomous context cap wiring', () => {
+  it('passes the computed per-turn cap into handleSendMessage', async () => {
+    const { repos } = createBufferedRepos({
+      chat: baseChat({ runState: 'running', budgetMaxTokens: 240_000, runTokensConsumed: 0, budgetMaxTurns: null }),
+      jobId: 'job-1',
+      chatId: 'chat-1',
+    })
+    mockGetRepositories.mockReturnValue(repos as never)
+
+    await handleAutonomousRoomTurn(baseJob() as never)
+
+    expect(mockHandleSendMessage).toHaveBeenCalledWith(
+      expect.anything(),
+      'chat-1',
+      'user-1',
+      expect.objectContaining({
+        autonomousContextCap: Math.floor(240_000 / DEFAULT_AUTONOMOUS_TARGET_TURNS),
+      }),
+    )
+  })
+
+  it('leaves the cap undefined for a room without a token budget', async () => {
+    const { repos } = createBufferedRepos({
+      chat: baseChat({ runState: 'running', budgetMaxTokens: null }),
+      jobId: 'job-1',
+      chatId: 'chat-1',
+    })
+    mockGetRepositories.mockReturnValue(repos as never)
+
+    await handleAutonomousRoomTurn(baseJob() as never)
+
+    const opts = mockHandleSendMessage.mock.calls[0][3]
+    expect(opts.autonomousContextCap).toBeUndefined()
   })
 })

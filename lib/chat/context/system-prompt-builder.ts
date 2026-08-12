@@ -11,6 +11,76 @@ import { calculateCurrentTimestamp, shouldInjectTimestamp } from '@/lib/chat/tim
 import { processTemplate, type TemplateContext } from '@/lib/templates/processor'
 
 /**
+ * Universal formatting note appended to every character's system prompt,
+ * independent of the selected roleplay template. Salon messages render as
+ * Markdown with KaTeX math (see `lib/markdown/math.ts`), and the renderer only
+ * recognizes double-dollar `$$...$$` (both inline and block) — single-dollar
+ * `$x$` is deliberately disabled so ordinary prose like "$50 ... $20" isn't
+ * swallowed as math. Without this note, models default to single-`$`/`\(...\)`
+ * habits and their formulas render as literal text.
+ */
+const MATH_FORMATTING_INSTRUCTION = `[FORMATTING: MATHEMATICAL NOTATION]
+Responses render as Markdown with KaTeX math support. To display a formula, wrap the LaTeX in DOUBLE dollar signs — $$...$$ — which renders correctly both inline within a sentence and as its own centered block. Do NOT use single dollar signs ($x$), single quotes, or backticks for math; only $$...$$ is recognized.
+- Inline example: The area of a circle is $$A = \\pi r^2$$ for radius r.
+- Block example:
+$$
+\\int_0^1 x^2 \\, dx = \\frac{1}{3}
+$$`
+
+/**
+ * Preamble of the Taboo section — the instance-wide list of phrases no
+ * character may utter (Settings → Chat → Taboo,
+ * `instance_settings['taboo']`).
+ *
+ * DO NOT "simplify" this into a bare list of banned strings. Every clause is
+ * load-bearing against a known failure mode:
+ *
+ *  - *"worn-out clichés, beneath you"* — printing the forbidden tokens into
+ *    every context raises their salience (the pink-elephant effect), and
+ *    weaker models parrot what they have just read. An aversive frame beats a
+ *    neutral mention.
+ *  - *"say what you actually mean in plain, specific words"* — prohibition
+ *    alone leaves a vacuum the model refills with the banned phrase's nearest
+ *    neighbour. Pairing the ban with a positive instruction outperforms it.
+ *  - *"not as inflections, rewordings, or near-variants"* — banning the exact
+ *    string invites trivial dodges ("load-bearing" for "weight-bearing"). The
+ *    blanket preamble generalizes each entry so the settings UI can keep
+ *    asking users for bare phrases rather than hand-written variant lists.
+ *  - *"Never mention, quote, or allude to this list"* — without it, characters
+ *    start joking about the phrases they are not allowed to say.
+ *
+ * Voice follows the universal-section precedent set by
+ * {@link MATH_FORMATTING_INSTRUCTION}: bracketed all-caps tag, imperative,
+ * addressed to the speaking character.
+ */
+const TABOO_SECTION_PREAMBLE = `[STYLE: FORBIDDEN PHRASES]
+The phrases below are worn-out clichés, beneath you. They never appear in anything you say — not verbatim, and not as inflections, rewordings, or near-variants of the same formula. When one of them would be the easy thing to reach for, say what you actually mean in plain, specific words instead. Never mention, quote, or allude to this list.`
+
+/**
+ * Render the Taboo section, or `null` when there is nothing to forbid.
+ *
+ * An empty list yields no section at all — no header, no blank block — so an
+ * instance that never touches the feature produces a byte-identical prompt to
+ * one built before the feature existed.
+ *
+ * Phrases are emitted verbatim in stored order and deliberately NOT run
+ * through `processTemplate`: a user phrase may legitimately contain `{{...}}`
+ * and must reach the model literally. (The math note sets the same
+ * template-free precedent.)
+ */
+export function renderTabooSection(phrases: string[] | undefined | null): string | null {
+  if (!phrases || phrases.length === 0) return null
+  const bullets: string[] = []
+  for (const phrase of phrases) {
+    const trimmed = typeof phrase === 'string' ? phrase.trim() : ''
+    if (!trimmed) continue
+    bullets.push(`- "${trimmed}"`)
+  }
+  if (bullets.length === 0) return null
+  return `${TABOO_SECTION_PREAMBLE}\n${bullets.join('\n')}`
+}
+
+/**
  * Other participant info for multi-character system prompts.
  *
  * Phase C moved the multi-character roster out of the system prompt and into
@@ -201,6 +271,14 @@ export interface BuildSystemPromptOptions {
   scenarioText?: string | null
   /** Phase H: precompiled identity-stack from `chats.compiledIdentityStacks`. */
   precompiledIdentityStack?: string | null
+  /**
+   * Instance-wide Taboo phrases (`instance_settings['taboo']`), read by the
+   * async caller and passed down because this builder is deliberately
+   * synchronous. Omitting the option omits the section — which is the intended
+   * default for the non-conversational call sites (the character-voiced
+   * announcer, `self_inventory`).
+   */
+  tabooPhrases?: string[]
 }
 
 export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
@@ -215,6 +293,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
     timezone,
     scenarioText,
     precompiledIdentityStack,
+    tabooPhrases,
   } = options
 
   const parts: string[] = []
@@ -257,6 +336,19 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
   // Roleplay template (chat-level formatting instructions).
   if (roleplayTemplate?.systemPrompt) {
     parts.push(processTemplate(roleplayTemplate.systemPrompt, templateContext))
+  }
+
+  // Universal math-notation formatting note — applies to every character
+  // regardless of the selected roleplay template.
+  parts.push(MATH_FORMATTING_INSTRUCTION)
+
+  // Universal Taboo section — instance-wide, character-independent, and stable
+  // between edits, so it belongs here with the other universal material rather
+  // than down among the per-turn additions. Sits inside system block 1 (the
+  // cacheable prefix) and never passes through `processTemplate`.
+  const tabooSection = renderTabooSection(tabooPhrases)
+  if (tabooSection) {
+    parts.push(tabooSection)
   }
 
   // Tool instructions (per-turn dynamic — varies with enabled tools, danger

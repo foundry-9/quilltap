@@ -12,10 +12,18 @@
 import { useEffect, useMemo, useCallback, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
 import type { Components } from 'react-markdown'
+import { REMARK_MATH_OPTIONS, normalizeMathDelimiters } from '@/lib/markdown/math'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism'
+import { QtapLink } from '@/components/qtap/QtapLink'
 import { FileInfo } from '../types'
+
+function isQtapHref(href: string): boolean {
+  return href.toLowerCase().startsWith('qtap://')
+}
 
 interface FilePreviewTextProps {
   /** The file being previewed */
@@ -355,6 +363,10 @@ export default function FilePreviewText({
 
   // Handle link clicks for wikilinks and relative markdown links
   const handleLinkClick = useCallback((href: string, e: React.MouseEvent) => {
+    if (isQtapHref(href)) {
+      return
+    }
+
     // Check if it's a wikilink (format: #wikilink/filename or #wikilink/filename/heading)
     if (href.startsWith('#wikilink/')) {
       e.preventDefault()
@@ -394,6 +406,14 @@ export default function FilePreviewText({
   // from being passed to the DOM element or overriding our click handler
   const markdownComponents: Components = useMemo(() => ({
     a: ({ href, children, node: _node, onClick: _onClick, ...restProps }) => {
+      if (typeof href !== 'string') {
+        return <span>{children}</span>
+      }
+
+      if (isQtapHref(href)) {
+        return <QtapLink href={href}>{children}</QtapLink>
+      }
+
       const isWikilink = href?.startsWith('#wikilink/')
       const isRelativeLink = href && !isWikilink && !href.startsWith('http://') && !href.startsWith('https://') && !href.startsWith('mailto:') && !href.startsWith('#')
       const isInternalLink = isWikilink || isRelativeLink
@@ -547,7 +567,13 @@ export default function FilePreviewText({
 
             {/* Markdown content */}
             <div className="qt-markdown">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{parsed.content}</ReactMarkdown>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm, [remarkMath, REMARK_MATH_OPTIONS]]}
+                rehypePlugins={[rehypeKatex]}
+                components={markdownComponents}
+              >
+                {normalizeMathDelimiters(parsed.content)}
+              </ReactMarkdown>
             </div>
           </div>
         </div>

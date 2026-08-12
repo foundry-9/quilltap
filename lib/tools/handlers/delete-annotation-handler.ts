@@ -44,7 +44,8 @@ export async function executeDeleteAnnotationTool(
 
   try {
     // Validate input
-    if (!validateDeleteAnnotationInput(input)) {
+    const parsed = validateDeleteAnnotationInput(input);
+    if (!parsed) {
       logger.warn('Delete annotation tool validation failed', {
         context: 'delete-annotation-handler',
         userId: context.userId,
@@ -61,7 +62,7 @@ export async function executeDeleteAnnotationTool(
       };
     }
 
-    const { message_index } = input as DeleteAnnotationToolInput;
+    const { message_index } = parsed;
 
     // Attempt to delete the annotation
     const deleted = await repos.conversationAnnotations.deleteAnnotation(

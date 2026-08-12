@@ -71,8 +71,13 @@ Read subcommands:
   grep [--mount <name|id|all>] [--ignore-case] [-l] [--max N] [--context N] <pattern>
                                          Substring search inside extracted text
   status [--mount <name|id>] [--top N]   Per-mount extraction + embedding rollup
+  docker-mounts [--format args|json]     Bind mounts this instance's filesystem
+                                         stores need to be visible in Docker
 
 Server-required subcommands (background-job queue lives in the running server):
+  grep --semantic [--mount <name|id|all>] [--top N] [--threshold 0..1] <query>
+                                         Embedding search over indexed chunks
+                                         (default --top 20, --threshold 0.5)
   reindex <mount> [path] [--force]       Re-extract text + re-chunk affected files
   embed <mount> [path] [--force] [--wait]
                                          Enqueue embedding jobs for un-embedded chunks
@@ -81,9 +86,9 @@ Write subcommands (server required for database-backed mounts):
   write [--force] [--base64] <mount> <path> [file]  Write a file from <file> or stdin
   delete <mount> <path>                              Idempotent file delete
   mkdir <mount> <path>                               Idempotent folder create
-  move <srcMount> <srcPath> <dstMount> <dstPath>                   Move file (hard-link when possible)
-  copy [--force] <srcMount> <srcPath> <dstMount> <dstPath>         Copy file (hard-link unless --force)
-  link <srcMount> <srcPath> <dstMount> <dstPath>                   Hard-link file (server-required)
+  move <srcMount> <srcPath> <dstMount> <dstPath>                   Move file (relocates the link; no byte copy)
+  copy [--force] <srcMount> <srcPath> <dstMount> <dstPath>         Copy file (independent; shares bytes until either side is written)
+  link <srcMount> <srcPath> <dstMount> <dstPath>                   Hard-link file — one file, two paths; edits show at both (server-required)
   rmdir <mount> <path>                               Delete an empty folder (server-required)
   mvdir <mount> <fromPath> <toPath>                  Rename/move a folder (server-required)
 
@@ -114,14 +119,17 @@ Options:
                             file size, or hard-link count
   -r, --reverse             Reverse sort order
   --links                   For 'ls' / 'dir': under each file with more than
-                            one hard link, list the other mount/path entries
+                            one hard link, list the other mount/path entries.
+                            Counts deliberate links made with 'docs link' — not
+                            unrelated files that merely share identical bytes
   --depth N                 For 'tree': maximum nesting depth (default: 20)
   --max-nodes N             For 'tree': maximum nodes to render (default: 1000)
   --long                    For 'tree': include text/emb columns (reserved for future)
   --force                   For 'read': dump binary to TTY anyway
                             For 'write': overwrite existing destination
                             For 'copy':  overwrite + force a real byte copy
-                                         (skips the default hard-link path)
+                                         (skips the default shared-content path;
+                                          the end state is the same either way)
   --base64                  For 'write': send content as base64 JSON via PUT
                                          .../files/{path} (portable path used
                                          by the file browser; server-required)
@@ -158,6 +166,7 @@ Examples:
   quilltap docs find --mount notes --ext md Knowledge
   quilltap docs grep --mount notes --ignore-case "five-point Calvinist"
   quilltap docs grep --mount notes -l "TODO"
+  quilltap docs grep --semantic --mount notes --top 10 "what did we decide about pricing"
   quilltap docs read qtap://notes/today.md
   quilltap docs find --uri Manifesto
   quilltap docs status
@@ -203,6 +212,8 @@ function parseFlags(args) {
     threshold: -1,
     // base64 read/write flag
     base64: false,
+    // docker-mounts output shape: table (human), args (docker run flags), json
+    format: '',
   };
   const positional = [];
   let i = 0;
@@ -222,6 +233,7 @@ function parseFlags(args) {
         break;
       }
       case '--json': flags.json = true; break;
+      case '--format': flags.format = args[++i]; break;
       case '--uri': flags.uri = true; break;
       case '--rendered': flags.rendered = true; break;
       case '--folder': flags.folder = args[++i]; break;
@@ -481,6 +493,95 @@ async function handleList(flags) {
 }
 
 // ----------------------------------------------------------------------------
+// docker-mounts
+// ----------------------------------------------------------------------------
+
+/**
+ * Report the bind mounts this instance's filesystem-backed stores need in
+ * order to be reachable from inside a container.
+ *
+ * `--format args` prints only the flags, one per line, so a start script can
+ * splice them into a `docker run` argv without parsing prose. Everything
+ * advisory goes to stderr for exactly that reason: stdout stays machine-clean
+ * even when there are warnings worth a human's attention.
+ */
+async function handleDockerMounts(flags) {
+  const { planStoreMounts, toDockerArgs } = require('./docker-mounts');
+  const { db } = await openDb(flags);
+
+  let rows;
+  try {
+    rows = db.prepare(`
+      SELECT id, name, mountType, storeType, basePath, enabled
+      FROM doc_mount_points
+      WHERE mountType != 'database'
+      ORDER BY name COLLATE NOCASE
+    `).all();
+  } finally {
+    db.close();
+  }
+
+  const plan = planStoreMounts(rows);
+  const format = flags.format || (flags.json ? 'json' : 'table');
+
+  if (format === 'json') {
+    process.stdout.write(JSON.stringify(plan, null, 2) + '\n');
+    return;
+  }
+
+  if (format === 'args') {
+    for (const arg of toDockerArgs(plan)) {
+      process.stdout.write(arg + '\n');
+    }
+    for (const warning of plan.warnings) {
+      process.stderr.write(`warning: ${warning}\n`);
+    }
+    return;
+  }
+
+  if (plan.unsupported) {
+    for (const warning of plan.warnings) {
+      console.log(`${YELLOW}${warning}${RESET}`);
+    }
+    return;
+  }
+
+  if (plan.binds.length === 0 && plan.skipped.length === 0) {
+    console.log('(no filesystem-backed document stores — nothing to bind)');
+    return;
+  }
+
+  if (plan.binds.length > 0) {
+    console.log(`${BOLD}Bind mounts required:${RESET}`);
+    console.table(
+      plan.binds.map((b) => ({
+        'host path': b.hostPath,
+        stores: b.stores.join(', '),
+      }))
+    );
+  }
+
+  if (plan.skipped.length > 0) {
+    console.log(`${BOLD}Skipped:${RESET}`);
+    console.table(
+      plan.skipped.map((s) => ({
+        'host path': s.hostPath,
+        stores: s.stores.join(', '),
+        reason: s.reason,
+      }))
+    );
+  }
+
+  for (const warning of plan.warnings) {
+    console.log(`${YELLOW}warning:${RESET} ${warning}`);
+  }
+
+  console.log('');
+  console.log(`${DIM}Binds are applied when a container is created. Re-run the start script`);
+  console.log(`with --recreate to rebuild the container with these stores included.${RESET}`);
+}
+
+// ----------------------------------------------------------------------------
 // show
 // ----------------------------------------------------------------------------
 
@@ -620,21 +721,51 @@ function formatLsDate(iso) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-const LS_FILE_COLUMNS = `
+// Cached per process: one PRAGMA per run, not one per prepared statement.
+let linkGroupColumnPresent = null;
+
+function hasLinkGroupColumn(db) {
+  if (linkGroupColumnPresent !== null) return linkGroupColumnPresent;
+  try {
+    const cols = db.prepare(`PRAGMA table_info("doc_mount_file_links")`).all();
+    linkGroupColumnPresent = cols.some((c) => c.name === 'linkGroupId');
+  } catch {
+    linkGroupColumnPresent = false;
+  }
+  return linkGroupColumnPresent;
+}
+
+// The "links" column counts deliberate hard links — members of this file's
+// linkGroupId — NOT rows sharing a fileId. Content rows are addressed by
+// sha256, so a boilerplate or empty file collects dozens of unrelated links
+// that share its bytes purely by coincidence; reporting those as links told
+// the operator a file was linked into 36 stores when nothing had been linked
+// at all. An instance that hasn't run the linkGroupId migration yet degrades
+// to 1 rather than failing the whole listing.
+function lsFileColumns(db) {
+  const present = hasLinkGroupColumn(db);
+  const linkCount = present
+    ? `(CASE WHEN l.linkGroupId IS NULL THEN 1 ELSE
+         (SELECT COUNT(*) FROM doc_mount_file_links g WHERE g.linkGroupId = l.linkGroupId) END)`
+    : `1`;
+  const linkGroupId = present ? `l.linkGroupId` : `NULL`;
+  return `
+  ${linkGroupId} AS linkGroupId,
   l.id AS linkId, l.fileId, l.relativePath, l.fileName, l.lastModified,
   l.extractionStatus, l.extractedTextSha256, l.chunkCount,
   f.fileType, f.fileSizeBytes, f.source, f.sha256,
-  (SELECT COUNT(*) FROM doc_mount_file_links WHERE fileId = l.fileId) AS linkCount,
+  ${linkCount} AS linkCount,
   (SELECT COUNT(*) FROM doc_mount_chunks
     WHERE linkId = l.id AND embedding IS NOT NULL) AS embeddedChunkCount
 `;
+}
 
 function resolveLsTarget(db, mountId, normalizedPath) {
   if (!normalizedPath) return { kind: 'root', path: '' };
 
   // Exact file match wins — handles the single-file display mode.
   const file = db.prepare(`
-    SELECT ${LS_FILE_COLUMNS}
+    SELECT ${lsFileColumns(db)}
     FROM doc_mount_file_links l
     JOIN doc_mount_files f ON f.id = l.fileId
     WHERE l.mountPointId = ? AND l.relativePath = ?
@@ -688,7 +819,7 @@ function fetchLsRows(db, mountId, parentPath) {
 
   const files = parentPath === ''
     ? db.prepare(`
-        SELECT ${LS_FILE_COLUMNS}
+        SELECT ${lsFileColumns(db)}
         FROM doc_mount_file_links l
         JOIN doc_mount_files f ON f.id = l.fileId
         WHERE l.mountPointId = ?
@@ -696,7 +827,7 @@ function fetchLsRows(db, mountId, parentPath) {
         ORDER BY l.fileName COLLATE NOCASE
       `).all(mountId)
     : db.prepare(`
-        SELECT ${LS_FILE_COLUMNS}
+        SELECT ${lsFileColumns(db)}
         FROM doc_mount_file_links l
         JOIN doc_mount_files f ON f.id = l.fileId
         WHERE l.mountPointId = ?
@@ -708,26 +839,29 @@ function fetchLsRows(db, mountId, parentPath) {
   return { folders, files };
 }
 
-function fetchLinksForFiles(db, fileIds) {
-  if (fileIds.length === 0) return new Map();
-  const placeholders = fileIds.map(() => '?').join(',');
+// Members of each named hard-link group, keyed by linkGroupId. Grouping is by
+// linkGroupId rather than fileId on purpose — see lsFileColumns: a shared
+// fileId only means "identical bytes", which is not a link.
+function fetchLinkGroupMembers(db, groupIds) {
+  if (groupIds.length === 0) return new Map();
+  const placeholders = groupIds.map(() => '?').join(',');
   const rows = db.prepare(`
-    SELECT l.fileId, l.relativePath, l.mountPointId, m.name AS mountName
+    SELECT l.linkGroupId, l.relativePath, l.mountPointId, m.name AS mountName
     FROM doc_mount_file_links l
     JOIN doc_mount_points m ON m.id = l.mountPointId
-    WHERE l.fileId IN (${placeholders})
+    WHERE l.linkGroupId IN (${placeholders})
     ORDER BY m.name COLLATE NOCASE, l.relativePath COLLATE NOCASE
-  `).all(...fileIds);
-  const byFile = new Map();
+  `).all(...groupIds);
+  const byGroup = new Map();
   for (const r of rows) {
-    if (!byFile.has(r.fileId)) byFile.set(r.fileId, []);
-    byFile.get(r.fileId).push({
+    if (!byGroup.has(r.linkGroupId)) byGroup.set(r.linkGroupId, []);
+    byGroup.get(r.linkGroupId).push({
       mountPointId: r.mountPointId,
       mountName: r.mountName,
       relativePath: r.relativePath,
     });
   }
-  return byFile;
+  return byGroup;
 }
 
 function sortLsFiles(files, sortType, reverse) {
@@ -776,14 +910,14 @@ async function handleLs(flags, mountSpec, rawPath) {
       const prefix = normalizedPath ? normalizedPath.replace(/\/+$/, '') + '/' : '';
       const allFiles = normalizedPath
         ? db.prepare(`
-            SELECT ${LS_FILE_COLUMNS}
+            SELECT ${lsFileColumns(db)}
             FROM doc_mount_file_links l
             JOIN doc_mount_files f ON f.id = l.fileId
             WHERE l.mountPointId = ? AND l.relativePath LIKE ?
             ORDER BY l.relativePath
           `).all(mount.id, prefix + '%')
         : db.prepare(`
-            SELECT ${LS_FILE_COLUMNS}
+            SELECT ${lsFileColumns(db)}
             FROM doc_mount_file_links l
             JOIN doc_mount_files f ON f.id = l.fileId
             WHERE l.mountPointId = ?
@@ -820,10 +954,10 @@ async function handleLs(flags, mountSpec, rawPath) {
 
     // Fetch links for JSON or --links flag
     const wantLinks = flags.json || flags.links;
-    const multiLinkFileIds = wantLinks
-      ? files.filter((f) => f.linkCount > 1).map((f) => f.fileId)
+    const linkedGroupIds = wantLinks
+      ? files.filter((f) => f.linkCount > 1 && f.linkGroupId).map((f) => f.linkGroupId)
       : [];
-    const linksByFile = fetchLinksForFiles(db, multiLinkFileIds);
+    const linksByGroup = fetchLinkGroupMembers(db, linkedGroupIds);
 
     // JSON output
     if (flags.json) {
@@ -842,7 +976,7 @@ async function handleLs(flags, mountSpec, rawPath) {
         }
       }
       for (const file of files) {
-        const others = linksByFile.get(file.fileId);
+        const others = file.linkGroupId ? linksByGroup.get(file.linkGroupId) : undefined;
         const links = others && others.length > 0
           ? others
           : [{
@@ -947,6 +1081,7 @@ async function handleLs(flags, mountSpec, rawPath) {
         emb: embedColumnMarker(file.chunkCount, file.embeddedChunkCount),
         name: singleFile ? file.relativePath : file.fileName,
         fileId: file.fileId,
+        linkGroupId: file.linkGroupId,
         relativePath: file.relativePath,
       });
     }
@@ -978,7 +1113,7 @@ async function handleLs(flags, mountSpec, rawPath) {
     for (const r of dataRows) {
       console.log(renderLine(r, false));
       if (flags.links && r.type === '-') {
-        const others = (linksByFile.get(r.fileId) || []).filter(
+        const others = ((r.linkGroupId && linksByGroup.get(r.linkGroupId)) || []).filter(
           (l) => !(l.mountPointId === mount.id && l.relativePath === r.relativePath)
         );
         if (others.length > 0) {
@@ -2991,6 +3126,9 @@ async function docsCommand(args) {
         break;
       case 'status':
         await handleStatus(flags);
+        break;
+      case 'docker-mounts':
+        await handleDockerMounts(flags);
         break;
       case 'find':
         await handleFind(flags, positional);

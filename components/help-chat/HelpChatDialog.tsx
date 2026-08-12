@@ -9,7 +9,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { Icon } from '@/components/ui/icon'
-import { useRouter } from 'next/navigation'
+import { useWorkspaceNavigate } from '@/components/workspace/useWorkspaceNavigate'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
@@ -67,7 +67,10 @@ export function HelpChatDialog() {
     currentPageUrl,
   } = useHelpChat()
 
-  const router = useRouter()
+  // Keep-alive-safe: a help link to a tab-equivalent route (Settings, a
+  // character editor, etc.) opens it as a tab in place instead of navigating
+  // and tearing the workspace down; other URLs push normally.
+  const navigate = useWorkspaceNavigate()
   const composerInputRef = useRef<HTMLTextAreaElement>(null)
   const [activeTab, setActiveTab] = useState<HelpTab>(getInitialTab)
   const [pastChats, setPastChats] = useState<PastChat[]>([])
@@ -88,9 +91,9 @@ export function HelpChatDialog() {
     if (hasParamSegments(url)) {
       setPendingParamUrl(url)
     } else {
-      router.push(url)
+      navigate(url)
     }
-  }, [router])
+  }, [navigate])
 
   const buildParticipantMaps = useCallback((participants: any[]) => {
     const newCharMap = new Map<string, CharacterInfo>()
@@ -288,7 +291,7 @@ export function HelpChatDialog() {
           urlTemplate={pendingParamUrl}
           onSelect={(resolvedUrl) => {
             setPendingParamUrl(null)
-            router.push(resolvedUrl)
+            navigate(resolvedUrl)
           }}
           onCancel={() => setPendingParamUrl(null)}
         />

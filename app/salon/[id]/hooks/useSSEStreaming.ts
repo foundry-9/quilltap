@@ -5,6 +5,7 @@ import { showSuccessToast, showErrorToast, showWarningToast, showInfoToast } fro
 import { getErrorMessage } from '@/lib/error-utils'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import type { ChatParticipantBase } from '@/lib/schemas/types'
+import { findActiveUserParticipant } from '@/lib/chat/turn-manager'
 import type { Message, MessageAttachment, Chat, PendingToolResult } from '../types'
 import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
 
@@ -87,6 +88,27 @@ interface SSEEvent {
   // fetchChat(). Inserted optimistically and deduped by id; the end-of-turn
   // refresh reconciles it to the authoritative copy.
   carinaAnswer?: Message
+  // "Nothing to add" turn-skipping. `hostAnnouncement` carries the full posted
+  // Host turn-pass message (surfaced live like carinaAnswer, deduped by id).
+  // On the done event, `skipped` marks that this turn was passed so the client
+  // resets its streaming buffer without appending a phantom bubble.
+  hostAnnouncement?: Message
+  // Pascal: the full posted custom-tool outcome message, surfaced the instant
+  // the dice fall so the Salon renders the bubble without waiting for the
+  // post-turn fetchChat(). Inserted optimistically and deduped by id; the
+  // end-of-turn refresh reconciles it to the authoritative copy.
+  pascalResult?: Message
+  skipped?: boolean
+  skippedParticipantId?: string | null
+  // Answer confirmation: the resolved state for a just-streamed message. On a
+  // re-affirmation rewrite, `content` carries the replacement bubble text.
+  confirmationResult?: {
+    messageId: string
+    confirmed: boolean | null
+    revised: boolean
+    notes: string | null
+    content?: string
+  }
 }
 
 /**
@@ -110,13 +132,16 @@ interface UseSSEStreamingParams {
   chat: Chat | null
   messages: Message[]
   setMessages: (fn: Message[] | ((prev: Message[]) => Message[])) => void
-  setEphemeralMessages: React.Dispatch<React.SetStateAction<import('@/components/chat/EphemeralMessage').EphemeralMessageData[]>>
   isMultiChar: boolean
   hasActiveCharacters: boolean
   participantsAsBase: ChatParticipantBase[]
   isPaused: boolean
   respondingParticipantId: string | null
   setRespondingParticipantId: (id: string | null) => void
+  /** The user-controlled participant the human is currently "Speaking As" (null = default) */
+  activeTypingParticipantId: string | null
+  /** Seats the human is impersonating this session (overlay; `controlledBy` stays `'llm'`) */
+  impersonatingParticipantIds: string[]
   fetchChat: () => Promise<void>
   scrollOnUserMessage: () => void
   scrollOnStreamComplete: () => void
@@ -134,7 +159,7 @@ interface UseSSEStreamingParams {
  * TanStack Query boundary: this is deliberately NOT a TanStack Query concern.
  * Query is a server-state *cache*, not a streaming transport — stream chunks are
  * never written into the query cache, and the live message buffer is owned here
- * via `setMessages`/`setEphemeralMessages`. The query reads that surround
+ * via `setMessages`. The query reads that surround
  * streaming (chat list, chat settings, LLM logs) live on TanStack Query and are
  * refreshed through their own hooks (e.g. `useLLMLogs.refreshLogs()` fires when a
  * turn completes); the authoritative post-turn message reconciliation goes
@@ -146,13 +171,14 @@ export function useSSEStreaming({
   chat,
   messages,
   setMessages,
-  setEphemeralMessages,
   isMultiChar,
   hasActiveCharacters,
   participantsAsBase,
   isPaused,
   respondingParticipantId,
   setRespondingParticipantId,
+  activeTypingParticipantId,
+  impersonatingParticipantIds,
   fetchChat,
   scrollOnUserMessage,
   scrollOnStreamComplete,
@@ -165,6 +191,24 @@ export function useSSEStreaming({
   const [sending, setSending] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
+  // Mirror the live "Speaking As" selection into a ref so the send/continue
+  // callbacks read the current value without re-creating on every selection.
+  const activeTypingParticipantIdRef = useRef(activeTypingParticipantId)
+  useEffect(() => {
+    activeTypingParticipantIdRef.current = activeTypingParticipantId
+  }, [activeTypingParticipantId])
+  // Mirror the impersonation overlay and the participant roster so the optimistic
+  // user bubble can resolve its author exactly the way the server will (Bug 45) —
+  // the send callback deliberately does not re-create on every roster/overlay
+  // change, so it reads these through refs rather than stale closure captures.
+  const impersonatingParticipantIdsRef = useRef(impersonatingParticipantIds)
+  useEffect(() => {
+    impersonatingParticipantIdsRef.current = impersonatingParticipantIds
+  }, [impersonatingParticipantIds])
+  const participantsAsBaseRef = useRef(participantsAsBase)
+  useEffect(() => {
+    participantsAsBaseRef.current = participantsAsBase
+  }, [participantsAsBase])
   // Live cumulative reasoning ("thinking") for the in-progress turn. DISPLAY ONLY.
   const [streamingReasoning, setStreamingReasoning] = useState('')
   const [waitingForResponse, setWaitingForResponse] = useState(false)
@@ -232,6 +276,26 @@ export function useSSEStreaming({
     streamingReasoningBufferRef.current = ''
     setStreamingReasoning('')
   }, [])
+
+  // Patch a message in place with its resolved answer-confirmation state. On a
+  // re-affirmation rewrite (`content` present) the optimistic bubble text is
+  // replaced with the corrected reply — a deliberate, visible transparency swap.
+  const applyConfirmationResult = useCallback((result: {
+    messageId: string
+    confirmed: boolean | null
+    revised: boolean
+    notes: string | null
+    content?: string
+  }) => {
+    setMessages(prev => prev.map(m => m.id === result.messageId ? {
+      ...m,
+      confirmed: result.confirmed,
+      confirmationChecked: true,
+      confirmationRevised: result.revised,
+      confirmationNotes: result.notes,
+      ...(typeof result.content === 'string' ? { content: result.content } : {}),
+    } : m))
+  }, [setMessages])
 
   // Cancel any pending rAF on unmount to avoid setting state after teardown.
   useEffect(() => {
@@ -341,6 +405,12 @@ export function useSSEStreaming({
       onDone: (fullContent: string, data: SSEEvent) => void | Promise<void>
       /** Called when a Carina reference answer is surfaced mid-turn */
       onCarinaAnswer?: (message: Message) => void
+      /** Called when a Host announcement (e.g. a turn-pass note) is surfaced mid-turn */
+      onHostAnnouncement?: (message: Message) => void
+      /** Called when a Pascal custom-tool outcome is surfaced mid-turn */
+      onPascalResult?: (message: Message) => void
+      /** Called when an answer-confirmation result resolves for a message */
+      onConfirmationResult?: (result: NonNullable<SSEEvent['confirmationResult']>) => void
       /** Called for intermediate done events during a chain (not the final one) */
       onIntermediateDone?: (fullContent: string, data: SSEEvent) => void | Promise<void>
       onTurnStart?: (event: { participantId: string; characterName: string; chainDepth: number }) => void
@@ -423,6 +493,25 @@ export function useSSEStreaming({
         // flow immediately rather than waiting for the post-turn fetchChat().
         if (data.carinaAnswer && opts.onCarinaAnswer) {
           opts.onCarinaAnswer(data.carinaAnswer)
+        }
+
+        // Handle a Host announcement surfaced mid-turn (turn-pass note) — insert
+        // it immediately, deduped by id, same as Carina answers.
+        if (data.hostAnnouncement && opts.onHostAnnouncement) {
+          opts.onHostAnnouncement(data.hostAnnouncement)
+        }
+
+        // Handle a Pascal custom-tool outcome surfaced mid-turn — insert it
+        // immediately, deduped by id, same as Carina answers.
+        if (data.pascalResult && opts.onPascalResult) {
+          opts.onPascalResult(data.pascalResult)
+        }
+
+        // Handle an answer-confirmation result — update the badge and, on a
+        // revision, swap in the corrected bubble text (a deliberate, visible
+        // transparency swap).
+        if (data.confirmationResult && opts.onConfirmationResult) {
+          opts.onConfirmationResult(data.confirmationResult)
         }
 
         // Handle completion
@@ -565,12 +654,26 @@ export function useSSEStreaming({
     }))
 
     const tempUserMessageId = `temp-user-${Date.now()}`
+    // Attribute the optimistic bubble to the seat the *server* will resolve this
+    // message onto — `findActiveUserParticipant`, which honours the impersonation
+    // overlay and falls back to the owner user seat when the active-typing id is
+    // not itself a user-driven seat. Using the bare `activeTypingParticipantId`
+    // here diverged from the persisted row and made the bubble flicker to the
+    // wrong author on refetch (Bug 45).
+    const optimisticAuthor = findActiveUserParticipant(
+      participantsAsBaseRef.current,
+      activeTypingParticipantIdRef.current,
+      impersonatingParticipantIdsRef.current,
+    )
     const tempUserMessage: Message = {
       id: tempUserMessageId,
       role: 'USER',
       content: displayContent,
       createdAt: new Date().toISOString(),
       attachments: messageAttachments.length > 0 ? messageAttachments : undefined,
+      // Renders with the chosen character's name/avatar immediately (not the
+      // default user), matching what the server persists.
+      participantId: optimisticAuthor?.id ?? activeTypingParticipantIdRef.current ?? undefined,
     }
     setMessages((prev) => [...prev, ...toolMessages, tempUserMessage])
     scrollOnUserMessage()
@@ -578,6 +681,7 @@ export function useSSEStreaming({
     const requestPayload = {
       content: userMessage || (attachedFiles.length > 0 ? 'Please look at the attached file(s).' : ''),
       fileIds,
+      speakingAsParticipantId: activeTypingParticipantIdRef.current ?? undefined,
       pendingToolResults: toolResultsToSend.length > 0 ? toolResultsToSend.map(r => ({
         tool: r.tool,
         success: r.success,
@@ -621,7 +725,25 @@ export function useSSEStreaming({
           setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
           scrollOnStreamComplete()
         },
+        onHostAnnouncement: (msg) => {
+          setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
+          scrollOnStreamComplete()
+        },
+        onPascalResult: (msg) => {
+          setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
+          scrollOnStreamComplete()
+        },
+        onConfirmationResult: applyConfirmationResult,
         onDone: async (fullContent, data) => {
+          // "Nothing to add" turn-pass: the Host note already surfaced via
+          // onHostAnnouncement. Reset streaming without appending a bubble or
+          // toasting; the chain (or chainComplete) drives the rest.
+          if (data.skipped) {
+            resetStreamingContent()
+            setStreaming(false)
+            return
+          }
+
           if (data.emptyResponse) {
             showErrorToast(data.emptyResponseReason || 'The AI returned an empty response. Use the Resend button to try again.')
             resetStreamingContent()
@@ -680,6 +802,13 @@ export function useSSEStreaming({
         },
         onIntermediateDone: async (fullContent, data) => {
           // Intermediate done during a chain — add temp message but don't reset state
+          // "Nothing to add" turn-pass: Host note surfaced via onHostAnnouncement;
+          // reset streaming without appending a bubble.
+          if (data.skipped) {
+            resetStreamingContent()
+            setStreaming(false)
+            return
+          }
           if (data.emptyResponse || !fullContent) return
 
           // Use server-provided participantId if available (authoritative)
@@ -759,12 +888,12 @@ export function useSSEStreaming({
       focusInput()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- onToolResultCallback is a stable page-level callback
-  }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, readSSEStream, extractErrorMessage, focusInput, resetStreamingContent, trackToolsDetected, trackToolResult])
+  }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, readSSEStream, extractErrorMessage, focusInput, resetStreamingContent, trackToolsDetected, trackToolResult, applyConfirmationResult])
 
   /**
    * Trigger continue mode - request AI to generate a response from a specific participant.
    */
-  const triggerContinueMode = useCallback(async (participantId: string) => {
+  const triggerContinueMode = useCallback(async (participantId: string, nudge = false) => {
     if (streaming || waitingForResponse) return
     if (isPaused) return
 
@@ -802,6 +931,10 @@ export function useSSEStreaming({
         body: JSON.stringify({
           continueMode: true,
           respondingParticipantId: participantId,
+          speakingAsParticipantId: activeTypingParticipantIdRef.current ?? undefined,
+          // Nudge (explicit summon) withholds the "nothing to add" skip option;
+          // the algorithm-picked Continue button leaves it undefined so skip is offered.
+          nudge: nudge || undefined,
         }),
         signal,
       })
@@ -822,8 +955,25 @@ export function useSSEStreaming({
           setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
           scrollOnStreamComplete()
         },
+        onHostAnnouncement: (msg) => {
+          setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
+          scrollOnStreamComplete()
+        },
+        onPascalResult: (msg) => {
+          setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
+          scrollOnStreamComplete()
+        },
+        onConfirmationResult: applyConfirmationResult,
         onDone: (fullContent, data) => {
           setResponseStatus(null)
+
+          // "Nothing to add" turn-pass: Host note surfaced via onHostAnnouncement;
+          // reset streaming without appending a bubble or toasting.
+          if (data.skipped) {
+            resetStreamingContent()
+            setStreaming(false)
+            return
+          }
 
           if (fullContent.trim()) {
             // Use server-provided participantId if available (authoritative)
@@ -843,13 +993,16 @@ export function useSSEStreaming({
             }
             setMessages(prev => [...prev, newMessage])
           }
-
-          setEphemeralMessages(prev =>
-            prev.filter(em => em.participantId !== participantId)
-          )
         },
         onIntermediateDone: async (fullContent, data) => {
           // Intermediate done during a chain — add temp message but don't reset state
+          // "Nothing to add" turn-pass: Host note surfaced via onHostAnnouncement;
+          // reset streaming without appending a bubble.
+          if (data.skipped) {
+            resetStreamingContent()
+            setStreaming(false)
+            return
+          }
           if (!fullContent.trim()) return
 
           // Use server-provided participantId if available (authoritative)
@@ -912,7 +1065,7 @@ export function useSSEStreaming({
       notifyQueueChange()
       focusInput()
     }
-  }, [chatId, streaming, waitingForResponse, isPaused, participantsAsBase, hasActiveCharacters, setMessages, setEphemeralMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, trackToolsDetected, trackToolResult])
+  }, [chatId, streaming, waitingForResponse, isPaused, participantsAsBase, hasActiveCharacters, setMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, trackToolsDetected, trackToolResult, applyConfirmationResult])
 
   const stopStreaming = useCallback(() => {
     if (abortControllerRef.current) {

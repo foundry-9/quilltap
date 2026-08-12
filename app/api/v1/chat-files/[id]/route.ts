@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler, type AuthenticatedContext } from '@/lib/api/middleware';
+import { createContextParamsHandler, type RequestContext } from '@/lib/api/middleware';
 import { withActionDispatch } from '@/lib/api/middleware/actions';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
@@ -26,7 +26,7 @@ const tagSchema = z.object({
  */
 async function handleTag(
   request: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   params: { id: string }
 ): Promise<NextResponse> {
   const { id } = params;
@@ -95,7 +95,7 @@ async function handleTag(
  * POST /api/v1/chat-files/:id
  * With ?action=tag - Tag a chat file
  */
-export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+export const POST = createContextParamsHandler<{ id: string }>(
   withActionDispatch(
     {
       tag: handleTag,
@@ -109,7 +109,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
  * DELETE /api/v1/chat-files/:id
  * Delete a chat file and its physical file
  */
-export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+export const DELETE = createContextParamsHandler<{ id: string }>(
   async (request: NextRequest, ctx, params) => {
     const { id } = params;
     const { user, repos } = ctx;

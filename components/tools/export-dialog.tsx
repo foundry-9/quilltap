@@ -145,6 +145,7 @@ export function ExportDialog({
                 includeMemories={state.includeMemories}
                 onIncludeMemoriesChange={actions.setIncludeMemories}
                 memoryCount={state.memoryCount}
+                vaultPreview={state.vaultPreview}
               />
             )}
 

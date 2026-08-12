@@ -34,6 +34,12 @@ async function clearFormat3Entities(): Promise<void> {
   const mainTables = [
     'chat_documents',
     'conversation_chunks',
+    // Per-message annotations. On no delete path in v4, so "delete all my data"
+    // left them behind (a privacy leak) and a restore into a migrated instance
+    // hit `UNIQUE constraint failed: conversation_annotations` (Bug 10). Cleared
+    // in bulk here — the UNIQUE(chatId,messageIndex,characterName) exists only on
+    // migrated instances, so the leak-on-delete affects every instance.
+    'conversation_annotations',
     'tfidf_vocabularies',
     'embedding_status',
     'vector_entries',
@@ -84,11 +90,37 @@ async function clearFormat3Entities(): Promise<void> {
 }
 
 /**
+ * Options for the destructive delete paths.
+ */
+export interface DeleteUserDataOptions {
+  /**
+   * When true (the default), `files` rows of category `ARCHIVE` — archived
+   * character bundles — and their on-disk bytes are spared from the wipe.
+   * The character rows themselves are NOT spared (they are ordinary rows), so
+   * what survives is a loose bundle: importable, not rehydratable. The bundle
+   * is encrypted under the user passphrase (or the internal constant), never
+   * under anything stored in a database, so it stays openable after the wipe.
+   * The destructive choice must be the explicit one — pass `false` to wipe
+   * archives too.
+   */
+  keepArchivedCharacterBundles?: boolean;
+}
+
+/** Is this `files` row an archived-character bundle? */
+function isArchiveBundle(file: FileEntry): boolean {
+  return file.category === 'ARCHIVE';
+}
+
+/**
  * Deletes all user data before restore (for 'replace' mode)
  * Also used for the "delete all data" feature
  */
-export async function deleteUserData(userId: string): Promise<void> {
-  moduleLogger.info('Deleting existing user data for replace mode', { userId });
+export async function deleteUserData(
+  userId: string,
+  options?: DeleteUserDataOptions
+): Promise<void> {
+  const keepArchives = options?.keepArchivedCharacterBundles !== false;
+  moduleLogger.info('Deleting existing user data for replace mode', { userId, keepArchives });
 
   const repos = getUserRepositories(userId);
   const globalRepos = getRepositories();
@@ -142,8 +174,15 @@ export async function deleteUserData(userId: string): Promise<void> {
     ...wardrobeItems.map((w) => globalRepos.wardrobe.delete(w.id, w.characterId ?? null)),
   ]);
 
-  // Delete files from storage
+  // Delete files from storage. Archived-character bundles are spared when
+  // `keepArchivedCharacterBundles` (the default) — row and bytes both survive
+  // as loose, importable bundles (spec §4.7).
+  let archiveBundlesKept = 0;
   for (const file of files) {
+    if (keepArchives && isArchiveBundle(file)) {
+      archiveBundlesKept++;
+      continue;
+    }
     try {
       if (file.storageKey) {
         await fileStorageManager.deleteFile(file);
@@ -155,6 +194,12 @@ export async function deleteUserData(userId: string): Promise<void> {
         error: error instanceof Error ? error.message : String(error),
       });
     }
+  }
+  if (archiveBundlesKept > 0) {
+    moduleLogger.info('Spared archived character bundles from wipe', {
+      userId,
+      archiveBundlesKept,
+    });
   }
 
   // Bulk-delete format-3 entities so the restore can re-insert them with
@@ -169,7 +214,8 @@ export async function deleteUserData(userId: string): Promise<void> {
       characters: characters.length,
       chats: chats.length,
       tags: tags.length,
-      files: files.length,
+      files: files.length - archiveBundlesKept,
+      archiveBundlesKept,
       connectionProfiles: connectionProfiles.length,
       imageProfiles: imageProfiles.length,
       embeddingProfiles: embeddingProfiles.length,
@@ -196,6 +242,15 @@ export interface DeleteSummary {
   memories: number;
   apiKeys: number;
   backups: number;
+  /**
+   * Archived-character bundles (`files` rows of category `ARCHIVE`) present at
+   * the time of the operation. In a preview this is the count on hand; after a
+   * deletion it is the count kept (when `keepArchivedCharacterBundles`) or
+   * wiped (when not) — read alongside `archiveBundlesKept`.
+   */
+  archiveBundles: number;
+  /** True when the operation spared the archive bundles (files count excludes them). */
+  archiveBundlesKept: boolean;
   projects: number;
   profiles: {
     connection: number;
@@ -212,8 +267,12 @@ export interface DeleteSummary {
  * Deletes all user data including API keys and backups
  * This is a complete account reset
  */
-export async function deleteAllUserData(userId: string): Promise<DeleteSummary> {
-  moduleLogger.info('Starting complete user data deletion', { userId });
+export async function deleteAllUserData(
+  userId: string,
+  options?: DeleteUserDataOptions
+): Promise<DeleteSummary> {
+  const keepArchives = options?.keepArchivedCharacterBundles !== false;
+  moduleLogger.info('Starting complete user data deletion', { userId, keepArchives });
 
   const repos = getUserRepositories(userId);
   const globalRepos = getRepositories();
@@ -247,8 +306,12 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
   );
   const backupsCount = allBackupFiles.length;
 
+  // Archived-character bundles, counted before deletion so the summary can
+  // report how many were kept (or wiped).
+  const archiveBundlesCount = files.filter(isArchiveBundle).length;
+
   // Now delete everything using the existing function (includes templates)
-  await deleteUserData(userId);
+  await deleteUserData(userId, options);
 
   // Delete API keys
   for (const apiKey of apiKeys) {
@@ -272,10 +335,12 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
     characters: characters.length,
     chats: chats.length,
     tags: tags.length,
-    files: files.length,
+    files: keepArchives ? files.length - archiveBundlesCount : files.length,
     memories: memoriesCount,
     apiKeys: apiKeys.length,
     backups: backupsCount,
+    archiveBundles: archiveBundlesCount,
+    archiveBundlesKept: keepArchives,
     projects: projects.length,
     profiles: {
       connection: connectionProfiles.length,
@@ -335,6 +400,10 @@ export async function previewDeleteAllUserData(userId: string): Promise<DeleteSu
     memories: memoriesCount,
     apiKeys: apiKeys.length,
     backups: backupFiles.length,
+    // Preview reports what's on hand; whether they survive is the caller's
+    // checkbox, so `kept` here just states the default.
+    archiveBundles: files.filter(isArchiveBundle).length,
+    archiveBundlesKept: true,
     projects: projects.length,
     profiles: {
       connection: connectionProfiles.length,

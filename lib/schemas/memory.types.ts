@@ -8,6 +8,7 @@
  */
 
 import { z } from 'zod';
+import { blobToFloat32 } from '@/lib/embedding/float32-conversion';
 import {
   UUIDSchema,
   TimestampSchema,
@@ -33,6 +34,18 @@ export type MemorySource = z.infer<typeof MemorySourceEnum>;
  */
 export const WitnessedContextEnum = z.enum(['user_present', 'autonomous_room', 'manual']);
 export type WitnessedContext = z.infer<typeof WitnessedContextEnum>;
+
+/**
+ * Declared kind of a memory (episodic recall overhaul):
+ *  - 'semantic': a standing fact ("Charlie likes lighthouses"). The default,
+ *    and what every pre-overhaul row reads as.
+ *  - 'episodic': a specific occurrence ("we visited Lighthouse Point on the
+ *    14th"). Retrieval, the memory gate, and housekeeping treat episodic rows
+ *    differently — keying behavior off a declared kind beats inferring it from
+ *    whether `occurredAt` happens to be set.
+ */
+export const MemoryKindEnum = z.enum(['semantic', 'episodic']);
+export type MemoryKind = z.infer<typeof MemoryKindEnum>;
 
 // ============================================================================
 // MEMORY
@@ -60,10 +73,9 @@ export const MemorySchema = z.object({
   embedding: z.union([
     z.instanceof(Float32Array),
     z.array(z.number()).transform((arr): Float32Array => new Float32Array(arr)),
-    z.instanceof(Buffer).transform((buf): Float32Array => {
-      const view = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / Float32Array.BYTES_PER_ELEMENT);
-      return new Float32Array(view);
-    }),
+    // Header-aware decode: handles both legacy raw Float32 blobs and the
+    // self-describing quantized format (see lib/embedding/float32-conversion.ts).
+    z.instanceof(Buffer).transform((buf): Float32Array => blobToFloat32(buf)),
     z.string().transform((s): Float32Array => {
       const parsed = JSON.parse(s);
       if (!Array.isArray(parsed)) throw new Error('Embedding string is not a JSON array');
@@ -73,6 +85,26 @@ export const MemorySchema = z.object({
   source: MemorySourceEnum.default('MANUAL'),       // How it was created
   /** Provenance of the conversational moment that produced this memory. Null on legacy rows. */
   witnessedContext: WitnessedContextEnum.nullable().optional(),
+  // ── Episodic spine (episodic recall overhaul) ──────────────────────────────
+  /**
+   * ISO wall-clock time of the EVENT the memory records (not the write clock —
+   * that's `createdAt`). Stamped from the source turn's message timestamp for
+   * current-turn memories, or resolved server-side from a relative phrase for
+   * retold events. Null on legacy rows until the backfill migration runs.
+   */
+  occurredAt: TimestampSchema.nullable().optional(),
+  /**
+   * Free-text in-story time ("the third night at sea") for chats running a
+   * fictional timeline (`chat.timelineMode === 'narrative'`). Null elsewhere.
+   */
+  narrativeTime: z.string().nullable().optional(),
+  /**
+   * Proper nouns of the episode: places, people, named things. Distinct from
+   * `keywords`, which carry the targeting tags and free search words.
+   */
+  entities: z.array(z.string()).default([]),
+  /** Declared memory kind — see {@link MemoryKindEnum}. */
+  kind: MemoryKindEnum.default('semantic'),
   sourceMessageId: UUIDSchema.nullable().optional(), // If auto-created, which message triggered it
   lastAccessedAt: TimestampSchema.nullable().optional(), // For housekeeping decisions
   // Memory Gate fields — reinforcement tracking

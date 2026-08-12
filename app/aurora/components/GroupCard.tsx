@@ -14,10 +14,12 @@ interface GroupCardProps {
   group: Group
   onClick: (e: React.MouseEvent) => void
   onDelete: () => void
+  /** When provided (workspace tab), the Edit action opens in place instead of routing. */
+  onOpen?: (groupId: string) => void
 }
 
 
-export function GroupCard({ group, onClick, onDelete }: GroupCardProps) {
+export function GroupCard({ group, onClick, onDelete, onOpen }: GroupCardProps) {
   return (
     <div
       className="qt-entity-card cursor-pointer hover:qt-border-primary/50 transition-colors"
@@ -45,13 +47,23 @@ export function GroupCard({ group, onClick, onDelete }: GroupCardProps) {
       )}
 
       <div className="qt-entity-card-actions flex gap-2">
-        <Link
-          href={`/aurora/groups/${group.id}`}
-          className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground qt-shadow-sm transition hover:qt-bg-primary/90"
-          title="Edit group"
-        >
-          Edit
-        </Link>
+        {onOpen ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); onOpen(group.id) }}
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground qt-shadow-sm transition hover:qt-bg-primary/90"
+            title="Edit group"
+          >
+            Edit
+          </button>
+        ) : (
+          <Link
+            href={`/aurora/groups/${group.id}`}
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground qt-shadow-sm transition hover:qt-bg-primary/90"
+            title="Edit group"
+          >
+            Edit
+          </Link>
+        )}
         <button
           onClick={(e) => { e.stopPropagation(); onDelete() }}
           className="qt-button-destructive qt-shadow-sm"

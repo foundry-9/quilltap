@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
+import { createContextParamsHandler } from '@/lib/api/middleware';
 import { pluginRegistry } from '@/lib/plugins/registry';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
@@ -212,7 +212,7 @@ async function handleSetConfig(req: NextRequest, context: any, name: string) {
 // GET Handler
 // ============================================================================
 
-export const GET = createAuthenticatedParamsHandler<{ name: string }>(
+export const GET = createContextParamsHandler<{ name: string }>(
   async (req: NextRequest, context, { name }) => {
     const { user } = context;
 
@@ -256,7 +256,7 @@ export const GET = createAuthenticatedParamsHandler<{ name: string }>(
 // POST Handler
 // ============================================================================
 
-export const POST = createAuthenticatedParamsHandler<{ name: string }>(
+export const POST = createContextParamsHandler<{ name: string }>(
   async (req: NextRequest, context, { name }) => {
     const action = getActionParam(req);
 
@@ -276,7 +276,7 @@ export const POST = createAuthenticatedParamsHandler<{ name: string }>(
 // PUT Handler - Enable/Disable Plugin
 // ============================================================================
 
-export const PUT = createAuthenticatedParamsHandler<{ name: string }>(
+export const PUT = createContextParamsHandler<{ name: string }>(
   async (req: NextRequest, context, { name }) => {
     const { user } = context;
 

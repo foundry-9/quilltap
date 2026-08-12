@@ -9,7 +9,7 @@ import { logger } from '@/lib/logger';
 import { badRequest } from '@/lib/api/responses';
 import { deleteMemoryWithVector } from '@/lib/memory/memory-service';
 import { bulkReattributeSchema } from '../schemas';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import type { ChatMetadata, MessageEvent, ChatEvent } from '@/lib/schemas/types';
 
 /**
@@ -19,7 +19,7 @@ export async function handleBulkReattribute(
   req: NextRequest,
   chatId: string,
   chat: ChatMetadata,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const validatedData = bulkReattributeSchema.parse(body);

@@ -25,19 +25,18 @@ import type {
   WardrobeWearOpResult,
 } from '../wardrobe-wear-tool';
 import { validateWardrobeWearInput } from '../wardrobe-wear-tool';
-import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
-import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
 import { equipItem, replaceItem, addToSlot } from '@/lib/wardrobe/outfit-displacement';
-import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
 import { resolveProjectMountPointIdsForChat } from '@/lib/mount-index/tiered-mount-pool';
 import {
   buildWardrobeCoverageSummaryFromState,
   describeWardrobeEffect,
   emptyEquippedState,
+  formatWardrobeMutationResults,
   loadCurrentWardrobeState,
   normalizeNoItemSentinel,
-  recordPendingWardrobeAnnouncement,
+  notifyWardrobeChanged,
   resolveWardrobeItemAcrossTiers,
+  wardrobeItemNotFoundMessage,
 } from './wardrobe-handler-shared';
 
 export interface WardrobeWearToolContext {
@@ -66,7 +65,9 @@ export async function executeWardrobeWearTool(
 ): Promise<WardrobeWearToolOutput> {
   const repos = getRepositories();
 
-  if (!validateWardrobeWearInput(input)) {
+  const parsed = validateWardrobeWearInput(input);
+
+  if (!parsed) {
     logger.warn('Wardrobe wear tool validation failed', {
       context: 'wardrobe-wear-handler',
       userId: context.userId,
@@ -86,7 +87,7 @@ export async function executeWardrobeWearTool(
   let appliedCount = 0;
   let failedError: string | undefined;
 
-  for (const op of (input as WardrobeWearToolInput).operations) {
+  for (const op of parsed.operations) {
     const mode = op.mode ?? 'wear';
     const itemId = normalizeNoItemSentinel(op.item_id);
     const itemTitle = normalizeNoItemSentinel(op.item_title);
@@ -100,9 +101,7 @@ export async function executeWardrobeWearTool(
         projectMountPointIds,
       );
       if (!item) {
-        throw new WardrobeWearError(
-          `Wardrobe item not found${itemId ? ` with ID "${itemId}"` : ''}${itemTitle ? ` with title "${itemTitle}"` : ''}`,
-        );
+        throw new WardrobeWearError(wardrobeItemNotFoundMessage(itemId, itemTitle));
       }
       if (item.archivedAt) {
         throw new WardrobeWearError(`Item "${item.title}" is archived and cannot be worn`);
@@ -177,19 +176,15 @@ export async function executeWardrobeWearTool(
 
   // Fire side effects ONCE, only if at least one operation actually landed.
   if (appliedCount > 0) {
-    await triggerAvatarGenerationIfEnabled(repos, {
-      userId: context.userId,
-      chatId: context.chatId,
-      characterId: context.characterId,
-      callerContext: 'wardrobe-wear-handler',
-    });
-    await recordPendingWardrobeAnnouncement(
+    await notifyWardrobeChanged(
+      repos,
       {
         userId: context.userId,
         chatId: context.chatId,
+        characterId: context.characterId,
         pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
       },
-      { sourceContext: 'wardrobe-wear-handler', characterId: context.characterId },
+      'wardrobe-wear-handler',
     );
   }
 
@@ -214,28 +209,5 @@ export async function executeWardrobeWearTool(
  * Format wardrobe wear results for inclusion in conversation context
  */
 export function formatWardrobeWearResults(output: WardrobeWearToolOutput): string {
-  if (!output.success && output.operations.length === 0) {
-    return `Wardrobe Error: ${output.error || 'Unknown error'}`;
-  }
-
-  const lines: string[] = [];
-  for (const op of output.operations) {
-    if (op.error) {
-      lines.push(`Failed: ${op.error}`);
-    } else if (op.effect_summary) {
-      lines.push(op.effect_summary);
-    }
-  }
-
-  lines.push('');
-  lines.push('Current outfit:');
-  const state: EquippedSlots = output.current_state;
-  for (const slotKey of WARDROBE_SLOT_TYPES) {
-    const ids = state[slotKey];
-    lines.push(`  ${slotKey}: ${ids.length === 0 ? '(empty)' : ids.join(', ')}`);
-  }
-  lines.push('');
-  lines.push(`Summary: ${output.coverage_summary}`);
-
-  return lines.join('\n');
+  return formatWardrobeMutationResults(output);
 }

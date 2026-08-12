@@ -5,11 +5,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { checkOwnership } from '@/lib/api/middleware';
+import { exists } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { notFound, successResponse } from '@/lib/api/responses';
 import { updateToolSettingsSchema } from '../schemas';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 /**
  * Update default tool settings for project
@@ -17,10 +17,10 @@ import type { AuthenticatedContext } from '@/lib/api/middleware';
 export async function handleUpdateToolSettings(
   req: NextRequest,
   projectId: string,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   const project = await repos.projects.findById(projectId);
-  if (!checkOwnership(project, user.id)) {
+  if (!exists(project)) {
     return notFound('Project');
   }
 

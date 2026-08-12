@@ -15,7 +15,7 @@ _quilltap_complete() {
   local global_opts="-d --data-dir -i --instance -p --port -o --open -v --version -h --help --update --passphrase"
 
   # Top-level subcommands
-  local top_cmds="db docs themes instances memories memory-diff logs migrations maintenance file-verify completion"
+  local top_cmds="db docs themes instances memories memory-diff recall-replay logs migrations maintenance file-verify completion"
 
   # Get the subcommand (first non-option word after quilltap)
   local subcommand=""
@@ -121,12 +121,21 @@ _quilltap_complete() {
         else
           COMPREPLY=($(compgen -W "$db_verbs" -- "$cur"))
         fi
+      elif [[ "$subverb" == "characters" ]]; then
+        local char_verbs="status archives archive rehydrate export"
+        local char_flags="--instance --data-dir --passphrase --json --limit --diverged --blocked --id \
+          --write -p --port --out --help"
+        if [[ "$cur" == -* ]]; then
+          COMPREPLY=($(compgen -W "$char_flags" -- "$cur"))
+        else
+          COMPREPLY=($(compgen -W "$char_verbs" -- "$cur"))
+        fi
       else
         COMPREPLY=($(compgen -W "$db_flags" -- "$cur"))
       fi
       ;;
     docs)
-      local docs_verbs="list show files ls dir tree read export scan write delete mkdir move copy link rmdir mvdir status find grep reindex embed"
+      local docs_verbs="list show files ls dir tree read export scan write delete mkdir move copy link rmdir mvdir status docker-mounts find grep reindex embed"
       local docs_flags="--mount --instance --data-dir --passphrase --port --json --help \
         --force --rendered --links --folder --type --ext --limit --max --context --top --threshold \
         --ignore-case -l --wait -R --recursive --sort -r --reverse --depth --max-nodes --long --semantic"
@@ -209,6 +218,10 @@ _quilltap_complete() {
       local md_flags="--instance --data-dir --passphrase --port --concurrency --out --help"
       COMPREPLY=($(compgen -W "$md_flags" -- "$cur"))
       ;;
+    recall-replay)
+      local rr_flags="--turn --char --limit --port --json --help"
+      COMPREPLY=($(compgen -W "$rr_flags" -- "$cur"))
+      ;;
     logs)
       local logs_flags="--stream --tail -f --follow --grep \
         --instance --data-dir --passphrase --help"
@@ -239,6 +252,10 @@ _quilltap_complete() {
       else
         COMPREPLY=($(compgen -W "$maint_flags" -- "$cur"))
       fi
+      ;;
+    file-verify)
+      local fv_flags="--all --stall-ms --json --instance --data-dir --help"
+      COMPREPLY=($(compgen -W "$fv_flags" -- "$cur"))
       ;;
     completion)
       if [[ "$cur" == -* ]]; then

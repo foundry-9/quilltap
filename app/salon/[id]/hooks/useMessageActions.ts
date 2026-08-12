@@ -52,7 +52,9 @@ export function useMessageActions(
       if (!res.ok) throw new Error('Failed to update message')
 
       const updated = await res.json()
-      setMessages(messages.map(m => m.id === messageId ? { ...m, content: updated.content } : m))
+      // The endpoint returns { message: <event> }; fall back to what we sent.
+      const newContent: string = updated?.message?.content ?? editContent
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: newContent } : m))
       setEditingMessageId(null)
       setEditContent('')
     } catch (err) {

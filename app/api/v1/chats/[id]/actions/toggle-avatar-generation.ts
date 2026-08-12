@@ -10,7 +10,7 @@ import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { serverError, successResponse } from '@/lib/api/responses';
 import { enqueueCharacterAvatarGeneration } from '@/lib/background-jobs/queue-service';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 /**
  * Toggle avatar generation for a chat.
@@ -21,7 +21,7 @@ import type { AuthenticatedContext } from '@/lib/api/middleware';
  */
 export async function handleToggleAvatarGeneration(
   chatId: string,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   try {
     const chat = await repos.chats.findById(chatId);

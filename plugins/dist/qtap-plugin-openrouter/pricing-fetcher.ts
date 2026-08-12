@@ -38,48 +38,54 @@ export async function fetchOpenRouterPricing(
       appTitle: getQuilltapUserAgent(),
     });
 
-    const response = await client.models.list();
+    // models.list() returns a paginated async-iterable and the model array
+    // lives at page.result.data. This read was left on the pre-0.13
+    // `response.data`, which is undefined on a PageIterator — so it silently
+    // produced zero prices.
+    const pages = await client.models.list();
     const models: ModelPricing[] = [];
 
-    for (const model of response.data || []) {
-      // Parse pricing (OpenRouter returns costs per token as strings)
-      const promptCost = parseFloat(String(model.pricing?.prompt || '0'));
-      const completionCost = parseFloat(String(model.pricing?.completion || '0'));
+    for await (const page of pages) {
+      for (const model of page.result?.data ?? []) {
+        // Parse pricing (OpenRouter returns costs per token as strings)
+        const promptCost = parseFloat(String(model.pricing?.prompt || '0'));
+        const completionCost = parseFloat(String(model.pricing?.completion || '0'));
 
-      // Convert from per-token to per-1M tokens
-      const promptCostPer1M = promptCost * 1_000_000;
-      const completionCostPer1M = completionCost * 1_000_000;
+        // Convert from per-token to per-1M tokens
+        const promptCostPer1M = promptCost * 1_000_000;
+        const completionCostPer1M = completionCost * 1_000_000;
 
-      // Check input modality for vision support (can receive images)
-      const inputModality = model.architecture?.modality;
-      const supportsVision = inputModality?.includes('image') || false;
+        // Check input modality for vision support (can receive images)
+        const inputModality = model.architecture?.modality;
+        const supportsVision = inputModality?.includes('image') || false;
 
-      // Check output modality for image generation support (can produce images)
-      // OpenRouter exposes this via output_modalities array, architecture.outputModality,
-      // or supported_generation_methods
-      const modelAny = model as any;
-      const outputModalities = modelAny.output_modalities || modelAny.outputModalities;
-      const outputModality = modelAny.architecture?.outputModality;
-      const supportsImageGeneration =
-        (Array.isArray(outputModalities) && outputModalities.includes('image')) ||
-        (typeof outputModality === 'string' && outputModality.includes('image')) ||
-        modelAny.supported_generation_methods?.includes('image') ||
-        false;
+        // Check output modality for image generation support (can produce images)
+        // OpenRouter exposes this via output_modalities array, architecture.outputModality,
+        // or supported_generation_methods
+        const modelAny = model as any;
+        const outputModalities = modelAny.output_modalities || modelAny.outputModalities;
+        const outputModality = modelAny.architecture?.outputModality;
+        const supportsImageGeneration =
+          (Array.isArray(outputModalities) && outputModalities.includes('image')) ||
+          (typeof outputModality === 'string' && outputModality.includes('image')) ||
+          modelAny.supported_generation_methods?.includes('image') ||
+          false;
 
-      models.push({
-        modelId: model.id,
-        name: model.name,
-        promptCostPer1M,
-        completionCostPer1M,
-        contextLength: model.contextLength,
-        supportsVision,
-        supportsImageGeneration,
-        supportsTools:
-          model.supportedParameters?.some(
-            (p) => p === Parameter.Tools || p === Parameter.ToolChoice
-          ) ?? false,
-        fetchedAt: new Date().toISOString(),
-      });
+        models.push({
+          modelId: model.id,
+          name: model.name,
+          promptCostPer1M,
+          completionCostPer1M,
+          contextLength: model.contextLength,
+          supportsVision,
+          supportsImageGeneration,
+          supportsTools:
+            model.supportedParameters?.some(
+              (p) => p === Parameter.Tools || p === Parameter.ToolChoice
+            ) ?? false,
+          fetchedAt: new Date().toISOString(),
+        });
+      }
     }
 
     logger.info('Successfully fetched OpenRouter pricing', {

@@ -18,6 +18,7 @@ import { DatabaseCollection, TypedQueryFilter } from '../interfaces';
 import { SQLiteCollection } from '../backends/sqlite/backend';
 import { getRawMountIndexDatabase, isMountIndexDegraded } from '../backends/sqlite/mount-index-client';
 import { generateDDL, extractSchemaMetadata } from '../schema-translator';
+import { ensureLinkGroupColumn } from './mount-index-case-repair';
 
 /**
  * Joined view: a document row with the link metadata callers need to know
@@ -33,6 +34,8 @@ export interface DocMountDocumentWithLink extends DocMountDocument {
   folderId: string | null;
   fileType: 'pdf' | 'docx' | 'markdown' | 'txt' | 'json' | 'jsonl' | 'blob';
   lastModified: string;
+  /** Set when this link is part of a deliberate hard-link group. */
+  linkGroupId: string | null;
 }
 
 export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMountDocument> {
@@ -64,6 +67,12 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
           `CREATE UNIQUE INDEX IF NOT EXISTS "idx_${this.collectionName}_fileId" ` +
           `ON "${this.collectionName}" ("fileId")`
         );
+
+        // The joined views below select l.linkGroupId off doc_mount_file_links.
+        // This repository's init is reachable without the links repository's
+        // having run, so align that column here too rather than depending on
+        // initialization order (a missing column reads as "document not found").
+        ensureLinkGroupColumn(db);
 
         this.mountIndexCollectionInitialized = true;
       } catch (error) {
@@ -169,7 +178,7 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
              d.id, d.fileId, d.content, d.contentSha256, d.plainTextLength,
              d.createdAt, d.updatedAt,
              l.id AS linkId, l.mountPointId, l.relativePath, l.fileName,
-             l.folderId, l.lastModified,
+             l.folderId, l.lastModified, l.linkGroupId,
              f.fileType
            FROM doc_mount_file_links l
            JOIN doc_mount_documents d ON d.fileId = l.fileId
@@ -206,7 +215,7 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
              d.id, d.fileId, d.content, d.contentSha256, d.plainTextLength,
              d.createdAt, d.updatedAt,
              l.id AS linkId, l.mountPointId, l.relativePath, l.fileName,
-             l.folderId, l.lastModified,
+             l.folderId, l.lastModified, l.linkGroupId,
              f.fileType
            FROM doc_mount_file_links l
            JOIN doc_mount_documents d ON d.fileId = l.fileId
@@ -253,7 +262,7 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
              d.id, d.fileId, d.content, d.contentSha256, d.plainTextLength,
              d.createdAt, d.updatedAt,
              l.id AS linkId, l.mountPointId, l.relativePath, l.fileName,
-             l.folderId, l.lastModified,
+             l.folderId, l.lastModified, l.linkGroupId,
              f.fileType
            FROM doc_mount_file_links l
            JOIN doc_mount_documents d ON d.fileId = l.fileId
@@ -292,7 +301,7 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
              d.id, d.fileId, d.content, d.contentSha256, d.plainTextLength,
              d.createdAt, d.updatedAt,
              l.id AS linkId, l.mountPointId, l.relativePath, l.fileName,
-             l.folderId, l.lastModified,
+             l.folderId, l.lastModified, l.linkGroupId,
              f.fileType
            FROM doc_mount_file_links l
            JOIN doc_mount_documents d ON d.fileId = l.fileId

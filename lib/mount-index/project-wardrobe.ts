@@ -50,8 +50,14 @@ export async function ensureProjectWardrobeFolder(
  * character). Returns `[]` when the folder is empty or unreadable.
  *
  * Archetype seeding is disabled in the underlying reader: a project composite
- * resolves its components against the merged tier set assembled by the wardrobe
- * repository, not by recursing through `findArchetypes`.
+ * resolves its components within this same folder, not by recursing through
+ * `findArchetypes` (which would loop back here).
+ *
+ * Consequence, and a known gap: a project composite whose components live in
+ * *Quilltap General* loses those refs at parse time — `resolveAndCheckComponentItems`
+ * only sees this folder's items. Same-tier composites (the common case) are
+ * fine. Read-time hydration in `lib/wardrobe/resolve-equipped.ts` recovers the
+ * equipped case; the parse-time gap is tracked separately.
  */
 export async function readProjectWardrobe(
   mountPointId: string,

@@ -60,6 +60,46 @@ export interface CheapLLMSelection {
   connectionProfileId?: string
   /** Whether this is a local model (no API costs) */
   isLocal: boolean
+  /**
+   * The chosen profile's provider parameters (e.g. DeepSeek `thinking` /
+   * `reasoning_effort`). Forwarded to the provider so per-model settings like
+   * "reasoning off" actually take effect for cheap-LLM tasks. The task pipeline
+   * still controls temperature / max-tokens at the top level; providers only
+   * apply the allowlisted extras from this object.
+   */
+  profileParameters?: Record<string, unknown>
+}
+
+/**
+ * Extract a connection profile's provider parameters (e.g. DeepSeek `thinking`
+ * / `reasoning_effort`) as a plain record for forwarding as
+ * `LLMParams.profileParameters`. Shared by every path that builds a provider
+ * call from a profile — the cheap-LLM selection sites here and the direct
+ * utility calls (auto-configure, wizards, optimizer, greeting, …) — so a
+ * profile's "reasoning off" setting takes effect uniformly.
+ */
+export function profileParams(profile: ConnectionProfile): Record<string, unknown> | undefined {
+  const params = profile.parameters
+  return params && typeof params === 'object' ? (params as Record<string, unknown>) : undefined
+}
+
+/**
+ * Build a {@link CheapLLMSelection} straight from a connection profile, using
+ * the profile's own base URL (no local-fallback substitution) and deriving
+ * `isLocal` from the provider. Shared by the selection paths that pick a profile
+ * as-is — the global default, the USER_DEFINED profile, and a non-local
+ * `isCheap` profile. Ollama-forced and uncensored paths substitute a localhost
+ * base URL and are intentionally NOT routed through here.
+ */
+function selectionFromProfile(profile: ConnectionProfile): CheapLLMSelection {
+  return {
+    provider: profile.provider,
+    modelName: profile.modelName,
+    baseUrl: profile.baseUrl || undefined,
+    connectionProfileId: profile.id,
+    isLocal: profile.provider === 'OLLAMA',
+    profileParameters: profileParams(profile),
+  }
 }
 
 /**
@@ -127,13 +167,7 @@ export function getCheapLLMProvider(
   if (config.defaultCheapProfileId) {
     const defaultCheapProfile = availableProfiles.find(p => p.id === config.defaultCheapProfileId)
     if (defaultCheapProfile) {
-      return {
-        provider: defaultCheapProfile.provider,
-        modelName: defaultCheapProfile.modelName,
-        baseUrl: defaultCheapProfile.baseUrl || undefined,
-        connectionProfileId: defaultCheapProfile.id,
-        isLocal: defaultCheapProfile.provider === 'OLLAMA',
-      }
+      return selectionFromProfile(defaultCheapProfile)
     }
     // Global default not found, fall through to other strategies
   }
@@ -142,14 +176,7 @@ export function getCheapLLMProvider(
   if (config.strategy === 'USER_DEFINED' && config.userDefinedProfileId) {
     const userProfile = availableProfiles.find(p => p.id === config.userDefinedProfileId)
     if (userProfile) {
-
-      return {
-        provider: userProfile.provider,
-        modelName: userProfile.modelName,
-        baseUrl: userProfile.baseUrl || undefined,
-        connectionProfileId: userProfile.id,
-        isLocal: userProfile.provider === 'OLLAMA',
-      }
+      return selectionFromProfile(userProfile)
     }
     // Fall through to next strategy if profile not found
     logger.warn('[CheapLLM] USER_DEFINED profile not found, falling through', {
@@ -170,17 +197,11 @@ export function getCheapLLMProvider(
         baseUrl: localCheapProfile.baseUrl || 'http://localhost:11434',
         connectionProfileId: localCheapProfile.id,
         isLocal: true,
+        profileParameters: profileParams(localCheapProfile),
       }
     }
     // Use the first available cheap profile
-    const cheapProfile = cheapProfiles[0]
-    return {
-      provider: cheapProfile.provider,
-      modelName: cheapProfile.modelName,
-      baseUrl: cheapProfile.baseUrl || undefined,
-      connectionProfileId: cheapProfile.id,
-      isLocal: cheapProfile.provider === 'OLLAMA',
-    }
+    return selectionFromProfile(cheapProfiles[0])
   }
 
   // Priority 4: Local first (prefer Ollama if available)
@@ -194,6 +215,7 @@ export function getCheapLLMProvider(
         baseUrl: ollamaProfile.baseUrl || 'http://localhost:11434',
         connectionProfileId: ollamaProfile.id,
         isLocal: true,
+        profileParameters: profileParams(ollamaProfile),
       }
     }
 
@@ -272,6 +294,7 @@ export function resolveUncensoredCheapLLMSelection(
         baseUrl: isLocal ? (uncensoredProfile.baseUrl || 'http://localhost:11434') : (uncensoredProfile.baseUrl || undefined),
         connectionProfileId: uncensoredProfile.id,
         isLocal,
+        profileParameters: profileParams(uncensoredProfile),
       }
     }
   }
@@ -286,6 +309,7 @@ export function resolveUncensoredCheapLLMSelection(
       baseUrl: isLocal ? (anyUncensored.baseUrl || 'http://localhost:11434') : (anyUncensored.baseUrl || undefined),
       connectionProfileId: anyUncensored.id,
       isLocal,
+      profileParameters: profileParams(anyUncensored),
     }
   }
 

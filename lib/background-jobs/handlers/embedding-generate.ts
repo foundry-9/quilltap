@@ -69,7 +69,8 @@ async function skipIfOversize(
       entityType,
       payload.entityId,
       payload.profileId,
-      reason
+      reason,
+      job.userId
     );
     return true;
   }
@@ -90,7 +91,8 @@ async function skipIfOversize(
     entityType,
     payload.entityId,
     payload.profileId,
-    reason
+    reason,
+    job.userId
   );
   return true;
 }
@@ -132,7 +134,8 @@ export async function handleEmbeddingGenerate(job: BackgroundJob): Promise<void>
       'MEMORY',
       payload.entityId,
       payload.profileId,
-      'Memory not found'
+      'Memory not found',
+      job.userId
     );
     return;
   }
@@ -185,7 +188,8 @@ export async function handleEmbeddingGenerate(job: BackgroundJob): Promise<void>
     await repos.embeddingStatus.markAsEmbedded(
       'MEMORY',
       payload.entityId,
-      payload.profileId
+      payload.profileId,
+      job.userId
     );
 
     logger.info('[EmbeddingGenerate] Embedding generated successfully', {
@@ -203,7 +207,8 @@ export async function handleEmbeddingGenerate(job: BackgroundJob): Promise<void>
       'MEMORY',
       payload.entityId,
       payload.profileId,
-      errorMessage
+      errorMessage,
+      job.userId
     );
 
     if (isPermanentEmbeddingError(errorMessage)) {
@@ -268,7 +273,8 @@ async function handleConversationChunkEmbedding(
     await repos.embeddingStatus.markAsEmbedded(
       'CONVERSATION_CHUNK',
       payload.entityId,
-      payload.profileId
+      payload.profileId,
+      job.userId
     );
 
     logger.info('[EmbeddingGenerate] Conversation chunk embedding generated', {
@@ -286,7 +292,8 @@ async function handleConversationChunkEmbedding(
       'CONVERSATION_CHUNK',
       payload.entityId,
       payload.profileId,
-      errorMessage
+      errorMessage,
+      job.userId
     );
 
     if (isPermanentEmbeddingError(errorMessage)) {
@@ -333,7 +340,8 @@ async function handleHelpDocEmbedding(
       'HELP_DOC',
       payload.entityId,
       payload.profileId,
-      'Help doc not found'
+      'Help doc not found',
+      job.userId
     );
     return;
   }
@@ -358,7 +366,8 @@ async function handleHelpDocEmbedding(
     await repos.embeddingStatus.markAsEmbedded(
       'HELP_DOC',
       payload.entityId,
-      payload.profileId
+      payload.profileId,
+      job.userId
     );
 
     logger.info('[EmbeddingGenerate] Help doc embedding generated', {
@@ -375,7 +384,8 @@ async function handleHelpDocEmbedding(
       'HELP_DOC',
       payload.entityId,
       payload.profileId,
-      errorMessage
+      errorMessage,
+      job.userId
     );
 
     if (isPermanentEmbeddingError(errorMessage)) {
@@ -420,7 +430,8 @@ async function handleMountChunkEmbedding(
       'MOUNT_CHUNK',
       payload.entityId,
       payload.profileId,
-      'Mount chunk not found'
+      'Mount chunk not found',
+      job.userId
     );
     return;
   }
@@ -448,7 +459,8 @@ async function handleMountChunkEmbedding(
     await repos.embeddingStatus.markAsEmbedded(
       'MOUNT_CHUNK',
       payload.entityId,
-      payload.profileId
+      payload.profileId,
+      job.userId
     );
 
     logger.info('[EmbeddingGenerate] Mount chunk embedding generated', {
@@ -465,7 +477,8 @@ async function handleMountChunkEmbedding(
       'MOUNT_CHUNK',
       payload.entityId,
       payload.profileId,
-      errorMessage
+      errorMessage,
+      job.userId
     );
 
     if (isPermanentEmbeddingError(errorMessage)) {

@@ -60,6 +60,10 @@ interface ToolResult {
   operatorName?: string
   /** Whether this run was launched as a private whisper from Prospero. */
   private?: boolean
+  /** When true, another message is the run's single visible artifact (e.g. the
+   *  Pascal bubble for `run_custom`) and this TOOL row renders nothing. The
+   *  message still persists for tool-call threading. */
+  delegatedDisplay?: boolean
   success?: boolean
   /** Result can be a string or object (for backwards compatibility with older RNG results) */
   result?: string | Record<string, unknown>
@@ -355,6 +359,12 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
       showErrorToast('Failed to copy image')
     }
   }, [])
+
+  // Display is delegated to another message (the Pascal bubble for run_custom):
+  // this TOOL row exists only for tool-call threading, so it renders nothing.
+  // Placed below every hook — an early return above them would break the rules
+  // of hooks for the messages that DO render.
+  if (toolData.delegatedDisplay) return null
 
   // Get preview text for collapsed sections
   const requestPreview = getPreviewText(formatRequestContent(toolData))

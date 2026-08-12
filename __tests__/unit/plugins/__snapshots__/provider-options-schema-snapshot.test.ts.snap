@@ -248,3 +248,61 @@ exports[`Provider options schemas OpenRouter exposes an options schema 1`] = `
   ],
 }
 `;
+
+exports[`Provider options schemas Z.AI exposes an options schema 1`] = `
+{
+  "groups": [
+    {
+      "fields": [
+        {
+          "default": "",
+          "enumValues": [
+            {
+              "label": "(model default)",
+              "value": "",
+            },
+            {
+              "label": "Enabled",
+              "value": "enabled",
+            },
+            {
+              "label": "Disabled",
+              "value": "disabled",
+            },
+          ],
+          "key": "thinking",
+          "label": "Thinking Mode",
+          "type": "enum",
+        },
+        {
+          "default": "",
+          "enumValues": [
+            {
+              "label": "(model default)",
+              "value": "",
+            },
+            {
+              "label": "Minimal",
+              "value": "minimal",
+            },
+            {
+              "label": "High",
+              "value": "high",
+            },
+            {
+              "label": "Max",
+              "value": "max",
+            },
+          ],
+          "helpText": "A dial for how hard glm-5.2 cogitates before it speaks (thinking must be lit; lesser models pay it no heed). Minimal all but silences the rumination; High and Max open the throttle — and mind that low and medium quietly fold up to High, xhigh up to Max. Leave it at (model default) and glm-5.2 still sets to High of its own accord, sparing you the API's spendthrift Max.",
+          "key": "reasoning_effort",
+          "label": "Reasoning Effort",
+          "type": "enum",
+        },
+      ],
+      "helpText": "Thinking mode enables the GLM reasoning models' extended chain-of-thought, shown in the Salon (display only; never re-fed to the model). Only the hybrid-reasoning GLM models (glm-4.5/4.6 family, glm-5.x) produce it; with thinking off, nothing appears.",
+      "title": "Z.AI Options",
+    },
+  ],
+}
+`;

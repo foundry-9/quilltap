@@ -27,6 +27,15 @@ SQLite columns are **camelCase**, mirroring the Zod/TypeScript types (`createdAt
 - `npx quilltap db memories --character <name|id> [--about <name|id>] [--source AUTO|MANUAL]`
 - `npx quilltap db characters status [--id <name|id>] [--diverged] [--blocked]` — per-character vault readiness (vault present, files N/8, prompt/scenario/wardrobe counts, DB-vs-vault divergence)
 
+### Character archive (`db characters archives|archive|rehydrate|export`)
+
+- `npx quilltap db characters archives [--json]` — list archived characters and the `ARCHIVE` bundle files on the shelf, flagging **loose** bundles (survivors of a "keep archived bundles" wipe: importable, not rehydratable). Read-only.
+- `npx quilltap db characters archive <name|id> --write [--port N]` — archive a character. Runs **through the running server's API** (default port 3000): the export pipeline and the unlocked passphrase live only in the server process, so the server must be up (and it, not the CLI, holds the instance lock). `--write` is still required as the explicit opt-in.
+- `npx quilltap db characters rehydrate <name|id> --write [--port N]` — wake an archived character, same transport: the server decrypts the bundle, restores the pruned material at its original ids (skip-if-present), clears the tombstone, and queues re-embedding. Reports what came back and notes that the bundle stays in the file library as a spare copy. On failure (wrong-era passphrase, missing bundle, import refusal) the character stays archived and re-running is safe.
+- `npx quilltap db characters export <name|id> [--out <path>] [--port N]` — write a **plaintext** `.qtap` for a character. For an **archived** character this decrypts the bundle straight off the disk, offline (tries the internal no-passphrase key, then `QUILLTAP_DB_PASSPHRASE`, then prompts) — the only way to reach packed-away mail, photographs and summaries without rehydrating. For a **live** character it runs the server's export pipeline, so the server must be up. Read-only; no `--write`.
+
+  **Pre-emptive, not recovery:** exporting an archive needs an instance that can still decrypt it. It does not help someone holding only a restored backup and a forgotten passphrase — which is also why a passphrase *change* rewrites every archive bundle (see the settings card's warning); a bundle reported left behind by a partial rewrite still wants the old passphrase.
+
 ### Single records
 
 - `npx quilltap db message <id>` and `npx quilltap db log <id>` — full content/request/response.
@@ -39,9 +48,15 @@ SQLite columns are **camelCase**, mirroring the Zod/TypeScript types (`createdAt
 
 ## Document-store CLI (`npx quilltap docs`)
 
-Read-only verbs: `list`, `show`, `files`, `ls`/`dir`, `tree` (ASCII folder hierarchy), `read`, `export`, `find` (substring on filename), `grep` (substring on extracted text), `status` (per-mount extraction + embedding rollup).
+Read-only verbs: `list`, `show`, `files`, `ls`/`dir`, `tree` (ASCII folder hierarchy), `read`, `export`, `find` (substring on filename), `grep` (substring on extracted text), `status` (per-mount extraction + embedding rollup), `docker-mounts` (bind mounts filesystem stores need under Docker).
 
-Server-required verbs: `scan`, `reindex` (re-extract + re-chunk), `embed` (enqueue embedding jobs — `--wait` polls to completion), and the write verbs (`write`/`delete`/`mkdir`/`move`/`copy`/`link`/`rmdir`/`mvdir`). `reindex` and `embed` are explicit triggers for the two background pipelines; they refuse to run when the server is unreachable.
+Server-required verbs: `scan`, `reindex` (re-extract + re-chunk), `embed` (enqueue embedding jobs — `--wait` polls to completion), `grep --semantic`, and the write verbs (`write`/`delete`/`mkdir`/`move`/`copy`/`link`/`rmdir`/`mvdir`). `reindex` and `embed` are explicit triggers for the two background pipelines; they refuse to run when the server is unreachable.
+
+**`link` vs `copy`:** `docs link` makes two addresses into one document — it shares the content row *and* enrols both link rows in a `linkGroupId`, so a later write through either path repoints both and re-chunks the sibling. `docs copy` produces an independent document that merely shares a deduped content row until the first write. The `links` column in `ls` counts group members, not rows sharing a `fileId` (identical bytes are not a link). See [DDL.md](DDL.md#doc_mount_file_links).
+
+**Semantic search:** `npx quilltap docs grep --semantic [--mount <name|id|all>] [--top N] [--threshold 0..1] <query>` runs an embedding search over indexed chunks instead of a substring match (defaults: `--top 20`, `--threshold 0.5`, `--port 3000`). It goes through `POST /api/v1/mount-points?action=semantic-search` because the embedding provider lives in the server, so the server must be up.
+
+**Docker binds:** `npx quilltap docs docker-mounts [--format args|json]` reports the bind mounts an instance's filesystem/Obsidian stores need to be reachable inside a container. Binds are path-identical (`-v /host/vault:/host/vault`) so the `basePath` in the database resolves the same inside and out. The planner (`packages/quilltap/lib/docker-mounts.js`, pure and unit-tested) collapses stores sharing a path to one bind, drops paths nested inside another bind, **skips** non-existent paths rather than letting Docker fabricate an empty source, warns for macOS paths outside Docker Desktop's default shares and for Linux uid mismatch, and refuses on Windows (no path-identical binds). `--format args` puts only flags on stdout and all advice on stderr. `scripts/start-quilltap-docker.ts` consumes it; see [Docker startup](#docker-startup-scripts-start-quilltap-dockerts).
 
 ### Addressing documents with `qtap://` URIs
 
@@ -59,11 +74,28 @@ The URI authority is matched name-first, UUID as fallback — the same rule as a
 
 **Emitting URIs:** `--json` output for `find`, `grep`, `ls`, `files`, and `tree` carries a `uri` field per row/node. `--uri` switches the text output of `find`, `grep`, and `files` to show the canonical `qtap://` URI as the locator (name form, UUID when the store name is ambiguous).
 
+## Docker startup (`scripts/start-quilltap-docker.ts`)
+
+`npm run start:docker` builds and runs the container. Beyond the data-directory bind it also passes through every filesystem/Obsidian document store, so their `basePath` values resolve inside the container.
+
+| Flag | Effect |
+|---|---|
+| `-i, --instance NAME` | Resolve the data dir from the instance registry, and let the CLI unlock an encrypted instance when enumerating stores |
+| `--recreate` | `docker rm -f` the existing container and build a new one (the only way to change binds) |
+| `--no-store-mounts` | Skip store enumeration entirely |
+| `--dry-run` | Print the `docker run` argv without executing |
+
+Store enumeration shells out to `quilltap docs docker-mounts --format json`. **A failure there is non-fatal** — it warns and starts without store binds, because an unreadable store list is a poor reason to refuse to start Quilltap. The usual cause is an encrypted instance reached by `--data-dir`; pass `--instance` instead.
+
+Because binds are fixed at container creation, a store added later is invisible to a running container. When the container already exists, the script diffs its `.Mounts` against the current plan and names the stores that are unreachable, pointing at `--recreate`.
+
 ## Memories CLI (`npx quilltap memories`)
 
 Read-only namespace. Verbs: `ls`, `find` (substring on summary/content), `grep` (pattern search inside content with snippets), `show <id|prefix>` (full record + related-memory neighbors), `tree <id|prefix>` (ASCII walk of the bidirectional related-memory graph with cycle handling), `status` (per-holder rollup including AUTO/MANUAL split, about-distribution, embedding presence, graph stats, dangling-edge count), `validate` (read-only health check; exit 1 on any dangling edge — `--list` prints offending source IDs and dangling targets).
 
 Shared filter flags: `--character` (default `all`), `--about` (with `self`/`none` shortcuts), `--source`, `--chat` (with `none` for manual entries), `--project`, `--since`/`--until`, `--min-importance`/`--min-reinforced`, `--has-embedding`/`--no-embedding`.
+
+`grep --semantic --character <name|id> [--top N] [--threshold 0..1] <query>` swaps the substring match for an embedding search via `POST /api/v1/memories?action=search` (defaults `--top 20`, `--threshold 0.5`, `--port 3000`). The server must be running, and it scopes to **one holder at a time** — `--character all` is rejected. Still read-only.
 
 Sort flags on `ls`/`find`/`grep`: `--sort reinforced|importance|created|accessed|reinforcement-count|links`, `-r` to reverse. **Default sort is `reinforcedImportance DESC`** (what the recall path uses), not `createdAt DESC` like the legacy `db memories` verb. The legacy verb remains undisturbed.
 
@@ -88,6 +120,10 @@ Force-downloads an instance's cloud-evicted (dataless) database files so they ar
 ## Memory extraction dry-run (`npx quilltap memory-diff <chatId>`)
 
 Diagnostic tool: dumps a chat's existing memories and dry-runs re-extraction against it **without writing anything**, so you can compare what the extractor *would* produce now against what is stored. Needs a running server (`--port`, default 3000) to reach the extraction pipeline. `--out <dir>` sets the report destination (default: cwd); `--concurrency N` bounds parallel turns (default 4, max 32).
+
+## Recall replay (`npx quilltap recall-replay <chatId>`)
+
+Episodic-recall tuning harness: replays a chat turn's memory recall against the running server and prints the full candidate table twice — the pre-overhaul ranking (episodic signals inert) and the episodic ranking (retrospective flip, time-window, entity anchors, multi-probe) — including cosine, ranking blend, every multiplier that fired, the final score, and head selection. The distillation's clock is anchored to the replayed turn's own timestamp, so historical "the character forgot" turns resolve "last week" against their own date. Read-only; nothing is persisted. Flags: `--turn <n>` (1-based interchange, default last), `--char <characterId>`, `--limit <n>` (rows per path, default 25), `--port` (default 3000), `--json`. Wraps `POST /api/v1/chats/[id]?action=recall-replay`.
 
 ## Themes CLI (`npx quilltap themes`)
 

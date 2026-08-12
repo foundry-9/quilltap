@@ -23,6 +23,7 @@ import {
   isOwnWardrobeItem,
   normalizeNoItemSentinel,
   resolveWardrobeItemAcrossTiers,
+  wardrobeItemNotFoundMessage,
 } from './wardrobe-handler-shared';
 import { buildWardrobeReadFailure, buildWardrobeReadOutput } from './wardrobe-read-handler';
 
@@ -38,7 +39,9 @@ export async function executeWardrobeUpdateTool(
 ): Promise<WardrobeUpdateToolOutput> {
   const repos = getRepositories();
 
-  if (!validateWardrobeUpdateInput(input)) {
+  const parsed = validateWardrobeUpdateInput(input);
+
+  if (!parsed) {
     logger.warn('Wardrobe update tool validation failed', {
       context: 'wardrobe-update-handler',
       userId: context.userId,
@@ -61,7 +64,7 @@ export async function executeWardrobeUpdateTool(
       is_default,
       replace,
       component_item_ids,
-    } = input as WardrobeUpdateToolInput;
+    } = parsed;
 
     const projectMountPointIds = await resolveProjectMountPointIdsForChat(context.chatId);
 
@@ -73,9 +76,7 @@ export async function executeWardrobeUpdateTool(
       projectMountPointIds,
     );
     if (!item) {
-      return buildWardrobeReadFailure(
-        `Wardrobe item not found${item_id ? ` with ID "${item_id}"` : ''}${item_title ? ` with title "${item_title}"` : ''}`,
-      );
+      return buildWardrobeReadFailure(wardrobeItemNotFoundMessage(item_id, item_title));
     }
 
     if (!isOwnWardrobeItem(item, context.characterId)) {

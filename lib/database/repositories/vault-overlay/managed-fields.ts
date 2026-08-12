@@ -28,6 +28,7 @@ import {
   CHARACTER_VAULT_DESCRIPTORS,
   MANAGED_FIELDS,
   CHARACTER_PROPERTIES_JSON_PATH,
+  CHARACTER_METADATA_JSON_PATH,
   CHARACTER_IDENTITY_MD_PATH,
   CHARACTER_DESCRIPTION_MD_PATH,
   CHARACTER_MANIFESTO_MD_PATH,
@@ -43,6 +44,8 @@ import { hasLinkedVault, stableUuidFromString } from './parsers';
 import {
   readVaultTextFile,
   readCharacterVaultProperties,
+  readCharacterVaultPropertiesForWrite,
+  readCharacterVaultMetadata,
   readCharacterVaultPhysicalPrompts,
   readCharacterVaultSystemPrompts,
   readCharacterVaultScenarios,
@@ -88,6 +91,14 @@ export async function readCharacterVaultManagedFields(
           snapshot.title = props.title;
           snapshot.firstMessage = props.firstMessage;
           snapshot.talkativeness = props.talkativeness;
+          snapshot.canChooseOutfit = props.canChooseOutfit;
+        }
+        break;
+      }
+      case 'metadata-json': {
+        const metadata = await readCharacterVaultMetadata(mountPointId, characterId);
+        if (metadata) {
+          snapshot.metadata = metadata;
         }
         break;
       }
@@ -215,12 +226,41 @@ export async function writeCharacterVaultManagedFields(
         title: character.title ?? null,
         firstMessage: character.firstMessage ?? null,
         talkativeness: character.talkativeness ?? 0.5,
+        canChooseOutfit: character.canChooseOutfit ?? false,
       },
       null,
       2,
     ),
   );
   result.singleFileWriteCount++;
+
+  // The fact sheet — projected ONLY when the caller actually has one.
+  //
+  // `metadata` has no DB column and no schema default: a raw character row
+  // simply cannot carry it, so "the caller passed nothing" means "no opinion",
+  // NOT "empty". Writing `{}` on its absence would let any caller holding a raw
+  // row — the startup backfill's repopulate path does exactly that — silently
+  // erase a fact sheet it never saw. So absence here leaves the file alone.
+  //
+  // (The six properties.json fields written above likewise have no DB column
+  // post-4.6 — they live only in that file. This full-projection writer is
+  // always handed a fully-overlaid character, so it can write them wholesale.
+  // But the *patch* path in applyDocumentStoreWriteOverlay must never seed
+  // empty defaults over an unreadable properties.json, since there is nowhere
+  // else to recover the six from — see readCharacterVaultPropertiesForWrite,
+  // which refuses that write. Bug 8.)
+  //
+  // Nothing is lost by the skip: a fresh vault's `metadata.json` is seeded by
+  // the scaffold, and the startup backfill seeds any older vault still lacking
+  // one. Same reasoning as the wardrobe note at the end of this function.
+  if (character.metadata != null) {
+    await writeDatabaseDocument(
+      mountPointId,
+      CHARACTER_METADATA_JSON_PATH,
+      JSON.stringify(character.metadata, null, 2),
+    );
+    result.singleFileWriteCount++;
+  }
 
   await writeDatabaseDocument(mountPointId, CHARACTER_IDENTITY_MD_PATH, character.identity ?? '');
   result.singleFileWriteCount++;
@@ -374,17 +414,30 @@ export async function applyDocumentStoreWriteOverlay(
         break;
       }
       case 'properties-json': {
-        const propsKeys = ['pronouns', 'aliases', 'title', 'firstMessage', 'talkativeness'] as const;
+        const propsKeys = ['pronouns', 'aliases', 'title', 'firstMessage', 'talkativeness', 'canChooseOutfit'] as const;
         const touched = propsKeys.filter((k) => k in patch);
         if (touched.length === 0) break;
         // Read-modify-write so a partial patch doesn't blow away unspecified
         // fields in the same JSON file.
-        const current = (await readCharacterVaultProperties(mountPointId, characterId)) ?? {
+        //
+        // `readCharacterVaultPropertiesForWrite` returns null ONLY when
+        // properties.json is genuinely absent (a fresh vault — seeding the
+        // defaults below is correct); it THROWS when the file exists but is
+        // unreadable/unparseable. That refusal is the whole fix for Bug 8: the
+        // six fields this file owns (pronouns, aliases, title, firstMessage,
+        // talkativeness, canChooseOutfit) live NOWHERE else post-4.6, so
+        // seeding empty defaults over a corrupt-but-present file would clobber
+        // them permanently and silently. Fail the save loudly instead — the
+        // user repairs or deletes the file. (Established vault failure
+        // semantics: reads already throw CharacterVaultUnavailableError on a
+        // broken vault; there is no "silent hollow" character.)
+        const current = (await readCharacterVaultPropertiesForWrite(mountPointId, characterId)) ?? {
           pronouns: character.pronouns ?? null,
           aliases: character.aliases ?? [],
           title: character.title ?? null,
           firstMessage: character.firstMessage ?? null,
           talkativeness: character.talkativeness ?? 0.5,
+          canChooseOutfit: character.canChooseOutfit ?? false,
         };
         const next: CharacterVaultProperties = {
           pronouns: 'pronouns' in patch ? (patch.pronouns ?? null) : current.pronouns,
@@ -394,6 +447,8 @@ export async function applyDocumentStoreWriteOverlay(
             'firstMessage' in patch ? (patch.firstMessage ?? null) : current.firstMessage,
           talkativeness:
             'talkativeness' in patch ? (patch.talkativeness ?? 0.5) : current.talkativeness,
+          canChooseOutfit:
+            'canChooseOutfit' in patch ? (patch.canChooseOutfit ?? false) : current.canChooseOutfit,
         };
         await writeDatabaseDocument(
           mountPointId,
@@ -401,6 +456,22 @@ export async function applyDocumentStoreWriteOverlay(
           JSON.stringify(next, null, 2),
         );
         for (const k of touched) delete dbPatch[k];
+        break;
+      }
+      case 'metadata-json': {
+        if (!('metadata' in patch)) break;
+        // Whole-object REPLACE, not a key-merge: `metadata` is one field owning
+        // one file, so the patch's value simply becomes the file. (properties.json
+        // read-modify-writes because five Character fields share it — that dance
+        // buys nothing here and would make it impossible to delete a key.)
+        // Key-level edits are the caller's read-modify-write to do.
+        const next = patch.metadata ?? {};
+        await writeDatabaseDocument(
+          mountPointId,
+          descriptor.vaultPath,
+          JSON.stringify(next, null, 2),
+        );
+        delete dbPatch.metadata;
         break;
       }
       case 'physical-md':

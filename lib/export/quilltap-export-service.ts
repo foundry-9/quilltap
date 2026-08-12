@@ -11,6 +11,7 @@ import { logger as baseLogger } from '@/lib/logger';
 import { getUserRepositories, getRepositories } from '@/lib/repositories/factory';
 import type { ExportOptions, ExportPreview } from './types';
 import type { Memory } from '@/lib/schemas/types';
+import { listPortableInstanceSettings } from '@/lib/instance-settings';
 
 const logger = baseLogger.child({ module: 'export:quilltap-export-service' });
 
@@ -52,6 +53,47 @@ async function collectChatMemories(
   }
 }
 
+/**
+ * Summarize the character vaults a `characters` export will carry (WP A2), so
+ * the wizard can warn that a bundle with photos in it is not a small file.
+ *
+ * Best-effort by design: a store that fails to read is left out of the totals
+ * rather than failing the preview — this only ever feeds a UI hint.
+ */
+async function summarizeCharacterVaults(
+  mountPointIds: string[]
+): Promise<ExportPreview['vaults']> {
+  const summary = { stores: 0, documents: 0, blobs: 0, estimatedBytes: 0 };
+  if (mountPointIds.length === 0) return summary;
+
+  const globalRepos = getRepositories();
+  for (const mountPointId of mountPointIds) {
+    try {
+      summary.stores++;
+
+      const documents = await globalRepos.docMountDocuments.findByMountPointId(mountPointId);
+      summary.documents += documents.length;
+      for (const doc of documents) {
+        summary.estimatedBytes += doc.plainTextLength ?? doc.content?.length ?? 0;
+      }
+
+      const blobs = await globalRepos.docMountBlobs.listByMountPoint(mountPointId);
+      summary.blobs += blobs.length;
+      for (const blob of blobs) {
+        // Blob bytes travel base64-encoded, which costs a third more.
+        summary.estimatedBytes += Math.ceil((blob.sizeBytes ?? 0) * (4 / 3));
+      }
+    } catch (error) {
+      logger.warn('Failed to summarize a character vault for export preview', {
+        mountPointId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return summary;
+}
+
 // ============================================================================
 // PUBLIC API FUNCTIONS
 // ============================================================================
@@ -68,6 +110,7 @@ export async function previewExport(
     const repos = getUserRepositories(userId);
     const entities: Array<{ id: string; name: string }> = [];
     let memoryCount = 0;
+    let vaults: ExportPreview['vaults'];
 
     const entityIds = options.scope === 'all' ? [] : (options.selectedIds ?? []);
 
@@ -80,16 +123,21 @@ export async function previewExport(
           ? allCharacters.map(c => c.id)
           : entityIds;
 
+        const vaultMountIds: string[] = [];
         for (const id of ids) {
           const char = await repos.characters.findById(id);
           if (char) {
             entities.push({ id: char.id, name: char.name });
+            if (char.characterDocumentMountPointId) {
+              vaultMountIds.push(char.characterDocumentMountPointId);
+            }
             if (options.includeMemories) {
               const memories = await collectCharacterMemories(repos, id);
               memoryCount += memories.length;
             }
           }
         }
+        vaults = await summarizeCharacterVaults(vaultMountIds);
         break;
       }
 
@@ -253,6 +301,79 @@ export async function previewExport(
         break;
       }
 
+      case 'files': {
+        const allFiles = options.scope === 'all'
+          ? (await repos.files.findAll()).filter(
+              (f) => f.category !== 'BACKUP' && f.folderPath !== '/backups'
+            )
+          : [];
+        const ids = options.scope === 'all'
+          ? allFiles.map(f => f.id)
+          : entityIds;
+
+        for (const id of ids) {
+          const file = await repos.files.findById(id);
+          if (file) {
+            entities.push({ id: file.id, name: file.originalFilename });
+          }
+        }
+        break;
+      }
+
+      case 'prompt-templates': {
+        const globalReposPT = getRepositories();
+        const allTemplates = options.scope === 'all'
+          ? await globalReposPT.promptTemplates.findAll()
+          : [];
+        const ids = options.scope === 'all'
+          ? allTemplates
+              .filter(t => !t.isBuiltIn && t.userId === userId)
+              .map(t => t.id)
+          : entityIds;
+
+        for (const id of ids) {
+          const template = await globalReposPT.promptTemplates.findById(id);
+          if (template && !template.isBuiltIn && template.userId === userId) {
+            entities.push({ id: template.id, name: template.name });
+          }
+        }
+        break;
+      }
+
+      case 'provider-models': {
+        // Instance-global catalogue, no user filter.
+        const globalReposPM = getRepositories();
+        const allModels = await globalReposPM.providerModels.findAll();
+        const wanted = options.scope === 'all' ? null : new Set(entityIds);
+        for (const model of allModels) {
+          if (wanted && !wanted.has(model.id)) continue;
+          entities.push({ id: model.id, name: `${model.provider} / ${model.modelId}` });
+        }
+        break;
+      }
+
+      case 'plugin-configs': {
+        const globalReposPC = getRepositories();
+        const configs = await globalReposPC.pluginConfigs.findByUserId(userId);
+        const wanted = options.scope === 'all' ? null : new Set(entityIds);
+        for (const config of configs) {
+          if (wanted && !wanted.has(config.id)) continue;
+          entities.push({ id: config.id, name: config.pluginName });
+        }
+        break;
+      }
+
+      case 'instance-settings': {
+        // Keyed by setting key — the table has no id column.
+        const settings = await listPortableInstanceSettings();
+        const wanted = options.scope === 'all' ? null : new Set(entityIds);
+        for (const setting of settings) {
+          if (wanted && !wanted.has(setting.key)) continue;
+          entities.push({ id: setting.key, name: setting.key });
+        }
+        break;
+      }
+
       default:
         throw new Error(`Unknown export type: ${options.type}`);
     }
@@ -260,6 +381,7 @@ export async function previewExport(
       type: options.type,
       entities,
       ...(memoryCount > 0 && { memoryCount }),
+      ...(vaults && vaults.stores > 0 && { vaults }),
     };
   } catch (error) {
     logger.error('Error previewing export', { userId, type: options.type }, error as Error);

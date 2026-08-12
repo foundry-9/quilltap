@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
+// KaTeX styles for rendered math ($$…$$ / \(...\) / \[...\]) in chat messages,
+// help docs, and Scriptorium file previews. Loaded globally because server
+// pre-rendered messages arrive as HTML that already contains KaTeX markup.
+import "katex/dist/katex.min.css";
 import { Providers } from "@/components/providers/session-provider";
 import { AutoLockProvider } from "@/components/providers/auto-lock-provider";
 import { PluginInitializer, PluginUpgradeNotifier, MigrationWarningNotifier } from "@/components/startup";

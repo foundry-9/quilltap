@@ -59,7 +59,8 @@ export async function executeSearchScriptoriumTool(
 ): Promise<SearchScriptoriumToolOutput> {
   try {
     // Validate input
-    if (!validateSearchScriptoriumInput(input)) {
+    const parsed = validateSearchScriptoriumInput(input)
+    if (!parsed) {
       logger.warn('Search scriptorium tool validation failed', {
         context: 'search-scriptorium-handler',
         userId: context.userId,
@@ -80,7 +81,25 @@ export async function executeSearchScriptoriumTool(
       scope = 'all',
       limit = 10,
       minImportance = 0,
-    } = input
+      since,
+      until,
+      aboutCharacter,
+    } = parsed
+
+    // Time filters (episodic recall): normalize date-only bounds to full-day
+    // coverage. Applied to memories via occurredAt ?? createdAt and to
+    // conversation hits via the source chat's timestamps.
+    const sinceIso = since ? (since.length === 10 ? `${since}T00:00:00.000Z` : since) : null
+    const untilIso = until ? (until.length === 10 ? `${until}T23:59:59.999Z` : until) : null
+    const timeWindow =
+      sinceIso || untilIso
+        ? {
+            from: sinceIso ?? '0000-01-01T00:00:00.000Z',
+            to: untilIso ?? '9999-12-31T23:59:59.999Z',
+          }
+        : null
+
+    const repos = getRepositories()
 
     // Operator surface (Brahma Console): no character, no memories. Memory
     // search is forced off here defensively even if a caller somehow requests
@@ -117,7 +136,6 @@ export async function executeSearchScriptoriumTool(
 
     if (searchDocuments || searchKnowledge) {
       if (operatorWide) {
-        const repos = getRepositories()
         const enabled = await repos.docMountPoints.findEnabled()
         operatorStoreIds = enabled.map((mp) => mp.id)
       } else {
@@ -186,21 +204,46 @@ export async function executeSearchScriptoriumTool(
       const characterId = context.characterId
       try {
         // Verify character exists and belongs to user
-        const repos = getRepositories()
         const character = await repos.characters.findById(characterId)
 
         if (character && character.userId === context.userId) {
-          const memoryResults = await searchMemoriesSemantic(
-            characterId,
-            query,
-            {
-              userId: context.userId,
-              embeddingProfileId: context.embeddingProfileId,
-              limit,
-              minImportance,
-              applyLiteralPhraseBoost: true,
+          // Optional about-character filter: resolve the name (or alias) to a
+          // character id among the user's characters. An unresolvable name
+          // returns no memory hits rather than silently ignoring the filter.
+          let aboutCharacterId: string | undefined
+          let aboutCharacterUnresolved = false
+          if (aboutCharacter) {
+            const needle = aboutCharacter.trim().toLowerCase()
+            const allCharacters = await repos.characters.findAll()
+            const match = allCharacters.find(c => {
+              if (c.name.trim().toLowerCase() === needle) return true
+              return (c.aliases ?? []).some(a => a.trim().toLowerCase() === needle)
+            })
+            if (match) {
+              aboutCharacterId = match.id
+            } else {
+              aboutCharacterUnresolved = true
             }
-          )
+          }
+
+          const memoryResults = aboutCharacterUnresolved
+            ? []
+            : await searchMemoriesSemantic(
+                characterId,
+                query,
+                {
+                  userId: context.userId,
+                  embeddingProfileId: context.embeddingProfileId,
+                  limit,
+                  minImportance,
+                  applyLiteralPhraseBoost: true,
+                  aboutCharacterId,
+                  // Tool path: a plain hard filter on event time (no
+                  // recallContext, so no soft fallback — the caller asked
+                  // for a window).
+                  occurredWithin: timeWindow,
+                }
+              )
 
           for (const mr of memoryResults) {
             results.push({
@@ -214,6 +257,12 @@ export async function executeSearchScriptoriumTool(
                 effectiveWeight: mr.effectiveWeight,
                 createdAt: mr.memory.createdAt,
                 source: mr.memory.source,
+                occurredAt: mr.memory.occurredAt ?? null,
+                narrativeTime: mr.memory.narrativeTime ?? null,
+                kind: mr.memory.kind ?? 'semantic',
+                // The memory's source conversation — drillable via
+                // read_conversation.
+                conversationId: mr.memory.chatId ?? undefined,
               },
             })
           }
@@ -250,7 +299,40 @@ export async function executeSearchScriptoriumTool(
           }
         )
 
-        for (const cr of conversationResults) {
+        // Time filter: keep conversations whose lifespan overlaps the window
+        // (chat createdAt..updatedAt). Resolved per distinct chat — the hit
+        // list is already capped at `limit`.
+        let filteredConversationResults = conversationResults
+        if (timeWindow) {
+          const from = Date.parse(timeWindow.from)
+          const to = Date.parse(timeWindow.to)
+          const spanByChat = new Map<string, { start: number; end: number } | null>()
+          for (const cr of conversationResults) {
+            if (spanByChat.has(cr.chatId)) continue
+            try {
+              const sourceChat = await repos.chats.findById(cr.chatId)
+              spanByChat.set(
+                cr.chatId,
+                sourceChat
+                  ? {
+                      start: Date.parse(sourceChat.createdAt),
+                      end: Date.parse(sourceChat.updatedAt ?? sourceChat.createdAt),
+                    }
+                  : null,
+              )
+            } catch {
+              spanByChat.set(cr.chatId, null)
+            }
+          }
+          filteredConversationResults = conversationResults.filter(cr => {
+            const span = spanByChat.get(cr.chatId)
+            if (!span || !Number.isFinite(span.start)) return false
+            const end = Number.isFinite(span.end) ? span.end : span.start
+            return span.start <= to && end >= from
+          })
+        }
+
+        for (const cr of filteredConversationResults) {
           results.push({
             content: cr.content.length > 500
               ? cr.content.substring(0, 500) + '...'
@@ -462,8 +544,18 @@ export function formatSearchScriptoriumResults(results: SearchScriptoriumResult[
       const importanceLabel = (result.metadata.importance ?? 0) >= 0.7 ? 'High' :
         (result.metadata.importance ?? 0) >= 0.4 ? 'Medium' : 'Low'
 
+      // Episodic spine: surface event time + source conversation so the model
+      // can confirm "when" and drill into the transcript.
+      const whenParts: string[] = []
+      if (result.metadata.occurredAt) whenParts.push(`When: ${result.metadata.occurredAt.slice(0, 10)}`)
+      if (result.metadata.narrativeTime) whenParts.push(`Story time: ${result.metadata.narrativeTime}`)
+      const whenLine = whenParts.length > 0 ? `\n${whenParts.join(' · ')}` : ''
+      const sourceLine = result.metadata.conversationId
+        ? `\nSource conversation: ${result.metadata.conversationId} (readable via read_conversation)`
+        : ''
+
       return `[Result ${index + 1} - Memory] (Importance: ${importanceLabel}, Relevance: ${(result.relevanceScore * 100).toFixed(0)}%)
-Summary: ${result.metadata.summary || 'No summary'}
+Summary: ${result.metadata.summary || 'No summary'}${whenLine}${sourceLine}
 Details: ${result.content}`
     } else if (result.sourceType === 'conversation') {
       return `[Result ${index + 1} - Conversation] (Relevance: ${(result.relevanceScore * 100).toFixed(0)}%, Chat: ${result.metadata.conversationTitle || 'Untitled'})

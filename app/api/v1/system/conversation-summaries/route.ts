@@ -11,12 +11,12 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedHandler, getActionParam } from '@/lib/api/middleware';
+import { createContextHandler, getActionParam } from '@/lib/api/middleware';
 import { badRequest, serverError } from '@/lib/api/responses';
 import { enqueueRegenerateConversationSummaries } from '@/lib/background-jobs/queue-service';
 import { logger } from '@/lib/logger';
 
-export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
+export const GET = createContextHandler(async (req, { user, repos }) => {
   const action = getActionParam(req);
   if (action === 'regenerate') {
     return handleRegenerateStatus(req, { user, repos });
@@ -24,7 +24,7 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
   return badRequest('Unknown or missing action.');
 });
 
-export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
+export const POST = createContextHandler(async (req, { user, repos }) => {
   const action = getActionParam(req);
   if (action === 'regenerate') {
     return handleRegenerate(req, { user, repos });

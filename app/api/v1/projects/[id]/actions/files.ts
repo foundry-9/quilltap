@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { checkOwnership } from '@/lib/api/middleware';
+import { exists } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { notFound, serverError, successResponse } from '@/lib/api/responses';
 import { resolveEffectiveFolderPath } from '@/lib/files/folder-utils';
@@ -15,7 +15,7 @@ import { getProjectDocumentStore } from '@/lib/file-storage/project-store-bridge
 import { detectMimeType } from '@/lib/file-storage/scanner';
 import type { DocMountFileLinkWithContent } from '@/lib/schemas/mount-index.types';
 import { addFileSchema, removeFileSchema } from '../schemas';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 /**
  * Map a doc_mount_files row's fileType (+ filename, for the 'blob' catch-all)
@@ -38,11 +38,11 @@ function mimeForMountFile(file: DocMountFileLinkWithContent): string {
  */
 export async function handleListFiles(
   projectId: string,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   try {
     const project = await repos.projects.findById(projectId);
-    if (!checkOwnership(project, user.id)) {
+    if (!exists(project)) {
       return notFound('Project');
     }
 
@@ -117,10 +117,10 @@ export async function handleListFiles(
 export async function handleAddFile(
   req: NextRequest,
   projectId: string,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   const project = await repos.projects.findById(projectId);
-  if (!checkOwnership(project, user.id)) {
+  if (!exists(project)) {
     return notFound('Project');
   }
 
@@ -147,10 +147,10 @@ export async function handleAddFile(
 export async function handleRemoveFile(
   req: NextRequest,
   projectId: string,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   const project = await repos.projects.findById(projectId);
-  if (!checkOwnership(project, user.id)) {
+  if (!exists(project)) {
     return notFound('Project');
   }
 

@@ -26,7 +26,7 @@ jest.mock('@/lib/mount-index/character-vault', () => ({
 }));
 
 import { handleGetMailbox } from '@/app/api/v1/chats/[id]/actions/mailbox';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 const PLAYER = 'char-player';
 const NPC = 'char-npc';
@@ -44,7 +44,7 @@ function createRequest(characterId?: string): NextRequest {
   return new NextRequest(`http://localhost:3000/api/v1/chats/chat-1?action=mailbox${qs}`);
 }
 
-function ctx(): AuthenticatedContext {
+function ctx(): RequestContext {
   return {
     user: { id: 'user-1' },
     repos: {
@@ -55,7 +55,7 @@ function ctx(): AuthenticatedContext {
         ),
       },
     },
-  } as unknown as AuthenticatedContext;
+  } as unknown as RequestContext;
 }
 
 describe('handleGetMailbox', () => {

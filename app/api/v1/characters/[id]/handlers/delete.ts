@@ -5,15 +5,15 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { checkOwnership } from '@/lib/api/middleware';
+import { exists } from '@/lib/api/middleware';
 import { executeCascadeDelete } from '@/lib/cascade-delete';
 import { logger } from '@/lib/logger';
 import { notFound, serverError } from '@/lib/api/responses';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 export async function handleDelete(
   req: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   id: string
 ): Promise<NextResponse> {
   const { user, repos } = ctx;
@@ -25,7 +25,7 @@ export async function handleDelete(
     // undeletable character).
     const existingCharacter = await repos.characters.findByIdRaw(id);
 
-    if (!checkOwnership(existingCharacter, user.id)) {
+    if (!exists(existingCharacter)) {
       return notFound('Character');
     }
 

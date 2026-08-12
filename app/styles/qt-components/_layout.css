@@ -908,8 +908,12 @@
   .qt-footer {
     @apply border-t;
     @apply px-4 py-4;
-    background: var(--qt-footer-bg);
+    background: var(--qt-app-header-bg);
     border-color: var(--qt-footer-border);
+    backdrop-filter: var(--qt-app-header-blur);
+    -webkit-backdrop-filter: var(--qt-app-header-blur);
+    position: relative;
+    z-index: 20;
   }
 
   /**

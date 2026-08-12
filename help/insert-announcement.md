@@ -8,15 +8,31 @@ There are occasions, you will find, when the proceedings demand a public proclam
 
 ## What it does
 
-A single click summons a tidy floating panel — drag it about by its title bar, tug its lower-right corner to whatever proportions suit you, and rest assured it will remember where it last stood the next time you call upon it. Because it does not draw a curtain across the Salon behind it, you remain free to scroll the conversation, select a passage, and copy a turn of phrase to quote in the announcement you are presently composing. There you choose who is speaking: a member of the Staff, a workspace character who is not presently in this chat, or — should neither suit — an arbitrary name of your own invention. You compose the message in a small Lexical editor, mark it up with whatever bold and italic flourishes the moment requires, and post.
+A single click summons a tidy floating panel — drag it about by its title bar, tug its lower-right corner to whatever proportions suit you, and rest assured it will remember where it last stood the next time you call upon it. Because it does not draw a curtain across the Salon behind it, you remain free to scroll the conversation, select a passage, and copy a turn of phrase to quote in the announcement you are presently composing. There you choose who is speaking: a member of the Staff, a workspace character who is not presently in this chat, or — should neither suit — an arbitrary name of your own invention. You then choose who is *listening.* You compose the message in a small Lexical editor, mark it up with whatever bold and italic flourishes the moment requires, and post.
 
-The result lands in the conversation as a public bubble, indistinguishable in deportment from the Salon's automated announcements: every participant present (and silent participants too) sees it, every character's LLM receives it as part of their transcript, and the database keeps it forever. It is not a whisper. It is not a private aside. It is, in the strictest sense, *announced.*
+By default the result lands in the conversation as a public bubble, indistinguishable in deportment from the Salon's automated announcements: every participant present (and silent participants too) sees it, every character's LLM receives it as part of their transcript, and the database keeps it forever. It is, in the strictest sense, *announced.*
+
+## Whispering instead of proclaiming
+
+Not every intervention wants the whole room. A hint meant for one character. A stage direction for the person you are playing opposite. A fact one figure has known all along and the others must not learn for another twenty pages. For these there is **Who hears it** — a modest list of everyone presently in the chat, each with a checkbox beside their name.
+
+Tick nobody and the announcement is public, exactly as it has always been. Tick one name, or several, and the bubble becomes a whisper: those participants receive it in their context and *no one else does.* The panel says so plainly beneath the list, the editor's label changes from Announcement to Whisper, and the button you press at the end reads **Post Whisper** — three small confirmations, because posting a private remark to the entire company is the sort of mistake one only makes once, and would rather not make at all. Should you change your mind, **Make it public** is offered right there.
+
+You yourself always see what you have written, whatever audience you named and whatever the "All Whispers" toggle happens to be set to. It would be a peculiar arrangement indeed if the house kept your own asides from you.
+
+A whispered announcement wears its discretion visibly: the collapsed chip carries the whisper's colouring and names its audience — *to Amy* — so a private aside can be told apart from a public proclamation at a glance, without expanding a thing.
+
+One caution about the guest list. Only current participants may be whispered to. A character who has left the scene cannot be reached by a note slipped after their departure, and Quilltap will decline the attempt rather than file a message no one will ever read.
+
+## When a character whispers in their own voice
+
+The two arrangements compose. Choose an off-scene character, name an audience, and route the seed through a connection profile, and the character is told — before they write a word — that the remark is private and precisely who will hear it. They are given those names in place of the room's roster, for a line pitched to a full drawing room reads oddly when only one person is standing there. Alter the audience after a proposal has appeared and the rehearsal begins again, as it must: the audience was part of the instruction.
 
 ## Choosing a speaker
 
 The dialog offers three tabs.
 
-**Staff** lists the eight personified members of Quilltap's staff — The Host, The Librarian, The Lantern, Aurora, The Concierge, Prospero, The Commonplace Book, and Ariel — each with their canonical name and avatar. Pick one and the bubble renders with their familiar likeness. There is no override here: a Staff member always appears as themselves.
+**Staff** lists the personified members of Quilltap's staff — The Host, The Librarian, The Lantern, Aurora, The Concierge, Prospero, The Commonplace Book, Ariel, Suparṇā, and Pascal the Croupier — each with their canonical name and avatar. Pick one and the bubble renders with their familiar likeness. There is no override here: a Staff member always appears as themselves.
 
 **Off-scene character** offers a searchable list of every workspace character who is *not* presently a participant in this chat. Use it when you want an absent figure to speak from offstage — a letter read aloud, a voice through a closed door, an introduction to a person being discussed but not yet on the scene. The bubble shows the character's name and avatar; characters in the chat will see them named and identified, but the absent character is still absent — adding them as a participant remains a separate ceremony.
 
@@ -32,7 +48,13 @@ From there: post it as it stands, polish it with a small edit, click **Regenerat
 
 ## What characters see
 
-The bubble's *content* — the Markdown body you typed — is exactly what every character's LLM receives. The avatar and name on the bubble are for the human audience; the LLM reads the prose. As with the Salon's automated Staff messages, this means the announcement's content should carry whatever attribution the conversation needs. *"The Host raises a glass and says…"* will read clearly to any character; bare prose with no speaker indicated may leave them guessing.
+The bubble's *content* — the Markdown body you typed — is what the audience's LLM receives (every character, when the announcement is public; only those you named, when it is whispered).
+
+**The speaker travels with it.** When you post as an off-scene character or under a name of your own invention, the announcement reaches the characters prefixed with that name — `[Ariel] *She drifts closer…*` — in the same form the Salon uses to attribute every other speaker. You need not repeat the name in your prose, and the room will not have to guess who spoke.
+
+It did have to guess, once. Before this, the name and avatar on the bubble were for the human audience alone, and the LLM read the prose by itself: a whispered aside written in one character's voice arrived at its recipient as anonymous prose, and the character — reasonably, and quite wrongly — concluded it had been a different member of the Staff entirely, then went on speaking as though the matter were settled. A name is now attached at the source.
+
+Staff announcements are unaffected: they have always named themselves in their own prose. *"The Host raises a glass and says…"* reads clearly to any character, and still does.
 
 ## A note on permanence
 

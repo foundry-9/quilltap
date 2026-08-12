@@ -158,6 +158,21 @@ export const CharacterSchema = z.object({
   defaultRoleplayTemplateId: UUIDSchema.nullable().optional(),  // Default roleplay template for this character
   defaultImageProfileId: UUIDSchema.nullable().optional(),  // Default image generation profile for this character
   sillyTavernData: JsonSchema.nullable().optional(),
+  /**
+   * The character's fact sheet: a flat object of user-authored keys with any
+   * JSON value — `{ "hasAnsibleAccess": true, "clearanceLevel": 3 }`. Lives in
+   * the vault as `metadata.json`, which is its sole source of truth (no DB
+   * column). Hydration always yields at least `{}` for a vault-linked
+   * character, so `character.metadata?.["key"]` needs no null gymnastics;
+   * null/undefined and `{}` mean the same thing to a reader.
+   *
+   * Driven user-side and user-side only. It is never injected into a prompt,
+   * and no generation system (create-character, summon-from-lore, the
+   * optimizer) may invent or populate it. Its consumer is Pascal: outcome
+   * tables test `when.metadata.<key>`. A transparent character can read and
+   * edit the file through the ordinary doc_* tools, like any vault document.
+   */
+  metadata: JsonSchema.nullable().optional(),
   isFavorite: z.boolean().default(false),
   npc: z.boolean().default(false),  // NPC flag - true for ad-hoc NPCs created in chat
   talkativeness: z.number().min(0.1).max(1.0).default(0.5),
@@ -181,11 +196,28 @@ export const CharacterSchema = z.object({
   /** Linked character document store (mountType='database', storeType='character'); null = not linked */
   characterDocumentMountPointId: UUIDSchema.nullable().optional(),
 
+  /** Tombstone marker; when set the character is archived and should not accept writes. */
+  archivedAt: TimestampSchema.nullable().optional(),
+  /** Archive bundle file row for this character's tombstone export. */
+  archiveFileId: UUIDSchema.nullable().optional(),
+  /** Thumbnail copy of the archived avatar for tombstone rendering. */
+  archivedAvatarFileId: UUIDSchema.nullable().optional(),
+
   /** Whether this character can change their own outfit using wardrobe tools (null = enabled by default) */
   canDressThemselves: z.boolean().nullable().optional(),
 
   /** Whether this character can create new wardrobe items mid-conversation (null = enabled by default, requires tool use) */
   canCreateOutfits: z.boolean().nullable().optional(),
+
+  /**
+   * When true, a new chat with this character defaults its Starting Outfit to
+   * "Let character choose" — the character picks their opening outfit based on
+   * the scenario rather than starting in their default wardrobe. Absent/false
+   * means the new-chat dialog falls back to defaults (or Compose, when the
+   * character has no usable default outfit). Lives in the vault's
+   * `properties.json`, not a DB column.
+   */
+  canChooseOutfit: z.boolean().default(false),
 
   /**
    * When true, this character may inspect and access "the Staff" of personified

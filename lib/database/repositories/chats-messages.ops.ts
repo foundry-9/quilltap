@@ -54,9 +54,18 @@ export const ChatMessageRowSchema = z.object({
   renderedHtml: z.string().nullable().optional(),
   // Danger content flags from gatekeeper classification
   dangerFlags: z.array(DangerFlagSchema).nullable().optional(),  // JSON array
+  // Answer-confirmation results. Plain booleans so the schema translator
+  // classifies them as boolean columns (INTEGER 0/1 in SQLite, hydrated back to
+  // true/false on read — they don't start with 'is' so the naming fallback
+  // wouldn't catch them).
+  confirmed: z.boolean().nullable().optional(),
+  confirmationChecked: z.boolean().nullable().optional(),
+  confirmationRevised: z.boolean().nullable().optional(),
+  confirmationNotes: z.string().nullable().optional(),
+  confirmationOriginalContent: z.string().nullable().optional(),
   targetParticipantIds: z.array(UUIDSchema).nullable().optional(),  // JSON array — whisper targets
   isSilentMessage: z.union([z.boolean(), z.number().transform(v => v === 1)]).nullable().optional(),  // Whether message was generated while character was in silent mode (SQLite stores as 0/1)
-  systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host', 'commonplaceBook', 'ariel', 'carina', 'suparna']).nullable().optional(),  // Personified feature that authored this message in lieu of a participant
+  systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host', 'commonplaceBook', 'ariel', 'carina', 'suparna', 'pascal']).nullable().optional(),  // Personified feature that authored this message in lieu of a participant
   systemKind: z.string().nullable().optional(),  // Sub-classification of a Staff-authored message (e.g. 'timestamp', 'project-context', 'memory-recap'). Always paired with systemSender.
   // Neutral, persona-free rewrite of `content` for Staff-authored messages.
   // Swapped into every character's LLM context when the chat has any non-user-
@@ -91,6 +100,65 @@ export const ChatMessageRowSchema = z.object({
   carinaMeta: z.object({
     answererId: UUIDSchema,
     question: z.string(),
+  }).nullable().optional(),
+  // Pascal the Croupier (custom pseudo-tools) roll record, set on
+  // systemSender='pascal' messages. The server rolled and the server picked the
+  // outcome, so none of this is the model's account of its own luck.
+  // This row schema describes what is STORED; the gate on the way in is
+  // ChatEventSchema (lib/schemas/chat.types.ts), which addMessage parses
+  // against — a field declared there but not here still persists, since this
+  // shape only tells the backend that pascalMeta is a JSON column. Kept in
+  // lockstep anyway: it is the account of the column a reader will consult.
+  // toolTitle = display title at roll time (absent on older rows; readers fall
+  // back to `tool`);
+  // definitionTier/definitionMountId = the store the definition resolved from
+  // (tiers shadow, so a name can differ per room); rollForm = 'range' or 'dice'
+  // ('dice' carries notation + diceRolls); raw = untransformed roll, value =
+  // what the outcome table tested; outcomeIndex/state = the winning entry and
+  // its verdict; invokedBy = model reach vs. user Run-Tool. NULL on every
+  // non-Pascal message.
+  pascalMeta: z.object({
+    tool: z.string(),
+    toolTitle: z.string().optional(),
+    // chipLabel = the definition's chipLabel template rendered at roll time —
+    // the per-run label the Salon chip and the bubble heading share. Absent on
+    // older rows; readers fall back to toolTitle, then tool.
+    chipLabel: z.string().optional(),
+    definitionTier: z.enum(['character', 'participant', 'group', 'project', 'global']),
+    definitionMountId: z.string(),
+    params: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])),
+    rollForm: z.enum(['range', 'dice']),
+    notation: z.string().optional(),
+    raw: z.number(),
+    diceRolls: z.array(z.number()).optional(),
+    value: z.number(),
+    state: z.enum(['success', 'partial', 'failure', 'info']),
+    outcomeIndex: z.number(),
+    // The metadata keys the winning row tested, and what they held at roll time.
+    metadataTested: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])).optional(),
+    // The LLM consult, when the definition declared one: the rendered prompt,
+    // whether it was answered, and the output the table tested (the model's
+    // answer, or the author's errorMessage on failure — `reason` records the
+    // technical cause for the operator).
+    llm: z.object({
+      ok: z.boolean(),
+      output: z.string(),
+      prompt: z.string(),
+      reason: z.string().optional(),
+      provider: z.string().optional(),
+      model: z.string().optional(),
+    }).optional(),
+    // The side effects this run applied (the audit of the definition's
+    // `effects` array): raw target, prior value (absent when none), what was
+    // written, and — state targets only — the tier the write landed in.
+    effects: z.array(z.object({
+      target: z.string(),
+      previous: z.unknown().optional(),
+      next: z.unknown(),
+      tier: z.enum(['chat', 'project', 'group', 'general']).optional(),
+    })).optional(),
+    invokedBy: z.enum(['llm', 'user']),
+    callerParticipantId: UUIDSchema.optional(),
   }).nullable().optional(),
   // The Courier: when non-null, this row is a placeholder for a manual /
   // clipboard turn awaiting a pasted reply. Cleared on resolve.
@@ -179,6 +247,27 @@ export class ChatMessagesOps {
 
       return validMessages;
     }, 'Failed to get messages for chat', { chatId }, []);
+  }
+
+  /**
+   * Resolve which chat a message belongs to via a direct indexed lookup on the
+   * message id — without loading, scanning, or validating any other chat. Used
+   * by the per-message API endpoints so locating a message is O(1) instead of
+   * loading and Zod-validating every message in every chat in the account.
+   *
+   * SQLite backend only (the real runtime). On the legacy embedded-array
+   * backend messages aren't individually queryable, so this returns null and
+   * callers fall through to "not found".
+   */
+  async findChatIdForMessage(messageId: string): Promise<string | null> {
+    return safeQuery(async () => {
+      if (!this.ctx.isSQLiteBackend()) {
+        return null;
+      }
+      const messagesCollection = await this.ctx.getMessagesCollection();
+      const row = await messagesCollection.findOne({ id: messageId } as QueryFilter);
+      return row ? ((row as { chatId?: string }).chatId ?? null) : null;
+    }, 'Failed to resolve chat for message', { messageId }, null);
   }
 
   /**
@@ -349,6 +438,46 @@ export class ChatMessagesOps {
       const messages = await this.getMessages(chatId);
       return messages.length;
     }, 'Failed to get message count for chat', { chatId }, 0);
+  }
+
+  /**
+   * Timestamp of the most recent *played* message in a chat — one authored by a
+   * participant character or the human user: `type === 'message'` with NO
+   * `systemSender`. Personified-feature / Staff announcements (Lantern, Aurora,
+   * Host, Prospero, Carina, Concierge, Commonplace Book, Ariel, Suparṇā,
+   * Librarian) also persist as `type: 'message'` rows, but they carry a
+   * `systemSender`, so they are excluded — a Staff whisper into an otherwise
+   * quiet chat must not read as conversational activity.
+   *
+   * Returns the ISO `createdAt` of that message, or null when the chat has no
+   * played messages at all. Used by the stale-chat maintenance sweep to decide
+   * whether a chat has genuinely gone quiet.
+   */
+  async getLastPlayedMessageAt(chatId: string): Promise<string | null> {
+    return safeQuery(async () => {
+      const messagesCollection = await this.ctx.getMessagesCollection();
+
+      if (this.ctx.isSQLiteBackend()) {
+        // Indexed single-row lookup — avoids loading and Zod-validating the
+        // whole transcript of every chat during the daily maintenance sweep.
+        const rows = await messagesCollection.find(
+          { chatId, type: 'message', systemSender: null } as QueryFilter,
+          { sort: { createdAt: -1 } as SortSpec, limit: 1 },
+        );
+        const createdAt = (rows[0] as { createdAt?: unknown } | undefined)?.createdAt;
+        return typeof createdAt === 'string' ? createdAt : null;
+      }
+
+      // Legacy embedded-array backend: scan the loaded messages for the newest
+      // participant-authored one (ISO-8601 strings compare lexicographically).
+      const messages = await this.getMessages(chatId);
+      let latest: string | null = null;
+      for (const m of messages) {
+        if (m.type !== 'message' || m.systemSender) continue;
+        if (latest === null || m.createdAt > latest) latest = m.createdAt;
+      }
+      return latest;
+    }, 'Failed to get last played message timestamp', { chatId }, null);
   }
 
   /**

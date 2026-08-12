@@ -20,7 +20,7 @@ import {
 export const FileSourceEnum = z.enum(['UPLOADED', 'GENERATED', 'IMPORTED', 'SYSTEM']);
 export type FileSource = z.infer<typeof FileSourceEnum>;
 
-export const FileCategoryEnum = z.enum(['IMAGE', 'DOCUMENT', 'AVATAR', 'ATTACHMENT', 'EXPORT', 'BACKUP']);
+export const FileCategoryEnum = z.enum(['IMAGE', 'DOCUMENT', 'AVATAR', 'ATTACHMENT', 'EXPORT', 'BACKUP', 'ARCHIVE']);
 export type FileCategory = z.infer<typeof FileCategoryEnum>;
 
 export const FileStatusEnum = z.enum(['ok', 'orphaned']);

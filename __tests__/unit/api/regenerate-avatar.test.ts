@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals'
 
-import type { AuthenticatedContext } from '@/lib/api/middleware'
+import type { RequestContext } from '@/lib/api/middleware'
 
 const mockTriggerAvatarGeneration = jest.fn()
 const mockLogger = {
@@ -30,7 +30,7 @@ function createMockRequest(body: unknown) {
   } as any
 }
 
-function createContext(chat: Record<string, unknown> | null): AuthenticatedContext {
+function createContext(chat: Record<string, unknown> | null): RequestContext {
   return {
     user: { id: 'user-1' },
     repos: {
@@ -38,7 +38,7 @@ function createContext(chat: Record<string, unknown> | null): AuthenticatedConte
         findById: jest.fn().mockResolvedValue(chat),
       },
     },
-  } as unknown as AuthenticatedContext
+  } as unknown as RequestContext
 }
 
 describe('handleRegenerateAvatar', () => {

@@ -10,6 +10,7 @@
  */
 
 import { createLLMProvider } from '@/lib/llm';
+import { profileParams } from '@/lib/llm/cheap-llm';
 
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
@@ -459,6 +460,7 @@ async function callLLM(
     maxTokens: number;
     userId?: string;
     profileProvider?: string;
+    profileParameters?: Record<string, unknown>;
   }
 ): Promise<string> {
   const messages = [
@@ -474,6 +476,7 @@ async function callLLM(
       messages,
       maxTokens: options.maxTokens,
       temperature: options.temperature,
+      profileParameters: options.profileParameters,
     },
     apiKey
   );
@@ -961,7 +964,11 @@ export async function runAIImportStreaming(
 
     // Create LLM provider
     const provider = await createLLMProvider(profile.provider, profile.baseUrl || undefined);
-    const llmOpts = { userId, profileProvider: profile.provider };
+    const llmOpts = {
+      userId,
+      profileProvider: profile.provider,
+      profileParameters: profileParams(profile),
+    };
 
     /**
      * Determine if a step should run:

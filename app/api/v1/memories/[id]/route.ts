@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
+import { createContextParamsHandler } from '@/lib/api/middleware';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, serverError } from '@/lib/api/responses';
@@ -29,7 +29,7 @@ const updateMemorySchema = z.object({
 /**
  * GET /api/v1/memories/[id] - Get a specific memory
  */
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id: memoryId }) => {
     try {// Find the memory - need to check ownership via character
       const memory = await repos.memories.findById(memoryId);
@@ -73,7 +73,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 /**
  * PUT /api/v1/memories/[id] - Update a memory
  */
-export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
+export const PUT = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id: memoryId }) => {
     // Find the memory
     const existingMemory = await repos.memories.findById(memoryId);
@@ -115,7 +115,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 /**
  * DELETE /api/v1/memories/[id] - Delete a memory
  */
-export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+export const DELETE = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id: memoryId }) => {
     try {// Find the memory
       const existingMemory = await repos.memories.findById(memoryId);

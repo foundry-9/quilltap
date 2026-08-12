@@ -40,6 +40,7 @@ export default function LLMLogsCard() {
       'IMAGE_PROMPT_CRAFTING': 'Image Prompt',
       'CHARACTER_WIZARD': 'Wizard',
       'IMAGE_DESCRIPTION': 'Image Desc',
+      'CUSTOM_TOOL_CONSULT': 'Custom Tool',
     }
     return labels[type] || type
   }

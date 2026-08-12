@@ -28,8 +28,17 @@ export {
   batchExtractMemories,
   extractMemorySearchKeywords,
   summarizeMemoryRecap,
+  extractEpisodesFromFold,
+  FOLD_EPISODE_CAP,
 } from './memory-tasks'
-export type { OtherSubjectInput, OrientingContext } from './memory-tasks'
+export type {
+  OtherSubjectInput,
+  OrientingContext,
+  ExtractionClock,
+  FoldEpisode,
+  FoldEpisodeMessage,
+  MemorySearchExtraction,
+} from './memory-tasks'
 
 // Canon block loader (used by the memory orchestrator to feed extractor prompts)
 export {

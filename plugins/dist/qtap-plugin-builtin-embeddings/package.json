@@ -1,17 +1,18 @@
 {
   "name": "qtap-plugin-builtin-embeddings",
-  "version": "1.0.13",
+  "version": "1.0.16",
   "description": "Built-in TF-IDF embedding provider for Quilltap - offline, zero-dependency semantic search",
   "main": "index.js",
   "types": "index.d.ts",
   "author": "Foundry-9 LLC",
   "license": "MIT",
   "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
     "build": "node esbuild.config.mjs",
     "clean": "rm -f index.js"
   },
   "dependencies": {
-    "@quilltap/plugin-types": "^2.5.2"
+    "@quilltap/plugin-types": "^2.5.4"
   },
   "devDependencies": {
     "esbuild": "^0.28.1"

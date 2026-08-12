@@ -70,6 +70,9 @@ describe('Database Key Manager (dbkey)', () => {
     if ('__quilltapHasUserPassphrase' in global) {
       delete (global as Record<string, unknown>).__quilltapHasUserPassphrase;
     }
+    if ('__quilltapRuntimePassphrase' in global) {
+      delete (global as Record<string, unknown>).__quilltapRuntimePassphrase;
+    }
 
     mockExit = jest.spyOn(process, 'exit').mockImplementation((_code?: string | number | null) => {
       throw new Error(`process.exit called with code ${_code}`);
@@ -236,7 +239,7 @@ describe('Database Key Manager (dbkey)', () => {
 
       // Simulate restart
       delete process.env.ENCRYPTION_MASTER_PEPPER;
-      delete (global as Record<string, unknown>).__quilttapDbKeyState;
+      delete (global as Record<string, unknown>).__quilltapDbKeyState;
       delete (global as Record<string, unknown>).__quilltapHasUserPassphrase;
 
       const dbkey2 = await importDbKey();
@@ -251,7 +254,7 @@ describe('Database Key Manager (dbkey)', () => {
 
       // Simulate restart
       delete process.env.ENCRYPTION_MASTER_PEPPER;
-      delete (global as Record<string, unknown>).__quilttapDbKeyState;
+      delete (global as Record<string, unknown>).__quilltapDbKeyState;
       delete (global as Record<string, unknown>).__quilltapHasUserPassphrase;
 
       const dbkey2 = await importDbKey();
@@ -468,6 +471,68 @@ describe('Database Key Manager (dbkey)', () => {
 
       // File should not have been overwritten
       expect(mockFiles[MOCK_DBKEY_PATH]).toBe(contentAfterSetup);
+    });
+  });
+
+  describe('runtime passphrase cache (archive encryption, §4.2c)', () => {
+    // Archive bundles are encrypted under the passphrase, which only ever
+    // passes through this module — each chokepoint must deposit it in the
+    // runtime cache, and locking must clear it.
+
+    function cachedPassphrase(): string | undefined {
+      return (global as Record<string, unknown>).__quilltapRuntimePassphrase as
+        | string
+        | undefined;
+    }
+
+    it('setupDbKey caches the effective passphrase (sentinel when none)', async () => {
+      const dbkey = await importDbKey();
+      await dbkey.provisionDbKey();
+      dbkey.setupDbKey('');
+
+      expect(cachedPassphrase()).toBe(dbkey.INTERNAL_PASSPHRASE);
+    });
+
+    it('unlockDbKey caches the passphrase it just proved', async () => {
+      const dbkey = await importDbKey();
+      await dbkey.provisionDbKey();
+      dbkey.setupDbKey('my-secret');
+
+      // Simulate a restart with a passphrase-protected key.
+      delete process.env.ENCRYPTION_MASTER_PEPPER;
+      delete (global as Record<string, unknown>).__quilltapDbKeyState;
+      delete (global as Record<string, unknown>).__quilltapHasUserPassphrase;
+      delete (global as Record<string, unknown>).__quilltapRuntimePassphrase;
+
+      const dbkey2 = await importDbKey();
+      await dbkey2.provisionDbKey();
+      expect(cachedPassphrase()).toBeUndefined();
+      expect(dbkey2.unlockDbKey('my-secret')).toBe(true);
+
+      expect(cachedPassphrase()).toBe('my-secret');
+    });
+
+    it('changePassphrase caches the new effective passphrase', async () => {
+      const dbkey = await importDbKey();
+      await dbkey.provisionDbKey();
+      dbkey.setupDbKey('old-secret');
+
+      const result = dbkey.changePassphrase('old-secret', 'new-secret');
+
+      expect(result.success).toBe(true);
+      expect(cachedPassphrase()).toBe('new-secret');
+    });
+
+    it('lockDbKey clears the cached passphrase alongside the pepper', async () => {
+      const dbkey = await importDbKey();
+      await dbkey.provisionDbKey();
+      dbkey.setupDbKey('my-secret');
+      expect(cachedPassphrase()).toBe('my-secret');
+
+      dbkey.lockDbKey();
+
+      expect(cachedPassphrase()).toBeUndefined();
+      expect(process.env.ENCRYPTION_MASTER_PEPPER).toBeUndefined();
     });
   });
 });

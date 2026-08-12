@@ -106,9 +106,11 @@ export async function handleCarinaMemoryExtraction(job: BackgroundJob): Promise<
         characterPronouns: answerer.pronouns ?? null,
         text: answer,
         contributingMessageIds: [carinaMessage.id],
+        lastMessageCreatedAt: carinaMessage.createdAt ?? null,
       },
     ],
     latestAssistantMessageId: carinaMessage.id,
+    turnTimestamp: carinaMessage.createdAt ?? null,
   };
 
   const participantCharacters = new Map<string, Character>([[answerer.id, answerer]]);
@@ -133,6 +135,8 @@ export async function handleCarinaMemoryExtraction(job: BackgroundJob): Promise<
     isDangerousChat: isChatActiveDangerous(chat),
     memoryExtractionLimits,
     sourceMessageTimestamp,
+    // Episodic spine: which clock the chat's story runs on.
+    timelineMode: chat.timelineMode ?? 'realtime',
     // A Carina answerer in an autonomous room earns the same user-absence
     // provenance as any other extraction there.
     inAutonomousRoom: chat.chatType === 'autonomous',

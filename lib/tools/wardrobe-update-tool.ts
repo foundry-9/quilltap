@@ -107,6 +107,7 @@ export const wardrobeUpdateToolDefinition = {
  */
 export function validateWardrobeUpdateInput(
   input: unknown
-): input is WardrobeUpdateToolInput {
-  return wardrobeUpdateToolInputSchema.safeParse(input).success
+): WardrobeUpdateToolInput | null {
+  const parsed = wardrobeUpdateToolInputSchema.safeParse(input)
+  return parsed.success ? parsed.data : null
 }

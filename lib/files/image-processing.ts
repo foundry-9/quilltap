@@ -8,6 +8,9 @@
  */
 
 import sharp from 'sharp'
+// sharp 0.35 replaced its TypeScript namespace with named exports for ESM, so
+// these types are no longer reachable as `sharp.Metadata` / `sharp.FormatEnum`.
+import type { FormatEnum, Metadata } from 'sharp'
 import { logger } from '@/lib/logger'
 import { getAttachmentSupport } from '@/lib/plugins/provider-registry'
 
@@ -87,7 +90,7 @@ export function getProviderMaxBase64Size(provider: string): number {
 async function determineOutputFormat(
   buffer: Buffer,
   originalMimeType: string
-): Promise<{ format: keyof sharp.FormatEnum; mimeType: string }> {
+): Promise<{ format: keyof FormatEnum; mimeType: string }> {
   const metadata = await sharp(buffer).metadata()
 
   // If the image has an alpha channel and it's PNG, keep PNG
@@ -186,7 +189,7 @@ export async function resizeImageForProvider(
   let iterations = 0
   const maxIterations = 10 // Safety limit
   let resultBuffer = buffer
-  let resultMetadata: sharp.Metadata | null = null
+  let resultMetadata: Metadata | null = null
 
   while (iterations < maxIterations) {
     iterations++

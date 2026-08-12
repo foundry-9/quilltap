@@ -17,7 +17,7 @@
 
 import { useEffect, useRef, useCallback } from 'react'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
-import { $getRoot } from 'lexical'
+import { $getRoot, type LexicalEditor } from 'lexical'
 import {
   $convertFromMarkdownString,
   $convertToMarkdownString,
@@ -38,6 +38,13 @@ import {
   type ElementTransformer,
 } from '@lexical/markdown'
 import { TABLE_TRANSFORMER } from '@/components/chat/lexical/transformers/table-transformer'
+import {
+  applyListIndentUnit,
+  detectListIndentUnit,
+  getListIndentUnit,
+  normalizeListIndentForLexical,
+  setListIndentUnit,
+} from '@/components/chat/lexical/transformers/list-indentation'
 
 /**
  * Case-insensitive CHECK_LIST transformer.
@@ -100,22 +107,88 @@ interface MarkdownBridgePluginProps {
    * single `*` is not a formatting tag.
    */
   preserveAsterisks?: boolean
+  /**
+   * When true, strip Lexical's automatic `\_` escapes on export so literal
+   * underscores survive as `_` rather than `\_`.
+   */
+  preserveUnderscores?: boolean
+  /**
+   * When true, strip Lexical's automatic `\`` escapes on export so literal
+   * backticks survive as `` ` `` rather than `\``.
+   */
+  preserveBackticks?: boolean
+  /**
+   * When true, strip Lexical's automatic `\~` escapes on export so literal
+   * tildes survive as `~` rather than `\~`.
+   */
+  preserveTildes?: boolean
+}
+
+const DEFAULT_PRESERVED_MARKDOWN_CHARS = ['*', '_', '`', '~'] as const
+
+/**
+ * Strip Lexical's automatic markdown escapes for the selected characters.
+ *
+ * This runs on export only, so editor behavior is unchanged while typing. The
+ * goal is byte-fidelity for plain punctuation in Document Mode writes.
+ */
+export function stripMarkdownEscapes(markdown: string, chars: string[]): string {
+  const filtered = Array.from(new Set(chars.filter((char) => char.length === 1 && char !== '\\')))
+  if (filtered.length === 0) return markdown
+
+  const escapedClass = filtered
+    .map((char) => char.replace(/[\\\]\^-]/g, '\\$&'))
+    .join('')
+
+  return markdown.replace(new RegExp(`\\\\([${escapedClass}])`, 'g'), '$1')
+}
+
+function normalizeExportMarkdown(markdown: string, chars: string[]): string {
+  return chars.length > 0 ? stripMarkdownEscapes(markdown, chars) : markdown
 }
 
 /**
- * Strip Lexical's `\*` escapes from exported markdown. Only `\*` is touched;
- * `\_`, `` \` ``, `\~` stay escaped because those characters *are* active
- * formatting tags in our transformer set.
+ * Load markdown into the editor.
+ *
+ * List indentation is put onto the four-space grid Lexical's importer counts
+ * in (see [[list-indentation]]) — without this, the two-space nesting that most
+ * documents use collapses to a flat list — and the document's own indentation
+ * unit is remembered so {@link $exportComposerMarkdown} hands it back unchanged.
+ *
+ * Must be called inside `editor.update()`.
  */
-function stripAsteriskEscapes(markdown: string): string {
-  return markdown.replace(/\\\*/g, '*')
+export function $importComposerMarkdown(editor: LexicalEditor, markdown: string): void {
+  setListIndentUnit(editor, detectListIndentUnit(markdown))
+  $convertFromMarkdownString(
+    normalizeListIndentForLexical(markdown),
+    COMPOSER_TRANSFORMERS,
+    undefined,
+    true,
+  )
+}
+
+/**
+ * Serialise the editor back to markdown, re-indenting sub-lists to the unit the
+ * loaded document used so a save doesn't churn every nested line.
+ *
+ * Must be called inside `editor.update()` or `editorState.read()`.
+ */
+export function $exportComposerMarkdown(editor: LexicalEditor, preserveChars: string[]): string {
+  const raw = $convertToMarkdownString(COMPOSER_TRANSFORMERS, undefined, true)
+  return applyListIndentUnit(
+    normalizeExportMarkdown(raw, preserveChars),
+    getListIndentUnit(editor),
+  )
 }
 
 export function MarkdownBridgePlugin({
   input,
   setInput,
   initialMarkdown,
-  preserveAsterisks = false,
+  preserveAsterisks = true,
+  preserveUnderscores = true,
+  preserveBackticks = true,
+  preserveTildes = true,
 }: MarkdownBridgePluginProps) {
   const [editor] = useLexicalComposerContext()
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -135,7 +208,7 @@ export function MarkdownBridgePlugin({
 
     editor.update(
       () => {
-        $convertFromMarkdownString(markdown, COMPOSER_TRANSFORMERS, undefined, true)
+        $importComposerMarkdown(editor, markdown)
       },
       { tag: 'external-sync' },
     )
@@ -148,8 +221,13 @@ export function MarkdownBridgePlugin({
       if (tags.has('external-sync')) return
 
       editorState.read(() => {
-        const raw = $convertToMarkdownString(COMPOSER_TRANSFORMERS, undefined, true)
-        const markdown = preserveAsterisks ? stripAsteriskEscapes(raw) : raw
+        const preserveChars = [
+          ...(preserveAsterisks ? ['*'] : []),
+          ...(preserveUnderscores ? ['_'] : []),
+          ...(preserveBackticks ? ['`'] : []),
+          ...(preserveTildes ? ['~'] : []),
+        ]
+        const markdown = $exportComposerMarkdown(editor, preserveChars)
 
         // Debounce parent state updates (16ms, ~1 frame)
         if (debounceTimerRef.current) {
@@ -161,7 +239,7 @@ export function MarkdownBridgePlugin({
         }, 16)
       })
     })
-  }, [editor, setInput, preserveAsterisks])
+  }, [editor, setInput, preserveAsterisks, preserveUnderscores, preserveBackticks, preserveTildes])
 
   // Detect when parent clears input (e.g., after submission) and clear editor.
   // We know it's an external clear when input becomes '' but we didn't send ''
@@ -206,7 +284,7 @@ export function useMarkdownBridge() {
   const getMarkdown = useCallback((): string => {
     let markdown = ''
     editor.getEditorState().read(() => {
-      markdown = $convertToMarkdownString(COMPOSER_TRANSFORMERS, undefined, true)
+      markdown = $exportComposerMarkdown(editor, [...DEFAULT_PRESERVED_MARKDOWN_CHARS])
     })
     return markdown
   }, [editor])
@@ -217,7 +295,7 @@ export function useMarkdownBridge() {
         () => {
           $getRoot().clear()
           if (text) {
-            $convertFromMarkdownString(text, COMPOSER_TRANSFORMERS, undefined, true)
+            $importComposerMarkdown(editor, text)
           }
         },
         { tag: 'external-sync' },

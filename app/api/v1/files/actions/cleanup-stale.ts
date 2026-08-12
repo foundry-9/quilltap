@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { serverError, successResponse } from '@/lib/api/responses';
 import { fileStorageManager } from '@/lib/file-storage/manager';
@@ -8,7 +8,7 @@ import { cleanupStaleSchema } from '../shared';
 
 export async function handleCleanupStale(
   request: NextRequest,
-  ctx: AuthenticatedContext
+  ctx: RequestContext
 ): Promise<NextResponse> {
   try {
     let dryRun = true;

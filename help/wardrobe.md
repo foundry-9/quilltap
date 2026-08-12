@@ -49,7 +49,7 @@ For day-to-day fussing-about with what a character is wearing, there is a more d
 What the dialog allows you to do, with the directness of a valet pulling out the morning's tweeds:
 
 - **Pick any character** from a single dropdown at the top — the dialog needn't be tied to whoever is presently speaking in a chat.
-- **Browse the wardrobe** in full: filter by slot, mark items as **default** (a star toggle), edit them in place, **duplicate** them (the item's `⋮` menu mints an identical copy with "(copy)" appended to its name — handy for spinning a near-twin garment off an existing one; duplicating a composite outfit keeps the very same component pieces rather than cloning them anew), delete them, or compose new ones.
+- **Browse the wardrobe** in full: filter by slot, mark items as **default** (a star toggle), edit them in place, **duplicate** them (the item's `⋮` menu mints an identical copy with "(copy)" appended to its name — handy for spinning a near-twin garment off an existing one; duplicating a composite outfit keeps the very same component pieces rather than cloning them anew), **move** them, **copy** them, delete them, or compose new ones.
 - **Build composite items** — a "Rain Outfit" that bundles a raincoat, jeans, and boots; a "Nice Jewellery" set comprising earrings, locket, and ring. The editor's *Composes* panel lets you pick existing items as components; the system computes the slot coverage automatically and refuses to allow circular bundles.
 - When opened **inside a chat**, a second column appears with two tabs:
   - *Wearing now* — what this character is actually wearing in the chat. Each slot lists what is currently equipped as removable chips; a small **+** opens a picker, and choosing a garment **wears** it across *every* slot it covers — so a dress settles into both top and bottom, and a composite ensemble takes all the ground it claims, in a single gesture. Whether the new piece *layers* over what is already worn or *clears those slots first* is decided by the garment's own **replace** setting (see *The Replace Toggle* below); ordinary single garments layer, so use the **Clear** button to bare a slot before dressing it afresh when you mean to swap rather than pile on. Composite items are shown as a single chip with a "composite" note. Edits to this tab **stage** in the dialog and are committed all at once when you click **Done** (or close the dialog) — Aurora announces the change exactly once and the avatar regenerates exactly once, no matter how many slots you fussed with along the way. If your final state happens to match what the character was already wearing, nothing is committed and nothing is announced.
@@ -106,6 +106,17 @@ When you add a new garment from the Wardrobe dialog, an **"Add to"** selector at
 
 Shared items appear in the dialog's list tagged "· shared" and are wear-only there; manage household archetypes from any character's wardrobe and project items from the project's [Wardrobe card](project-wardrobe.md). (Editing an existing item keeps it in whichever tier it already lives.)
 
+A shared item marked as a **default** garment is worn by *every* character — a household archetype dresses the whole cast in every chat, a project item dresses everyone in that project's chats. Use the honour sparingly, and only when the garment truly is a uniform: a mourning band for a season of grief, the livery of a great house, the regimental coat that no member of the regiment would be seen without. Any character who would rather not may keep a personal copy of the item with its default flag turned off, and the house will say nothing further about it.
+
+When you use **Move** or **Copy** from an item's `⋮` menu, Quilltap opens a destination picker with:
+
+- **General** (Quilltap General)
+- **Projects** (all projects)
+- **Groups** (all groups)
+- **Users** (character vault wardrobes)
+
+**Copy** always generates a fresh wardrobe item ID at the destination. **Move** keeps the item's existing ID and removes it from the source after a successful write.
+
 ### Composite Items (Bundled Outfits)
 
 Rather than selecting each garment individually every time a character must dress for an occasion, you may compose a single wardrobe item out of *other* wardrobe items. A "Garden Party Attire" composite might bundle a linen blazer, white slacks, and oxfords; a "Nice Jewellery" composite might bundle a pair of earrings, a locket, and a ring. The composite itself is a wardrobe item like any other — it covers whichever slots its components do, and equipping it places the bundle in those slots in one tidy gesture.
@@ -156,21 +167,26 @@ For models using text-block syntax, gifting uses the `recipient` attribute: `[[C
 
 ### The Wardrobe Flags
 
-Two flags on each character govern what they are permitted to do with their own clothing:
+Three flags on each character govern their clothing:
 
 - **canDressThemselves** --- When enabled (the default), the character may use `wardrobe_list`, `wardrobe_read`, `wardrobe_wear`, and `wardrobe_take_off` to browse and change their outfit during conversation. Disable this if you prefer to maintain strict authorial control over what they wear.
 - **canCreateOutfits** --- When enabled (also the default), the character may use `wardrobe_create`, `wardrobe_update`, and `wardrobe_archive` to fabricate, amend, and retire garments on the fly. This is delightful for characters with a flair for fashion, but you may wish to disable it if your character's wardrobe should remain fixed.
+- **canChooseOutfit** --- Disabled by default. When enabled, a *new* chat with this character opens with its Starting Outfit already set to **Let Character Choose**, so a character with a wardrobe worth showing off arrives dressed for the occasion without your having to flip the switch each time. It changes only the default the new-chat dialog offers; you may still overrule it for any particular chat.
 
-Both flags can be found in the character's settings on the Aurora page.
+All three flags live on the character's **Wardrobe** tab on the Aurora page — `canChooseOutfit` sits just above the "Open wardrobe" button; the other two are grouped with the character's other wardrobe permissions.
 
 ## Outfit Selection When Starting a Chat
 
 When you begin a new conversation, you will be asked how to handle the character's outfit:
 
-- **Default** --- The character starts wearing whatever they had equipped in their most recent chat (or their full wardrobe if no prior chat exists)
+- **Default** --- The character arrives wearing everything marked as a default garment across all three tiers --- their own vault, the project's wardrobe, and Quilltap General --- layered one atop the next rather than squabbling over a single slot. Should the character keep their own copy of a shared garment, that copy prevails: mark it *not* a default and they will decline the house livery altogether, with no offence taken.
 - **Manual** --- You hand-pick which items the character is wearing at the start of the scene
-- **Let Character Choose** --- The character examines the scenario and their own wardrobe, then selects what seems most appropriate for the occasion. This is accomplished by a discreet consultation with the AI before the conversation begins --- rather like sending one's valet ahead to assess the dress code. Should the consultation fail for any reason (a misplaced cufflink, an uncooperative telegraph), the character simply falls back to their default outfit with admirable composure.
+- **Let Character Choose** --- The character examines the scenario and the whole of their wardrobe (all three tiers), then selects what seems most appropriate for the occasion. This is accomplished by a discreet consultation with the AI before the conversation begins --- rather like sending one's valet ahead to assess the dress code. Should the consultation fail for any reason (a misplaced cufflink, an uncooperative telegraph, or a valet who has simply not returned within the minute allotted him), the character falls back to their default outfit with admirable composure.
+
+  A character may also elect to wear *nothing* --- a nudist at home, a bathing scene, a setting in which clothing would be plainly absurd --- and when they do so deliberately, the house respects it. The distinction matters: an empty answer offered *without* that deliberate declaration is treated as a valet who has lost his nerve, and the character is put into their defaults rather than sent out undressed by accident. When several characters are dressing at once, they now consult in parallel rather than queueing politely in the hall, so one slow valet no longer keeps the entire party waiting.
 - **None** --- The character begins with no equipped outfit; what they wear (if anything) is left to the narrative
+
+The dialog now proposes a sensible starting choice for each character on its own, so you need only intervene when your taste differs. Continuing from an earlier conversation keeps everyone in what they last wore; a character carrying the **canChooseOutfit** flag opens on **Let Character Choose**; a character with a proper default outfit on file opens on **Default**; and a character with no default outfit to speak of opens on **Manual**, its panel already unfolded so the empty slots are plain to see. When several characters are present, each folded panel wears a small badge — **Defaults**, **Composed**, **Dress Themselves**, **Undressed**, or **Same as Last** — so the whole cast's attire reads at a glance.
 
 If you have also chosen a **Play As** character to represent yourself in the conversation, that character appears in the outfit selector too --- so you may dress your own persona alongside the cast, sparing yourself the indignity of arriving at a gala in whatever you happened to be wearing at your last engagement.
 

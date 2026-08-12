@@ -7,7 +7,6 @@
  * Uses crypto.randomBytes() for cryptographically secure random numbers.
  */
 
-import { randomBytes } from 'crypto';
 import {
   RngToolInput,
   RngToolOutput,
@@ -15,6 +14,7 @@ import {
   RngType,
   validateRngInput,
 } from '../rng-tool';
+import { secureRandomInt, rollDice, flipCoin } from '@/lib/pascal/dice';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 
@@ -39,57 +39,6 @@ export class RngError extends Error {
     super(message);
     this.name = 'RngError';
   }
-}
-
-/**
- * Generate a cryptographically secure random integer in range [1, max]
- * Uses rejection sampling to avoid modulo bias
- */
-function secureRandomInt(max: number): number {
-  if (max < 1) return 1;
-
-  // Calculate how many bytes we need
-  const bytesNeeded = Math.ceil(Math.log2(max + 1) / 8) || 1;
-  const maxValue = 256 ** bytesNeeded;
-  const limit = maxValue - (maxValue % max);
-
-  let value: number;
-  do {
-    const bytes = randomBytes(bytesNeeded);
-    value = bytes.reduce((acc, byte, i) => acc + byte * (256 ** i), 0);
-  } while (value >= limit);
-
-  return (value % max) + 1;
-}
-
-/**
- * Execute a dice roll
- */
-function rollDice(sides: number, count: number): { results: number[]; sum: number } {
-  const results: number[] = [];
-  let sum = 0;
-
-  for (let i = 0; i < count; i++) {
-    const roll = secureRandomInt(sides);
-    results.push(roll);
-    sum += roll;
-  }
-
-  return { results, sum };
-}
-
-/**
- * Execute a coin flip
- */
-function flipCoin(count: number): RngResult[] {
-  const results: RngResult[] = [];
-
-  for (let i = 0; i < count; i++) {
-    const flip = secureRandomInt(2);
-    results.push(flip === 1 ? 'heads' : 'tails');
-  }
-
-  return results;
 }
 
 /**
@@ -162,7 +111,8 @@ export async function executeRngTool(
 ): Promise<RngToolOutput> {
   try {
     // Validate input
-    if (!validateRngInput(input)) {
+    const parsed = validateRngInput(input);
+    if (!parsed) {
       logger.warn('RNG validation failed', { userId: context.userId, input });
       return {
         success: false,
@@ -175,11 +125,12 @@ export async function executeRngTool(
       };
     }
 
-    const { type, rolls = 1 } = input;
+    const { type, rolls = 1, modifier = 0 } = parsed;
 
     // Handle dice roll
     if (typeof type === 'number') {
       const { results, sum } = rollDice(type, rolls);
+      const total = sum + modifier;
 
       logger.info('RNG dice roll completed', {
         userId: context.userId,
@@ -188,6 +139,8 @@ export async function executeRngTool(
         rolls,
         results,
         sum,
+        modifier,
+        total,
       });
 
       return {
@@ -196,6 +149,8 @@ export async function executeRngTool(
         rollCount: rolls,
         results,
         sum,
+        modifier,
+        total,
       };
     }
 
@@ -286,14 +241,23 @@ export function formatRngResults(output: RngToolOutput): string {
     return `RNG Error: ${output.error || 'Unknown error'}`;
   }
 
-  const { type, results, rollCount, sum } = output;
+  const { type, results, rollCount, sum, modifier = 0, total } = output;
 
-  // Format dice roll
+  // Format dice roll. The no-modifier wording is long-standing and deliberately
+  // untouched; a modifier only ever adds the "+ n" arithmetic to the line.
   if (typeof type === 'number') {
+    const sign = modifier > 0 ? '+' : '-';
+    const magnitude = Math.abs(modifier);
     if (rollCount === 1) {
-      return `Rolled a d${type}: **${results[0]}**`;
+      if (modifier === 0) {
+        return `Rolled a d${type}: **${results[0]}**`;
+      }
+      return `Rolled a d${type}${sign}${magnitude}: ${results[0]} ${sign} ${magnitude} = **${total}**`;
     }
-    return `Rolled ${rollCount}d${type}: [${results.join(', ')}] = **${sum}** total`;
+    if (modifier === 0) {
+      return `Rolled ${rollCount}d${type}: [${results.join(', ')}] = **${sum}** total`;
+    }
+    return `Rolled ${rollCount}d${type}${sign}${magnitude}: [${results.join(', ')}] ${sign} ${magnitude} = **${total}** total`;
   }
 
   // Format coin flip

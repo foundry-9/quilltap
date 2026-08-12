@@ -304,6 +304,11 @@ export async function analyzeImageForWardrobeItems(
         ],
         maxTokens: 4000,
         temperature: 0.5,
+        // Forward the profile's provider params (e.g. DeepSeek thinking mode)
+        // so a "reasoning off" setting on the analysis profile takes effect.
+        profileParameters: profile.parameters && typeof profile.parameters === 'object'
+          ? (profile.parameters as Record<string, unknown>)
+          : undefined,
       },
       apiKeyValue
     )

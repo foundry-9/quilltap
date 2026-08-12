@@ -26,10 +26,13 @@ import {
   helpSettingsToolDefinition,
   helpNavigateToolDefinition,
   rngToolDefinition,
+  runCustomToolDefinition,
+  buildRunCustomDescription,
   stateToolDefinition,
   selfInventoryToolDefinition,
   whisperToolDefinition,
 } from '@/lib/tools';
+import type { DiscoveredCustomTool } from '@/lib/pascal/custom-tools';
 import {
   readConversationToolDefinition,
 } from '@/lib/tools/read-conversation-tool';
@@ -205,6 +208,21 @@ export interface BuildToolsOptions {
   /** Whether to enable RNG (random number generator) tool (enabled by default) */
   rng?: boolean;
 
+  /**
+   * The resolved custom-tool roster for THIS call (Pascal's table).
+   *
+   * Pass the caller's freshly-resolved roster to offer `run_custom`; omit it or
+   * pass an empty array and the tool is not offered at all. The roster rides in
+   * the tool's description, rebuilt every time, so a `.tool.json` added or
+   * edited mid-chat takes effect on the very next LLM call — and a brand-new
+   * chat gets its full roster on turn one with no initialisation step.
+   *
+   * Resolve per call and never cache across turns: edits inside a mount don't
+   * reliably touch the mount index, so an invalidated cache would miss exactly
+   * the changes users most expect to see.
+   */
+  customTools?: DiscoveredCustomTool[];
+
   /** Whether to enable state (persistent state management) tool (enabled by default) */
   state?: boolean;
 
@@ -316,6 +334,7 @@ export async function buildToolsForProvider(
       helpSettings: options.helpSettings,
       helpNavigate: options.helpNavigate,
       rng: options.rng,
+      customTools: options.customTools?.length ?? 0,
       state: options.state,
       whisper: options.whisper,
       wardrobeList: options.wardrobeList,
@@ -385,6 +404,20 @@ export async function buildToolsForProvider(
   // Add RNG tool if enabled (defaults to true when not specified)
   if (includeWorkspaceTools && options.rng !== false) {
     universalTools.push(rngToolDefinition as UniversalTool);
+  }
+
+  // Add run_custom only when this scene actually has custom tools. An empty
+  // roster would offer the model a tool with nothing to run — worse than not
+  // offering it. The description is composed here, per call, from the roster
+  // the caller just resolved.
+  if (options.customTools && options.customTools.length > 0) {
+    universalTools.push({
+      ...runCustomToolDefinition,
+      function: {
+        ...runCustomToolDefinition.function,
+        description: buildRunCustomDescription(options.customTools),
+      },
+    } as UniversalTool);
   }
 
   // Add state tool if enabled (defaults to true when not specified)

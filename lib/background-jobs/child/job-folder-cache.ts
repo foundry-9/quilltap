@@ -19,20 +19,27 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-const folderCacheStore = new AsyncLocalStorage<Map<string, string>>();
+/** Memo value: the ensured folder's id plus its stored-casing path. */
+export interface EnsuredFolderMemo {
+  id: string;
+  path: string;
+}
+
+const folderCacheStore = new AsyncLocalStorage<Map<string, EnsuredFolderMemo>>();
 
 /**
  * Run `fn` with a fresh per-job folder-ensure memo in scope. Nested inside
  * `runWithJobScope` so every job handler gets one.
  */
 export function runWithJobFolderCache<T>(fn: () => Promise<T>): Promise<T> {
-  return folderCacheStore.run(new Map<string, string>(), fn);
+  return folderCacheStore.run(new Map<string, EnsuredFolderMemo>(), fn);
 }
 
 /**
- * The current job's folder-ensure memo, keyed by `${mountPointId}:${path}` →
- * folderId. Null outside a job scope.
+ * The current job's folder-ensure memo, keyed by the lowercased
+ * `${mountPointId}:${path}` (the folder namespace is case-insensitive) →
+ * folder id + stored-casing path. Null outside a job scope.
  */
-export function getJobFolderEnsureCache(): Map<string, string> | null {
+export function getJobFolderEnsureCache(): Map<string, EnsuredFolderMemo> | null {
   return folderCacheStore.getStore() ?? null;
 }

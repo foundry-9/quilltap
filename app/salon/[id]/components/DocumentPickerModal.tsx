@@ -23,7 +23,13 @@ import { MAX_RECENT_DOCUMENTS } from '@/lib/chat-documents/constants'
 interface DocumentPickerModalProps {
   isOpen: boolean
   onClose: () => void
-  chatId: string
+  /**
+   * The chat whose reach scopes the picker. `null` = the standalone (chat-less)
+   * surface: stores and recents come from `/api/v1/documents`, every enabled
+   * store is shown (there is no narrower reach to default to), and the
+   * project-library shortcut is unavailable.
+   */
+  chatId: string | null
   projectId?: string | null
   projectName?: string | null
   onSelectDocument: (params: {
@@ -128,7 +134,9 @@ export default function DocumentPickerModal({
   const fetchAccessibleStores = async (all: boolean) => {
     try {
       setLoading(true)
-      const res = await fetch(`/api/v1/chats/${chatId}?action=accessible-stores${all ? '&all=true' : ''}`)
+      const res = await fetch(chatId
+        ? `/api/v1/chats/${chatId}?action=accessible-stores${all ? '&all=true' : ''}`
+        : '/api/v1/documents?action=accessible-stores')
       if (res.ok) {
         const data = await res.json()
         setAccessibleStores(data.stores || [])
@@ -143,7 +151,10 @@ export default function DocumentPickerModal({
 
   const fetchRecentDocuments = async () => {
     try {
-      const res = await fetch(`/api/v1/chats/${chatId}?action=recent-documents`, {
+      const url = chatId
+        ? `/api/v1/chats/${chatId}?action=recent-documents`
+        : '/api/v1/documents?action=recent-documents'
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })
@@ -411,6 +422,10 @@ export default function DocumentPickerModal({
     return currentFolder.split('/')
   }, [currentFolder])
 
+  // On the standalone (chat-less) surface everything is already "everywhere":
+  // the toggle disappears and the accordion descriptions read accordingly.
+  const everywhere = chatId === null || lookEverywhere
+
   // Bucket the chat-accessible stores for the right-column accordions. Group
   // stores get their own bucket and are held out of the generic Database-/
   // Filesystem-backed buckets so each store appears exactly once.
@@ -544,24 +559,27 @@ export default function DocumentPickerModal({
 
           {/* Right column: document stores, grouped by kind */}
           <div className="flex-1 min-w-0 space-y-2">
-            {/* Look-everywhere toggle — widens the accordions beyond this chat */}
-            <label className="flex items-start gap-3 px-1 pb-1 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={lookEverywhere}
-                onChange={(e) => setLookEverywhere(e.target.checked)}
-                className="qt-checkbox mt-0.5"
-              />
-              <span>
-                <span className="block text-sm font-medium qt-text-primary">Look everywhere</span>
-                <span className="block text-xs qt-text-secondary">Show every store, not just the ones reachable from this chat</span>
-              </span>
-            </label>
+            {/* Look-everywhere toggle — widens the accordions beyond this chat.
+                Absent on the standalone surface, which is always everywhere. */}
+            {chatId !== null && (
+              <label className="flex items-start gap-3 px-1 pb-1 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={lookEverywhere}
+                  onChange={(e) => setLookEverywhere(e.target.checked)}
+                  className="qt-checkbox mt-0.5"
+                />
+                <span>
+                  <span className="block text-sm font-medium qt-text-primary">Look everywhere</span>
+                  <span className="block text-xs qt-text-secondary">Show every store, not just the ones reachable from this chat</span>
+                </span>
+              </label>
+            )}
 
             <CollapsibleCard
-              key={`vaults-${lookEverywhere}-${storeBuckets.characterVaults.length > 0}`}
+              key={`vaults-${everywhere}-${storeBuckets.characterVaults.length > 0}`}
               title="Character Vaults"
-              description={lookEverywhere ? 'Every character vault' : 'Vaults of characters in this chat'}
+              description={everywhere ? 'Every character vault' : 'Vaults of characters in this chat'}
               defaultOpen={storeBuckets.characterVaults.length > 0}
               icon={<Icon name="characters" className="w-5 h-5" />}
             >
@@ -574,7 +592,7 @@ export default function DocumentPickerModal({
 
             {storeBuckets.groupStores.length > 0 && (
               <CollapsibleCard
-                key={`group-${lookEverywhere}-${storeBuckets.groupStores.length > 0}`}
+                key={`group-${everywhere}-${storeBuckets.groupStores.length > 0}`}
                 title="Group Files"
                 description="Stores shared with characters' groups"
                 defaultOpen={storeBuckets.groupStores.length > 0}
@@ -587,9 +605,9 @@ export default function DocumentPickerModal({
             )}
 
             <CollapsibleCard
-              key={`db-${lookEverywhere}-${storeBuckets.databaseStores.length > 0}`}
+              key={`db-${everywhere}-${storeBuckets.databaseStores.length > 0}`}
               title="Database-backed document stores"
-              description={lookEverywhere ? 'Every store kept inside Quilltap' : 'Project stores kept inside Quilltap'}
+              description={everywhere ? 'Every store kept inside Quilltap' : 'Project stores kept inside Quilltap'}
               defaultOpen={storeBuckets.databaseStores.length > 0}
               icon={<Icon name="database" className="w-5 h-5" />}
             >
@@ -601,9 +619,9 @@ export default function DocumentPickerModal({
             </CollapsibleCard>
 
             <CollapsibleCard
-              key={`fs-${lookEverywhere}-${storeBuckets.filesystemStores.length > 0}`}
+              key={`fs-${everywhere}-${storeBuckets.filesystemStores.length > 0}`}
               title="Filesystem-backed document stores"
-              description={lookEverywhere ? 'Every store backed by folders on disk' : 'Project stores backed by folders on disk'}
+              description={everywhere ? 'Every store backed by folders on disk' : 'Project stores backed by folders on disk'}
               defaultOpen={storeBuckets.filesystemStores.length > 0}
               icon={<Icon name="folder" className="w-5 h-5" />}
             >

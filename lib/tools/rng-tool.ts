@@ -11,6 +11,14 @@
 
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
+import { llmNumber } from './llm-number';
+import {
+  MIN_DIE_SIDES,
+  MAX_DIE_SIDES,
+  MIN_DICE_COUNT,
+  MAX_DICE_COUNT,
+  MAX_DICE_MODIFIER,
+} from '@/lib/pascal/dice-notation';
 
 /**
  * Type of random generation to perform
@@ -27,12 +35,14 @@ export type RngType = number | 'flip_coin' | 'spin_the_bottle';
 export const rngToolInputSchema = z.object({
   type: z
     .union([
-      z
-        .number()
-        .int()
-        .min(2)
-        .max(1000)
-        .describe('Number of sides on the die (e.g., 6 for d6, 20 for d20)'),
+      llmNumber(
+        z
+          .number()
+          .int()
+          .min(MIN_DIE_SIDES)
+          .max(MAX_DIE_SIDES)
+          .describe('Number of sides on the die (e.g., 6 for d6, 20 for d20)')
+      ),
       z
         .enum(['flip_coin', 'spin_the_bottle'])
         .describe(
@@ -42,15 +52,29 @@ export const rngToolInputSchema = z.object({
     .describe(
       'Type of random generation. Use a number for dice (e.g., 6 for d6, 20 for d20), "flip_coin" for heads/tails, or "spin_the_bottle" to randomly select a chat participant.'
     ),
-  rolls: z
-    .number()
-    .int()
-    .min(1)
-    .max(100)
+  rolls: llmNumber(
+    z
+      .number()
+      .int()
+      .min(MIN_DICE_COUNT)
+      .max(MAX_DICE_COUNT)
+      .describe(
+        'Number of times to roll/flip (default: 1). For dice, this is like rolling multiple dice (e.g., 3 rolls of d6 = 3d6).'
+      )
+  )
     .default(1)
-    .describe(
-      'Number of times to roll/flip (default: 1). For dice, this is like rolling multiple dice (e.g., 3 rolls of d6 = 3d6).'
-    )
+    .optional(),
+  modifier: llmNumber(
+    z
+      .number()
+      .int()
+      .min(-MAX_DICE_MODIFIER)
+      .max(MAX_DICE_MODIFIER)
+      .describe(
+        'Flat amount added to the dice total after rolling (default: 0). Use for notation like 3d6+2 (modifier 2) or 2d10-1 (modifier -1). Ignored for flip_coin and spin_the_bottle.'
+      )
+  )
+    .default(0)
     .optional(),
 });
 
@@ -77,6 +101,10 @@ export interface RngToolOutput {
   results: RngResult[];
   /** Sum of all results (only for numeric dice rolls) */
   sum?: number;
+  /** Flat modifier applied to `sum`; omitted/0 when the roll carried none. */
+  modifier?: number;
+  /** `sum + modifier` — the number that counts. Only for numeric dice rolls. */
+  total?: number;
   error?: string;
 }
 
@@ -96,6 +124,7 @@ export const rngToolDefinition = {
 /**
  * Helper to validate tool input parameters
  */
-export function validateRngInput(input: unknown): input is RngToolInput {
-  return rngToolInputSchema.safeParse(input).success;
+export function validateRngInput(input: unknown): RngToolInput | null {
+  const parsed = rngToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }

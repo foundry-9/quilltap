@@ -1,8 +1,14 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 type Status = 'idle' | 'submitting' | 'success' | 'error'
+
+interface ArchiveReencryptSummary {
+  total: number
+  reencrypted: number
+  failures: Array<{ fileId: string; filename: string; reason: string }>
+}
 
 export function ChangePassphraseCard() {
   const [currentPassphrase, setCurrentPassphrase] = useState('')
@@ -10,9 +16,26 @@ export function ChangePassphraseCard() {
   const [confirmPassphrase, setConfirmPassphrase] = useState('')
   const [status, setStatus] = useState<Status>('idle')
   const [errorMessage, setErrorMessage] = useState('')
+  const [archiveCount, setArchiveCount] = useState<number | null>(null)
+  const [archiveSummary, setArchiveSummary] = useState<ArchiveReencryptSummary | null>(null)
 
   const mismatch = newPassphrase.length > 0 && confirmPassphrase.length > 0 && newPassphrase !== confirmPassphrase
   const isValid = !mismatch && (newPassphrase === confirmPassphrase) && status !== 'submitting'
+
+  // Character archive bundles are encrypted under the passphrase, so changing
+  // it rewrites each one. Tell the operator how many, up front.
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/v1/files?category=ARCHIVE')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.files) setArchiveCount(data.files.length)
+      })
+      .catch(() => {
+        /* count is a courtesy; the change itself reports the real numbers */
+      })
+    return () => { cancelled = true }
+  }, [])
 
   const resetForm = useCallback(() => {
     setCurrentPassphrase('')
@@ -27,6 +50,7 @@ export function ChangePassphraseCard() {
 
     setStatus('submitting')
     setErrorMessage('')
+    setArchiveSummary(null)
 
     try {
       const res = await fetch('/api/v1/system/unlock?action=change-passphrase', {
@@ -47,6 +71,10 @@ export function ChangePassphraseCard() {
       }
 
       setStatus('success')
+      if (data.archives) {
+        setArchiveSummary(data.archives as ArchiveReencryptSummary)
+        setArchiveCount(data.archives.total >= 0 ? data.archives.total : archiveCount)
+      }
       resetForm()
 
       // Notify other components (e.g., AutoLockSettingsCard) that passphrase state changed
@@ -55,7 +83,9 @@ export function ChangePassphraseCard() {
       setStatus('error')
       setErrorMessage(err instanceof Error ? err.message : 'An unexpected error occurred')
     }
-  }, [isValid, currentPassphrase, newPassphrase, resetForm])
+  }, [isValid, currentPassphrase, newPassphrase, resetForm, archiveCount])
+
+  const archiveFailures = archiveSummary?.failures ?? []
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -64,6 +94,16 @@ export function ChangePassphraseCard() {
         re-encrypt your database — it only re-wraps the key with a new passphrase.
         Leave the new passphrase empty to remove passphrase protection entirely.
       </p>
+
+      {archiveCount !== null && archiveCount > 0 && (
+        <p className="qt-text-small qt-text-muted">
+          {archiveCount === 1
+            ? 'Your 1 archived-character bundle is sealed under this passphrase and will be rewritten to open with the new one.'
+            : `Your ${archiveCount} archived-character bundles are sealed under this passphrase and will each be rewritten to open with the new one.`}{' '}
+          This cannot be interrupted halfway without leaving some archives on the old
+          passphrase; if that happens, the ones left behind are named below.
+        </p>
+      )}
 
       <div>
         <label htmlFor="cp-current" className="block qt-text-label mb-2">
@@ -123,6 +163,28 @@ export function ChangePassphraseCard() {
       {status === 'success' && (
         <div className="qt-alert-success">
           Passphrase changed successfully. The new passphrase will be required on the next restart.
+          {archiveSummary && archiveSummary.reencrypted > 0 && archiveFailures.length === 0 && (
+            <> {archiveSummary.reencrypted === 1
+              ? 'Your archived-character bundle was rewritten under the new passphrase.'
+              : `All ${archiveSummary.reencrypted} archived-character bundles were rewritten under the new passphrase.`}</>
+          )}
+        </div>
+      )}
+
+      {status === 'success' && archiveFailures.length > 0 && (
+        <div className="qt-alert-error">
+          <p>
+            {archiveFailures.length === 1
+              ? 'One archived-character bundle could not be rewritten and still expects the old passphrase:'
+              : `${archiveFailures.length} archived-character bundles could not be rewritten and still expect the old passphrase:`}
+          </p>
+          <ul className="mt-1 list-disc list-inside">
+            {archiveFailures.map((f) => (
+              <li key={f.fileId || f.filename} className="qt-text-small">
+                {f.filename} — {f.reason}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

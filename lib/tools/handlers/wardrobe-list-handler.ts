@@ -15,8 +15,8 @@ import { getRepositories } from '@/lib/repositories/factory';
 import type { WardrobeListToolInput, WardrobeListToolOutput, WardrobeListItemResult } from '../wardrobe-list-tool';
 import { validateWardrobeListInput } from '../wardrobe-list-tool';
 import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
-import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
 import { resolveProjectMountPointIdsForChat } from '@/lib/mount-index/tiered-mount-pool';
+import { findEquippedSlots } from './wardrobe-handler-shared';
 
 /**
  * Context required for wardrobe list tool execution
@@ -44,24 +44,6 @@ export class WardrobeListError extends Error {
 }
 
 /**
- * Find every slot the item is equipped in. Slots are arrays now, so a single
- * item can occupy multiple slots (a multi-slot dress) and we want them all.
- */
-function findEquippedSlots(
-  itemId: string,
-  equippedSlots: EquippedSlots | null
-): string[] {
-  if (!equippedSlots) return [];
-  const slots: string[] = [];
-  for (const slot of WARDROBE_SLOT_TYPES) {
-    if ((equippedSlots[slot] ?? []).includes(itemId)) {
-      slots.push(slot);
-    }
-  }
-  return slots;
-}
-
-/**
  * Execute the wardrobe_list tool
  *
  * @param input - The tool input parameters
@@ -75,7 +57,8 @@ export async function executeWardrobeListTool(
   const repos = getRepositories();
 
   try {
-    if (!validateWardrobeListInput(input)) {
+    const parsed = validateWardrobeListInput(input);
+    if (!parsed) {
       logger.warn('Wardrobe list tool validation failed', {
         context: 'wardrobe-list-handler',
         userId: context.userId,
@@ -91,22 +74,17 @@ export async function executeWardrobeListTool(
       };
     }
 
-    const validatedInput = input as WardrobeListToolInput;
+    const validatedInput = parsed;
     const { type_filter, appropriateness_filter, include_equipped } = validatedInput;
 
-    // Merge the character's own wardrobe with shared archetypes (project +
-    // Quilltap General). Character items win on id collision so a personal
+    // The character's own wardrobe merged under the shared archetypes (project
+    // + Quilltap General). Character items win on id collision so a personal
     // override masks the shared item. (The group tier is a tracked follow-up —
     // the repo doesn't accept group mounts yet.)
     const projectMountPointIds = await resolveProjectMountPointIdsForChat(context.chatId);
-    const ownRaw = await repos.wardrobe.findByCharacterId(context.characterId);
-    const archetypesRaw = await repos.wardrobe.findArchetypes(false, { projectMountPointIds });
-
-    const byId = new Map<string, WardrobeItem>();
-    for (const item of archetypesRaw) byId.set(item.id, item);
-    for (const item of ownRaw) byId.set(item.id, item); // character overrides shared
-
-    const allItems = Array.from(byId.values()).filter((item) => !item.archivedAt);
+    const allItems = await repos.wardrobe.findWearablePoolForCharacter(context.characterId, {
+      projectMountPointIds,
+    });
 
     const equippedSlots: EquippedSlots | null = await repos.chats.getEquippedOutfitForCharacter(
       context.chatId,

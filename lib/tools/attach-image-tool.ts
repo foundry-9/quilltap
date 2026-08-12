@@ -33,8 +33,9 @@ export const attachImageToolDefinition = {
   },
 };
 
-export function validateAttachImageInput(input: unknown): input is AttachImageInput {
-  return attachImageToolInputSchema.safeParse(input).success;
+export function validateAttachImageInput(input: unknown): AttachImageInput | null {
+  const parsed = attachImageToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 /**

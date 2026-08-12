@@ -87,6 +87,7 @@ export const wardrobeReadToolDefinition = {
  */
 export function validateWardrobeReadInput(
   input: unknown
-): input is WardrobeReadToolInput {
-  return wardrobeReadToolInputSchema.safeParse(input).success
+): WardrobeReadToolInput | null {
+  const parsed = wardrobeReadToolInputSchema.safeParse(input)
+  return parsed.success ? parsed.data : null
 }

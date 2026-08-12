@@ -81,6 +81,36 @@
   }
 
   /**
+   * Pascal result - the outcome of a custom tool (pseudo-tool) roll, announced
+   * by Pascal the Croupier. The accent carries the outcome's semantic `state`
+   * so a success reads as a success at a glance; definition authors choose a
+   * state and never write any styling themselves.
+   *
+   * Built on the --qt-alert-* token families, which every bundled theme defines,
+   * so the four states stay legible without per-theme work.
+   */
+  .qt-pascal-result {
+    border-left: 3px solid var(--qt-alert-info-border);
+    padding-left: 0.75rem;
+  }
+
+  .qt-pascal-result--success {
+    border-left-color: var(--qt-alert-success-border);
+  }
+
+  .qt-pascal-result--partial {
+    border-left-color: var(--qt-alert-warning-border);
+  }
+
+  .qt-pascal-result--failure {
+    border-left-color: var(--qt-alert-error-border);
+  }
+
+  .qt-pascal-result--info {
+    border-left-color: var(--qt-alert-info-border);
+  }
+
+  /**
    * Silent message - inner thoughts and actions from a character in silent mode.
    * Distinguished from whispers by a dotted border (vs dashed) and a different
    * color scheme — muted teal/sage tones to suggest inward contemplation.
@@ -247,6 +277,21 @@
     white-space: nowrap;
   }
 
+  /**
+   * Whisper audience on an announcement bar or chip ("to Alice, Bob"). Wears
+   * the same ink as the message body's whisper label so a private aside reads
+   * the same whether it is collapsed to a chip or opened in full.
+   */
+  .qt-chat-system-bar-whisper {
+    flex: 0 1 auto;
+    min-width: 0;
+    color: var(--qt-chat-whisper-label-fg);
+    font-style: italic;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .qt-chat-system-bar-time {
     color: var(--qt-chat-system-bar-fg);
     opacity: 0.75;
@@ -321,6 +366,18 @@
     max-width: 22ch;
   }
 
+  /* Same cap for a long audience list — a whisper to five people must not push
+     the timestamp and chevron off the chip. */
+  .qt-chat-announcement-chip .qt-chat-system-bar-whisper {
+    max-width: 18ch;
+  }
+
+  /* A whispered announcement carries the whisper's border colour, so a private
+     aside is distinguishable from a public one before it is ever expanded. */
+  .qt-chat-announcement-chip-whisper {
+    border-color: var(--qt-chat-whisper-label-fg);
+  }
+
   /**
    * Importance dot before the sender name. Filled for high/medium, hollow for
    * low, so the eye lands on what matters (file changes, arrivals/departures)
@@ -345,6 +402,70 @@
   .qt-chat-announcement-dot-low {
     background: transparent;
     border-color: var(--qt-chat-announcement-dot-low);
+  }
+
+  /**
+   * Outcome dot for a Pascal roll announcement. A roll has a verdict of its own
+   * — success / partial / failure / info — and that verdict, not a generic
+   * importance tier, is what the reader is looking for. Filled with the solid
+   * --qt-alert-*-fg (the -border tints are alpha-thin and vanish at 8px);
+   * the bar's leading accent below uses the -border tints, as the Workbench and
+   * Proving Bench do.
+   */
+  .qt-chat-announcement-dot-outcome-success {
+    background: var(--qt-alert-success-fg);
+  }
+
+  .qt-chat-announcement-dot-outcome-partial {
+    background: var(--qt-alert-warning-fg);
+  }
+
+  .qt-chat-announcement-dot-outcome-failure {
+    background: var(--qt-alert-error-fg);
+  }
+
+  .qt-chat-announcement-dot-outcome-info {
+    background: var(--qt-alert-info-fg);
+  }
+
+  /**
+   * The bar/chip of a Pascal roll wears the same .qt-pascal-result accent as the
+   * Workbench's outcome rows and the Proving Bench's miniature, so one outcome
+   * reads identically wherever it is shown.
+   *
+   * These compound selectors only restate that accent: .qt-pascal-result is
+   * declared earlier in this file, and both wrappers set a `border` SHORTHAND
+   * (which resets border-left-color) at equal specificity, so the plain family
+   * would lose on source order. Nothing new is styled here — change the accent
+   * itself at .qt-pascal-result.
+   */
+  .qt-chat-system-bar.qt-pascal-result,
+  .qt-chat-announcement-chip.qt-pascal-result {
+    border-left-width: 3px;
+    border-left-color: var(--qt-alert-info-border);
+    /* Matches .qt-pascal-result's own padding-left, which the wrappers' `padding`
+       shorthand would otherwise win on source order. */
+    padding-left: 0.75rem;
+  }
+
+  .qt-chat-system-bar.qt-pascal-result--success,
+  .qt-chat-announcement-chip.qt-pascal-result--success {
+    border-left-color: var(--qt-alert-success-border);
+  }
+
+  .qt-chat-system-bar.qt-pascal-result--partial,
+  .qt-chat-announcement-chip.qt-pascal-result--partial {
+    border-left-color: var(--qt-alert-warning-border);
+  }
+
+  .qt-chat-system-bar.qt-pascal-result--failure,
+  .qt-chat-announcement-chip.qt-pascal-result--failure {
+    border-left-color: var(--qt-alert-error-border);
+  }
+
+  .qt-chat-system-bar.qt-pascal-result--info,
+  .qt-chat-announcement-chip.qt-pascal-result--info {
+    border-left-color: var(--qt-alert-info-border);
   }
 
   /**
@@ -516,6 +637,16 @@
   .qt-chat-message-content li,
   .qt-chat-message-content blockquote {
     color: inherit;
+  }
+
+  /* Rendered math (KaTeX) — chat messages, help docs, and file previews.
+     Wide display equations scroll in place instead of stretching their
+     container; a little vertical padding keeps tall scripts (integrals,
+     matrices) clear of neighbouring lines. */
+  .katex-display {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.25rem 0;
   }
 
   /* ==========================================================================
@@ -832,6 +963,7 @@
   .qt-lexical-contenteditable [contenteditable] {
     outline: none;
     min-height: 1.5em;
+    background: var(--color-background);
   }
 
   /**
@@ -925,6 +1057,24 @@
 
   .qt-lexical-li {
     margin: 0.1em 0;
+  }
+
+  /**
+   * Wrapper item for a sub-list. Lexical represents nesting as a list item
+   * whose only child is another list, so this <li> is structure rather than
+   * content — left to itself it draws the parent list's bullet right beside
+   * the sub-list's own first bullet. Ordered lists are unaffected: Lexical
+   * writes an explicit `value` on every real item and skips the wrapper, so
+   * hiding this marker doesn't disturb the numbering.
+   */
+  .qt-lexical-li-nested {
+    list-style-type: none;
+    margin: 0;
+  }
+
+  .qt-lexical-li-nested::before,
+  .qt-lexical-li-nested::after {
+    display: none;
   }
 
   /* Checklist items */
@@ -1073,7 +1223,10 @@
   }
 
   /**
-   * Container for RNG dropdown in gutter - needed for proper positioning
+   * Container for a dropdown in the gutter (RNG) - needed for proper
+   * positioning of the upward-opening popover. Custom tools no longer needs
+   * one: it opens a modal dialog rather than a popover, so its button sits in
+   * the grid unwrapped like the rest.
    */
   .qt-composer-gutter-rng {
     @apply relative;
@@ -1348,6 +1501,15 @@
   }
 
   /**
+   * List indent / outdent buttons - arrow glyphs sized to match the text labels
+   */
+  .qt-formatting-button-indent,
+  .qt-formatting-button-outdent {
+    font-size: 1.05rem;
+    line-height: 1;
+  }
+
+  /**
    * Source mode toggle button
    */
   .qt-formatting-button-source {
@@ -1505,6 +1667,23 @@
     padding: var(--qt-rp-ooc-padding);
     border-radius: var(--qt-rp-ooc-radius);
     display: inline;
+  }
+
+  /* Line-scoped rules (linePrefix / tagPrefix — e.g. a default `// OOC` line)
+     land one of these legacy chip classes on the BLOCK element itself. The
+     `display: inline` above is for inline narration spans; on a block it would
+     collapse every paragraph into one run and erase blank-line paragraph breaks.
+     Restore block flow when a chip lands on a block element. Mirrors the
+     qt-roleplay-* override in _roleplay.css. */
+  .qt-chat-message-content :is(p, blockquote, h1, h2, h3, h4, h5, h6):is(
+    .qt-chat-narration, .qt-chat-ooc, .qt-chat-inner-monologue
+  ) {
+    display: block;
+  }
+  .qt-chat-message-content li:is(
+    .qt-chat-narration, .qt-chat-ooc, .qt-chat-inner-monologue
+  ) {
+    display: list-item;
   }
 
   /* ==========================================================================
@@ -1863,6 +2042,34 @@
     background: var(--qt-hover-bg, color-mix(in srgb, var(--qt-text-primary) 10%, transparent));
   }
 
+  /** Compact qtap:// URL line shown under the document header */
+  .qt-doc-uri-row {
+    @apply flex items-center gap-2 px-4 py-1;
+    @apply flex-shrink-0;
+    border-bottom: 1px solid var(--qt-border);
+    background: color-mix(in srgb, var(--qt-content-bg) 95%, transparent);
+  }
+
+  .qt-doc-uri-label {
+    @apply text-[10px] font-semibold uppercase tracking-wide;
+    color: var(--qt-text-muted);
+  }
+
+  .qt-doc-uri-value {
+    @apply min-w-0 flex-1 truncate text-xs font-mono;
+    color: var(--qt-text-secondary);
+  }
+
+  .qt-doc-uri-copy-button {
+    @apply p-1 rounded transition-colors;
+    color: var(--qt-text-secondary);
+  }
+
+  .qt-doc-uri-copy-button:hover {
+    color: var(--qt-text-primary);
+    background: var(--qt-hover-bg, color-mix(in srgb, var(--qt-text-primary) 10%, transparent));
+  }
+
   /**
    * Document editor toolbar
    * Formatting buttons for the document pane, always visible
@@ -1883,6 +2090,7 @@
     @apply overflow-y-auto;
     position: relative;
     padding: 1rem 1.5rem;
+    background: var(--color-background);
   }
 
   /**
@@ -2272,6 +2480,23 @@
        scoped override of the global card padding (default 1.25rem). */
     --qt-card-padding: 0.5rem;
     @apply overflow-hidden flex flex-col;
+  }
+
+  /**
+   * Narrow-pane overlay: in a split/narrow pane the expanded sidebar floats over
+   * the chat (anchored to the relatively-positioned .qt-chat-layout) instead of
+   * squeezing it. A click outside, or Escape, collapses it back to the mini
+   * strip (handled in ChatSidebar). Wide/full panes never use this.
+   */
+  .qt-chat-sidebar.qt-chat-sidebar-overlay {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    max-width: 100%;
+    box-shadow: var(--qt-chat-sidebar-overlay-shadow,
+      -8px 0 24px -8px color-mix(in srgb, var(--color-foreground) 30%, transparent));
   }
 
   /**
@@ -2888,6 +3113,53 @@
   }
 
   /* ==========================================================================
+     THINKING INDICATOR
+     The quill that rocks while a response is awaited, streaming, or a tool is
+     still running (see components/chat/QuillAnimation.tsx). The GLYPH is the
+     themeable `thinking` icon; this class owns only the MOTION, so a theme can
+     retune the two independently:
+
+       - swap the glyph:   manifest `icons: { "thinking": "..." }`
+       - retune the rock:  override --qt-thinking-* below
+       - replace it whole: re-declare .qt-thinking-indicator (any animation)
+
+     The default rock sweeps between upright and the quill's natural writing
+     lean, which is why the rest angle is negative — the `thinking` glyph is
+     drawn on the diagonal, nib to the lower left.
+
+     It pivots on the NIB, not the centre: the default origin is the nib's
+     position in the default glyph, (3,21) of its 24x24 viewBox = 12.5% 87.5%.
+     The point that would be touching the page therefore stays put and the
+     feather swings above it, the way a held quill actually moves. A theme
+     shipping a differently-drawn glyph must move this origin to ITS nib —
+     otherwise the pivot lands on empty space and the whole thing orbits.
+
+     Consequence worth knowing: a quill is longer than the box is tall, so at
+     the upright extreme the feather tip paints a little above the element's
+     layout box. Nothing clips it (mask/background paint rides the transform),
+     and every call site has slack for it, but don't wrap this in an
+     overflow: hidden container.
+     ========================================================================== */
+
+  .qt-thinking-indicator {
+    animation: qt-thinking-rock var(--qt-thinking-duration, 1.2s)
+               var(--qt-thinking-easing, ease-in-out) infinite;
+    transform-origin: var(--qt-thinking-origin, 12.5% 87.5%);
+  }
+
+  @keyframes qt-thinking-rock {
+    0%, 100% { transform: rotate(var(--qt-thinking-angle-rest, -45deg)); }
+    50%      { transform: rotate(var(--qt-thinking-angle-lean, 0deg)); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .qt-thinking-indicator {
+      animation: none;
+      transform: rotate(var(--qt-thinking-angle-rest, -45deg));
+    }
+  }
+
+  /* ==========================================================================
      TERMINAL — IN-CHAT EMBED, POP-OUT PAGE, AND PANE SURFACES
      A terminal carries its own identity (dark by default) regardless of the
      surrounding theme's light/dark mode. Themes may re-tint these via the
@@ -3041,4 +3313,38 @@
   max-width: 100%;
   padding-left: 1rem;
   padding-right: 1rem;
+}
+
+/* ==========================================================================
+   ANSWER-CONFIRMATION BADGE
+   A quiet per-message indicator; the glyph carries the state, the title holds
+   the discrepancy notes / original text on hover. Metadata, not an alarm.
+   ========================================================================== */
+
+.qt-confirmation-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 0.375rem;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  line-height: 1.4;
+  cursor: help;
+  color: var(--qt-text-secondary-fg, var(--qt-text-secondary));
+  opacity: 0.8;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.qt-confirmation-badge-glyph {
+  font-weight: 600;
+}
+
+.qt-confirmation-badge[data-confirmation-state="stood-by"] {
+  color: var(--qt-warning-box-fg, var(--qt-text-secondary-fg));
+  opacity: 1;
+}
+
+.qt-confirmation-badge[data-confirmation-state="amended"] {
+  opacity: 1;
 }

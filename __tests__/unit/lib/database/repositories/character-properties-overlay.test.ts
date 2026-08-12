@@ -52,10 +52,13 @@ import {
   writeCharacterVaultManagedFields,
   projectVaultWardrobe,
   readCharacterVaultWardrobe,
+  readCharacterVaultMetadata,
+  applyDocumentStoreWriteOverlay,
   CharacterVaultPropertiesSchema,
   CharacterVaultPhysicalPromptsSchema,
   CharacterVaultUnavailableError,
   CHARACTER_PROPERTIES_JSON_PATH,
+  CHARACTER_METADATA_JSON_PATH,
   CHARACTER_DESCRIPTION_MD_PATH,
   CHARACTER_PERSONALITY_MD_PATH,
   CHARACTER_EXAMPLE_DIALOGUES_MD_PATH,
@@ -129,6 +132,7 @@ const VALID_VAULT_PROPS = {
   title: 'vault-title',
   firstMessage: 'vault-first',
   talkativeness: 0.8,
+  canChooseOutfit: false,
 };
 
 const VALID_VAULT_PHYSICAL_PROMPTS = {
@@ -329,6 +333,113 @@ describe('applyDocumentStoreOverlay — properties.json overlay', () => {
     const [result] = await applyDocumentStoreOverlay([char]);
     expect(result.title).toBe('db-title');
     expect(result.talkativeness).toBe(0.5);
+  });
+});
+
+describe('applyDocumentStoreOverlay — metadata.json overlay', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const SHEET = {
+    hasAnsibleAccess: true,
+    clearanceLevel: 3,
+    faction: 'Ordo Aurum',
+    knownLanguages: ['Trade Cant', 'High Gothic'],
+    dossier: { rank: 'adept' },
+    lastSeen: null,
+  };
+
+  async function hydrate(metadataContent?: string) {
+    mockRepoPaths(
+      metadataContent === undefined
+        ? {}
+        : { [CHARACTER_METADATA_JSON_PATH]: [{ mountPointId: 'mp-1', content: metadataContent }] },
+    );
+    const [result] = await applyDocumentStoreOverlay([
+      makeCharacter({ id: 'a', characterDocumentMountPointId: 'mp-1' }),
+    ]);
+    return result;
+  }
+
+  it('hydrates the sheet, preserving every JSON value type', async () => {
+    const result = await hydrate(JSON.stringify(SHEET));
+    expect(result.metadata).toEqual(SHEET);
+  });
+
+  /**
+   * metadata.json is emphatically NOT a second keystone. Only properties.json
+   * gets to declare a vault broken; every case below is either a vault that
+   * predates the feature or a fat-fingered edit, and hollowing the character
+   * over either would be wildly out of proportion.
+   */
+  it('hydrates {} when the file is absent, rather than throwing', async () => {
+    // The normal state for every vault provisioned before this feature existed.
+    const result = await hydrate();
+    expect(result.metadata).toEqual({});
+    // And the rest of the character still hydrates.
+    expect(result.title).toBe('vault-title');
+  });
+
+  it.each([
+    ['the JSON is invalid', '{ "faction": '],
+    ['the top level is an array', '["Ordo Aurum"]'],
+    ['the top level is a bare string', '"Ordo Aurum"'],
+    ['the top level is null', 'null'],
+    ['the file is empty', ''],
+  ])('hydrates {} when %s', async (_label, content) => {
+    const result = await hydrate(content);
+    expect(result.metadata).toEqual({});
+  });
+
+  it('does not hollow the character over an unparseable sheet', async () => {
+    mockRepoPaths({
+      [CHARACTER_METADATA_JSON_PATH]: [{ mountPointId: 'mp-1', content: '{ broken' }],
+      [CHARACTER_DESCRIPTION_MD_PATH]: [{ mountPointId: 'mp-1', content: 'vault-description' }],
+    });
+    const [result] = await applyDocumentStoreOverlay([
+      makeCharacter({ id: 'a', characterDocumentMountPointId: 'mp-1' }),
+    ]);
+    expect(result.metadata).toEqual({});
+    expect(result.description).toBe('vault-description');
+    expect(result.title).toBe('vault-title');
+  });
+
+  it('hydrates the sheet through the single-character path too', async () => {
+    mockRepoPaths({
+      [CHARACTER_METADATA_JSON_PATH]: [{ mountPointId: 'mp-1', content: JSON.stringify(SHEET) }],
+    });
+    const result = await applyDocumentStoreOverlayOne(
+      makeCharacter({ id: 'a', characterDocumentMountPointId: 'mp-1' }),
+    );
+    expect(result!.metadata).toEqual(SHEET);
+  });
+
+  it('leaves a character with no linked vault entirely alone', async () => {
+    const char = makeCharacter({ id: 'a', characterDocumentMountPointId: null });
+    const [result] = await applyDocumentStoreOverlay([char]);
+    expect(result.metadata).toBeUndefined();
+  });
+});
+
+describe('readCharacterVaultMetadata', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('returns the parsed sheet', async () => {
+    readDatabaseDocumentMock.mockResolvedValue({ content: '{"faction":"Ordo Aurum"}' } as any);
+    expect(await readCharacterVaultMetadata('mp-1', 'char-1')).toEqual({ faction: 'Ordo Aurum' });
+  });
+
+  it('returns null when the file is missing', async () => {
+    readDatabaseDocumentMock.mockRejectedValue(new DatabaseStoreError('nope', 'NOT_FOUND'));
+    expect(await readCharacterVaultMetadata('mp-1', 'char-1')).toBeNull();
+  });
+
+  it('returns null when the file is not a JSON object', async () => {
+    readDatabaseDocumentMock.mockResolvedValue({ content: '["nope"]' } as any);
+    expect(await readCharacterVaultMetadata('mp-1', 'char-1')).toBeNull();
   });
 });
 
@@ -1019,9 +1130,10 @@ describe('applyDocumentStoreOverlay — batching', () => {
     ];
 
     const result = await applyDocumentStoreOverlay(chars);
-    // 8 single-file overlay paths: properties.json, identity.md, description.md,
-    // manifesto.md, personality.md, example-dialogues.md, physical-description.md, physical-prompts.json
-    expect(findManyByMountPointsAndPath).toHaveBeenCalledTimes(8);
+    // 9 single-file overlay paths: properties.json, metadata.json, identity.md,
+    // description.md, manifesto.md, personality.md, example-dialogues.md,
+    // physical-description.md, physical-prompts.json
+    expect(findManyByMountPointsAndPath).toHaveBeenCalledTimes(9);
     // 2 directory overlays: Prompts, Scenarios
     expect(findManyByMountPointsInFolder).toHaveBeenCalledTimes(2);
     expect(result[0].title).toBe('vault-a');
@@ -1107,6 +1219,40 @@ describe('applyDocumentStoreOverlayOne', () => {
     });
     const result = await applyDocumentStoreOverlayOne(char);
     expect(result?.title).toBe(VALID_VAULT_PROPS.title);
+  });
+
+  it('overlays archived characters from their kept vault (§4.2a — no hollow tombstones)', async () => {
+    // Archiving prunes the vault but keeps every managed-field document, so an
+    // archived character must hydrate exactly like a live one. The old
+    // archived short-circuit here would hand back a hollow row — the very
+    // outcome prune-in-place exists to avoid.
+    mockRepoPaths({
+      [CHARACTER_PROPERTIES_JSON_PATH]: [
+        { mountPointId: 'mp-1', content: JSON.stringify(VALID_VAULT_PROPS) },
+      ],
+    });
+    const char = makeCharacter({
+      id: 'a',
+      characterDocumentMountPointId: 'mp-1',
+      archivedAt: '2026-08-10T00:00:00.000Z',
+    });
+    const result = await applyDocumentStoreOverlayOne(char);
+    expect(result?.title).toBe(VALID_VAULT_PROPS.title);
+    expect(result?.archivedAt).toBe('2026-08-10T00:00:00.000Z');
+  });
+
+  it('still throws for an archived character whose vault is genuinely broken', async () => {
+    // A broken archived vault is a real fault and surfaces as one — it is not
+    // silently hollowed the way the old short-circuit did.
+    mockRepoPaths({ [CHARACTER_PROPERTIES_JSON_PATH]: [] });
+    const char = makeCharacter({
+      id: 'a',
+      characterDocumentMountPointId: 'mp-1',
+      archivedAt: '2026-08-10T00:00:00.000Z',
+    });
+    await expect(applyDocumentStoreOverlayOne(char)).rejects.toThrow(
+      CharacterVaultUnavailableError,
+    );
   });
 });
 
@@ -1381,6 +1527,108 @@ describe('CharacterVaultPhysicalPromptsSchema', () => {
   });
 });
 
+describe('applyDocumentStoreWriteOverlay — corrupt properties.json (Bug 8)', () => {
+  // The six fields properties.json owns (pronouns, aliases, title, firstMessage,
+  // talkativeness, canChooseOutfit) live ONLY in that file post-4.6. A
+  // read-modify-write save that treated a present-but-corrupt file as absent
+  // would seed empty defaults over it and clobber all six, permanently and
+  // silently. The write path must refuse instead — matching the vault's
+  // established "no silent hollow" failure semantics.
+  const CHAR_ID = 'char-corrupt';
+  const MOUNT_ID = 'mount-corrupt';
+
+  function wireVaultCharacter() {
+    getRepositoriesMock.mockReturnValue({
+      characters: {
+        findByIdRaw: jest.fn().mockResolvedValue({
+          id: CHAR_ID,
+          name: 'Tess',
+          characterDocumentMountPointId: MOUNT_ID, // → hasLinkedVault() === true
+        }),
+      },
+    });
+  }
+
+  function propsWrites() {
+    return writeDatabaseDocumentMock.mock.calls.filter(
+      ([, relPath]) => relPath === CHARACTER_PROPERTIES_JSON_PATH,
+    );
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    wireVaultCharacter();
+  });
+
+  it('refuses the write when properties.json is truncated mid-token — throws, file untouched', async () => {
+    // A real iCloud-conflict / interrupted-write artifact: a valid JSON prefix,
+    // then nothing.
+    readDatabaseDocumentMock.mockResolvedValue({
+      content: '{ "pronouns": { "subject": "she", "objec',
+      mtime: 0,
+      size: 40,
+    });
+
+    await expect(
+      applyDocumentStoreWriteOverlay(CHAR_ID, { title: 'A New Title' }),
+    ).rejects.toBeInstanceOf(CharacterVaultUnavailableError);
+
+    // The six-field file was NOT overwritten with seeded defaults.
+    expect(propsWrites()).toHaveLength(0);
+  });
+
+  it('names the file and calls it unparseable in the error', async () => {
+    readDatabaseDocumentMock.mockResolvedValue({ content: '{ broken', mtime: 0, size: 8 });
+    await expect(
+      applyDocumentStoreWriteOverlay(CHAR_ID, { title: 'X' }),
+    ).rejects.toThrow(/properties\.json unparseable/);
+  });
+
+  it('refuses when the body fails schema validation (talkativeness out of range)', async () => {
+    readDatabaseDocumentMock.mockResolvedValue({
+      content: JSON.stringify({ ...VALID_VAULT_PROPS, talkativeness: 5 }),
+      mtime: 0,
+      size: 80,
+    });
+    await expect(
+      applyDocumentStoreWriteOverlay(CHAR_ID, { title: 'X' }),
+    ).rejects.toBeInstanceOf(CharacterVaultUnavailableError);
+    expect(propsWrites()).toHaveLength(0);
+  });
+
+  it('still seeds defaults when the file is genuinely absent (NOT_FOUND)', async () => {
+    readDatabaseDocumentMock.mockRejectedValue(
+      new (DatabaseStoreError as any)('not found', 'NOT_FOUND'),
+    );
+    const dbPatch = await applyDocumentStoreWriteOverlay(CHAR_ID, { title: 'Seeded Title' });
+    // The patch was routed to the vault and stripped from the DB-bound patch.
+    expect('title' in dbPatch).toBe(false);
+    const [call] = propsWrites();
+    expect(call).toBeDefined();
+    const written = JSON.parse(call![2] as string);
+    expect(written.title).toBe('Seeded Title');
+    // Unspecified fields fall to their fresh-vault defaults.
+    expect(written.talkativeness).toBe(0.5);
+    expect(written.canChooseOutfit).toBe(false);
+  });
+
+  it('merges the patch over a healthy present file, preserving untouched fields', async () => {
+    readDatabaseDocumentMock.mockResolvedValue({
+      content: JSON.stringify(VALID_VAULT_PROPS),
+      mtime: 0,
+      size: 120,
+    });
+    await applyDocumentStoreWriteOverlay(CHAR_ID, { title: 'Merged Title' });
+    const [call] = propsWrites();
+    const written = JSON.parse(call![2] as string);
+    expect(written.title).toBe('Merged Title');
+    // Everything else survives from the file, not reset to defaults.
+    expect(written.aliases).toEqual(VALID_VAULT_PROPS.aliases);
+    expect(written.firstMessage).toBe(VALID_VAULT_PROPS.firstMessage);
+    expect(written.talkativeness).toBe(VALID_VAULT_PROPS.talkativeness);
+  });
+});
+
 describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -1402,6 +1650,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
       title: 'Detective',
       firstMessage: 'Hello there.',
       talkativeness: 0.7,
+      metadata: { faction: 'Ordo Aurum' },
       description: 'DB desc',
       personality: 'DB personality',
       exampleDialogues: 'DB dialogues',
@@ -1425,7 +1674,10 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
     });
 
     expect(result.physicalSkippedNoPrimary).toBe(false);
-    expect(result.singleFileWriteCount).toBe(8);
+    // properties.json, metadata.json, the five markdown files, and the
+    // physical-* pair.
+    expect(result.singleFileWriteCount).toBe(9);
+    expect(JSON.parse(getWrite(CHARACTER_METADATA_JSON_PATH)!)).toEqual({ faction: 'Ordo Aurum' });
 
     const props = JSON.parse(getWrite(CHARACTER_PROPERTIES_JSON_PATH)!);
     expect(props).toEqual({
@@ -1434,6 +1686,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
       title: 'Detective',
       firstMessage: 'Hello there.',
       talkativeness: 0.7,
+      canChooseOutfit: false,
     });
 
     expect(getWrite(CHARACTER_DESCRIPTION_MD_PATH)).toBe('DB desc');
@@ -1458,6 +1711,41 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
     expect(writtenPaths.some((p) => p.startsWith('Outfits/'))).toBe(false);
   });
 
+  it('projects a populated fact sheet into metadata.json', async () => {
+    // The link import depends on: `create()` hands the validated character
+    // (metadata and all) to ensureCharacterVault, which projects it here. If
+    // this write ever stopped carrying `metadata`, an imported .qtap would
+    // silently arrive with an empty sheet.
+    const sheet = { hasAnsibleAccess: true, clearanceLevel: 3, knownLanguages: ['Trade Cant'] };
+    const character = makeCharacter({ id: 'char-meta', physicalDescription: null, metadata: sheet });
+
+    await writeCharacterVaultManagedFields('mount-meta', { character });
+
+    expect(JSON.parse(getWrite(CHARACTER_METADATA_JSON_PATH)!)).toEqual(sheet);
+  });
+
+  it('projects an explicitly empty fact sheet', async () => {
+    const character = makeCharacter({ id: 'char-empty-meta', physicalDescription: null, metadata: {} });
+    await writeCharacterVaultManagedFields('mount-empty-meta', { character });
+    expect(JSON.parse(getWrite(CHARACTER_METADATA_JSON_PATH)!)).toEqual({});
+  });
+
+  it.each([
+    ['carries no metadata at all', undefined],
+    ['carries a null metadata', null],
+  ])('does not touch metadata.json when the character %s', async (_label, metadata) => {
+    // `metadata` has no DB column, so a RAW character row can never carry one —
+    // and the startup backfill's repopulate path projects exactly such rows.
+    // Writing `{}` on absence would erase a fact sheet this caller never saw.
+    // Absence means "no opinion", not "empty". The scaffold and the startup
+    // backfill are what guarantee the file exists.
+    const character = makeCharacter({ id: 'char-raw', physicalDescription: null, metadata });
+
+    await writeCharacterVaultManagedFields('mount-raw', { character });
+
+    expect(getWrite(CHARACTER_METADATA_JSON_PATH)).toBeUndefined();
+  });
+
   it('writes empty strings / nulls through for characters with sparse fields', async () => {
     const character = makeCharacter({
       id: 'char-sparse',
@@ -1478,6 +1766,9 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
     });
 
     expect(result.physicalSkippedNoPrimary).toBe(true);
+    // properties.json and the five markdown files; the physical-* pair is
+    // skipped for want of a physical description, and metadata.json for want
+    // of any metadata to project (see below).
     expect(result.singleFileWriteCount).toBe(6);
 
     const props = JSON.parse(getWrite(CHARACTER_PROPERTIES_JSON_PATH)!);
@@ -1487,6 +1778,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
       title: null,
       firstMessage: null,
       talkativeness: 0.5,
+      canChooseOutfit: false,
     });
     expect(getWrite(CHARACTER_DESCRIPTION_MD_PATH)).toBe('');
     expect(getWrite(CHARACTER_PERSONALITY_MD_PATH)).toBe('');

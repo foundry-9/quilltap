@@ -54,6 +54,7 @@ export const sendMailToolDefinition = {
   },
 };
 
-export function validateSendMailInput(input: unknown): input is SendMailToolInput {
-  return sendMailToolInputSchema.safeParse(input).success;
+export function validateSendMailInput(input: unknown): SendMailToolInput | null {
+  const parsed = sendMailToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }

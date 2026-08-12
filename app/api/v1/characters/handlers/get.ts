@@ -8,11 +8,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { enrichWithDefaultImage } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { serverError } from '@/lib/api/responses';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 export async function handleGet(
   req: NextRequest,
-  ctx: AuthenticatedContext
+  ctx: RequestContext
 ): Promise<NextResponse> {
   const { user, repos } = ctx;
 
@@ -20,6 +20,17 @@ export async function handleGet(
     let characters = await repos.characters.findByUserId(user.id);
 
     const { searchParams } = req.nextUrl;
+
+    // Archived filter — the single chokepoint for every picker and roster
+    // (character-archive spec §5.1). Default excludes tombstones so no
+    // consumer offers an archived character for a chat, group, mail, or
+    // image dialog; the Aurora roster opts in with include/only.
+    const archivedFilter = searchParams.get('archived');
+    if (archivedFilter === 'only') {
+      characters = characters.filter((c) => Boolean(c.archivedAt));
+    } else if (archivedFilter !== 'include') {
+      characters = characters.filter((c) => !c.archivedAt);
+    }
 
     // Filter by NPC status
     const npcFilter = searchParams.get('npc');
@@ -65,6 +76,7 @@ export async function handleGet(
           isFavorite: character.isFavorite,
           controlledBy: character.controlledBy ?? 'llm',
           canBeCarina: character.canBeCarina ?? false,
+          canChooseOutfit: character.canChooseOutfit ?? false,
           defaultConnectionProfileId: character.defaultConnectionProfileId || null,
           defaultPartnerId: character.defaultPartnerId || null,
           defaultPartnerName,
@@ -73,6 +85,7 @@ export async function handleGet(
           defaultSystemPromptId: character.defaultSystemPromptId || null,
           defaultImageProfileId: character.defaultImageProfileId || null,
           npc: character.npc ?? false,
+          archivedAt: character.archivedAt ?? null,
           createdAt: character.createdAt,
           tags: character.tags || [],
           updatedAt: character.updatedAt,

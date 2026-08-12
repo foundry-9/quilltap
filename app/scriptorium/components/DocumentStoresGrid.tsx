@@ -19,6 +19,8 @@ interface DocumentStoresGridProps {
   onScanClick: (storeId: string) => void
   onConvertClick: (store: DocumentStore) => void
   onDeconvertClick: (store: DocumentStore) => void
+  /** When provided (workspace tab), open the store in place instead of routing. */
+  onOpenStore?: (storeId: string) => void
 }
 
 export function DocumentStoresGrid({
@@ -30,6 +32,7 @@ export function DocumentStoresGrid({
   onScanClick,
   onConvertClick,
   onDeconvertClick,
+  onOpenStore,
 }: DocumentStoresGridProps) {
   const router = useRouter()
 
@@ -38,7 +41,8 @@ export function DocumentStoresGrid({
     if (target.closest('button') || target.closest('a')) {
       return
     }
-    router.push(`/scriptorium/${storeId}`)
+    if (onOpenStore) onOpenStore(storeId)
+    else router.push(`/scriptorium/${storeId}`)
   }
 
   if (stores.length === 0) {

@@ -107,6 +107,11 @@ const cheapModels = {
  * at request time in `applyProfileParameters`. GLM models stream their
  * chain-of-thought as `reasoning_content` ONLY when thinking is enabled —
  * with no toggle the Salon's thinking block stays empty.
+ *
+ * `reasoning_effort` dials back GLM-5.2's thinking effort. It is stored as a
+ * flat enum string and forwarded verbatim, but ONLY on glm-5.2-and-newer
+ * (the provider gates it). Left blank, glm-5.2 still gets `high` applied in
+ * the provider — deliberately, to undo the API's expensive `max` default.
  */
 const optionsSchema: ProviderOptionsSchema = {
   groups: [
@@ -124,6 +129,20 @@ const optionsSchema: ProviderOptionsSchema = {
             { value: '', label: '(model default)' },
             { value: 'enabled', label: 'Enabled' },
             { value: 'disabled', label: 'Disabled' },
+          ],
+        },
+        {
+          key: 'reasoning_effort',
+          label: 'Reasoning Effort',
+          type: 'enum',
+          default: '',
+          helpText:
+            "A dial for how hard glm-5.2 cogitates before it speaks (thinking must be lit; lesser models pay it no heed). Minimal all but silences the rumination; High and Max open the throttle — and mind that low and medium quietly fold up to High, xhigh up to Max. Leave it at (model default) and glm-5.2 still sets to High of its own accord, sparing you the API's spendthrift Max.",
+          enumValues: [
+            { value: '', label: '(model default)' },
+            { value: 'minimal', label: 'Minimal' },
+            { value: 'high', label: 'High' },
+            { value: 'max', label: 'Max' },
           ],
         },
       ],

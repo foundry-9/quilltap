@@ -120,6 +120,7 @@ Each character carries a private vault in the Scriptorium — a small database-b
 | Vault file | What it replaces |
 |---|---|
 | `properties.json` | **pronouns**, **aliases**, **title**, **first message**, **talkativeness** |
+| `metadata.json` | The character's **fact sheet** — a flat object of keys you invent yourself, answering to no field in the editor. See the note below. |
 | `identity.md` | **Identity** (the surface, outside-view prose field) |
 | `description.md` | **Description** (the acquaintance-view prose field) |
 | `manifesto.md` | **Manifesto** (the axiomatic-core, load-bearing-truth prose field) |
@@ -148,6 +149,30 @@ By default, every one of these is read from the character's database row — the
 **A note on physical descriptions.** The `physical-description.md` and `physical-prompts.json` overlays target the **first** physical description (the one at index 0 — typically your character's default). Subsequent descriptions remain database-canonical. The overlay requires at least one physical description already present in the database; if your character has none, populate the first description the usual way in the Descriptions tab before filling in the vault files.
 
 **A note on `Prompts/` and `Scenarios/`.** Each directory is read as a whole set — when the overlay is on and the folder holds at least one parseable file, the vault listing entirely replaces the character's database-backed array. An empty or malformed folder falls back to the database. Prompt files require YAML frontmatter naming them; a file that lacks frontmatter (or a `name` field) is quietly skipped while its siblings carry on. Scenario files want a `# Scenario Title` at the top, though if one is missing Quilltap will use the filename (without the `.md`) rather than drop the file entirely. Identifiers for synthesized prompts and scenarios are derived deterministically from the mount point and the file's relative path, so a chat's selected prompt or default scenario keeps its reference across reads as long as the filename doesn't change.
+
+**A note on `metadata.json` — the fact sheet.** Every other file in the vault answers to some field the Aurora editor already knows about. `metadata.json` answers to nothing at all: it is a single JSON object of whatever keys you care to invent, and Quilltap has not the faintest opinion about any of them.
+
+```json
+{
+  "hasAnsibleAccess": true,
+  "clearanceLevel": 3,
+  "faction": "Ordo Aurum",
+  "knownLanguages": ["Trade Cant", "High Gothic"]
+}
+```
+
+Booleans, numbers, strings, lists, nested objects — any JSON value is welcome. There are no reserved keys and no schema to satisfy; the only rule is that the file must hold an **object** (a `{ … }`), not a list or a bare value.
+
+A few points of etiquette worth knowing:
+
+- **You are the only author.** No generation system will ever write here — not character creation, not summoning from lore, not the optimizer. Nothing invents a fact about your character behind your back, and nothing tidies away a key you meant to keep.
+- **It is not a prompt field.** The fact sheet is never injected into any character's context. A model does not read your character's clearance level merely by being your character; it must go and look, like anyone else.
+- **It is an ordinary vault file for all that.** A character with **system transparency** enabled may read — and edit — `metadata.json` through the `doc_*` tools, their own and their tablemates', exactly as with any other document in the vault. An opaque character cannot see it at all. No new permissions, no special cases.
+- **The file manager is the editing desk.** There is no form for it in the editor (yet); open the character's vault in the Scriptorium and edit the JSON directly.
+- **Its absence is not a fault.** Characters created before the fact sheet existed simply have no such file, and Quilltap reads that as an empty sheet rather than a broken vault. New characters are seeded with `{}`. Should the file ever fail to parse — a comma out of place at midnight — the sheet reads as empty for that reading and a warning goes to the log; the rest of your character is entirely undisturbed.
+- **Saving through the API replaces the whole object.** The file is one field's property, so a `metadata` write is the new sheet entire, not a merge into the old one. Editing the file by hand, of course, does exactly what you'd expect.
+
+**What it is for.** The fact sheet exists so that [custom tools](custom-tools.md) may consult it: an outcome table can branch on `hasAnsibleAccess`, so the same lock opens for the character carrying the key and stays shut for everyone else. Anything else you file there is yours to use as you see fit.
 
 **A note on example dialogues.** An *empty* `example-dialogues.md` is a perfectly valid state — it means "no examples," and Quilltap treats it accordingly rather than falling back to the database. If you genuinely want the database value to show through, delete the file entirely; presence of the file (even at zero bytes) is what tells the overlay to take over.
 

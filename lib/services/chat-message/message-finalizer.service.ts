@@ -24,7 +24,17 @@ import type { getRepositories } from '@/lib/repositories/factory'
 import type { ChatMetadataBase, Character, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
 import type { GeneratedImage, NextSpeakerInfo, ProcessMessageResult, StreamingState, CompressionContext, TriggerContext, ToolMessage, ReasoningSegment } from './types'
 import { saveToolMessages, type ToolWhisperContext } from './tool-execution.service'
-import { encodeDoneEvent, encodeCarinaAnswerEvent, safeEnqueue } from './streaming.service'
+import { encodeDoneEvent, encodeCarinaAnswerEvent, encodeStatusEvent, encodeConfirmationResultEvent, safeEnqueue } from './streaming.service'
+import {
+  isAnswerConfirmationActive,
+  isUserDrivenTurn,
+  hasCheckableInputs,
+  gatherConfirmationInputs,
+  findLatestCommonplaceWhisper,
+  buildRecentConversationContext,
+  runAnswerConfirmation,
+  type AnswerConfirmationOverride,
+} from './answer-confirmation.service'
 import {
   triggerTurnMemoryExtraction,
   triggerContextSummaryCheck,
@@ -184,12 +194,114 @@ export async function finalizeMessageResponse({
     })
   }
 
+  // ==========================================================================
+  // Answer confirmation (consistency check + re-affirmation)
+  // ==========================================================================
+  // Between response-cleaning and persistence: vet a character's tool-using
+  // reply against what it was told (Commonplace Book whisper) and looked up
+  // (in-scope read tools) this turn. Annotates the message (and may replace its
+  // text with a re-affirmation rewrite). Never blocks the turn; any failure
+  // degrades to `confirmed:null`. See answer-confirmation.service.ts.
+  const assistantMessageId = preGeneratedAssistantMessageId || crypto.randomUUID()
+  let confirmed: boolean | null | undefined
+  let confirmationRevised: boolean | null | undefined
+  let confirmationNotes: string | null | undefined
+  let confirmationOriginalContent: string | null | undefined
+
+  const isSilentTurn = characterParticipant.status === 'silent'
+  if (isUserDrivenTurn(chat, characterParticipant.id)) {
+    // A user-controlled/impersonated turn: the human may have sourced facts out
+    // of band, so the system can neither confirm nor deny. Explicit null (≠ the
+    // undefined "feature off" state).
+    confirmed = null
+    logger.debug('Answer confirmation: user-driven turn, marking unverifiable', { chatId })
+  } else if (!isSilentTurn) {
+    const globalEnabled = chatSettings?.answerConfirmationSettings?.enabled === true
+    const chatOverride = chat.answerConfirmationOverride as AnswerConfirmationOverride
+    let projectOverride: AnswerConfirmationOverride
+    if (!chatOverride && chat.projectId) {
+      const project = await repos.projects.findById(chat.projectId).catch(() => null)
+      projectOverride = (project?.answerConfirmationOverride as AnswerConfirmationOverride) ?? undefined
+    }
+    if (isAnswerConfirmationActive(chatOverride, projectOverride, globalEnabled)) {
+      const priorMessages = await repos.chats.getMessages(chatId)
+      const priorEvents = priorMessages.filter(
+        (m): m is typeof m & { type: 'message' } => m.type === 'message'
+      ) as unknown as MessageEvent[]
+      const whisper = findLatestCommonplaceWhisper(priorEvents, characterParticipant.id)
+      if (hasCheckableInputs(whisper, toolMessages)) {
+        const reference = gatherConfirmationInputs(whisper, toolMessages)
+        if (reference) {
+          // Recent live conversation, so any re-affirmation rewrite stays anchored
+          // to THIS scene instead of drifting into an old conversation the
+          // reference material may quote.
+          const conversationContext = buildRecentConversationContext(
+            priorEvents,
+            chat.participants ?? [],
+            participantCharacters,
+          )
+          safeEnqueue(controller, encodeStatusEvent(encoder, {
+            stage: 'confirming',
+            message: 'Confirming…',
+            characterName: character.name,
+            characterId: character.id,
+          }))
+          const outcome = await runAnswerConfirmation({
+            reply: cleanedResponse,
+            reference,
+            userId,
+            chatId,
+            messageId: assistantMessageId,
+            characterId: character.id,
+            characterName: character.name,
+            conversationContext,
+            cheapLLMSelection,
+            connectionProfile,
+            isDangerousChat: isChatActiveDangerous(chat),
+            uncensoredFallback: {
+              dangerSettings,
+              availableProfiles: allProfiles,
+              isDangerousChat: isChatActiveDangerous(chat),
+            },
+            onAffirming: () => safeEnqueue(controller, encodeStatusEvent(encoder, {
+              stage: 'affirming',
+              message: 'Requesting affirmation of questionable results…',
+              characterName: character.name,
+              characterId: character.id,
+            })),
+          })
+          confirmed = outcome.confirmed
+          confirmationRevised = outcome.revised
+          confirmationNotes = outcome.notes
+          if (outcome.revised && outcome.revisedContent) {
+            // Keep the original for the logs; show the revised reply. A rewrite
+            // invalidates tool-call/reasoning anchors computed against the old
+            // prose — mirror normalizeRewroteBody: drop tool anchors and
+            // collapse reasoning to a single offset-0 block (display only).
+            confirmationOriginalContent = cleanedResponse
+            cleanedResponse = outcome.revisedContent
+            for (const tm of toolMessages) {
+              tm.anchorOffset = undefined
+            }
+            if (rebasedReasoning && rebasedReasoning.length > 0) {
+              rebasedReasoning = [{
+                anchorOffset: 0,
+                content: rebasedReasoning.map(s => s.content).join(''),
+                seq: rebasedReasoning[0].seq,
+              }]
+            }
+          }
+        }
+      }
+    }
+  }
+
   const whisperContext: ToolWhisperContext = {
     userParticipantId,
     allowCrossCharacterVaultReads: chat.allowCrossCharacterVaultReads === true,
   }
 
-  const assistantMessageId = await saveAssistantMessage(
+  await saveAssistantMessage(
     repos,
     chatId,
     character,
@@ -200,13 +312,27 @@ export async function finalizeMessageResponse({
     thoughtSignature,
     generatedImagePaths,
     toolMessages,
-    preGeneratedAssistantMessageId,
+    assistantMessageId,
     effectiveProfile.provider,
     effectiveProfile.modelName,
     whisperContext,
     reasoningContent,
-    rebasedReasoning
+    rebasedReasoning,
+    { confirmed, confirmationRevised, confirmationNotes, confirmationOriginalContent }
   )
+
+  // Surface the resolved confirmation state to the live client (badge +, on a
+  // revision, the replacement bubble text). The persisted columns carry it too,
+  // so a page refresh shows the same state.
+  if (confirmed !== undefined) {
+    safeEnqueue(controller, encodeConfirmationResultEvent(encoder, {
+      messageId: assistantMessageId,
+      confirmed,
+      revised: confirmationRevised === true,
+      notes: confirmationNotes ?? null,
+      ...(confirmationRevised === true ? { content: cleanedResponse } : {}),
+    }))
+  }
 
   // Async pre-compression exists to make the *next human message* feel fast.
   // Autonomous-room chains never wait on a human, and each chain step appends
@@ -267,7 +393,10 @@ export async function finalizeMessageResponse({
       let rngAnchorSearchFrom = 0
       for (const pattern of rngPatternsInResponse) {
         const rngContext = { userId, chatId }
-        const result = await executeRngTool({ type: pattern.type, rolls: pattern.rolls }, rngContext)
+        const result = await executeRngTool(
+          { type: pattern.type, rolls: pattern.rolls, modifier: pattern.modifier ?? 0 },
+          rngContext
+        )
         const formattedResult = formatRngResults(result)
 
         // Place the result block right after the dice notation that triggered it.
@@ -289,7 +418,7 @@ export async function finalizeMessageResponse({
             success: result.success,
             result: formattedResult,
             prompt: pattern.matchText,
-            arguments: { type: pattern.type, rolls: pattern.rolls },
+            arguments: { type: pattern.type, rolls: pattern.rolls, modifier: pattern.modifier ?? 0 },
             ...(typeof rngAnchor === 'number' ? { anchorOffset: rngAnchor } : {}),
           }),
           createdAt: new Date().toISOString(),
@@ -472,8 +601,19 @@ export async function saveAssistantMessage(
   // Reasoning ("thinking") for DISPLAY ONLY — persisted so the Salon can show
   // it; never re-fed to any model. See ReasoningSegment.
   reasoningContent?: string | null,
-  reasoningSegments?: ReasoningSegment[] | null
+  reasoningSegments?: ReasoningSegment[] | null,
+  // Answer-confirmation results (undefined fields are omitted — no field written).
+  confirmation?: {
+    confirmed?: boolean | null
+    confirmationRevised?: boolean | null
+    confirmationNotes?: string | null
+    confirmationOriginalContent?: string | null
+  }
 ): Promise<string> {
+  // A check "ran" whenever a verdict (incl. null) was assigned. Persisted as a
+  // real 1 so a reload can tell "unverified" from "never checked" (both leave
+  // `confirmed` as SQL NULL).
+  const confirmationChecked = confirmation?.confirmed !== undefined ? true : undefined
   const assistantMessageId = preGeneratedMessageId || crypto.randomUUID()
   const assistantAttachments = generatedImagePaths.map(img => img.id)
 
@@ -495,6 +635,13 @@ export async function saveAssistantMessage(
     provider: provider || null,
     modelName: modelName || null,
     isSilentMessage: characterParticipant.status === 'silent' || null,
+    // Only include confirmation keys that were actually resolved, so an
+    // untouched turn writes no confirmation fields at all.
+    ...(confirmation?.confirmed !== undefined ? { confirmed: confirmation.confirmed } : {}),
+    ...(confirmationChecked !== undefined ? { confirmationChecked } : {}),
+    ...(confirmation?.confirmationRevised !== undefined ? { confirmationRevised: confirmation.confirmationRevised } : {}),
+    ...(confirmation?.confirmationNotes !== undefined ? { confirmationNotes: confirmation.confirmationNotes } : {}),
+    ...(confirmation?.confirmationOriginalContent !== undefined ? { confirmationOriginalContent: confirmation.confirmationOriginalContent } : {}),
   }
 
   await repos.chats.addMessage(chatId, assistantMessage)
@@ -570,7 +717,8 @@ export async function calculateNextSpeaker(
     chat.participants,
     charactersMap,
     turnState,
-    userParticipantId
+    userParticipantId,
+    chat.impersonatingParticipantIds
   )
 
   return {

@@ -17,6 +17,7 @@
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { scaffoldCharacterMount } from '@/lib/mount-index/character-scaffold';
+import { nextUniqueMountPointName } from '@/lib/mount-index/unique-mount-point-name';
 import { serializeFrontmatter } from '@/lib/doc-edit/markdown-parser';
 import { writeCharacterVaultManagedFields } from '@/lib/database/repositories/character-properties-overlay';
 import type {
@@ -139,8 +140,15 @@ export async function ensureCharacterVault(
     });
   }
 
+  // Vault names live in the one case-insensitive store-name namespace, and
+  // characters may share a name — suffix ` (N)` rather than mint a duplicate.
+  // Adoption above still keys off the un-suffixed base name, so orphaned
+  // vaults from earlier releases stay adoptable.
+  const allStoreNames = new Set((await repos.docMountPoints.findAll()).map(mp => mp.name));
+  const finalVaultName = nextUniqueMountPointName(allStoreNames, vaultName);
+
   const mountPoint = await repos.docMountPoints.create({
-    name: vaultName,
+    name: finalVaultName,
     basePath: '',
     mountType: 'database',
     storeType: 'character',
@@ -169,7 +177,7 @@ export async function ensureCharacterVault(
   logger.info('Character vault created, populated, and linked', {
     characterId: character.id,
     mountPointId: mountPoint.id,
-    name: vaultName,
+    name: finalVaultName,
   });
 
   return { mountPointId: mountPoint.id, created: true };

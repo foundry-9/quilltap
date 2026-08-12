@@ -10,7 +10,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { successResponse, badRequest, serverError, conflict, created } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
@@ -28,7 +28,7 @@ type PostAction = (typeof POST_ACTIONS)[number];
  * GET /api/v1/settings/text-replacements
  * Returns all text replacement rules ordered by sortOrder then createdAt.
  */
-export const GET = createAuthenticatedHandler(async () => {
+export const GET = createContextHandler(async () => {
   try {
     const repos = getRepositories();
     const rules = await repos.textReplacementRules.list();
@@ -47,7 +47,7 @@ export const GET = createAuthenticatedHandler(async () => {
  * POST /api/v1/settings/text-replacements
  * Action-dispatched. Default is create one rule.
  */
-export const POST = createAuthenticatedHandler(async (req: NextRequest) => {
+export const POST = createContextHandler(async (req: NextRequest) => {
   const action = getActionParam(req);
 
   if (action && isValidAction(action, POST_ACTIONS)) {

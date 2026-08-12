@@ -7,6 +7,7 @@ jest.mock('@/lib/chat/connection-resolver', () => ({
 }))
 
 import { resolveRespondingParticipant, getRoleplayTemplate } from '@/lib/services/chat-message/participant-resolver.service'
+import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository'
 import type { ChatMetadataBase, ChatParticipantBase, Character } from '@/lib/schemas/types'
 
 const now = new Date().toISOString()
@@ -28,7 +29,7 @@ const makeCharParticipant = (id: string, characterId: string, overrides: Partial
   ...overrides,
 })
 
-const makeChar = (id: string, talkativeness = 0.5): Character => ({
+const makeChar = (id: string, talkativeness = 0.5, archivedAt: string | null = null): Character => ({
   id,
   userId: 'user-1',
   name: `Character ${id}`,
@@ -51,6 +52,7 @@ const makeChar = (id: string, talkativeness = 0.5): Character => ({
   physicalDescriptions: [],
   createdAt: now,
   updatedAt: now,
+  archivedAt,
 } as unknown as Character)
 
 const buildChat = (participants: ChatParticipantBase[], spokenJson: string | null = null): ChatMetadataBase => ({
@@ -95,6 +97,14 @@ describe('resolveRespondingParticipant — first-responder selection', () => {
     expect(result.characterParticipant.id).toBe('p2')
   })
 
+  it('refuses to resolve an archived character as a responder', async () => {
+    const participant = makeCharParticipant('p1', 'char-1')
+    const chat = buildChat([participant])
+    const repos = buildRepos(new Map([['char-1', makeChar('char-1', 0.5, '2026-08-10T00:00:00.000Z')]]))
+
+    await expect(resolveRespondingParticipant(repos, chat, 'user-1')).rejects.toThrow(CharacterArchivedError)
+  })
+
   it('uses weighted selection for multiple LLM candidates and respects spokenThisCycle', async () => {
     const p1 = makeCharParticipant('p1', 'char-1')
     const p2 = makeCharParticipant('p2', 'char-2')
@@ -133,6 +143,29 @@ describe('resolveRespondingParticipant — first-responder selection', () => {
       const result = await resolveRespondingParticipant(repos, chat, 'user-1')
       expect(result.characterParticipant.controlledBy).not.toBe('user')
     }
+  })
+
+  it('attributes userParticipantId to the active speaker, not the first user-controlled participant', async () => {
+    // Two user-controlled characters (Jackie first, Revenant later) + one LLM.
+    const jackie = makeCharParticipant('u-jackie', 'char-jackie', { controlledBy: 'user', displayOrder: 0 })
+    const abigail = makeCharParticipant('p-abigail', 'char-abigail', { displayOrder: 1 })
+    const revenant = makeCharParticipant('u-revenant', 'char-revenant', { controlledBy: 'user', displayOrder: 2 })
+    const chat = buildChat([jackie, abigail, revenant])
+    const repos = buildRepos(new Map([
+      ['char-jackie', makeChar('char-jackie')],
+      ['char-abigail', makeChar('char-abigail')],
+      ['char-revenant', makeChar('char-revenant')],
+    ]))
+
+    // Speaking As Revenant → the saved user message is attributed to Revenant.
+    const speakingAsRevenant = await resolveRespondingParticipant(repos, chat, 'user-1', undefined, false, 'u-revenant')
+    expect(speakingAsRevenant.userParticipantId).toBe('u-revenant')
+    // Abigail still responds (the LLM character).
+    expect(speakingAsRevenant.characterParticipant.id).toBe('p-abigail')
+
+    // No selection → falls back to the first user-controlled participant (Jackie).
+    const noSelection = await resolveRespondingParticipant(repos, chat, 'user-1')
+    expect(noSelection.userParticipantId).toBe('u-jackie')
   })
 })
 

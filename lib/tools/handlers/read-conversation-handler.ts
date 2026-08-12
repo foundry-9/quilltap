@@ -45,7 +45,8 @@ export async function executeReadConversationTool(
 
   try {
     // Validate input
-    if (!validateReadConversationInput(input)) {
+    const parsed = validateReadConversationInput(input);
+    if (!parsed) {
       logger.warn('Read conversation tool validation failed', {
         context: 'read-conversation-handler',
         userId: context.userId,
@@ -58,7 +59,7 @@ export async function executeReadConversationTool(
       };
     }
 
-    const { conversationId, exclude_annotations } = input as ReadConversationToolInput;
+    const { conversationId, exclude_annotations, interchange_start, interchange_end } = parsed;
     const targetChatId = conversationId || context.chatId;
 
     // Load chat
@@ -114,7 +115,38 @@ export async function executeReadConversationTool(
       }
     }
 
-    // Count messages and interchanges from the markdown
+    // Interchange-range slicing: a character drilling into a very long chat
+    // can pull just the relevant slice instead of the whole transcript.
+    const totalInterchanges = (markdown.match(/^## Interchange \d+/gm) ?? []).length;
+    if (interchange_start !== undefined || interchange_end !== undefined) {
+      const start = interchange_start ?? 1;
+      const end = interchange_end ?? Number.POSITIVE_INFINITY;
+      if (end < start) {
+        return {
+          success: false,
+          error: 'interchange_end must be >= interchange_start.',
+        };
+      }
+      const sections = markdown.split(/^(?=## Interchange \d+)/m);
+      const preamble = /^## Interchange \d+/.test(sections[0] ?? '') ? '' : (sections.shift() ?? '');
+      const kept = sections.filter(section => {
+        const m = section.match(/^## Interchange (\d+)/);
+        if (!m) return false;
+        const n = parseInt(m[1], 10);
+        return n >= start && n <= end;
+      });
+      if (kept.length === 0) {
+        return {
+          success: false,
+          error: `No interchanges in range ${start}–${interchange_end ?? totalInterchanges} (conversation has ${totalInterchanges}).`,
+        };
+      }
+      const lastShown = Math.min(end, totalInterchanges);
+      markdown = `${preamble}${kept.join('')}`.trimEnd() +
+        `\n\n_Showing interchanges ${start}–${lastShown} of ${totalInterchanges}._\n`;
+    }
+
+    // Count messages and interchanges from the (possibly sliced) markdown
     const messageMatches = markdown.match(/^### Message \d+/gm);
     const interchangeMatches = markdown.match(/^## Interchange \d+/gm);
     const messageCount = messageMatches ? messageMatches.length : 0;

@@ -129,23 +129,29 @@ export async function ensureFolderPath(
   // outside a job scope (the parent path), where read-your-writes suffices.
   const folderCache = getJobFolderEnsureCache();
 
+  // The folder namespace is case-insensitive and case-preserving: a segment
+  // that matches an existing folder except for casing reuses that folder, and
+  // the walk continues under the folder's STORED casing (`currentPath` tracks
+  // the canonical prefix) so newly-created deeper segments get consistent
+  // `path` values.
   let currentParentId: string | null = null;
   let currentPath = '';
 
   for (const segment of segments) {
-    // Build the path for this segment
-    currentPath = currentPath ? `${currentPath}/${segment}` : segment;
-    const cacheKey = `${mountPointId}:${currentPath}`;
+    // Build the path for this segment (canonical prefix + requested leaf)
+    const requestedPath = currentPath ? `${currentPath}/${segment}` : segment;
+    const cacheKey = `${mountPointId}:${requestedPath.toLowerCase()}`;
 
     // Already ensured (found or created) this folder earlier in the same job?
     const memoized = folderCache?.get(cacheKey);
     if (memoized) {
-      currentParentId = memoized;
+      currentParentId = memoized.id;
+      currentPath = memoized.path;
       continue;
     }
 
-    // Try to find the existing folder
-    let folder = await repos.docMountFolders.findByMountPointAndPath(mountPointId, currentPath);
+    // Try to find the existing folder (case-insensitive)
+    let folder = await repos.docMountFolders.findByMountPointAndPath(mountPointId, requestedPath);
 
     if (!folder) {
       // Create it if it doesn't exist
@@ -154,11 +160,11 @@ export async function ensureFolderPath(
           mountPointId,
           parentId: currentParentId,
           name: segment,
-          path: currentPath,
+          path: requestedPath,
         });
       } catch (error) {
         // On conflict (concurrent creation), look it up
-        const existing = await repos.docMountFolders.findByMountPointAndPath(mountPointId, currentPath);
+        const existing = await repos.docMountFolders.findByMountPointAndPath(mountPointId, requestedPath);
         if (existing) {
           folder = existing;
         } else {
@@ -166,7 +172,7 @@ export async function ensureFolderPath(
             context: 'folder-paths.ensureFolderPath',
             mountPointId,
             segment,
-            path: currentPath,
+            path: requestedPath,
             error: error instanceof Error ? error.message : String(error),
           });
           throw error;
@@ -174,8 +180,9 @@ export async function ensureFolderPath(
       }
     }
 
-    folderCache?.set(cacheKey, folder.id);
+    folderCache?.set(cacheKey, { id: folder.id, path: folder.path });
     currentParentId = folder.id;
+    currentPath = folder.path;
   }
 
   return currentParentId;

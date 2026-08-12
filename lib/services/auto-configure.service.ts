@@ -17,7 +17,7 @@ import { executeWebSearchTool, formatWebSearchResults } from '@/lib/tools/handle
 import { isWebSearchConfigured } from '@/lib/tools/handlers/web-search-handler'
 import { createLLMProvider } from '@/lib/llm'
 import { parseLLMJson } from '@/lib/services/ai-import.service'
-import { getCheapLLMProvider } from '@/lib/llm/cheap-llm'
+import { getCheapLLMProvider, profileParams } from '@/lib/llm/cheap-llm'
 import { MODEL_CLASSES, isValidModelClassName } from '@/lib/llm/model-classes'
 import { getUserRepositories } from '@/lib/repositories/user-scoped'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
@@ -208,16 +208,19 @@ async function cleanupWithCheapLLM(
     },
   ]
 
+  const cleanupStartedAt = Date.now()
   const cleanupResponse = await cheapProvider.sendMessage(
-    { messages: cleanupMessages, model: cheapSelection.modelName, temperature: 0.1, maxTokens: 500 },
+    { messages: cleanupMessages, model: cheapSelection.modelName, temperature: 0.1, maxTokens: 500, profileParameters: cheapSelection.profileParameters },
     cheapApiKey
   )
+  const cleanupDurationMs = Date.now() - cleanupStartedAt
 
   logLLMCall({
     userId,
     type: 'AUTO_CONFIGURE',
     provider: cheapSelection.provider,
     modelName: cheapSelection.modelName,
+    connectionProfileId: cheapSelection.connectionProfileId ?? null,
     request: {
       messages: cleanupMessages.map(m => ({ role: m.role, content: m.content })),
       temperature: 0.1,
@@ -225,6 +228,7 @@ async function cleanupWithCheapLLM(
     },
     response: { content: cleanupResponse.content },
     usage: cleanupResponse.usage,
+    durationMs: cleanupDurationMs,
   }).catch(err => {
     logger.warn('[Auto-Configure] Failed to log cheap LLM cleanup call', {
       error: err instanceof Error ? err.message : String(err),
@@ -248,16 +252,19 @@ async function analyzeWithProfile(
   const apiKey = await getApiKey(profile, userId)
   const llmProvider = await createLLMProvider(profile.provider, profile.baseUrl ?? undefined)
 
+  const startedAt = Date.now()
   const response = await llmProvider.sendMessage(
-    { messages, model: profile.modelName, temperature: 0.2, maxTokens: 1000 },
+    { messages, model: profile.modelName, temperature: 0.2, maxTokens: 1000, profileParameters: profileParams(profile) },
     apiKey
   )
+  const durationMs = Date.now() - startedAt
 
   logLLMCall({
     userId,
     type: 'AUTO_CONFIGURE',
     provider: profile.provider,
     modelName: profile.modelName,
+    connectionProfileId: profile.id,
     request: {
       messages: messages.map(m => ({ role: m.role, content: m.content })),
       temperature: 0.2,
@@ -265,6 +272,7 @@ async function analyzeWithProfile(
     },
     response: { content: response.content },
     usage: response.usage,
+    durationMs,
   }).catch(err => {
     logger.warn('[Auto-Configure] Failed to log LLM call', {
       error: err instanceof Error ? err.message : String(err),

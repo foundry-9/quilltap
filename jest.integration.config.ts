@@ -1,6 +1,10 @@
 import type { Config } from 'jest'
 import nextJest from 'next/jest.js'
 
+// Pin the timezone before Jest forks its workers, for the same reason the unit
+// config does — see the note in jest.config.ts.
+process.env.TZ = 'UTC'
+
 const createJestConfig = nextJest({
   // Provide the path to your Next.js app to load next.config.js and .env files in your test environment
   dir: './',
@@ -25,6 +29,7 @@ const config: Config = {
   ],
   testMatch: [
     '**/__tests__/integration/**/*.test.{js,jsx,ts,tsx}',
+    '**/__tests__/unit/**/*.integration.test.{js,jsx,ts,tsx}',
   ],
   testPathIgnorePatterns: [
     '/node_modules/',

@@ -39,13 +39,13 @@ interface JobScope {
   writes: ChildWritePayload[];
   /**
    * Set of repo.method strings appended during this job. Used to surface
-   * read-your-writes regressions: if a read method matches a key recently
-   * written, log a warning so the regression is visible during testing.
+   * read-your-writes regressions: if a read lands on a table already written
+   * this job, log a warning so the regression is visible during testing.
    */
   recentlyWrittenKeys: Set<string>;
   /**
    * Per-job dedup of read-your-writes warnings so we don't spam the log
-   * when a handler does many reads against the same repo after a write.
+   * when a handler does many reads against the same table after a write.
    */
   warnedReads: Set<string>;
   /**
@@ -263,6 +263,49 @@ const FORBIDDEN_METHODS: Set<string> = new Set([
   'backgroundJobs.resetStuckJobs',
 ]);
 
+/**
+ * Sub-table resolvers for repositories that own more than one table.
+ *
+ * The read-your-writes detector below compares a read against the buffered
+ * writes, and its grouping key decides what counts as "the same data". The
+ * repository object is the wrong granularity for a repo spanning several
+ * tables: `connections` owns both `connection_profiles` and `api_keys`, so
+ * every `AUTONOMOUS_ROOM_TURN` produced a warning pairing the buffered
+ * `connections.incrementTokenUsage` (a counter bump on `connection_profiles`)
+ * with a later `connections.findApiKeyByIdAndUserId` (a `SELECT` from
+ * `api_keys`) — two tables that cannot stale each other. One line per turn,
+ * forever, for a condition that does not exist.
+ *
+ * A resolver maps a method name to the table it touches, so reads and writes
+ * are only compared when they land on the same one. Add an entry when a new
+ * repository fronts multiple tables; repos absent from this map are treated
+ * as a single group (the previous behaviour).
+ */
+const TABLE_GROUP_RESOLVERS: Record<string, (methodName: string) => string> = {
+  // Every api_keys method carries "ApiKey" in its name (getApiKeysByUserId,
+  // findApiKeyById, createApiKey, updateApiKey, deleteApiKey,
+  // recordApiKeyUsage, findApiKeyByIdAndUserId); everything else on this repo
+  // operates on connection_profiles.
+  connections: (methodName) => (/ApiKey/.test(methodName) ? 'api_keys' : 'connection_profiles'),
+};
+
+/**
+ * Grouping key for the read-your-writes heuristic: the table a call touches,
+ * as best we can tell from its name. Falls back to the repository key so an
+ * unmapped repo behaves exactly as it did before table groups existed.
+ */
+function tableGroup(repoKey: string, methodName: string): string {
+  const resolver = TABLE_GROUP_RESOLVERS[repoKey];
+  return resolver ? `${repoKey}.${resolver(methodName)}` : repoKey;
+}
+
+/** Same, for an already-buffered `<repoKey>.<methodName>` write key. */
+function tableGroupForWriteKey(writeKey: string): string {
+  const dot = writeKey.indexOf('.');
+  if (dot === -1) return writeKey;
+  return tableGroup(writeKey.slice(0, dot), writeKey.slice(dot + 1));
+}
+
 function classifyMethod(repoKey: string, methodName: string): 'read' | 'write' | 'unknown' {
   const fqn = `${repoKey}.${methodName}`;
 
@@ -353,20 +396,24 @@ function wrapRepo<T extends object>(repoKey: string, instance: T): T {
 
       if (classification === 'read') {
         // Diagnostic: warn (once per (jobId, readMethod)) if a read hits a
-        // key recently appended to the pending-writes buffer. Heuristic —
-        // checks method name, not row identity — but enough to flag
-        // suspicious patterns during testing without spamming the log.
+        // table recently appended to the pending-writes buffer. Heuristic —
+        // checks the table a method name implies, not row identity — but
+        // enough to flag suspicious patterns during testing without spamming
+        // the log. See TABLE_GROUP_RESOLVERS for why the grouping key is the
+        // table rather than the repository object.
         return (...args: unknown[]) => {
           const scope = jobScopeStore.getStore();
           if (scope && scope.recentlyWrittenKeys.size > 0) {
             const readKey = `${repoKey}.${key}`;
             if (!scope.warnedReads.has(readKey)) {
+              const readGroup = tableGroup(repoKey, key);
               for (const writtenKey of scope.recentlyWrittenKeys) {
-                if (writtenKey.startsWith(`${repoKey}.`)) {
+                if (tableGroupForWriteKey(writtenKey) === readGroup) {
                   scope.warnedReads.add(readKey);
-                  log.warn('Read after buffered write on same repo — possible read-your-writes issue', {
+                  log.warn('Read after buffered write on same table — possible read-your-writes issue', {
                     jobId: scope.jobId,
                     readMethod: readKey,
+                    table: readGroup,
                     bufferedWrites: Array.from(scope.recentlyWrittenKeys),
                   });
                   break;

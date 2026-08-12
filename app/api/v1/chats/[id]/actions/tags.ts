@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { notFound } from '@/lib/api/responses';
 import { addTagSchema, removeTagSchema } from '../schemas';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 /**
  * Add a tag to a chat
@@ -16,7 +16,7 @@ import type { AuthenticatedContext } from '@/lib/api/middleware';
 export async function handleAddTag(
   req: NextRequest,
   chatId: string,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const validatedData = addTagSchema.parse(body);
@@ -39,7 +39,7 @@ export async function handleAddTag(
 export async function handleRemoveTag(
   req: NextRequest,
   chatId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const validatedData = removeTagSchema.parse(body);

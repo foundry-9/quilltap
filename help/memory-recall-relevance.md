@@ -39,7 +39,15 @@ It gives a gentle backward glance to memories the character has explicitly outgr
 
 It also keeps an eye on the company in the room. A memory concerning someone actually present this turn — the character speaking, or any of their fellow guests — is given a small lift, on the sensible principle that one is rather more likely to recall a thing about the very person across the table. (A lift, mind, never a bar: absent figures may still be spoken of, as they always could.)
 
+It keeps the very recent warm besides. A memory of something that happened within the last day or two is given a lift — no matter what the conversation is nominally about — on the plain observation that yesterday's expedition ought not be outranked by a settled truth of a fortnight's standing merely because the latter is more comfortably filed. Memories drawn from the conversation presently underway are passed over for this particular courtesy: they are already before you, and repeating them back would be a poor use of the Book's few sentences.
+
 And it takes a moment's measure of what the present exchange is *about* — whether the talk runs to philosophy, or scheming, or tender confession — and gives a corresponding nudge to memories cut from the same cloth. None of this asks anything of you; it is simply the Book paying closer attention.
+
+Above all, the Book now lets *pertinence* lead the way. A memory of towering importance but no bearing on the present talk is no longer permitted to shoulder its way to the front merely on account of its weight; the recollection that actually answers the moment takes precedence, and a grand old memory left untouched for a season is allowed, gracefully, to recede. The measure of a thing's importance still counts — it simply no longer drowns out the question of whether the thing is *relevant*.
+
+A happy consequence is that the Book has learned the art of holding its tongue. When it leafs through the shelves and finds that nothing truly speaks to the matter at hand, it now says so by saying nothing at all, rather than producing some only-vaguely-related entry to fill the silence. Better an honest blank than a confident irrelevance.
+
+And it keeps a short memory of its own recent remarks, so as not to repeat itself. A recollection it has pressed upon you these last few turns is gently set aside to let another have its say — never barred outright, for a thing that remains the single most pertinent memory will still win out, but no longer permitted to become that tiresome guest who tells the same anecdote at every turn of the conversation.
 
 ## In-Chat Navigation
 
@@ -49,6 +57,7 @@ Characters with help tools enabled can navigate directly to this page:
 
 ## Related Settings
 
+- [The Book Remembers When and Where](episodic-memory.md) — dated, placed memories and the retrospective turn
 - [When You Take the Reins Yourself](memory-playing-a-character.md) — how a character you play forms its own memories
 - [Memory Housekeeping](memory-housekeeping.md) — prunes the shelves once a character's memories grow numerous
 - [Embedding Profiles](embedding-profiles.md) — the semantic match that recall ranks on top of

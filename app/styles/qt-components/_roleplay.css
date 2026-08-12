@@ -33,6 +33,27 @@
     -webkit-box-decoration-break: clone;
   }
 
+  /* Line-scoped rules (linePrefix / tagPrefix, e.g. a `[WIFE]` speaker line)
+     land a chip class on the BLOCK element itself — see `applyLineScopedClasses`
+     and the `<p>` adapter in MessageContent. The `display: inline` above is meant
+     for inline narration spans; on a block it collapses every paragraph into one
+     continuous run, erasing the blank-line paragraph breaks. Restore normal block
+     flow whenever a chip lands on a block element (a list item keeps its marker). */
+  .qt-chat-message-content :is(p, blockquote, h1, h2, h3, h4, h5, h6):is(
+    .qt-roleplay-1, .qt-roleplay-2, .qt-roleplay-3, .qt-roleplay-4,
+    .qt-roleplay-danger, .qt-roleplay-warning, .qt-roleplay-success,
+    .qt-roleplay-info, .qt-roleplay-muted, .qt-roleplay-code
+  ) {
+    display: block;
+  }
+  .qt-chat-message-content li:is(
+    .qt-roleplay-1, .qt-roleplay-2, .qt-roleplay-3, .qt-roleplay-4,
+    .qt-roleplay-danger, .qt-roleplay-warning, .qt-roleplay-success,
+    .qt-roleplay-info, .qt-roleplay-muted, .qt-roleplay-code
+  ) {
+    display: list-item;
+  }
+
   /* ---- High-contrast palette (1..4) -------------------------------------- */
   .qt-chat-message-content .qt-roleplay-1 {
     --qt-rp-fg: var(--qt-roleplay-1-fg);

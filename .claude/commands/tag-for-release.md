@@ -96,11 +96,14 @@ git tag -s -m "NEWRELEASE" NEWRELEASE
 ```bash
 git checkout main
 git merge --no-ff release -m "merge: NEWRELEASE back into main"
+git tag "rel/NEWRELEASE"
 ```
 
 (Replace NEWRELEASE with the actual version, e.g., `4.1.0`.)
 
 This brings the release commit and tag into main's history so `git log NEWRELEASE..main` reflects everything done on main since the release. Conflicts are rare in this direction — release was tree-copied from main — but if any appear, take release's version. The next step bumps version files anyway, so the merge's version-file state on main is transient.
+
+**The `rel/NEWRELEASE` anchor tag** is a lightweight tag placed on the merge-back commit, which lives on main's first-parent line. The official `NEWRELEASE` version tag lives on the squashed release branch, so `git describe` can't measure a meaningful distance against it (the squash severs ancestry, putting every release tag on a merge's *second* parent). The `rel/*` anchor fixes this: `git describe --tags --first-parent --match 'rel/*'` yields a real "commits on main since the release" distance, which the shell prompt uses. Keep the `rel/` prefix and namespace exactly — the prompt strips it for display and filters on it.
 
 ### Step 6: Start the new dev branch on main
 
@@ -255,7 +258,13 @@ This brings the release commit and tag into main's history so `git log NEWRELEAS
 - **docs/CHANGELOG.md**: keep both sets of entries — main's new dev-cycle entries above the bugfix entries.
 - **Code conflicts**: resolve case-by-case. The bugfix change is usually the intended fix; if the dev branch already supersedes it, prefer the dev version.
 
-Commit the merge resolution before moving on.
+Commit the merge resolution before moving on. Then place the anchor tag on the merge-back commit (now at `main`'s HEAD):
+
+```bash
+git tag "rel/NEWRELEASE"
+```
+
+(Replace NEWRELEASE with the actual version, e.g., `4.0.2`.) See the explanation of the `rel/*` anchor tag in the `main`-branch flow's Step 5 — it gives the shell prompt a meaningful "commits since release" distance that the official version tag (on the squashed release branch) cannot.
 
 ### Step 6: Restart bugfix from the new release
 

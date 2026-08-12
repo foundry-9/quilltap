@@ -31,7 +31,6 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     needs: lint
-    continue-on-error: true
 
     steps:
       - name: Checkout code
@@ -53,33 +52,16 @@ jobs:
           SKIP_ENV_VALIDATION: 'true'
           ENCRYPTION_MASTER_PEPPER: 'test-pepper-for-ci-environment-32chars!'
           BASE_URL: 'http://localhost:3000'
-          JWT_SECRET: 'test-jwt-secret-key-32-characters!!!'
-          MONGODB_URI: 'mongodb://localhost:27017/quilltap-ci'
 
+      # Nothing downstream consumes the build — this job exists to prove the
+      # application still compiles, so the output is checked and discarded.
       - name: Verify build output
-        id: verify-build
         run: |
-          if [ -d ".next" ]; then
-            echo "✅ Build directory created"
-            echo "build_exists=true" >> $GITHUB_OUTPUT
-            ls -la .next/ | head -20
-            echo "Total size:"
-            du -sh .next/
-          else
-            echo "❌ Build directory not found"
-            echo "build_exists=false" >> $GITHUB_OUTPUT
+          if [ ! -d ".next" ]; then
+            echo "❌ Build reported success but .next was never created"
             exit 1
           fi
-
-      - name: Upload build artifacts
-        if: steps.verify-build.outputs.build_exists == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: build-artifacts
-          path: |
-            .next/**
-            !.next/cache/**
-          retention-days: 1
+          echo "✅ Build directory created ($(du -sh .next/ | cut -f1))"
 
   test:
     name: Test
@@ -180,26 +162,102 @@ jobs:
     name: Discord Notification
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+    # This used to run tristanbudd/discord-commit-github-action, a JavaScript
+    # action pinned to the node20 runtime. 1.0.1 is its latest release and it
+    # still declares `using: node20`, so there was no version to bump to — the
+    # runner's deprecation warning had no fix short of dropping the action. The
+    # embed it posted is a single webhook call, reproduced below with curl, so
+    # the step now has no runtime to go stale. Nothing to check out either: the
+    # push event payload carries everything the notification needs.
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
+      - name: Post the commit to Discord
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          # Untrusted commit data goes through the environment, never through
+          # ${{ }} interpolation into the shell — a commit message is attacker-
+          # controlled text and would otherwise be a script-injection vector.
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          COMMIT_URL: ${{ github.event.head_commit.url }}
+          COMMIT_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
+          AUTHOR_NAME: ${{ github.event.head_commit.author.name }}
+          AUTHOR_LOGIN: ${{ github.event.head_commit.author.username || github.event.sender.login }}
+          BRANCH: ${{ github.ref_name }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
+        run: |
+          set -euo pipefail
 
-      - name: Discord Commit Message Webhook
-        uses: tristanbudd/discord-commit-github-action@1.0.1
-        with:
-          webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          show-commit-message: true
-          show-commit-branch: true
-          show-commit-link: true
-          show-commit-author: true
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "::warning::DISCORD_WEBHOOK_URL is not set — skipping the Discord notification."
+            exit 0
+          fi
+
+          # Branch deletions and some tag pushes arrive with no head_commit.
+          if [ -z "$COMMIT_URL" ]; then
+            echo "::notice::Push carried no head commit — nothing to announce."
+            exit 0
+          fi
+
+          if [ -n "$AUTHOR_LOGIN" ]; then
+            author="$AUTHOR_NAME ([$AUTHOR_LOGIN]($SERVER_URL/$AUTHOR_LOGIN))"
+          else
+            author="$AUTHOR_NAME"
+          fi
+
+          # jq builds the JSON so every value is escaped properly. Discord caps
+          # a field value at 1024 characters; the fence and ellipsis fit inside
+          # the headroom left by truncating the message at 900.
+          payload=$(jq -n \
+            --arg message "$COMMIT_MESSAGE" \
+            --arg branch "$BRANCH" \
+            --arg author "$author" \
+            --arg commit_url "$COMMIT_URL" \
+            --arg repo_url "$REPO_URL" \
+            --arg timestamp "$COMMIT_TIMESTAMP" \
+            '{
+              embeds: [{
+                title: "GitHub Commit Notification",
+                color: 16777215,
+                timestamp: $timestamp,
+                fields: [
+                  {
+                    name: "Commit Message",
+                    value: ("```\n" + (if ($message | length) > 900
+                                       then ($message[0:900] + "\n…(truncated)")
+                                       else $message end) + "\n```"),
+                    inline: false
+                  },
+                  { name: "Branch", value: $branch, inline: true },
+                  { name: "Author", value: $author, inline: false },
+                  {
+                    name: "Commit Link",
+                    value: ("[View Commit](" + $commit_url + ") | [View Repository](" + $repo_url + ")"),
+                    inline: false
+                  }
+                ]
+              }]
+            }')
+
+          status=$(printf '%s' "$payload" | curl -sS -X POST \
+            -H 'Content-Type: application/json' \
+            --data-binary @- \
+            -o /tmp/discord-response.txt \
+            -w '%{http_code}' \
+            "$WEBHOOK_URL")
+
+          if [ "$status" -ge 200 ] && [ "$status" -lt 300 ]; then
+            echo "✅ Discord notification sent (HTTP $status)"
+          else
+            echo "❌ Discord rejected the notification (HTTP $status)"
+            cat /tmp/discord-response.txt
+            exit 1
+          fi
 
   report:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [lint, test]
+    needs: [lint, build, test]
     if: always()
 
     steps:
@@ -210,10 +268,10 @@ jobs:
           echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Lint | ${{ needs.lint.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Build | ${{ needs.build.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build | ${{ needs.build.result == 'success' && '✅ Passed' || needs.build.result == 'skipped' && '⚠️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Test | ${{ needs.test.result == 'success' && '✅ Passed' || needs.test.result == 'skipped' && '⚠️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
 
-          if [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.test.result }}" != "success" ]; then
+          if [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.build.result }}" != "success" ] || [ "${{ needs.test.result }}" != "success" ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "❌ **CI Pipeline Failed**" >> $GITHUB_STEP_SUMMARY
             exit 1

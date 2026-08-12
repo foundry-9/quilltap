@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { showAlert } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { useWorkspaceNavigate } from '@/components/workspace/useWorkspaceNavigate'
+import { useCloseSelfTab } from '@/components/workspace/useCloseSelfTab'
 import {
   Character,
   CharacterFormData,
@@ -37,6 +39,17 @@ const INITIAL_FORM_DATA: CharacterFormData = {
  */
 export function useCharacterEdit(id: string) {
   const router = useRouter()
+  // Keep-alive-safe returns: inside the workspace, "done editing" closes this
+  // edit tab (focus falls back to the adjacent, kept-alive tab the user came
+  // from — typically the Aurora grid or the character detail, untouched);
+  // outside the workspace it is a normal route push to the character view.
+  const navigate = useWorkspaceNavigate()
+  const closeSelf = useCloseSelfTab()
+  const returnToCharacter = useCallback(() => {
+    if (!closeSelf()) {
+      router.push(`/aurora/${id}/view`)
+    }
+  }, [closeSelf, router, id])
 
   // State management
   const [state, setState] = useState<CharacterEditState>({
@@ -236,7 +249,7 @@ export function useCharacterEdit(id: string) {
       setState((prev) => ({ ...prev, saving: false }))
       showSuccessToast('Character saved successfully!')
 
-      router.push(`/aurora/${id}/view`)
+      returnToCharacter()
       return true
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'An error occurred'
@@ -275,9 +288,10 @@ export function useCharacterEdit(id: string) {
     }
     // Navigate to appropriate location based on character type
     if (state.character?.npc) {
-      router.push('/settings')
+      navigate('/settings')
+      closeSelf()
     } else {
-      router.push(`/aurora/${id}/view`)
+      returnToCharacter()
     }
   }
 

@@ -255,9 +255,22 @@ export function remapBackupData(
     ...remapper.remapFields(group, ['id']),
   })) as Group[];
 
-  // Remap LLM logs
+  // Remap LLM logs.
+  // `connectionProfileId` / `imageProfileId` must be in this list: connection
+  // and image profiles are themselves remapped above, so a log row left holding
+  // the source instance's profile id would name nothing on the receiving one —
+  // and The Almanack's per-profile attribution would read every restored row as
+  // a deleted profile. Both are nullable and `remapFields` only touches string
+  // fields, so pre-4.9 rows (which carry null) pass through untouched.
   const remappedLLMLogs = data.llmLogs.map((log) => ({
-    ...remapper.remapFields(log, ['id', 'messageId', 'chatId', 'characterId']),
+    ...remapper.remapFields(log, [
+      'id',
+      'messageId',
+      'chatId',
+      'characterId',
+      'connectionProfileId',
+      'imageProfileId',
+    ]),
     userId: targetUserId,
   })) as LLMLog[];
 

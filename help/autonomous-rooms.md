@@ -30,6 +30,8 @@ A run ends gracefully on the first of the following budgets to be reached:
 
 Reaching a per-run cap ends that particular run cleanly with `budgetExhausted` status. Reaching the daily user cap pauses the room (`paused` status); the scheduler will resume it the next day. The household may, of course, intervene at any time with **Pause**, **Resume**, or **Stop** controls.
 
+A word on how a **token allowance now paces the evening.** Where once each turn was furnished with as much of the night's history as its character's chosen model could be persuaded to hold — and a sufficiently capacious model could, on a single turn, all but drain a modest purse — the Estate now portions the *remaining* token allowance across the turns the run still has before it, and trims each turn's recollection to its fair share. A room granted a turn budget alongside its token one divides the purse across the turns remaining; a room granted only a token budget aims, by default, to see some six turns through. No instruction is needed to invoke this thrift: any room bearing a per-run token cap is paced thus of its own accord, while rooms left uncapped — and every ordinary salon — carry on precisely as before. (A sensible floor is kept beneath the portioning, that even a nearly-spent run may furnish its final turn with enough of the night to speak coherently, rather than a starved scrap.)
+
 A small but consequential distinction between **Resume** and **Start**, lest the household be startled. **Resume** picks a *paused* room up precisely where it set itself down: the very same run carries on, its turn and token tallies continue climbing from where they paused, and no fresh "the run has begun" fanfare is sounded — the conversation simply resumes mid-breath. The minutes spent paused are not charged against any wall-clock budget; only the time actually spent conversing counts. **Start**, by contrast, opens a *brand-new* run with its tallies reset to nought, and is what one reaches for with a room that is idle, stopped, or has exhausted its budget. (A room whose budget is spent cannot meaningfully continue, so resuming it would only begin anew in any case.)
 
 Should the Estate suffer an abrupt outage — the power cut, the server felled mid-sentence — a run caught in motion is not lost. On the next startup the room is set gently to *paused*, its tallies and transcript intact, awaiting your **Resume** to carry on as though nothing had happened; the dark interval of the outage is not charged against any time budget. (A scheduled room left thus paused will still keep its next appointment on the clock, beginning afresh then if you have not resumed it in the meantime.)
@@ -146,3 +148,7 @@ help_navigate(url: "/settings?tab=chat&section=autonomous-rooms")
 ```
 help_navigate(url: "/settings?tab=chat&section=autonomous-room-schedules")
 ```
+
+## Related Pages
+
+- [Nothing to Add — Turn Skipping](turn-skipping.md) — Characters may pass a turn; in a run, a pass still consumes one turn of the budget

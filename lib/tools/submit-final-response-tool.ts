@@ -9,6 +9,7 @@
 
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
+import { llmNumber } from './llm-number'
 
 /**
  * Zod schema for the submit final response tool's input.
@@ -26,13 +27,15 @@ export const submitFinalResponseToolInputSchema = z.object({
       'Optional brief summary of what you accomplished (e.g., "Searched 3 files and found the bug in config.ts").'
     )
     .optional(),
-  confidence: z
-    .number()
-    .min(0)
-    .max(1)
-    .describe(
-      'Optional confidence level (0-1) in your response. Use 0.9+ when highly confident, 0.5-0.9 for moderate confidence, below 0.5 when uncertain.'
-    )
+  confidence: llmNumber(
+    z
+      .number()
+      .min(0)
+      .max(1)
+      .describe(
+        'Optional confidence level (0-1) in your response. Use 0.9+ when highly confident, 0.5-0.9 for moderate confidence, below 0.5 when uncertain.'
+      )
+  )
     .optional(),
 })
 
@@ -76,6 +79,7 @@ export const submitFinalResponseToolDefinition = {
  */
 export function validateSubmitFinalResponseInput(
   input: unknown
-): input is SubmitFinalResponseToolInput {
-  return submitFinalResponseToolInputSchema.safeParse(input).success
+): SubmitFinalResponseToolInput | null {
+  const parsed = submitFinalResponseToolInputSchema.safeParse(input)
+  return parsed.success ? parsed.data : null
 }

@@ -19,14 +19,6 @@ import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { nextUniqueMountPointName } from './unique-mount-point-name';
 
-/** Minimal shape of an adoptable document store (a `doc_mount_points` row). */
-export interface AdoptableStore {
-  id: string;
-  name: string;
-  mountType: string;
-  storeType?: string | null;
-}
-
 /** Minimal shape of the raw entity row this flow needs. */
 export interface OfficialStoreEntityRow {
   officialMountPointId?: string | null;

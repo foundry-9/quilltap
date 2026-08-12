@@ -6,6 +6,7 @@
 
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
+import { llmNumber } from './llm-number';
 
 /**
  * Zod schema for the list-images tool's input. The single source of truth for both
@@ -24,13 +25,17 @@ export const listImagesToolInputSchema = z.object({
     .string()
     .describe('Optional filter: character name or id of the character who saved the image. Defaults to all visible albums.')
     .optional(),
-  limit: z
-    .number()
-    .describe('Maximum results to return. Defaults to 20.')
+  limit: llmNumber(
+    z
+      .number()
+      .describe('Maximum results to return. Defaults to 20.')
+  )
     .optional(),
-  offset: z
-    .number()
-    .describe('Pagination offset. Defaults to 0.')
+  offset: llmNumber(
+    z
+      .number()
+      .describe('Pagination offset. Defaults to 0.')
+  )
     .optional(),
 });
 
@@ -49,8 +54,9 @@ export const listImagesToolDefinition = {
   },
 };
 
-export function validateListImagesInput(input: unknown): input is ListImagesInput {
-  return listImagesToolInputSchema.safeParse(input).success;
+export function validateListImagesInput(input: unknown): ListImagesInput | null {
+  const parsed = listImagesToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 export interface ListedImage {

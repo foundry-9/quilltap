@@ -19,6 +19,7 @@ import { enqueueTitleUpdate } from '@/lib/background-jobs/queue-service'
 import { postLibrarianSummaryAnnouncement, SUMMARY_CONTENT_PREFIX } from '@/lib/services/librarian-notifications/writer'
 import { writeConversationSummaryToVaults, computeConversationStats } from '@/lib/file-storage/conversation-summary-vault-bridge'
 import { refreshRelevantConversationsOnFold } from '@/lib/services/commonplace-notifications/relevant-conversations-refresh'
+import { runFoldEpisodePass } from '@/lib/memory/fold-episode-pass'
 
 /**
  * Rolling-window summarization cadence.
@@ -280,11 +281,16 @@ export function partitionMessagesIntoTurns(
   return turns
 }
 
-function turnsToChatMessages(turns: FoldedTurn[]): ChatMessage[] {
-  const result: ChatMessage[] = []
+function turnsToChatMessages(turns: FoldedTurn[]): Array<ChatMessage & { createdAt?: string | null }> {
+  const result: Array<ChatMessage & { createdAt?: string | null }> = []
   for (const t of turns) {
     for (const m of t.messages) {
-      result.push({ role: m.role.toLowerCase() as 'user' | 'assistant', content: m.content })
+      result.push({
+        role: m.role.toLowerCase() as 'user' | 'assistant',
+        content: m.content,
+        // Message dates feed the fold summary's Timeline section.
+        createdAt: m.createdAt ?? null,
+      })
     }
   }
   return result
@@ -501,6 +507,26 @@ export async function generateContextSummary(
       })
     } catch (e) {
       logger.error('[Context Summary] Failed to refresh relevant conversations:', { chatId }, e instanceof Error ? e : new Error(String(e)))
+    }
+
+    // Episodic spine: fold-time episode pass. Over the just-folded window, ask
+    // the cheap LLM for 0–2 consolidated episode records and write them as
+    // dated `kind: 'episodic'` memories linked to the window's per-turn
+    // fragments. Piggybacks the fold cadence — no new trigger. Best-effort:
+    // a failed episode pass never fails the fold.
+    try {
+      const windowMessages = turnsToFold.flatMap(t => t.messages)
+      await runFoldEpisodePass({
+        chatId,
+        userId,
+        windowMessages,
+        cheapLLM,
+        timelineMode: chat.timelineMode ?? 'realtime',
+        projectId: chat.projectId ?? null,
+        inAutonomousRoom: chat.chatType === 'autonomous',
+      })
+    } catch (e) {
+      logger.error('[Context Summary] Fold episode pass failed:', { chatId }, e instanceof Error ? e : new Error(String(e)))
     }
 
     if (result.usage && (result.usage.promptTokens > 0 || result.usage.completionTokens > 0)) {

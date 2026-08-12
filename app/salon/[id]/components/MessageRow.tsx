@@ -7,10 +7,15 @@ import ToolMessage from '@/components/chat/ToolMessage'
 import { DangerFlagBadge } from '@/components/chat/DangerFlagBadge'
 import { DangerContentWrapper } from '@/components/chat/DangerContentWrapper'
 import { TerminalEmbed } from '@/components/terminal/TerminalEmbed'
-import { getSystemSenderDisplayName, getSystemKindDisplayLabel } from './system-message-labels'
+import {
+  getSystemSenderDisplayName,
+  getSystemKindDisplayLabel,
+  getAnnouncementAccentClasses,
+} from './system-message-labels'
 import { AnnouncementChip, AnnouncementBarContents } from './AnnouncementChip'
 import { CourierBubble } from './CourierBubble'
 import { buildInterleavedLayout, resolveReasoningSegments } from '../intersperse-reasoning'
+import { resolveWhisperTargetLabel } from '../whisper-visibility'
 import { ThinkingBlock } from '@/components/chat/ThinkingBlock'
 import { MessageDesktopAvatar } from './message-row/MessageDesktopAvatar'
 import { MessageActionBar } from './message-row/MessageActionBar'
@@ -96,6 +101,9 @@ interface MessageRowProps {
   onReattribute?: (messageId: string) => void
   /** Mapping of participant IDs to display names for whisper labels */
   participantNames?: Record<string, string>
+  /** The operator's own userId — a private user-initiated run whispers to it,
+   * so the whisper label resolves it to "you" rather than "unknown" (Bug 30). */
+  currentUserId?: string | null
   /** Whether this message is a whisper being shown via "show all" and the user is not sender/target */
   isOverheardWhisper?: boolean
   /** Whether the Concierge has flagged this chat as dangerous */
@@ -164,6 +172,7 @@ function MessageRowInner({
   onHandleContinue,
   onReattribute,
   participantNames,
+  currentUserId,
   isOverheardWhisper = false,
   isDangerousChat = false,
   isSystemMessageCollapsed = false,
@@ -249,7 +258,11 @@ function MessageRowInner({
     // omits them to avoid a duplicate id.
     return (
       <div key={message.id} className={messageRowClasses.join(' ')}>
-        <AnnouncementChip message={message} onToggleExpanded={onToggleSystemMessageExpanded} />
+        <AnnouncementChip
+          message={message}
+          onToggleExpanded={onToggleSystemMessageExpanded}
+          participantNames={participantNames}
+        />
       </div>
     )
   }
@@ -273,15 +286,21 @@ function MessageRowInner({
         {message.systemSender && !isEditing && onToggleSystemMessageExpanded && (() => {
           const senderName = getSystemSenderDisplayName(message.systemSender)
           const kindLabel = getSystemKindDisplayLabel(message)
+          // A Pascal roll wears its outcome state on the bar's leading edge.
+          const accent = getAnnouncementAccentClasses(message)
           return (
             <button
               type="button"
               onClick={() => onToggleSystemMessageExpanded(message.id)}
-              className="qt-chat-system-bar qt-chat-system-bar-expanded"
+              className={`qt-chat-system-bar qt-chat-system-bar-expanded${accent ? ` ${accent}` : ''}`}
               aria-expanded={true}
               aria-label={`Collapse ${senderName}${kindLabel ? ` ${kindLabel}` : ''} message`}
             >
-              <AnnouncementBarContents message={message} expanded />
+              <AnnouncementBarContents
+                message={message}
+                expanded
+                participantNames={participantNames}
+              />
             </button>
           )
         })()}
@@ -321,7 +340,7 @@ function MessageRowInner({
               {isWhisper && (
                 <div className="qt-chat-whisper-label">
                   whispered to {message.targetParticipantIds!.map(
-                    id => participantNames?.[id] || 'unknown'
+                    id => resolveWhisperTargetLabel(id, participantNames, currentUserId)
                   ).join(', ')}
                 </div>
               )}
@@ -575,6 +594,7 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
   // Whisper props
   if (prev.isOverheardWhisper !== next.isOverheardWhisper) return false
   if (prev.participantNames !== next.participantNames) return false
+  if (prev.currentUserId !== next.currentUserId) return false
 
   // Danger state
   if (prev.isDangerousChat !== next.isDangerousChat) return false
@@ -596,6 +616,12 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
   if (prev.thinkingCollapsedByDefault !== next.thinkingCollapsedByDefault) return false
   if (prev.message.reasoningContent !== next.message.reasoningContent) return false
   if ((prev.message.reasoningSegments?.length ?? 0) !== (next.message.reasoningSegments?.length ?? 0)) return false
+
+  // Answer-confirmation state (badge)
+  if (prev.message.confirmed !== next.message.confirmed) return false
+  if (prev.message.confirmationChecked !== next.message.confirmationChecked) return false
+  if (prev.message.confirmationRevised !== next.message.confirmationRevised) return false
+  if (prev.message.confirmationNotes !== next.message.confirmationNotes) return false
 
   // Props are equal, skip re-render
   return true

@@ -14,9 +14,11 @@ interface ProjectsGridProps {
   projects: Project[]
   onCreateClick: () => void
   onDeleteClick: (projectId: string) => void
+  /** When provided (workspace tab), open the project in place instead of routing. */
+  onOpenProject?: (projectId: string) => void
 }
 
-export function ProjectsGrid({ projects, onCreateClick, onDeleteClick }: ProjectsGridProps) {
+export function ProjectsGrid({ projects, onCreateClick, onDeleteClick, onOpenProject }: ProjectsGridProps) {
   const router = useRouter()
 
   const handleCardClick = (e: React.MouseEvent, projectId: string) => {
@@ -24,7 +26,8 @@ export function ProjectsGrid({ projects, onCreateClick, onDeleteClick }: Project
     if (target.closest('button') || target.closest('a')) {
       return
     }
-    router.push(`/prospero/${projectId}`)
+    if (onOpenProject) onOpenProject(projectId)
+    else router.push(`/prospero/${projectId}`)
   }
 
   if (projects.length === 0) {
@@ -49,6 +52,7 @@ export function ProjectsGrid({ projects, onCreateClick, onDeleteClick }: Project
           project={project}
           onClick={(e) => handleCardClick(e, project.id)}
           onDelete={() => onDeleteClick(project.id)}
+          onOpen={onOpenProject}
         />
       ))}
     </div>

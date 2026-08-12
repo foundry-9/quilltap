@@ -37,7 +37,8 @@ export async function executeListEmailTool(
   context: ListEmailToolContext,
 ): Promise<ListEmailToolOutput> {
   try {
-    if (!validateListEmailInput(input)) {
+    const parsed = validateListEmailInput(input);
+    if (!parsed) {
       return fail('That request to the Post Office made no sense.');
     }
     if (!context.characterId) {
@@ -48,6 +49,9 @@ export async function executeListEmailTool(
     const me = await repos.characters.findByIdRaw(context.characterId);
     if (!me) {
       return fail('The Post Office cannot find your postbox; your character seems to have gone astray.');
+    }
+    if (me.archivedAt) {
+      return fail('That character is archived; rehydrate it to continue.');
     }
 
     const { mountPointId: myVaultId } = await ensureCharacterVault(me);

@@ -98,3 +98,24 @@ export function mimeForExtension(relativePath: string): string {
       return 'application/octet-stream';
   }
 }
+
+/**
+ * Clean, parameter-free MIME type for a native-text document, suitable for a
+ * `FileAttachment` handed to the LLM. Unlike {@link mimeForExtension} this drops
+ * the `; charset=utf-8` suffix, because the provider text whitelist and
+ * `lib/chat/file-attachment-fallback#isTextFile` compare exact strings. Returns
+ * null for paths that aren't a native-text type.
+ */
+export function nativeTextAttachmentMime(relativePath: string): string | null {
+  switch (detectNativeText(relativePath)) {
+    case 'markdown':
+      return 'text/markdown';
+    case 'txt':
+      return 'text/plain';
+    case 'json':
+    case 'jsonl':
+      return 'application/json';
+    default:
+      return null;
+  }
+}

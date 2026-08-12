@@ -10,12 +10,12 @@
  * those pointers are nulled too.
  */
 
-import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
+import { createContextParamsHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { successResponse, badRequest, notFound, serverError } from '@/lib/api/responses';
 import { removeFromCharacterGallery } from '@/lib/photos/character-gallery-service';
 
-export const DELETE = createAuthenticatedParamsHandler<{ id: string; linkId: string }>(
+export const DELETE = createContextParamsHandler<{ id: string; linkId: string }>(
   async (_req, { user, repos }, { id, linkId }) => {
     try {
       if (!id) return badRequest('Missing character id');

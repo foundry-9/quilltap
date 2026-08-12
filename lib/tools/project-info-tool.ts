@@ -122,6 +122,7 @@ export const projectInfoToolDefinition = {
  */
 export function validateProjectInfoInput(
   input: unknown
-): input is ProjectInfoToolInput {
-  return projectInfoToolInputSchema.safeParse(input).success
+): ProjectInfoToolInput | null {
+  const parsed = projectInfoToolInputSchema.safeParse(input)
+  return parsed.success ? parsed.data : null
 }

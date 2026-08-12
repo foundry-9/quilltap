@@ -6,7 +6,7 @@
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { NextRequest, NextResponse } from 'next/server';
-import type { AuthenticatedContext } from '@/lib/api/middleware/auth';
+import type { RequestContext } from '@/lib/api/middleware/context';
 
 const {
   getActionParam,
@@ -44,7 +44,7 @@ describe('API Action Middleware', () => {
   });
 
   describe('withActionDispatch', () => {
-    let mockContext: AuthenticatedContext;
+    let mockContext: RequestContext;
     let mockHandlers: any;
 
     beforeEach(() => {
@@ -157,7 +157,7 @@ describe('API Action Middleware', () => {
   });
 
   describe('withCollectionActionDispatch', () => {
-    let mockContext: AuthenticatedContext;
+    let mockContext: RequestContext;
     let mockHandlers: any;
 
     beforeEach(() => {

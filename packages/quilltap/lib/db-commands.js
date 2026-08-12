@@ -922,13 +922,26 @@ function inspectCharacterVault(row, mounts) {
   return status;
 }
 
-function cmdCharacters(args, ctx) {
+async function cmdCharacters(args, ctx) {
   const { flags, positional } = parseSubArgs(args);
   const sub = positional[0] || 'status';
-  if (sub !== 'status') {
-    throw new Error(`Unknown characters subcommand: ${sub}. Try: status`);
+  switch (sub) {
+    case 'status':
+      return cmdCharactersStatus(flags, ctx);
+    case 'archives':
+      return cmdCharactersArchives(flags, ctx);
+    case 'archive':
+      return cmdCharactersArchiveVerb('archive', positional[1], flags, ctx);
+    case 'rehydrate':
+      return cmdCharactersArchiveVerb('rehydrate', positional[1], flags, ctx);
+    case 'export':
+      return cmdCharactersExport(positional[1], flags, ctx);
+    default:
+      throw new Error(`Unknown characters subcommand: ${sub}. Try: status, archives, archive, rehydrate, export`);
   }
+}
 
+function cmdCharactersStatus(flags, ctx) {
   const json = asBool(flags.json);
   const limit = asInt(flags.limit, 0);
   const onlyDiverged = asBool(flags.diverged);
@@ -1040,6 +1053,258 @@ function summarizeCharacterStatuses(all) {
     else if (s.issue.startsWith('diverged')) diverged++;
   }
   return { ok, diverged, missingFiles, noVault, empty, physIncomplete };
+}
+
+// ---------- characters: archive shelf ----------
+
+const ARCHIVE_MAGIC = Buffer.from('QTAPARC1', 'ascii');
+const ARCHIVE_INTERNAL_PASSPHRASE = '__quilltap_no_passphrase__';
+
+/**
+ * List archived characters and the ARCHIVE bundle files on the shelf,
+ * including loose bundles (files rows no character points at — the survivors
+ * of a "keep archived bundles" wipe). Read-only.
+ */
+function cmdCharactersArchives(flags, ctx) {
+  const json = asBool(flags.json);
+  const main = ctx.openMain();
+  try {
+    const cols = new Set(main.prepare('PRAGMA table_info(characters)').all().map(r => r.name));
+    if (!cols.has('archivedAt')) {
+      console.log('This database predates character archiving (no archivedAt column).');
+      return;
+    }
+    const archived = main.prepare(
+      'SELECT id, name, archivedAt, archiveFileId FROM characters WHERE archivedAt IS NOT NULL ORDER BY archivedAt DESC'
+    ).all();
+    const bundles = main.prepare(
+      "SELECT id, originalFilename, storageKey, size, createdAt FROM files WHERE category = 'ARCHIVE' ORDER BY createdAt DESC"
+    ).all();
+
+    const referenced = new Set(archived.map(c => c.archiveFileId).filter(Boolean));
+    const looseBundles = bundles.filter(b => !referenced.has(b.id));
+
+    if (json) {
+      return printJson({ archivedCharacters: archived, bundles, looseBundles });
+    }
+
+    if (archived.length === 0 && bundles.length === 0) {
+      console.log('The archive shelf stands empty — no archived characters, no bundles.');
+      return;
+    }
+
+    if (archived.length > 0) {
+      console.log(`Archived characters (${archived.length}):`);
+      printTable(archived.map(c => ({
+        id: c.id.slice(0, 8),
+        name: truncate(c.name, 28),
+        archivedAt: c.archivedAt,
+        bundle: c.archiveFileId ? c.archiveFileId.slice(0, 8) : '(none — pre-bundle tombstone)',
+      })));
+    }
+    if (bundles.length > 0) {
+      console.log('');
+      console.log(`Archive bundles (${bundles.length}${looseBundles.length > 0 ? `, ${looseBundles.length} loose` : ''}):`);
+      printTable(bundles.map(b => ({
+        id: b.id.slice(0, 8),
+        file: truncate(b.originalFilename, 44),
+        bytes: b.size,
+        createdAt: b.createdAt,
+        state: referenced.has(b.id) ? 'held by character' : 'loose (importable only)',
+      })));
+    }
+  } finally {
+    try { main.close(); } catch {}
+  }
+}
+
+/**
+ * Archive or rehydrate a character through the RUNNING server's API. The
+ * archive pipeline (export, encryption, prune) and the passphrase cache live
+ * in the server process — the CLI cannot run them against the raw database —
+ * so the server must be up, and it is the server that holds the instance
+ * lock. `--write` is still required as the explicit opt-in to a write.
+ */
+async function cmdCharactersArchiveVerb(verb, query, flags, ctx) {
+  if (!query) {
+    throw new Error(`Usage: characters ${verb} <name|id> --write [--port N]`);
+  }
+  if (!asBool(flags.write)) {
+    throw new Error(`characters ${verb} changes data; add --write to proceed.`);
+  }
+  const port = asInt(flags.port, 3000);
+
+  const main = ctx.openMain();
+  let character;
+  try {
+    character = resolveCharacter(main, String(query), ctx.openMounts);
+  } finally {
+    try { main.close(); } catch {}
+  }
+
+  const url = `http://localhost:${port}/api/v1/characters/${encodeURIComponent(character.id)}?action=${verb}`;
+  let res;
+  try {
+    res = await fetch(url, { method: 'POST' });
+  } catch (err) {
+    throw new Error(
+      `Could not reach the Quilltap server at http://localhost:${port}: ${err.message}\n` +
+      `The ${verb} operation runs inside the server (it needs the export pipeline and the ` +
+      'unlocked passphrase), so start the server first.'
+    );
+  }
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(body.error || `${verb} failed with HTTP ${res.status}`);
+  }
+
+  if (asBool(flags.json)) return printJson(body);
+  if (verb === 'archive') {
+    console.log(
+      body.pruneComplete === false
+        ? `${character.name} is archived, but the prune did not finish — run the same command again to complete it.`
+        : `${character.name} rests in the archive. Bundle file: ${body.archiveFileId || '(none)'}.`
+    );
+  } else {
+    const r = body.restored;
+    console.log(
+      r
+        ? `${character.name} is awake again — ${r.memories} memories, ${r.documents} documents, ${r.blobs} blobs restored.`
+        : `${character.name} is awake again.`
+    );
+    if (body.archiveBundleFileId) {
+      console.log(`The archive bundle stays in the file library (file ${body.archiveBundleFileId}); delete it there if you no longer want the spare copy.`);
+    }
+    for (const w of body.warnings || []) console.log(`warning: ${w}`);
+  }
+}
+
+/** Parse + decrypt a QTAPARC1 bundle. Returns null on a wrong passphrase. */
+function tryDecryptArchiveBundle(data, passphrase) {
+  const crypto = require('crypto');
+  const headerLength = data.readUInt32BE(ARCHIVE_MAGIC.length);
+  const bodyStart = ARCHIVE_MAGIC.length + 4 + headerLength;
+  if (headerLength <= 0 || data.length < bodyStart + 16) {
+    throw new Error('Archive bundle is truncated (bad header or missing auth tag).');
+  }
+  const header = JSON.parse(data.subarray(ARCHIVE_MAGIC.length + 4, bodyStart).toString('utf8'));
+  const salt = Buffer.from(header.salt, 'hex');
+  const iv = Buffer.from(header.iv, 'hex');
+  const key = crypto.pbkdf2Sync(passphrase, new Uint8Array(salt), header.kdfIterations, 32, header.kdfDigest);
+  const keyHash = crypto.createHash('sha256').update(new Uint8Array(key)).digest('hex');
+  if (keyHash !== header.keyHash) return null;
+
+  const ciphertext = data.subarray(bodyStart, data.length - 16);
+  const authTag = data.subarray(data.length - 16);
+  const decipher = crypto.createDecipheriv(header.algorithm, new Uint8Array(key), new Uint8Array(iv));
+  decipher.setAuthTag(new Uint8Array(authTag));
+  return Buffer.concat([decipher.update(new Uint8Array(ciphertext)), decipher.final()]);
+}
+
+/**
+ * Export a character as a plaintext `.qtap` — the interchange escape hatch.
+ *
+ * Archived characters: decrypt their bundle straight off the disk (offline;
+ * prompts for the passphrase on protected instances). This is the only way to
+ * reach an archived character's packed-away material — mail, photographs,
+ * summaries — without rehydrating. Live characters: proxy to the running
+ * server's export pipeline. Read-only either way.
+ */
+async function cmdCharactersExport(query, flags, ctx) {
+  if (!query) {
+    throw new Error('Usage: characters export <name|id> [--out <path>] [--port N]');
+  }
+
+  const main = ctx.openMain();
+  let character;
+  let archiveFile = null;
+  try {
+    character = resolveCharacter(main, String(query), ctx.openMounts);
+    const cols = new Set(main.prepare('PRAGMA table_info(characters)').all().map(r => r.name));
+    if (cols.has('archivedAt')) {
+      const row = main.prepare('SELECT archivedAt, archiveFileId FROM characters WHERE id = ?').get(character.id);
+      if (row && row.archivedAt && row.archiveFileId) {
+        archiveFile = main.prepare('SELECT id, storageKey, sha256 FROM files WHERE id = ?').get(row.archiveFileId);
+        if (!archiveFile) {
+          throw new Error(`${character.name} is archived but their bundle file row (${row.archiveFileId}) is missing.`);
+        }
+      } else if (row && row.archivedAt) {
+        throw new Error(`${character.name} is a pre-bundle tombstone (no archive bundle exists to export).`);
+      }
+    }
+  } finally {
+    try { main.close(); } catch {}
+  }
+
+  const safeName = String(character.name || character.id).replace(/[\\/:*?"<>|]/g, '_');
+  const outPath = path.resolve(flags.out ? String(flags.out) : `${safeName}.qtap`);
+
+  let plaintext;
+  if (archiveFile) {
+    if (!archiveFile.storageKey) {
+      throw new Error('The bundle row has no storage key; the file was never written.');
+    }
+    const bundlePath = path.join(ctx.dataDir, '..', 'files', archiveFile.storageKey);
+    if (!fs.existsSync(bundlePath)) {
+      throw new Error(`Bundle bytes not found on disk: ${bundlePath}`);
+    }
+    const data = fs.readFileSync(bundlePath);
+
+    if (!data.subarray(0, ARCHIVE_MAGIC.length).equals(ARCHIVE_MAGIC)) {
+      // Pre-encryption plaintext bundle — pass it through untouched.
+      plaintext = data;
+    } else {
+      plaintext = tryDecryptArchiveBundle(data, ARCHIVE_INTERNAL_PASSPHRASE);
+      if (plaintext === null && process.env.QUILLTAP_DB_PASSPHRASE) {
+        plaintext = tryDecryptArchiveBundle(data, process.env.QUILLTAP_DB_PASSPHRASE);
+      }
+      if (plaintext === null) {
+        const { promptPassphrase } = require('./db-helpers');
+        const pass = await promptPassphrase('Archive passphrase: ');
+        if (pass) plaintext = tryDecryptArchiveBundle(data, pass);
+      }
+      if (plaintext === null) {
+        throw new Error(
+          'That passphrase does not open this archive. If you changed your passphrase and this ' +
+          'bundle was reported left behind, it still wants the old one.'
+        );
+      }
+    }
+  } else {
+    // Live character: the export pipeline lives in the server.
+    const port = asInt(flags.port, 3000);
+    const url = `http://localhost:${port}/api/v1/system/tools?action=export`;
+    let res;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'characters',
+          scope: 'selected',
+          selectedIds: [character.id],
+          includeMemories: true,
+        }),
+      });
+    } catch (err) {
+      throw new Error(
+        `Could not reach the Quilltap server at http://localhost:${port}: ${err.message}\n` +
+        'Exporting a live character runs the server\'s export pipeline, so start the server first. ' +
+        '(Archived characters export offline from their bundle.)'
+      );
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `Export failed with HTTP ${res.status}`);
+    }
+    plaintext = Buffer.from(await res.arrayBuffer());
+  }
+
+  fs.writeFileSync(outPath, plaintext);
+  console.log(`Wrote ${plaintext.length} bytes to ${outPath}`);
+  if (archiveFile) {
+    console.log('This is the decrypted archive bundle — a plaintext .qtap. Guard it accordingly.');
+  }
 }
 
 // ---------- verb: optimize ----------

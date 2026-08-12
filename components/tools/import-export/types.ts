@@ -43,6 +43,7 @@ export const ENTITY_TYPE_LABELS: Record<ExportEntityType, string> = {
   characters: 'Characters',
   chats: 'Chats',
   'roleplay-templates': 'Roleplay Templates',
+  'prompt-templates': 'Prompt Templates',
   'connection-profiles': 'Connection Profiles',
   'image-profiles': 'Image Profiles',
   'embedding-profiles': 'Embedding Profiles',
@@ -50,6 +51,10 @@ export const ENTITY_TYPE_LABELS: Record<ExportEntityType, string> = {
   projects: 'Projects',
   groups: 'Groups',
   'document-stores': 'Document Stores',
+  files: 'Files & Folders',
+  'provider-models': 'Provider Models',
+  'plugin-configs': 'Plugin Settings',
+  'instance-settings': 'Instance Settings',
 }
 
 // Available entity with optional memory count
@@ -69,8 +74,22 @@ export interface ExportState {
   loadingEntities: boolean
   includeMemories: boolean
   memoryCount: number
+  /**
+   * What the selected characters' vaults add to the bundle — photographs,
+   * correspondence and the like now travel with the character. Null until the
+   * options step has asked, and for every type but `characters`.
+   */
+  vaultPreview: VaultPreview | null
   exporting: boolean
   error: string | null
+}
+
+// Character vaults riding along in a `characters` export
+export interface VaultPreview {
+  stores: number
+  documents: number
+  blobs: number
+  estimatedBytes: number
 }
 
 // Import state

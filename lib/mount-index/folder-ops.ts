@@ -108,12 +108,18 @@ export async function moveFolder(input: {
   } catch {
     throw new FileOpError(`Folder not found: ${fromRel}`, 'SOURCE_NOT_FOUND');
   }
-  try {
-    await fs.access(toAbs);
-    throw new FileOpError(`Destination already exists: ${toRel}`, 'DEST_EXISTS');
-  } catch (err) {
-    if (err instanceof FileOpError) throw err;
-    // ENOENT is the happy path (destination free).
+  // Case-only rename (lore → Lore): on a case-insensitive filesystem the
+  // destination probe would find the source itself, so skip it — fs.rename
+  // handles the casing change in place.
+  const caseOnlyRename = fromRel.toLowerCase() === toRel.toLowerCase();
+  if (!caseOnlyRename) {
+    try {
+      await fs.access(toAbs);
+      throw new FileOpError(`Destination already exists: ${toRel}`, 'DEST_EXISTS');
+    } catch (err) {
+      if (err instanceof FileOpError) throw err;
+      // ENOENT is the happy path (destination free).
+    }
   }
 
   await fs.mkdir(path.dirname(toAbs), { recursive: true });

@@ -347,8 +347,8 @@ export function TimestampConfigCard({
                   Use fictional time
                 </div>
                 <div className="qt-text-secondary text-xs">
-                  Instead of real-time, use a fictional base timestamp that
-                  advances with each message
+                  Instead of real-time, start the clock at a fictional moment.
+                  It then keeps pace with the real one, hour for hour
                 </div>
               </div>
             </label>
@@ -370,8 +370,10 @@ export function TimestampConfigCard({
                 className="w-full px-3 py-2 border qt-border-default rounded bg-background qt-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
               />
               <p className="qt-text-secondary mt-1 text-xs">
-                Set the initial timestamp for fictional time. It will advance
-                based on message activity.
+                The hour at which the tale begins, read as a clock in the
+                timezone set above. From there it advances one minute for every
+                minute that passes in the waking world; the clock starts when
+                the chat is created.
               </p>
             </div>
           )}

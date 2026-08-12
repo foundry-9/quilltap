@@ -86,7 +86,7 @@ export function useMessageStreaming({
     setStreamingContent('')
   }, [isMultiChar, setSending, setStreaming, setStreamingContent, setWaitingForResponse, setRespondingParticipantId, setPendingToolCalls, setToolExecutionStatus])
 
-  const triggerContinueMode = useCallback(async (participantId: string) => {
+  const triggerContinueMode = useCallback(async (participantId: string, _nudge = false) => {
     // This is a placeholder - the actual implementation is in page.tsx
     // because it needs access to many page-level dependencies
   }, [])

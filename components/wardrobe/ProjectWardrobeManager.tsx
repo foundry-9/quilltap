@@ -265,7 +265,7 @@ export function ProjectWardrobeManager({
                 onChange={(e) => setDraft((p) => ({ ...p, isDefault: e.target.checked }))}
                 className="qt-checkbox"
               />
-              Default item
+              Worn by default by every character in this project
             </label>
             <label className="flex items-center gap-1.5 qt-text-small">
               <input

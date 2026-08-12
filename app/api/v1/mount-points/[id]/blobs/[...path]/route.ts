@@ -16,8 +16,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
-import type { RequestContext } from '@/lib/api/middleware/auth';
+import { createContextParamsHandler } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
 import { notFound, serverError, successResponse } from '@/lib/api/responses';
 import { deleteDatabaseDocument } from '@/lib/mount-index/database-store';
@@ -39,7 +39,7 @@ function mimeForDocument(doc: { fileType?: string }): string {
   }
 }
 
-export const GET = createAuthenticatedParamsHandler<Params>(
+export const GET = createContextParamsHandler<Params>(
   async (_req: NextRequest, { repos }: RequestContext, { id, path }) => {
     try {
       const relativePath = joinPath(path);
@@ -92,7 +92,7 @@ export const GET = createAuthenticatedParamsHandler<Params>(
   }
 );
 
-export const DELETE = createAuthenticatedParamsHandler<Params>(
+export const DELETE = createContextParamsHandler<Params>(
   async (_req: NextRequest, { user, repos }: RequestContext, { id, path }) => {
     try {
       const relativePath = joinPath(path);
@@ -128,7 +128,7 @@ export const DELETE = createAuthenticatedParamsHandler<Params>(
   }
 );
 
-export const PATCH = createAuthenticatedParamsHandler<Params>(
+export const PATCH = createContextParamsHandler<Params>(
   async (req: NextRequest, { user, repos }: RequestContext, { id, path }) => {
     try {
       const relativePath = joinPath(path);

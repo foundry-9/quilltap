@@ -3,6 +3,7 @@
 import { useRef } from 'react'
 import { Icon } from '@/components/ui/icon'
 import RngDropdown, { type RngPendingResult } from './RngDropdown'
+import CustomToolsButton from './CustomToolsButton'
 
 interface ComposerGutterToolsProps {
   /** Callback to trigger file attachment dialog */
@@ -21,6 +22,12 @@ interface ComposerGutterToolsProps {
   chatId: string
   /** Callback when RNG result is ready */
   onPendingToolResult?: (result: RngPendingResult) => void
+  /** Whether this chat resolves a non-empty custom-tool roster. The custom
+   *  tools button is rendered only when it does — an empty roster means the
+   *  user has no definitions in scope and the button would open onto nothing. */
+  customToolsAvailable?: boolean
+  /** Callback after a custom tool runs, so the Salon can refetch the chat */
+  onCustomToolRan?: () => void
   /** Whether the tools are disabled */
   disabled?: boolean
 }
@@ -29,10 +36,12 @@ interface ComposerGutterToolsProps {
  * Gutter tools for the chat composer.
  *
  * Displays small icon buttons for frequently-used message-level tools in a
- * 3×2 grid:
+ * two-column grid, filling left-to-right:
  * - Row 1: Insert Announcement (megaphone), Compose Mail (envelope)
  * - Row 2: Library file (document), Generate image (camera)
  * - Row 3: Attach file (paperclip), RNG (dice)
+ * - Row 4: Custom tools (wand) — present only when `customToolsAvailable`, so
+ *   the grid is 3×2 without it and 4×2 (last row half-full) with it.
  *
  * These are positioned in the left gutter of the composer for quick access.
  */
@@ -45,6 +54,8 @@ export function ComposerGutterTools({
   onComposeMailClick,
   chatId,
   onPendingToolResult,
+  customToolsAvailable = false,
+  onCustomToolRan,
   disabled = false,
 }: Readonly<ComposerGutterToolsProps>) {
   const rngDropdownRef = useRef<HTMLDivElement>(null)
@@ -127,6 +138,17 @@ export function ComposerGutterTools({
           variant="gutter"
         />
       </div>
+
+      {/* Row 4, Col 1: Custom tools (Pascal) — opens a dialog; only when the
+          chat actually resolves a roster */}
+      {customToolsAvailable && (
+        <CustomToolsButton
+          chatId={chatId}
+          disabled={disabled}
+          onRan={onCustomToolRan}
+          variant="gutter"
+        />
+      )}
     </div>
   )
 }

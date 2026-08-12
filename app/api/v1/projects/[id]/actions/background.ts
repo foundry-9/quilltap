@@ -5,21 +5,21 @@
  */
 
 import { NextResponse } from 'next/server';
-import { checkOwnership, getFilePath } from '@/lib/api/middleware';
+import { exists, getFilePath } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { notFound, serverError } from '@/lib/api/responses';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 /**
  * Get project story background based on backgroundDisplayMode
  */
 export async function handleGetBackground(
   projectId: string,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   try {
     const project = await repos.projects.findById(projectId);
-    if (!checkOwnership(project, user.id)) {
+    if (!exists(project)) {
       return notFound('Project');
     }
 

@@ -115,6 +115,9 @@ export interface EnrichedConnectionProfile {
   name: string
   provider: string
   modelName: string
+  /** Whether this profile permits tool use — surfaced so the tool-settings
+   *  dialog can warn that per-chat tool toggles are moot when it's false. */
+  allowToolUse: boolean
   apiKey: {
     id: string
     provider: string
@@ -374,6 +377,7 @@ export async function getConnectionProfile(
     name: profile.name,
     provider: profile.provider,
     modelName: profile.modelName,
+    allowToolUse: profile.allowToolUse ?? true,
     apiKey: apiKeyInfo,
   }
 }

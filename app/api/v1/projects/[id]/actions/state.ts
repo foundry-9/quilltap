@@ -7,16 +7,15 @@
  */
 
 import { NextResponse } from 'next/server';
-import { checkOwnership } from '@/lib/api/middleware';
+import { exists } from '@/lib/api/middleware';
 import { notFound, successResponse } from '@/lib/api/responses';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import { createResetStateHandler, createSetStateHandler } from '@/lib/api/state-handlers';
 
 const STATE_CFG = {
   entityName: 'Project',
   idLogKey: 'projectId',
-  selectRepo: (repos: AuthenticatedContext['repos']) => repos.projects,
-  useOwnershipCheck: true,
+  selectRepo: (repos: RequestContext['repos']) => repos.projects,
 } as const;
 
 /**
@@ -24,10 +23,10 @@ const STATE_CFG = {
  */
 export async function handleGetState(
   projectId: string,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   const project = await repos.projects.findById(projectId);
-  if (!checkOwnership(project, user.id)) {
+  if (!exists(project)) {
     return notFound('Project');
   }
 

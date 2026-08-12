@@ -19,6 +19,7 @@ import type {
   Character,
   GeneralScenarioOption,
   NewChatFormState,
+  RoleplayTemplateOption,
   SelectedCharacter,
 } from '../types'
 
@@ -79,6 +80,8 @@ jest.mock('@/hooks/usePersonaDisplayName', () => ({
 function makeState(overrides: Partial<NewChatFormState> = {}): NewChatFormState {
   return {
     imageProfileId: '',
+    roleplayTemplateId: null,
+    roleplayTemplateTouched: false,
     scenario: '',
     scenarioId: null,
     projectScenarioPath: null,
@@ -228,14 +231,16 @@ const autonomousCheckbox = () =>
   screen.getByRole('checkbox', { name: /Make this an autonomous room/i })
 
 describe('NewChatForm Play As (in-place)', () => {
-  it('lists cast characters and default-user characters in the dropdown', () => {
+  it('lists only cast characters in the dropdown', () => {
     const alice = makeChar('a', 'Alice')
     const bob = makeChar('b', 'Bob', { controlledBy: 'user' })
+    // Bob is a default-user character but is NOT in the cast, so he is absent
+    // from the dropdown — he would be added via the picker on the left instead.
     renderPlayAs([llm(alice)], [bob])
 
     const select = screen.getByLabelText('Play As (Optional)')
     const options = within(select).getAllByRole('option').map((o) => o.textContent)
-    expect(options).toEqual(['Chat as yourself', 'Alice', 'Bob'])
+    expect(options).toEqual(['Chat as yourself', 'Alice'])
   })
 
   it('flips exactly the chosen cast character to user, leaving the rest LLM', () => {
@@ -274,11 +279,13 @@ describe('NewChatForm Play As (in-place)', () => {
     expect(next[0].connectionProfileId).toBe('')
   })
 
-  it('"Chat as yourself" removes a default-user persona pulled in by the dropdown', () => {
+  it('"Chat as yourself" reverts a default-user cast member to llm', () => {
+    // Bob is a default-user character who was added to the cast from the picker
+    // and is currently the persona. Reverting hands him back to the LLM in place
+    // (he stays in the cast) rather than being removed.
     const alice = makeChar('a', 'Alice')
     const bob = makeChar('b', 'Bob', { controlledBy: 'user' })
     const cast = [llm(alice), user(bob)]
-    // Bob is in the default-user roster, so reverting removes him entirely.
     const { setSelectedCharacters } = renderPlayAs(cast, [bob])
 
     fireEvent.change(screen.getByLabelText('Play As (Optional)'), {
@@ -286,24 +293,10 @@ describe('NewChatForm Play As (in-place)', () => {
     })
 
     const next = applyUpdater(setSelectedCharacters, cast)
-    expect(next).toEqual([llm(alice)])
-  })
-
-  it('adds a default-user character not yet in the cast as a user entry', () => {
-    const alice = makeChar('a', 'Alice')
-    const bob = makeChar('b', 'Bob', { controlledBy: 'user' })
-    const cast = [llm(alice)]
-    const { setSelectedCharacters } = renderPlayAs(cast, [bob])
-
-    fireEvent.change(screen.getByLabelText('Play As (Optional)'), {
-      target: { value: 'b' },
-    })
-
-    const next = applyUpdater(setSelectedCharacters, cast)
     expect(next).toHaveLength(2)
-    const added = next.find((sc) => sc.character.id === 'b')!
-    expect(added.controlledBy).toBe('user')
-    expect(added.connectionProfileId).toBe('')
+    const b = next.find((sc) => sc.character.id === 'b')!
+    expect(b.controlledBy).toBe('llm')
+    expect(b.connectionProfileId).toBe('')
   })
 
   it('disables the autonomous toggle and shows the note when a user entry is present', () => {
@@ -322,5 +315,70 @@ describe('NewChatForm Play As (in-place)', () => {
 
     expect(autonomousCheckbox()).not.toBeDisabled()
     expect(screen.queryByText(/revert it to/i)).not.toBeInTheDocument()
+  })
+})
+
+// --- Roleplay template picker ----------------------------------------------
+
+const TEMPLATES: RoleplayTemplateOption[] = [
+  { id: 'tpl-classic', name: 'Classic Roleplay', description: null, isBuiltIn: true },
+  { id: 'tpl-house', name: 'House Style', description: null, isBuiltIn: false },
+]
+
+function templateSelect() {
+  return screen.getByLabelText('Roleplay Template') as HTMLSelectElement
+}
+
+describe('NewChatForm roleplay template picker', () => {
+  it('is hidden when no templates are available', () => {
+    renderForm()
+    expect(screen.queryByLabelText('Roleplay Template')).not.toBeInTheDocument()
+  })
+
+  it('defaults to the chat default and marks it in the list', () => {
+    renderForm(
+      { roleplayTemplateId: 'tpl-house' },
+      { roleplayTemplates: TEMPLATES, defaultRoleplayTemplateId: 'tpl-house' }
+    )
+
+    expect(templateSelect().value).toBe('tpl-house')
+    expect(screen.getByRole('option', { name: /House Style \(default\)/ })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Classic Roleplay (Built-in)' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'No Template' })).toBeInTheDocument()
+  })
+
+  it('marks "No Template" as the default when no default template is set', () => {
+    renderForm({}, { roleplayTemplates: TEMPLATES, defaultRoleplayTemplateId: null })
+
+    expect(templateSelect().value).toBe('')
+    expect(screen.getByRole('option', { name: 'No Template (default)' })).toBeInTheDocument()
+  })
+
+  it('records an explicit pick as touched so reference reloads cannot re-seed it', () => {
+    const { setState } = renderForm(
+      { roleplayTemplateId: 'tpl-house' },
+      { roleplayTemplates: TEMPLATES, defaultRoleplayTemplateId: 'tpl-house' }
+    )
+
+    fireEvent.change(templateSelect(), { target: { value: 'tpl-classic' } })
+
+    const updater = setState.mock.calls[0][0] as (prev: NewChatFormState) => NewChatFormState
+    const next = updater(makeState({ roleplayTemplateId: 'tpl-house' }))
+    expect(next.roleplayTemplateId).toBe('tpl-classic')
+    expect(next.roleplayTemplateTouched).toBe(true)
+  })
+
+  it('turns "No Template" into a null id, still marked as touched', () => {
+    const { setState } = renderForm(
+      { roleplayTemplateId: 'tpl-house' },
+      { roleplayTemplates: TEMPLATES, defaultRoleplayTemplateId: 'tpl-house' }
+    )
+
+    fireEvent.change(templateSelect(), { target: { value: '' } })
+
+    const updater = setState.mock.calls[0][0] as (prev: NewChatFormState) => NewChatFormState
+    const next = updater(makeState({ roleplayTemplateId: 'tpl-house' }))
+    expect(next.roleplayTemplateId).toBeNull()
+    expect(next.roleplayTemplateTouched).toBe(true)
   })
 })

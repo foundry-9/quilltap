@@ -169,4 +169,81 @@ describe('resolveEquippedOutfitForCharacter', () => {
       { projectMountPointIds: ['proj-mount'] },
     )
   })
+
+  it('hydrates a shared composite whose components are neither equipped nor owned', async () => {
+    // The canonical project-wardrobe default: a "House Livery" bundling three
+    // General items. Nothing but the composite is equipped, and the character
+    // owns none of it — so the components have to be fetched on their own, or
+    // the whole outfit resolves to nothing.
+    const coat = makeItem('coat-id', 'Livery coat', ['top'])
+    const waistcoat = makeItem('waistcoat-id', 'Livery waistcoat', ['top'])
+    const boots = makeItem('boots-id', 'Livery boots', ['footwear'])
+    const livery = makeItem('livery-id', 'House livery', ['top'], [
+      'coat-id',
+      'waistcoat-id',
+      'boots-id',
+    ])
+    const shared = [coat, waistcoat, boots, livery]
+
+    const findByIdsForCharacter = jest.fn(async (_characterId: string, ids: string[]) =>
+      shared.filter((i) => ids.includes(i.id)),
+    )
+    const repos = {
+      wardrobe: {
+        findByCharacterId: jest.fn(async () => []),
+        findByIdsForCharacter,
+      },
+    } as unknown as Parameters<typeof resolveEquippedOutfitForCharacter>[0]
+
+    const slots: EquippedSlots = { ...emptySlots(), top: ['livery-id'] }
+    const resolved = await resolveEquippedOutfitForCharacter(repos, CHAR_ID, slots)
+
+    expect(resolved.outfitValues.top).toEqual(['Livery coat', 'Livery waistcoat'])
+    expect(resolved.outfitValues.footwear).toEqual(['Livery boots'])
+    // One query for the equipped id, one for its component level — not one per component.
+    expect(findByIdsForCharacter).toHaveBeenCalledTimes(2)
+  })
+
+  it('hydrates nested composite components level by level', async () => {
+    const cufflinks = makeItem('cufflinks-id', 'Cufflinks', ['accessories'])
+    const jewelry = makeItem('jewelry-id', 'Formal jewelry', ['accessories'], ['cufflinks-id'])
+    const shirt = makeItem('shirt-id', 'Dress shirt', ['top'])
+    const formal = makeItem('formal-id', 'Formal set', ['top'], ['shirt-id', 'jewelry-id'])
+    const shared = [cufflinks, jewelry, shirt, formal]
+
+    const repos = {
+      wardrobe: {
+        findByCharacterId: jest.fn(async () => []),
+        findByIdsForCharacter: jest.fn(async (_characterId: string, ids: string[]) =>
+          shared.filter((i) => ids.includes(i.id)),
+        ),
+      },
+    } as unknown as Parameters<typeof resolveEquippedOutfitForCharacter>[0]
+
+    const slots: EquippedSlots = { ...emptySlots(), top: ['formal-id'] }
+    const resolved = await resolveEquippedOutfitForCharacter(repos, CHAR_ID, slots)
+
+    expect(resolved.outfitValues.top).toEqual(['Dress shirt'])
+    expect(resolved.outfitValues.accessories).toEqual(['Cufflinks'])
+  })
+
+  it('stops hydrating when a component cannot be found anywhere', async () => {
+    const orphanParent = makeItem('parent-id', 'Mystery bundle', ['top'], ['ghost-id'])
+    const findByIdsForCharacter = jest.fn(async (_characterId: string, ids: string[]) =>
+      ids.includes('parent-id') ? [orphanParent] : [],
+    )
+    const repos = {
+      wardrobe: {
+        findByCharacterId: jest.fn(async () => []),
+        findByIdsForCharacter,
+      },
+    } as unknown as Parameters<typeof resolveEquippedOutfitForCharacter>[0]
+
+    const slots: EquippedSlots = { ...emptySlots(), top: ['parent-id'] }
+    const resolved = await resolveEquippedOutfitForCharacter(repos, CHAR_ID, slots)
+
+    expect(resolved.outfitValues.top).toEqual([])
+    // Equipped id, then one attempt at the missing component — no retry loop.
+    expect(findByIdsForCharacter).toHaveBeenCalledTimes(2)
+  })
 })

@@ -82,6 +82,7 @@ export interface Project {
   defaultImageProfileId?: string | null
   defaultRoleplayTemplateId?: string | null
   defaultAlertCharactersOfLanternImages?: boolean | null
+  answerConfirmationOverride?: 'ON' | 'OFF' | null
   color?: string | null
   icon?: string | null
   characterRoster: ProjectCharacter[]

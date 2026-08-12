@@ -4,7 +4,7 @@
   "id": "art-deco",
   "name": "Art Deco",
   "description": "The geometry of elegance, the precision of grandeur. Navy-and-gold palette evoking the Chrysler Building lobby at dusk — opulent but disciplined. Geometric sans-serif headings with wide tracking, elegant serif body text, and gold accents throughout. Light mode is ivory and gold leaf; dark mode is midnight and burnished brass.",
-  "version": "1.0.9",
+  "version": "1.0.11",
   "author": "Foundry-9 LLC",
   "license": "MIT",
   "supportsDarkMode": true,

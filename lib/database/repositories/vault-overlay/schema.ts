@@ -12,6 +12,7 @@
 import { z } from 'zod';
 import type { Character } from '@/lib/schemas/types';
 import { PronounsSchema } from '@/lib/schemas/character.types';
+import { JsonSchema } from '@/lib/schemas/common.types';
 import {
   WardrobeItemSchema,
   type WardrobeItem,
@@ -28,6 +29,11 @@ export const CharacterVaultPropertiesSchema = z.object({
   title: z.string().nullable(),
   firstMessage: z.string().nullable(),
   talkativeness: z.number().min(0.1).max(1.0),
+  // Optional-with-default so the vaults written before this field existed
+  // still parse (their properties.json has no `canChooseOutfit` key) and
+  // hydrate as false, rather than failing validation and falling back to the
+  // DB for every managed field. "Absent means false" is the intended default.
+  canChooseOutfit: z.boolean().optional().default(false),
 });
 
 export type CharacterVaultProperties = z.infer<typeof CharacterVaultPropertiesSchema>;
@@ -44,6 +50,20 @@ export const CharacterVaultPhysicalPromptsSchema = z.object({
 });
 
 export type CharacterVaultPhysicalPrompts = z.infer<typeof CharacterVaultPhysicalPromptsSchema>;
+
+/**
+ * `metadata.json` — one flat object of user-authored keys, values of any JSON
+ * type. Nothing about the contents is constrained: the keys are the user's
+ * vocabulary, not ours, so the schema's whole job is to insist the file is a
+ * JSON *object* and refuse an array or a bare scalar.
+ *
+ * `JsonSchema` (record of string → unknown) is exactly that shape, and is
+ * already what `sillyTavernData` uses — reused rather than restated so the two
+ * can't drift into disagreeing about what "arbitrary JSON" means.
+ */
+export const CharacterVaultMetadataSchema = JsonSchema;
+
+export type CharacterVaultMetadata = z.infer<typeof CharacterVaultMetadataSchema>;
 
 // Snapshot of a vault's wardrobe state — composite items live alongside leaf
 // items in the same list and reference their components via
@@ -75,6 +95,7 @@ export const LegacyVaultWardrobeJsonSchema = z.object({
  * Mirrors `writeCharacterVaultManagedFields()` below.
  */
 export const CHARACTER_PROPERTIES_JSON_PATH = 'properties.json';
+export const CHARACTER_METADATA_JSON_PATH = 'metadata.json';
 export const CHARACTER_IDENTITY_MD_PATH = 'identity.md';
 export const CHARACTER_DESCRIPTION_MD_PATH = 'description.md';
 export const CHARACTER_MANIFESTO_MD_PATH = 'manifesto.md';
@@ -90,6 +111,7 @@ export { CHARACTER_WARDROBE_FOLDER };
 
 export const SINGLE_FILE_OVERLAY_PATHS = [
   CHARACTER_PROPERTIES_JSON_PATH,
+  CHARACTER_METADATA_JSON_PATH,
   CHARACTER_IDENTITY_MD_PATH,
   CHARACTER_DESCRIPTION_MD_PATH,
   CHARACTER_MANIFESTO_MD_PATH,
@@ -149,11 +171,13 @@ export type CharacterVaultDescriptor =
   | { kind: 'physical-md'; vaultPath: string }
   | { kind: 'physical-json'; vaultPath: string }
   | { kind: 'properties-json'; vaultPath: string }
+  | { kind: 'metadata-json'; vaultPath: string }
   | { kind: 'prompts-dir'; vaultFolder: string }
   | { kind: 'scenarios-dir'; vaultFolder: string };
 
 export const CHARACTER_VAULT_DESCRIPTORS: readonly CharacterVaultDescriptor[] = [
   { kind: 'properties-json', vaultPath: CHARACTER_PROPERTIES_JSON_PATH },
+  { kind: 'metadata-json', vaultPath: CHARACTER_METADATA_JSON_PATH },
   { kind: 'markdown', vaultPath: CHARACTER_IDENTITY_MD_PATH, field: 'identity' },
   { kind: 'markdown', vaultPath: CHARACTER_DESCRIPTION_MD_PATH, field: 'description' },
   { kind: 'markdown', vaultPath: CHARACTER_MANIFESTO_MD_PATH, field: 'manifesto' },
@@ -181,7 +205,9 @@ export const MANAGED_FIELDS: ReadonlySet<keyof Character> = new Set<keyof Charac
   'title',
   'firstMessage',
   'talkativeness',
+  'canChooseOutfit',
   'physicalDescription',
   'systemPrompts',
   'scenarios',
+  'metadata',
 ]);

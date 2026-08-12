@@ -9,10 +9,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler, getActionParam } from '@/lib/api/middleware';
-import { badRequest, notFound, serverError } from '@/lib/api/responses';
-import { createLLMProvider } from '@/lib/llm';
-import { deleteMemoriesBySourceMessagesWithVectors, deleteMemoriesBySourceMessageWithVectors, deleteMemoryWithVector } from '@/lib/memory/memory-service';
+import { createContextParamsHandler, getActionParam } from '@/lib/api/middleware';
+import { badRequest, notFound, serverError, successResponse, created } from '@/lib/api/responses';
+import { regenerateMessageAsSwipe } from '@/lib/services/chat-message';
+import { deleteMemoriesBySourceMessagesWithVectors, deleteMemoryWithVector } from '@/lib/memory/memory-service';
 import { invalidateContextSummaryIfMessageCovered } from '@/lib/chat/context-summary';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
@@ -48,38 +48,49 @@ async function findMessageInUserChats(
   userId: string,
   messageId: string
 ): Promise<MessageSearchResult | null> {
-  const userChats = await repos.chats.findByUserId(userId);
-
-  for (const chat of userChats) {
-    const messages = await repos.chats.getMessages(chat.id);
-    const idx = messages.findIndex(
-      (m: ChatEvent): m is MessageEvent => m.type === 'message' && m.id === messageId
-    );
-    if (idx !== -1) {
-      return {
-        chat,
-        message: messages[idx] as MessageEvent,
-        allMessages: messages,
-        messageIndex: idx,
-      };
-    }
+  // Resolve the owning chat with a single indexed lookup on the message id,
+  // rather than loading and validating every message in every chat. Then load
+  // only that one chat's messages.
+  const chatId = await repos.chats.findChatIdForMessage(messageId);
+  if (!chatId) {
+    return null;
   }
 
-  return null;
+  const chat = await repos.chats.findById(chatId);
+  // Enforce the same per-user ownership the previous account-wide scan gave us:
+  // a message is only reachable through chats the requesting user owns.
+  if (!chat || chat.userId !== userId) {
+    return null;
+  }
+
+  const messages = await repos.chats.getMessages(chatId);
+  const idx = messages.findIndex(
+    (m: ChatEvent): m is MessageEvent => m.type === 'message' && m.id === messageId
+  );
+  if (idx === -1) {
+    return null;
+  }
+
+  return {
+    chat,
+    message: messages[idx] as MessageEvent,
+    allMessages: messages,
+    messageIndex: idx,
+  };
 }
 
 // =============================================================================
 // GET /api/v1/messages/[id] - Get a specific message
 // =============================================================================
 
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id: messageId }) => {
     try {const result = await findMessageInUserChats(repos, user.id, messageId);
       if (!result) {
         return notFound('Message');
       }
 
-      return NextResponse.json({ message: result.message });
+      return successResponse({ message: result.message });
     } catch (error) {
       logger.error('[Messages API v1] Error fetching message', {}, error instanceof Error ? error : undefined);
       return serverError('Failed to fetch message');
@@ -91,7 +102,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 // PUT /api/v1/messages/[id] - Edit a message
 // =============================================================================
 
-export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
+export const PUT = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id: messageId }) => {
     const body = await req.json();
     const { content } = editMessageSchema.parse(body);
@@ -100,19 +111,12 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
       return notFound('Message');
     }
 
-    // Update the message content
-    const updatedMessage: MessageEvent = {
-      ...result.message,
-      content,
-    };
-
-    // Update the message in the array
-    result.allMessages[result.messageIndex] = updatedMessage;
-
-    // Rewrite all messages
-    await repos.chats.clearMessages(result.chat.id);
-    for (const msg of result.allMessages) {
-      await repos.chats.addMessage(result.chat.id, msg);
+    // Update only the edited row. (The old path deleted every message in the
+    // chat and re-inserted them one by one, which was O(n²) and would silently
+    // drop any sibling message that failed validation.)
+    const updatedMessage = await repos.chats.updateMessage(result.chat.id, messageId, { content });
+    if (!updatedMessage) {
+      return notFound('Message');
     }
 
     // Update chat's updatedAt timestamp
@@ -122,7 +126,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
     // the set that fed it.
     await invalidateContextSummaryIfMessageCovered(result.chat.id, [messageId]);
 
-    return NextResponse.json({ message: updatedMessage });
+    return successResponse({ message: updatedMessage });
   }
 );
 
@@ -130,7 +134,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 // DELETE /api/v1/messages/[id] - Delete a message
 // =============================================================================
 
-export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+export const DELETE = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id: messageId }) => {
     try {
       // Parse query params for memory handling
@@ -159,7 +163,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       const memoryCount = await repos.memories.countBySourceMessageIds(messageIdsToDelete);
 
       // If memories exist and no action specified, return info for confirmation dialog
-      if (memoryCount > 0 && !memoryAction && !skipConfirmation) {return NextResponse.json({
+      if (memoryCount > 0 && !memoryAction && !skipConfirmation) {return successResponse({
           requiresConfirmation: true,
           memoryCount,
           messageIds: messageIdsToDelete,
@@ -181,25 +185,11 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
         }
       }
 
-      // Filter out the deleted message(s)
-      let filteredMessages: ChatEvent[];
-      if (result.message.swipeGroupId) {
-        filteredMessages = result.allMessages.filter(
-          (m) =>
-            m.type !== 'message' ||
-            (m as MessageEvent).swipeGroupId !== result.message.swipeGroupId
-        );
-      } else {
-        filteredMessages = result.allMessages.filter(
-          (m) => m.type !== 'message' || m.id !== messageId
-        );
-      }
-
-      // Rewrite all messages without the deleted one(s)
-      await repos.chats.clearMessages(result.chat.id);
-      for (const msg of filteredMessages) {
-        await repos.chats.addMessage(result.chat.id, msg);
-      }
+      // Delete only the targeted message(s) by id, leaving every other row —
+      // including any unrelated corrupted message — untouched. (The old path
+      // cleared the whole chat and re-inserted the survivors, which silently
+      // dropped any sibling message that failed validation on reload.)
+      await repos.chats.deleteMessagesByIds(result.chat.id, messageIdsToDelete);
 
       // Update chat's updatedAt timestamp
       await repos.chats.update(result.chat.id, {});
@@ -214,7 +204,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
         memoriesDeleted,
       });
 
-      return NextResponse.json({
+      return successResponse({
         success: true,
         memoriesDeleted,
       });
@@ -229,7 +219,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
 // POST /api/v1/messages/[id]?action= - Actions
 // =============================================================================
 
-export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+export const POST = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id: messageId }) => {
     const action = getActionParam(req);
 
@@ -276,120 +266,41 @@ async function handleGenerateSwipe(
     return notFound('Message');
   }
 
-  // Only assistant messages can be swiped
+  // Only character-authored assistant messages can be regenerated. Staff/system
+  // messages share the ASSISTANT role but have no responder to regenerate from.
   if (result.message.role !== 'ASSISTANT') {
     return badRequest('Only assistant messages can be swiped');
   }
-
-  // Get connection profile from first active character participant
-  const characterParticipant = result.chat.participants.find(
-    (p: ChatParticipant) => p.type === 'CHARACTER' && p.isActive && p.connectionProfileId
-  );
-  if (!characterParticipant?.connectionProfileId) {
-    return notFound('Connection profile');
+  if (result.message.systemSender) {
+    return badRequest('Staff and system messages cannot be regenerated');
   }
 
-  const profile = await repos.connections.findById(characterParticipant.connectionProfileId);
-  if (!profile) {
-    return notFound('Connection profile');
+  try {
+    // Run the regeneration through the same context engine a normal turn uses,
+    // so the swipe gets the responder's real system prompt, multi-character
+    // attribution, and memory — and is attributed to the same participant.
+    const newSwipe = await regenerateMessageAsSwipe({
+      repos,
+      userId,
+      chat: result.chat,
+      targetMessage: result.message,
+      allMessages: result.allMessages.filter(
+        (m): m is MessageEvent => m.type === 'message'
+      ),
+      activeUserParticipantId: result.chat.activeTypingParticipantId ?? null,
+    });
+
+    return created({ message: newSwipe });
+  } catch (error) {
+    logger.error(
+      '[Messages API v1] Swipe generation failed',
+      { messageId, chatId: result.chat.id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError(
+      error instanceof Error ? error.message : 'Failed to generate alternative response'
+    );
   }
-
-  // Create swipe group ID if this is the first swipe
-  const swipeGroupId = result.message.swipeGroupId || `swipe-${result.message.id}`;
-
-  // Update original message with swipe group ID if needed
-  if (!result.message.swipeGroupId) {
-    const msg = result.allMessages[result.messageIndex] as MessageEvent;
-    msg.swipeGroupId = swipeGroupId;
-    msg.swipeIndex = 0;
-  }
-
-  // Get the highest swipe index in this group
-  const existingSwipes = result.allMessages.filter(
-    (m): m is MessageEvent =>
-      m.type === 'message' && m.swipeGroupId === swipeGroupId
-  );
-  const maxSwipeIndex = existingSwipes.reduce(
-    (max, m) => Math.max(max, m.swipeIndex || 0),
-    0
-  );
-  const newSwipeIndex = maxSwipeIndex + 1;
-
-  // Get all messages before this one for context
-  const messageCreatedAt = new Date(result.message.createdAt).getTime();
-  const previousMessages = result.allMessages.filter(
-    (m): m is MessageEvent =>
-      m.type === 'message' && new Date(m.createdAt).getTime() < messageCreatedAt
-  );
-
-  // Build messages array for LLM
-  const llmMessages = previousMessages.map((m) => ({
-    role: m.role.toLowerCase() as 'system' | 'user' | 'assistant',
-    content: m.content,
-  }));
-
-  // Get LLM provider and generate new response
-  const provider = await createLLMProvider(profile.provider, profile.baseUrl || undefined);
-
-  let apiKey = '';
-  if (profile.apiKeyId) {
-    const apiKeyRecord = await repos.connections.findApiKeyByIdAndUserId(profile.apiKeyId, userId);
-    if (apiKeyRecord) {
-      apiKey = apiKeyRecord.key_value;
-    }
-  }
-
-  const params = profile.parameters as Record<string, unknown>;
-
-  const response = await provider.sendMessage(
-    {
-      messages: llmMessages,
-      model: profile.modelName,
-      temperature: params.temperature as number | undefined,
-      maxTokens: params.max_tokens as number | undefined,
-      topP: params.top_p as number | undefined,
-    },
-    apiKey
-  );
-
-  // Handle memory cleanup for the message being swiped
-  const chatSettings = await repos.chatSettings.findByUserId(userId);
-  const cascadeAction = chatSettings?.memoryCascadePreferences?.onSwipeRegenerate || 'DELETE_MEMORIES';
-
-  if (cascadeAction !== 'KEEP_MEMORIES') {
-    const memoryCount = await repos.memories.countBySourceMessageId(messageId);
-    if (memoryCount > 0) {
-      await deleteMemoriesBySourceMessageWithVectors(messageId);
-    }
-  }
-
-  // Create new swipe message
-  const newSwipe: MessageEvent = {
-    type: 'message',
-    id: crypto.randomUUID(),
-    role: 'ASSISTANT',
-    content: response.content,
-    swipeGroupId,
-    swipeIndex: newSwipeIndex,
-    tokenCount: response.usage.totalTokens,
-    rawResponse: response.raw as Record<string, unknown> | null | undefined,
-    attachments: [],
-    createdAt: result.message.createdAt, // Keep same timestamp as original
-  };
-
-  // Add new swipe to the chat messages
-  await repos.chats.addMessage(result.chat.id, newSwipe);
-
-  // Update chat's updatedAt timestamp
-  await repos.chats.update(result.chat.id, {});
-
-  logger.info('[Messages API v1] Swipe generated', {
-    messageId,
-    chatId: result.chat.id,
-    newSwipeIndex,
-  });
-
-  return NextResponse.json({ message: newSwipe }, { status: 201 });
 }
 
 async function handleSwitchSwipe(
@@ -419,7 +330,7 @@ async function handleSwitchSwipe(
     return notFound('Swipe');
   }
 
-  return NextResponse.json({ message: targetSwipe });
+  return successResponse({ message: targetSwipe });
 }
 
 async function handleReattributeAction(
@@ -465,19 +376,12 @@ async function handleReattributeAction(
     }
   }
 
-  // Update the message's participantId
-  const updatedMessage: MessageEvent = {
-    ...result.message,
+  // Update only the re-attributed row's participantId.
+  const updatedMessage = await repos.chats.updateMessage(result.chat.id, messageId, {
     participantId: newParticipantId,
-  };
-
-  // Update the message in the array
-  result.allMessages[result.messageIndex] = updatedMessage;
-
-  // Rewrite all messages
-  await repos.chats.clearMessages(result.chat.id);
-  for (const msg of result.allMessages) {
-    await repos.chats.addMessage(result.chat.id, msg);
+  });
+  if (!updatedMessage) {
+    return notFound('Message');
   }
 
   // Update chat's updatedAt timestamp
@@ -491,7 +395,7 @@ async function handleReattributeAction(
     memoriesDeleted,
   });
 
-  return NextResponse.json({
+  return successResponse({
     success: true,
     message: updatedMessage,
     memoriesDeleted,

@@ -27,8 +27,8 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import {
-  createAuthenticatedParamsHandler,
-  type AuthenticatedContext,
+  createContextParamsHandler,
+  type RequestContext,
 } from '@/lib/api/middleware';
 import { withActionDispatch } from '@/lib/api/middleware/actions';
 import {
@@ -71,7 +71,7 @@ const updateSettingsSchema = z.object({
 });
 
 async function ensureAutonomousChat(
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   chatId: string,
 ) {
   const chat = await ctx.repos.chats.findById(chatId);
@@ -87,7 +87,7 @@ async function ensureAutonomousChat(
 
 async function handleStart(
   _req: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   { id }: { id: string },
 ) {
   try {
@@ -109,7 +109,7 @@ async function handleStart(
 
 async function handlePause(
   _req: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   { id }: { id: string },
 ) {
   try {
@@ -128,7 +128,7 @@ async function handlePause(
 
 async function handleStop(
   _req: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   { id }: { id: string },
 ) {
   try {
@@ -147,7 +147,7 @@ async function handleStop(
 
 async function handleResume(
   _req: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   { id }: { id: string },
 ) {
   try {
@@ -169,7 +169,7 @@ async function handleResume(
 
 async function handleUpdateSettings(
   req: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   { id }: { id: string },
 ) {
   const guard = await ensureAutonomousChat(ctx, id);
@@ -202,7 +202,7 @@ async function handleUpdateSettings(
 
 async function handleStatus(
   _req: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   { id }: { id: string },
 ) {
   const guard = await ensureAutonomousChat(ctx, id);
@@ -233,7 +233,7 @@ async function handleStatus(
   });
 }
 
-export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+export const POST = createContextParamsHandler<{ id: string }>(
   withActionDispatch({
     start: handleStart,
     pause: handlePause,
@@ -243,7 +243,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
   }),
 );
 
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   withActionDispatch(
     {},
     handleStatus,

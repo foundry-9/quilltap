@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { withCollectionActionDispatch, getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { getUserRepositories } from '@/lib/repositories/factory';
 import { maskApiKey, encryptWithPassphrase, decryptWithPassphrase, signWithPassphrase, verifyWithPassphrase } from '@/lib/encryption';
@@ -63,7 +63,7 @@ type ApiKeysPostAction = typeof API_KEYS_POST_ACTIONS[number];
  * GET /api/v1/api-keys
  * List all API keys for the authenticated user (masked)
  */
-export const GET = createAuthenticatedHandler(async (req, { user }) => {
+export const GET = createContextHandler(async (req, { user }) => {
   try {
 
     const repos = getUserRepositories(user.id);
@@ -556,7 +556,7 @@ async function handleImportPreview(req: NextRequest, user: { id: string }) {
 /**
  * POST /api/v1/api-keys - Action dispatch or create
  */
-export const POST = createAuthenticatedHandler(async (req, { user }) => {
+export const POST = createContextHandler(async (req, { user }) => {
   const action = getActionParam(req);
 
   // No action or unknown action = create new key (existing behavior)

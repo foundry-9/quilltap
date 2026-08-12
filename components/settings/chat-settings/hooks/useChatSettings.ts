@@ -31,6 +31,8 @@ import {
   AutonomousRoomSettings,
   ThinkingDisplaySettings,
   DEFAULT_THINKING_DISPLAY_SETTINGS,
+  AnswerConfirmationSettings,
+  DEFAULT_ANSWER_CONFIRMATION_SETTINGS,
 } from '../types'
 
 interface UseChatSettingsReturn {
@@ -54,6 +56,7 @@ interface UseChatSettingsReturn {
   handleContextCompressionUpdate: (updates: Partial<ContextCompressionSettings>) => Promise<void>
   handleLLMLoggingChange: (key: keyof LLMLoggingSettings, value: boolean | number) => Promise<void>
   handleAutoDetectRngChange: (value: boolean) => Promise<void>
+  handleCustomToolsChange: (value: boolean) => Promise<void>
   handleCompositionModeDefaultChange: (value: boolean) => Promise<void>
   handleComposerSpellcheckChange: (value: boolean) => Promise<void>
   handleAutoScrollOnResponseCompleteChange: (value: boolean) => Promise<void>
@@ -66,6 +69,7 @@ interface UseChatSettingsReturn {
   handleTimezoneChange: (timezone: string | null) => Promise<void>
   handleAutonomousRoomSettingsUpdate: (updates: Partial<AutonomousRoomSettings>) => Promise<void>
   handleThinkingDisplayUpdate: (updates: Partial<ThinkingDisplaySettings>) => Promise<void>
+  handleAnswerConfirmationUpdate: (updates: Partial<AnswerConfirmationSettings>) => Promise<void>
 }
 
 export function useChatSettings(): UseChatSettingsReturn {
@@ -488,6 +492,40 @@ export function useChatSettings(): UseChatSettingsReturn {
   )
 
   /**
+   * Update custom-tools setting
+   */
+  const handleCustomToolsChange = useCallback(
+    async (value: boolean) => {
+      if (!settings) return
+
+      try {
+        setSaving(true)
+
+        const res = await fetch('/api/v1/settings/chat', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customTools: value }),
+        })
+
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update custom tools setting')
+        }
+
+        const updatedSettings = await res.json()
+        await mutateSettings(updatedSettings, false)
+        await showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        console.error('Failed to update custom tools setting', { error: errorMsg })
+      } finally {
+        setSaving(false)
+      }
+    },
+    [settings, mutateSettings, showSuccess]
+  )
+
+  /**
    * Update default-composition-mode setting
    */
   const handleCompositionModeDefaultChange = useCallback(
@@ -692,6 +730,40 @@ export function useChatSettings(): UseChatSettingsReturn {
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'An error occurred'
         console.error('Failed to update thinking-display settings', { error: errorMsg })
+      } finally {
+        setSaving(false)
+      }
+    },
+    [settings, mutateSettings, showSuccess]
+  )
+
+  const handleAnswerConfirmationUpdate = useCallback(
+    async (updates: Partial<AnswerConfirmationSettings>) => {
+      if (!settings) return
+
+      const merged: AnswerConfirmationSettings = {
+        ...DEFAULT_ANSWER_CONFIRMATION_SETTINGS,
+        ...(settings.answerConfirmationSettings ?? {}),
+        ...updates,
+      }
+
+      try {
+        setSaving(true)
+        const res = await fetch('/api/v1/settings/chat', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ answerConfirmationSettings: merged }),
+        })
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update answer-confirmation settings')
+        }
+        const updatedSettings = await res.json()
+        await mutateSettings(updatedSettings, false)
+        await showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        console.error('Failed to update answer-confirmation settings', { error: errorMsg })
       } finally {
         setSaving(false)
       }
@@ -948,6 +1020,7 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleContextCompressionUpdate,
     handleLLMLoggingChange,
     handleAutoDetectRngChange,
+    handleCustomToolsChange,
     handleCompositionModeDefaultChange,
     handleComposerSpellcheckChange,
     handleAutoScrollOnResponseCompleteChange,
@@ -960,5 +1033,6 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleTimezoneChange,
     handleAutonomousRoomSettingsUpdate,
     handleThinkingDisplayUpdate,
+    handleAnswerConfirmationUpdate,
   }
 }

@@ -37,6 +37,8 @@ export interface ParticipantData {
     name: string
     title?: string | null
     avatarUrl?: string | null
+    /** Set when the character is archived — seat is absent until rehydration. */
+    archivedAt?: string | null
     talkativeness: number
     defaultImage?: {
       id: string
@@ -381,6 +383,14 @@ export function ParticipantCard({
             {participantStatus === 'absent' && (
               <span className="qt-badge-absent text-xs">Absent</span>
             )}
+            {participant.character?.archivedAt && (
+              <span
+                className="qt-badge-absent text-xs"
+                title="Resting in the archive — rehydrate them from their character page to let them speak again"
+              >
+                Archived
+              </span>
+            )}
           </div>
 
           {title && (
@@ -389,8 +399,10 @@ export function ParticipantCard({
             </div>
           )}
 
-          {/* Connection profile dropdown for characters (not user-controlled) */}
-          {isCharacter && !isUserParticipant && connectionProfiles && onConnectionProfileChange ? (
+          {/* Connection profile dropdown for every character — including the
+              active "You" seat, so any participant can be flipped between
+              "User (you type)" and an LLM (and back) from one control. */}
+          {isCharacter && connectionProfiles && onConnectionProfileChange ? (
             <div className="mt-1">
               <select
                 value={connectionProfileValue}

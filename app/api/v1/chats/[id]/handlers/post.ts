@@ -12,7 +12,6 @@ import {
   handleRemoveTag,
   handleRegenerateTitle,
   handleImpersonate,
-  handleStopImpersonate,
   handleSetActiveSpeaker,
   handleAddParticipantAction,
   handleUpdateParticipantAction,
@@ -26,6 +25,7 @@ import {
   handleUpdateToolSettings,
   handleQueueMemories,
   handleExtractMemoriesDryRun,
+  handleRecallReplay,
   handleRng,
   handleRunTool,
   handleToggleAgentMode,
@@ -36,6 +36,7 @@ import {
   handleRegenerateAvatar,
   handleRenderConversation,
   handleActiveDocument,
+  handleOpenDocuments,
   handleRecentDocuments,
   handleOpenDocument,
   handleCloseDocument,
@@ -47,15 +48,15 @@ import {
   handleInsertAnnouncement,
   handleAnnouncementPreview,
   handleSendMail,
+  handleMergeConversation,
 } from '../actions';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 const CHAT_POST_ACTIONS = [
   'regenerate-title',
   'add-tag',
   'remove-tag',
   'impersonate',
-  'stop-impersonate',
   'set-active-speaker',
   'turn',
   'add-participant',
@@ -68,6 +69,7 @@ const CHAT_POST_ACTIONS = [
   'add-tool-result',
   'queue-memories',
   'extract-memories-dry-run',
+  'recall-replay',
   'update-tool-settings',
   'rng',
   'run-tool',
@@ -79,6 +81,7 @@ const CHAT_POST_ACTIONS = [
   'regenerate-avatar',
   'render-conversation',
   'active-document',
+  'open-documents',
   'recent-documents',
   'open-document',
   'close-document',
@@ -90,6 +93,7 @@ const CHAT_POST_ACTIONS = [
   'announcement',
   'announcement-preview',
   'send-mail',
+  'merge-conversation',
 ] as const;
 
 type ChatPostAction = typeof CHAT_POST_ACTIONS[number];
@@ -99,7 +103,7 @@ type ChatPostAction = typeof CHAT_POST_ACTIONS[number];
  */
 export async function handlePost(
   req: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   chatId: string
 ): Promise<NextResponse> {
   const { user, repos } = ctx;
@@ -120,7 +124,6 @@ export async function handlePost(
     'add-tag': () => handleAddTag(req, chatId, ctx),
     'remove-tag': () => handleRemoveTag(req, chatId, ctx),
     impersonate: () => handleImpersonate(req, chatId, chat, ctx),
-    'stop-impersonate': () => handleStopImpersonate(req, chatId, chat, ctx),
     'set-active-speaker': () => handleSetActiveSpeaker(req, chatId, chat, ctx),
     turn: () => handleTurnAction(req, chatId, chat, ctx),
     'add-participant': () => handleAddParticipantAction(req, chatId, chat, ctx),
@@ -133,6 +136,7 @@ export async function handlePost(
     'add-tool-result': () => handleAddToolResult(req, chatId, ctx),
     'queue-memories': () => handleQueueMemories(req, chatId, chat, ctx),
     'extract-memories-dry-run': () => handleExtractMemoriesDryRun(req, chatId, chat, ctx),
+    'recall-replay': () => handleRecallReplay(req, chatId, chat, ctx),
     'update-tool-settings': () => handleUpdateToolSettings(req, chatId, ctx),
     rng: () => handleRng(req, chatId, ctx),
     'run-tool': () => handleRunTool(req, chatId, ctx),
@@ -144,17 +148,19 @@ export async function handlePost(
     'regenerate-avatar': () => handleRegenerateAvatar(req, chatId, ctx),
     'render-conversation': () => handleRenderConversation(chatId, ctx),
     'active-document': () => handleActiveDocument(chatId, ctx),
+    'open-documents': () => handleOpenDocuments(chatId, ctx),
     'recent-documents': () => handleRecentDocuments(chatId, ctx),
     'open-document': () => handleOpenDocument(req, chatId, ctx),
-    'close-document': () => handleCloseDocument(chatId, ctx),
+    'close-document': () => handleCloseDocument(req, chatId, ctx),
     'read-document': () => handleReadDocument(req, chatId, ctx),
     'resolve-document': () => handleResolveDocument(req, chatId, ctx),
     'write-document': () => handleWriteDocument(req, chatId, ctx),
     'rename-document': () => handleRenameDocument(req, chatId, ctx),
-    'delete-document': () => handleDeleteDocument(chatId, ctx),
+    'delete-document': () => handleDeleteDocument(req, chatId, ctx),
     announcement: () => handleInsertAnnouncement(req, chatId, ctx),
     'announcement-preview': () => handleAnnouncementPreview(req, chatId, ctx),
     'send-mail': () => handleSendMail(req, chatId, chat, ctx),
+    'merge-conversation': () => handleMergeConversation(req, chatId, chat, ctx),
   };
 
   return actionHandlers[action]();

@@ -1,7 +1,8 @@
 /**
  * Chats API v1 - Insert Announcement Action
  *
- * Posts an ad-hoc announcement bubble (Insert Announcement composer button).
+ * Posts an ad-hoc announcement bubble (Insert Announcement composer button),
+ * either publicly or whispered to named participants.
  *
  * POST /api/v1/chats/[id]?action=announcement
  */
@@ -10,13 +11,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound } from '@/lib/api/responses';
 import { postAdhocAnnouncement } from '@/lib/services/announcer/writer';
+import { resolveAnnouncementAudience } from '@/lib/services/announcer/audience';
 import { insertAnnouncementSchema } from '../schemas';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 export async function handleInsertAnnouncement(
   req: NextRequest,
   chatId: string,
-  { repos }: AuthenticatedContext,
+  { repos }: RequestContext,
 ): Promise<NextResponse> {
   const body = await req.json();
   const validated = insertAnnouncementSchema.parse(body);
@@ -30,10 +32,20 @@ export async function handleInsertAnnouncement(
     }
   }
 
+  // A whisper audience is only meaningful if every id is a live participant of
+  // this chat — otherwise we'd persist a message nobody can ever be shown.
+  const audience = await resolveAnnouncementAudience(chatId, validated.targetParticipantIds);
+  if (audience.unknownIds.length > 0) {
+    return badRequest(
+      `Unknown whisper target(s) for this chat: ${audience.unknownIds.join(', ')}`,
+    );
+  }
+
   const message = await postAdhocAnnouncement({
     chatId,
     contentMarkdown: validated.contentMarkdown,
     sender: validated.sender,
+    targetParticipantIds: audience.targetParticipantIds,
   });
 
   if (!message) {
@@ -44,6 +56,8 @@ export async function handleInsertAnnouncement(
     chatId,
     messageId: message.id,
     senderKind: validated.sender.kind,
+    audience: audience.targetParticipantIds ? 'whisper' : 'public',
+    targetCount: audience.targetParticipantIds?.length ?? 0,
   });
 
   return NextResponse.json({ success: true, message }, { status: 201 });

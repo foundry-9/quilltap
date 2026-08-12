@@ -18,6 +18,7 @@ export * from './components/Surfaces';
 export * from './components/Avatars';
 export * from './components/Dialogs';
 export * from './components/Tabs';
+export * from './components/Workspace';
 export * from './components/Chat';
 export * from './components/Terminal';
 export * from './components/FilePreview';

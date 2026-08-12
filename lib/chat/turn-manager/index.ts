@@ -25,7 +25,26 @@ export {
 } from './state';
 
 // Turn selection
-export { selectNextSpeaker } from './selection';
+export { selectNextSpeaker, selectNextSpeakerAfterUserMessage } from './selection';
+
+// "Nothing to add" turn-skipping — shared pure logic
+export {
+  NOTHING_TO_ADD_SENTINEL,
+  TURN_PASS_SYSTEM_KIND,
+  isTurnPassMessage,
+  detectSkipSentinel,
+  findSkippedSinceLastSubstantive,
+  isFirstCharacterTurn,
+  isRecentlyAddressed,
+  qualifiesForTurnSkipping,
+  computeSkipEligibility,
+} from './skip-signal';
+export type {
+  DetectSkipResult,
+  MustSpeakReason,
+  ComputeSkipEligibilityOptions,
+  SkipEligibility,
+} from './skip-signal';
 
 // Queue management
 export {
@@ -43,6 +62,8 @@ export {
   isUsersTurn,
   getSelectionExplanation,
   findUserParticipant,
+  findActiveUserParticipant,
+  isUserDrivenSeat,
   findUserControlledParticipants,
   getActiveCharacterParticipants,
   getActiveLLMParticipants,

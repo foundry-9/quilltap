@@ -12,10 +12,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { checkOwnership } from '@/lib/api/middleware';
+import { exists } from '@/lib/api/middleware';
 import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import {
   parseAestheticKind,
   aestheticContentSchema,
@@ -26,10 +26,10 @@ import {
 export async function handleGetAesthetic(
   req: NextRequest,
   projectId: string,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   const project = await repos.projects.findById(projectId);
-  if (!checkOwnership(project, user.id)) {
+  if (!exists(project)) {
     return notFound('Project');
   }
   const kind = parseAestheticKind(req);
@@ -46,10 +46,10 @@ export async function handleGetAesthetic(
 export async function handlePutAesthetic(
   req: NextRequest,
   projectId: string,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   const project = await repos.projects.findById(projectId);
-  if (!checkOwnership(project, user.id)) {
+  if (!exists(project)) {
     return notFound('Project');
   }
   const kind = parseAestheticKind(req);

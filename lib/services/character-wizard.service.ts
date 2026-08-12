@@ -6,6 +6,7 @@
  */
 
 import { createLLMProvider } from '@/lib/llm';
+import { profileParams } from '@/lib/llm/cheap-llm';
 
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
@@ -357,7 +358,8 @@ export async function generateField(
   maxTokens: number = 500,
   userId?: string,
   characterId?: string,
-  profileProvider?: string
+  profileProvider?: string,
+  profileParameters?: Record<string, unknown>
 ): Promise<string> {
   const messages = [
     { role: 'system' as const, content: contextPrompt },
@@ -372,6 +374,7 @@ export async function generateField(
       messages,
       maxTokens,
       temperature: 0.8,
+      profileParameters,
     },
     apiKey
   );
@@ -469,6 +472,7 @@ export async function generateImageDescription(
       messages,
       maxTokens: 1000,
       temperature: 0.7,
+      profileParameters: profileParams(visionProfile),
     },
     apiKey
   );
@@ -524,7 +528,8 @@ export async function generatePhysicalDescriptions(
   contextPrompt: string,
   userId?: string,
   characterId?: string,
-  profileProvider?: string
+  profileProvider?: string,
+  profileParameters?: Record<string, unknown>
 ): Promise<GeneratedPhysicalDescription> {
   const results: Partial<GeneratedPhysicalDescription> = {
     name: 'AI Generated',
@@ -541,7 +546,8 @@ export async function generatePhysicalDescriptions(
       maxTokens,
       userId,
       characterId,
-      profileProvider
+      profileProvider,
+      profileParameters
     );
 
     switch (level) {
@@ -579,7 +585,8 @@ export async function generateWardrobeItems(
   contextPrompt: string,
   userId?: string,
   characterId?: string,
-  profileProvider?: string
+  profileProvider?: string,
+  profileParameters?: Record<string, unknown>
 ): Promise<GeneratedWardrobeItem[]> {
   const content = await generateField(
     provider,
@@ -590,7 +597,8 @@ export async function generateWardrobeItems(
     2000,
     userId,
     characterId,
-    profileProvider
+    profileProvider,
+    profileParameters
   );
 
   const items = parseLLMJson<GeneratedWardrobeItem[]>(content);
@@ -736,7 +744,8 @@ export async function runCharacterWizard(
         100,
         userId,
         request.characterId,
-        primaryProfile.provider
+        primaryProfile.provider,
+        profileParams(primaryProfile)
       );
       generated.name = generatedName;
       effectiveCharacterName = generatedName;
@@ -771,7 +780,8 @@ export async function runCharacterWizard(
           contextPrompt,
           userId,
           request.characterId,
-          primaryProfile.provider
+          primaryProfile.provider,
+          profileParams(primaryProfile)
         );
       } else if (field === 'wardrobeItems') {
         generated.wardrobeItems = await generateWardrobeItems(
@@ -781,7 +791,8 @@ export async function runCharacterWizard(
           contextPrompt,
           userId,
           request.characterId,
-          primaryProfile.provider
+          primaryProfile.provider,
+          profileParams(primaryProfile)
         );
       } else {
         const fieldPrompt = FIELD_PROMPTS[field];
@@ -795,7 +806,8 @@ export async function runCharacterWizard(
           maxTokens,
           userId,
           request.characterId,
-          primaryProfile.provider
+          primaryProfile.provider,
+          profileParams(primaryProfile)
         );
         if (field === 'scenarios') {
           try {
@@ -984,7 +996,8 @@ export async function runCharacterWizardStreaming(
           100,
           userId,
           request.characterId,
-          primaryProfile.provider
+          primaryProfile.provider,
+          profileParams(primaryProfile)
         );
         generated.name = generatedName;
         effectiveCharacterName = generatedName;
@@ -1022,7 +1035,8 @@ export async function runCharacterWizardStreaming(
             contextPrompt,
             userId,
             request.characterId,
-            primaryProfile.provider
+            primaryProfile.provider,
+            profileParams(primaryProfile)
           );
           generated.physicalDescription = physDesc;
           onProgress({ type: 'field_complete', field, snippet: getSnippet(physDesc) });
@@ -1034,7 +1048,8 @@ export async function runCharacterWizardStreaming(
             contextPrompt,
             userId,
             request.characterId,
-            primaryProfile.provider
+            primaryProfile.provider,
+            profileParams(primaryProfile)
           );
           generated.wardrobeItems = items;
           onProgress({ type: 'field_complete', field, snippet: `${items.length} wardrobe item(s) generated` });
@@ -1050,7 +1065,8 @@ export async function runCharacterWizardStreaming(
             maxTokens,
             userId,
             request.characterId,
-            primaryProfile.provider
+            primaryProfile.provider,
+            profileParams(primaryProfile)
           );
           let fieldValue: unknown;
           if (field === 'scenarios') {

@@ -8,6 +8,7 @@
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { buildContext, type MessageWithParticipant, type BuiltContext, type ContextCompressionResult } from '@/lib/chat/context-manager'
 import type { SemanticSearchResult } from '@/lib/memory/memory-service'
+import type { MemorySearchExtraction } from '@/lib/memory/cheap-llm-tasks'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
@@ -20,7 +21,12 @@ import {
   type FallbackResult,
 } from '@/lib/chat/file-attachment-fallback'
 import { resolveTimezone } from '@/lib/chat/timestamp-utils'
-import type { getRepositories } from '@/lib/repositories/factory'
+import { getRepositories } from '@/lib/repositories/factory'
+import {
+  attributeAdhocAnnouncements,
+  collectAnnouncerCharacterIds,
+  type CustomAnnouncer,
+} from '@/lib/chat/context/announcement-attribution'
 import type {
   ChatMetadataBase,
   ChatParticipantBase,
@@ -50,6 +56,8 @@ export interface BuildMessageContextOptions {
   chatSettings: { cheapLLMSettings?: Record<string, unknown>; defaultTimestampConfig?: TimestampConfig | null; timezone?: string | null } | null
   toolInstructions?: string
   newUserMessage?: string
+  /** The user-controlled participant the human is "Speaking As" for this turn */
+  activeUserParticipantId?: string | null
   isContinueMode: boolean
   /** Context compression settings (if enabled) */
   contextCompressionSettings?: ContextCompressionSettings | null
@@ -66,12 +74,28 @@ export interface BuildMessageContextOptions {
   cachedCompressionMessageCount?: number
   /** Pre-searched memories from proactive recall (skips internal memory search when provided) */
   preSearchedMemories?: SemanticSearchResult[]
+  /** Turn-level recall signals from the proactive distillation (retrospective cadence). */
+  recallSignals?: MemorySearchExtraction
   /** Whether to generate a memory recap for this character (chat start or character join) */
   generateMemoryRecap?: boolean
   /** Uncensored fallback options for memory recap in dangerous chats */
   uncensoredFallbackOptions?: UncensoredFallbackOptions
   /** Optional callback to emit status events during context building phases */
   onStatusChange?: (stage: string, message: string) => void
+  /**
+   * Autonomous-room per-turn context cap (tokens). When set, clamps the
+   * model-derived `maxAvailable` budget down to this value so a token-budgeted
+   * room paces its run across multiple turns. Undefined for everything else.
+   */
+  autonomousContextCap?: number
+  /**
+   * "Nothing to add" turn-skipping — per-turn instruction control. When
+   * `offerSkip` is true, a Turn note is injected inviting the character to pass
+   * with the `[NOTHING TO ADD]` sentinel; `recentlyAddressed` adds a caution to
+   * answer rather than pass. Undefined / `offerSkip: false` → no note. Ephemeral,
+   * never persisted.
+   */
+  turnSkip?: { offerSkip: boolean; recentlyAddressed: boolean; characterName: string }
 }
 
 /**
@@ -449,7 +473,7 @@ export function normalizeWhisperRoles<
  */
 export async function buildMessageContext(
   options: BuildMessageContextOptions,
-  existingMessages: Array<{ type: string; role?: string; content?: string; opaqueContent?: string | null; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string; attachments?: string[] | null; systemSender?: string | null; systemKind?: string | null }>,
+  existingMessages: Array<{ type: string; role?: string; content?: string; opaqueContent?: string | null; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string; attachments?: string[] | null; systemSender?: string | null; systemKind?: string | null; customAnnouncer?: CustomAnnouncer | null }>,
   attachmentsToSend: unknown[]
 ): Promise<MessageContextResult> {
   const {
@@ -465,12 +489,14 @@ export async function buildMessageContext(
     chatSettings,
     toolInstructions,
     newUserMessage,
+    activeUserParticipantId,
     contextCompressionSettings,
     cheapLLMSelection,
     bypassCompression,
     cachedCompressionResult,
     cachedCompressionMessageCount,
     preSearchedMemories,
+    recallSignals,
     generateMemoryRecap: requestMemoryRecap,
     uncensoredFallbackOptions,
   } = options
@@ -493,22 +519,50 @@ export async function buildMessageContext(
   if (cmpbStrippedCount > 0) {
   }
 
-  // Drop TOOL whispers the responding character isn't a target of. Operator-
-  // only Prospero runs (run-tool with `private: true`) target the userId, so
-  // no character participant ever matches and the message is filtered out of
-  // every context. Multi-character mode also runs `filterWhisperMessages`
-  // downstream — this filter just makes sure single-character context honors
-  // the same rule.
+  // Name the speaker on ad-hoc announcements. `customAnnouncer` is a rendering
+  // field — the Salon paints the name and avatar on the bubble — so without
+  // this the model receives an anonymous block of prose and guesses who said
+  // it. See lib/chat/context/announcement-attribution.ts.
+  const announcerCharacterIds = collectAnnouncerCharacterIds(messagesWithoutCmpb)
+  const announcerNames = new Map<string, string>()
+  if (announcerCharacterIds.length > 0) {
+    const announcerRepos = getRepositories()
+    await Promise.all(
+      announcerCharacterIds.map(async id => {
+        try {
+          const character = await announcerRepos.characters.findById(id)
+          if (character?.name) announcerNames.set(id, character.name)
+        } catch (error) {
+          // A deleted or unreadable character stays unnamed rather than
+          // blocking the turn; the announcement passes through as it did before.
+          logger.warn('[Context] Could not resolve announcer name', {
+            characterId: id,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
+      }),
+    )
+  }
+  // Always run the pass: a `custom` announcer carries its own display name and
+  // needs no lookup, so gating on the resolved-name map would skip it.
+  const messagesAttributed = attributeAdhocAnnouncements(messagesWithoutCmpb, announcerNames)
+
+  // Drop whispers the responding character isn't a party to — the same rule
+  // `filterWhisperMessages` applies in multi-character mode, enforced here so
+  // single-character context can't be the one place a private aside leaks.
+  // Operator-only Prospero runs (run-tool with `private: true`) target the
+  // userId, so no character participant ever matches and the message is
+  // filtered out of every context; a whispered ad-hoc announcement is excluded
+  // from every character it wasn't addressed to on the same test.
   const respondingParticipantId = characterParticipant?.id
   const messagesAfterWhisperFilter = respondingParticipantId
-    ? messagesWithoutCmpb.filter(m => {
-        if (m.role !== 'TOOL') return true
+    ? messagesAttributed.filter(m => {
         const targets = m.targetParticipantIds
         if (!targets || targets.length === 0) return true
         if (m.participantId === respondingParticipantId) return true
         return targets.includes(respondingParticipantId)
       })
-    : messagesWithoutCmpb
+    : messagesAttributed
 
   // System transparency: when any non-user-character participant in this chat
   // has systemTransparency !== true, the whole chat goes "opaque-anywhere" —
@@ -590,6 +644,7 @@ export async function buildMessageContext(
     chat,
     existingMessages: conversationMessages,
     newUserMessage,
+    activeUserParticipantId,
     roleplayTemplate,
     embeddingProfileId: undefined, // always use default embedding profile
     skipMemories: false,
@@ -618,6 +673,7 @@ export async function buildMessageContext(
     cachedCompressionMessageCount,
     // Proactive memory recall
     preSearchedMemories,
+    recallSignals,
     // Memory recap (chat start or character join)
     generateMemoryRecap: shouldGenerateRecap,
     uncensoredFallbackOptions,
@@ -625,6 +681,11 @@ export async function buildMessageContext(
     isContinueMode: options.isContinueMode,
     // Status callback for streaming events
     onStatusChange: options.onStatusChange,
+    // Autonomous-room per-turn context cap (tokens) — clamps the model-derived
+    // budget so a token-budgeted room paces its run across multiple turns.
+    autonomousContextCap: options.autonomousContextCap,
+    // "Nothing to add" turn-skipping — per-turn ephemeral instruction control.
+    turnSkip: options.turnSkip,
   })
 
   // Log context building results for debugging

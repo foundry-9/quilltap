@@ -175,6 +175,10 @@ describe('Cheap LLM Tasks Service', () => {
         // Free keywords, then the three defaulted targeting tags (no tags in input).
         keywords: ['cat', 'pet', 'Whiskers', 'present', 'scope: wide', 'information'],
         importance: 0.7,
+        // Episodic spine defaults (no EVENT fields in input).
+        kind: 'semantic',
+        when: undefined,
+        entities: undefined,
       }])
       expect(result.usage).toEqual({ promptTokens: 100, completionTokens: 50, totalTokens: 150 })
     })
@@ -238,7 +242,15 @@ describe('Cheap LLM Tasks Service', () => {
       expect(result.success).toBe(true)
       const map = result.result as Map<string, MemoryCandidate[]>
       expect(map.get('user-char-id')).toEqual([
-        { content: 'ok', summary: 'c', keywords: ['present', 'scope: wide', 'information'], importance: 0.6 },
+        {
+          content: 'ok',
+          summary: 'c',
+          keywords: ['present', 'scope: wide', 'information'],
+          importance: 0.6,
+          kind: 'semantic',
+          when: undefined,
+          entities: undefined,
+        },
       ])
     })
 

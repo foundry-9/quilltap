@@ -11,6 +11,7 @@
  */
 
 import { createLLMProvider } from '@/lib/llm';
+import { profileParams } from '@/lib/llm/cheap-llm';
 import { buildCharacterCacheKey } from '@/lib/llm/cache-key';
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
@@ -474,7 +475,8 @@ async function callOptimizerLLM(
     temperature: number;
     maxTokens: number;
   },
-  characterId?: string
+  characterId?: string,
+  profileParameters?: Record<string, unknown>
 ): Promise<string> {
   const messages = [
     { role: 'system' as const, content: SYSTEM_MESSAGE },
@@ -490,6 +492,7 @@ async function callOptimizerLLM(
       maxTokens: options.maxTokens,
       temperature: options.temperature,
       cacheKey: buildCharacterCacheKey(characterId),
+      profileParameters,
     },
     apiKey
   );
@@ -667,6 +670,7 @@ export async function runCharacterOptimizer(
     const memoryContext = buildMemoryContext(qualifyingMemories);
 
     // Call LLM for analysis
+    const analysisStartedAt = Date.now();
     const analysisRaw = await callOptimizerLLM(
       provider,
       apiKey,
@@ -675,8 +679,10 @@ export async function runCharacterOptimizer(
       memoryContext,
       getAnalysisPrompt(),
       { temperature: 0.5, maxTokens: 8000 },
-      characterId
+      characterId,
+      profileParams(profile)
     );
+    const analysisDurationMs = Date.now() - analysisStartedAt;
 
     let analysis: OptimizerAnalysis;
     try {
@@ -698,6 +704,7 @@ export async function runCharacterOptimizer(
       characterId,
       provider: profile.provider,
       modelName: profile.modelName,
+      connectionProfileId: profile.id,
       request: {
         messages: [
           { role: 'system', content: SYSTEM_MESSAGE },
@@ -710,7 +717,7 @@ export async function runCharacterOptimizer(
         content: analysisRaw.substring(0, 500),
         error: undefined,
       },
-      durationMs: 0,
+      durationMs: analysisDurationMs,
     }).catch(err => {
       logger.warn('[CharacterOptimizer] Failed to log analysis LLM call', {
         error: err instanceof Error ? err.message : String(err),
@@ -760,6 +767,8 @@ export async function runCharacterOptimizer(
       onProgress({ type: 'substep_start', step: 'generating', subStep });
 
       let raw: string;
+      let subStepDurationMs = 0;
+      const subStepStartedAt = Date.now();
       try {
         raw = await callOptimizerLLM(
           provider,
@@ -770,7 +779,9 @@ export async function runCharacterOptimizer(
           instruction,
           { temperature: 0.7, maxTokens: 6000 },
           characterId,
+          profileParams(profile),
         );
+        subStepDurationMs = Date.now() - subStepStartedAt;
       } catch (callError) {
         logger.warn('[CharacterOptimizer] Sub-step LLM call failed; continuing', {
           characterId,
@@ -821,6 +832,7 @@ export async function runCharacterOptimizer(
         characterId,
         provider: profile.provider,
         modelName: profile.modelName,
+        connectionProfileId: profile.id,
         request: {
           messages: [
             { role: 'system', content: SYSTEM_MESSAGE },
@@ -833,7 +845,7 @@ export async function runCharacterOptimizer(
           content: raw.substring(0, 500),
           error: undefined,
         },
-        durationMs: 0,
+        durationMs: subStepDurationMs,
       }).catch((err) => {
         logger.warn('[CharacterOptimizer] Failed to log sub-step LLM call', {
           subStep: label,

@@ -15,8 +15,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
-import type { RequestContext } from '@/lib/api/middleware/auth';
+import { createContextParamsHandler } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware/context';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
@@ -81,7 +81,7 @@ async function loadProjectAndStore(
 // GET — read one scenario
 // ============================================================================
 
-export const GET = createAuthenticatedParamsHandler<{ id: string; scenarioPath: string }>(
+export const GET = createContextParamsHandler<{ id: string; scenarioPath: string }>(
   async (_req: NextRequest, { repos }: RequestContext, { id, scenarioPath }) => {
     try {
       const resolved = resolveScenarioPath(scenarioPath, PROJECT_SCENARIOS_FOLDER);
@@ -109,7 +109,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string; scenarioPath: 
 // PUT — update scenario content + frontmatter
 // ============================================================================
 
-export const PUT = createAuthenticatedParamsHandler<{ id: string; scenarioPath: string }>(
+export const PUT = createContextParamsHandler<{ id: string; scenarioPath: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id, scenarioPath }) => {
     try {
       const resolved = resolveScenarioPath(scenarioPath, PROJECT_SCENARIOS_FOLDER);
@@ -170,7 +170,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string; scenarioPath: 
 // POST ?action=rename — rename a scenario file
 // ============================================================================
 
-export const POST = createAuthenticatedParamsHandler<{ id: string; scenarioPath: string }>(
+export const POST = createContextParamsHandler<{ id: string; scenarioPath: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id, scenarioPath }) => {
     try {
       const url = new URL(req.url);
@@ -243,7 +243,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string; scenarioPath:
 // DELETE — delete a scenario file
 // ============================================================================
 
-export const DELETE = createAuthenticatedParamsHandler<{ id: string; scenarioPath: string }>(
+export const DELETE = createContextParamsHandler<{ id: string; scenarioPath: string }>(
   async (_req: NextRequest, { user, repos }: RequestContext, { id, scenarioPath }) => {
     try {
       const resolved = resolveScenarioPath(scenarioPath, PROJECT_SCENARIOS_FOLDER);

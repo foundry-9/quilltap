@@ -32,6 +32,7 @@ export const listEmailToolDefinition = {
   },
 };
 
-export function validateListEmailInput(input: unknown): input is ListEmailToolInput {
-  return listEmailToolInputSchema.safeParse(input).success;
+export function validateListEmailInput(input: unknown): ListEmailToolInput | null {
+  const parsed = listEmailToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }

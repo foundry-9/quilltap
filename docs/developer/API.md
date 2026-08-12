@@ -6,7 +6,7 @@ API reference for Quilltap v4.3 and later.
 >
 > - **Mount Points** (`/api/v1/mount-points`) — Scriptorium document-store CRUD, files/folders/blobs operations, scan/convert/deconvert actions, and per-project linking
 > - **Terminals** (`/api/v1/terminals`) — Ariel PTY session spawn, list, signal, write, and ring-buffer access
-> - **Chat actions overhaul** — handlers under `app/api/v1/chats/[id]/actions/` were consolidated; current action set: `agent-mode`, `announcement`, `announcement-preview`, `avatars`, `bulk`, `danger-classification`, `documents`, `mailbox`, `memories`, `outfit`, `participants`, `photo-albums`, `regenerate-avatar`, `render-conversation`, `rng`, `run-tool`, `send-mail`, `state`, `story-background`, `tags`, `title`, `toggle-avatar-generation`, `tools`, `turn`
+> - **Chat actions overhaul** — handlers under `app/api/v1/chats/[id]/actions/` were consolidated; current action set: `agent-mode`, `announcement`, `announcement-preview`, `avatars`, `bulk`, `danger-classification`, `documents`, `mailbox`, `memories`, `merge`, `outfit`, `participants`, `photo-albums`, `regenerate-avatar`, `render-conversation`, `rng`, `run-tool`, `send-mail`, `state`, `story-background`, `tags`, `title`, `toggle-avatar-generation`, `tools`, `turn`
 > - **New built-in LLM tools** — `doc_*` family (read/write/grep/list/move/copy/str_replace/focus/open/close/insert_text/update_heading/read_heading/read_frontmatter/update_frontmatter/create_folder/delete_folder/delete_file, plus blob variants), `self_inventory`, `state`, `whisper`, `read_conversation`, `submit_final_response`, `upsert_annotation`, `delete_annotation`, and the `wardrobe_*` family (`wardrobe_list`/`wardrobe_read`/`wardrobe_wear`/`wardrobe_take_off`/`wardrobe_create`/`wardrobe_update`/`wardrobe_archive`). The unified search tool is now named `search` (was `search_memories`).
 > - **Retired tools** — `file_management` and the file-write-permission infrastructure are gone; many `project_info` actions were trimmed.
 > - **`systemSender` enum on messages** — `lantern`, `aurora`, `librarian`, `concierge`, `prospero`, `host`, `commonplaceBook`, `ariel`, `carina`, `suparna`. See `lib/schemas/chat.types.ts`.
@@ -33,6 +33,7 @@ API reference for Quilltap v4.3 and later.
   - [Session](#session-endpoint)
   - [User Profile](#user-profile)
   - [Chat Settings](#chat-settings)
+  - [Text Replacement Rules](#text-replacement-rules)
   - [API Keys](#api-keys)
   - [Connection Profiles](#connection-profiles)
   - [Embedding Profiles](#embedding-profiles)
@@ -47,12 +48,16 @@ API reference for Quilltap v4.3 and later.
   - [Wardrobe (Archetypes)](#wardrobe-archetypes)
   - [Character Wardrobe](#character-wardrobe)
   - [Outfit Presets](#outfit-presets)
+  - [Character Photos](#character-photos)
   - [Chats](#chats)
   - [Brahma Console](#brahma-console)
   - [Chat Announcements](#chat-announcements)
   - [Chat Photo Albums](#chat-photo-albums)
+  - [Photo Gallery](#photo-gallery)
   - [Chat Files](#chat-files)
   - [Chat File Operations](#chat-file-operations)
+  - [Chat qtap:// Target](#chat-qtap-target)
+  - [Chat Messages (Send & Stream)](#chat-messages-send--stream)
   - [Messages](#messages)
   - [Memories](#memories)
   - [Tags](#tags)
@@ -62,6 +67,7 @@ API reference for Quilltap v4.3 and later.
   - [Roleplay Templates](#roleplay-templates)
   - [Images](#images)
   - [Mount Points (Scriptorium)](#mount-points-scriptorium)
+  - [Documents (Standalone Document Mode)](#documents-standalone-document-mode)
   - [Terminals (Ariel)](#terminals-ariel)
   - [System Backup & Restore](#system-backup--restore)
   - [System Data Directory](#system-data-directory)
@@ -76,9 +82,17 @@ API reference for Quilltap v4.3 and later.
   - [LLM Tools](#llm-tools)
   - [Plugins (v1)](#plugins-v1)
   - [Projects](#projects)
+  - [Groups](#groups)
+  - [Scenarios](#scenarios)
   - [Help Docs](#help-docs)
   - [Help Chats](#help-chats)
   - [System Deployment](#system-deployment)
+  - [System Home](#system-home)
+  - [System Autonomous Rooms](#system-autonomous-rooms)
+  - [System Browse Directory](#system-browse-directory)
+  - [System Conversation Summaries](#system-conversation-summaries)
+  - [System Image Aesthetics](#system-image-aesthetics)
+  - [System Startup Status](#system-startup-status)
   - [System Plugin Initialization](#system-plugin-initialization)
   - [System Plugin Upgrades](#system-plugin-upgrades)
   - [System Pepper Vault (Deprecated)](#system-pepper-vault-deprecated)
@@ -431,6 +445,82 @@ Update chat settings.
 }
 ```
 
+#### `GET /api/v1/settings/data-retention`
+
+Read the instance-wide stale-chat retention window (`instance_settings['dataRetention']`, not a `chat_settings` column). Governs the daily maintenance sweep's cache collapse, generated-image collapse, and conversation-chunk cold-tiering.
+
+**Response:**
+
+```json
+{
+  "staleChatDays": 30
+}
+```
+
+#### `PUT /api/v1/settings/data-retention`
+
+Update the retention window. Merges with the current value and validates (integer, 1–3650 days).
+
+**Request Body:**
+
+```json
+{
+  "staleChatDays": 90
+}
+```
+
+#### `GET /api/v1/settings/taboo`
+
+Read the instance-wide Taboo list (`instance_settings['taboo']`, not a `chat_settings` column) — phrases characters must never say. Rendered into the universal, cache-stable portion of every character's system prompt on conversational turns; an empty list renders no prompt section at all.
+
+**Response:**
+
+```json
+{
+  "phrases": ["that's not nothing", "weight-bearing"]
+}
+```
+
+#### `PUT /api/v1/settings/taboo`
+
+Replace the phrase list. The body is merged over the current value (so `{}` is a no-op rather than a wipe) and validated: at most 500 phrases, each 1–200 characters after trimming.
+
+The response echoes what was **stored**, not what was submitted — the write normalizes (trim, drop empties, drop case-insensitive duplicates keeping the first occurrence) while preserving the submitted order.
+
+**Request Body:**
+
+```json
+{
+  "phrases": ["that's not nothing", "weight-bearing"]
+}
+```
+
+---
+
+### Text Replacement Rules
+
+Global, literal-string, word-boundary text replacements applied by the Lexical composer plugin on typed input. Rules are not user-scoped.
+
+#### `GET /api/v1/settings/text-replacements`
+
+List all replacement rules.
+
+#### `POST /api/v1/settings/text-replacements`
+
+Create a new rule.
+
+#### `POST /api/v1/settings/text-replacements?action=bulk-replace`
+
+Replace the entire rule list in one call.
+
+#### `PATCH /api/v1/settings/text-replacements/[id]`
+
+Update a single rule.
+
+#### `DELETE /api/v1/settings/text-replacements/[id]`
+
+Delete a single rule.
+
 ---
 
 ### API Keys
@@ -694,7 +784,7 @@ Get a specific embedding profile.
 
 #### `PUT /api/v1/embedding-profiles/[id]`
 
-Update an embedding profile.
+Update an embedding profile. When the update changes what the default profile produces — the profile *becomes* the default, or a default profile's provider/model/dimensions change — all embeddings are invalidated and a full `EMBEDDING_REINDEX_ALL` is enqueued automatically (BUILTIN goes through refit). Changing only `truncateToDimensions` enqueues the local Matryoshka re-apply when narrowing, the full reindex when widening. The response's `reembeddingTriggered` flag reports whether any re-embed was queued.
 
 #### `DELETE /api/v1/embedding-profiles/[id]`
 
@@ -915,6 +1005,7 @@ List all characters.
 - `npc=true|false` - Filter by NPC status (omit for regular characters)
 - `controlledBy=llm|user` - Filter by control mode (LLM-controlled or user-controlled)
 - `tagId` - Filter by tag
+- `archived=exclude|include|only` - Archived-character filter (default `exclude`). Every picker uses the default, so archived characters never appear as chat/group/mail/image candidates; the Aurora roster's "Show Archived" opts into `include`. Each row carries `archivedAt` (null for live characters).
 
 **Response**: `200 OK`
 
@@ -1034,6 +1125,24 @@ Export character in SillyTavern-compatible format.
 
 **Query Parameters**:
 - `format=json|png` - Export format (JSON for data, PNG for character card image)
+
+Returns `400` for an archived character — a tombstone export would carry only the pruned vault, and the full bundle already exists as an `ARCHIVE` file. Rehydrate first, or use `quilltap db characters export`.
+
+#### `POST /api/v1/characters/[id]?action=archive`
+
+Archive the character: write the encrypted `.qtap` bundle (an `ARCHIVE` file row), verify it, commit the tombstone (`archivedAt` + `archiveFileId`, chat seats flipped to absent), then prune the vault in place — mail, non-avatar photos, conversation summaries, own memories and their embeddings go; managed fields, avatar, and wardrobe stay readable.
+
+**Response**: `{ "archived": true, "archiveFileId": "file-uuid", "pruneComplete": true }`. A `pruneComplete: false` means the tombstone committed but some prune step failed; calling the action again re-runs only the prune. Returns `400` when the passphrase hasn't been seen by this server process (unlock first).
+
+#### `POST /api/v1/characters/[id]?action=rehydrate`
+
+Bring an archived character back: decrypt the bundle (verifying the plaintext against the file row's recorded sha256), import it with `preserveIds` in skip-if-present mode (ids already inside the character's own vault are skipped; ids anywhere else refuse atomically), clear the tombstone, flip absent chat seats back to active, re-chunk the restored documents, and enqueue re-embedding. The bundle file stays in the library afterwards. A pre-bundle tombstone (no `archiveFileId`) just un-flags.
+
+**Response**: `{ "rehydrated": true, "archived": false, "archiveBundleFileId": "file-uuid", "restored": { "memories": 12, "documents": 8, "blobs": 3 }, "warnings": [] }` (`restored` is absent for a bundle-less tombstone; `archiveBundleFileId` is `null` there).
+
+Returns `400` with the named diagnosis when the bundle predates a passphrase change or the process hasn't seen the passphrase yet, or when the bundle file is missing / the import fails — in every failure the character stays archived and re-running is safe. Returns `500` when the bundle fails digest, format, or integrity verification.
+
+Deleting a leftover bundle goes through `DELETE /api/v1/files/[id]`, which refuses (400, code `ARCHIVE_BUNDLE_HELD`) to delete a bundle a **still-archived** character points at unless `force=true` is passed.
 
 #### `POST /api/v1/characters/[id]?action=favorite`
 
@@ -1438,6 +1547,22 @@ Analyze an image using a vision LLM to suggest wardrobe items.
 }
 ```
 
+#### `POST /api/v1/wardrobe/preview-avatar`
+
+Generate a one-off character avatar against an arbitrary equipped-slot snapshot (the state a wardrobe dialog is currently showing). The result is saved as a regular generated image (downloadable from the dialog) but is **not** persisted onto the character's `avatarOverrides` or any chat's `characterAvatars` — out-of-chat avatars never overwrite the canonical character avatar.
+
+**Request Body**: `{ characterId, equippedSlots, imageProfileId? }`
+
+**Response**: `{ fileId, url, mimeType, prompt }`
+
+#### `GET /api/v1/wardrobe/transfers`
+
+Return the destination options for moving or copying a wardrobe item between tiers (character vault, project stores, Quilltap General).
+
+#### `POST /api/v1/wardrobe/transfers`
+
+Move or copy one wardrobe item between wardrobe tiers.
+
 ---
 
 ### Character Wardrobe
@@ -1577,6 +1702,24 @@ Apply a preset outfit to a chat.
 
 ---
 
+### Character Photos
+
+A character's own photo gallery, stored in the character vault's `photos/` folder (distinct from per-chat photo albums). Backed by `lib/photos/character-gallery-service.ts`.
+
+#### `GET /api/v1/characters/[id]/photos`
+
+List the photos in the character's gallery.
+
+#### `POST /api/v1/characters/[id]/photos`
+
+Upload a new photo. `multipart/form-data`: `file` (required), plus optional `caption` and `tags`.
+
+#### `DELETE /api/v1/characters/[id]/photos/[linkId]`
+
+Remove a photo from the gallery. `[linkId]` is the `doc_mount_file_links.id` returned by the list/upload endpoints. If the removed photo was the character's `defaultImageId` (or appeared in any `avatarOverrides[].imageId`), those pointers are nulled too.
+
+---
+
 ### Chats
 
 #### `GET /api/v1/chats`
@@ -1635,6 +1778,10 @@ Create a new chat.
 
 **Note**: `userCharacterId` is optional - provide a user-controlled character ID to "play as" that character in the chat.
 
+**Note**: `roleplayTemplateId` is optional and tri-state. Omit the key to fall back to the default chain (project default > user/global default > none). Send a template UUID to force that template, or send an explicit `null` for "no template" — both beat the defaults. A UUID that doesn't resolve returns `400 Roleplay template not found`.
+
+**Note**: `progressId` is optional — a client-generated UUID. When present, the handler publishes creation progress (setup milestones and per-character LLM wardrobe choices) to an in-memory bus keyed by that id, which the "Green Room" status dialog subscribes to via `GET /api/v1/chats/creation-progress?id=…` (below). Omit it and creation behaves exactly as before, returning the same JSON.
+
 To create an autonomous room, include `chatType: "autonomous"` and autonomous-room fields:
 
 ```json
@@ -1676,6 +1823,22 @@ Import a SillyTavern chat (JSONL format).
 }
 ```
 
+#### `GET /api/v1/chats/creation-progress?id=<progressId>`
+
+Server-Sent Events stream for the chat-creation status dialog ("The Green Room"). The client opens this just before `POST /api/v1/chats` (carrying the same `progressId`) and relays each event to the blocking status dialog. The in-memory bus buffers events per id and replays the backlog on connect, so a subscriber that attaches a beat late loses nothing (including a terminal `done`/`error`, which closes the stream).
+
+Each SSE frame is `data: <json>\n\n` where the payload is one of:
+
+```
+{ "kind": "status", "message": "Consulting the wardrobe…", "ts": 0 }
+{ "kind": "log", "message": "…", "level": "info|warn|error", "ts": 0 }
+{ "kind": "wardrobe-start", "characterId": "…", "characterName": "…", "ts": 0 }
+{ "kind": "wardrobe-result", "characterId": "…", "characterName": "…",
+  "slots": { "top": [{ "id": "…", "title": "…", "isComposite": false }], "bottom": [], "footwear": [], "accessories": [] }, "ts": 0 }
+{ "kind": "done", "ts": 0 }
+{ "kind": "error", "message": "…", "ts": 0 }
+```
+
 #### `GET /api/v1/chats/[id]`
 
 Get a chat with full message history. The response includes `chatType` (e.g. `"standard"`, `"autonomous"`).
@@ -1691,6 +1854,10 @@ Delete a chat (cascades to messages).
 #### `GET /api/v1/chats/[id]?action=export`
 
 Export chat as SillyTavern JSONL format.
+
+#### `GET /api/v1/chats/[id]?action=export-markdown`
+
+Export the chat as a single deterministic Markdown transcript (`text/markdown`, served as an attachment named after the chat title). The readable record of the conversation: the opening scenario, participant and user messages (active swipe only), Pascal roll announcements, Carina/Brahma answers, user-authored announcements, and the Host's continuation/merge notices. Each message renders under a `## Speaker — timestamp` heading, with timestamps on the chat's own clock (fictional time when configured, in the chat's resolved timezone and format). Excludes SYSTEM/TOOL messages, Staff housekeeping chatter, and anything sent to LLMs as prompts.
 
 #### `GET /api/v1/chats/[id]?action=cost`
 
@@ -1770,10 +1937,12 @@ Add a character to the chat.
 
 **Notes**:
 
-- `controlledBy` accepts `"llm"` (default) or `"user"` (user-impersonated). `connectionProfileId` is required for LLM control and ignored for user control.
+- `controlledBy` accepts `"llm"` (default) or `"user"` (a seat the human owns and types for directly). `connectionProfileId` is required for LLM control and ignored for user control. Note this is durable seat **ownership** and is distinct from impersonation, which overlays a seat via `impersonatingParticipantIds` without changing `controlledBy` (see `action=impersonate`).
 - `hasHistoryAccess` (default `false`) controls whether the new participant sees messages from before they joined.
 - `joinScenario` is optional context describing how the character entered; surfaced as a Host announcement targeted at the new participant when `hasHistoryAccess` is false.
-- `outfitSelection` is optional. Modes: `default` (wardrobe defaults), `manual` (provide a `slots` object), `llm_choose` (cheap LLM picks), `none` (start undressed). Omitting it on a fresh add defaults to `mode: "default"` so the new arrival is dressed; on reactivation of a previously-removed participant, omitting it preserves their previous outfit.
+- `outfitSelection` is optional. Modes: `default`, `manual` (provide a `slots` object), `llm_choose` (cheap LLM picks), `none` (start undressed). Omitting it on a fresh add defaults to `mode: "default"` so the new arrival is dressed; on reactivation of a previously-removed participant, omitting it preserves their previous outfit.
+- `mode: "llm_choose"` consults a cheap LLM per character. Consults for all characters in one request run concurrently; each is bounded by a 60s timeout. The model may return `"deliberate": true` alongside empty slots to dress the character in nothing on purpose; an all-empty response *without* that flag, a failure, or a timeout falls back to `default`.
+- `mode: "default"` resolves across **all three wardrobe tiers** — the character's own vault, the project stores linked to the chat's project, and Quilltap General. Items marked `isDefault` in any tier are equipped and **layer** in the same slot (ordered by `createdAt` ascending). Tiers are merged before the `isDefault` filter, so a character's own copy of a shared item shadows it by id: a personal `isDefault: false` override means the shared default is not worn. `llm_choose` draws its candidate list from that same merged pool.
 
 #### `POST /api/v1/chats/[id]?action=update-participant`
 
@@ -1801,6 +1970,30 @@ Remove a participant from the chat.
   "participantId": "participant-uuid"
 }
 ```
+
+#### `POST /api/v1/chats/[id]?action=merge-conversation`
+
+Fold another conversation's characters and summary into **this** chat (the inverse of "Continue Elsewhere"). `[id]` is the merge target.
+
+**Request Body**:
+
+```json
+{
+  "sourceChatId": "source-chat-uuid",
+  "characterIds": ["char-uuid"],
+  "outfitSelections": [
+    { "characterId": "char-uuid", "mode": "previous_chat" }
+  ]
+}
+```
+
+**Notes**:
+
+- Adds the source chat's present characters that aren't already in the target as **LLM-controlled** participants (a source user-controlled character is converted to LLM-driven; the target keeps its own user character). Characters already present are excluded server-side.
+- `characterIds` is an optional allowlist gating exactly which source characters come across (still minus any already present). Omitted → every eligible source character merges. An explicit empty array returns `400` ("select at least one").
+- `outfitSelections` is optional and mirrors `add-participant`'s `outfitSelection` modes per character; omitted characters default to `previous_chat` (carry their worn outfit forward from the source chat).
+- Posts a Host recap (`systemKind: "merge-from"`) at the tail of the target carrying the source's summary and a link back, plus a back-link (`systemKind: "merge-to"`) in the source chat. Existing turns are **not** replayed and the target's turn state is untouched.
+- Returns `400` when `sourceChatId` equals `[id]` or when every source character is already present (no side effects in the latter case).
 
 #### `POST /api/v1/chats/[id]?action=bulk-reattribute`
 
@@ -1893,11 +2086,11 @@ Start impersonating a character in the chat.
 
 **Response**: `200 OK`
 
-Returns updated chat metadata with `impersonatingParticipantIds` including the new participant.
+Returns updated chat metadata with `impersonatingParticipantIds` including the new participant. Impersonation is an **overlay**, not an ownership change: the participant's durable `controlledBy` (and its connection profile) are left untouched. Recording the id in `impersonatingParticipantIds` — and pointing `activeTypingParticipantId` at it — is the whole state change. The attribution and turn-taking resolvers treat an impersonated seat as user-driven from that overlay (so the operator's messages are attributed to the character and it drops out of the LLM responder rotation) without the column ever moving.
 
-#### `POST /api/v1/chats/[id]?action=stop-impersonate`
+#### `DELETE /api/v1/chats/[id]?action=stop-impersonate`
 
-Stop impersonating a character.
+Stop impersonating a character. (Uses the `DELETE` verb — the impersonation seat is being torn down.)
 
 **Request Body**:
 
@@ -1908,7 +2101,7 @@ Stop impersonating a character.
 }
 ```
 
-**Note**: `newConnectionProfileId` is required when the character doesn't have a default connection profile. This assigns the LLM profile that will control the character after you stop impersonating.
+Clearing the impersonation is the whole action — because the overlay never disturbed the seat, there is nothing to restore. `newConnectionProfileId` is optional and independent: supplying it is a **deliberate seat reassignment** (offered by the client when the character has no default connection profile, so a seat that goes back to LLM control isn't left unable to answer). It sets `connectionProfileId` only; `controlledBy` is never written by either path.
 
 #### `POST /api/v1/chats/[id]?action=set-active-speaker`
 
@@ -2010,7 +2203,7 @@ Queue avatar regeneration for a specific character in this chat.
 
 #### `GET /api/v1/chats/[id]?action=get-state`
 
-Get chat state (merged with project state if chat belongs to a project).
+Get the merged **four-tier cascade** state (chat → project → group → general; narrower tiers win). The group tier uses the **participants-union** scope — the union across the chat's active character participants (`type === 'CHARACTER' && status !== 'removed'`) — and only merges when exactly one group applies.
 
 **Response**: `200 OK`
 
@@ -2020,13 +2213,18 @@ Get chat state (merged with project state if chat belongs to a project).
   "state": {},
   "chatState": {},
   "projectState": {},
+  "groupState": {},
+  "generalState": {},
+  "groupTier": { "status": "single", "candidates": [{ "id": "group-uuid", "name": "Alpha" }], "appliedGroupId": "group-uuid" },
   "projectId": "project-uuid"
 }
 ```
 
+`projectState`, `groupState`, and `generalState` are **omitted when empty** (the "undefined when empty" convention). `groupTier.status` is `none` (no groups), `single` (exactly one — merged, `appliedGroupId` set), or `ambiguous` (two or more — the tier is skipped from the merged view and must be edited per group).
+
 #### `PUT /api/v1/chats/[id]?action=set-state`
 
-Replace entire chat state.
+Replace the entire **chat-tier** state only.
 
 **Request Body**:
 
@@ -2039,6 +2237,48 @@ Replace entire chat state.
 #### `DELETE /api/v1/chats/[id]?action=reset-state`
 
 Reset chat state to empty object. Returns previous state.
+
+---
+
+### Group State
+
+Groups are instance-global (existence-only check, no ownership). `handleGetState` returns the group's own state with no parent tier — the cascade merge happens on the chat get-state route.
+
+#### `GET /api/v1/groups/[id]?action=get-state`
+
+Get a single group's own state.
+
+**Response**: `200 OK`
+
+```json
+{ "success": true, "state": {} }
+```
+
+#### `PUT /api/v1/groups/[id]?action=set-state`
+
+Replace the group's entire state. Body `{ "state": { ... } }`.
+
+#### `DELETE /api/v1/groups/[id]?action=reset-state`
+
+Reset the group's state to `{}`. Returns `{ "success": true, "previousState": { ... } }`.
+
+---
+
+### General State (instance-wide)
+
+The bottom tier of the state cascade. No entity row — it lives as a `state.json` document at the root of the singleton "Quilltap General" mount (`instance_settings.generalMountPointId`), seeded idempotently at startup.
+
+#### `GET /api/v1/settings/general-state`
+
+Read instance-wide general state. Returns `{ "success": true, "state": {} }` (empty `{}` when the mount is not yet provisioned).
+
+#### `PUT /api/v1/settings/general-state`
+
+Replace general state. Body `{ "state": { ... } }` (validated by `stateBodySchema`).
+
+#### `DELETE /api/v1/settings/general-state`
+
+Reset general state to `{}`. Returns `{ "success": true, "previousState": { ... } }`.
 
 ---
 
@@ -2153,6 +2393,22 @@ Queue memory extraction jobs for message pairs.
 }
 ```
 
+#### `POST /api/v1/chats/[id]?action=recall-replay`
+
+Episodic-recall tuning harness (wrapped by `quilltap recall-replay`). Reconstructs the per-turn recall distillation for a turn and runs the memory search twice — episodic signals inert (pre-overhaul path) vs. live (retrospective flip, time window, entity anchors, multi-probe) — returning both candidate tables with cosine, ranking blend, multipliers fired, final score, and head selection per row. Read-only. The distillation clock is anchored to the replayed turn's own timestamp.
+
+**Request Body** (all optional):
+
+```json
+{
+  "turnIndex": 42,
+  "characterId": "char-uuid",
+  "limit": 25
+}
+```
+
+`turnIndex` is the 1-based interchange to replay at (default: last); `characterId` defaults to the first LLM-controlled participant; `limit` caps candidate rows per path (max 100).
+
 #### `POST /api/v1/chats/[id]?action=toggle-agent-mode`
 
 Toggle agent mode for this chat, or set to inherit from project/character.
@@ -2190,6 +2446,206 @@ Queue a story background regeneration job.
 ```
 
 ---
+
+### Custom Tools (Pascal the Croupier)
+
+The operator's surface for user-authored pseudo-tools (`Tools/*.tool.json` in any document store). Characters reach for the same definitions via the `run_custom` LLM tool; these endpoints are the composer run dialog's route in.
+
+The roster is resolved **fresh on every request** — never cached — so a definition the user just edited is live on the next time the dialog opens.
+
+**The roll spec and outcome table are never returned.** The dialog does not show the odds; `definitionPath` + `mountName` let the UI link to the user's own file instead.
+
+**`references` is vocabulary, not odds.** Each listing carries what its definition actually *quotes* — derived by `collectToolVocabulary` in `lib/pascal/tool-vocabulary.ts`. Every field is an **occurrence**, not an availability: `dice` is true only if some rendered string writes `{{dice}}`, not merely because the roll is dice; `params` lists only the declared parameters some message or prompt quotes back. Sources are outcome messages, the `llm` prompt, `when.metadata` keys, and `$state` references anywhere in the definition. It names what a tool reads and says; it never says what the tool concludes from it.
+
+#### `GET /api/v1/chats/[id]/custom-tools`
+
+List the roster for the run dialog. Because a character-tier store shadows farther tiers, the roster is resolved once per character participant and merged: a tool that resolves identically for everyone is listed once; a tool whose definition differs per character is listed once **per variant**, each labelled with that character's name. `asCharacterId` records whose perspective produced the entry and is replayed by the run action.
+
+**Whose perspective the single-variant row records.** It decides no variant, but the run action reads that character's fact sheet for `when.metadata` and their groups for `$state`, so it is not arbitrary: it is the operator's own played character — the participant named by `activeTypingParticipantId`, else the first present `controlledBy: 'user'` participant. When none of theirs is a candidate (an all-LLM chat, or an `availableWhen`/`withheldWhen` gate their character did not pass) it falls back to participant order **and carries a `characterLabel`**, so the caller can see whose sheet the run will consult.
+
+**Response**: `200 OK`
+
+```json
+{
+  "tools": [
+    {
+      "name": "unlock",
+      "description": "Try the lock with whatever is to hand.",
+      "parameters": {
+        "bonus": { "type": "integer", "default": 0, "description": "Anything helping the attempt.", "min": -5, "max": 5 }
+      },
+      "references": {
+        "value": true,
+        "roll": true,
+        "dice": true,
+        "llm": false,
+        "params": ["bonus"],
+        "metadata": ["hasAnsibleAccess"],
+        "state": ["player.health"]
+      },
+      "defaultVisibility": "public",
+      "sourceTier": "character",
+      "characterLabel": "Miss Ashcroft",
+      "asCharacterId": "character-uuid",
+      "definitionPath": "Tools/unlock.tool.json",
+      "mountPointId": "mount-uuid",
+      "mountName": "Ashcroft's Vault"
+    }
+  ],
+  "errors": [
+    {
+      "definitionPath": "Tools/broken.tool.json",
+      "mountPointId": "mount-uuid",
+      "mountName": "Quilltap General",
+      "tier": "global",
+      "reason": "is not valid JSON: Unexpected token }"
+    }
+  ],
+  "droppedForCap": ["spare_tool"]
+}
+```
+
+`characterLabel` is present on variant rows, and on a single-variant row that fell back off the operator's own character (above). `droppedForCap` is present only when the roster hit its size cap. `sourceTier` is one of `character`, `participant`, `group`, `project`, `global`. `references` is always present, all-false with empty lists for a tool that quotes nothing.
+
+#### `POST /api/v1/chats/[id]/custom-tools?action=run`
+
+Run one tool at the operator's behest. Posts **one** message: Pascal's outcome (`systemSender: 'pascal'`, `systemKind: 'custom-tool-result'`), identical to the one a character's own roll produces. The transcript does not record that the operator reached for the tool, nor what figures they set — a companion USER-role invocation line used to publish exactly that, and was removed.
+
+A failed run posts **no Pascal message** — the failure is announced by Prospero (`systemKind: 'custom-tool-error'`) and returns `400`.
+
+**Request Body**:
+
+```json
+{
+  "tool": "unlock",
+  "parameters": { "bonus": 2 },
+  "private": false,
+  "asCharacterId": "character-uuid"
+}
+```
+
+`parameters` and `asCharacterId` are optional/nullable. Omitting `asCharacterId` resolves the roster from the operator's own character where there is one (the same preference `GET` uses), falling back to participant order — but the run then consults **no** fact sheet and **no** group state: metadata is `{}` and the `$state` group tier is skipped, rather than borrowing an arbitrary participant's. `private: true` whispers the outcome to the operator alone — no character sees it.
+
+**Response**: `200 OK`
+
+```json
+{
+  "messages": [ { "role": "ASSISTANT", "systemSender": "pascal" } ],
+  "result": {
+    "tool": "unlock",
+    "value": 14,
+    "state": "success",
+    "message": "The wards give with a sigh.",
+    "whispered": false
+  }
+}
+```
+
+**Errors**: `400` for an unknown tool (the response lists the available names), a rejected parameter, or a definition that will not run. `404` when the chat does not exist.
+
+---
+
+#### `GET /api/v1/custom-tools`
+
+Pascal's Workbench library: **every** definition in **every** enabled store — no per-invoker shadowing, no roster cap, broken files included. Resolved fresh per request.
+
+**Response**: `200 OK`
+
+```json
+{
+  "tools": [
+    {
+      "valid": true,
+      "name": "unlock",
+      "title": "Force the Lock",
+      "description": "Try the lock with whatever is to hand.",
+      "disabled": false,
+      "defaultVisibility": "public",
+      "rollForm": "range",
+      "parameterCount": 1,
+      "outcomeCount": 3,
+      "mountPointId": "mount-uuid",
+      "mountName": "Ashcroft's Vault",
+      "definitionPath": "Tools/unlock.tool.json",
+      "attachments": [{ "kind": "character", "id": "character-uuid", "label": "Miss Ashcroft" }]
+    }
+  ],
+  "errors": [
+    {
+      "valid": false,
+      "definitionPath": "Tools/broken.tool.json",
+      "mountPointId": "mount-uuid",
+      "mountName": "Quilltap General",
+      "reason": "is not valid JSON: Unexpected token }",
+      "attachments": [{ "kind": "general", "label": "General" }]
+    }
+  ]
+}
+```
+
+`attachments[].kind` is one of `general`, `project`, `group`, `character`, `unattached`; a store may carry several.
+
+#### `GET /api/v1/custom-tools?action=destinations`
+
+The Workbench save-target list: every enabled store grouped by what it is attached to, with the tool names each store already carries (a same-store duplicate `name` is a load-time rejection, so the picker warns before writing).
+
+**Response**: `200 OK`
+
+```json
+{
+  "general": { "mountPointId": "mount-uuid", "mountName": "Quilltap General", "existingToolNames": ["unlock"] },
+  "projects": [
+    { "projectId": "project-uuid", "projectName": "Ashfall Chronicle", "stores": [{ "mountPointId": "mount-uuid", "mountName": "Ashfall Docs", "existingToolNames": [] }] }
+  ],
+  "groups": [
+    { "groupId": "group-uuid", "groupName": "The Night Shift", "stores": [{ "mountPointId": "mount-uuid", "mountName": "Night Shift Files", "official": true, "existingToolNames": [] }] }
+  ],
+  "characters": [
+    { "characterId": "character-uuid", "characterName": "Miss Ashcroft", "mountPointId": "mount-uuid", "mountName": "Ashcroft's Vault", "existingToolNames": [] }
+  ],
+  "other": [{ "mountPointId": "mount-uuid", "mountName": "Loose Papers", "existingToolNames": [] }]
+}
+```
+
+`general` is `null` when the General store is unprovisioned. Characters without a vault are omitted.
+
+#### `POST /api/v1/custom-tools?action=preview`
+
+Dry-run a definition through the same `executeCustomTool` core live chats use. **Posts nothing, writes nothing** — pure computation with the crypto RNG kept server-side.
+
+**Request Body**:
+
+```json
+{
+  "definition": { "name": "unlock", "description": "…", "outcomes": [{ "when": true, "message": "…", "state": "info" }] },
+  "params": { "bonus": 2 },
+  "private": false,
+  "metadata": { "hasSkeletonKey": true }
+}
+```
+
+`metadata` may instead be `{ "characterId": "uuid" }`, in which case the server hydrates that character and uses their real `metadata.json` (404 for an unknown id; a broken vault returns 422 with the reason).
+
+**Response**: `200 OK` — the full run result (`tool`, `params`, `rollForm`, `raw`, `value`, `state`, `outcomeIndex`, rendered `message`, `diceBreakdown`, `visibility`, and `metadataTested` when the winning row consulted the sheet). An invalid definition returns 400 with the loader's rejection sentence; a run-time refusal (e.g. an inverted range after `$param` substitution) returns 422.
+
+#### `POST /api/v1/custom-tools?action=audit`
+
+Monte Carlo table audit: 10,000 draws with roll + outcome matching only (no template rendering). Body is the preview body without `private`; `metadata` resolves the same way and is threaded into the match subjects so metadata-gated rows can fire.
+
+**Response**: `200 OK`
+
+```json
+{
+  "runs": 10000,
+  "outcomes": [
+    { "index": 0, "hits": 4012, "share": 0.4012 },
+    { "index": 1, "hits": 5988, "share": 0.5988 }
+  ],
+  "valueMin": 0.0001,
+  "valueMax": 0.9998,
+  "valueMean": 0.5003
+}
+```
 
 ### Autonomous Room Control
 
@@ -2336,7 +2792,7 @@ Ad-hoc announcement messages — system or character bubbles inserted into the c
 
 #### `POST /api/v1/chats/[id]?action=announcement`
 
-Post an ad-hoc announcement bubble.
+Post an ad-hoc announcement bubble, publicly or whispered to named participants.
 
 **Request Body**:
 
@@ -2346,13 +2802,16 @@ Post an ad-hoc announcement bubble.
   "sender": {
     "kind": "character",
     "characterId": "char-uuid"
-  }
+  },
+  "targetParticipantIds": ["participant-uuid"]
 }
 ```
 
 `sender.kind` is one of `"system"`, `"character"`, or a `systemSender` value (e.g. `"lantern"`, `"host"`). For `character` senders the referenced character must exist.
 
-**Response**: `201 Created` — `{ success: true, message: {...} }`.
+`targetParticipantIds` is optional. Omitted, `null`, or empty posts a public announcement (the default). Otherwise the announcement is persisted as a whisper: only those participants' LLM contexts include it. The ids are **chat participant ids, not character ids**, and each is re-verified against the chat's current participants — a removed participant or an id from another chat is rejected.
+
+**Response**: `201 Created` — `{ success: true, message: {...} }`. `400` when any target is not a current participant of this chat.
 
 #### `POST /api/v1/chats/[id]?action=announcement-preview`
 
@@ -2365,9 +2824,12 @@ Generate an in-character rewrite of a seed announcement for an off-scene charact
   "characterId": "char-uuid",
   "connectionProfileId": "profile-uuid",
   "systemPromptId": "prompt-uuid",
-  "seedMarkdown": "Aurora announces the wardrobe refresh."
+  "seedMarkdown": "Aurora announces the wardrobe refresh.",
+  "targetParticipantIds": ["participant-uuid"]
 }
 ```
+
+`targetParticipantIds` carries the audience the operator has chosen for the eventual post. When present, the character is told the remark is private and is given those names in place of the room's roster, so the rewrite is phrased as an aside rather than a proclamation. Unresolvable ids are ignored here (nothing is persisted); the post action is the gate that rejects them.
 
 **Response**: `200 OK`
 
@@ -2420,6 +2882,28 @@ Returns the list of photo-album targets the Salon's Save-Image dialog can offer 
 ```
 
 `kind` is one of `"character"`, `"project"`, `"document-store"`, or `"general"`.
+
+---
+
+### Photo Gallery
+
+The user's personal image gallery, stored at `<userUploadsMountPointId>/photos/` and deduped by SHA-256. Backed by `lib/photos/user-gallery-service.ts`.
+
+#### `GET /api/v1/photos`
+
+List the user's gallery. Supports optional `query`, `tags`, and pagination parameters.
+
+#### `POST /api/v1/photos`
+
+Save an image (by image-v2 `FileEntry` id) to the gallery. Saving the same image twice is rejected with a clear error (SHA-256 dedupe).
+
+#### `GET /api/v1/photos/[id]`
+
+Get a single gallery entry with its link summary. `[id]` is a `doc_mount_file_links.id` (the `linkId` returned by list/save).
+
+#### `DELETE /api/v1/photos/[id]`
+
+Remove a gallery entry. Cascades to chunks; garbage collection drops the underlying file row if this was its last link.
 
 ---
 
@@ -2531,6 +3015,50 @@ Delete a chat file and its physical storage.
   "success": true
 }
 ```
+
+---
+
+### Chat qtap:// Target
+
+#### `GET /api/v1/chats/[id]/qtap-target`
+
+Resolves a `qtap://` address through the same chat access rules as the Salon's Document Mode, then streams the raw bytes. Used by global `qtap://` image links so non-Salon surfaces (e.g. the fullscreen image viewer) can reuse chat-scoped document resolution.
+
+**Query Parameters**:
+
+| Parameter | Description |
+|-----------|-------------|
+| `scope` | The doc-edit scope the address resolves within |
+| `filePath` | The target file path inside the resolved store |
+| `mountPoint` | The mount point / store the address targets |
+
+**Response**: `200 OK` — the raw file bytes with the resolved content type. `404` if the target does not resolve.
+
+---
+
+### Chat Messages (Send & Stream)
+
+Chat-scoped message send and per-message actions. (The collection read/edit endpoints are under [Messages](#messages) below.)
+
+#### `POST /api/v1/chats/[id]/messages`
+
+Send a message and receive the streaming LLM response. Returns `text/event-stream` (SSE). HTTP concerns only — the business logic is delegated to the chat message orchestrator service.
+
+#### `POST /api/v1/chats/[id]/messages/[messageId]?action=override-danger-flag`
+
+Override the Concierge danger flags on a message.
+
+#### `POST /api/v1/chats/[id]/messages/[messageId]?action=resolve-external-turn`
+
+Resolve a Courier (manual / clipboard) placeholder turn by attaching the pasted reply.
+
+#### `POST /api/v1/chats/[id]/messages/[messageId]?action=cancel-external-turn`
+
+Cancel a Courier placeholder turn: delete the message and unpause the chat.
+
+#### `POST /api/v1/chats/[id]/messages/[messageId]?action=save-image`
+
+Save an image attached to the message into a chosen photo album.
 
 ---
 
@@ -2992,6 +3520,8 @@ Download a file by ID. Returns the file content with appropriate headers.
 - `size` - Thumbnail size (default 150, max 300)
 
 **Response**: File binary with `Content-Type` and `Content-Disposition` headers.
+
+Returns `404` both when the row is absent and when the row exists but its content does not — a dangling pointer into a deleted mount point or a storage key with nothing behind it. That condition is permanent, so the client should fall back rather than retry. `500` is reserved for reads that genuinely failed (permissions, corruption, a backend that is down). The same rule applies to `GET /api/v1/files/proxy/[...key]`.
 
 #### `DELETE /api/v1/files/[id]`
 
@@ -3614,12 +4144,26 @@ Cross-mount and folder operations live on the `[id]` action-dispatch route (they
 - `POST /api/v1/mount-points/[id]?action=write-file` — multipart `file`/`path`/`force` write (legacy; prefer `PUT .../files/[...path]`).
 - `POST /api/v1/mount-points/[id]?action=delete-file` — JSON `{ path }`.
 - `POST /api/v1/mount-points/[id]?action=move-file` — JSON `{ sourcePath, destMountPointId, destPath }`. Cross-mount move (rename / byte-copy / hard-link strategy chosen automatically). Returns `{ strategy, sourceSha256, destSha256, sizeBytes, ... }`.
-- `POST /api/v1/mount-points/[id]?action=copy-file` — JSON `{ sourcePath, destMountPointId, destPath, force? }`. Copies; hard-links when possible unless `force` forces a byte copy.
-- `POST /api/v1/mount-points/[id]?action=link-file` — JSON `{ sourcePath, destMountPointId, destPath }`. Creates a **true hard link** (db→db link row or POSIX `fs.link`); never byte-copies. Cross-storage or cross-device links return `400 UNSUPPORTED`. Never overwrites (`409 DEST_EXISTS`).
+- `POST /api/v1/mount-points/[id]?action=copy-file` — JSON `{ sourcePath, destMountPointId, destPath, force? }`. Copies. The result is an **independent** document: it shares a content-addressed row with the source until either side is written and then forks. `force` skips the shared-content path and writes bytes for real; the end state is the same.
+- `POST /api/v1/mount-points/[id]?action=link-file` — JSON `{ sourcePath, destMountPointId, destPath }`. Creates a **true hard link** (db→db link row or POSIX `fs.link`); never byte-copies. Both ends are enrolled in a `linkGroupId` (see DDL), so a later write through *either* path repoints both and re-chunks the sibling — unlike `copy-file`, which forks. Cross-storage or cross-device links return `400 UNSUPPORTED`. Never overwrites (`409 DEST_EXISTS`).
 - `POST /api/v1/mount-points/[id]?action=delete-folder` — JSON `{ path }`. Empty folders only (`409 NOT_EMPTY` otherwise).
 - `POST /api/v1/mount-points/[id]?action=move-folder` — JSON `{ fromPath, toPath }`. Moves the folder and everything under it (database rows or `fs.rename` + link-row reconciliation).
 
 > **Mount-point files vs. the file library (`/api/v1/files`).** These mount-point endpoints address content by **(mount, relative path)** and are the one surface for Scriptorium file CRUD. `/api/v1/files` is a separate **library** layer that addresses by **file id** and carries domain metadata the mount index has no columns for (category, generation prompt/model, `linkedTo` associations, tags, image dimensions, thumbnails, avatar back-references). Its uploads already persist bytes into mount stores via the storage bridges (which now funnel through `storeMountFile`), and `GET /api/v1/files/[id]` plus `/api/v1/files/proxy/[...key]` remain the stable, persisted read URLs for library assets. Use the mount-point routes for raw file content; use `/api/v1/files` for the library/metadata layer.
+
+---
+
+### Documents (Standalone Document Mode)
+
+Chat-less Document Mode operations for the left rail's standalone document tabs. These reuse the same shared core as the chat-scoped document actions (`lib/documents/operator-doc-actions.ts`) but create **no `chat_documents` rows and post no Librarian announcements** — no conversation is attached, so nothing is notified of edits. All actions resolve paths with the operator override (any enabled store is reachable). The `project` scope is not accepted here (no chat means no project context); project files are reachable through their project's official document store by mount name.
+
+- `GET /api/v1/documents?action=accessible-stores` — every enabled store (the picker's chat-less "look everywhere"). Returns `{ stores, projectLibrary: null }`; character vaults are labelled by their owning character.
+- `POST /api/v1/documents?action=recent-documents` — recently-opened documents across all chats (sourced from `chat_documents` history), deduped by file identity, `project`-scoped rows filtered out. Returns `{ documents }`.
+- `POST /api/v1/documents?action=open-document` — JSON `{ filePath?, title?, scope? ('document_store' | 'general', default 'general'), mountPoint?, targetFolder? }`. Reads an existing file, or (no `filePath`) creates a collision-safe "Untitled Document.md" in `targetFolder`. Returns `{ document: { filePath, scope, mountPoint, displayTitle }, content, mtime, isNew }`. `404` if a named file is missing.
+- `POST /api/v1/documents?action=read-document` — JSON `{ filePath, scope?, mountPoint? }`. Returns `{ content, mtime }`.
+- `POST /api/v1/documents?action=write-document` — JSON `{ filePath, scope?, mountPoint?, content, mtime? }`. Mtime-checked write (`409` on conflict); document-store writes schedule re-index + embedding + stats refresh. Returns `{ success, mtime }`.
+- `POST /api/v1/documents?action=rename-document` — JSON `{ filePath, scope?, mountPoint?, newTitle }`. Same basename semantics as the chat route (directory preserved, old extension inherited, separators rejected). `409` if the destination exists. Returns `{ document }`.
+- `POST /api/v1/documents?action=delete-document` — JSON `{ filePath, scope?, mountPoint? }`. Returns `{ success }`.
 
 ---
 
@@ -3742,6 +4286,7 @@ Restore data from a backup file.
 - `file` (required) - The backup ZIP file
 - `mode` (required) - `"replace"` (overwrite existing data) or `"new-account"` (import as new)
 - `preview` (optional) - Set to `"true"` for preview mode
+- `keepArchivedCharacterBundles` (optional, default `true`) - Replace mode only: spare archived-character `.qtap` bundles (`files` rows of category `ARCHIVE` and their bytes) from the pre-restore wipe. The tombstone character rows are replaced like everything else, so a spared bundle is loose — importable, not rehydratable. Pass `false` to wipe them too.
 
 **Response**: `200 OK`
 
@@ -4261,6 +4806,22 @@ Install a theme from a registry source.
 }
 ```
 
+#### `GET /api/v1/themes/[themeId]`
+
+Get metadata for a single theme.
+
+#### `GET /api/v1/themes/[themeId]?action=tokens`
+
+Get the resolved design tokens for the theme.
+
+#### `GET /api/v1/themes/[themeId]?action=export`
+
+Export the theme as a downloadable `.qtap-theme` bundle.
+
+#### `DELETE /api/v1/themes/[themeId]`
+
+Uninstall a bundle theme.
+
 ---
 
 ### Search
@@ -4364,6 +4925,21 @@ Pause a job.
 
 Resume a paused job.
 
+#### `POST /api/v1/system/tools?action=delete-data`
+
+Delete all user data (the Delete All Data card).
+
+**Body:**
+```json
+{ "confirm": "DELETE_ALL_MY_DATA", "keepArchivedCharacterBundles": true }
+```
+
+`confirm` is required verbatim. `keepArchivedCharacterBundles` (optional, default `true`) spares archived-character `.qtap` bundles (`files` rows of category `ARCHIVE` and their on-disk bytes) from the wipe; the character rows themselves are deleted, so what survives is a loose, importable bundle. Pass `false` to wipe the bundles too. The response `summary` includes `archiveBundles` (bundles present) and `archiveBundlesKept`; `files` counts only the files actually deleted.
+
+#### `GET /api/v1/system/tools?action=delete-data-preview`
+
+Count-only preview for the deletion above; the summary's `archiveBundles` reports the bundles on hand (nothing is deleted).
+
 #### `GET /api/v1/system/tools?action=tasks-queue`
 
 Get tasks queue status. The response includes `maxConcurrentJobs` — the current global background-job concurrency cap.
@@ -4387,6 +4963,46 @@ Set the global background-job concurrency cap. Applies within ~2 s without a res
 ```
 
 `concurrency` is an integer in the range 1–32. Returns `{ "success": true, "concurrency": 8 }`.
+
+#### `GET /api/v1/system/tools?action=export-entities`
+
+List the entities of one export type, for the export wizard's selection step.
+
+**Query Parameters:**
+- `type` (required) — an `ExportEntityType`: `characters`, `chats`, `roleplay-templates`, `prompt-templates`, `connection-profiles`, `image-profiles`, `embedding-profiles`, `tags`, `projects`, `groups`, `document-stores`, `files`, `provider-models`, `plugin-configs`, `instance-settings`.
+
+**Response:**
+```json
+{
+  "success": true,
+  "entities": [{ "id": "…", "name": "…", "memoryCount": 12 }],
+  "totalMemoryCount": 12
+}
+```
+
+`memoryCount` / `totalMemoryCount` are present only for `characters` and `chats`.
+
+Scoping notes, because they are not uniform:
+
+- `document-stores` and `provider-models` are **instance-scoped** — they come from the global repositories, not the user-scoped ones.
+- `prompt-templates` and `roleplay-templates` exclude built-ins (`isBuiltIn`), which are seeded from `prompts/` on every instance.
+- `files` excludes backup files (`category === 'BACKUP'` or `folderPath === '/backups'`), mirroring the backup service's own rule.
+- `instance-settings` is keyed by **setting key**, not a UUID — the table has no id column — and omits the keys that only make sense inside the exporting instance (the three mount-point pointers, `lastMaintenanceSweepAt`, `highest_app_version`).
+
+An unknown `type` returns 400.
+
+#### `POST /api/v1/system/backup`
+
+Create a backup and stage it for download.
+
+**Body (optional):**
+```json
+{ "compact": true }
+```
+
+`compact` defaults to `false`. When true the archive omits every embedding-derived payload — memory embeddings are nulled and `conversation-chunks.json`, `vector-entries.json`, `vector-index-metas.json`, `tfidf-vocabularies.json`, `embedding-status.json`, and `doc-mount-chunks.json` are not written at all — and the manifest records `compact: true`. Restore keys off that flag to enqueue a full `EMBEDDING_REINDEX_ALL`. A malformed body is treated as absent rather than rejected.
+
+**Response:** `201` with `{ "success": true, "backupId": "…", "manifest": { … } }`.
 
 ---
 
@@ -4632,6 +5248,22 @@ Uninstall a plugin.
 }
 ```
 
+#### `GET /api/v1/plugins/[name]`
+
+Get details for a single plugin.
+
+#### `GET /api/v1/plugins/[name]?action=get-config`
+
+Get the plugin's current configuration.
+
+#### `PUT /api/v1/plugins/[name]`
+
+Enable or disable the plugin.
+
+#### `POST /api/v1/plugins/[name]?action=set-config`
+
+Update the plugin's configuration.
+
 ---
 
 ### Projects
@@ -4755,6 +5387,131 @@ Update default tool settings for new chats in the project.
 
 When a new chat is created within a project, it inherits these default tool settings. Existing chats are not affected.
 
+#### `GET /api/v1/projects/[id]/mount-points`
+
+List the mount points (document stores) linked to a project.
+
+#### `POST /api/v1/projects/[id]/mount-points`
+
+Link a mount point to the project. Body: `{ mountPointId }`.
+
+#### `DELETE /api/v1/projects/[id]/mount-points`
+
+Unlink a mount point from the project. Body: `{ mountPointId }`.
+
+#### `GET /api/v1/projects/[id]/wardrobe`
+
+List the project's wardrobe items (the project tier of the tri-tier wardrobe model: character vault + project stores + Quilltap General), read from the project's `Wardrobe/` folder.
+
+#### `POST /api/v1/projects/[id]/wardrobe`
+
+Create a project wardrobe item. Body: `{ title, description?, types, appropriateness?, isDefault?, componentItemIds?, replace? }`.
+
+#### `GET /api/v1/projects/[id]/wardrobe/[itemId]`
+
+Fetch one project wardrobe item.
+
+#### `PUT /api/v1/projects/[id]/wardrobe/[itemId]`
+
+Update one project wardrobe item.
+
+#### `DELETE /api/v1/projects/[id]/wardrobe/[itemId]`
+
+Delete one project wardrobe item.
+
+---
+
+### Groups
+
+Character groups bundle several characters and their shared document stores. Group **state** is documented separately under [Group State](#group-state); these endpoints cover the group itself, its membership, and its linked stores.
+
+#### `GET /api/v1/groups`
+
+List all groups.
+
+#### `POST /api/v1/groups`
+
+Create a new group.
+
+#### `GET /api/v1/groups/[id]`
+
+Get group details.
+
+#### `PUT /api/v1/groups/[id]`
+
+Update a group.
+
+#### `DELETE /api/v1/groups/[id]`
+
+Delete a group.
+
+#### `GET /api/v1/groups/[id]?action=members`
+
+List the group's member characters.
+
+#### `POST /api/v1/groups/[id]?action=addMember`
+
+Add a character to the group.
+
+#### `DELETE /api/v1/groups/[id]?action=removeMember`
+
+Remove a character from the group.
+
+#### `GET /api/v1/groups/[id]?action=stores`
+
+List the document stores linked to the group.
+
+#### `POST /api/v1/groups/[id]?action=linkStore`
+
+Link a document store to the group.
+
+#### `DELETE /api/v1/groups/[id]?action=unlinkStore`
+
+Unlink a document store from the group.
+
+#### `GET /api/v1/groups/[id]/mount-points`
+
+List the mount points linked to a group.
+
+#### `POST /api/v1/groups/[id]/mount-points`
+
+Link a mount point to the group. Body: `{ mountPointId }`.
+
+#### `DELETE /api/v1/groups/[id]/mount-points`
+
+Unlink a mount point from the group. Body: `{ mountPointId }`.
+
+---
+
+### Scenarios
+
+Scenarios are Markdown files (with frontmatter: `name`, `description`, `isDefault`, body) kept in a `Scenarios/` folder. They exist at three tiers — **general** (instance-wide "Quilltap General" store), **project**, and **group** — that share an identical endpoint shape. Each collection endpoint ensures the backing store and its `Scenarios/` folder exist first, so callers don't wait for the next startup heal pass. Frontmatter is parsed and default-conflict resolution is applied on read.
+
+For the single-scenario endpoints, `[scenarioPath]` is the URL-encoded filename relative to `Scenarios/`; the bare filename (with or without `.md`) is accepted and the `Scenarios/` prefix is applied server-side. `..` segments are rejected.
+
+**General tier**
+
+- `GET /api/v1/scenarios` — list general scenarios. Tolerates the pre-migration race (returns an empty list with `mountPointId: null`).
+- `POST /api/v1/scenarios` — create a general scenario. Body: `{ filename, name?, description?, isDefault?, body }`. Rejects writes during the pre-migration window.
+- `GET /api/v1/scenarios/[scenarioPath]` — read one.
+- `PUT /api/v1/scenarios/[scenarioPath]` — update content + frontmatter.
+- `POST /api/v1/scenarios/[scenarioPath]?action=rename` — rename the file.
+- `DELETE /api/v1/scenarios/[scenarioPath]` — delete the file.
+
+**Project tier**
+
+- `GET /api/v1/projects/[id]/scenarios` · `POST /api/v1/projects/[id]/scenarios`
+- `GET`/`PUT`/`DELETE /api/v1/projects/[id]/scenarios/[scenarioPath]` · `POST …?action=rename`
+
+**Group tier**
+
+- `GET /api/v1/groups/[id]/scenarios` · `POST /api/v1/groups/[id]/scenarios`
+- `GET`/`PUT`/`DELETE /api/v1/groups/[id]/scenarios/[scenarioPath]` · `POST …?action=rename`
+
+#### `GET /api/v1/groups/scenarios?characterIds=<id,id,...>`
+
+The New Chat dialog's participant-union aggregation: for every group that **any** of the supplied prospective participants belongs to, returns that group's `Scenarios/` entries grouped under the group's name. This is the one sanctioned exception to a group's otherwise strict per-responding-character isolation — scenarios are a chat-creation-time menu, not a per-turn access grant, so this route must never feed the per-turn tier resolver.
+
 ---
 
 ### Help Docs
@@ -4784,6 +5541,10 @@ Get the count of salon chats (non-help chats) for the current user.
   "count": 42
 }
 ```
+
+#### `GET /api/v1/help-docs/[id]`
+
+Get a single help document, including its rendered content.
 
 ---
 
@@ -4977,6 +5738,70 @@ Returns deployment information. This endpoint is unauthenticated as it is needed
 |-------|-------------|
 | `isUserManaged` | `true` for self-hosted deployments |
 | `isHosted` | `true` for hosted/cloud deployments (inverse of `isUserManaged`) |
+
+---
+
+### System Home
+
+#### `GET /api/v1/system/home`
+
+Returns the home dashboard payload for the client-rendered workspace home tab: greeting name, the "continue last" chat id, recent chats, active projects, and characters. The server-rendered `/` route computes the same payload directly through the shared `home-data` service, so this endpoint exists for the workspace tab to fetch it client-side. See `docs/developer/features/tabbed-workspace.md`.
+
+**Response**: `200 OK` — the home dashboard data object.
+
+---
+
+### System Autonomous Rooms
+
+#### `GET /api/v1/system/autonomous-rooms`
+
+List every autonomous room owned by the authenticated user, with enough context for the Settings → System management surface to render `runState` badges, last/next run, budgets consumed, and to route into a transcript on demand. (Per-room control lives under [Autonomous Room Control](#autonomous-room-control).)
+
+---
+
+### System Browse Directory
+
+#### `GET /api/v1/system/browse-directory?path=/some/path`
+
+List the immediate subdirectories of the given path for the directory-picker UI. Returns the resolved path and its subdirectories. With no `path`, lists the user's home directory.
+
+---
+
+### System Conversation Summaries
+
+Backfill utility for the Commonplace Book's relevant-conversations retrieval.
+
+#### `POST /api/v1/system/conversation-summaries?action=regenerate`
+
+Enqueue a background job that re-mirrors every summarized chat's context summary into its participant character vaults (the files the retrieval reads). Returns immediately; the work runs in the background.
+
+#### `GET /api/v1/system/conversation-summaries?action=regenerate`
+
+Report whether a regeneration is currently in flight.
+
+---
+
+### System Image Aesthetics
+
+Read/write the instance-wide "Default Aesthetic" files behind the two editors on the Images settings tab. The doc-store file is the source of truth; the editors are views over it. Single tier — no fallback.
+
+#### `GET /api/v1/system/image-aesthetics?kind=lantern|aurora`
+
+Read the Quilltap General store's aesthetic file. `kind=lantern` → `lantern-aesthetics.md` (general/scene look); `kind=aurora` → `aurora-aesthetics.md` (how people and outfits are depicted).
+
+#### `PUT /api/v1/system/image-aesthetics?kind=lantern|aurora`
+
+Write that file — or, when the body is empty, delete it.
+
+---
+
+### System Startup Status
+
+#### `GET /api/v1/system/startup-status`
+
+Return the live state of server startup — coarse phase plus the event stream, current label, and sub-progress — to drive the loading-screen UI.
+
+**Authentication**: Not required. The loading screen runs before any session exists; the only data exposed is generic "what the server is doing right now," so no user data leaks.
 
 ---
 

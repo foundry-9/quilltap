@@ -27,6 +27,9 @@ import {
   GroupDocMountLinksRepository,
   LLMLogsRepository,
   type CreateOptions,
+  type LLMLogTypeStatsRow,
+  type LLMLogProfileStatsRow,
+  type LLMLogCacheStatsRow,
 } from '@/lib/database/repositories';
 import { getRepositories, getRepositoriesSafe } from './factory';
 import type {
@@ -43,6 +46,8 @@ import type {
   Project,
   Group,
   LLMLog,
+  LLMLogType,
+  ParticipantStatus,
 } from '@/lib/schemas/types';
 
 // ============================================================================
@@ -187,10 +192,24 @@ class UserScopedChatsRepository extends UserScopedTaggableRepository<ChatMetadat
     return this.baseRepo.getMessages(chatId);
   }
 
+  async getLastPlayedMessageAt(chatId: string): Promise<string | null> {
+    return this.baseRepo.getLastPlayedMessageAt(chatId);
+  }
+
   async addMessage(chatId: string, message: ChatEvent): Promise<ChatEvent> {
     const chat = await this.findById(chatId);
     if (!chat) throw new Error('Chat not found or access denied');
     return this.baseRepo.addMessage(chatId, message);
+  }
+
+  async setParticipantStatus(
+    chatId: string,
+    participantId: string,
+    newStatus: ParticipantStatus
+  ): Promise<{ chat: ChatMetadata | null; oldStatus: ParticipantStatus }> {
+    const chat = await this.findById(chatId);
+    if (!chat) throw new Error('Chat not found or access denied');
+    return this.baseRepo.setParticipantStatus(chatId, participantId, newStatus);
   }
 
   async clearMessages(chatId: string): Promise<boolean> {
@@ -281,10 +300,16 @@ class UserScopedMemoriesRepository {
     return memory;
   }
 
-  async create(data: Omit<Memory, 'id' | 'createdAt' | 'updatedAt'>): Promise<Memory> {
+  /**
+   * `options` is forwarded so callers can pin an explicit id — restore relies on
+   * it to re-insert memories under their backed-up ids, which is what keeps
+   * `relatedMemoryIds` edges resolving. This class scopes by character rather
+   * than userId, so it doesn't inherit the generic wrapper's pass-through.
+   */
+  async create(data: Omit<Memory, 'id' | 'createdAt' | 'updatedAt'>, options?: CreateOptions): Promise<Memory> {
     const character = await this.charactersRepo.findById(data.characterId);
     if (!character) throw new Error('Character not found or access denied');
-    return this.baseRepo.create(data);
+    return this.baseRepo.create(data, options);
   }
 
   async update(id: string, data: Partial<Memory>): Promise<Memory | null> {
@@ -509,6 +534,36 @@ class UserScopedLLMLogsRepository extends UserScopedRepository<LLMLog, LLMLogsRe
 
   async deleteByCharacterId(characterId: string): Promise<number> {
     return this.baseRepo.deleteByCharacterId(characterId);
+  }
+
+  // --- Aggregates (The Almanack) -------------------------------------------
+
+  /** Does the logs table carry the 4.9 profile-attribution columns yet? */
+  hasProfileAttributionColumns(): boolean {
+    return this.baseRepo.hasProfileAttributionColumns();
+  }
+
+  async getStatsByType(): Promise<LLMLogTypeStatsRow[]> {
+    return this.baseRepo.getStatsByType(this.userId);
+  }
+
+  async getStatsByProfile(
+    groupBy: 'connectionProfileId' | 'imageProfileId' | 'providerModel',
+    options?: { type?: LLMLogType },
+  ): Promise<LLMLogProfileStatsRow[]> {
+    return this.baseRepo.getStatsByProfile(this.userId, groupBy, options ?? {});
+  }
+
+  async getMedianDurationByProfile(
+    groupBy: 'connectionProfileId' | 'imageProfileId' | 'providerModel',
+  ): Promise<Array<{ key: string; medianDurationMs: number }>> {
+    return this.baseRepo.getMedianDurationByProfile(this.userId, groupBy);
+  }
+
+  async getCacheStats(
+    groupBy: 'provider' | 'connectionProfileId',
+  ): Promise<LLMLogCacheStatsRow[]> {
+    return this.baseRepo.getCacheStats(this.userId, groupBy);
   }
 }
 

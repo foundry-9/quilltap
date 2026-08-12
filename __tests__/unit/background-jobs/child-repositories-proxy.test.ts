@@ -28,6 +28,7 @@ jest.mock('@/lib/logger', () => {
 });
 
 import { getRepositories as mockedGetRepositories } from '@/lib/database/repositories';
+import { logger } from '@/lib/logger';
 import {
   runWithJobScope,
   flushPendingWrites,
@@ -72,6 +73,15 @@ function makeFakeRepos() {
       addEntries: jest.fn().mockResolvedValue(undefined),
       entryExists: jest.fn().mockResolvedValue(false),
       saveMeta: jest.fn().mockResolvedValue(undefined),
+    },
+    // Fronts two tables: connection_profiles and api_keys. See
+    // TABLE_GROUP_RESOLVERS in the proxy.
+    connections: {
+      findById: jest.fn().mockResolvedValue({ id: 'p-1' }),
+      incrementTokenUsage: jest.fn().mockResolvedValue(undefined),
+      findApiKeyByIdAndUserId: jest.fn().mockResolvedValue({ id: 'k-1', key: 'sk-x' }),
+      findApiKeyById: jest.fn().mockResolvedValue({ id: 'k-1', key: 'sk-x' }),
+      updateApiKey: jest.fn().mockResolvedValue(null),
     },
   };
 }
@@ -346,5 +356,100 @@ describe('child repository proxy — Float32Array IPC sanitization', () => {
     // …and embedding-free args are passed by reference (no needless copy).
     expect(writes[0].args[0]).toBe(plainArg);
     expect(writes[0].args[1]).toBe(numberArg);
+  });
+});
+
+describe('child repository proxy — read-your-writes detector', () => {
+  const warn = logger.warn as jest.Mock;
+
+  function readYourWritesWarnings(): Array<Record<string, unknown>> {
+    return warn.mock.calls
+      .filter(([message]) => typeof message === 'string' && message.includes('read-your-writes'))
+      .map(([, context]) => context as Record<string, unknown>);
+  }
+
+  it('stays quiet when the read hits a different table on the same repository', async () => {
+    const repos = makeFakeRepos();
+    mockedFactory.mockReturnValue(repos as never);
+    const proxied = getChildRepositoriesProxy();
+
+    // The AUTONOMOUS_ROOM_TURN pattern: the turn's LLM call bumps the profile's
+    // token counters (connection_profiles), then a later call in the same job
+    // re-resolves an API key (api_keys). Two tables — no staleness possible.
+    await runWithJobScope('job-rww-crosstable', async () => {
+      await (proxied.connections as unknown as typeof repos.connections).incrementTokenUsage(
+        'p-1' as never, 100 as never, 50 as never,
+      );
+      const key = await (proxied.connections as unknown as typeof repos.connections)
+        .findApiKeyByIdAndUserId('k-1' as never, 'u-1' as never);
+      expect(key).toEqual({ id: 'k-1', key: 'sk-x' });
+      flushPendingWrites();
+    });
+
+    expect(readYourWritesWarnings()).toEqual([]);
+  });
+
+  it('warns when the read hits the same table as a buffered write', async () => {
+    const repos = makeFakeRepos();
+    mockedFactory.mockReturnValue(repos as never);
+    const proxied = getChildRepositoriesProxy();
+
+    await runWithJobScope('job-rww-profiles', async () => {
+      await (proxied.connections as unknown as typeof repos.connections).incrementTokenUsage(
+        'p-1' as never, 100 as never, 50 as never,
+      );
+      await (proxied.connections as unknown as typeof repos.connections).findById('p-1' as never);
+      flushPendingWrites();
+    });
+
+    const warnings = readYourWritesWarnings();
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toEqual(expect.objectContaining({
+      jobId: 'job-rww-profiles',
+      readMethod: 'connections.findById',
+      table: 'connections.connection_profiles',
+    }));
+  });
+
+  it('still warns within the api_keys table — the split does not blind the detector', async () => {
+    const repos = makeFakeRepos();
+    mockedFactory.mockReturnValue(repos as never);
+    const proxied = getChildRepositoriesProxy();
+
+    await runWithJobScope('job-rww-apikeys', async () => {
+      await (proxied.connections as unknown as typeof repos.connections).updateApiKey(
+        'k-1' as never, { lastUsedAt: 'now' } as never,
+      );
+      await (proxied.connections as unknown as typeof repos.connections).findApiKeyById('k-1' as never);
+      flushPendingWrites();
+    });
+
+    const warnings = readYourWritesWarnings();
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toEqual(expect.objectContaining({
+      readMethod: 'connections.findApiKeyById',
+      table: 'connections.api_keys',
+    }));
+  });
+
+  it('treats a repository with no resolver as a single table (unchanged behaviour)', async () => {
+    const repos = makeFakeRepos();
+    mockedFactory.mockReturnValue(repos as never);
+    const proxied = getChildRepositoriesProxy();
+
+    await runWithJobScope('job-rww-unmapped', async () => {
+      await (proxied.memories as unknown as typeof repos.memories).create({ content: 'x' } as never);
+      await (proxied.memories as unknown as typeof repos.memories).findById('m-existing');
+      // Dedup is per (jobId, readMethod): a second identical read stays quiet.
+      await (proxied.memories as unknown as typeof repos.memories).findById('m-existing');
+      flushPendingWrites();
+    });
+
+    const warnings = readYourWritesWarnings();
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toEqual(expect.objectContaining({
+      readMethod: 'memories.findById',
+      table: 'memories',
+    }));
   });
 });

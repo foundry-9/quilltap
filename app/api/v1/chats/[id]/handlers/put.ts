@@ -13,14 +13,14 @@ import { notFound, badRequest, serverError, errorResponse } from '@/lib/api/resp
 import { chatUpdateRequestSchema } from '../schemas';
 import { processChatUpdates } from '../helpers';
 import { handleSetState } from '../actions';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 /**
  * PUT handler for updating a chat
  */
 export async function handlePut(
   req: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   chatId: string
 ): Promise<NextResponse> {
   const { user, repos } = ctx;

@@ -33,6 +33,7 @@ import {
   MemoryCandidate,
   UncensoredFallbackOptions,
   type OrientingContext,
+  type ExtractionClock,
 } from './cheap-llm-tasks'
 import type { OtherSubjectInput } from './cheap-llm-tasks'
 import { getCheapLLMProvider, CheapLLMConfig, CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
@@ -42,6 +43,7 @@ import type { Pronouns } from '@/lib/schemas/character.types'
 import type { DangerousContentSettings, MemoryExtractionLimits } from '@/lib/schemas/settings.types'
 import type { TurnTranscript, TurnCharacterSlice } from '@/lib/services/chat-message/turn-transcript'
 import { createMemoryWithGate } from './memory-service'
+import { resolveWhenPhrase } from './episodic'
 import type { MemoryGateOutcome } from './memory-gate'
 import { logger } from '@/lib/logger'
 
@@ -129,6 +131,12 @@ export interface TurnMemoryExtractionContext {
   memoryExtractionLimits?: MemoryExtractionLimits
   /** Override the source-message timestamp on derived memories — used by batch re-extraction to backfill historical timing. */
   sourceMessageTimestamp?: string
+  /**
+   * Which clock the chat's story runs on (chat.timelineMode; defaults to
+   * 'realtime'). Feeds the extraction CLOCK block and decides whether an
+   * unresolved / in-story `when` phrase is preserved as `narrativeTime`.
+   */
+  timelineMode?: 'realtime' | 'narrative' | null
   /** When true, run all extraction passes but skip persistence — candidates are returned on the result instead. */
   dryRun?: boolean
   /**
@@ -157,6 +165,12 @@ export interface ExtractedCandidate {
   summary: string
   keywords: string[]
   importance: number
+  /** Episodic spine (dry-run visibility): declared kind + raw/resolved anchors. */
+  kind: 'semantic' | 'episodic'
+  when: string | null
+  occurredAt: string | null
+  narrativeTime: string | null
+  entities: string[]
 }
 
 export interface TurnMemoryProcessingResult {
@@ -198,13 +212,54 @@ interface WriteOptions {
   passLabel: string
   ctx: TurnMemoryExtractionContext
   sourceMessageId: string | null
+  /** `createdAt` of the source message — the wall-clock anchor for `occurredAt`. */
+  sourceMessageCreatedAt: string | null
   debugLogs: string[]
   createdIds: string[]
   reinforcedIds: string[]
   collected: ExtractedCandidate[]
 }
 
+/**
+ * Resolve a candidate's episodic anchors against the source turn's clock.
+ *
+ * Stamping rules (episodic spine):
+ *  - Every memory gets `occurredAt` = the source message timestamp by default
+ *    (authoritative from the transcript — never asked of the model).
+ *  - A retold EVENT with a `when` phrase resolves that phrase server-side
+ *    against the same anchor; a successful resolution overrides the default.
+ *  - On fictional timelines the raw phrase is preserved as `narrativeTime`
+ *    (whether or not it also resolved to a wall-clock date).
+ */
+function resolveCandidateAnchors(
+  candidate: MemoryCandidate,
+  anchorIso: string | null,
+  timelineMode: 'realtime' | 'narrative',
+): { occurredAt: string | null; narrativeTime: string | null } {
+  const fallback = anchorIso ?? null
+  let occurredAt = fallback
+  if (candidate.when && fallback) {
+    const resolved = resolveWhenPhrase(candidate.when, fallback)
+    if (resolved) occurredAt = resolved
+  }
+  const narrativeTime =
+    timelineMode === 'narrative' && candidate.when ? candidate.when : null
+  return { occurredAt, narrativeTime }
+}
+
 async function writeCandidate(opts: WriteOptions): Promise<void> {
+  const timelineMode = opts.ctx.timelineMode ?? 'realtime'
+  const anchorIso =
+    opts.sourceMessageCreatedAt ??
+    opts.ctx.sourceMessageTimestamp ??
+    opts.ctx.transcript.turnTimestamp ??
+    new Date().toISOString()
+  const { occurredAt, narrativeTime } = resolveCandidateAnchors(
+    opts.candidate,
+    anchorIso,
+    timelineMode,
+  )
+
   if (opts.ctx.dryRun) {
     opts.collected.push({
       pass: opts.pass,
@@ -217,6 +272,11 @@ async function writeCandidate(opts: WriteOptions): Promise<void> {
       summary: opts.candidate.summary || '',
       keywords: opts.candidate.keywords || [],
       importance: opts.candidate.importance ?? 0.5,
+      kind: opts.candidate.kind === 'episodic' ? 'episodic' : 'semantic',
+      when: opts.candidate.when ?? null,
+      occurredAt,
+      narrativeTime,
+      entities: opts.candidate.entities ?? [],
     })
     opts.debugLogs.push(
       `[Memory] DRY-RUN ${opts.passLabel} — would write: ${opts.candidate.summary}`
@@ -243,6 +303,11 @@ async function writeCandidate(opts: WriteOptions): Promise<void> {
       // 'user_present' (the extractor only runs in chats with content, and
       // a user opener is implicit on non-autonomous chats).
       witnessedContext: opts.ctx.inAutonomousRoom ? 'autonomous_room' : 'user_present',
+      // Episodic spine: event time + anchors, resolved above.
+      occurredAt,
+      narrativeTime,
+      entities: opts.candidate.entities ?? [],
+      kind: opts.candidate.kind === 'episodic' ? 'episodic' : 'semantic',
     },
     { userId: opts.ctx.userId }
   )
@@ -350,6 +415,16 @@ export async function processTurnForMemory(
       chatContextSummary: ctx.chatContextSummary ?? null,
     }
 
+    // Episodic spine: give the extractor a clock, anchored to the turn's own
+    // message timestamps (batch re-extraction passes its historical override).
+    const clock: ExtractionClock = {
+      nowIso:
+        ctx.sourceMessageTimestamp ??
+        ctx.transcript.turnTimestamp ??
+        new Date().toISOString(),
+      timelineMode: ctx.timelineMode ?? 'realtime',
+    }
+
     // Pre-resolve per-character rate limits so we know which characters to
     // skip entirely, throttle, or allow before we start firing LLM calls.
     const rateLimits = new Map<string, RateLimitDecision>()
@@ -450,6 +525,7 @@ export async function processTurnForMemory(
         cheapMaxTokens,
         ctx.inAutonomousRoom === true,
         orienting,
+        clock,
       )
 
       if (selfResult.usage) {
@@ -484,6 +560,7 @@ export async function processTurnForMemory(
             passLabel: `SELF memory for ${slice.characterName}`,
             ctx,
             sourceMessageId: slice.contributingMessageIds[slice.contributingMessageIds.length - 1] ?? sourceMessageId,
+            sourceMessageCreatedAt: slice.lastMessageCreatedAt ?? null,
             debugLogs,
             createdIds: createdMemoryIds,
             reinforcedIds: reinforcedMemoryIds,
@@ -548,6 +625,7 @@ export async function processTurnForMemory(
         cheapMaxTokens,
         ctx.inAutonomousRoom === true,
         orienting,
+        clock,
       )
 
       if (otherResult.usage) {
@@ -591,6 +669,7 @@ export async function processTurnForMemory(
             passLabel: `OTHER memory ${observer.characterName} about ${subject.subjectName}`,
             ctx,
             sourceMessageId: observer.contributingMessageIds[observer.contributingMessageIds.length - 1] ?? sourceMessageId,
+            sourceMessageCreatedAt: observer.lastMessageCreatedAt ?? null,
             debugLogs,
             createdIds: createdMemoryIds,
             reinforcedIds: reinforcedMemoryIds,

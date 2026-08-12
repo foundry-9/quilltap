@@ -47,6 +47,26 @@ function migrateCharacterScenarios(character: any): any {
   };
 }
 
+/**
+ * Record which vault mount point the bundle claimed for a character we just
+ * created. `characters.create()` deliberately drops the incoming pointer and
+ * provisions a scaffold vault, so this is the only surviving trace of the
+ * store the bundle meant — reconciliation needs it to repoint the character at
+ * its imported vault and tear the scaffold down.
+ *
+ * Characters exported before WP A2 carry no vault, so nothing is recorded and
+ * reconciliation leaves the scaffold in place.
+ */
+function rememberBundleVault(
+  idMaps: IdMappingState,
+  exported: { characterDocumentMountPointId?: string | null },
+  newCharacterId: string
+): void {
+  if (exported.characterDocumentMountPointId) {
+    idMaps.characterVaultMounts.set(newCharacterId, exported.characterDocumentMountPointId);
+  }
+}
+
 export async function importCharacters(
   userId: string,
   characters: Character[],
@@ -68,6 +88,19 @@ export async function importCharacters(
   for (const rawCharacter of characters) {
     const character = migrateCharacterScenarios(rawCharacter);
     try {
+      // Skip-if-present rehydrate (spec §6/F4): this IS the character being
+      // rehydrated — its row survived the archive. Map it to itself and move
+      // on. Deliberately NOT via the conflict-strategy 'skip' branch below:
+      // that one adds the vault to skippedCharacterVaults, which would drop
+      // the very store records this import exists to restore. Nor
+      // rememberBundleVault: the character still points at its own vault, so
+      // reconciliation must not repoint anything or tear down a "scaffold".
+      if (options.preserveIds && idMaps.preserveIdsSkips.has(character.id)) {
+        idMaps.characters.set(character.id, character.id);
+        skipped++;
+        continue;
+      }
+
       // Check by ID first (same-instance re-import), then by name (cross-instance)
       let existing = await repos.characters.findById(character.id);
       let nameMatched = false;
@@ -89,6 +122,12 @@ export async function importCharacters(
         if (options.conflictStrategy === 'skip') {
           skipped++;
           idMaps.characters.set(character.id, existing.id);
+          // The existing character keeps its own vault untouched, so the
+          // bundle's store must not be imported at all — it would land as a
+          // store nothing points at.
+          if (character.characterDocumentMountPointId) {
+            idMaps.skippedCharacterVaults.add(character.characterDocumentMountPointId);
+          }
           continue;
         }
 
@@ -111,6 +150,7 @@ export async function importCharacters(
             name: `${charData.name} (imported)`,
           });
           idMaps.characters.set(character.id, newCharacter.id);
+          rememberBundleVault(idMaps, character, newCharacter.id);
 
           // Import wardrobe items for duplicated character (folding any legacy
           // outfitPresets into composites for pre-rework `.qtap` exports).
@@ -136,9 +176,14 @@ export async function importCharacters(
       }
 
       const { id: _, userId: __, createdAt, updatedAt, ...charData } = character;
+      const createData = options.preserveIds ? { ...charData, id: character.id } : charData;
+      const createOptions = options.preserveIds ? { id: character.id } : undefined;
       // create() provisions vault + projects managed fields atomically.
-      const newCharacter = await repos.characters.create(charData);
+      const newCharacter = options.preserveIds
+        ? await repos.characters.create(createData, createOptions)
+        : await repos.characters.create(createData);
       idMaps.characters.set(character.id, newCharacter.id);
+      rememberBundleVault(idMaps, character, newCharacter.id);
 
       // Import wardrobe items for this character (folding any legacy
       // outfitPresets into composites for pre-rework `.qtap` exports).

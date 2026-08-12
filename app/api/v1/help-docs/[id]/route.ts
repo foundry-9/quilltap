@@ -5,7 +5,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware';
+import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { successResponse, notFound, serverError } from '@/lib/api/responses';
 import { getHelpSearch } from '@/lib/help-search';
@@ -23,7 +23,7 @@ function extractDocumentId(pathname: string): string {
 /**
  * GET /api/v1/help-docs/[id] - Get a single help document with content
  */
-export const GET = createAuthenticatedHandler(async (request: NextRequest, _context: AuthenticatedContext) => {
+export const GET = createContextHandler(async (request: NextRequest, _context: RequestContext) => {
   try {
     const docId = extractDocumentId(request.nextUrl.pathname);
 

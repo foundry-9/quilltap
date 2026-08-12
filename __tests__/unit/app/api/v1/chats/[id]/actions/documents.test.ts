@@ -14,6 +14,7 @@ jest.mock('@/lib/doc-edit', () => ({
   readFileWithMtime: jest.fn(),
   writeFileWithMtimeCheck: jest.fn(),
   reindexSingleFile: jest.fn(),
+  isTextFile: jest.fn((filePath: string) => /\.(md|markdown|txt|json|jsonl|ndjson|yaml|yml|xml|html|htm|css|js|ts|jsx|tsx|py|rb|sh|bash|zsh|csv|toml|ini|cfg|conf|log|env)$/i.test(filePath) || filePath.endsWith('.gitignore') || filePath.endsWith('.editorconfig')),
 }))
 
 jest.mock('@/lib/mount-index/embedding-scheduler', () => ({
@@ -83,6 +84,12 @@ describe('chats [id] document actions', () => {
           findRecentAcrossChats: jest.fn().mockResolvedValue([]),
           findActiveForChat: jest.fn(),
           openDocument: jest.fn(),
+        },
+        docMountFileLinks: {
+          findByMountPointAndPath: jest.fn(),
+        },
+        docMountBlobs: {
+          findByFileId: jest.fn(),
         },
         docMountPoints: {
           refreshStats: jest.fn(),
@@ -372,8 +379,34 @@ describe('chats [id] document actions', () => {
 
     expect(response.status).toBe(200)
     expect(body.exists).toBe(true)
+    expect(body.kind).toBe('document')
     // The probe must never return the document's bytes.
     expect(readFileWithMtime).not.toHaveBeenCalled()
+  })
+
+  it('resolve-document returns { exists: true, kind: image } for image targets', async () => {
+    const chatId = 'chat-1'
+    ctx.repos.chats.findById.mockResolvedValueOnce({ id: chatId, projectId: 'p1', participants: [] })
+    resolveDocEditPath.mockResolvedValueOnce({
+      mountType: 'filesystem',
+      absolutePath: '/tmp/store/cover.webp',
+      scope: 'document_store',
+      relativePath: 'cover.webp',
+      mountPointId: 'm1',
+      mountPointName: 'Notes',
+    })
+    fsp.access.mockResolvedValueOnce(undefined)
+
+    const response = await handleResolveDocument(
+      resolveReq({ filePath: 'cover.webp', scope: 'document_store', mountPoint: 'Notes' }),
+      chatId,
+      ctx
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.exists).toBe(true)
+    expect(body.kind).toBe('image')
   })
 
   it('resolve-document returns { exists: false } for a missing file', async () => {
@@ -398,6 +431,7 @@ describe('chats [id] document actions', () => {
 
     expect(response.status).toBe(200)
     expect(body.exists).toBe(false)
+    expect(body.kind).toBe('other')
   })
 
   it('resolve-document returns { exists: false } for an inaccessible / unresolvable store', async () => {
@@ -414,6 +448,7 @@ describe('chats [id] document actions', () => {
 
     expect(response.status).toBe(200)
     expect(body.exists).toBe(false)
+    expect(body.kind).toBe('other')
     expect(readFileWithMtime).not.toHaveBeenCalled()
   })
 })

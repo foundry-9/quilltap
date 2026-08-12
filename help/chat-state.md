@@ -31,6 +31,20 @@ State is a JSON object that stores key-value pairs. Unlike regular messages whic
 2. Expand the **Project Settings** card
 3. Click **View/Edit** next to "Project State"
 
+### In Groups
+
+1. Open a group from Aurora's Groups page
+2. Press the **Group State** button beside **Save Changes**
+3. The State Editor modal opens on that group's own ledger
+
+### General (instance-wide)
+
+1. Repair to **Settings → Chat**
+2. Expand the **General State** card (it keeps company with Pascal's custom tools)
+3. Press **Edit General State**
+
+General State is the foundation the whole establishment stands upon — every chat consults it unless a nearer tier has already spoken.
+
 ## State Editor Features
 
 - **View Mode**: By default, state is shown read-only with syntax highlighting
@@ -41,7 +55,12 @@ State is a JSON object that stores key-value pairs. Unlike regular messages whic
 
 ## How AI Uses State
 
-When the state tool is enabled, AI characters can:
+When the state tool is enabled, AI characters can read and write any tier. Without a named
+`context`, a fetch returns the merged cascade and a set/delete lands on the **chat** tier.
+To reach a particular tier, the character names it: `context: "project"`, `context: "group"`,
+or `context: "general"`. For a group, when the character belongs to more than one, it also
+supplies a `group` (the group's name or id); belonging to exactly one group, it may omit that.
+As ever, keys beginning with an underscore are yours alone and the AI may not touch them, at any tier.
 
 ### Fetch State
 Read current values to understand context:
@@ -67,18 +86,46 @@ AI sets "player.health" → 100
 AI: "The potion's warmth spreads through you as your wounds close."
 ```
 
-## State Inheritance (Projects)
+### Custom Tools May Write It Too
 
-When a chat belongs to a project:
+Pascal's custom tools are no longer read-only guests at this ledger. A tool may declare
+**side effects** — writes applied on the server as part of the roll itself, quite beyond
+any model's power to fudge — and a state effect lands **at the tier where the key already
+lives** (a project counter stays a project counter), defaulting to the chat for a fresh key.
+Every write is recorded with the roll, previous value and all. See
+*[Custom Tools](custom-tools.md)* for the recipe. Underscore-prefixed keys remain yours
+alone: no tool may write them, any more than the state tool may.
 
-1. **Project State**: Shared across all chats in the project
-2. **Chat State**: Specific to individual conversations
-3. **Merged View**: When fetching, chat values override project values at the top level
+## The Cascade — Four Tiers
 
-This allows you to:
-- Set global values (like world settings) at the project level
-- Override specific values per-chat when needed
-- Share common data across related conversations
+State no longer flows from a mere two springs but from four, each nearer tier
+overriding the more distant when their keys collide:
+
+**chat → project → group → general** — the chat wins.
+
+1. **Chat State**: particular to a single conversation. Chat wins every dispute.
+2. **Project State**: shared by every chat under the project's roof.
+3. **Group State**: shared by every character enrolled in the group.
+4. **General State**: instance-wide bedrock, visible to every chat in the house.
+
+When you fetch without naming a tier, Quilltap serves the **merged view**: the four
+layers stacked, top-level keys resolved with the chat's word taken as final, then the
+project's, then the group's, and only then the general default.
+
+This lets you:
+- Lay down house-wide defaults (an era, a currency, a tone) at the **general** tier
+- Set a company's shared ledger at the **group** tier
+- Keep a project's world settings at the **project** tier
+- Override any of it, key by key, in a single **chat**
+
+### A Word on Groups
+
+The group tier merges into the general view only when **exactly one** group applies to
+the table. Should two or more characters bring different groups to the same chat, Quilltap
+declines to guess which ledger is meant: the group tier is quietly set aside from the merged
+view, and the State Editor posts a note to that effect. To read or write a particular group's
+state in that case, edit it from its own **Group State** page, or — for the AI — name the group
+explicitly (see below).
 
 ## The Underscore Convention
 

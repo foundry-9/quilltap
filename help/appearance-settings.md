@@ -23,6 +23,13 @@ Quilltap includes a default theme and can display custom themes from installed p
 - **Default theme** — Professional, clean design (always available)
 - **Plugin themes** — Custom designs from installed theme plugins
 - **Color modes** — Each theme can be viewed in light or dark mode
+- **Icons and small animations** — A theme may re-cut the icons themselves, and even the little flourishes that move
+
+### The Waiting Quill
+
+While a character gathers their thoughts — and again while the words are actually arriving — a small quill keeps you company. By default it rocks upon its nib, as though poised over the page mid-sentence.
+
+A theme is entitled to its own opinion on the matter. It may substitute its own mark and give it quite a different motion: **Madman's Box**, for instance, declines to write at all, and instead turns its ringed quill slowly through a full revolution, in the manner of a rotor idling in the corner of the cabin. Should you have asked your system to reduce motion, the quill holds admirably still in every theme.
 
 ### Viewing Available Themes
 

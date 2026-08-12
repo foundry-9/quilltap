@@ -186,6 +186,17 @@ export interface ToolExecutionContext {
   userId: string;
   imageProfileId?: string;
   characterId?: string;
+  /**
+   * The calling character's vault mount — a fast path for tools that resolve
+   * the tiered mount pool (`run_custom`). Purely an optimisation: `characterId`
+   * is what the pool actually requires.
+   */
+  characterMountPointId?: string | null;
+  /**
+   * Every character participating in this chat, for tools whose scope includes
+   * the peers' vaults (`run_custom`'s 'participant' tier).
+   */
+  characterIds?: string[];
   embeddingProfileId?: string;
   /** Participant ID of who is calling the tool (for {{me}} resolution in image prompts) */
   callingParticipantId?: string;
@@ -211,6 +222,13 @@ export interface ToolExecutionContext {
    * there is no client stream and the post-turn refresh handles surfacing.
    */
   emitCarinaAnswer?: (message: MessageEvent) => void;
+  /**
+   * Surface Pascal's `run_custom` outcome to the Salon the instant it posts,
+   * via the turn's live SSE stream. Set by the orchestrator (which holds the
+   * stream controller); absent in the autonomous-room/forked-child path, where
+   * there is no client stream and the post-turn refresh handles surfacing.
+   */
+  emitPascalResult?: (message: MessageEvent) => void;
   /**
    * Operator surface (the **Brahma Console**): a character-less, memory-free
    * direct line to the LLM. When true:
@@ -242,6 +260,8 @@ const BUILT_IN_TOOLS = new Set<string>([
   'help_navigate',
   'rng',
   'state',
+  // Pascal the Croupier — user-authored pseudo-tools
+  'run_custom',
   'self_inventory',
   'submit_final_response',
   'whisper',
@@ -588,6 +608,39 @@ export async function executeToolCallWithContext(
       };
     }
 
+    // Handle run_custom (Pascal the Croupier — user-authored pseudo-tools)
+    if (toolCall.name === 'run_custom') {
+      const { executeRunCustomTool, formatRunCustomResults } = await import('@/lib/tools/handlers/run-custom-handler');
+
+      // The handler posts Pascal's bubble itself — that message is the run's
+      // single visible artifact, so the TOOL row this returns renders nothing
+      // (see `delegatedDisplay` in saveToolMessages). The row still persists so
+      // tool-call threading keeps its tool_call_id linkage intact.
+      const out = await executeRunCustomTool(toolCall.arguments, {
+        userId,
+        chatId,
+        characterId,
+        characterMountPointId: context.characterMountPointId,
+        characterIds: context.characterIds,
+        projectId: context.projectId,
+        callerParticipantId: context.callingParticipantId,
+        onPosted: context.emitPascalResult,
+      });
+
+      return {
+        toolName: 'run_custom',
+        success: out.success,
+        result: out.success ? {
+          formattedText: formatRunCustomResults(out),
+          tool: out.tool,
+          value: out.value,
+          state: out.state,
+          whispered: out.whispered,
+        } : null,
+        error: out.success ? undefined : out.error,
+      };
+    }
+
     // Handle self_inventory (character introspection)
     if (toolCall.name === 'self_inventory') {
       if (!characterId) {
@@ -642,6 +695,7 @@ export async function executeToolCallWithContext(
         userId,
         chatId,
         projectId: context.projectId,
+        characterId,
       };
 
       const result = await executeStateTool(toolCall.arguments, stateContext);
@@ -1155,7 +1209,8 @@ export async function executeToolCallWithContext(
         // Import validators at the point of use to avoid circular imports
         const { validateTerminalReadInput } = await import('@/lib/tools/terminal-read-tool');
 
-        if (!validateTerminalReadInput(toolCall.arguments)) {
+        const parsedTerminalRead = validateTerminalReadInput(toolCall.arguments);
+        if (!parsedTerminalRead) {
           return {
             toolName: 'terminal_read',
             success: false,
@@ -1164,7 +1219,7 @@ export async function executeToolCallWithContext(
           };
         }
 
-        const result = await executeTerminalReadTool(toolCall.arguments, terminalReadContext);
+        const result = await executeTerminalReadTool(parsedTerminalRead, terminalReadContext);
         const formattedResult = formatTerminalReadResults(result);
 
         return {
@@ -1210,7 +1265,8 @@ export async function executeToolCallWithContext(
         // Import validator at the point of use to avoid circular imports
         const { validateTerminalListInput } = await import('@/lib/tools/terminal-list-tool');
 
-        if (!validateTerminalListInput(toolCall.arguments)) {
+        const parsedTerminalList = validateTerminalListInput(toolCall.arguments);
+        if (!parsedTerminalList) {
           return {
             toolName: 'terminal_list',
             success: false,
@@ -1219,7 +1275,7 @@ export async function executeToolCallWithContext(
           };
         }
 
-        const result = await executeTerminalListTool(toolCall.arguments, terminalListContext);
+        const result = await executeTerminalListTool(parsedTerminalList, terminalListContext);
         const formattedResult = formatTerminalListResults(result);
 
         return {

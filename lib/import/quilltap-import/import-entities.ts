@@ -62,7 +62,11 @@ export async function importTags(
       }
 
       const { id: _, userId: __, createdAt, updatedAt, ...tagData } = tag;
-      const newTag = await repos.tags.create(tagData);
+      const createData = options.preserveIds ? { ...tagData, id: tag.id } : tagData;
+      const createOptions = options.preserveIds ? { id: tag.id } : undefined;
+      const newTag = options.preserveIds
+        ? await repos.tags.create(createData, createOptions)
+        : await repos.tags.create(createData);
       idMaps.tags.set(tag.id, newTag.id);
       imported++;
     } catch (error) {
@@ -149,10 +153,17 @@ export async function importRoleplayTemplates(
       }
 
       const { id: _, createdAt, updatedAt, ...templateData } = template;
-      const newTemplate = await globalRepos.roleplayTemplates.create({
-        ...templateData,
-        userId,
-      });
+      const createData = options.preserveIds ? { ...templateData, id: template.id } : templateData;
+      const createOptions = options.preserveIds ? { id: template.id } : undefined;
+      const newTemplate = options.preserveIds
+        ? await globalRepos.roleplayTemplates.create({
+            ...createData,
+            userId,
+          }, createOptions)
+        : await globalRepos.roleplayTemplates.create({
+            ...createData,
+            userId,
+          });
       idMaps.roleplayTemplates.set(template.id, newTemplate.id);
       imported++;
     } catch (error) {
@@ -212,7 +223,11 @@ export async function importProjects(
       // updatedAt / officialMountPointId are excluded so create() generates
       // fresh values and provisions a new store.
       const { id: _, createdAt, updatedAt, officialMountPointId: ___, ...projectData } = project;
-      const newProject = await repos.projects.create(projectData);
+      const createData = options.preserveIds ? { ...projectData, id: project.id } : projectData;
+      const createOptions = options.preserveIds ? { id: project.id } : undefined;
+      const newProject = options.preserveIds
+        ? await repos.projects.create(createData, createOptions)
+        : await repos.projects.create(createData);
       idMaps.projects.set(project.id, newProject.id);
       imported++;
     } catch (error) {
@@ -275,7 +290,11 @@ export async function importGroups(
       // createdAt / updatedAt / officialMountPointId are excluded so create()
       // generates fresh values and provisions a new store.
       const { id: _, createdAt, updatedAt, officialMountPointId: ___, ...groupData } = group;
-      const newGroup = await repos.groups.create(groupData);
+      const createData = options.preserveIds ? { ...groupData, id: group.id } : groupData;
+      const createOptions = options.preserveIds ? { id: group.id } : undefined;
+      const newGroup = options.preserveIds
+        ? await repos.groups.create(createData, createOptions)
+        : await repos.groups.create(createData);
       idMaps.groups.set(group.id, newGroup.id);
       imported++;
     } catch (error) {
@@ -350,7 +369,11 @@ export async function importChats(
       }
 
       const { id: _, userId: __, messages: _msgs, createdAt, updatedAt, ...chatData } = chat;
-      const newChat = await repos.chats.create(chatData);
+      const createData = options.preserveIds ? { ...chatData, id: chat.id } : chatData;
+      const createOptions = options.preserveIds ? { id: chat.id } : undefined;
+      const newChat = options.preserveIds
+        ? await repos.chats.create(createData, createOptions)
+        : await repos.chats.create(createData);
       idMaps.chats.set(chat.id, newChat.id);
 
       // Add messages
@@ -384,18 +407,40 @@ export async function importChats(
   return { imported, skipped, messages };
 }
 
+/**
+ * Insert imported memories, remapping every FK through the id maps.
+ *
+ * Deliberately uses the raw repository rather than `createMemoryWithGate`:
+ * the gate can silently skip near-duplicates, reinforce an existing row
+ * instead of inserting, or lose rows entirely when the embedding provider is
+ * down — none of which is acceptable for an import, where the user asked for
+ * exactly these rows.
+ *
+ * Returns the created memory IDs (alongside the counts) so the orchestrator
+ * can enqueue targeted re-embedding — imported memories arrive with a NULL
+ * embedding by design (see below).
+ */
 export async function importMemories(
   userId: string,
   memories: Memory[],
+  options: ImportOptions,
   idMaps: IdMappingState,
   repos: ReturnType<typeof getUserRepositories>,
   warnings: string[]
-): Promise<ImportCounts> {
+): Promise<ImportCounts & { createdIds: Array<{ id: string; characterId: string }> }> {
   let imported = 0;
   let skipped = 0;
+  const createdIds: Array<{ id: string; characterId: string }> = [];
 
   for (const memory of memories) {
     try {
+      // Skip-if-present rehydrate (spec §6/F4): the memory is already back —
+      // a partial restore being re-run. The surviving row wins.
+      if (options.preserveIds && idMaps.preserveIdsSkips.has(memory.id)) {
+        skipped++;
+        continue;
+      }
+
       // Remap character ID
       const newCharacterId = idMaps.characters.get(memory.characterId);
       if (!newCharacterId) {
@@ -433,15 +478,28 @@ export async function importMemories(
           .filter((id) => id !== null) as string[];
       }
 
-      const { id: _, createdAt, updatedAt, ...memoryData } = memory;
-      await repos.memories.create({
-        ...memoryData,
+      // `embedding` is excluded on purpose. A vector is only meaningful
+      // against the model that produced it, so a foreign one silently
+      // corrupts semantic search whenever the dimensionality happens to
+      // match — and the boot repair in lib/startup/repair-text-embeddings.ts
+      // would *preserve* a bad vector by converting it to a valid blob rather
+      // than discarding it. Import time is the only correct place to drop it.
+      // The orchestrator enqueues an EMBEDDING_GENERATE per created row.
+      const { id: _, createdAt, updatedAt, embedding: _embedding, ...memoryData } = memory;
+      const createData = options.preserveIds ? { ...memoryData, id: memory.id } : memoryData;
+      const createOptions = options.preserveIds ? { id: memory.id } : undefined;
+      const payload = {
+        ...createData,
         characterId: newCharacterId,
         aboutCharacterId: newAboutCharacterId,
         chatId: newChatId,
         projectId: newProjectId,
         tags: newTags,
-      });
+      };
+      const created = options.preserveIds
+        ? await repos.memories.create(payload, createOptions)
+        : await repos.memories.create(payload);
+      createdIds.push({ id: created.id, characterId: newCharacterId });
       imported++;
     } catch (error) {
       warnings.push(
@@ -457,5 +515,5 @@ export async function importMemories(
     }
   }
 
-  return { imported, skipped };
+  return { imported, skipped, createdIds };
 }

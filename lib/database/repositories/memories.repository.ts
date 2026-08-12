@@ -778,7 +778,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
           // Hydrate JSON-encoded array columns. SQLiteCollection does this for
           // us via getCollection(); when we drop down to rawQuery to use the
           // window function, we have to do it by hand.
-          for (const col of ['keywords', 'tags', 'relatedMemoryIds']) {
+          for (const col of ['keywords', 'tags', 'relatedMemoryIds', 'entities']) {
             const val = row[col];
             if (typeof val === 'string') {
               try {
@@ -837,6 +837,30 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
       },
       'Error finding memories by source message ID',
       { sourceMessageId },
+      []
+    );
+  }
+
+  /**
+   * Find a character's memories whose sourceMessageId is any of the given
+   * message IDs. Used by the fold-time episode pass to link a consolidated
+   * episode to the per-turn fragment memories from the same window.
+   */
+  async findByCharacterAndSourceMessageIds(
+    characterId: string,
+    sourceMessageIds: string[],
+  ): Promise<Memory[]> {
+    if (sourceMessageIds.length === 0) return [];
+    return this.safeQuery(
+      async () => {
+        const memories = await this.findByFilter({
+          characterId,
+          sourceMessageId: { $in: sourceMessageIds },
+        } as TypedQueryFilter<Memory>);
+        return memories;
+      },
+      'Error finding memories by character and source message IDs',
+      { characterId, count: sourceMessageIds.length },
       []
     );
   }
@@ -995,6 +1019,31 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
           .filter((id): id is string => typeof id === 'string' && id.length > 0);
       },
       'Error listing distinct memory chatIds',
+      {},
+      []
+    );
+  }
+
+  /**
+   * Find every distinct characterId that owns at least one memory.
+   *
+   * Used by the reindex-all fan-out instead of the characters repository:
+   * `characters.findAll`/`findByUserId` silently DROP characters whose vault
+   * is unavailable, which would leave those characters' memories permanently
+   * un-re-embedded after a profile switch. Memories are the ground truth for
+   * "who needs re-embedding".
+   */
+  async findDistinctCharacterIds(): Promise<string[]> {
+    return this.safeQuery(
+      async () => {
+        const rows = (await rawQuery<Array<{ characterId: string | null }>>(
+          'SELECT DISTINCT characterId FROM memories WHERE characterId IS NOT NULL'
+        )) ?? [];
+        return rows
+          .map((r) => r.characterId)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0);
+      },
+      'Error listing distinct memory characterIds',
       {},
       []
     );

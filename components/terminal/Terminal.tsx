@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useTerminalSession } from '@/hooks/useTerminalSession';
+// Type-only, so it is erased at compile time and doesn't pull xterm into the
+// SSR bundle — the runtime import below stays dynamic.
+import type { ITheme } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 
 interface TerminalProps {
@@ -84,15 +87,9 @@ export function Terminal({
       term.loadAddon(webLinksAddon);
       term.loadAddon(serializeAddon);
 
-      // Try to load Canvas renderer if available (non-SSR)
-      try {
-        const { CanvasAddon } = await import('@xterm/addon-canvas');
-        if (canvasSupported()) {
-          term.loadAddon(new CanvasAddon());
-        }
-      } catch {
-        // Canvas addon not available or not supported — fall back to DOM
-      }
+      // xterm 6 removed the canvas renderer, and @xterm/addon-canvas was
+      // retired with it (its last release still peers on xterm ^5). The DOM
+      // renderer is the supported default now.
 
       if (cancelled || !containerRef.current) {
         try { term.dispose(); } catch { /* noop */ }
@@ -192,9 +189,12 @@ export function Terminal({
 
     termRef.current.write(line);
 
-    // Disable input after exit
-    if (termRef.current._input) {
-      termRef.current._input.disabled = true;
+    // Disable input after exit. This used to poke at `_input`, which is not an
+    // xterm field in any version — the guard always short-circuited, so exited
+    // sessions stayed typeable. `textarea` is the documented handle.
+    const textarea = termRef.current.textarea as HTMLTextAreaElement | undefined;
+    if (textarea) {
+      textarea.disabled = true;
     }
   }, [session.state, session.exitInfo]);
 
@@ -215,7 +215,12 @@ export function Terminal({
   );
 }
 
-function getTerminalTheme() {
+// The ITheme annotation is load-bearing. Without it the returned object is
+// inferred, assigned to a variable, and only then handed to the Terminal
+// constructor — and TypeScript skips excess-property checks on variables. That
+// is how the pre-6.0 `selection` key survived here silently after xterm renamed
+// it. Annotating the return type makes any unknown key a build error.
+function getTerminalTheme(): ITheme {
   if (typeof document === 'undefined') {
     // SSR fallback
     return {};
@@ -229,11 +234,27 @@ function getTerminalTheme() {
     return val || '#000000';
   };
 
+  // Optional keys must stay undefined when a theme doesn't set them: xterm
+  // derives sensible values from our themed background/foreground (the slider
+  // colors default to foreground at 20/40/50% opacity), whereas getColor's
+  // black fallback would paint them a hard #000.
+  const optionalColor = (variable: string): string | undefined => {
+    return style.getPropertyValue(variable).trim() || undefined;
+  };
+
   return {
     background: getColor('--qt-terminal-bg'),
     foreground: getColor('--qt-terminal-fg'),
     cursor: getColor('--qt-terminal-cursor'),
-    selection: getColor('--qt-terminal-selection'),
+    // xterm 6 renamed `selection` to `selectionBackground`. The old key is
+    // silently ignored, which drops every theme's selection color.
+    selectionBackground: getColor('--qt-terminal-selection'),
+    cursorAccent: optionalColor('--qt-terminal-cursor-accent'),
+    selectionForeground: optionalColor('--qt-terminal-selection-fg'),
+    selectionInactiveBackground: optionalColor('--qt-terminal-selection-inactive'),
+    scrollbarSliderBackground: optionalColor('--qt-terminal-scrollbar'),
+    scrollbarSliderHoverBackground: optionalColor('--qt-terminal-scrollbar-hover'),
+    scrollbarSliderActiveBackground: optionalColor('--qt-terminal-scrollbar-active'),
     black: getColor('--qt-terminal-ansi-black'),
     red: getColor('--qt-terminal-ansi-red'),
     green: getColor('--qt-terminal-ansi-green'),
@@ -253,16 +274,3 @@ function getTerminalTheme() {
   };
 }
 
-function canvasSupported(): boolean {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-
-  try {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('webgl') || canvas.getContext('webgl2');
-    return ctx !== null;
-  } catch {
-    return false;
-  }
-}

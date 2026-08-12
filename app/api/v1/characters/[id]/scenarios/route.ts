@@ -8,7 +8,7 @@
  */
 
 import { z } from 'zod';
-import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware';
+import { createContextParamsHandler, exists } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { successResponse, notFound, serverError, badRequest, created } from '@/lib/api/responses';
 
@@ -23,12 +23,12 @@ const updateScenarioSchema = z.object({
 });
 
 // GET /api/v1/characters/[id]/scenarios
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   async (request, { user, repos }, { id: characterId }) => {
     try {
       const character = await repos.characters.findById(characterId);
 
-      if (!checkOwnership(character, user.id)) {
+      if (!exists(character)) {
         return notFound('Character');
       }
 
@@ -42,14 +42,14 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 );
 
 // POST /api/v1/characters/[id]/scenarios
-export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+export const POST = createContextParamsHandler<{ id: string }>(
   async (request, { user, repos }, { id: characterId }) => {
     const body = await request.json();
     const validated = createScenarioSchema.parse(body);
 
     const character = await repos.characters.findById(characterId);
 
-    if (!checkOwnership(character, user.id)) {
+    if (!exists(character)) {
       return notFound('Character');
     }
 
@@ -78,7 +78,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
 );
 
 // PUT /api/v1/characters/[id]/scenarios?scenarioId=xxx
-export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
+export const PUT = createContextParamsHandler<{ id: string }>(
   async (request, { user, repos }, { id: characterId }) => {
     const url = new URL(request.url);
     const scenarioId = url.searchParams.get('scenarioId');
@@ -92,7 +92,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 
     const character = await repos.characters.findById(characterId);
 
-    if (!checkOwnership(character, user.id)) {
+    if (!exists(character)) {
       return notFound('Character');
     }
 
@@ -113,7 +113,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 );
 
 // DELETE /api/v1/characters/[id]/scenarios?scenarioId=xxx
-export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+export const DELETE = createContextParamsHandler<{ id: string }>(
   async (request, { user, repos }, { id: characterId }) => {
     try {
       const url = new URL(request.url);
@@ -125,7 +125,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
 
       const character = await repos.characters.findById(characterId);
 
-      if (!checkOwnership(character, user.id)) {
+      if (!exists(character)) {
         return notFound('Character');
       }
 

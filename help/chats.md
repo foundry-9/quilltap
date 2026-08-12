@@ -75,13 +75,33 @@ Chats associated with a specific project:
 
 Most characters have a **First Message** — an introductory message the character sends when you start a new chat. This sets the scene and establishes the character's voice.
 
+### The Green Room — a word on what happens while the curtain rises
+
+Between the moment you press **Start** and the moment the room is yours to speak in, a good deal of unseen bustle takes place behind the scenes — and it is not always instantaneous. The cast must be gathered, everyone's particulars committed to memory, the opening scene set, and — most time-consuming of all — any character you have asked to *choose their own attire* must repair to the wardrobe and settle on an outfit, each such decision being a small consultation that takes a moment or two.
+
+Rather than leave you drumming your fingers at a blank screen, Quilltap now raises a small status dialog — **The Green Room** — for the duration. It reports, in plain terms, what is presently afoot; and as each character finishes deciding, it displays their chosen ensemble across the four slots (**Top**, **Bottom**, **Footwear**, and **Accessories**), so you may see at a glance what everyone has elected to wear. A running log beneath keeps a tidy record of the proceedings.
+
+The dialog cannot be waved away while the work is underway — there would be nothing to return to — and it retires of its own accord the instant the conversation is ready for you. The one exception is trouble: should something go amiss, it will say so and offer you a **Close** button. (This attends fresh conversations and the *Continue Elsewhere* manoeuvre; autonomous rooms keep their own counsel.)
+
 ### Taking a Character's Chair — "Play As"
 
-By default you attend a chat as yourself, the unseen correspondent. But should you wish to step onto the stage and inhabit one of the cast, the **Play As (Optional)** dropdown on the new-chat form stands ready. It now offers *every* character you have added to the room — not merely those you keep on hand as personal personas — alongside any of your designated user-characters waiting in the wings.
+By default you attend a chat as yourself, the unseen correspondent. But should you wish to step onto the stage and inhabit one of the cast, the **Play As (Optional)** dropdown on the new-chat form stands ready. It now draws its guest list strictly from the room itself — *every* character you have added to the cast is offered, and none who have not been.
 
-Choose one, and that character quietly changes hats: where the machine once spoke for them, now you do. Their connection profile is set aside (you are the author now, and need no model), and they remain in the cast under your own hand. Select **Chat as yourself** again and the character is handed back to the LLM — though you will want to assign a connection profile once more before the curtain rises.
+This is a happier arrangement than it may first appear, for the **Select Characters** roster on the left now presents the *entire* company — including those you keep as personal personas, who once kept themselves discreetly out of that list. Add whomever you mean to inhabit to the cast as you would any other, and they take their place in the Play-As dropdown alongside the rest.
+
+Choose one, and that character quietly changes hats: where the machine once spoke for them, now you do. Their connection profile is set aside (you are the author now, and need no model), and they remain in the cast under your own hand. Select **Chat as yourself** again and the character is handed back to the LLM — remaining in the room, though you will want to assign a connection profile once more before the curtain rises.
 
 One consequence follows, as surely as a headache follows a particularly long dinner party: the moment any character takes your chair, the room can no longer be made **autonomous**, for an autonomous room by its very nature keeps no human at the table. The *Make this an autonomous room* toggle greys itself out and posts a courteous note to that effect. Return the character to LLM control to restore the option.
+
+### Settling the House Style Before a Word Is Spoken — the Roleplay Template
+
+A conversation's *roleplay template* decides how prose, dialogue, and murmured asides are dressed — and until now it was a matter to be discovered after the fact, by opening the sidebar of a chat already in progress and adjusting it there. No longer. The new-chat form carries a **Roleplay Template** dropdown of its own, sitting quietly beneath **Play As**.
+
+It arrives already set to whatever this conversation would have chosen for itself: the project's preferred template when you are filing the chat under a project, your own default from **Settings → Templates** otherwise, and **No Template** when you keep no default at all. The option that would have been chosen for you is marked *(default)*, so you may see at a glance whether you are agreeing with the house or overruling it.
+
+Change it and the new conversation begins in that style — no visit to the sidebar required. Leave it be and nothing whatever is different from before. And should you think better of it once the conversation is under way, the **Roleplay Template** dropdown in the chat's own sidebar remains where it always was, ready to be reconsidered.
+
+(The dropdown keeps its counsel when you have no templates installed at all, there being nothing to choose between.)
 
 ## The Chat Interface
 
@@ -107,7 +127,8 @@ Where you compose messages:
 
 Shows chat information and controls:
 
-- **Chat Title** — Auto-generated or custom name
+- **Chat Title** — Auto-generated or custom name; it doubles as a direct link back to this conversation's own Salon address, handy for pinning open in a fresh tab
+- **Copy ID** — a small button just past the title that whisks the conversation's unique identifier onto the clipboard, flashing a check-mark once the deed is done
 - **Character Info** — Who you're chatting with
 - **Action Menu** — Additional chat operations
 
@@ -141,6 +162,8 @@ See [Chat Sidebar](chat-participants.md) for the full tour.
 ```
 
 — arrives as three orderly lines, and not as one breathless run-on sentence.
+
+**A word on mathematics.** The Salon typesets LaTeX mathematics — `$$e^{i\pi}+1=0$$` between double dollar signs, or the backslashed `\(...\)` and `\[...\]` forms — into proper printed-monograph equations. Single dollar signs remain honest currency and are never mistaken for algebra. The full particulars are catalogued in [Mathematical Notation](math-notation.md).
 
 ### Viewing History
 
@@ -232,6 +255,22 @@ Save chats for backup or sharing:
 3. Choose export format
 4. File downloads to your computer
 
+### Exporting a Markdown Transcript
+
+There comes an evening — there always does — when one wishes to carry the conversation out of the house entirely: to read it by lamplight, hand it to a friend, or file it in whatever commonplace book one keeps beyond these walls. For that there is **Export Markdown**, which produces not a data file for machines but a *transcript for people*: a single Markdown document of who said what, and when.
+
+Open the **Chat Sidebar** on the right, expand the **Organize** drawer, and press **Export Markdown**. The file arrives named after the chat, and contains:
+
+- The chat's title and its opening scenario, set at the head of the document.
+- Every message anyone actually said, each under a heading of the form `## Speaker — timestamp`. Where a message has been regenerated into several variants, only the one showing in the Salon makes the page.
+- Pascal's roll announcements, Carina's answers (Brahma's included, under his own name), and any announcements you inserted yourself — voiced by a Staff member, a character, or a name of your own invention.
+- The Host's notices recording that the conversation continues from another chat, has moved elsewhere, or absorbed a neighbouring thread — so the paper trail survives the change of address.
+- Whispers, marked as such beside the speaker's name.
+
+The timestamps are the chat's *own* clock. A chat running on fictional time is transcribed in fictional time; a chat with a configured timezone keeps it; a chat with neither simply reads the household clock. The Staff's housekeeping chatter — memory whispers, image announcements, the marking of hours — is left out of the record, as are the prompts sent to the models; the transcript is what a reader would want, not what the machinery required.
+
+The same transcript twice is the same file twice, to the letter — nothing in it depends on the moment of export.
+
 ### Continuing a Conversation Elsewhere
 
 Now and again the matter under discussion drifts so far afield that the original setting will simply not bear it. The project no longer fits, the scenario has worn thin, and rather than narrate one's way out of it — like a guest pretending the parlour was always the conservatory — one wishes simply to *change venue*.
@@ -253,6 +292,23 @@ The original chat is not deleted; you may always return to it. But henceforth th
 
 A particularly civilised variation: in the same dialog you may flip the chat over to an **autonomous room**, taking yourself out of the picture entirely and letting the LLMs carry the conversation forward without you. Remove your own character from the cast, enable the autonomous controls (cadence, budget, visibility), and press **Continue**. The carryover proceeds as above — Librarian summary, recent messages, turn order, Host bookends — and the new room then runs on its own schedule, with you free to attend to other matters. Autonomous rooms require at least two LLM-controlled characters and no user-controlled participant, which the dialog will enforce before letting you proceed.
 
+### Merging a Conversation In
+
+Where *Continue Elsewhere* sends the present company onward to a fresh venue, its mirror-image — **Merge In…** — summons another gathering *here*, folding a second conversation's cast and its accumulated history into the one before you. Useful when two threads have wandered toward the same table and you would sooner they shared it.
+
+Open the **Chat Sidebar**, expand the **Organize** drawer, and press **Merge In…**. (The button keeps its peace inside autonomous rooms, which run by their own clockwork.) A roster of your recent conversations appears, each annotated with who was in attendance and when the talk last stirred. Choose one, and a confirming dialog presents the newcomers:
+
+1. A **guest list** — every character eligible to come across, each with a checkbox. All are ticked to begin with, but you are the doorman: untick anyone you would rather leave behind, and only the chosen few are admitted. (Anyone already present in *this* chat is quietly omitted from the list entirely, there being no sense in announcing a guest who is already seated.)
+2. For each admitted guest, the same wardrobe options as the new-chat dialog, defaulting to **Same as last conversation** so they arrive dressed as they were when last we saw them.
+
+Press **Merge In**, and Quilltap attends to the formalities:
+
+- Each newcomer joins as an LLM-driven participant. (Should the other conversation have had its own user-controlled character — its human's voice over there — that character is brought in under the LLM's hand, since *your* voice in this room is already spoken for.)
+- The Host posts a recap at the foot of the conversation, linking back to the source chat and carrying its summary, so the assembled company knows where the newcomers have been.
+- A matching notice is posted in the source chat, pointing forward to here.
+
+Unlike a change of venue, no old messages are replayed into the running conversation — the recap stands in for the history, and the proceedings carry on uninterrupted.
+
 ## Advanced Features
 
 ### Memory Integration
@@ -263,6 +319,8 @@ Quilltap can extract and store memories from your chats:
 - **Semantic Search** — Find past conversations by meaning
 - **Character Memory** — Characters can remember previous interactions
 - **Memory Recap** — When a chat begins or a character joins an existing conversation, the system generates a first-person narrative summary from the character's Commonplace Book memories. This "What You Remember" recap gives each character a sense of continuity across conversations — rather like a butler whispering a briefing in one's ear before entering the drawing room. The recap draws from memories of varying importance and is injected into the character's context automatically; no action on your part is required.
+
+  Should the briefing-butler be detained — an unresponsive provider, most commonly, which accepts one's request with every appearance of attentiveness and then simply says nothing at all — Quilltap declines to wait indefinitely on his account. After a short interval the recap is abandoned, the character enters the room without it, and the conversation proceeds as though nothing had happened. You will notice, at worst, a character a shade less freshly briefed than usual; you will not be left staring at a stalled reply.
 
 For Semantic Search to find a conversation by meaning, Quilltap first renders it into a tidy transcript and commits that to memory — an *embedding*, in the parlance — quiet clerical work performed in the background after each exchange. Should the indexing-clerk be indisposed at the decisive moment — the embedding provider abed, or the whole establishment shuttered mid-sentence — a conversation may slip through un-indexed and sit, unsearchable, in the stacks. No matter: at every startup Quilltap takes a discreet inventory and sets any half-finished conversation to rights, re-rendering and re-indexing whatever was left undone, so your library of past chats stays complete without the slightest intervention on your part.
 
@@ -390,6 +448,7 @@ Characters with help tools enabled can navigate directly to this page:
 - [Multi-Character Chats](chat-multi-character.md) — Conversations with multiple AI characters
 - [Turn Manager](chat-turn-manager.md) — How speaking turns work in group chats
 - [Message Actions](chat-message-actions.md) — Edit, regenerate, and manage messages
+- [Mathematical Notation](math-notation.md) — Typeset LaTeX mathematics in messages
 - [Chat Sidebar](chat-participants.md) — Managing chat participants and per-chat settings
 - [Chat Settings](chat-settings.md) — Global chat configuration
 - [Using Tools](tools-usage.md) — AI tools available during chat

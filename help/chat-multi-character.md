@@ -54,10 +54,19 @@ You'll be asked:
   - This appears as a system message in the chat
 
 - **Starting Outfit** — How the new arrival is dressed when they step into the room. The same four choices the new-chat ceremony offers:
-  - **Use defaults** — They arrive in whatever the wardrobe marks as default (the standing presumption)
+  - **Use defaults** — They arrive in whatever is marked default across all three wardrobe tiers — their own vault, the project's wardrobe, and Quilltap General — layered together (the standing presumption)
   - **Compose outfit** — Pick the starting outfit slot by slot, the way one might lay clothes out on the bed before a party
-  - **Let character choose** — A cheap LLM peeks at the scenario and chooses something fitting (not offered to characters you're impersonating)
+  - **Let character choose** — A cheap LLM peeks at the scenario and chooses something fitting from all three wardrobe tiers (not offered to characters you're impersonating). It may deliberately choose nothing at all where the scene calls for it; an *undeclared* empty answer, or a consultation that runs past a minute, falls back to their defaults
   - **Start undressed** — Every slot empty, for entrances best left to imagination
+
+  The dialog now settles on a sensible opening choice for each character on its own, so you need only overrule it when your taste differs:
+
+  - Carrying on from an earlier conversation? Everyone keeps to **Same as last conversation**.
+  - A character marked to choose their own attire — the `canChooseOutfit` flag in their vault `properties.json` — opens on **Let character choose**.
+  - A character with a proper default outfit on file (at least one garment marked default) opens on **Use defaults**.
+  - A character with no default outfit to speak of opens on **Compose outfit**, with their panel already unfolded so the empty slots are plain to see.
+
+  When several characters are present, each one's folded panel wears a small badge — **Defaults**, **Composed**, **Dress Themselves**, **Undressed**, or **Same as Last** — so you can read the whole cast's attire at a glance without unfolding a single panel.
 
 ## How Multi-Character Chats Work
 
@@ -212,9 +221,11 @@ Impersonation lets you control a character directly, typing their responses your
 ### While Impersonating
 
 - The input field shows which character you're typing as
+- A portrait of your borrowed self stands within the composer itself, just to the left of the row of tool buttons and rising the full height of the writing box, so you are never in doubt as to whose pen you hold. It burns bright when the floor is yours to type upon, and dims to a shadow while another soul holds forth — a glance tells you both *who* you are and *whether* it is your moment. (On the narrowest of windows, where there is simply no room, it steps aside.)
 - Your message appears as that character, with their avatar
 - Other characters respond to what you wrote as that character
 - You can switch between impersonating different characters
+- **The moment you take up a character's pen, the floor becomes theirs.** Declaring an impersonation is a declaration that you mean to speak *now*, so the turn is handed straight to the borrowed seat — the banner names them, and the very next line you type lands squarely in turn, rather than languishing as someone else's moment. (The one courtesy observed: should a character be mid-utterance, their sentence is allowed to finish before the floor changes hands.)
 
 ### Multiple Impersonations
 
@@ -223,6 +234,12 @@ You can impersonate multiple characters:
 1. Enable impersonation on multiple characters
 2. Choose which one to type as before sending
 3. Click the character's name/avatar above the input to switch
+
+Whoever you've chosen above the input is the voice your next message carries: the message is filed under that character, shown with their name and avatar, and presented to the other characters as having come from them. Switch the selection and the very next line you send changes hands accordingly — no need to touch a character's card.
+
+When you hold the pens of several characters at once, the composer keeps step with the rotation on your behalf: as each of your borrowed seats comes round to its own turn, the voice above the input quietly defaults to *that* seat — so on Lorian's turn you speak as Lorian, and on your own character's turn you speak as them, with never a manual switch. Should you deliberately choose a different voice for the turn at hand, your choice stands; the composer only re-defaults when the rotation moves on to the next seat.
+
+Every seat you drive keeps its own place in the weighted rotation, each apart from the machine players. So when you play two of the three souls at the table and a lone automaton plays the third, the floor passes round evenly — your first character, then perhaps the automaton, then your second character — rather than the machine seizing every second turn. When the rotation comes to one of your seats, the house simply pauses for you to write; it does not put words in a borrowed mouth on your behalf.
 
 ### Stopping Impersonation
 
@@ -447,6 +464,7 @@ Characters with help tools enabled can navigate directly to this page:
 
 - [Chats Overview](chats.md) — Basic chat functionality
 - [Turn Manager](chat-turn-manager.md) — Detailed turn management documentation
+- [Nothing to Add — Turn Skipping](turn-skipping.md) — Letting a character pass a turn
 - [Chat Sidebar](chat-participants.md) — Full sidebar documentation, including the Chat / Visibility / Organize / Edit Content drawers
 - [Message Actions](chat-message-actions.md) — Editing and managing messages
 - [Characters](characters.md) — Creating and managing characters

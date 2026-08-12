@@ -8,6 +8,7 @@ import { turnManagerLogger as logger } from './logger';
 import type { TurnState, CalculateTurnStateOptions } from './types';
 import type { ChatEvent, ChatParticipantBase, MessageEvent } from '@/lib/schemas/types';
 import { isParticipantPresent } from '@/lib/schemas/chat.types';
+import { isTurnPassMessage } from './skip-signal';
 
 /**
  * Creates a fresh turn state (e.g., for a new chat or after reset)
@@ -51,8 +52,15 @@ export function calculateTurnStateFromHistory(
   }
 
   // lastSpeakerId = most recent non-whisper message with a participantId.
+  // A Host turn-pass record occupies the floor position of the character who
+  // passed (stall prevention): without this, the last substantive speaker
+  // would stay permanently unpickable while everyone else ping-pongs passes.
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
+    if (isTurnPassMessage(msg)) {
+      state.lastSpeakerId = msg.hostEvent.participantId;
+      break;
+    }
     if (msg.role !== 'USER' && msg.role !== 'ASSISTANT') continue;
     if (!msg.participantId) continue;
     const isWhisper = 'targetParticipantIds' in msg
@@ -120,22 +128,18 @@ export function updateTurnStateAfterMessage(
  * to signal "no write needed". Returning `null` (rather than the existing
  * value) lets callers skip the column entirely in their update payload.
  */
-export function computeSpokenThisCycleAfterMessage(
-  message: ChatEvent,
+/**
+ * Core of the two cycle-advance helpers: record `participantId` as having taken
+ * a turn this cycle, wrapping the list to just that id once every active
+ * CHARACTER participant has spoken. Returns the JSON to persist, or `null` when
+ * no write is needed. Shared by {@link computeSpokenThisCycleAfterMessage} and
+ * {@link computeSpokenThisCycleAfterSkip}.
+ */
+function advanceSpokenThisCycle(
+  participantId: string,
   participants: ChatParticipantBase[],
   currentSpokenJson: string | null | undefined,
 ): string | null {
-  if (message.type !== 'message') return null;
-  if (message.role !== 'USER' && message.role !== 'ASSISTANT') return null;
-  if (!message.participantId) return null;
-
-  const isWhisper = 'targetParticipantIds' in message
-    && Array.isArray(message.targetParticipantIds)
-    && message.targetParticipantIds.length > 0;
-  if (isWhisper) return null;
-
-  const participantId = message.participantId;
-
   let current: string[] = [];
   if (currentSpokenJson) {
     try {
@@ -173,6 +177,23 @@ export function computeSpokenThisCycleAfterMessage(
   return JSON.stringify(next);
 }
 
+export function computeSpokenThisCycleAfterMessage(
+  message: ChatEvent,
+  participants: ChatParticipantBase[],
+  currentSpokenJson: string | null | undefined,
+): string | null {
+  if (message.type !== 'message') return null;
+  if (message.role !== 'USER' && message.role !== 'ASSISTANT') return null;
+  if (!message.participantId) return null;
+
+  const isWhisper = 'targetParticipantIds' in message
+    && Array.isArray(message.targetParticipantIds)
+    && message.targetParticipantIds.length > 0;
+  if (isWhisper) return null;
+
+  return advanceSpokenThisCycle(message.participantId, participants, currentSpokenJson);
+}
+
 /**
  * Returns the next value for `chat.spokenThisCycleParticipantIds` after a
  * skip-user-turn action. The given user-controlled participant is appended to
@@ -188,35 +209,5 @@ export function computeSpokenThisCycleAfterSkip(
   participants: ChatParticipantBase[],
   currentSpokenJson: string | null | undefined,
 ): string | null {
-  let current: string[] = [];
-  if (currentSpokenJson) {
-    try {
-      const parsed = JSON.parse(currentSpokenJson);
-      if (Array.isArray(parsed)) {
-        current = parsed.filter((id): id is string => typeof id === 'string');
-      }
-    } catch {
-      // Treat as empty cycle.
-    }
-  }
-
-  const next = current.includes(skippedParticipantId)
-    ? current
-    : [...current, skippedParticipantId];
-
-  const activeIds = new Set(
-    participants
-      .filter(p => p.type === 'CHARACTER' && isParticipantPresent(p.status) && p.characterId)
-      .map(p => p.id),
-  );
-
-  if (activeIds.size > 0) {
-    const spokenActive = next.filter(id => activeIds.has(id));
-    if (spokenActive.length >= activeIds.size) {
-      return JSON.stringify([skippedParticipantId]);
-    }
-  }
-
-  if (next === current) return null;
-  return JSON.stringify(next);
+  return advanceSpokenThisCycle(skippedParticipantId, participants, currentSpokenJson);
 }

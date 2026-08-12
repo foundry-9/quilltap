@@ -176,7 +176,12 @@ export async function handleMoveFile(
       }
       return { success: false, error: `Source file not found: ${input.path}` };
     }
-    if (await databaseDocumentExists(resolvedSource.mountPointId, resolvedDest.relativePath)) {
+    // Case-only rename is legal: the case-insensitive existence check would
+    // find the source itself and report a bogus conflict.
+    const caseOnlyRename =
+      resolvedSource.relativePath !== resolvedDest.relativePath &&
+      resolvedSource.relativePath.toLowerCase() === resolvedDest.relativePath.toLowerCase();
+    if (!caseOnlyRename && await databaseDocumentExists(resolvedSource.mountPointId, resolvedDest.relativePath)) {
       return { success: false, error: `Destination already exists: ${input.new_path}. Move will not overwrite existing files.` };
     }
     await moveDatabaseDocument(
@@ -220,12 +225,18 @@ export async function handleMoveFile(
     return { success: false, error: `Source file not found: ${input.path}` };
   }
 
-  // Check destination doesn't already exist
-  try {
-    await fs.access(resolvedDest.absolutePath);
-    return { success: false, error: `Destination already exists: ${input.new_path}. Move will not overwrite existing files.` };
-  } catch {
-    // Good — destination doesn't exist
+  // Check destination doesn't already exist. Skip for a case-only rename —
+  // on a case-insensitive filesystem the probe would find the source itself.
+  const fsCaseOnlyRename =
+    resolvedSource.absolutePath !== resolvedDest.absolutePath &&
+    resolvedSource.absolutePath.toLowerCase() === resolvedDest.absolutePath.toLowerCase();
+  if (!fsCaseOnlyRename) {
+    try {
+      await fs.access(resolvedDest.absolutePath);
+      return { success: false, error: `Destination already exists: ${input.new_path}. Move will not overwrite existing files.` };
+    } catch {
+      // Good — destination doesn't exist
+    }
   }
 
   // Ensure parent directory of destination exists
@@ -841,12 +852,18 @@ export async function handleMoveFolder(
     return { success: false, error: `Source folder not found: ${input.path}` };
   }
 
-  // Check destination doesn't already exist
-  try {
-    await fs.access(resolvedDest.absolutePath);
-    return { success: false, error: `Destination already exists: ${input.new_path}. Move will not overwrite existing folders.` };
-  } catch {
-    // Good — destination doesn't exist
+  // Check destination doesn't already exist. Skip for a case-only rename —
+  // on a case-insensitive filesystem the probe would find the source itself.
+  const folderCaseOnlyRename =
+    resolvedSource.absolutePath !== resolvedDest.absolutePath &&
+    resolvedSource.absolutePath.toLowerCase() === resolvedDest.absolutePath.toLowerCase();
+  if (!folderCaseOnlyRename) {
+    try {
+      await fs.access(resolvedDest.absolutePath);
+      return { success: false, error: `Destination already exists: ${input.new_path}. Move will not overwrite existing folders.` };
+    } catch {
+      // Good — destination doesn't exist
+    }
   }
 
   // Ensure parent directory of destination exists

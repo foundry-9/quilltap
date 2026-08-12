@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler, enrichProfile } from '@/lib/api/middleware';
+import { createContextParamsHandler, enrichProfile } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { notFound, badRequest, serverError, messageResponse, successResponse } from '@/lib/api/responses';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
@@ -30,7 +30,7 @@ const generateImageSchema = z.object({
 /**
  * GET /api/v1/image-profiles/[id]
  */
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {
 
@@ -57,7 +57,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 /**
  * PUT /api/v1/image-profiles/[id]
  */
-export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
+export const PUT = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {
 
@@ -183,7 +183,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 /**
  * DELETE /api/v1/image-profiles/[id]
  */
-export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+export const DELETE = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {
 
@@ -211,7 +211,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
  * POST /api/v1/image-profiles/[id]?action=generate
  * Generate images using this profile with placeholder expansion support
  */
-export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+export const POST = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     const action = getActionParam(req);
 

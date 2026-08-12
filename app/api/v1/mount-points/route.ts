@@ -6,13 +6,13 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { created, serverError, badRequest } from '@/lib/api/responses';
+import { created, serverError, badRequest, conflict, successResponse } from '@/lib/api/responses';
 import { attachMountPoint } from '@/lib/mount-index/watcher';
-import { verifyBasePath } from '@/lib/mount-index/scanner';
+import { checkBasePathAvailability } from '@/lib/mount-index/base-path-availability';
 import { scaffoldCharacterMount } from '@/lib/mount-index/character-scaffold';
 import { searchDocumentChunks } from '@/lib/mount-index/document-search';
 import {
@@ -45,7 +45,7 @@ const createMountPointSchema = z.object({
 // GET Handler
 // ============================================================================
 
-export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
+export const GET = createContextHandler(async (req: NextRequest, { user, repos }) => {
   try {
 
     const mountPoints = await repos.docMountPoints.findAll();
@@ -66,7 +66,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
       embeddedChunkCount: embeddedCountMap.get(mp.id) || 0,
     }));
 
-    return NextResponse.json({ mountPoints: enriched });
+    return successResponse({ mountPoints: enriched });
   } catch (error) {
     logger.error('[Mount Points v1] Error fetching mount points', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to fetch mount points');
@@ -126,7 +126,7 @@ async function handleSemanticSearch(req: NextRequest, userId: string) {
       // (knowledge injector, search tool, etc.) keep the default filtering.
       includeBlocked: true,
     });
-    return NextResponse.json({
+    return successResponse({
       results,
       count: results.length,
       query,
@@ -149,7 +149,7 @@ async function handleSemanticSearch(req: NextRequest, userId: string) {
   }
 }
 
-export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
+export const POST = createContextHandler(async (req: NextRequest, { user, repos }) => {
   const action = getActionParam(req);
 
   if (action === 'semantic-search') {
@@ -158,6 +158,22 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
 
   const body = await req.json();
   const validatedData = createMountPointSchema.parse(body);
+
+  // Document-store names form one case-insensitive namespace: no store may
+  // share a name with a peer, even in a different casing.
+  const allStores = await repos.docMountPoints.findAll();
+  const desiredLower = validatedData.name.trim().toLowerCase();
+  const clash = allStores.find(mp => mp.name.trim().toLowerCase() === desiredLower);
+  if (clash) {
+    logger.warn('[Mount Points v1] Rejected duplicate mount point name', {
+      name: validatedData.name,
+      clashesWith: clash.id,
+      userId: user.id,
+    });
+    return conflict(
+      `A document store named "${clash.name}" already exists. Names are matched without regard to case — please choose a different name.`
+    );
+  }
 
   const mountPoint = await repos.docMountPoints.create({
     name: validatedData.name,
@@ -182,13 +198,14 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
   // or the blob API once the user starts writing.
   let warning: string | undefined;
   if (validatedData.mountType !== 'database') {
-    const accessible = await verifyBasePath(validatedData.basePath);
-    if (accessible) {
-    } else {
-      warning = `Base path '${validatedData.basePath}' is not currently accessible. The mount point was created but scanning will fail until the path is available.`;
+    const availability = await checkBasePathAvailability(validatedData.basePath);
+    if (!availability.available) {
+      warning = `${availability.message} The store was created, but scanning will fail until the path is reachable.`;
       logger.warn('[Mount Points v1] Base path not accessible', {
         basePath: validatedData.basePath,
         mountPointId: mountPoint.id,
+        reason: availability.reason,
+        containerized: availability.containerized,
       });
     }
   }

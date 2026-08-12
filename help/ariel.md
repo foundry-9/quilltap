@@ -30,6 +30,8 @@ Ariel operates under Quilltap's own user account and working directory. When you
 
 Similarly, environment variables, shell aliases, and PATH configuration are inherited from the server process — save for a few amenities Ariel lays out in advance, described below. If you have questions about what is accessible from within a terminal session, apply the same caution and verification you would apply to any shell on your system.
 
+**A word on the Docker larder.** Aboard the good ship Docker, the pantry is stocked sparingly and by design. You will find `bash`, `zip`, `unzip`, the `quilltap` command itself, and Node — and precious little else. `git`, `curl`, `wget`, and `jq` were formerly laid on as a courtesy, but each dragged a retinue of unpatched vulnerabilities in behind it (Debian's `perl`, summoned by `git`, being the worst offender by some margin), and so they have been shown the door. Should your work genuinely require them, install them into your own image with a two-line `Dockerfile` built `FROM` the published one, and be aware of what you are readmitting. Note that this concerns only what a *human* may type at the prompt: the `curl` **tool** your characters may wield is a plugin that fetches over the network under its own steam, entirely unbothered by the absence of the command-line article. Installations outside Docker are untouched — your own machine's toolbox remains exactly as you left it.
+
 ## A few amenities laid out in advance
 
 Ariel is not content merely to fling open a shell and abscond. Before surrendering the keyboard, the good fellow tidies the parlour with several small courtesies:

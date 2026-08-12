@@ -1,13 +1,20 @@
 /**
  * Memory Gate — Pre-Write Similarity Check
  *
- * Replaces the binary duplicate check with a three-tier decision at write time:
- * - REINFORCE: near-duplicate (>= 0.80 similarity) — boost existing memory
- * - INSERT_RELATED: related but distinct (0.70–0.80) — link memories together
- * - INSERT: genuinely new (< 0.70) — create fresh memory
+ * A four-tier decision at write time, keyed off the thresholds below:
+ * - SKIP_NEAR_DUPLICATE: >= NEAR_DUPLICATE_THRESHOLD (0.90) — absorb silently
+ * - REINFORCE: >= MERGE_THRESHOLD (0.85) — boost the existing memory
+ * - INSERT_RELATED: RELATED_THRESHOLD (0.70) – MERGE_THRESHOLD — link memories
+ * - INSERT: below RELATED_THRESHOLD — create a fresh memory
  *
  * This changes the memory system from append-only to append-or-reinforce,
  * preserving signal about repeatedly observed facts.
+ *
+ * Episodic date guard: "same activity, different occasion" (visited the harbor
+ * in spring vs. winter) embeds nearly identically, so when candidate and best
+ * match both carry an `occurredAt` more than {@link DATE_GUARD_DAYS} apart, a
+ * would-be SKIP_NEAR_DUPLICATE / REINFORCE is downgraded to INSERT_RELATED —
+ * distinct occasions must both persist.
  */
 
 import { Memory } from '@/lib/schemas/types'
@@ -16,6 +23,7 @@ import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
 import { generateEmbeddingForUser, EmbeddingError } from '@/lib/embedding/embedding-service'
 import { rawQuery } from '@/lib/database/manager'
 import { logger } from '@/lib/logger'
+import { buildMemoryEmbeddingText, type EpisodicAnchorView } from './episodic'
 
 // =============================================================================
 // Constants
@@ -39,6 +47,25 @@ const GATE_TOP_K = 5
 
 /** Milliseconds to wait before retrying embedding generation once. */
 const EMBEDDING_RETRY_DELAY_MS = 500
+
+/**
+ * When candidate and best-match `occurredAt` differ by more than this many
+ * days, SKIP_NEAR_DUPLICATE / REINFORCE downgrade to INSERT_RELATED so
+ * distinct occasions of the same activity both persist as rows.
+ */
+export const DATE_GUARD_DAYS = 7
+
+/** True when both timestamps parse and sit more than {@link DATE_GUARD_DAYS} apart. */
+export function occasionsAreDistinct(
+  candidateOccurredAt: string | null | undefined,
+  existingOccurredAt: string | null | undefined,
+): boolean {
+  if (!candidateOccurredAt || !existingOccurredAt) return false
+  const a = Date.parse(candidateOccurredAt)
+  const b = Date.parse(existingOccurredAt)
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return false
+  return Math.abs(a - b) > DATE_GUARD_DAYS * 86_400_000
+}
 
 // =============================================================================
 // Types
@@ -108,10 +135,13 @@ export async function runMemoryGate(
   candidateSummary: string,
   _candidateKeywords: string[],
   userId: string,
-  embeddingProfileId?: string
+  embeddingProfileId?: string,
+  candidateAnchors?: EpisodicAnchorView
 ): Promise<GateResult> {
   const debugInfo: string[] = []
-  const embeddingText = `${candidateSummary}\n\n${candidateContent}`
+  // Anchor line included so the gate compares/writes the same vector shape the
+  // create path stores (see buildMemoryEmbeddingText).
+  const embeddingText = buildMemoryEmbeddingText(candidateSummary, candidateContent, candidateAnchors)
 
   let embeddingResult: Awaited<ReturnType<typeof generateEmbeddingForUser>>
   try {
@@ -167,6 +197,28 @@ export async function runMemoryGate(
   const bestMemory = memoryMap.get(bestResult.id)
 
   debugInfo.push(`[Gate] Best match: score=${bestResult.score.toFixed(3)}, id=${bestResult.id}`)
+
+  // Episodic date guard: a near-identical embedding with an occurredAt more
+  // than DATE_GUARD_DAYS from the best match is a DIFFERENT OCCASION of the
+  // same activity — link, never absorb.
+  const distinctOccasion =
+    bestMemory !== undefined &&
+    bestResult.score >= MERGE_THRESHOLD &&
+    occasionsAreDistinct(candidateAnchors?.occurredAt, bestMemory.occurredAt)
+  if (distinctOccasion && bestMemory) {
+    debugInfo.push(
+      `[Gate] Score ${bestResult.score.toFixed(3)} but occurredAt differs by > ${DATE_GUARD_DAYS} days ` +
+      `(candidate ${candidateAnchors?.occurredAt}, existing ${bestMemory.occurredAt}) → INSERT_RELATED (date guard)`
+    )
+    return {
+      decision: {
+        action: 'INSERT_RELATED',
+        relatedMemories: [{ memory: bestMemory, similarity: bestResult.score }],
+      },
+      embedding,
+      debugInfo,
+    }
+  }
 
   if (bestResult.score >= NEAR_DUPLICATE_THRESHOLD && bestMemory) {
     debugInfo.push(`[Gate] Score >= ${NEAR_DUPLICATE_THRESHOLD} → SKIP_NEAR_DUPLICATE`)
@@ -224,15 +276,18 @@ export async function runMemoryGate(
  * 2. Append novel details as footnotes.
  * 3. Increment reinforcementCount, update lastReinforcedAt.
  * 4. Recalculate reinforcedImportance.
- * 5. Re-embed if content changed.
- * 6. Return updated memory.
+ * 5. Upgrade episodic anchors when the retelling supplies better ones
+ *    (fills a null occurredAt/narrativeTime; unions new entities).
+ * 6. Re-embed if content or anchors changed.
+ * 7. Return updated memory.
  */
 export async function reinforceMemory(
   existingMemory: Memory,
   candidateContent: string,
   candidateSummary: string,
   userId: string,
-  embeddingProfileId?: string
+  embeddingProfileId?: string,
+  candidateAnchors?: EpisodicAnchorView
 ): Promise<{ memory: Memory; novelDetails: string[] }> {
   const repos = getRepositories()
   const novelDetails = extractNovelDetails(candidateContent, existingMemory.content)
@@ -259,6 +314,35 @@ export async function reinforceMemory(
     updateData.content = newContent
   }
 
+  // Anchor upgrades: a retelling that supplies when/where the original capture
+  // lacked should improve the row — today only footnote prose accumulates.
+  // Note the date guard upstream already diverted candidates whose occurredAt
+  // CONFLICTS with the existing one by > DATE_GUARD_DAYS, so filling a null is
+  // safe here. Entities union (bounded) so repeated retellings converge.
+  let anchorsChanged = false
+  if (candidateAnchors) {
+    if (candidateAnchors.occurredAt && !existingMemory.occurredAt) {
+      updateData.occurredAt = candidateAnchors.occurredAt
+      anchorsChanged = true
+    }
+    if (candidateAnchors.narrativeTime && !existingMemory.narrativeTime) {
+      updateData.narrativeTime = candidateAnchors.narrativeTime
+      anchorsChanged = true
+    }
+    const candidateEntities = (candidateAnchors.entities ?? []).filter(
+      (e): e is string => typeof e === 'string' && e.trim().length > 0,
+    )
+    if (candidateEntities.length > 0) {
+      const existingEntities = existingMemory.entities ?? []
+      const existingLower = new Set(existingEntities.map(e => e.toLowerCase()))
+      const fresh = candidateEntities.filter(e => !existingLower.has(e.toLowerCase()))
+      if (fresh.length > 0) {
+        updateData.entities = [...existingEntities, ...fresh].slice(0, 12)
+        anchorsChanged = true
+      }
+    }
+  }
+
   const updatedMemory = await repos.memories.updateForCharacter(
     existingMemory.characterId,
     existingMemory.id,
@@ -273,11 +357,11 @@ export async function reinforceMemory(
     return { memory: existingMemory, novelDetails }
   }
 
-  // Re-embed if content changed
-  if (contentChanged) {
+  // Re-embed if content or anchors changed (the anchor line is embedded text)
+  if (contentChanged || anchorsChanged) {
     try {
       const embeddingResult = await generateEmbeddingForUser(
-        `${updatedMemory.summary}\n\n${updatedMemory.content}`,
+        buildMemoryEmbeddingText(updatedMemory.summary, updatedMemory.content, updatedMemory),
         userId,
         embeddingProfileId,
         { priority: 'background' }

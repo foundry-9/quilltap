@@ -221,6 +221,8 @@ import { alignAboutCharacterIdV2Migration } from './align-about-character-id-v2'
 import { addCharacterIdentityFieldMigration } from './add-character-identity-field';
 // Add manifesto field to characters table
 import { addCharacterManifestoFieldMigration } from './add-character-manifesto-field';
+// Add archive fields to characters for tombstone support
+import { addCharacterArchiveFieldsMigration } from './add-character-archive-fields';
 // Re-absorb leftover project files into database-backed official store
 import { reabsorbLeftoverProjectFilesMigration } from './reabsorb-leftover-project-files';
 // Relink legacy files.storageKey rows to mount-blob shims (Stage-1 follow-up)
@@ -326,6 +328,7 @@ import { addAutonomousRunPausedAccumMigration } from './add-autonomous-run-pause
 import { dropCharacterScenarioColumnMigration } from './drop-character-scenario-column';
 // Thinking display: reasoningContent + reasoningSegments columns on chat_messages
 import { addChatMessageReasoningColumnsMigration } from './add-chat-message-reasoning-columns';
+import { addAnswerConfirmationColumnsMigration } from './add-answer-confirmation-columns';
 // Thinking display: showThinking column on chats + thinkingDisplay column on chat_settings
 import { addThinkingDisplayFieldsMigration } from './add-thinking-display-fields';
 // Add autoScrollOnResponseComplete column to chat_settings (Salon auto-scroll toggle)
@@ -338,6 +341,8 @@ import { addAutonomousRunMilestonesMigration } from './add-autonomous-run-milest
 import { addCarinaFlagMigration } from './add-carina-flag-v1';
 // Carina (inline LLM queries): carinaMeta provenance column on chat_messages
 import { addCarinaMessageMetaMigration } from './add-carina-message-meta-v1';
+// Pascal the Croupier (custom pseudo-tools): pascalMeta roll-record column on chat_messages
+import { addPascalMessageMetaMigration } from './add-pascal-message-meta-v1';
 // RP formatting overhaul: add kind discriminant (wrap/linePrefix) to template delimiters
 import { rpDelimiterKindsMigration } from './rp-delimiter-kinds-v1';
 // Brahma Console: consoleConnectionProfileId column on chats (per-chat model selection)
@@ -346,6 +351,22 @@ import { addConsoleConnectionProfileFieldMigration } from './add-console-connect
 import { addConnectionProfileUniqueNameIndexMigration } from './add-connection-profile-unique-name-index';
 // Scriptorium per-document policy: allowEmbed / allowCharacterRead / allowCharacterWrite columns + frontmatter backfill
 import { addDocMountFilePolicyFlagsMigration } from './add-doc-mount-file-policy-flags';
+// Commonplace recall anti-repetition: commonplaceRecallHistory ring-buffer column on chats
+import { addCommonplaceRecallHistoryMigration } from './add-commonplace-recall-history';
+// "Nothing to add" turn-skipping: turnSkippingEnabled toggle column on chats
+import { addTurnSkippingFieldMigration } from './add-turn-skipping-field';
+// DB size reduction: re-pack stored embeddings as int8 (self-describing quantized format)
+import { quantizeEmbeddingsMigration } from './quantize-embeddings';
+// Pascal's custom pseudo-tools: customTools toggle column on chat_settings
+import { addCustomToolsFieldMigration } from './add-custom-tools-field';
+// Episodic recall overhaul: occurredAt/narrativeTime/entities/kind on memories + chats.timelineMode
+import { addEpisodicMemoryFieldsMigration } from './add-episodic-memory-fields';
+// Story clock: backfill timestampConfig.fictionalBaseRealTime so fictional clocks advance
+import { anchorFictionalClockBaseMigration } from './anchor-fictional-clock-base';
+// Scriptorium hard links: linkGroupId column on doc_mount_file_links + orphaned-content sweep
+import { addDocMountLinkGroupsMigration } from './add-doc-mount-link-groups';
+// The Almanack: connectionProfileId + imageProfileId attribution columns on llm_logs
+import { addLLMLogsProfileColumnsMigration } from './add-llm-logs-profile-columns';
 
 /**
  * All available migrations.
@@ -562,6 +583,8 @@ export const migrations: Migration[] = [
   addCharacterIdentityFieldMigration,
   // Add manifesto field to characters table
   addCharacterManifestoFieldMigration,
+  // Add archive-tombstone fields to characters table
+  addCharacterArchiveFieldsMigration,
   // Re-absorb leftover project files into database-backed official store
   reabsorbLeftoverProjectFilesMigration,
   // Relink legacy files.storageKey rows to mount-blob shims (Stage-1 follow-up)
@@ -670,6 +693,8 @@ export const migrations: Migration[] = [
   addAutonomousBudgetCacheModeMigration,
   // 4.6 private character rooms: runMilestonesAnnounced column on chats (per-run pacing-nudge bitmask)
   addAutonomousRunMilestonesMigration,
+  // Answer confirmation: confirmed/notes/revised/original columns on chat_messages + answerConfirmationOverride on chats
+  addAnswerConfirmationColumnsMigration,
   // Carina (inline LLM queries): canBeCarina answerer flag on characters
   addCarinaFlagMigration,
   // Carina (inline LLM queries): carinaMeta provenance column on chat_messages
@@ -688,6 +713,24 @@ export const migrations: Migration[] = [
   addConnectionProfileUniqueNameIndexMigration,
   // Scriptorium per-document policy flags on doc_mount_file_links + frontmatter backfill
   addDocMountFilePolicyFlagsMigration,
+  // Commonplace recall anti-repetition: commonplaceRecallHistory ring-buffer column on chats
+  addCommonplaceRecallHistoryMigration,
+  // "Nothing to add" turn-skipping: turnSkippingEnabled toggle column on chats
+  addTurnSkippingFieldMigration,
+  // DB size reduction: re-pack stored embeddings as int8 (self-describing quantized format)
+  quantizeEmbeddingsMigration,
+  // Pascal the Croupier (custom pseudo-tools): pascalMeta roll-record column on chat_messages
+  addPascalMessageMetaMigration,
+  // Pascal's custom pseudo-tools: customTools toggle column on chat_settings
+  addCustomToolsFieldMigration,
+  // Episodic recall overhaul: occurredAt/narrativeTime/entities/kind on memories + chats.timelineMode
+  addEpisodicMemoryFieldsMigration,
+  // Story clock: backfill timestampConfig.fictionalBaseRealTime so fictional clocks advance
+  anchorFictionalClockBaseMigration,
+  // Scriptorium hard links: linkGroupId column on doc_mount_file_links + orphaned-content sweep
+  addDocMountLinkGroupsMigration,
+  // The Almanack: connectionProfileId + imageProfileId attribution columns on llm_logs
+  addLLMLogsProfileColumnsMigration,
 ];
 
 export {
@@ -993,6 +1036,8 @@ export {
   addAutonomousBudgetCacheModeMigration,
   // 4.6 private character rooms: runMilestonesAnnounced column on chats (per-run pacing-nudge bitmask)
   addAutonomousRunMilestonesMigration,
+  // Answer confirmation: confirmed/notes/revised/original columns on chat_messages + answerConfirmationOverride on chats
+  addAnswerConfirmationColumnsMigration,
   // Carina (inline LLM queries): canBeCarina answerer flag on characters
   addCarinaFlagMigration,
   // Carina (inline LLM queries): carinaMeta provenance column on chat_messages
@@ -1011,5 +1056,23 @@ export {
   addConnectionProfileUniqueNameIndexMigration,
   // Scriptorium per-document policy flags on doc_mount_file_links + frontmatter backfill
   addDocMountFilePolicyFlagsMigration,
+  // Commonplace recall anti-repetition: commonplaceRecallHistory ring-buffer column on chats
+  addCommonplaceRecallHistoryMigration,
+  // "Nothing to add" turn-skipping: turnSkippingEnabled toggle column on chats
+  addTurnSkippingFieldMigration,
+  // DB size reduction: re-pack stored embeddings as int8 (self-describing quantized format)
+  quantizeEmbeddingsMigration,
+  // Pascal the Croupier (custom pseudo-tools): pascalMeta roll-record column on chat_messages
+  addPascalMessageMetaMigration,
+  // Pascal's custom pseudo-tools: customTools toggle column on chat_settings
+  addCustomToolsFieldMigration,
+  // Episodic recall overhaul: occurredAt/narrativeTime/entities/kind on memories + chats.timelineMode
+  addEpisodicMemoryFieldsMigration,
+  // Story clock: backfill timestampConfig.fictionalBaseRealTime so fictional clocks advance
+  anchorFictionalClockBaseMigration,
+  // Scriptorium hard links: linkGroupId column on doc_mount_file_links + orphaned-content sweep
+  addDocMountLinkGroupsMigration,
+  // The Almanack: connectionProfileId + imageProfileId attribution columns on llm_logs
+  addLLMLogsProfileColumnsMigration,
 };
 

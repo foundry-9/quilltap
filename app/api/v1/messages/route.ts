@@ -7,26 +7,23 @@
  * The POST endpoint returns Server-Sent Events for real-time streaming.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
-import { handleSendMessage, sendMessageSchema, continueMessageSchema } from '@/lib/services/chat-message';
-import { z } from 'zod';
+import { createContextHandler } from '@/lib/api/middleware';
+import {
+  handleSendMessage,
+  sendMessageSchema,
+  continueMessageSchema,
+  buildSendMessageOptions,
+  buildContinueMessageOptions,
+  sseStreamResponse,
+} from '@/lib/services/chat-message';
 import { logger } from '@/lib/logger';
-import { notFound, badRequest, serverError } from '@/lib/api/responses';
-
-// Extended schema that includes chatId
-const sendMessageWithChatIdSchema = sendMessageSchema.extend({
-  chatId: z.uuid('Chat ID is required'),
-});
-
-const continueMessageWithChatIdSchema = continueMessageSchema.extend({
-  chatId: z.uuid('Chat ID is required'),
-});
+import { notFound, badRequest, serverError, successResponse } from '@/lib/api/responses';
+import { scrubUserAgent } from '@/lib/utils/user-agent';
 
 /**
  * GET /api/v1/messages?chatId= - List messages for a chat
  */
-export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
+export const GET = createContextHandler(async (req, { user, repos }) => {
   const { searchParams } = req.nextUrl;
   const chatId = searchParams.get('chatId');
 
@@ -46,7 +43,7 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
     // Filter to only message events (not system events, context summaries, etc.)
     const messageEvents = messages.filter((m) => m.type === 'message');
 
-    return NextResponse.json({
+    return successResponse({
       messages: messageEvents,
       count: messageEvents.length,
     });
@@ -61,7 +58,7 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
  *
  * Returns Server-Sent Events (SSE) stream for real-time response.
  */
-export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
+export const POST = createContextHandler(async (req, { user, repos }) => {
   // Get chatId from query string
   const { searchParams } = req.nextUrl;
   const chatId = searchParams.get('chatId');
@@ -76,52 +73,26 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
     return badRequest('Invalid chatId format');
   }
 
+  // Verify chat ownership
+  const chat = await repos.chats.findById(chatId);
+  if (!chat) {
+    return notFound('Chat');
+  }
+
   // Parse request body
   const body = await req.json();
   const isContinueMode = body.continueMode === true;
 
-  // Validate request based on mode
-  if (isContinueMode) {
-    const parsed = continueMessageSchema.parse(body);// Verify chat ownership
-    const chat = await repos.chats.findById(chatId);
-    if (!chat) {
-      return notFound('Chat');
-    }
+  // Capture browser User-Agent for tool use (e.g., curl), scrubbing
+  // Electron/Quilltap tokens so it looks like a normal browser.
+  const browserUserAgent = scrubUserAgent(req.headers.get('user-agent') || undefined);
 
-    // Handle the message via orchestrator
-    const stream = await handleSendMessage(repos, chatId, user.id, {
-      continueMode: true,
-      respondingParticipantId: parsed.respondingParticipantId,
-    });
+  // Validate request based on mode, then build options via the shared helper
+  // so the forwarded field set stays in lockstep with /api/v1/chats/[id]/messages.
+  const options = isContinueMode
+    ? buildContinueMessageOptions(continueMessageSchema.parse(body), { browserUserAgent })
+    : buildSendMessageOptions(sendMessageSchema.parse(body), { browserUserAgent });
 
-    return new NextResponse(stream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      },
-    });
-  } else {
-    const parsed = sendMessageSchema.parse(body);// Verify chat ownership
-    const chat = await repos.chats.findById(chatId);
-    if (!chat) {
-      return notFound('Chat');
-    }
-
-    // Handle the message via orchestrator
-    const stream = await handleSendMessage(repos, chatId, user.id, {
-      content: parsed.content,
-      fileIds: parsed.fileIds,
-      pendingToolResults: parsed.pendingToolResults,
-      continueMode: false,
-    });
-
-    return new NextResponse(stream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      },
-    });
-  }
+  const stream = await handleSendMessage(repos, chatId, user.id, options);
+  return sseStreamResponse(stream);
 });

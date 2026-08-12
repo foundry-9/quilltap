@@ -8,7 +8,7 @@
 
 import { GoogleGenAI } from '@google/genai';
 import type { TextProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage, ModelMetadata } from './types';
-import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
+import { createPluginLogger, getQuilltapUserAgent, resolveRequestTimeoutMs } from '@quilltap/plugin-utils';
 
 const logger = createPluginLogger('qtap-plugin-google');
 
@@ -498,7 +498,9 @@ export class GoogleProvider implements TextProvider {
   }
 
   async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
-    const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { 'User-Agent': getQuilltapUserAgent() } } });
+    // A caller-supplied budget is a ceiling; without one the SDK default would
+    // let a silent endpoint hold a turn open indefinitely.
+    const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { 'User-Agent': getQuilltapUserAgent() }, timeout: resolveRequestTimeoutMs(params) } });
 
     // Build tools configuration
     const tools: any[] = [];
@@ -646,7 +648,18 @@ export class GoogleProvider implements TextProvider {
   }
 
   async *streamMessage(params: LLMParams, apiKey: string): AsyncGenerator<StreamChunk> {
-    const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { 'User-Agent': getQuilltapUserAgent() } } });
+    // Only an explicit caller budget is honored on the streaming path. Unlike
+    // the OpenAI SDK, whose timeout stops at the response headers, this one is
+    // documented as "timeout for the request" — imposing a default here could
+    // cut off a long generation mid-answer. Background work, which is what the
+    // budget exists for, never streams.
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: { 'User-Agent': getQuilltapUserAgent() },
+        ...(params.requestTimeoutMs ? { timeout: params.requestTimeoutMs } : {}),
+      },
+    });
 
     // Build tools configuration
     const tools: any[] = [];

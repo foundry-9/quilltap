@@ -38,4 +38,5 @@
 @import "./_roleplay.css";     /* Roleplay-template chips + add-on flourishes */
 @import "./_content.css";      /* Badges, avatars, code blocks */
 @import "./_typography.css";   /* Semantic typography classes */
+@import "./_workspace.css";    /* Tabbed workspace: panes, tab strip, divider, drop-zones */
 @import "./_utilities.css";    /* Background, border, text color utilities */

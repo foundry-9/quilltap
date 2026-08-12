@@ -142,6 +142,7 @@ export const wardrobeWearToolDefinition = {
  */
 export function validateWardrobeWearInput(
   input: unknown
-): input is WardrobeWearToolInput {
-  return wardrobeWearToolInputSchema.safeParse(input).success
+): WardrobeWearToolInput | null {
+  const parsed = wardrobeWearToolInputSchema.safeParse(input)
+  return parsed.success ? parsed.data : null
 }

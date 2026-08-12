@@ -27,6 +27,9 @@ export type GreetingRequest = {
   temperature?: number
   maxTokens?: number
   topP?: number
+  /** The character profile's raw parameters, forwarded to the provider so
+   *  per-model settings (e.g. DeepSeek thinking mode) take effect. */
+  profileParameters?: Record<string, unknown>
   /** Memories about other participants in the chat */
   participantMemories?: ParticipantMemoryForGreeting[]
   /** Project context if chat is in a project */
@@ -110,6 +113,7 @@ export async function generateGreetingMessage({
   temperature,
   maxTokens,
   topP,
+  profileParameters,
   participantMemories,
   projectContext,
   recentConversationsBlock,
@@ -151,6 +155,7 @@ export async function generateGreetingMessage({
         maxTokens,
         topP,
         cacheKey: buildCharacterCacheKey(characterId),
+        profileParameters,
       },
       apiKey ?? ''
     )) {

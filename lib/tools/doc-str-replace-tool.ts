@@ -64,8 +64,9 @@ export const docStrReplaceToolDefinition = {
 /**
  * Validates input for doc_str_replace tool.
  */
-export function validateDocStrReplaceInput(input: unknown): input is DocStrReplaceInput {
-  return docStrReplaceToolInputSchema.safeParse(input).success;
+export function validateDocStrReplaceInput(input: unknown): DocStrReplaceInput | null {
+  const parsed = docStrReplaceToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 

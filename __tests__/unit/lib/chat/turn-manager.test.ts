@@ -3,6 +3,7 @@ import {
   createInitialTurnState,
   calculateTurnStateFromHistory,
   selectNextSpeaker,
+  selectNextSpeakerAfterUserMessage,
   updateTurnStateAfterMessage,
   addToQueue,
   removeFromQueue,
@@ -12,6 +13,7 @@ import {
   getQueuePosition,
   getSelectionExplanation,
   findUserParticipant,
+  findActiveUserParticipant,
   getActiveCharacterParticipants,
   isMultiCharacterChat,
   computeSpokenThisCycleAfterMessage,
@@ -214,6 +216,33 @@ describe('turn manager state', () => {
     expect(selection.reason).toBe('user_turn')
   })
 
+  it('ignores archived characters when selecting the next speaker', () => {
+    const participant = makeCharacterParticipant('p1', 'char-1')
+    const characters = new Map<string, Character>([['char-1', makeCharacter('char-1', { archivedAt: '2026-08-10T00:00:00.000Z' })]])
+    const state = createInitialTurnState()
+
+    const selection = selectNextSpeaker([participant], characters, state, null)
+    expect(selection.nextSpeakerId).toBeNull()
+    expect(selection.reason).toBe('user_turn')
+  })
+
+  it('treats an impersonated LLM seat as a user turn via the overlay (Bug 44)', () => {
+    // The seat's controlledBy is 'llm'; only impersonatingParticipantIds marks it.
+    const impersonated = makeCharacterParticipant('p1', 'char-1')
+    const characters = new Map<string, Character>([['char-1', makeCharacter('char-1')]])
+    const state = createInitialTurnState()
+
+    // Without the overlay it is an ordinary LLM speaker.
+    const llmTurn = selectNextSpeaker([impersonated], characters, state, null)
+    expect(llmTurn.reason).toBe('only_character')
+
+    // With the overlay it pauses for the human, without the column moving.
+    const userTurn = selectNextSpeaker([impersonated], characters, state, null, ['p1'])
+    expect(userTurn.nextSpeakerId).toBe('p1')
+    expect(userTurn.reason).toBe('user_turn')
+    expect(impersonated.controlledBy).toBe('llm')
+  })
+
   it('single-character all-LLM chat continues in monologue mode', () => {
     const participant = makeCharacterParticipant('p1', 'char-1')
     const characters = new Map<string, Character>([['char-1', makeCharacter('char-1')]])
@@ -296,6 +325,58 @@ describe('turn manager state', () => {
     expect(findUserParticipant([char1, userChar])).toBe(userChar)
     expect(getActiveCharacterParticipants([char1, char2])).toEqual([char1])
     expect(isMultiCharacterChat([char1, makeCharacterParticipant('p3', 'char-3')])).toBe(true)
+  })
+})
+
+describe('findActiveUserParticipant (Speaking As)', () => {
+  const jackie = makeUserControlledParticipant('u-jackie', 'char-jackie', { displayOrder: 0 })
+  const abigail = makeCharacterParticipant('p-abigail', 'char-abigail', { displayOrder: 1 })
+  const revenant = makeUserControlledParticipant('u-revenant', 'char-revenant', { displayOrder: 2 })
+  const participants = [jackie, abigail, revenant]
+
+  it('honors the active speaker when two characters are user-controlled', () => {
+    expect(findActiveUserParticipant(participants, 'u-revenant')).toBe(revenant)
+  })
+
+  it('falls back to the first user-controlled participant when no selection', () => {
+    expect(findActiveUserParticipant(participants, null)).toBe(jackie)
+    expect(findActiveUserParticipant(participants)).toBe(jackie)
+  })
+
+  it('falls back when the selected id is not a user-controlled participant', () => {
+    // Pointing at the LLM character (Abigail) is not a valid user speaker.
+    expect(findActiveUserParticipant(participants, 'p-abigail')).toBe(jackie)
+    // Unknown id also falls back.
+    expect(findActiveUserParticipant(participants, 'does-not-exist')).toBe(jackie)
+  })
+
+  it('ignores a selected speaker who is no longer present', () => {
+    const absentRevenant = makeUserControlledParticipant('u-revenant', 'char-revenant', {
+      displayOrder: 2,
+      status: 'absent',
+      isActive: false,
+    })
+    expect(findActiveUserParticipant([jackie, abigail, absentRevenant], 'u-revenant')).toBe(jackie)
+  })
+
+  it('returns null when there are no user-controlled participants', () => {
+    expect(findActiveUserParticipant([abigail], 'anything')).toBeNull()
+  })
+
+  // Bug 44: "Speak as an AI character" routes through impersonation, which is an
+  // OVERLAY — the chosen seat's `controlledBy` stays 'llm'; only the chat's
+  // `impersonatingParticipantIds` records it. Attribution must honour the
+  // overlaid seat as the active speaker without the column ever moving.
+  it('honours an impersonated LLM seat via the overlay, without moving controlledBy', () => {
+    const abigailSeat = makeCharacterParticipant('p-abigail', 'char-abigail', { displayOrder: 1 })
+    // Without the overlay, selecting the LLM character is not honoured.
+    expect(findActiveUserParticipant([jackie, abigailSeat], 'p-abigail')).toBe(jackie)
+
+    // With the seat listed in impersonatingParticipantIds, the SAME still-LLM
+    // seat IS honoured as the active speaker.
+    expect(findActiveUserParticipant([jackie, abigailSeat], 'p-abigail', ['p-abigail'])).toBe(abigailSeat)
+    // The column was never touched.
+    expect(abigailSeat.controlledBy).toBe('llm')
   })
 })
 
@@ -838,5 +919,87 @@ describe('computeSpokenThisCycleAfterSkip', () => {
   it('wraps the cycle when the skip completes the active set', () => {
     const result = computeSpokenThisCycleAfterSkip('u1', participants, JSON.stringify(['p1']))
     expect(JSON.parse(result!)).toEqual(['u1'])
+  })
+})
+
+describe('selectNextSpeakerAfterUserMessage — fair rotation with 2+ user-driven seats', () => {
+  // The reported bug: human plays Charlie (user) AND impersonates Lorian (an LLM
+  // seat, controlledBy still 'llm' under the Bug 44 overlay), with Kumar the sole
+  // real LLM. The first-responder picker used an LLM-only shortlist, so Kumar
+  // answered EVERY human turn: Charlie→Kumar→Lorian→Kumar… This helper projects
+  // the rotation one step past the human's just-typed (unpersisted) message so the
+  // send path can pause for the OTHER human seat instead of forcing Kumar.
+  const charlie = makeUserControlledParticipant('charlie', 'char-charlie')
+  const lorian = makeCharacterParticipant('lorian', 'char-lorian') // controlledBy 'llm'
+  const kumar = makeCharacterParticipant('kumar', 'char-kumar')
+  const participants = [charlie, lorian, kumar]
+  const impersonating = ['lorian'] // Lorian is impersonated → user-driven overlay
+
+  const characters = new Map<string, Character>([
+    ['char-charlie', makeCharacter('char-charlie')],
+    ['char-lorian', makeCharacter('char-lorian')],
+    ['char-kumar', makeCharacter('char-kumar')],
+  ])
+
+  it('after Charlie posts, hands the floor to impersonated Lorian (pause), not Kumar', () => {
+    // Kumar already spoke this cycle; Charlie is posting now. The only eligible
+    // seat left is Lorian — and Lorian is user-driven, so the send path pauses.
+    const result = selectNextSpeakerAfterUserMessage(
+      participants,
+      characters,
+      'charlie',                 // poster
+      JSON.stringify(['kumar']), // persisted spokenThisCycle
+      '[]',                      // no queue
+      'charlie',                 // userParticipantId
+      impersonating,
+    )
+    expect(result.nextSpeakerId).toBe('lorian')
+    expect(result.reason).toBe('user_turn') // overlay-aware → the caller pauses
+  })
+
+  it('after Lorian posts, lets Kumar answer (no pause) when he is the eligible seat', () => {
+    // Charlie already spoke this cycle; the human just typed as Lorian. The only
+    // eligible seat is Kumar (a real LLM) — the send path must NOT pause.
+    const result = selectNextSpeakerAfterUserMessage(
+      participants,
+      characters,
+      'lorian',                    // poster (impersonated)
+      JSON.stringify(['charlie']), // persisted spokenThisCycle
+      '[]',
+      'charlie',
+      impersonating,
+    )
+    expect(result.nextSpeakerId).toBe('kumar')
+    expect(result.reason).not.toBe('user_turn')
+  })
+
+  it('wraps the cycle when the poster completes it, then picks from the fresh set', () => {
+    // Kumar and Lorian have spoken; Charlie posting completes the 3-seat cycle,
+    // so it wraps and the next speaker is drawn from {Lorian, Kumar} (not Charlie).
+    const result = selectNextSpeakerAfterUserMessage(
+      participants,
+      characters,
+      'charlie',
+      JSON.stringify(['kumar', 'lorian']),
+      '[]',
+      'charlie',
+      impersonating,
+    )
+    expect(result.nextSpeakerId).not.toBe('charlie')
+    expect(['lorian', 'kumar']).toContain(result.nextSpeakerId)
+  })
+
+  it('honours the queue ahead of the rotation', () => {
+    const result = selectNextSpeakerAfterUserMessage(
+      participants,
+      characters,
+      'charlie',
+      JSON.stringify(['kumar']),
+      JSON.stringify(['kumar']), // Kumar explicitly queued
+      'charlie',
+      impersonating,
+    )
+    expect(result.nextSpeakerId).toBe('kumar')
+    expect(result.reason).toBe('queue')
   })
 })

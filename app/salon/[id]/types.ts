@@ -33,8 +33,8 @@ export interface Message {
   targetParticipantIds?: string[] | null
   /** Whether this message was generated while the character was in silent mode */
   isSilentMessage?: boolean
-  /** Personified feature that authored this message (e.g., 'lantern' for Lantern announcements, 'aurora' for character-avatar refreshes, 'librarian' for Document Mode open/save announcements, 'concierge' for dangerous-content classification announcements, 'host' for Salon participation announcements, 'commonplaceBook' for memory recall whispers, 'ariel' for terminal session announcements, 'suparna' for Post Office mail-delivery announcements) */
-  systemSender?: 'lantern' | 'aurora' | 'librarian' | 'concierge' | 'prospero' | 'host' | 'commonplaceBook' | 'ariel' | 'carina' | 'suparna' | null
+  /** Personified feature that authored this message (e.g., 'lantern' for Lantern announcements, 'aurora' for character-avatar refreshes, 'librarian' for Document Mode open/save announcements, 'concierge' for dangerous-content classification announcements, 'host' for Salon participation announcements, 'commonplaceBook' for memory recall whispers, 'ariel' for terminal session announcements, 'suparna' for Post Office mail-delivery announcements, 'pascal' for Pascal the Croupier's custom-tool roll outcomes) */
+  systemSender?: 'lantern' | 'aurora' | 'librarian' | 'concierge' | 'prospero' | 'host' | 'commonplaceBook' | 'ariel' | 'carina' | 'suparna' | 'pascal' | null
   /** Sub-classification of a Staff-authored message — used by the Salon UI to label collapsed system-message bars (e.g. 'timestamp', 'project-context', 'memory-recap'). Always paired with systemSender. */
   systemKind?: string | null
   /** Ad-hoc announcer metadata for user-authored announcement bubbles (Insert Announcement composer button). Mutually exclusive with systemSender. */
@@ -47,6 +47,39 @@ export interface Message {
   carinaMeta?: {
     answererId: string
     question: string
+  } | null
+  /** Pascal the Croupier (custom pseudo-tools) roll record, set on systemSender='pascal' messages. The server rolled and picked the outcome; the client only renders it. `state` accents the result bubble; `rollForm`/`notation`/`diceRolls` describe how the number came about. */
+  pascalMeta?: {
+    tool: string
+    /** Display title at the time of the roll. Absent on messages predating it — fall back to `tool`. */
+    toolTitle?: string
+    /** The definition's chipLabel template rendered at roll time — the per-run label the chip and the bubble heading share. Absent on older rows and unlabelled tools — fall back to `toolTitle`, then `tool`. */
+    chipLabel?: string
+    definitionTier: 'character' | 'participant' | 'group' | 'project' | 'global'
+    definitionMountId: string
+    params: Record<string, number | string | boolean>
+    rollForm: 'range' | 'dice'
+    notation?: string
+    raw: number
+    diceRolls?: number[]
+    value: number
+    state: 'success' | 'partial' | 'failure' | 'info'
+    outcomeIndex: number
+    /** Side effects the run applied (audit only — the Salon body shows nothing of these). */
+    effects?: Array<{
+      target: string
+      previous?: unknown
+      next: unknown
+      tier?: 'chat' | 'project' | 'group' | 'general'
+    }>
+    invokedBy: 'llm' | 'user'
+    callerParticipantId?: string
+  } | null
+  /** Host structured payload. On turn-pass records (systemKind='turn-pass'), participantId names the character/participant who passed — read by the client Skip-button guard. */
+  hostEvent?: {
+    participantId?: string | null
+    toStatus?: string | null
+    introducedCharacterIds?: string[] | null
   } | null
   /** Danger flags from content classification */
   dangerFlags?: Array<{
@@ -90,6 +123,19 @@ export interface Message {
    * `anchorOffset`, `content`, and a `seq` shared with tool anchors so
    * same-offset items render in true emission order. */
   reasoningSegments?: Array<{ anchorOffset: number; content: string; seq: number }> | null
+  /** Answer-confirmation verdict: true = consistent/revised, false = affirmed a
+   *  flagged answer, null = could not verify / not applicable, undefined = the
+   *  check did not run (feature off / nothing to check). */
+  confirmed?: boolean | null
+  /** True when a check actually ran — distinguishes a reloaded "unverified"
+   *  (confirmed comes back undefined from SQL NULL) from "never checked". */
+  confirmationChecked?: boolean | null
+  /** Whether the shown content is a re-affirmation rewrite of the original. */
+  confirmationRevised?: boolean | null
+  /** The cheap-LLM discrepancy explanation, surfaced on the badge hover. */
+  confirmationNotes?: string | null
+  /** The pre-revision text, retained for the logs when confirmationRevised. */
+  confirmationOriginalContent?: string | null
 }
 
 export interface CharacterData {
@@ -212,8 +258,14 @@ export interface Chat {
   coreWhisperEnabled?: boolean | null
   /** Per-chat override for Aurora's Core whisper cadence (assistant turns between offerings). null = inherit. */
   coreWhisperInterval?: number | null
+  /** "Nothing to add" turn-skipping toggle. null = enabled (default); false = disabled. */
+  turnSkippingEnabled?: boolean | null
   /** Per-chat override for showing reasoning models' thinking (null = inherit global `thinkingDisplay.defaultVisible`; true = show; false = hide). DISPLAY ONLY. */
   showThinking?: boolean | null
+  /** Per-chat answer-confirmation override (null = inherit project/global; 'ON'/'OFF' = explicit). */
+  answerConfirmationOverride?: 'ON' | 'OFF' | null
+  /** Which clock the chat's story keeps for episodic memory (null = realtime default). */
+  timelineMode?: 'realtime' | 'narrative' | null
   /** Image profile ID for generating images in this chat (shared by all participants) */
   imageProfileId?: string | null
   /** Whether to auto-generate character avatars when outfits change */

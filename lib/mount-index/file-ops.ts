@@ -292,6 +292,18 @@ export async function copyFile(opts: CopyOpts): Promise<FileOpResult> {
 
   const sourceInfo = await sourceExistsOrThrow(sourceMount, sourceRel);
 
+  // Same mount and same path is a no-op; reject so the caller doesn't
+  // accidentally garbage-collect both ends in the move flow. Case-insensitive
+  // (paths are one namespace regardless of casing) and BEFORE the force-
+  // overwrite branch — force-copying onto a case-variant of the source would
+  // otherwise delete the source itself.
+  if (sourceMount.id === destMount.id && sourceRel.toLowerCase() === destRel.toLowerCase()) {
+    throw new FileOpError(
+      `Source and destination are the same path: ${destRel}`,
+      'INVALID_PATH'
+    );
+  }
+
   if (await destExists(destMount, destRel)) {
     if (!opts.force) {
       throw new FileOpError(
@@ -302,15 +314,6 @@ export async function copyFile(opts: CopyOpts): Promise<FileOpResult> {
     // Force overwrite: remove the existing destination first so write paths
     // don't have to special-case overwrite semantics on every storage type.
     await deleteAtDest(destMount, destRel);
-  }
-
-  // Same mount and same path is a no-op; reject so the caller doesn't
-  // accidentally garbage-collect both ends in the move flow.
-  if (sourceMount.id === destMount.id && sourceRel === destRel) {
-    throw new FileOpError(
-      `Source and destination are the same path: ${destRel}`,
-      'INVALID_PATH'
-    );
   }
 
   const sourceIsFs = isFilesystemMount(sourceMount);
@@ -336,11 +339,14 @@ export async function copyFile(opts: CopyOpts): Promise<FileOpResult> {
       destSha = await writeDestBytes(destMount, destRel, bytes, sourceMount, sourceRel);
       strategy = 'byte-copy';
     } else {
+      // No group: a copy is an independent file that merely starts out sharing
+      // a deduped content row. The first write to either side forks it.
       await hardLinkDbToDb({
         sourceFileId: sourceInfo.fileId,
         sourceLinkId: sourceInfo.linkId!,
         destMountPointId: destMount.id,
         destRelativePath: destRel,
+        bindGroup: false,
       });
       destSha = sourceInfo.sha256;
       strategy = 'db-link';
@@ -427,7 +433,11 @@ export async function moveFile(opts: MoveOpts): Promise<FileOpResult> {
 
   const sourceInfo = await sourceExistsOrThrow(sourceMount, sourceRel);
 
-  if (await destExists(destMount, destRel)) {
+  // A case-only rename (notes.md → Notes.md on the same mount) is legal: the
+  // case-insensitive existence check would find the source itself, so skip it.
+  const caseOnlyRename =
+    sourceMount.id === destMount.id && sourceRel.toLowerCase() === destRel.toLowerCase();
+  if (!caseOnlyRename && await destExists(destMount, destRel)) {
     throw new FileOpError(
       `Destination already exists: ${destRel}. Move will not overwrite.`,
       'DEST_EXISTS'
@@ -570,6 +580,7 @@ export async function linkFile(opts: MoveOpts): Promise<FileOpResult> {
       sourceLinkId: sourceInfo.linkId,
       destMountPointId: destMount.id,
       destRelativePath: destRel,
+      bindGroup: true,
     });
     strategy = 'db-link';
   } else if (sourceIsFs && destIsFs) {
@@ -594,6 +605,24 @@ export async function linkFile(opts: MoveOpts): Promise<FileOpResult> {
         error: err instanceof Error ? err.message : String(err),
       });
     });
+    // The OS already shares the bytes through the inode, so no content fan-out
+    // is needed here — but the index doesn't know the two paths are the same
+    // file, and a write through one would leave the other's row (sha, size,
+    // chunks) stale. Record the group so the sibling gets re-indexed.
+    const destLink = await getRepositories().docMountFileLinks.findByMountPointAndPath(
+      destMount.id,
+      destRel
+    );
+    if (sourceInfo.linkId && destLink) {
+      await getRepositories().docMountFileLinks.bindLinkGroup(sourceInfo.linkId, destLink.id);
+    } else {
+      logger.warn('fs link created but could not be bound into a link group', {
+        sourceMountPointId: sourceMount.id,
+        sourcePath: sourceRel,
+        destMountPointId: destMount.id,
+        destPath: destRel,
+      });
+    }
     strategy = 'fs-link';
   } else {
     throw new FileOpError(
@@ -762,11 +791,24 @@ export async function deleteAtDest(mp: DocMountPoint, relativePath: string): Pro
   }
 }
 
+/**
+ * Insert a second link row sharing the source's content row.
+ *
+ * `bindGroup` is what separates `link` from `copy`. Both end up sharing a
+ * fileId (the store is content-addressed, so identical bytes always land on
+ * one row), but only a linked pair is enrolled in a hard-link group, and only
+ * a group survives a write: writing through a grouped link repoints every
+ * member, while writing through a merely-deduped copy forks it onto its own
+ * content row. Without that distinction a `copy` would inherit edits from its
+ * original, and two unrelated files with identical bytes would rewrite each
+ * other.
+ */
 async function hardLinkDbToDb(input: {
   sourceFileId: string;
   sourceLinkId: string;
   destMountPointId: string;
   destRelativePath: string;
+  bindGroup: boolean;
 }): Promise<void> {
   const repos = getRepositories();
   // Pull metadata from the source link so the new link row preserves
@@ -781,7 +823,7 @@ async function hardLinkDbToDb(input: {
   const destFolderDir = path.posix.dirname(input.destRelativePath);
   const destFolderId =
     destFolderDir !== '.' ? await ensureFolderPath(input.destMountPointId, destFolderDir) : null;
-  await insertLinkRow({
+  const destLinkId = await insertLinkRow({
     fileId: input.sourceFileId,
     source: sourceLink.source,
     fileType: sourceLink.fileType,
@@ -795,6 +837,9 @@ async function hardLinkDbToDb(input: {
     conversionStatus: sourceLink.conversionStatus,
     plainTextLength: sourceLink.plainTextLength ?? null,
   });
+  if (input.bindGroup) {
+    await repos.docMountFileLinks.bindLinkGroup(input.sourceLinkId, destLinkId);
+  }
   emitDocumentWritten({
     mountPointId: input.destMountPointId,
     relativePath: input.destRelativePath,

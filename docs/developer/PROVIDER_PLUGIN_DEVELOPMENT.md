@@ -141,6 +141,26 @@ Create `tsconfig.json`:
 }
 ```
 
+> **Plugins bundled in this repo** (`plugins/dist/*`) use a shorter form instead —
+> they extend the shared bar in `plugins/tsconfig.base.json`:
+>
+> ```json
+> {
+>   "extends": "../../tsconfig.base.json",
+>   "include": ["*.ts"],
+>   "exclude": ["node_modules"]
+> }
+> ```
+>
+> Pair it with a `"typecheck": "tsc -p tsconfig.json"` script. `npm run build:plugins`
+> runs that before esbuild and fails the build on any type error. This matters because
+> the root `tsconfig.json` excludes `plugins/` and esbuild strips types without checking
+> them, so without it a plugin's TypeScript is never verified anywhere.
+>
+> Note `include`/`exclude` stay in the per-plugin file: TypeScript resolves them
+> relative to whichever config declares them, so inheriting them from the base would
+> point every plugin at the wrong directory.
+
 ### Step 6: Create Build Configuration
 
 Create `esbuild.config.mjs`:

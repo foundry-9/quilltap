@@ -13,14 +13,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { notFound, successResponse, badRequest } from '@/lib/api/responses';
 import { updateGroupSchema, addMemberSchema, removeMemberSchema } from '../schemas';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 /**
  * Get group details with enriched member count
  */
 export async function handleGetDefault(
   groupId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   const group = await repos.groups.findById(groupId);
 
@@ -45,7 +45,7 @@ export async function handleGetDefault(
  */
 export async function handleGetMembers(
   groupId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   const group = await repos.groups.findById(groupId);
   if (!group) {
@@ -61,6 +61,9 @@ export async function handleGetMembers(
       return {
         id: character.id,
         name: character.name,
+        // Archiving never removes membership edges; the badge lets the list
+        // reconcile "6 members / 4 can speak" (spec §5.2).
+        archivedAt: character.archivedAt ?? null,
       };
     })
   );
@@ -74,7 +77,7 @@ export async function handleGetMembers(
 export async function handlePutDefault(
   req: NextRequest,
   groupId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   const existingGroup = await repos.groups.findById(groupId);
 
@@ -97,7 +100,7 @@ export async function handlePutDefault(
  */
 export async function handleDeleteGroup(
   groupId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   const existingGroup = await repos.groups.findById(groupId);
 
@@ -125,7 +128,7 @@ export async function handleDeleteGroup(
 export async function handleAddMember(
   req: NextRequest,
   groupId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   const group = await repos.groups.findById(groupId);
   if (!group) {
@@ -138,6 +141,12 @@ export async function handleAddMember(
   const character = await repos.characters.findById(validatedData.characterId);
   if (!character) {
     return badRequest('Character not found');
+  }
+
+  // Archived characters can't join a group; existing memberships are never
+  // removed by archiving (spec §5.1).
+  if (character.archivedAt) {
+    return badRequest('That character is archived; rehydrate them before adding them to a group.');
   }
 
   await repos.groupCharacterMembers.addMember(groupId, validatedData.characterId);
@@ -156,7 +165,7 @@ export async function handleAddMember(
 export async function handleRemoveMember(
   req: NextRequest,
   groupId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   const group = await repos.groups.findById(groupId);
   if (!group) {

@@ -23,6 +23,11 @@ export { FilesRepository } from './files.repository';
 export { FoldersRepository } from './folders.repository';
 export { ImageProfilesRepository } from './image-profiles.repository';
 export { LLMLogsRepository } from './llm-logs.repository';
+export type {
+  LLMLogTypeStatsRow,
+  LLMLogProfileStatsRow,
+  LLMLogCacheStatsRow,
+} from './llm-logs.repository';
 export { MemoriesRepository } from './memories.repository';
 export { PluginConfigRepository } from './plugin-config.repository';
 export { ProjectsRepository } from './projects.repository';

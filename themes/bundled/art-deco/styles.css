@@ -182,10 +182,14 @@
   --qt-chat-assistant-font: var(--theme-font-serif);
   --qt-chat-assistant-font-weight: 500;
 
-  /* Chat: Whisper messages — midnight violet with gold accents */
-  --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 55%, hsl(270 35% 30%) 45%);
+  /* Chat: Whisper messages — midnight violet with gold accents.
+     The light-mode bubble is deliberately lighter than the dark-mode one below:
+     this theme's muted is already a dim hsl(222 16% 72%), so the darker recipe
+     landed the bubble at a luminance where nothing — not the label, not the body
+     text — could clear WCAG AA against it. */
+  --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, hsl(270 40% 55%) 35%);
   --qt-chat-whisper-border: hsl(270 40% 45%);
-  --qt-chat-whisper-label-fg: hsl(270 30% 55%);
+  --qt-chat-whisper-label-fg: hsl(270 50% 22%);
 
   /* Chat: Silent messages — muted gold-tinged green */
   --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, hsl(88 25% 52%) 35%);
@@ -378,6 +382,13 @@
   --qt-tab-active-fg: var(--deco-gold-dark);
 
   --qt-tab-group-gap: 0.25rem;
+
+  /* ==========================================================================
+     WORKSPACE VARIABLES (the tabbed workspace — see _workspace.css)
+     Gilded chrome: one --qt-workspace-accent gilds the active tab's border/bar/
+     fill, the pane divider on hover, and the split drop-zone.
+     ========================================================================== */
+  --qt-workspace-accent: var(--deco-gold);
 
   /* ==========================================================================
      OVERLAY VARIABLES

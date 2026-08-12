@@ -16,8 +16,8 @@ import {
   updateParticipantSchema,
   removeParticipantSchema,
 } from '../schemas';
-import { enrichParticipant, handleAddParticipant, handleParticipantUpdate, handleRemoveParticipant } from '../helpers';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import { enrichParticipant, handleAddParticipant, handleParticipantUpdate, handleRemoveParticipant, resolveParticipantCharacterName } from '../helpers';
+import type { RequestContext } from '@/lib/api/middleware';
 import type { ChatMetadata } from '@/lib/schemas/types';
 import { isParticipantPresent } from '@/lib/schemas/types';
 import {
@@ -31,6 +31,7 @@ import {
   buildCheapLLMConfig,
 } from '@/lib/wardrobe/apply-outfit-selections';
 import type { OutfitSelection } from '@/lib/schemas/wardrobe.types';
+import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 
 /**
  * Start impersonating a participant
@@ -39,7 +40,7 @@ export async function handleImpersonate(
   req: NextRequest,
   chatId: string,
   chat: ChatMetadata,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const { participantId } = impersonateSchema.parse(body);
@@ -52,18 +53,20 @@ export async function handleImpersonate(
     return badRequest('Participant is not active or silent');
   }
 
+  // Impersonation is a BEHAVIOR change, not a state change (Bug 44): the seat's
+  // durable ownership (`controlledBy`) and connection profile stay exactly where
+  // they were. `addImpersonation` — which records the id in
+  // `impersonatingParticipantIds` and sets `activeTypingParticipantId` — is the
+  // whole state change. The attribution and turn-taking resolvers honour that
+  // overlay (see `isUserDrivenSeat`), so no column moves and no identity stack
+  // recompiles. Not mutating `controlledBy` is what keeps the "user seat" stable
+  // and the card's own Stop button reachable.
   const updatedChat = await repos.chats.addImpersonation(chatId, participantId);
   if (!updatedChat) {
     return serverError('Failed to start impersonation');
   }
 
-  let characterName = 'Unknown';
-  if (participant.characterId) {
-    const character = await repos.characters.findById(participant.characterId);
-    if (character) {
-      characterName = character.name;
-    }
-  }
+  const characterName = await resolveParticipantCharacterName(participant, repos);
 
   logger.info('[Chats v1] Impersonation started', { chatId, participantId, characterName });
 
@@ -83,7 +86,7 @@ export async function handleStopImpersonate(
   req: NextRequest,
   chatId: string,
   chat: ChatMetadata,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const { participantId, newConnectionProfileId } = stopImpersonateSchema.parse(body);
@@ -93,11 +96,22 @@ export async function handleStopImpersonate(
     return notFound('Participant');
   }
 
+  // Impersonation is an overlay (Bug 44): the seat was never disturbed on start,
+  // so there is nothing to restore. `removeImpersonation` — which drops the id
+  // from `impersonatingParticipantIds` and re-points `activeTypingParticipantId`
+  // — is the whole state change. No `controlledBy` write, no identity-stack
+  // recompile.
   let updatedChat = await repos.chats.removeImpersonation(chatId, participantId);
   if (!updatedChat) {
     return serverError('Failed to stop impersonation');
   }
 
+  // A new connection profile may accompany the hand-back — the client's stop
+  // flow offers one when the character has none, so a formerly-impersonated seat
+  // isn't left LLM-controlled with no way to answer. This is a DELIBERATE seat
+  // reassignment, a separate concern from stopping the impersonation: route it
+  // through a plain participant update (profile only — `controlledBy` never
+  // moved, so there is nothing to flip and nothing to recompile).
   if (newConnectionProfileId) {
     const profile = await repos.connections.findById(newConnectionProfileId);
     if (!profile) {
@@ -106,17 +120,10 @@ export async function handleStopImpersonate(
 
     updatedChat = await repos.chats.updateParticipant(chatId, participantId, {
       connectionProfileId: newConnectionProfileId,
-      controlledBy: 'llm',
-    });
+    }) ?? updatedChat;
   }
 
-  let characterName = 'Unknown';
-  if (participant.characterId) {
-    const character = await repos.characters.findById(participant.characterId);
-    if (character) {
-      characterName = character.name;
-    }
-  }
+  const characterName = await resolveParticipantCharacterName(participant, repos);
 
   logger.info('[Chats v1] Impersonation stopped', { chatId, participantId, characterName });
 
@@ -137,7 +144,7 @@ export async function handleSetActiveSpeaker(
   req: NextRequest,
   chatId: string,
   chat: ChatMetadata,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const { participantId } = setActiveSpeakerSchema.parse(body);
@@ -166,13 +173,7 @@ export async function handleSetActiveSpeaker(
     return serverError('Failed to set active speaker');
   }
 
-  let characterName = 'Unknown';
-  if (participant.characterId) {
-    const character = await repos.characters.findById(participant.characterId);
-    if (character) {
-      characterName = character.name;
-    }
-  }
+  const characterName = await resolveParticipantCharacterName(participant, repos);
 
   logger.info('[Chats v1] Active speaker set', { chatId, participantId, characterName });
 
@@ -199,7 +200,7 @@ async function applyOutfitForAddedParticipant(
   characterId: string,
   outfitSelection: OutfitSelection | undefined,
   userId: string,
-  repos: AuthenticatedContext['repos'],
+  repos: RequestContext['repos'],
 ): Promise<void> {
   const selection: OutfitSelection = outfitSelection ?? {
     characterId,
@@ -214,6 +215,9 @@ async function applyOutfitForAddedParticipant(
       repos,
       {
         userId,
+        // Project wardrobe tier for this chat, so a joining character can be
+        // dressed from the project's shared stores as well as their own vault.
+        projectMountPointIds: await resolveProjectMountPointIds(chat.projectId ?? null),
         scenarioText: chat.scenarioText ?? null,
         cheapLLMConfig: buildCheapLLMConfig(chatSettings),
       },
@@ -240,7 +244,7 @@ export async function handleAddParticipantAction(
   req: NextRequest,
   chatId: string,
   chat: ChatMetadata,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const validatedData = addParticipantSchema.parse(body);
@@ -414,7 +418,7 @@ export async function handleAddParticipantAction(
 export async function handleRebuildSystemPromptAction(
   req: NextRequest,
   chatId: string,
-  { repos }: AuthenticatedContext,
+  { repos }: RequestContext,
 ): Promise<NextResponse> {
   const body = await req.json().catch(() => ({}));
   const participantId = typeof body?.participantId === 'string' ? body.participantId : null;
@@ -432,11 +436,7 @@ export async function handleRebuildSystemPromptAction(
     return badRequest('System prompt rebuild is only available for LLM-controlled characters');
   }
 
-  let characterName = 'Unknown';
-  if (participant.characterId) {
-    const character = await repos.characters.findById(participant.characterId);
-    if (character) characterName = character.name;
-  }
+  const characterName = await resolveParticipantCharacterName(participant, repos);
 
   try {
     await compileIdentityStackForParticipant(chat, participantId);
@@ -460,7 +460,7 @@ export async function handleRebuildSystemPromptAction(
 export async function handleUpdateParticipantAction(
   req: NextRequest,
   chatId: string,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   // Support both wrapped ({ updateParticipant: { ... } }) and unwrapped ({ participantId, ... }) formats
@@ -473,11 +473,7 @@ export async function handleUpdateParticipantAction(
   const preStatus = preParticipant?.status || (preParticipant?.isActive ? 'active' : 'absent');
 
   // Resolve character name for logging
-  let characterName = 'Unknown';
-  if (preParticipant?.characterId) {
-    const character = await repos.characters.findById(preParticipant.characterId);
-    if (character) characterName = character.name;
-  }
+  const characterName = await resolveParticipantCharacterName(preParticipant, repos);
 
   const { participantId, ...updateFields } = validatedData;
 
@@ -513,7 +509,7 @@ export async function handleRemoveParticipantAction(
   req: NextRequest,
   chatId: string,
   chat: ChatMetadata,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const validatedData = removeParticipantSchema.parse(body);
@@ -527,11 +523,7 @@ export async function handleRemoveParticipantAction(
   }
 
   // Resolve character name for logging
-  let characterName = 'Unknown';
-  if (participantToRemove.characterId) {
-    const character = await repos.characters.findById(participantToRemove.characterId);
-    if (character) characterName = character.name;
-  }
+  const characterName = await resolveParticipantCharacterName(participantToRemove, repos);
   const previousStatus = participantToRemove.status || (participantToRemove.isActive ? 'active' : 'absent');
 
   const activeCharacters = chat.participants.filter((p) => p.type === 'CHARACTER' && isParticipantPresent(p.status));
@@ -555,7 +547,11 @@ export async function handleRemoveParticipantAction(
     return serverError(result.error);
   }
 
-  // Clean up impersonation state for removed participant
+  // Clean up impersonation state for removed participant. The cleanup update
+  // happens after result.chat was captured, so the returned chat must reflect
+  // it — otherwise the response still lists the removed participant in
+  // impersonatingParticipantIds (stale client state until a refetch).
+  let finalChat = result.chat;
   const currentImpersonating = result.chat.impersonatingParticipantIds || [];
   if (currentImpersonating.includes(validatedData.participantId)) {
     const cleanedIds = currentImpersonating.filter((id: string) => id !== validatedData.participantId);
@@ -563,7 +559,10 @@ export async function handleRemoveParticipantAction(
     if (result.chat.activeTypingParticipantId === validatedData.participantId) {
       updateData.activeTypingParticipantId = cleanedIds[0] || null;
     }
-    await repos.chats.update(chatId, updateData);
+    const cleanedChat = await repos.chats.update(chatId, updateData);
+    if (cleanedChat) {
+      finalChat = cleanedChat;
+    }
   }
 
   logger.info('[Chats v1] Participant removed', {
@@ -579,5 +578,5 @@ export async function handleRemoveParticipantAction(
     });
   }
 
-  return NextResponse.json({ success: true, chat: result.chat });
+  return NextResponse.json({ success: true, chat: finalChat });
 }

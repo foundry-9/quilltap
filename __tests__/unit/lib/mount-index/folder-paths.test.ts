@@ -271,6 +271,45 @@ describe('folder-paths utilities', () => {
       expect(repos.docMountFolders.create).not.toHaveBeenCalled();
     });
 
+    it('reuses a case-variant folder and continues under its stored casing', async () => {
+      // Store holds 'Lore'; the caller asks for 'lore/maps'. The existing
+      // folder must be reused (no sibling case-collision minted) and the new
+      // child created under the STORED prefix 'Lore/maps'.
+      const loreFolder = {
+        id: 'folder-lore',
+        path: 'Lore',
+        mountPointId: MOUNT_ID,
+        parentId: null,
+        name: 'Lore',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      repos.docMountFolders.findByMountPointAndPath.mockImplementation(async (mpId, path) => {
+        // The repository layer matches case-insensitively.
+        if (path.toLowerCase() === 'lore') return loreFolder;
+        return null;
+      });
+
+      repos.docMountFolders.create.mockImplementation(async (data) => ({
+        id: 'folder-maps',
+        ...data,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }));
+
+      const result = await ensureFolderPath(MOUNT_ID, 'lore/maps');
+
+      expect(result).toBe('folder-maps');
+      expect(repos.docMountFolders.create).toHaveBeenCalledTimes(1);
+      expect(repos.docMountFolders.create).toHaveBeenCalledWith({
+        mountPointId: MOUNT_ID,
+        parentId: 'folder-lore',
+        name: 'maps',
+        path: 'Lore/maps',
+      });
+    });
+
     it('handles concurrent creation via conflict resolution', async () => {
       let createCount = 0;
 

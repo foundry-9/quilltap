@@ -29,6 +29,7 @@ import {
   ChatEvent,
   ChatParticipantBase,
   ChatParticipantBaseInput,
+  ParticipantStatus,
 } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { TypedQueryFilter, QueryFilter, DatabaseCollection } from '../interfaces';
@@ -336,6 +337,20 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
           });
         }
 
+        // Sweep this conversation's per-message annotations. They live on no
+        // FK cascade, so without this a deleted chat leaks its annotation rows
+        // — and a later restore of a migrated instance collides on the
+        // UNIQUE(chatId, messageIndex, characterName) constraint (Bug 10).
+        try {
+          const { getRepositories } = await import('@/lib/repositories/factory');
+          await getRepositories().conversationAnnotations.deleteAllForChat(id);
+        } catch (error) {
+          logger.warn('Failed to delete conversation annotations for chat', {
+            chatId: id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+
         // Sweep the conversation's summary file out of each participant vault.
         if (syncVaults && participantCharacterIds.length > 0) {
           try {
@@ -403,6 +418,14 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
     return this.participantsOps.removeParticipant(chatId, participantId);
   }
 
+  async setParticipantStatus(
+    chatId: string,
+    participantId: string,
+    newStatus: ParticipantStatus
+  ): Promise<{ chat: ChatMetadata | null; oldStatus: ParticipantStatus }> {
+    return this.participantsOps.setParticipantStatus(chatId, participantId, newStatus);
+  }
+
   getCharacterParticipants(chat: ChatMetadata): ChatParticipantBase[] {
     return this.participantsOps.getCharacterParticipants(chat);
   }
@@ -463,8 +486,16 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
     return this.messagesOps.updateMessage(chatId, messageId, updates);
   }
 
+  async findChatIdForMessage(messageId: string): Promise<string | null> {
+    return this.messagesOps.findChatIdForMessage(messageId);
+  }
+
   async getMessageCount(chatId: string): Promise<number> {
     return this.messagesOps.getMessageCount(chatId);
+  }
+
+  async getLastPlayedMessageAt(chatId: string): Promise<string | null> {
+    return this.messagesOps.getLastPlayedMessageAt(chatId);
   }
 
   async clearMessages(chatId: string): Promise<boolean> {

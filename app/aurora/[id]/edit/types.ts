@@ -32,6 +32,7 @@ export interface Character {
   systemTransparency?: boolean | null
   coreWhisperEnabled?: boolean | null
   canBeCarina?: boolean | null
+  canChooseOutfit?: boolean
   defaultImage?: {
     id: string
     filepath: string

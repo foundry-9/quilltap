@@ -10,11 +10,20 @@ import { createLLMProvider } from '@/lib/llm'
 import { requiresApiKey } from '@/lib/plugins/provider-validation'
 import {
   isMultiCharacterChat,
+  computeSkipEligibility,
+  detectSkipSentinel,
+  computeSpokenThisCycleAfterSkip,
+  qualifiesForTurnSkipping,
+  findActiveUserParticipant,
+  isUserDrivenSeat,
+  selectNextSpeakerAfterUserMessage,
 } from '@/lib/chat/turn-manager'
+import { isParticipantPresent } from '@/lib/schemas/chat.types'
+import { postHostTurnPassAnnouncement, postHostNudgeAnnouncement } from '@/lib/services/host-notifications/writer'
 import { z } from 'zod'
 
 import type { getRepositories } from '@/lib/repositories/factory'
-import type { MessageEvent, ConnectionProfile } from '@/lib/schemas/types'
+import type { MessageEvent, ConnectionProfile, Character, ChatMetadataBase } from '@/lib/schemas/types'
 
 import type { SendMessageOptions, ToolMessage, GeneratedImage, ProcessMessageResult, StreamingState } from './types'
 
@@ -48,6 +57,9 @@ import {
   encodeStatusEvent,
   encodeTurnStartEvent,
   encodeCarinaAnswerEvent,
+  encodeHostAnnouncementEvent,
+  encodePascalResultEvent,
+  encodeChainCompleteEvent,
   safeEnqueue,
   safeClose,
 } from './streaming.service'
@@ -83,6 +95,7 @@ import { flushPendingWardrobeAnnouncements } from '@/lib/tools/handlers/wardrobe
 import { countMessagesTokens } from '@/lib/tokens/token-counter'
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
+import type { RosterContext as CustomToolRosterContext } from '@/lib/pascal/custom-tools'
 import { runPreContextPreCompute } from './pre-compute.service'
 import { runTextToolPass } from './text-tool-loop.service'
 import { findPreviousResponseId, makePreservePartialOnError, runPrimaryStream } from './primary-stream.service'
@@ -137,6 +150,8 @@ export const sendMessageSchema = z.object({
   pendingToolResults: z.array(pendingToolResultSchema).optional(),
   /** Target participant IDs for whisper messages */
   targetParticipantIds: z.array(z.string()).nullable().optional(),
+  /** The user-controlled participant the human is "Speaking As" for this message */
+  speakingAsParticipantId: z.uuid().nullable().optional(),
 }).superRefine((data, ctx) => {
   if (data.content.trim().length === 0 &&
       (!data.fileIds || data.fileIds.length === 0) &&
@@ -154,6 +169,13 @@ export const sendMessageSchema = z.object({
 export const continueMessageSchema = z.object({
   continueMode: z.literal(true),
   respondingParticipantId: z.uuid().optional(),
+  /** The user-controlled participant the human is "Speaking As" (for context/identity) */
+  speakingAsParticipantId: z.uuid().nullable().optional(),
+  /**
+   * Nudge: the human explicitly summoned this character (Nudge button). When
+   * true, the "nothing to add" skip option is withheld for this turn.
+   */
+  nudge: z.boolean().optional(),
 })
 
 /**
@@ -190,6 +212,7 @@ export async function handleSendMessage(
               neverPauseForUser: options.neverPauseForUser,
               suppressAutomaticImages: options.suppressAutomaticImages,
               singleTurn: options.singleTurn,
+              autonomousContextCap: options.autonomousContextCap,
             },
             controller,
             encoder
@@ -266,12 +289,50 @@ async function processMessage(
   const respondingId = options.respondingParticipantId
     || (options.targetParticipantIds?.length ? options.targetParticipantIds[0] : undefined)
 
+  // The human's "Speaking As" selection: an explicit per-turn override from the
+  // composer takes precedence over the persisted chat field (avoids a read-back
+  // race where the set-active-speaker write hasn't landed yet).
+  const speakingAsParticipantId = options.speakingAsParticipantId ?? chat.activeTypingParticipantId ?? null
+
+  // Fair-rotation guard for rooms where the human drives two or more seats.
+  // The first responder after a human post used to be picked from an LLM-ONLY
+  // shortlist (participant-resolver), so a room with a single LLM had that LLM
+  // answer EVERY human turn — collapsing the rotation to e.g.
+  // Charlie→Kumar→Lorian→Kumar… when the human plays both Charlie and an
+  // impersonated Lorian. When the rotation's next speaker after this post is
+  // ANOTHER seat the human drives, the floor is theirs: persist the message and
+  // pause for that seat (the client shows its turn banner) instead of forcing the
+  // sole LLM to speak out of turn. A whisper, a nudge, an explicit responding
+  // participant, or a continue-mode turn all bypass this (they name their own
+  // speaker), as does any single-user-seat room (the common case is untouched).
+  if (
+    !isContinueMode &&
+    !options.respondingParticipantId &&
+    !(options.targetParticipantIds && options.targetParticipantIds.length > 0) &&
+    !options.nudge &&
+    !!options.content &&
+    isMultiCharacterChat(chat.participants)
+  ) {
+    const pauseResult = await maybePauseForUserSeatTurn(
+      repos,
+      chatId,
+      chat,
+      userId,
+      options,
+      speakingAsParticipantId,
+      controller,
+      encoder,
+    )
+    if (pauseResult) return pauseResult
+  }
+
   const participantResult = await resolveRespondingParticipant(
     repos,
     chat,
     userId,
     respondingId,
-    isContinueMode
+    isContinueMode,
+    speakingAsParticipantId
   )
 
   const {
@@ -304,6 +365,23 @@ async function processMessage(
     characterId: character.id,
   }))
 
+  // Nudge (the human explicitly summoned this voice via the Nudge button): the
+  // Host announces the invitation so it persists in the transcript instead of a
+  // client-only ephemeral note that vanishes on reload. Fires exactly once — the
+  // `nudge` flag rides only on this initial summoned request, never on the
+  // server-driven chained turns that follow. Best-effort by the writer contract;
+  // surfaced live so the household sees it before the summoned reply streams in.
+  if (isContinueMode && options.nudge === true) {
+    const nudgeMessage = await postHostNudgeAnnouncement({
+      chatId,
+      characterName: character.name,
+      participantId: characterParticipant.id,
+    })
+    if (nudgeMessage) {
+      safeEnqueue(controller, encodeHostAnnouncementEvent(encoder, nudgeMessage))
+    }
+  }
+
   // The Courier (manual / clipboard transport): no API key, no plugin call.
   // Detected here so the API-key check, tool build, and streamMessage block
   // can all short-circuit later.
@@ -320,7 +398,7 @@ async function processMessage(
 
   // Resolve user identity through fallback chain:
   // 1. User-controlled character in chat → 2. Sole user-controlled character → 3. User profile → 4. "User"
-  const resolvedIdentity = await resolveUserIdentity(repos, userId, chat)
+  const resolvedIdentity = await resolveUserIdentity(repos, userId, chat, speakingAsParticipantId)
   const userCharacter: { name: string; description: string } | null = {
     name: resolvedIdentity.name,
     description: resolvedIdentity.description,
@@ -468,6 +546,30 @@ async function processMessage(
   const existingMessages = await repos.chats.getMessages(chatId)
 
   // ============================================================================
+  // "Nothing to add" turn-skipping — eligibility
+  // ============================================================================
+  // Decide once whether this character may be offered the pass option this
+  // turn. Only meaningful in multi-character chats with an LLM-controlled
+  // responder. `summoned` (nudge or queue-pop) withholds the option — you don't
+  // offer a pass to a voice the operator explicitly called on.
+  let turnSkip: { offerSkip: boolean; recentlyAddressed: boolean; characterName: string } | undefined
+  if (qualifiesForTurnSkipping(chat.participants) && characterParticipant.controlledBy !== 'user') {
+    const eligibility = computeSkipEligibility({
+      events: existingMessages,
+      participants: chat.participants,
+      respondingParticipantId: characterParticipant.id,
+      respondingCharacter: character,
+      summoned: options.nudge === true || options.chainSelectionReason === 'queue',
+      turnSkippingEnabled: chat.turnSkippingEnabled !== false,
+    })
+    turnSkip = {
+      offerSkip: eligibility.offerSkip,
+      recentlyAddressed: eligibility.recentlyAddressed,
+      characterName: character.name,
+    }
+  }
+
+  // ============================================================================
   // Project + General Context Re-injection (Phase E: Prospero whisper)
   // ============================================================================
   // The chat-start whisper is posted by `createInitialMessages` when the chat
@@ -587,7 +689,10 @@ async function processMessage(
       // Execute each detected pattern and save as TOOL messages
       for (const pattern of rngPatterns) {
         const rngContext = { userId, chatId }
-        const result = await executeRngTool({ type: pattern.type, rolls: pattern.rolls }, rngContext)
+        const result = await executeRngTool(
+          { type: pattern.type, rolls: pattern.rolls, modifier: pattern.modifier ?? 0 },
+          rngContext
+        )
         const formattedResult = formatRngResults(result)
 
         const toolMessageId = crypto.randomUUID()
@@ -601,7 +706,7 @@ async function processMessage(
             success: result.success,
             result: formattedResult,
             prompt: pattern.matchText,
-            arguments: { type: pattern.type, rolls: pattern.rolls },
+            arguments: { type: pattern.type, rolls: pattern.rolls, modifier: pattern.modifier ?? 0 },
           }),
           createdAt: new Date().toISOString(),
           attachments: [],
@@ -784,7 +889,7 @@ async function processMessage(
   let askCarinaEnabled = false
   try {
     const rawCharacters = await repos.characters.findAllRaw()
-    const anyCanBeCarina = rawCharacters.some(c => c.canBeCarina === true)
+    const anyCanBeCarina = rawCharacters.some(c => !c.archivedAt && c.canBeCarina === true)
     askCarinaEnabled = anyCanBeCarina || characterIsTransparent
   } catch (carinaProbeError) {
     logger.warn('Failed to probe for Carina answerers; ask_carina tool withheld', {
@@ -792,6 +897,33 @@ async function processMessage(
       error: carinaProbeError instanceof Error ? carinaProbeError.message : String(carinaProbeError),
     })
   }
+
+  // Pascal's custom pseudo-tools (`run_custom`). The roster's perspective is the
+  // RESPONDING character's, because a character-tier store shadows the farther
+  // tiers — two characters in one room can hold different definitions of the
+  // same tool name. `characterId` is REQUIRED (the group tier is keyed on the
+  // responding character's own group memberships and silently resolves to []
+  // without it); `characterMountPointId` is merely the fast path to their vault.
+  // Withholding the context entirely is how the chat-level setting turns the
+  // feature off: buildTools then never lists a single mount.
+  const participantCharacterIds = chat.participants
+    .filter(p => p.type === 'CHARACTER' && p.characterId)
+    .map(p => p.characterId as string)
+  const customToolsEnabled = chatSettings?.customTools ?? true
+  const customToolContext: CustomToolRosterContext | null = customToolsEnabled
+    ? {
+        userId,
+        chatId,
+        characterId: character.id ?? null,
+        characterMountPointId: character.characterDocumentMountPointId ?? null,
+        characterIds: participantCharacterIds,
+        projectId: chat.projectId ?? null,
+        // The responding character's fact sheet, which availability gates are
+        // answered against. Already hydrated by the participant resolver, so
+        // this costs nothing.
+        metadata: character.metadata ?? null,
+      }
+    : null
 
   let tools: unknown[] = []
   let modelSupportsNativeTools = false
@@ -814,7 +946,11 @@ async function processMessage(
       canDressThemselves, // enables wardrobe_list, wardrobe_read, wardrobe_wear, wardrobe_take_off
       canCreateOutfits, // enables wardrobe_create, wardrobe_update, wardrobe_archive
       documentEditingEnabled, // documentEditingEnabled - enables doc_* editing tools
-      askCarinaEnabled // askCarinaEnabled - enables ask_carina tool when an answerer exists
+      askCarinaEnabled, // askCarinaEnabled - enables ask_carina tool when an answerer exists
+      undefined, // includeWorkspaceTools - Salon turns keep the always-on set
+      undefined, // excludeMemorySearch - Brahma Console only
+      undefined, // sqlAccess - Brahma Console only
+      customToolContext // customToolContext - enables run_custom when the scene has a roster
     )
     tools = builtTools.tools
     modelSupportsNativeTools = builtTools.modelSupportsNativeTools
@@ -919,7 +1055,7 @@ async function processMessage(
     ),
   )
 
-  const { cachedCompressionResponse, preSearchedMemories, stopKeepAlive } = await runPreContextPreCompute({
+  const { cachedCompressionResponse, preSearchedMemories, recallSignals, stopKeepAlive } = await runPreContextPreCompute({
     chatId,
     userId,
     chat,
@@ -962,16 +1098,23 @@ async function processMessage(
       chatSettings: contextChatSettings,
       toolInstructions,
       newUserMessage: finalUserMessageContent,
+      activeUserParticipantId: speakingAsParticipantId,
       isContinueMode,
       // Context compression options
       contextCompressionSettings: compressionEnabled ? contextCompressionSettings : null,
       cheapLLMSelection,
       bypassCompression,
+      // Autonomous-room per-turn context cap (tokens). Clamps the model-derived
+      // budget so a token-budgeted room paces its run across multiple turns.
+      autonomousContextCap: options.autonomousContextCap,
+      // "Nothing to add" turn-skipping — per-turn ephemeral instruction control.
+      turnSkip,
       // Pass cached compression result and message count for dynamic window calculation
       cachedCompressionResult: cachedCompressionResponse?.result,
       cachedCompressionMessageCount: cachedCompressionResponse?.cachedMessageCount,
       // Proactive memory recall results
       preSearchedMemories,
+      recallSignals,
       // Memory recap: uncensored fallback for dangerous chats. Off-duty
       // chats opt out, so the fallback is not engaged for them.
       uncensoredFallbackOptions: (isChatActiveDangerous(chat) && dangerSettings && cheapLLMSelection)
@@ -1051,6 +1194,17 @@ async function processMessage(
   // toolContext threads down into the native/text tool loops.
   toolContext.emitCarinaAnswer = (msg) =>
     safeEnqueue(controller, encodeCarinaAnswerEvent(encoder, msg))
+
+  // Pascal's `run_custom`: the tiered mount pool needs the same perspective the
+  // roster was built from, or the model would be offered a tool the executor
+  // then cannot find. Vault fast path + the peers whose vaults form the
+  // 'participant' tier.
+  toolContext.characterMountPointId = character.characterDocumentMountPointId ?? null
+  toolContext.characterIds = participantCharacterIds
+  // Surface Pascal's outcome the instant it posts, rather than waiting for the
+  // post-turn refetch — same live-SSE pattern as the Carina answer above.
+  toolContext.emitPascalResult = (msg) =>
+    safeEnqueue(controller, encodePascalResultEvent(encoder, msg))
 
   // ============================================================================
   // Tool Change Notification
@@ -1390,6 +1544,52 @@ async function processMessage(
   // enqueuing per-edit; here we fire one job each and clear.
   await flushPendingWardrobeAnnouncements(toolContext)
 
+  // ============================================================================
+  // "Nothing to add" turn-skipping — sentinel handling
+  // ============================================================================
+  // Detect the pass sentinel on the raw response before the finalizer. Only
+  // when eligibility was computed for this turn (multi-character, LLM responder).
+  if (turnSkip) {
+    const detection = detectSkipSentinel(
+      streamingState.fullResponse,
+      character.name,
+      character.aliases ?? undefined,
+    )
+    if (detection.skip) {
+      if (toolMessages.length > 0) {
+        // Tools ran this turn — the turn had real effects, so the tool-save
+        // branch must win. Clear the bare sentinel so that branch fires.
+        logger.warn('[TurnSkip] Sentinel emitted but tools ran; keeping tool results, ignoring the pass', {
+          chatId,
+          characterId: character.id,
+          participantId: characterParticipant.id,
+          toolCount: toolMessages.length,
+        })
+        streamingState.fullResponse = ''
+      } else if (turnSkip.offerSkip) {
+        return handleTurnSkip({
+          repos,
+          chatId,
+          character,
+          characterParticipant,
+          isMultiCharacter,
+          userParticipantId,
+          streaming: streamingState,
+          controller,
+          encoder,
+        })
+      } else {
+        // Sentinel when the skip option wasn't offered: route to the existing
+        // empty-response branch (bare pass with no effects → nothing persisted).
+        streamingState.fullResponse = ''
+      }
+    } else if (detection.cleaned !== undefined) {
+      // Sentinel line + trailing prose: strip the line, keep the prose, and
+      // fall through to the normal finalizer as a real reply.
+      streamingState.fullResponse = detection.cleaned
+    }
+  }
+
   if (streamingState.fullResponse && streamingState.fullResponse.trim().length > 0) {
     return finalizeMessageResponse({
       repos,
@@ -1497,6 +1697,254 @@ async function processMessage(
       userParticipantId,
       isPaused: chat.isPaused,
     }
+  }
+}
+
+/**
+ * Fair-rotation pause for rooms where the human drives two or more seats.
+ *
+ * Called on a fresh, non-whisper user send before any responder is resolved.
+ * Returns a terminal `ProcessMessageResult` (so the caller returns immediately
+ * and the turn chain does not run) when the rotation's next speaker after this
+ * post is ANOTHER seat the human drives — persisting the user's message and
+ * pausing for that seat. Returns `null` in every other case (single user seat,
+ * or an LLM is genuinely up next), letting the normal generation path proceed
+ * untouched.
+ */
+async function maybePauseForUserSeatTurn(
+  repos: ReturnType<typeof getRepositories>,
+  chatId: string,
+  chat: ChatMetadataBase,
+  userId: string,
+  options: SendMessageOptions,
+  speakingAsParticipantId: string | null,
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  encoder: TextEncoder,
+): Promise<ProcessMessageResult | null> {
+  // Which seat is the human speaking as? (overlay-aware — an impersonated seat
+  // counts, Bug 44.)
+  const posterSeat = findActiveUserParticipant(
+    chat.participants,
+    speakingAsParticipantId,
+    chat.impersonatingParticipantIds,
+  )
+  if (!posterSeat) return null
+
+  // Only relevant when the human drives 2+ seats; otherwise the LLM answering a
+  // human post is exactly right and this guard must not change anything.
+  // NB: `getActiveCharacterParticipants` is a misnomer — it returns LLM seats
+  // only — so filter the full roster here; a user-controlled seat (and the
+  // impersonated overlay) must both count.
+  const activeChars = chat.participants.filter(p =>
+    p.type === 'CHARACTER' && isParticipantPresent(p.status) && !!p.characterId,
+  )
+  const userDrivenSeatCount = activeChars.filter(p =>
+    isUserDrivenSeat(p, chat.impersonatingParticipantIds),
+  ).length
+  if (userDrivenSeatCount < 2) return null
+
+  // Talkativeness lives on the character record — build the weight map.
+  const charactersMap = new Map<string, Character>()
+  for (const p of activeChars) {
+    if (!p.characterId) continue
+    const char = await repos.characters.findById(p.characterId)
+    if (char) charactersMap.set(p.characterId, char)
+  }
+
+  const next = selectNextSpeakerAfterUserMessage(
+    chat.participants,
+    charactersMap,
+    posterSeat.id,
+    chat.spokenThisCycleParticipantIds,
+    chat.turnQueue,
+    posterSeat.id,
+    chat.impersonatingParticipantIds,
+  )
+  const nextSeat = next.nextSpeakerId
+    ? chat.participants.find(p => p.id === next.nextSpeakerId)
+    : null
+
+  const nextIsUserDriven = !!nextSeat && isUserDrivenSeat(nextSeat, chat.impersonatingParticipantIds)
+  logger.debug('[TurnFairness] Evaluated first-responder rotation after user post', {
+    chatId,
+    posterParticipantId: posterSeat.id,
+    userDrivenSeatCount,
+    nextSpeakerId: next.nextSpeakerId,
+    nextReason: next.reason,
+    willPause: nextIsUserDriven,
+  })
+
+  // An LLM (or nobody) is up next — let the normal path generate its reply.
+  if (!nextSeat || !nextIsUserDriven) {
+    return null
+  }
+
+  // The floor after this post belongs to another seat the human drives. Persist
+  // the message (which advances the persisted cycle via addMessage) and pause.
+  const userMessageId = crypto.randomUUID()
+  const now = new Date().toISOString()
+  await repos.chats.addMessage(chatId, {
+    id: userMessageId,
+    type: 'message' as const,
+    role: 'USER' as const,
+    content: options.content ?? '',
+    createdAt: now,
+    attachments: options.fileIds || [],
+    participantId: posterSeat.id,
+    targetParticipantIds: null,
+  })
+  for (const fileId of options.fileIds || []) {
+    try {
+      await repos.files.addLink(fileId, userMessageId)
+    } catch (error) {
+      logger.warn('[TurnFairness] Failed to link attachment on paused user turn', {
+        chatId, fileId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  // Inline @Name / @Name? queries are a side effect and still fire, even though
+  // no character takes the floor this turn (mirrors the main path).
+  if (options.content) {
+    await runCarinaMarkupQuery({
+      userId,
+      chatId,
+      text: options.content,
+      askerParticipantId: posterSeat.id,
+      operatorInitiated: true,
+      logLabels: { detected: 'user message', failed: 'user-message' },
+      onConsulting: (characterName) => safeEnqueue(controller, encodeStatusEvent(encoder, {
+        stage: 'gathering',
+        message: `Consulting ${characterName}...`,
+      })),
+      onPosted: (msg) => safeEnqueue(controller, encodeCarinaAnswerEvent(encoder, msg)),
+      onPublicAnswer: () => { /* no character responds this turn to hear it */ },
+    })
+  }
+
+  // Persist the pending turn and tell the client whose floor it is. The client's
+  // own recompute (from the freshly-saved history) lands on the same seat; the
+  // event settles its streaming state and refreshes the banner immediately.
+  await repos.chats.update(chatId, { lastTurnParticipantId: nextSeat.id })
+  safeEnqueue(controller, encodeChainCompleteEvent(encoder, {
+    reason: 'user_turn',
+    nextSpeakerId: nextSeat.id,
+    chainDepth: 0,
+  }))
+
+  logger.info('[TurnFairness] User post pauses for another user-driven seat', {
+    chatId,
+    posterParticipantId: posterSeat.id,
+    nextSpeakerId: nextSeat.id,
+  })
+
+  return {
+    isMultiCharacter: true,
+    hasContent: false,
+    messageId: userMessageId,
+    userParticipantId: posterSeat.id,
+    isPaused: chat.isPaused === true,
+  }
+}
+
+/**
+ * "Nothing to add" turn-skipping — skip path.
+ *
+ * Posts the Host turn-pass announcement, records the passing participant in the
+ * persisted cycle set (so the rotation advances past them), surfaces the Host
+ * bubble live over SSE, and emits a `done` event flagged `skipped: true` so the
+ * client resets its streaming buffer without appending a phantom bubble. No
+ * character reply is persisted.
+ */
+async function handleTurnSkip(params: {
+  repos: ReturnType<typeof getRepositories>
+  chatId: string
+  character: { id: string; name: string }
+  characterParticipant: { id: string }
+  isMultiCharacter: boolean
+  userParticipantId: string | null
+  streaming: StreamingState
+  controller: ReadableStreamDefaultController<Uint8Array>
+  encoder: TextEncoder
+}): Promise<ProcessMessageResult> {
+  const {
+    repos,
+    chatId,
+    character,
+    characterParticipant,
+    isMultiCharacter,
+    userParticipantId,
+    streaming,
+    controller,
+    encoder,
+  } = params
+
+  logger.info('[TurnSkip] Character passed the turn', {
+    chatId,
+    characterId: character.id,
+    participantId: characterParticipant.id,
+  })
+
+  // Post the Host announcement (errors swallowed by the writer contract).
+  const hostMessage = await postHostTurnPassAnnouncement({
+    chatId,
+    characterName: character.name,
+    participantId: characterParticipant.id,
+    source: 'llm',
+  })
+
+  // Record the pass in the persisted cycle so the next speaker selection
+  // advances past this character. Re-read for fresh participants/cycle state.
+  let isPaused = false
+  try {
+    const freshChat = await repos.chats.findById(chatId)
+    if (freshChat) {
+      isPaused = freshChat.isPaused === true
+      const cycleUpdate = computeSpokenThisCycleAfterSkip(
+        characterParticipant.id,
+        freshChat.participants,
+        freshChat.spokenThisCycleParticipantIds,
+      )
+      const updatePayload: Record<string, unknown> = { updatedAt: new Date().toISOString() }
+      if (cycleUpdate !== null) {
+        updatePayload.spokenThisCycleParticipantIds = cycleUpdate
+      }
+      await repos.chats.update(chatId, updatePayload)
+    }
+  } catch (error) {
+    logger.warn('[TurnSkip] Failed to persist cycle update after pass', {
+      chatId,
+      participantId: characterParticipant.id,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+
+  // Surface the Host bubble live, then close the turn with the skipped flag.
+  if (hostMessage) {
+    safeEnqueue(controller, encodeHostAnnouncementEvent(encoder, hostMessage))
+  }
+  safeEnqueue(controller, encodeDoneEvent(encoder, {
+    messageId: null,
+    participantId: characterParticipant.id,
+    usage: streaming.usage,
+    cacheUsage: streaming.cacheUsage,
+    attachmentResults: streaming.attachmentResults,
+    toolsExecuted: false,
+    skipped: true,
+    skippedParticipantId: characterParticipant.id,
+    provider: streaming.effectiveProfile.provider,
+    modelName: streaming.effectiveProfile.modelName,
+  }))
+
+  return {
+    isMultiCharacter,
+    hasContent: false,
+    skipped: true,
+    skippedParticipantId: characterParticipant.id,
+    messageId: null,
+    userParticipantId,
+    isPaused,
   }
 }
 

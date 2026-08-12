@@ -40,6 +40,14 @@ export interface LogLLMCallParams {
   characterId?: string;
   provider: string;
   modelName: string;
+  /**
+   * The connection profile that served this call, when the call site has one
+   * in hand. Lets the Almanack attribute usage/latency/cache figures to a
+   * specific profile rather than guessing from (provider, modelName).
+   */
+  connectionProfileId?: string | null;
+  /** The image profile that served this call (image-generation call sites). */
+  imageProfileId?: string | null;
   request: {
     messages: Array<{
       role: string;
@@ -215,6 +223,8 @@ export async function logLLMCall(params: LogLLMCallParams): Promise<LLMLog | nul
       autonomousRunId: getAutonomousRunId(),
       provider: params.provider,
       modelName: params.modelName,
+      connectionProfileId: params.connectionProfileId ?? null,
+      imageProfileId: params.imageProfileId ?? null,
       request: requestSummary,
       response: responseSummary,
       usage,

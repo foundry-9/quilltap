@@ -7,23 +7,23 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { checkOwnership, enrichWithDefaultImage } from '@/lib/api/middleware';
+import { exists, enrichWithDefaultImage } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { notFound, serverError, successResponse } from '@/lib/api/responses';
 import { updateProjectSchema } from '../schemas';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 /**
  * Get project details with enriched roster and counts
  */
 export async function handleGetDefault(
   projectId: string,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   try {
     const project = await repos.projects.findById(projectId);
 
-    if (!checkOwnership(project, user.id)) {
+    if (!exists(project)) {
       return notFound('Project');
     }
 
@@ -83,11 +83,11 @@ export async function handleGetDefault(
 export async function handlePutDefault(
   req: NextRequest,
   projectId: string,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   const existingProject = await repos.projects.findById(projectId);
 
-  if (!checkOwnership(existingProject, user.id)) {
+  if (!exists(existingProject)) {
     return notFound('Project');
   }
 
@@ -106,12 +106,12 @@ export async function handlePutDefault(
  */
 export async function handleDeleteProject(
   projectId: string,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   try {
     const existingProject = await repos.projects.findById(projectId);
 
-    if (!checkOwnership(existingProject, user.id)) {
+    if (!exists(existingProject)) {
       return notFound('Project');
     }
 

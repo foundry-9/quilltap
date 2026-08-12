@@ -84,6 +84,14 @@ export interface CreateBlobInput {
   fileName?: string;
   folderId?: string | null;
   fileType?: 'pdf' | 'docx' | 'markdown' | 'txt' | 'json' | 'jsonl' | 'blob';
+  /**
+   * Explicit row ids for `preserveIds` imports (archive/rehydrate, spec F4).
+   * Forwarded to linkBlobContent, which honors each only when the row in
+   * question is actually being created — existing rows keep their own ids.
+   */
+  fileId?: string;
+  linkId?: string;
+  blobId?: string;
 }
 
 function nowIso(): string {
@@ -303,6 +311,9 @@ export class DocMountBlobsRepository {
       sha256: input.sha256,
       data: input.data,
       description: input.description,
+      fileId: input.fileId,
+      linkId: input.linkId,
+      blobId: input.blobId,
     });
 
     const found = await this.findByMountPointAndPath(link.mountPointId, link.relativePath);

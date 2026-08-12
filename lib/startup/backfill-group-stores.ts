@@ -22,6 +22,12 @@
  * values pre-cutover, so the populator writes real data; post-cutover the
  * columns are gone and only defaults remain (restore from backup for lost data).
  *
+ * Because that populate step is destructive post-cutover, step 2 fires only on
+ * a genuinely absent `properties.json`. `readGroupStoreProperties` throws for a
+ * store that exists but is unreadable, which routes to the per-group catch and
+ * leaves the files alone — healing a group we merely failed to read would
+ * flatten its settings, description, instructions, and state to defaults.
+ *
  * Idempotent: groups whose store already has `properties.json` are skipped.
  * Per-group failures are logged and do not stop the remainder of the run.
  *
@@ -86,7 +92,11 @@ export async function backfillGroupStores(): Promise<GroupStoreBackfillResult> {
         result.storesCreated++;
       }
       const mountPointId = ensured.mountPointId;
-      const existingProps = await readGroupStoreProperties(mountPointId);
+      // Throws when properties.json exists but can't be read or parsed, so a
+      // transient store failure lands in the catch below (logged, counted,
+      // group skipped) instead of being mistaken for "never populated" —
+      // which would overwrite all four files with the raw row's defaults.
+      const existingProps = await readGroupStoreProperties(mountPointId, group.id);
       if (existingProps) {
         result.alreadyPopulated++;
       } else {

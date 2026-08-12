@@ -15,7 +15,6 @@ import {
   ConversationChunkSchema,
 } from '@/lib/schemas/types';
 import { AbstractBaseRepository } from './base.repository';
-import { logger } from '@/lib/logger';
 import { TypedQueryFilter, DatabaseCollection } from '../interfaces';
 import { rawQuery, registerBlobColumns } from '../manager';
 
@@ -177,6 +176,15 @@ export class ConversationChunksRepository extends AbstractBaseRepository<Convers
           // Only overwrite embedding if explicitly provided (non-undefined)
           if (input.embedding !== undefined) {
             updateData.embedding = input.embedding;
+          } else if (existing.content !== input.content) {
+            // Content changed but no embedding supplied → the preserved vector is
+            // now stale for the new text. NULL it so the render handler re-embeds
+            // (its enqueue gate is `!chunk.embedding`). This is load-bearing for
+            // interchange sub-chunking (Bug 17): when a formerly-oversize
+            // interchange splits, every chunk at and after that point shifts to
+            // new content at an existing index, and each must be re-embedded, not
+            // left carrying the previous occupant's vector.
+            updateData.embedding = null;
           }
 
           const updated = await this._update(existing.id, updateData);
@@ -224,6 +232,46 @@ export class ConversationChunksRepository extends AbstractBaseRepository<Convers
       },
       'Error deleting all chunks for chat',
       { chatId }
+    );
+  }
+
+  /**
+   * Cold-tier a chat's chunks: NULL every non-null embedding while keeping
+   * `content`/`messageIds`/`interchangeIndex` intact, so the chat stays
+   * keyword-searchable and can be re-embedded (embed-only, no re-chunk) when
+   * reopened. Idempotent — the `embedding IS NOT NULL` guard makes a second
+   * pass a no-op. Returns the number of rows cleared.
+   *
+   * `olderThan` (ISO-8601) restricts clearing to embeddings last written
+   * before that moment. The maintenance sweep passes its staleness cutoff
+   * here so an embedding minted by the reopen path (`cold-chunk-reembed`)
+   * survives for a full retention window from the reopen: a chat the user
+   * reads — without playing a message — stays semantically searchable
+   * instead of being re-embedded (paid) on every open and cleared again by
+   * every sweep. The embedding row's own `updatedAt` is the reopen signal;
+   * nothing else writes chunk rows on a stale chat, because renders only
+   * fire on played messages and the boot reconcile skips stale chats.
+   *
+   * Raw SQL rather than `_update` so a maintenance pass over a large stale
+   * chat is one statement, and so `updatedAt` stamping stays explicit.
+   */
+  async clearEmbeddingsForChat(chatId: string, olderThan?: string): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        const ageGuard = olderThan !== undefined ? ' AND updatedAt < ?' : '';
+        const params: string[] = [new Date().toISOString(), chatId];
+        if (olderThan !== undefined) params.push(olderThan);
+        const result = await rawQuery<{ changes: number }>(
+          `UPDATE conversation_chunks SET embedding = NULL, updatedAt = ?
+            WHERE chatId = ? AND embedding IS NOT NULL${ageGuard}`,
+          params
+        );
+        const cleared = Number(result?.changes ?? 0);
+        return cleared;
+      },
+      'Error clearing chunk embeddings for chat',
+      { chatId, olderThan },
+      0
     );
   }
 

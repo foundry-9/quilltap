@@ -9,6 +9,7 @@ import type { Character, ChatParticipantBase, ParticipantStatus } from '@/lib/sc
 import type { MultiCharacterMessage } from '@/lib/llm/message-formatter'
 import { logger } from '@/lib/logger'
 import { isParticipantPresent } from '@/lib/schemas/chat.types'
+import { isUserDrivenSeat } from '@/lib/chat/turn-manager/utils'
 
 /**
  * Extended message format for multi-character context building
@@ -263,15 +264,32 @@ export function attributeMessagesForCharacter(
 }
 
 /**
- * Find the user participant for message attribution in multi-character mode
- * Returns the first active user-controlled CHARACTER participant
+ * Find the user participant name for message attribution in multi-character mode.
+ *
+ * Prefers the participant the human is currently "Speaking As"
+ * (`activeTypingParticipantId`) so a freshly typed message is labelled with the
+ * chosen character's name; falls back to the first active user-controlled
+ * CHARACTER participant when no valid selection exists.
  */
 export function findUserParticipantName(
   allParticipants: ChatParticipantBase[],
-  participantCharacters: Map<string, Character>
+  participantCharacters: Map<string, Character>,
+  activeTypingParticipantId?: string | null,
+  impersonatingParticipantIds?: readonly string[] | null
 ): string | undefined {
-  // Find a user-controlled CHARACTER participant
-  const userCharacterParticipant = allParticipants.find(p =>
+  // Prefer the actively-selected speaker, then fall back to the first
+  // user-controlled CHARACTER participant. The selected speaker may be a seat
+  // the human is impersonating (Bug 44 overlay — `controlledBy` still `'llm'`),
+  // so honour the overlay rather than the bare column; otherwise a message typed
+  // while "speaking as" a character would fall through to the wrong name.
+  const selected = activeTypingParticipantId
+    ? allParticipants.find(p =>
+        p.id === activeTypingParticipantId &&
+        p.type === 'CHARACTER' && isUserDrivenSeat(p, impersonatingParticipantIds) &&
+        isParticipantPresent(p.status) && p.characterId
+      )
+    : undefined
+  const userCharacterParticipant = selected ?? allParticipants.find(p =>
     p.type === 'CHARACTER' && p.controlledBy === 'user' && isParticipantPresent(p.status) && p.characterId
   )
   if (userCharacterParticipant?.characterId) {

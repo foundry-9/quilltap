@@ -8,6 +8,7 @@
 
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
+import { llmNumber } from './llm-number';
 
 /**
  * Zod schema for the web-search tool's input. The single source of truth for both
@@ -24,13 +25,15 @@ export const webSearchToolInputSchema = z.object({
     .describe(
       'The search query to execute. Be specific and use keywords that will help find relevant information. Examples: "latest news about AI", "current weather in Tokyo", "recent developments in quantum computing"'
     ),
-  maxResults: z
-    .number()
-    .int()
-    .min(1)
-    .max(10)
+  maxResults: llmNumber(
+    z
+      .number()
+      .int()
+      .min(1)
+      .max(10)
+      .describe('Maximum number of search results to retrieve. Default is 5.')
+  )
     .default(5)
-    .describe('Maximum number of search results to retrieve. Default is 5.')
     .optional(),
 });
 
@@ -78,6 +81,7 @@ export const webSearchToolDefinition = {
  */
 export function validateWebSearchInput(
   input: unknown
-): input is WebSearchToolInput {
-  return webSearchToolInputSchema.safeParse(input).success;
+): WebSearchToolInput | null {
+  const parsed = webSearchToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }

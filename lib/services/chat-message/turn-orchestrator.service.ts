@@ -5,6 +5,7 @@ import {
   getActiveCharacterParticipants,
   isAllLLMChat,
   shouldPauseForAllLLM,
+  isUserDrivenSeat,
 } from '@/lib/chat/turn-manager'
 import type { Character, MessageEvent } from '@/lib/schemas/types'
 import type { getRepositories } from '@/lib/repositories/factory'
@@ -35,6 +36,13 @@ export interface ChainDecision {
   participantId?: string
   characterName?: string
   reason: 'user_turn' | 'paused' | 'max_depth' | 'max_time' | 'error' | 'no_next_speaker' | 'cycle_complete' | 'continue'
+  /**
+   * How this turn's speaker was chosen — `queue` (popped from the manual turn
+   * queue) or `algorithm` (weighted rotation). Threaded into the chained
+   * `processMessage` so the "nothing to add" skip option is withheld for
+   * queue-popped (summoned) turns. Only set when `chain` is true.
+   */
+  selectionReason?: 'queue' | 'algorithm'
 }
 
 const logger = createServiceLogger('TurnOrchestrator')
@@ -105,10 +113,14 @@ export async function shouldChainNext(
     || messageEvents.some(m => m.role === 'USER')
   const effectiveAllLLM = isAllLLM && !hasUserPresence
   if (effectiveAllLLM) {
-    // Count assistant messages since last user message
+    // Count assistant messages since last user message. Staff messages
+    // (systemSender set — Host turn-pass notes, Lantern/Librarian whispers,
+    // etc.) are ASSISTANT-role but are not character turns, so they must not
+    // inflate the pause counter.
     let turnCount = 0
     for (let i = messageEvents.length - 1; i >= 0; i--) {
       if (messageEvents[i].role === 'USER') break
+      if (messageEvents[i].systemSender) continue
       if (messageEvents[i].role === 'ASSISTANT') turnCount++
     }
 
@@ -167,7 +179,8 @@ export async function shouldChainNext(
       freshChat.participants,
       charactersMap,
       turnState,
-      userParticipantId
+      userParticipantId,
+      freshChat.impersonatingParticipantIds
     )
 
     nextParticipantId = result.nextSpeakerId
@@ -189,9 +202,12 @@ export async function shouldChainNext(
     return { chain: false, reason: 'error' }
   }
 
-  if (nextParticipant.controlledBy === 'user') {
+  if (isUserDrivenSeat(nextParticipant, freshChat.impersonatingParticipantIds)) {
     // Surface which user character is "up" so the salon UI can label the
-    // pause and offer a Skip button targeted at that participant.
+    // pause and offer a Skip button targeted at that participant. A seat the
+    // human is impersonating (Bug 44 overlay — `controlledBy` still `'llm'`)
+    // pauses the chain just like a genuine user seat, so the operator types
+    // the character's line instead of the model generating it.
     let characterName: string | undefined
     if (nextParticipant.characterId) {
       const char = await repos.characters.findById(nextParticipant.characterId)
@@ -225,6 +241,7 @@ export async function shouldChainNext(
     participantId: nextParticipantId,
     characterName,
     reason: 'continue',
+    selectionReason: selectionReason === 'queue' ? 'queue' : 'algorithm',
   }
 }
 
@@ -258,6 +275,8 @@ export interface ExecuteTurnChainOptions {
   processChainedMessage: (options: {
     continueMode: true
     respondingParticipantId: string
+    /** How this speaker was chosen — threaded so the skip option is withheld for queue-popped (summoned) turns. */
+    chainSelectionReason?: 'queue' | 'algorithm'
   }) => Promise<ProcessMessageResult>
   decideNextTurn?: typeof shouldChainNext
   persistTurnParticipant?: typeof persistTurnParticipantId
@@ -295,7 +314,10 @@ export async function executeTurnChain({
   neverPauseForUser = false,
   singleTurn = false,
 }: ExecuteTurnChainOptions): Promise<void> {
-  if (!initialResult.isMultiCharacter || !initialResult.hasContent || initialResult.isPaused) {
+  // A skipped initial turn ("nothing to add") is NOT terminal — it advanced the
+  // rotation via a Host turn-pass record, so the chain must continue to the next
+  // speaker. Only a genuinely empty (no content, no skip) initial turn stops here.
+  if (!initialResult.isMultiCharacter || (!initialResult.hasContent && !initialResult.skipped) || initialResult.isPaused) {
     return
   }
 
@@ -353,15 +375,20 @@ export async function executeTurnChain({
       const chainResult = await processChainedMessage({
         continueMode: true,
         respondingParticipantId: decision.participantId,
+        chainSelectionReason: decision.selectionReason,
       })
 
       safeEnqueue(controller, encodeTurnCompleteEvent(encoder, {
         participantId: decision.participantId,
         messageId: chainResult.messageId || '',
         chainDepth,
+        skipped: chainResult.skipped === true,
       }))
 
-      if (!chainResult.hasContent) {
+      // A skipped turn advanced the rotation (Host turn-pass record) — fall
+      // through to the next decideNextTurn iteration. Only a genuinely empty
+      // response (no content, no skip) stops the chain.
+      if (!chainResult.hasContent && !chainResult.skipped) {
         logger.info('[TurnOrchestrator] Chain stopped: empty response', { chatId, chainDepth, userId })
         await persistTurnParticipant(repos, chatId, null)
         safeEnqueue(controller, encodeChainCompleteEvent(encoder, {

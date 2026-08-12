@@ -9,7 +9,7 @@
 
 import OpenAI from 'openai';
 import type { TextProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage, ImageGenParams, ImageGenResponse } from './types';
-import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
+import { buildSdkClientOptions, createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
 
 const logger = createPluginLogger('qtap-plugin-grok');
 
@@ -21,17 +21,58 @@ const GROK_SUPPORTED_MIME_TYPES = [
   'image/webp',
 ];
 
+/**
+ * A text-file attachment's `data` may hold either the raw text or a base64
+ * encoding of it. `Buffer.from(s, 'base64')` never throws — it silently mangles
+ * non-base64 input (`"hello"` → garbage, `"x=1"` → empty) — so a bare try/catch
+ * can't tell the two apart. Round-trip instead: decode, re-encode, and compare
+ * (normalizing padding/whitespace). A match means the input really was base64,
+ * so return the decoded text; a mismatch means it was plain text all along, so
+ * return it verbatim.
+ */
+function decodeBase64Text(data: string): string {
+  const normalize = (s: string): string => s.replace(/\s+/g, '').replace(/=+$/, '');
+  const decoded = Buffer.from(data, 'base64');
+  if (normalize(decoded.toString('base64')) === normalize(data)) {
+    return decoded.toString('utf-8');
+  }
+  return data;
+}
+
 // SDK types for the Responses API
 type ResponsesInputItem = OpenAI.Responses.ResponseInputItem;
 type ResponsesTool = OpenAI.Responses.Tool;
 type ResponsesResponse = OpenAI.Responses.Response;
 type ResponsesStreamEvent = OpenAI.Responses.ResponseStreamEvent;
 
+/**
+ * xAI's Responses endpoint accepts `stop` sequences; OpenAI's Responses API
+ * does not model them, so the SDK types omit the field. Quilltap sends them
+ * deliberately — this records the divergence in one place instead of casting at
+ * each assignment. (The other two xAI extensions, the `x_search` tool and the
+ * `citations` include value, are value-level and cast at their use sites.)
+ */
+type WithGrokStop<T> = T & { stop?: string[] };
+
 export class GrokProvider implements TextProvider {
   private readonly baseUrl = 'https://api.x.ai/v1';
   readonly supportsFileAttachments = true;
   readonly supportedMimeTypes = GROK_SUPPORTED_MIME_TYPES;
   readonly supportsWebSearch = true;
+
+  /**
+   * Whether an attachment MIME type has a handler behind the gate. Images send
+   * inline; `text/*` embeds inline; PDF reaches the honest "requires Grok Files
+   * API" arm. Anything else falls to the generic "unsupported" rejection. The
+   * previous gate was images-only, which made the text and PDF arms dead code.
+   */
+  private isHandledMimeType(mimeType: string): boolean {
+    return (
+      this.supportedMimeTypes.includes(mimeType) ||
+      mimeType.startsWith('text/') ||
+      mimeType === 'application/pdf'
+    );
+  }
 
   /**
    * Format messages from LLMMessage format to Responses API format.
@@ -105,10 +146,10 @@ export class GrokProvider implements TextProvider {
       // Add file attachments
       if (msg.attachments && msg.attachments.length > 0) {
         for (const attachment of msg.attachments) {
-          if (!this.supportedMimeTypes.includes(attachment.mimeType)) {
+          if (!this.isHandledMimeType(attachment.mimeType)) {
             failed.push({
               id: attachment.id,
-              error: `Unsupported file type: ${attachment.mimeType}. Grok supports: ${this.supportedMimeTypes.join(', ')}`,
+              error: `Unsupported file type: ${attachment.mimeType}. Grok supports: ${this.supportedMimeTypes.join(', ')}, text/*`,
             });
             continue;
           }
@@ -130,20 +171,15 @@ export class GrokProvider implements TextProvider {
             });
             sent.push(attachment.id);
           } else if (attachment.mimeType.startsWith('text/')) {
-            // For text files, embed as text content
-            try {
-              const textContent = Buffer.from(attachment.data, 'base64').toString('utf-8');
-              content.push({
-                type: 'input_text',
-                text: `[File: ${attachment.filename}]\n${textContent}`,
-              });
-              sent.push(attachment.id);
-            } catch {
-              failed.push({
-                id: attachment.id,
-                error: 'Failed to decode text file',
-              });
-            }
+            // For text files, embed as text content. `data` may be raw text or
+            // base64; decodeBase64Text round-trips to tell which (a bare decode
+            // would mangle already-plain text — see the helper).
+            const textContent = decodeBase64Text(attachment.data);
+            content.push({
+              type: 'input_text',
+              text: `[File: ${attachment.filename}]\n${textContent}`,
+            });
+            sent.push(attachment.id);
           } else {
             failed.push({
               id: attachment.id,
@@ -307,10 +343,13 @@ export class GrokProvider implements TextProvider {
       apiKey,
       baseURL: this.baseUrl,
       defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+      // A caller-supplied budget is a ceiling; without one the SDK's 10-minute
+      // default would let a silent endpoint hold a turn open indefinitely.
+      ...buildSdkClientOptions(params),
     });
     const { input, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
 
-    const requestParams: OpenAI.Responses.ResponseCreateParamsNonStreaming = {
+    const requestParams: WithGrokStop<OpenAI.Responses.ResponseCreateParamsNonStreaming> = {
       model: params.model,
       input,
       store: false, // Stateless operation - Quilltap manages history locally
@@ -344,8 +383,10 @@ export class GrokProvider implements TextProvider {
     if (params.webSearchEnabled) {
       // Grok uses web_search and x_search (not web_search_preview)
       tools.push({ type: 'web_search' } as ResponsesTool);
-      tools.push({ type: 'x_search' } as ResponsesTool);
-      requestParams.include = ['citations'] as OpenAI.Responses.ResponseIncludable[];
+      // x_search is an xAI-only tool, absent from OpenAI's Tool union.
+      tools.push({ type: 'x_search' } as unknown as ResponsesTool);
+      // 'citations' is an xAI-only include value, absent from OpenAI's union.
+      requestParams.include = ['citations'] as unknown as OpenAI.Responses.ResponseIncludable[];
     }
 
     if (params.tools && params.tools.length > 0) {
@@ -404,10 +445,13 @@ export class GrokProvider implements TextProvider {
       apiKey,
       baseURL: this.baseUrl,
       defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+      // A caller-supplied budget is a ceiling; without one the SDK's 10-minute
+      // default would let a silent endpoint hold a turn open indefinitely.
+      ...buildSdkClientOptions(params),
     });
     const { input, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
 
-    const requestParams: OpenAI.Responses.ResponseCreateParamsStreaming = {
+    const requestParams: WithGrokStop<OpenAI.Responses.ResponseCreateParamsStreaming> = {
       model: params.model,
       input,
       store: false,
@@ -434,8 +478,10 @@ export class GrokProvider implements TextProvider {
 
     if (params.webSearchEnabled) {
       tools.push({ type: 'web_search' } as ResponsesTool);
-      tools.push({ type: 'x_search' } as ResponsesTool);
-      requestParams.include = ['citations'] as OpenAI.Responses.ResponseIncludable[];
+      // x_search is an xAI-only tool, absent from OpenAI's Tool union.
+      tools.push({ type: 'x_search' } as unknown as ResponsesTool);
+      // 'citations' is an xAI-only include value, absent from OpenAI's union.
+      requestParams.include = ['citations'] as unknown as OpenAI.Responses.ResponseIncludable[];
     }
 
     if (params.tools && params.tools.length > 0) {

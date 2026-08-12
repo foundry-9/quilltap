@@ -15,6 +15,7 @@ import {
 import { logger } from '@/lib/logger'
 import { getRepositories } from '@/lib/repositories/factory'
 import { ensureHelpDocsSynced } from '@/lib/help/help-doc-sync'
+import { helpDocSlug } from '@/lib/help/help-doc-slug'
 import type { HelpDocument, HelpDocumentWithEmbedding, HelpSearchResult } from './help-search.types'
 
 /**
@@ -45,6 +46,7 @@ export class HelpSearch {
 
         this.documents = allDocs.map(doc => ({
           id: doc.id,
+          slug: helpDocSlug(doc.path),
           title: doc.title,
           path: doc.path,
           url: doc.url,
@@ -131,6 +133,7 @@ export class HelpSearch {
       results.push({
         document: {
           id: doc.id,
+          slug: helpDocSlug(doc.path),
           title: doc.title,
           path: doc.path,
           url: doc.url,
@@ -146,16 +149,18 @@ export class HelpSearch {
   }
 
   /**
-   * Get a document by its ID
+   * Get a document by its database ID or its slug
    */
-  async getDocument(id: string): Promise<HelpDocument | null> {
+  async getDocument(idOrSlug: string): Promise<HelpDocument | null> {
     await this.ensureLoaded()
 
     if (!this.documents) {
       return null
     }
 
-    return this.documents.find(doc => doc.id === id) || null
+    return (
+      this.documents.find(doc => doc.id === idOrSlug || doc.slug === idOrSlug) || null
+    )
   }
 
   /**
@@ -169,15 +174,16 @@ export class HelpSearch {
   /**
    * Get all document titles and paths for listing
    */
-  async listDocuments(): Promise<Array<{ id: string; title: string; path: string; url: string }>> {
+  async listDocuments(): Promise<Array<{ id: string; slug: string; title: string; path: string; url: string }>> {
     await this.ensureLoaded()
 
     if (!this.documents) {
       return []
     }
 
-    return this.documents.map(({ id, title, path, url }) => ({
+    return this.documents.map(({ id, slug, title, path, url }) => ({
       id,
+      slug,
       title,
       path,
       url,

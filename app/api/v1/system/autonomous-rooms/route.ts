@@ -10,16 +10,16 @@
 
 import { NextRequest } from 'next/server';
 import {
-  createAuthenticatedHandler,
-  type AuthenticatedContext,
+  createContextHandler,
+  type RequestContext,
 } from '@/lib/api/middleware';
 import { successResponse, serverError } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 
 const HANDLER = 'api.v1.system.autonomous-rooms';
 
-export const GET = createAuthenticatedHandler(
-  async (_req: NextRequest, ctx: AuthenticatedContext) => {
+export const GET = createContextHandler(
+  async (_req: NextRequest, ctx: RequestContext) => {
     try {
       const userChats = await ctx.repos.chats.findByUserId(ctx.user.id);
       const autonomousChats = userChats.filter((c) => c.chatType === 'autonomous');

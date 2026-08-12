@@ -1,8 +1,9 @@
 import { logger } from '@/lib/logger';
-import { EMPTY_EQUIPPED_SLOTS } from '@/lib/schemas/wardrobe.types';
+import { EMPTY_EQUIPPED_SLOTS, WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
 import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import { describeOutfit } from '@/lib/wardrobe/outfit-description';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
+import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
 import { enqueueWardrobeOutfitAnnouncement } from '@/lib/background-jobs/queue-service';
 import { getRepositories } from '@/lib/repositories/factory';
 import type { ToolExecutionContext } from '@/lib/chat/tool-executor';
@@ -90,6 +91,24 @@ export function emptyEquippedState(): EquippedSlots {
 }
 
 /**
+ * Find every slot the item is equipped in. Slots are arrays, so a single item
+ * can occupy multiple slots (a multi-slot dress) and we want them all.
+ */
+export function findEquippedSlots(
+  itemId: string,
+  equippedSlots: EquippedSlots | null,
+): string[] {
+  if (!equippedSlots) return [];
+  const slots: string[] = [];
+  for (const slot of WARDROBE_SLOT_TYPES) {
+    if ((equippedSlots[slot] ?? []).includes(itemId)) {
+      slots.push(slot);
+    }
+  }
+  return slots;
+}
+
+/**
  * What a wardrobe mutation did to the slots it touched, reported back to the
  * LLM so it knows whether existing items survived.
  *
@@ -126,6 +145,50 @@ export function describeWardrobeEffect(
     case 'cleared':
       return `Cleared ${slotList} entirely.`;
   }
+}
+
+/**
+ * The shape shared by `wardrobe_wear` / `wardrobe_take_off` outputs, as far as
+ * the context formatter cares.
+ */
+interface WardrobeMutationOutput {
+  success: boolean;
+  operations: Array<{ error?: string; effect_summary?: string }>;
+  current_state: EquippedSlots;
+  coverage_summary: string;
+  error?: string;
+}
+
+/**
+ * Format a wear/take-off result for conversation context: the per-operation
+ * effect lines, then the resulting per-slot outfit, then the coverage summary.
+ * Identical presentation for both tools so the LLM reads them the same way.
+ */
+export function formatWardrobeMutationResults(output: WardrobeMutationOutput): string {
+  if (!output.success && output.operations.length === 0) {
+    return `Wardrobe Error: ${output.error || 'Unknown error'}`;
+  }
+
+  const lines: string[] = [];
+  for (const op of output.operations) {
+    if (op.error) {
+      lines.push(`Failed: ${op.error}`);
+    } else if (op.effect_summary) {
+      lines.push(op.effect_summary);
+    }
+  }
+
+  lines.push('');
+  lines.push('Current outfit:');
+  const state = output.current_state;
+  for (const slotKey of WARDROBE_SLOT_TYPES) {
+    const ids = state[slotKey];
+    lines.push(`  ${slotKey}: ${ids.length === 0 ? '(empty)' : ids.join(', ')}`);
+  }
+  lines.push('');
+  lines.push(`Summary: ${output.coverage_summary}`);
+
+  return lines.join('\n');
 }
 
 export async function loadCurrentWardrobeState(
@@ -193,6 +256,49 @@ export async function scheduleWardrobeAnnouncement(
  * If the Set is missing (legacy callers without orchestrator threading), the
  * announcement is enqueued immediately so behavior degrades safely.
  */
+/**
+ * The "not found" message the wardrobe tools return when an item can't be
+ * resolved by id or title. Phrased identically across `wardrobe_read`,
+ * `wardrobe_update`, `wardrobe_wear`, `wardrobe_take_off`, and
+ * `wardrobe_archive`.
+ */
+export function wardrobeItemNotFoundMessage(
+  itemId: string | undefined,
+  itemTitle: string | undefined,
+): string {
+  return `Wardrobe item not found${itemId ? ` with ID "${itemId}"` : ''}${itemTitle ? ` with title "${itemTitle}"` : ''}`;
+}
+
+/**
+ * Fire the two side effects that must follow any equipped-state change: refresh
+ * the character's avatar (if enabled) and queue Aurora's wardrobe announcement.
+ * Both the caller-context label (avatar) and source-context label
+ * (announcement) share the handler's name. Called ONCE per turn after a wardrobe
+ * mutation actually lands.
+ */
+export async function notifyWardrobeChanged(
+  repos: WardrobeRepos,
+  context: Pick<ToolExecutionContext, 'userId' | 'chatId' | 'pendingWardrobeAnnouncements'> & {
+    characterId: string;
+  },
+  sourceContext: string,
+): Promise<void> {
+  await triggerAvatarGenerationIfEnabled(repos, {
+    userId: context.userId,
+    chatId: context.chatId,
+    characterId: context.characterId,
+    callerContext: sourceContext,
+  });
+  await recordPendingWardrobeAnnouncement(
+    {
+      userId: context.userId,
+      chatId: context.chatId,
+      pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
+    },
+    { sourceContext, characterId: context.characterId },
+  );
+}
+
 export async function recordPendingWardrobeAnnouncement(
   context: Pick<ToolExecutionContext, 'userId' | 'chatId' | 'pendingWardrobeAnnouncements'>,
   args: {

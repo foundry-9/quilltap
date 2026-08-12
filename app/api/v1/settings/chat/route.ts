@@ -6,11 +6,11 @@
  */
 
 import { NextRequest } from 'next/server'
-import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware'
+import { createContextHandler, type RequestContext } from '@/lib/api/middleware'
 import { successResponse, serverError, badRequest } from '@/lib/api/responses'
 import { logger } from '@/lib/logger'
 import { TagStyleMapSchema, ThemePreferenceSchema } from '@/lib/schemas/common.types'
-import { TokenDisplaySettingsSchema, LLMLoggingSettingsSchema, AgentModeSettingsSchema, StoryBackgroundsSettingsSchema, DangerousContentSettingsSchema, AutoLockSettingsSchema } from '@/lib/schemas/settings.types'
+import { TokenDisplaySettingsSchema, LLMLoggingSettingsSchema, AgentModeSettingsSchema, StoryBackgroundsSettingsSchema, DangerousContentSettingsSchema, AutoLockSettingsSchema, AnswerConfirmationSettingsSchema } from '@/lib/schemas/settings.types'
 import { type AvatarDisplayMode } from '@/lib/schemas/types'
 import { getErrorMessage } from '@/lib/error-utils'
 
@@ -33,6 +33,7 @@ async function updateChatSettings(
   memoryCascadePreferences?: unknown,
   llmLoggingSettings?: unknown,
   autoDetectRng?: boolean,
+  customTools?: boolean,
   agentModeSettings?: unknown,
   storyBackgroundsSettings?: unknown,
   contextCompressionSettings?: unknown,
@@ -44,6 +45,7 @@ async function updateChatSettings(
   autonomousRoomSettings?: unknown,
   thinkingDisplay?: unknown,
   autoScrollOnResponseComplete?: boolean,
+  answerConfirmationSettings?: unknown,
 ) {
   // Validate avatarDisplayMode if provided
   if (avatarDisplayMode) {
@@ -138,6 +140,12 @@ async function updateChatSettings(
       throw new Error('Invalid autoDetectRng value (must be boolean)')
     }
     updateData.autoDetectRng = autoDetectRng
+  }
+  if (typeof customTools !== 'undefined') {
+    if (typeof customTools !== 'boolean') {
+      throw new Error('Invalid customTools value (must be boolean)')
+    }
+    updateData.customTools = customTools
   }
   if (typeof agentModeSettings !== 'undefined') {
     const validatedAgentModeSettings = AgentModeSettingsSchema.parse(agentModeSettings)
@@ -242,6 +250,11 @@ async function updateChatSettings(
     }
     updateData.thinkingDisplay = thinkingDisplay
   }
+  if (typeof answerConfirmationSettings !== 'undefined') {
+    // Answer confirmation global default. Zod governs the persisted shape.
+    const validated = AnswerConfirmationSettingsSchema.parse(answerConfirmationSettings)
+    updateData.answerConfirmationSettings = validated
+  }
 
   return repos.chatSettings.updateForUser(userId, updateData)
 }
@@ -251,7 +264,7 @@ async function updateChatSettings(
  * Get chat settings for the authenticated user
  * Returns default settings if none exist
  */
-export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }: AuthenticatedContext) => {
+export const GET = createContextHandler(async (req: NextRequest, { user, repos }: RequestContext) => {
   try {
 
     let chatSettings = await repos.chatSettings.findByUserId(user.id)
@@ -281,7 +294,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
  * PUT /api/v1/settings/chat
  * Update chat settings for the authenticated user
  */
-export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, repos }: AuthenticatedContext) => {
+export const PUT = createContextHandler(async (req: NextRequest, { user, repos }: RequestContext) => {
   try {
     const body = await req.json()
     const {
@@ -298,6 +311,7 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       memoryCascadePreferences,
       llmLoggingSettings,
       autoDetectRng,
+      customTools,
       agentModeSettings,
       storyBackgroundsSettings,
       contextCompressionSettings,
@@ -309,6 +323,7 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       autonomousRoomSettings,
       thinkingDisplay,
       autoScrollOnResponseComplete,
+      answerConfirmationSettings,
     } = body
 
     const chatSettings = await updateChatSettings(
@@ -327,6 +342,7 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       memoryCascadePreferences,
       llmLoggingSettings,
       autoDetectRng,
+      customTools,
       agentModeSettings,
       storyBackgroundsSettings,
       contextCompressionSettings,
@@ -338,6 +354,7 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       autonomousRoomSettings,
       thinkingDisplay,
       autoScrollOnResponseComplete,
+      answerConfirmationSettings,
     )
 
     return successResponse(chatSettings)

@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * RecentChatItem
  *
@@ -7,6 +9,7 @@
 import Link from 'next/link'
 import AvatarStack from '@/components/ui/AvatarStack'
 import { formatMessageTime } from '@/lib/format-time'
+import { useWorkspaceLink } from '@/components/workspace/useWorkspaceLink'
 import type { RecentChat } from './types'
 
 interface RecentChatItemProps {
@@ -14,6 +17,11 @@ interface RecentChatItemProps {
 }
 
 export function RecentChatItem({ chat }: RecentChatItemProps) {
+  // Inside the workspace, open the conversation as a tab instead of navigating
+  // (which would unmount the whole workspace). Falls through to normal Link
+  // navigation on the legacy home route.
+  const openInWorkspace = useWorkspaceLink()
+  const href = `/salon/${chat.id}`
   // Get active character participants for avatar display
   const characters = chat.participants
     .filter(p => p.type === 'CHARACTER' && p.isActive && p.character)
@@ -31,7 +39,8 @@ export function RecentChatItem({ chat }: RecentChatItemProps) {
 
   return (
     <Link
-      href={`/salon/${chat.id}`}
+      href={href}
+      onClick={(e) => openInWorkspace(href, e)}
       className="flex items-center gap-3 p-2 rounded-lg hover:qt-bg-muted/50 transition-colors"
     >
       {/* Story background thumbnail (preferred) or Avatar stack */}

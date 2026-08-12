@@ -12,9 +12,15 @@ import { ContextCompressionSettingsComponent } from '@/components/settings/chat-
 import { MemoryCascadeSettings } from '@/components/settings/chat-settings/MemoryCascadeSettings'
 import { ImageDescriptionSettings } from '@/components/settings/chat-settings/ImageDescriptionSettings'
 import { AutomationSettings } from '@/components/settings/chat-settings/AutomationSettings'
+import { CustomToolsSettings } from '@/components/settings/chat-settings/CustomToolsSettings'
+import { GeneralStateSettings } from '@/components/settings/chat-settings/GeneralStateSettings'
 import { AgentModeSettings } from '@/components/settings/chat-settings/AgentModeSettings'
 import { ThinkingDisplaySettings } from '@/components/settings/chat-settings/ThinkingDisplaySettings'
+import { AnswerConfirmationSettings } from '@/components/settings/chat-settings/AnswerConfirmationSettings'
 import { DangerousContentSettings } from '@/components/settings/chat-settings/DangerousContentSettings'
+import { DataRetentionSettings } from '@/components/settings/chat-settings/DataRetentionSettings'
+import { BrahmaConsoleSettings } from '@/components/settings/chat-settings/BrahmaConsoleSettings'
+import { TabooSettings } from '@/components/settings/chat-settings/TabooSettings'
 import { AutonomousRoomSettingsComponent } from '@/components/settings/chat-settings/AutonomousRoomSettings'
 import { AutonomousRoomsCard } from '@/components/tools/autonomous-rooms-card'
 import { useSettingsSection } from './useSettingsSection'
@@ -39,12 +45,14 @@ export function ChatTabContent() {
     handleImageDescriptionProfileChange,
     handleUncensoredImageDescriptionProfileChange,
     handleAutoDetectRngChange,
+    handleCustomToolsChange,
     handleAgentModeDefaultEnabledChange,
     handleAgentModeMaxTurnsChange,
     handleDangerousContentUpdate,
     handleCheapLLMUpdate,
     handleAutonomousRoomSettingsUpdate,
     handleThinkingDisplayUpdate,
+    handleAnswerConfirmationUpdate,
   } = useChatSettingsContext()
 
   if (loading) {
@@ -139,6 +147,18 @@ export function ChatTabContent() {
           />
         </CollapsibleCard>
 
+        <CollapsibleCard title="Custom Tools" description="Whether Pascal's custom tools are offered to models and the composer" sectionId="custom-tools" forceOpen={activeSection === 'custom-tools'}>
+          <CustomToolsSettings
+            settings={settings}
+            saving={saving}
+            onChange={handleCustomToolsChange}
+          />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="General State" description="Instance-wide persistent state shared by every chat (bottom tier of the state cascade)" sectionId="general-state" forceOpen={activeSection === 'general-state'}>
+          <GeneralStateSettings />
+        </CollapsibleCard>
+
         <CollapsibleCard title="Agent Mode" description="Configure iterative tool use with self-correction" sectionId="agent-mode" forceOpen={activeSection === 'agent-mode'}>
           <AgentModeSettings
             settings={settings}
@@ -156,6 +176,14 @@ export function ChatTabContent() {
           />
         </CollapsibleCard>
 
+        <CollapsibleCard title="Answer Confirmation" description="Vet looked-up answers against what the character actually knew this turn" sectionId="answer-confirmation" forceOpen={activeSection === 'answer-confirmation'}>
+          <AnswerConfirmationSettings
+            settings={settings}
+            saving={saving}
+            onUpdate={handleAnswerConfirmationUpdate}
+          />
+        </CollapsibleCard>
+
         <CollapsibleCard title="Dangerous Content" description="Configure content detection, routing, and display behavior" sectionId="dangerous-content" forceOpen={activeSection === 'dangerous-content'}>
           <DangerousContentSettings
             settings={settings}
@@ -167,6 +195,18 @@ export function ChatTabContent() {
             imagePromptProfileId={settings.cheapLLMSettings.imagePromptProfileId}
             onImagePromptProfileChange={(id) => handleCheapLLMUpdate({ imagePromptProfileId: id })}
           />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Taboo" description="Phrases no character may utter, anywhere in the house" sectionId="taboo" forceOpen={activeSection === 'taboo'}>
+          <TabooSettings />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Data Retention" description="How long inactive chats keep their regenerable working data" sectionId="data-retention" forceOpen={activeSection === 'data-retention'}>
+          <DataRetentionSettings />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Brahma Console" description="How many tool-use turns the Console may take before it must answer" sectionId="brahma-console" forceOpen={activeSection === 'brahma-console'}>
+          <BrahmaConsoleSettings />
         </CollapsibleCard>
 
         <CollapsibleCard title="Autonomous Rooms" description="Defaults for private character-to-character rooms" sectionId="autonomous-rooms" forceOpen={activeSection === 'autonomous-rooms'}>

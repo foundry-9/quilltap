@@ -35,6 +35,15 @@ const VAULT_READ_TOOLS = new Set<string>([
   'doc_open_document',
 ])
 
+// Tools whose visible artifact is a message somebody else authored. The TOOL row
+// still persists — tool-call threading needs its callId linkage, and the model
+// needs the result — but the Salon renders nothing for it, so the run shows up
+// exactly once instead of twice.
+const DELEGATED_DISPLAY_TOOLS = new Set<string>([
+  // Pascal announces the outcome in his own bubble.
+  'run_custom',
+])
+
 /**
  * Per-chat context used to decide whether a tool result should be whispered.
  */
@@ -209,6 +218,9 @@ export async function saveToolMessages(
         result: toolMsg.content,
         arguments: toolMsg.arguments,
         callId: toolMsg.callId,
+        // Another message is this run's single visible artifact; this row is
+        // persisted for threading and the model, but rendered by nobody.
+        ...(DELEGATED_DISPLAY_TOOLS.has(toolMsg.toolName) ? { delegatedDisplay: true } : {}),
         // Prose offset where the character paused to call this tool, used by the
         // Salon UI to splice the block back into the message at that point.
         // Omitted (not null) when unavailable so legacy/end-anchored rows fall

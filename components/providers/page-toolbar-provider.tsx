@@ -12,14 +12,20 @@
 
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
 
-interface PageToolbarContextValue {
+export interface PageToolbarContextValue {
   leftContent: ReactNode | null
   setLeftContent: (content: ReactNode | null) => void
   rightContent: ReactNode | null
   setRightContent: (content: ReactNode | null) => void
 }
 
-const PageToolbarContext = createContext<PageToolbarContextValue | null>(null)
+/**
+ * Exported so the per-tab `TabToolbarProvider` (tabbed workspace) can supply the
+ * *same* context. `usePageToolbar()` then resolves to whichever provider is
+ * nearest — the per-tab one inside a workspace tab, the global one on the
+ * legacy routes — with no change to the call sites.
+ */
+export const PageToolbarContext = createContext<PageToolbarContextValue | null>(null)
 
 export function PageToolbarProvider({ children }: { children: ReactNode }) {
   const [leftContent, setLeftContentState] = useState<ReactNode | null>(null)

@@ -8,6 +8,7 @@
  */
 
 import { createLLMProvider } from '@/lib/llm';
+import { profileParams } from '@/lib/llm/cheap-llm';
 import { buildCharacterCacheKey } from '@/lib/llm/cache-key';
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup';
 import { getSafeInputLimit } from '@/lib/llm/model-context-data';
@@ -158,6 +159,7 @@ export async function generateExternalPrompt(
         maxTokens: request.maxTokens,
         temperature: 0.7,
         cacheKey: buildCharacterCacheKey(characterId),
+        profileParameters: profileParams(profile),
       },
       apiKey
     );

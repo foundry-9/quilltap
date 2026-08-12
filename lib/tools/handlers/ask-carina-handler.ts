@@ -62,7 +62,8 @@ export async function executeAskCarinaTool(
   context: AskCarinaToolContext,
 ): Promise<AskCarinaToolOutput> {
   try {
-    if (!validateAskCarinaInput(input)) {
+    const parsed = validateAskCarinaInput(input);
+    if (!parsed) {
       moduleLogger.warn('ask_carina validation failed', {
         chatId: context.chatId,
         userId: context.userId,
@@ -78,9 +79,9 @@ export async function executeAskCarinaTool(
     const result = await runCarinaQuery({
       userId: context.userId,
       chatId: context.chatId,
-      characterName: input.character,
-      question: input.question,
-      whisper: input.whisper,
+      characterName: parsed.character,
+      question: parsed.question,
+      whisper: parsed.whisper,
       askerParticipantId: context.callingParticipantId ?? null,
       onPosted: context.emitCarinaAnswer,
     });
@@ -96,7 +97,7 @@ export async function executeAskCarinaTool(
       kind: result.error.kind,
       characterName: result.error.characterName,
       detail: result.error.detail,
-      whisper: input.whisper,
+      whisper: parsed.whisper,
       askerParticipantId: context.callingParticipantId ?? null,
     });
 

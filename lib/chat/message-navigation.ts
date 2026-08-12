@@ -82,25 +82,3 @@ export function scrollToMessage(
 
   return true
 }
-
-/**
- * Set a highlight on a message element that will be cleared later.
- *
- * @param messageId The message ID to highlight
- * @param duration How long to keep the highlight (ms)
- */
-export function highlightMessage(messageId: string, duration: number = 3000): boolean {
-  const messageElement = document.querySelector(`[data-message-id="${messageId}"]`)
-
-  if (!messageElement) {
-    return false
-  }
-
-  messageElement.classList.add('memory-source-highlight')
-
-  setTimeout(() => {
-    messageElement.classList.remove('memory-source-highlight')
-  }, duration)
-
-  return true
-}

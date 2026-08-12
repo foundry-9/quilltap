@@ -21,6 +21,7 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { requiresApiKey } from '@/lib/plugins/provider-validation'
+import { resolveBrahmaMaxAgentTurns } from './turn-budget'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
 import type { ToolExecutionContext } from '@/lib/chat/tool-executor'
@@ -257,8 +258,10 @@ async function processBrahmaResponse(
     toolInstructions = buildNativeToolSystemInstructions()
   }
 
-  // Agent mode instructions (always enabled)
-  const maxAgentTurns = 25
+  // Agent mode instructions (always enabled). The turn budget is operator-set
+  // (Settings → Chat → Brahma Console); the stuck-loop guard below still stops
+  // a repeating loop well before this cap.
+  const maxAgentTurns = await resolveBrahmaMaxAgentTurns()
   const agentInstructions = buildAgentModeInstructions(maxAgentTurns)
   toolInstructions = toolInstructions
     ? `${toolInstructions}\n\n${agentInstructions}`
@@ -531,6 +534,28 @@ async function processBrahmaResponse(
 
   // Handle models that output submit_final_response as JSON text
   fullResponse = extractSubmitFinalResponseFromText(fullResponse)
+
+  // Budget-exhaustion salvage (Bug 47). The forced final turn (pushed at
+  // `agentTurnCount === maxAgentTurns`) executes no tools, so a model that
+  // answers it with yet another native tool call instead of
+  // `submit_final_response` leaves `fullResponse` empty — native tool calls
+  // carry no prose. Without this, the run would end having spent real API budget
+  // with NO assistant message and NO `done` event: a silent hang that looks
+  // exactly like a crash. Synthesise a short explanatory answer (folding in the
+  // last tool result we captured) so a run that did work always finalises with
+  // something and always signals completion below.
+  if (!fullResponse.trim()) {
+    const digest = lastToolResultText
+      ? `\n\nHere is what I gathered before I stopped:\n\n${lastToolResultText}`
+      : ''
+    fullResponse = `I reached my ${maxAgentTurns}-turn budget before I could compose a final answer.${digest}`
+    logger.warn('Brahma Console exhausted its turn budget without a final response', {
+      chatId,
+      maxAgentTurns,
+      hadToolData: !!lastToolResultText,
+    })
+    safeEnqueue(controller, encodeContentChunk(encoder, fullResponse))
+  }
 
   // Save the final assistant message
   if (fullResponse) {

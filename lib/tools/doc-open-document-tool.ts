@@ -57,8 +57,9 @@ export const docOpenDocumentToolDefinition = {
 /**
  * Validates input for doc_open_document tool.
  */
-export function validateDocOpenDocumentInput(input: unknown): input is DocOpenDocumentInput {
-  return docOpenDocumentToolInputSchema.safeParse(input).success;
+export function validateDocOpenDocumentInput(input: unknown): DocOpenDocumentInput | null {
+  const parsed = docOpenDocumentToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 

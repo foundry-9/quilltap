@@ -44,8 +44,9 @@ export const keepImageToolDefinition = {
   },
 };
 
-export function validateKeepImageInput(input: unknown): input is KeepImageInput {
-  return keepImageToolInputSchema.safeParse(input).success;
+export function validateKeepImageInput(input: unknown): KeepImageInput | null {
+  const parsed = keepImageToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 export interface KeepImageOutput {

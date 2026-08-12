@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware';
+import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { z } from 'zod';
@@ -39,7 +39,7 @@ const createHelpChatSchema = z.object({
 /**
  * List help chats for the current user
  */
-async function handleList(_req: NextRequest, context: AuthenticatedContext) {
+async function handleList(_req: NextRequest, context: RequestContext) {
   const { user, repos } = context;
 
   const allChats = await repos.chats.findByUserId(user.id);
@@ -74,7 +74,7 @@ async function handleList(_req: NextRequest, context: AuthenticatedContext) {
 /**
  * Get eligible help characters
  */
-async function handleEligibility(_req: NextRequest, context: AuthenticatedContext) {
+async function handleEligibility(_req: NextRequest, context: RequestContext) {
   const { user, repos } = context;
 
   const characters = await repos.characters.findByUserId(user.id);
@@ -122,7 +122,7 @@ async function handleEligibility(_req: NextRequest, context: AuthenticatedContex
 /**
  * Create a new help chat
  */
-async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
+async function handleCreate(req: NextRequest, context: RequestContext) {
   const { user, repos } = context;
 
   const body = await req.json();
@@ -220,7 +220,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
  * GET /api/v1/help-chats
  * List help chats or check eligibility
  */
-export const GET = createAuthenticatedHandler(async (req, context) => {
+export const GET = createContextHandler(async (req, context) => {
   const action = getActionParam(req);
 
   if (!action) {
@@ -242,6 +242,6 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
  * POST /api/v1/help-chats
  * Create a new help chat
  */
-export const POST = createAuthenticatedHandler(async (req, context) => {
+export const POST = createContextHandler(async (req, context) => {
   return handleCreate(req, context);
 });

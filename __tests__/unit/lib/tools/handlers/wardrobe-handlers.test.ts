@@ -48,6 +48,9 @@ const { executeWardrobeArchiveTool } = require('@/lib/tools/handlers/wardrobe-ar
 const { executeWardrobeWearTool } = require('@/lib/tools/handlers/wardrobe-wear-handler')
 const { executeWardrobeTakeOffTool } = require('@/lib/tools/handlers/wardrobe-take-off-handler')
 const outfitDisplacement = require('@/lib/wardrobe/outfit-displacement')
+// Not mocked — the fake repository below uses the real merge rule so the tier
+// precedence the handler relies on is the one under test.
+const { mergeWearablePool } = require('@/lib/wardrobe/wearable-pool')
 
 const mockGetRepositories = getRepositories as jest.Mock
 const mockTriggerAvatar = avatarGen.triggerAvatarGenerationIfEnabled as jest.Mock
@@ -99,6 +102,15 @@ describe('wardrobe tool handlers', () => {
           repos.wardrobe.findByIds(ids)
         ),
         findArchetypes: jest.fn().mockResolvedValue([]),
+        // Delegates to the two tier stubs so per-test setups that only override
+        // `findByCharacterId` / `findArchetypes` keep working. Note the list
+        // handler swallows a throw into `success: false` rather than failing
+        // loudly, so a missing method here reads as a bogus assertion.
+        findWearablePoolForCharacter: jest.fn(async (charId: string, opts?: unknown) => {
+          const shared = await repos.wardrobe.findArchetypes(false, opts)
+          const own = await repos.wardrobe.findByCharacterId(charId)
+          return mergeWearablePool(shared, own)
+        }),
         findArchetypeById: jest.fn().mockResolvedValue(null),
         findByIdForCharacter: jest.fn((_charId: string, id: string) =>
           repos.wardrobe.findById(id)

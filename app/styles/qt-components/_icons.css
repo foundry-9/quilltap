@@ -117,6 +117,7 @@
 [data-icon="dice"] { --_qt-icon-mask: url("/images/icons/dice.svg"); --_qt-icon-bg: none; }
 [data-icon="sparkles"] { --_qt-icon-mask: url("/images/icons/sparkles.svg"); --_qt-icon-bg: none; }
 [data-icon="wand"] { --_qt-icon-mask: url("/images/icons/wand.svg"); --_qt-icon-bg: none; }
+[data-icon="thinking"] { --_qt-icon-mask: url("/images/icons/thinking.svg"); --_qt-icon-bg: none; }
 [data-icon="wrench"] { --_qt-icon-mask: url("/images/icons/wrench.svg"); --_qt-icon-bg: none; }
 [data-icon="code"] { --_qt-icon-mask: url("/images/icons/code.svg"); --_qt-icon-bg: none; }
 [data-icon="cpu"] { --_qt-icon-mask: url("/images/icons/cpu.svg"); --_qt-icon-bg: none; }

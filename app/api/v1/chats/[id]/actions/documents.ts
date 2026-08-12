@@ -8,28 +8,38 @@
  * - read-document: Read file content for the document editor
  * - write-document: Write file content from the document editor
  * - rename-document: Rename the active document's file (filesystem or database-backed)
+ *
+ * The file mechanics (path resolution, blank-document naming, read/write with
+ * mtime checks, rename/delete moves) live in the shared core
+ * `lib/documents/operator-doc-actions`, which the chat-less standalone route
+ * (`/api/v1/documents`) drives too. This module adds what is chat-specific:
+ * chat_documents row tracking, the chat's documentMode flag, and Librarian
+ * announcements.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { successResponse, badRequest, conflict, notFound, serverError, errorResponse } from '@/lib/api/responses';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
-import {
-  resolveDocEditPath,
-  readFileWithMtime,
-  writeFileWithMtimeCheck,
-  reindexSingleFile,
-  type DocEditScope,
-} from '@/lib/doc-edit';
-import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
+import type { RequestContext } from '@/lib/api/middleware';
+import { readFileWithMtime, type DocEditScope } from '@/lib/doc-edit';
 import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
+import { DatabaseStoreError } from '@/lib/mount-index/database-store';
 import {
-  moveDatabaseDocument,
-  deleteDatabaseDocument,
-  readDatabaseDocument,
-  DatabaseStoreError,
-} from '@/lib/mount-index/database-store';
+  resolveOperatorDocPath,
+  resolvedPathExists,
+  classifyResolvedTarget,
+  openDocumentFile,
+  writeDocumentFile,
+  computeRenameTarget,
+  renameDocumentFile,
+  deleteDocumentFile,
+  listAllEnabledStores,
+  DocumentConflictError,
+  DocumentMissingError,
+  type DocumentAccessContext,
+  type AccessibleStoreOption,
+} from '@/lib/documents/operator-doc-actions';
 import {
   postLibrarianOpenAnnouncement,
   postLibrarianRenameAnnouncement,
@@ -44,7 +54,11 @@ import { getGeneralMountPointId } from '@/lib/instance-settings';
 import { MAX_RECENT_DOCUMENTS } from '@/lib/chat-documents/constants';
 import type { ChatDocument } from '@/lib/schemas/chat-document.types';
 import path from 'path';
-import fs from 'fs/promises';
+
+export type {
+  AccessibleStoreKind,
+  AccessibleStoreOption,
+} from '@/lib/documents/operator-doc-actions';
 
 // ============================================================================
 // Schemas
@@ -82,7 +96,27 @@ const writeDocumentSchema = z.object({
 
 const renameDocumentSchema = z.object({
   newTitle: z.string().min(1),
+  /** Row id of the specific open document to rename. Omitted by the legacy
+   * single-pane route, which renames the earliest-opened active document. */
+  chatDocumentId: z.string().optional(),
 });
+
+/**
+ * Resolve the chat_documents row a per-document action targets: the named row
+ * (verified to belong to the chat) when `chatDocumentId` is given, otherwise the
+ * earliest-opened active document (legacy single-pane fallback).
+ */
+async function resolveTargetDocument(
+  repos: RequestContext['repos'],
+  chatId: string,
+  chatDocumentId: string | undefined,
+): Promise<ChatDocument | null> {
+  if (chatDocumentId) {
+    const doc = await repos.chatDocuments.findById(chatDocumentId);
+    return doc && doc.chatId === chatId ? doc : null;
+  }
+  return repos.chatDocuments.findActiveForChat(chatId);
+}
 
 function getProjectId(chat: unknown): string | undefined {
   return (chat as Record<string, unknown>).projectId as string | undefined;
@@ -98,15 +132,10 @@ function getParticipantCharacterIds(chat: unknown): string[] {
   return Array.from(ids);
 }
 
-interface ChatDocumentContext {
-  projectId?: string;
-  characterIds: string[];
-}
-
 async function getChatContext(
   chatId: string,
-  { repos }: AuthenticatedContext
-): Promise<ChatDocumentContext | null> {
+  { repos }: RequestContext
+): Promise<DocumentAccessContext | null> {
   const chat = await repos.chats.findById(chatId);
   if (!chat) {
     return null;
@@ -116,128 +145,6 @@ async function getChatContext(
     projectId: getProjectId(chat),
     characterIds: getParticipantCharacterIds(chat),
   };
-}
-
-async function resolveDocumentRequest(
-  chatContext: ChatDocumentContext,
-  params: {
-    scope: DocEditScope;
-    filePath: string;
-    mountPoint?: string;
-  }
-): Promise<{ projectId?: string; resolved: Awaited<ReturnType<typeof resolveDocEditPath>> }> {
-  const resolved = await resolveDocEditPath(params.scope, params.filePath, {
-    projectId: chatContext.projectId,
-    characterIds: chatContext.characterIds,
-    mountPoint: params.mountPoint,
-    // These are operator-driven Document Mode actions (open/read/write/rename/
-    // delete from the Salon UI), so the operator may reach any enabled store —
-    // including ones picked via the picker's "look everywhere" mode. Character
-    // doc tools use a separate code path and never get this override.
-    operatorOverride: true,
-  });
-
-  return {
-    ...chatContext,
-    resolved,
-  };
-}
-
-/**
- * Probe whether a resolved doc-edit path currently has a file. Database-backed
- * stores answer via readDatabaseDocument (NOT_FOUND → false); filesystem
- * scopes use fs.access. Any other error bubbles, since we don't want to
- * silently treat permission failures as "doesn't exist" and overwrite.
- */
-async function resolvedPathExists(
-  resolved: Awaited<ReturnType<typeof resolveDocEditPath>>
-): Promise<boolean> {
-  if (resolved.mountType === 'database') {
-    if (!resolved.mountPointId) {
-      throw new Error('Database-backed ResolvedPath is missing mountPointId');
-    }
-    try {
-      await readDatabaseDocument(resolved.mountPointId, resolved.relativePath);
-      return true;
-    } catch (error) {
-      if (error instanceof DatabaseStoreError && error.code === 'NOT_FOUND') {
-        return false;
-      }
-      throw error;
-    }
-  }
-
-  try {
-    await fs.access(resolved.absolutePath);
-    return true;
-  } catch (error) {
-    const code = error instanceof Error && 'code' in error
-      ? (error as NodeJS.ErrnoException).code
-      : undefined;
-    if (code === 'ENOENT') return false;
-    throw error;
-  }
-}
-
-/**
- * Pick an unused "Untitled Document.md" filename inside `targetFolder`.
- * On collision, appends a counter ("Untitled Document 2.md", etc.). Returns
- * both the relative file path (for the chat_documents row and rename math)
- * and the resolved path it lives at (so the caller can write without a
- * second resolution round-trip).
- */
-async function pickUntitledDocumentPath(
-  chatContext: ChatDocumentContext,
-  scope: DocEditScope,
-  mountPoint: string | undefined,
-  targetFolder: string | undefined,
-): Promise<{ filePath: string; resolved: Awaited<ReturnType<typeof resolveDocEditPath>> }> {
-  const folder = (targetFolder ?? '').replace(/^\/+|\/+$/g, '');
-  const join = (name: string) => (folder ? `${folder}/${name}` : name);
-  const MAX_ATTEMPTS = 1000;
-
-  for (let i = 1; i <= MAX_ATTEMPTS; i++) {
-    const candidate = i === 1 ? 'Untitled Document.md' : `Untitled Document ${i}.md`;
-    const filePath = join(candidate);
-    const { resolved } = await resolveDocumentRequest(chatContext, {
-      scope,
-      filePath,
-      mountPoint,
-    });
-    if (!(await resolvedPathExists(resolved))) {
-      return { filePath, resolved };
-    }
-  }
-
-  // Defensive: if a thousand "Untitled Document N.md" already exist, fall
-  // back to a UUID so the user can still create a new doc.
-  const filePath = join(`Untitled Document ${crypto.randomUUID()}.md`);
-  const { resolved } = await resolveDocumentRequest(chatContext, {
-    scope,
-    filePath,
-    mountPoint,
-  });
-  return { filePath, resolved };
-}
-
-function scheduleDocumentStoreRefresh(
-  mountPointId: string,
-  relativePath: string,
-  absolutePath: string,
-  repos: AuthenticatedContext['repos'],
-  filePath: string,
-): void {
-  reindexSingleFile(mountPointId, relativePath, absolutePath)
-    .then(() => Promise.all([
-      enqueueEmbeddingJobsForMountPoint(mountPointId),
-      repos.docMountPoints.refreshStats(mountPointId),
-    ]))
-    .catch(err => {
-      logger.warn('Background re-index, embedding, or stats refresh failed after document save', {
-        path: filePath,
-        error: getErrorMessage(err),
-      });
-    });
 }
 
 // ============================================================================
@@ -255,7 +162,7 @@ function scheduleDocumentStoreRefresh(
  */
 export async function handleRecentDocuments(
   chatId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   try {
     // This chat's own documents (always shown first, in full) plus a window of
@@ -278,7 +185,7 @@ export async function handleRecentDocuments(
     const seen = new Set<string>();
     const ordered: ChatDocument[] = [];
     for (const doc of [...thisChat, ...otherChats]) {
-      const key = `${doc.scope} ${doc.mountPoint ?? ''} ${doc.filePath}`;
+      const key = `${doc.scope} ${doc.mountPoint ?? ''} ${doc.filePath}`;
       if (seen.has(key)) continue;
       seen.add(key);
       ordered.push(doc);
@@ -320,39 +227,6 @@ export async function handleRecentDocuments(
 }
 
 /**
- * Kind of an accessible store, used by the picker to bucket the right-column
- * accordions. `character` → a participant's character vault; `document-store`
- * → a document store linked to the chat's project.
- */
-export type AccessibleStoreKind = 'character' | 'document-store';
-
-export interface AccessibleStoreOption {
-  /** Mount point UUID — used to list files (`/api/v1/mount-points/:id/files`). */
-  mountPointId: string;
-  /**
-   * The mount point's canonical name. This is what document opens resolve
-   * against (`resolveDocEditPath` matches `document_store` scope by name), so
-   * it must be the real mount name, not a display alias.
-   */
-  name: string;
-  /** Display label for the row — character name for vaults, store name otherwise. */
-  label: string;
-  kind: AccessibleStoreKind;
-  mountType: 'filesystem' | 'obsidian' | 'database';
-  storeType: 'documents' | 'character';
-  /** Present for `kind: 'character'`. */
-  characterId?: string;
-  /**
-   * True when this store is reachable via a group membership (a group's
-   * official store or one of its linked stores) of some character participant.
-   * The picker buckets these into a dedicated "Group Files" accordion rather
-   * than the generic Database-/Filesystem-backed accordions, mirroring the
-   * tiered mount pool's group tier and the Library picker's Group Files section.
-   */
-  isGroupStore?: boolean;
-}
-
-/**
  * The project's official document store, surfaced as the picker's left-column
  * "Project library" button so it browses and opens the same mount the
  * `project` scope resolves to. Null when the chat has no project or the project
@@ -391,7 +265,7 @@ export interface ProjectLibraryTarget {
  */
 export async function handleAccessibleStores(
   chatId: string,
-  { repos }: AuthenticatedContext,
+  { repos }: RequestContext,
   opts: { all?: boolean } = {}
 ): Promise<NextResponse> {
   try {
@@ -432,39 +306,15 @@ export async function handleAccessibleStores(
       for (const id of ids) groupMountIds.add(id);
     }
 
-    const stores: AccessibleStoreOption[] = [];
+    let stores: AccessibleStoreOption[];
 
     if (opts.all) {
       // "Look everywhere": every enabled store, regardless of chat reach.
-      const [mounts, characters] = await Promise.all([
-        repos.docMountPoints.findEnabled(),
-        repos.characters.findAll(),
-      ]);
-      // Reverse-map character vaults to their owning character for labelling.
-      const vaultOwner = new Map<string, { id: string; name: string }>();
-      for (const c of characters) {
-        if (c.characterDocumentMountPointId) {
-          vaultOwner.set(c.characterDocumentMountPointId, { id: c.id, name: c.name });
-        }
-      }
-      for (const mp of mounts) {
-        if (seen.has(mp.id)) continue;
-        seen.add(mp.id);
-        const isCharacter = mp.storeType === 'character';
-        const owner = isCharacter ? vaultOwner.get(mp.id) : undefined;
-        stores.push({
-          mountPointId: mp.id,
-          name: mp.name,
-          label: owner?.name ?? mp.name,
-          kind: isCharacter ? 'character' : 'document-store',
-          mountType: mp.mountType,
-          storeType: mp.storeType,
-          ...(owner ? { characterId: owner.id } : {}),
-          ...(groupMountIds.has(mp.id) ? { isGroupStore: true } : {}),
-        });
-      }
+      stores = await listAllEnabledStores(repos, { exclude: seen, groupMountIds });
     } else {
       // Default: only stores reachable from this chat.
+      stores = [];
+
       // 1. Participant character vaults.
       for (const participant of chat.participants) {
         if (participant.type !== 'CHARACTER' || !participant.characterId) continue;
@@ -478,7 +328,7 @@ export async function handleAccessibleStores(
           mountPointId: mp.id,
           name: mp.name,
           label: character?.name ?? mp.name,
-          kind: 'character',
+          kind: 'character' as const,
           mountType: mp.mountType,
           storeType: mp.storeType,
           characterId: participant.characterId,
@@ -497,7 +347,7 @@ export async function handleAccessibleStores(
           mountPointId: mp.id,
           name: mp.name,
           label: mp.name,
-          kind: 'document-store',
+          kind: 'document-store' as const,
           mountType: mp.mountType,
           storeType: mp.storeType,
           isGroupStore: true,
@@ -516,7 +366,7 @@ export async function handleAccessibleStores(
             mountPointId: mp.id,
             name: mp.name,
             label: mp.name,
-            kind: 'document-store',
+            kind: 'document-store' as const,
             mountType: mp.mountType,
             storeType: mp.storeType,
           });
@@ -534,7 +384,7 @@ export async function handleAccessibleStores(
             mountPointId: mp.id,
             name: mp.name,
             label: mp.name,
-            kind: 'document-store',
+            kind: 'document-store' as const,
             mountType: mp.mountType,
             storeType: mp.storeType,
           });
@@ -565,11 +415,36 @@ export async function handleAccessibleStores(
 }
 
 /**
- * Get the active document for a chat
+ * Recompute a chat's coarse `documentMode` flag from how many documents remain
+ * open. With multiple documents allowed at once, the flag means "is Document
+ * Mode engaged" — `split` while any document is open, `normal` once the last
+ * one closes. The legacy single-pane route still reads this to decide whether to
+ * show a pane. A `focus`-mode chat keeps `focus` while documents remain open so
+ * the legacy route's full-width layout survives a sibling close.
+ */
+async function refreshDocumentMode(
+  repos: RequestContext['repos'],
+  chatId: string,
+): Promise<void> {
+  const open = await repos.chatDocuments.findOpenForChat(chatId);
+  if (open.length === 0) {
+    await repos.chats.update(chatId, { documentMode: 'normal' } as Record<string, unknown>);
+    return;
+  }
+  const chat = await repos.chats.findById(chatId);
+  const current = (chat as { documentMode?: string } | null)?.documentMode;
+  if (current !== 'split' && current !== 'focus') {
+    await repos.chats.update(chatId, { documentMode: 'split' } as Record<string, unknown>);
+  }
+}
+
+/**
+ * Get an active document for a chat (the earliest-opened). Retained for the
+ * legacy single-pane route; the workspace uses `open-documents` instead.
  */
 export async function handleActiveDocument(
   chatId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   try {
     const doc = await repos.chatDocuments.findActiveForChat(chatId);
@@ -593,12 +468,42 @@ export async function handleActiveDocument(
 }
 
 /**
+ * List every open document for a chat (oldest-opened first). The tabbed
+ * workspace calls this on mount to restore one editor pane/tab per open
+ * document. Content is fetched separately per document via `read-document`.
+ */
+export async function handleOpenDocuments(
+  chatId: string,
+  { repos }: RequestContext
+): Promise<NextResponse> {
+  try {
+    const docs = await repos.chatDocuments.findOpenForChat(chatId);
+
+    return successResponse({
+      documents: docs.map(doc => ({
+        id: doc.id,
+        filePath: doc.filePath,
+        scope: doc.scope,
+        mountPoint: doc.mountPoint,
+        displayTitle: doc.displayTitle,
+      })),
+    });
+  } catch (error) {
+    logger.error('Failed to list open documents', {
+      chatId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return serverError('Failed to list open documents');
+  }
+}
+
+/**
  * Open a document alongside the chat
  */
 export async function handleOpenDocument(
   req: NextRequest,
   chatId: string,
-  context: AuthenticatedContext
+  context: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const data = openDocumentSchema.parse(body);
@@ -614,53 +519,26 @@ export async function handleOpenDocument(
     ? 'general'
     : requestedScope;
 
-  let filePath = data.filePath;
-  let displayTitle = data.title;
-  let content = '';
-  let mtime: number | undefined;
-
-  if (filePath) {
-    try {
-      const resolvedRequest = await resolveDocumentRequest(chatContext, {
-        scope: effectiveScope,
-        filePath,
-        mountPoint: data.mountPoint,
-      });
-
-      const fileData = await readFileWithMtime(resolvedRequest.resolved);
-      content = fileData.content;
-      mtime = fileData.mtime;
-      if (!displayTitle) {
-        displayTitle = path.basename(filePath);
-      }
-    } catch {
+  let opened;
+  try {
+    opened = await openDocumentFile(chatContext, {
+      filePath: data.filePath,
+      title: data.title,
+      scope: effectiveScope,
+      mountPoint: data.mountPoint,
+      targetFolder: data.targetFolder,
+    });
+  } catch (error) {
+    if (error instanceof DocumentMissingError) {
       // 404 (not 400) so the client can distinguish a genuinely missing file
       // from a malformed request and surface a friendly toast instead of the
       // dev error overlay.
-      return errorResponse(`File not found: ${filePath}`, 404);
+      return errorResponse(error.message, 404);
     }
-  } else {
-    try {
-      const picked = await pickUntitledDocumentPath(
-        chatContext,
-        effectiveScope,
-        data.mountPoint,
-        data.targetFolder,
-      );
-      filePath = picked.filePath;
-      const writeResult = await writeFileWithMtimeCheck(picked.resolved, '');
-      mtime = writeResult.mtime;
-      if (!displayTitle) {
-        displayTitle = path.basename(filePath);
-      }
-    } catch (error) {
-      return serverError(`Failed to create blank document: ${error instanceof Error ? error.message : String(error)}`);
-    }
+    return serverError(`Failed to create blank document: ${getErrorMessage(error)}`);
   }
 
-  if (!displayTitle) {
-    displayTitle = 'Untitled document';
-  }
+  const { filePath, displayTitle, content, mtime } = opened;
 
   try {
     const doc = await repos.chatDocuments.openDocument(chatId, {
@@ -681,7 +559,7 @@ export async function handleOpenDocument(
       filePath,
       scope: effectiveScope,
       mountPoint: data.mountPoint,
-      isNew: !data.filePath,
+      isNew: opened.isNew,
       origin: { kind: 'opened-by-user' },
       // A character_read:false document must not be announced to characters.
       hiddenFromCharacters: contentHiddenFromCharacters(content),
@@ -709,18 +587,33 @@ export async function handleOpenDocument(
   }
 }
 
+const closeDocumentSchema = z.object({
+  /** Row id of the specific open document to close. Omitted by the legacy
+   * single-pane route, which closes the earliest-opened active document. */
+  chatDocumentId: z.string().optional(),
+});
+
 /**
- * Close the document pane
+ * Close one open document pane. With multiple documents open, the caller names
+ * which one via `chatDocumentId`; the legacy single-pane route omits it and the
+ * earliest-opened document is closed. `documentMode` is recomputed from the
+ * remaining open set, so it only returns to `normal` once the last one closes.
  */
 export async function handleCloseDocument(
+  req: NextRequest,
   chatId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   try {
-    await repos.chatDocuments.closeDocument(chatId);
-    await repos.chats.update(chatId, {
-      documentMode: 'normal',
-    } as Record<string, unknown>);
+    const body = await req.json().catch(() => ({}));
+    const { chatDocumentId } = closeDocumentSchema.parse(body ?? {});
+
+    if (chatDocumentId) {
+      await repos.chatDocuments.closeDocumentById(chatId, chatDocumentId);
+    } else {
+      await repos.chatDocuments.closeDocument(chatId);
+    }
+    await refreshDocumentMode(repos, chatId);
 
     return successResponse({ success: true });
   } catch (error) {
@@ -738,7 +631,7 @@ export async function handleCloseDocument(
 export async function handleReadDocument(
   req: NextRequest,
   chatId: string,
-  context: AuthenticatedContext
+  context: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const data = readDocumentSchema.parse(body);
@@ -748,9 +641,9 @@ export async function handleReadDocument(
     return badRequest('Chat not found');
   }
 
-  let resolvedRequest;
+  let resolved;
   try {
-    resolvedRequest = await resolveDocumentRequest(chatContext, {
+    resolved = await resolveOperatorDocPath(chatContext, {
       scope: data.scope as DocEditScope,
       filePath: data.filePath,
       mountPoint: data.mountPoint,
@@ -768,7 +661,7 @@ export async function handleReadDocument(
   }
 
   try {
-    const fileData = await readFileWithMtime(resolvedRequest.resolved);
+    const fileData = await readFileWithMtime(resolved);
 
     return successResponse({
       content: fileData.content,
@@ -809,7 +702,7 @@ export async function handleReadDocument(
 export async function handleResolveDocument(
   req: NextRequest,
   chatId: string,
-  context: AuthenticatedContext
+  context: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const data = readDocumentSchema.parse(body);
@@ -825,17 +718,17 @@ export async function handleResolveDocument(
     const selfCharacterId =
       isSelf && chatContext.characterIds.length === 1 ? chatContext.characterIds[0] : undefined;
 
-    const resolved = await resolveDocEditPath(data.scope as DocEditScope, data.filePath, {
-      projectId: chatContext.projectId,
-      characterIds: chatContext.characterIds,
-      characterId: selfCharacterId,
+    const resolved = await resolveOperatorDocPath(chatContext, {
+      scope: data.scope as DocEditScope,
+      filePath: data.filePath,
       mountPoint: data.mountPoint,
       // Operator surface (the human's Salon), matching read/open-document.
-      operatorOverride: true,
+      characterId: selfCharacterId,
     });
 
     const exists = await resolvedPathExists(resolved);
-    return successResponse({ exists });
+    const kind = exists ? await classifyResolvedTarget(context.repos, resolved) : 'other'
+    return successResponse({ exists, kind });
   } catch (error) {
     logger.debug('resolve-document: path not resolvable; treating as non-existent', {
       chatId,
@@ -844,7 +737,7 @@ export async function handleResolveDocument(
       mountPoint: data.mountPoint,
       error: getErrorMessage(error),
     });
-    return successResponse({ exists: false });
+    return successResponse({ exists: false, kind: 'other' });
   }
 }
 
@@ -854,7 +747,7 @@ export async function handleResolveDocument(
 export async function handleWriteDocument(
   req: NextRequest,
   chatId: string,
-  context: AuthenticatedContext
+  context: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const data = writeDocumentSchema.parse(body);
@@ -865,29 +758,13 @@ export async function handleWriteDocument(
   }
 
   try {
-    const resolvedRequest = await resolveDocumentRequest(chatContext, {
-      scope: data.scope as DocEditScope,
+    const { mtime } = await writeDocumentFile(chatContext, context.repos, {
       filePath: data.filePath,
+      scope: data.scope as DocEditScope,
       mountPoint: data.mountPoint,
+      content: data.content,
+      mtime: data.mtime,
     });
-
-    const { repos } = context;
-    const { resolved } = resolvedRequest;
-    const { mtime } = await writeFileWithMtimeCheck(
-      resolved,
-      data.content,
-      data.mtime,
-    );
-
-    if (data.scope === 'document_store' && resolved.mountPointId) {
-      scheduleDocumentStoreRefresh(
-        resolved.mountPointId,
-        resolved.relativePath,
-        resolved.absolutePath,
-        repos,
-        data.filePath,
-      );
-    }
 
     const librarianMessage = data.diffContent
       ? await postLibrarianSaveAnnouncement({
@@ -933,42 +810,26 @@ export async function handleWriteDocument(
  * extension, the old extension is appended so users can type "backstory"
  * and get "backstory.md". Path separators are rejected — this is a rename
  * within the current directory, not a move.
- *
- * Dispatches on mount type so database-backed stores route through
- * moveDatabaseDocument while filesystem-backed scopes use fs.rename,
- * matching the pattern in doc_move_file.
  */
 export async function handleRenameDocument(
   req: NextRequest,
   chatId: string,
-  context: AuthenticatedContext
+  context: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const data = renameDocumentSchema.parse(body);
 
   const { repos } = context;
-  const doc = await repos.chatDocuments.findActiveForChat(chatId);
+  const doc = await resolveTargetDocument(repos, chatId, data.chatDocumentId);
   if (!doc) {
     return badRequest('No active document to rename');
   }
 
-  const raw = data.newTitle.trim();
-  if (!raw) {
-    return badRequest('Name cannot be empty');
+  const target = computeRenameTarget(doc.filePath, data.newTitle);
+  if (!target.ok) {
+    return badRequest(target.reason);
   }
-  if (raw.includes('/') || raw.includes('\\')) {
-    return badRequest('Name cannot contain path separators');
-  }
-  if (raw === '.' || raw === '..' || raw.split(/[\\/]/).includes('..')) {
-    return badRequest('Invalid name');
-  }
-
-  const oldExt = path.extname(doc.filePath);
-  const oldDir = path.dirname(doc.filePath);
-  const newBasename = path.extname(raw) ? raw : `${raw}${oldExt}`;
-  const newFilePath = oldDir === '.' || oldDir === ''
-    ? newBasename
-    : `${oldDir.replace(/\\/g, '/')}/${newBasename}`;
+  const { newFilePath, newDisplayTitle } = target;
 
   if (newFilePath === doc.filePath) {
     return successResponse({
@@ -987,18 +848,15 @@ export async function handleRenameDocument(
     return badRequest('Chat not found');
   }
 
-  let resolvedOld, resolvedNew;
+  // Capture the read-policy BEFORE the rename moves the link off the old path,
+  // so a character_read:false document isn't announced to characters.
+  let resolvedOld;
   try {
-    resolvedOld = (await resolveDocumentRequest(chatContext, {
+    resolvedOld = await resolveOperatorDocPath(chatContext, {
       scope: doc.scope as DocEditScope,
       filePath: doc.filePath,
       mountPoint: doc.mountPoint ?? undefined,
-    })).resolved;
-    resolvedNew = (await resolveDocumentRequest(chatContext, {
-      scope: doc.scope as DocEditScope,
-      filePath: newFilePath,
-      mountPoint: doc.mountPoint ?? undefined,
-    })).resolved;
+    });
   } catch (error) {
     const message = getErrorMessage(error);
     logger.warn('Failed to resolve document path for rename', {
@@ -1009,44 +867,21 @@ export async function handleRenameDocument(
     });
     return badRequest(`Could not resolve path: ${message}`);
   }
-
-  // Capture the read-policy BEFORE the rename moves the link off the old path,
-  // so a character_read:false document isn't announced to characters.
   const hiddenFromCharacters = await documentHiddenFromCharacters(
     resolvedOld.mountPointId,
     resolvedOld.relativePath,
   );
 
   try {
-    if (resolvedOld.mountType === 'database' && resolvedOld.mountPointId) {
-      await moveDatabaseDocument(
-        resolvedOld.mountPointId,
-        resolvedOld.relativePath,
-        resolvedNew.relativePath,
-      );
-    } else {
-      try {
-        await fs.access(resolvedNew.absolutePath);
-        return conflict(`A file already exists at that name.`);
-      } catch {
-        // destination free — proceed
-      }
-      await fs.mkdir(path.dirname(resolvedNew.absolutePath), { recursive: true });
-      await fs.rename(resolvedOld.absolutePath, resolvedNew.absolutePath);
-
-      if (doc.scope === 'document_store' && resolvedOld.mountPointId) {
-        scheduleDocumentStoreRefresh(
-          resolvedOld.mountPointId,
-          resolvedNew.relativePath,
-          resolvedNew.absolutePath,
-          repos,
-          newFilePath,
-        );
-      }
-    }
+    await renameDocumentFile(chatContext, repos, {
+      scope: doc.scope as DocEditScope,
+      mountPoint: doc.mountPoint ?? undefined,
+      oldFilePath: doc.filePath,
+      newFilePath,
+    });
   } catch (error) {
     const message = getErrorMessage(error);
-    if (error instanceof DatabaseStoreError && error.code === 'CONFLICT') {
+    if (error instanceof DocumentConflictError) {
       return conflict(`A file already exists at that name.`);
     }
     if (error instanceof DatabaseStoreError && error.code === 'UNSUPPORTED') {
@@ -1061,12 +896,34 @@ export async function handleRenameDocument(
     return serverError(`Failed to rename document: ${message}`);
   }
 
-  const newDisplayTitle = path.basename(newFilePath);
   const oldDisplayTitle = doc.displayTitle || path.basename(doc.filePath);
   const updated = await repos.chatDocuments.update(doc.id, {
     filePath: newFilePath,
     displayTitle: newDisplayTitle,
   });
+
+  // Sweep any other chats' (or the standalone) recent-document rows still
+  // pointing at the old path so the shared recent list stays consistent. The
+  // row above is already at newFilePath, so it won't re-match here. Best-effort:
+  // the rename already succeeded on disk. Mirrors syncChatDocumentsAfterFileMove.
+  try {
+    await repos.chatDocuments.renameFilePathInStore(
+      doc.scope,
+      doc.mountPoint ?? null,
+      doc.filePath,
+      newFilePath,
+      newDisplayTitle,
+    );
+  } catch (trackError) {
+    logger.warn('Failed to sweep recent-document tracking after rename', {
+      chatId,
+      from: doc.filePath,
+      to: newFilePath,
+      scope: doc.scope,
+      mountPoint: doc.mountPoint,
+      error: getErrorMessage(trackError),
+    });
+  }
 
   const librarianMessage = await postLibrarianRenameAnnouncement({
     chatId,
@@ -1099,11 +956,15 @@ export async function handleRenameDocument(
  * Librarian announces the removal so characters present know the file is gone.
  */
 export async function handleDeleteDocument(
+  req: NextRequest,
   chatId: string,
-  context: AuthenticatedContext
+  context: RequestContext
 ): Promise<NextResponse> {
+  const body = await req.json().catch(() => ({}));
+  const { chatDocumentId } = closeDocumentSchema.parse(body ?? {});
+
   const { repos } = context;
-  const doc = await repos.chatDocuments.findActiveForChat(chatId);
+  const doc = await resolveTargetDocument(repos, chatId, chatDocumentId);
   if (!doc) {
     return badRequest('No active document to delete');
   }
@@ -1115,11 +976,11 @@ export async function handleDeleteDocument(
 
   let resolved;
   try {
-    resolved = (await resolveDocumentRequest(chatContext, {
+    resolved = await resolveOperatorDocPath(chatContext, {
       scope: doc.scope as DocEditScope,
       filePath: doc.filePath,
       mountPoint: doc.mountPoint ?? undefined,
-    })).resolved;
+    });
   } catch (error) {
     const message = getErrorMessage(error);
     logger.warn('Failed to resolve document path for delete', {
@@ -1138,21 +999,16 @@ export async function handleDeleteDocument(
   );
 
   try {
-    if (resolved.mountType === 'database' && resolved.mountPointId) {
-      const deleted = await deleteDatabaseDocument(resolved.mountPointId, resolved.relativePath);
-      if (!deleted) {
-        return notFound('File not found');
-      }
-    } else {
-      try {
-        const stat = await fs.stat(resolved.absolutePath);
-        if (!stat.isFile()) {
-          return badRequest(`Path is not a file: ${doc.filePath}`);
-        }
-      } catch {
-        return notFound('File not found');
-      }
-      await fs.unlink(resolved.absolutePath);
+    const outcome = await deleteDocumentFile(chatContext, {
+      scope: doc.scope as DocEditScope,
+      mountPoint: doc.mountPoint ?? undefined,
+      filePath: doc.filePath,
+    });
+    if (outcome === 'not-found') {
+      return notFound('File not found');
+    }
+    if (outcome === 'not-a-file') {
+      return badRequest(`Path is not a file: ${doc.filePath}`);
     }
   } catch (error) {
     const message = getErrorMessage(error);
@@ -1164,10 +1020,8 @@ export async function handleDeleteDocument(
     return serverError(`Failed to delete document: ${message}`);
   }
 
-  await repos.chatDocuments.closeDocument(chatId);
-  await repos.chats.update(chatId, {
-    documentMode: 'normal',
-  } as Record<string, unknown>);
+  await repos.chatDocuments.closeDocumentById(chatId, doc.id);
+  await refreshDocumentMode(repos, chatId);
 
   const displayTitle = doc.displayTitle || path.basename(doc.filePath);
 

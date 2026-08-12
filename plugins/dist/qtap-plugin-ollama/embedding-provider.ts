@@ -286,8 +286,11 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
           context: 'OllamaEmbeddingProvider.fetchModelNumCtx',
           model,
           fallback: NUM_CTX_FALLBACK,
-        },
-        error instanceof Error ? error : undefined
+          // PluginLogger.warn takes (message, context) — only error() accepts a
+          // third Error argument. This was passed as a third argument and
+          // silently dropped, so the warning carried no cause. Fold it in.
+          error: error instanceof Error ? error.message : String(error),
+        }
       );
       return { numCtx: NUM_CTX_FALLBACK, derived: false };
     }

@@ -17,6 +17,7 @@
 
 import { execSync } from 'child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, readdirSync, statSync } from 'fs';
+import { builtinModules } from 'module';
 import { join } from 'path';
 
 const PROJECT_ROOT = join(__dirname, '..');
@@ -48,6 +49,86 @@ function dirSize(dir: string): string {
   } catch {
     return '?';
   }
+}
+
+/**
+ * Reduce a require specifier to its package name: "ajv/dist/runtime/uri" ->
+ * "ajv", "@quilltap/plugin-types/foo" -> "@quilltap/plugin-types".
+ */
+function packageNameOf(specifier: string): string {
+  const parts = specifier.split('/');
+  return specifier.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0];
+}
+
+/**
+ * Drop each plugin's node_modules when nothing actually resolves against it.
+ *
+ * esbuild inlines a plugin's dependencies into its index.js, so these trees are
+ * usually pure dead weight — around 680 MB across the 14 bundled plugins, which
+ * is the bulk of the tarball. But they are NOT uniformly redundant: a few
+ * packages survive bundling as bare require() calls, either because the plugin
+ * marks them external (zod) or because a dependency requires them dynamically
+ * in a way esbuild cannot follow (@modelcontextprotocol/sdk reaching for ajv
+ * and ajv/dist/runtime/*).
+ *
+ * Whether that matters depends on where the require can resolve. Node walks up
+ * from the plugin directory, so a package present in the standalone root is
+ * found with or without the plugin's own copy. Docker gets away with deleting
+ * all of these because its image carries the full production node_modules; the
+ * standalone root is only Next's traced subset, and packages like ajv and
+ * @quilltap/plugin-types are not in it.
+ *
+ * So a tree is load-bearing only when some require resolves from it and NOT
+ * from the root — which also correctly ignores specifiers that resolve from
+ * neither. `ws` reaching for its optional native accelerators (bufferutil,
+ * utf-8-validate) is the case that matters there: absent everywhere today, and
+ * handled by a fallback, so keeping the tree would buy nothing.
+ *
+ * Computed per build rather than hardcoded, so it stays correct as plugin
+ * dependencies change instead of silently going stale.
+ */
+function pruneRedundantPluginModules(pluginsDest: string): void {
+  const rootModules = join(STAGING_DIR, 'node_modules');
+  const builtins = new Set(builtinModules);
+  let dropped = 0;
+  let kept = 0;
+
+  for (const entry of readdirSync(pluginsDest)) {
+    const pluginDir = join(pluginsDest, entry);
+    const treeDir = join(pluginDir, 'node_modules');
+    const bundle = join(pluginDir, 'index.js');
+    if (!existsSync(treeDir) || !statSync(pluginDir).isDirectory()) continue;
+
+    // No bundle to inspect — leave the tree alone rather than guess.
+    if (!existsSync(bundle)) {
+      console.log(`    Kept:     ${entry}/node_modules (no index.js to analyze)`);
+      kept++;
+      continue;
+    }
+
+    const source = readFileSync(bundle, 'utf-8');
+    const specifiers = new Set<string>();
+    for (const m of source.matchAll(/require\(\s*["']([^"'.][^"']*)["']\s*\)/g)) {
+      specifiers.add(packageNameOf(m[1]));
+    }
+
+    const needed = [...specifiers].filter(pkg => {
+      if (pkg.startsWith('node:') || builtins.has(pkg)) return false;
+      const inRoot = existsSync(join(rootModules, pkg));
+      const inTree = existsSync(join(treeDir, pkg));
+      return inTree && !inRoot;
+    });
+
+    if (needed.length === 0) {
+      rmSync(treeDir, { recursive: true, force: true });
+      dropped++;
+    } else {
+      console.log(`    Kept:     ${entry}/node_modules (resolves ${needed.join(', ')})`);
+      kept++;
+    }
+  }
+
+  console.log(`    Pruned ${dropped} redundant plugin node_modules, kept ${kept}`);
 }
 
 // Read root version
@@ -133,6 +214,7 @@ if (existsSync(PLUGINS_DIST)) {
   const pluginsDest = join(STAGING_DIR, 'plugins', 'dist');
   mkdirSync(pluginsDest, { recursive: true });
   copyDir(`${PLUGINS_DIST}/.`, pluginsDest);
+  pruneRedundantPluginModules(pluginsDest);
 }
 
 const standaloneNodeModules = join(STAGING_DIR, 'node_modules');
@@ -161,19 +243,10 @@ if (existsSync(standaloneNodeModules)) {
     }
   }
 
-  // Strip native .node binaries from sharp (keep JS wrapper)
-  const sharpBuildDir = join(standaloneNodeModules, 'sharp', 'build');
-  if (existsSync(sharpBuildDir)) {
-    rmSync(sharpBuildDir, { recursive: true, force: true });
-    console.log('    Stripped: sharp/build (native binaries)');
-  }
-  const sharpPrebuildsDir = join(standaloneNodeModules, 'sharp', 'prebuilds');
-  if (existsSync(sharpPrebuildsDir)) {
-    rmSync(sharpPrebuildsDir, { recursive: true, force: true });
-    console.log('    Stripped: sharp/prebuilds (native binaries)');
-  }
-
-  // Remove @img/sharp-* platform-specific native packages but keep @img/colour (pure JS)
+  // Remove @img/sharp-* platform-specific native packages but keep @img/colour (pure JS).
+  // Since sharp 0.35 every native binary lives here — the package itself no longer
+  // carries build/ or prebuilds/ directories, and it dropped its install script, so
+  // the user's `npm install` restores these purely through optionalDependencies.
   const imgDir = join(standaloneNodeModules, '@img');
   if (existsSync(imgDir)) {
     for (const entry of readdirSync(imgDir)) {

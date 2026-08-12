@@ -8,6 +8,7 @@
 
 import type { Memory } from '@/lib/schemas/types'
 import { logger } from '@/lib/logger'
+import { eventReferenceTimeMs } from './episodic'
 
 /**
  * Configuration for memory weight calculations.
@@ -34,6 +35,22 @@ export interface EffectiveWeightResult {
   timeDecayFactor: number
   daysOld: number
   baseImportance: number
+}
+
+/**
+ * Decay reference point for a memory: `max(createdAt, lastReinforcedAt)`.
+ *
+ * Single source of truth for the invariant that passive retrieval
+ * (`lastAccessedAt`) does NOT reset the decay clock — only creation or actual
+ * reinforcement with new information does. Every decay/age calculation in this
+ * module derives its reference time from here.
+ */
+export function referenceTimeMs(memory: Memory): number {
+  const createdTime = new Date(memory.createdAt).getTime()
+  const reinforcedTime = memory.lastReinforcedAt
+    ? new Date(memory.lastReinforcedAt).getTime()
+    : 0
+  return Math.max(createdTime, reinforcedTime)
 }
 
 /**
@@ -64,11 +81,7 @@ export function calculateEffectiveWeight(
   // Use max(createdAt, lastReinforcedAt) as the reference time for decay.
   // Passive retrieval (lastAccessedAt) does NOT reset the decay timer —
   // only actual reinforcement with new information does.
-  const createdTime = new Date(memory.createdAt).getTime()
-  const reinforcedTime = memory.lastReinforcedAt
-    ? new Date(memory.lastReinforcedAt).getTime()
-    : 0
-  const referenceTime = Math.max(createdTime, reinforcedTime)
+  const referenceTime = referenceTimeMs(memory)
 
   const daysOld = Math.max(0, (now.getTime() - referenceTime) / 86400000)
   const timeDecayFactor = Math.pow(0.5, daysOld / config.halfLifeDays)
@@ -87,15 +100,68 @@ export function calculateEffectiveWeight(
 }
 
 /**
+ * Retrieval ranking blend.
+ *
+ * Every semantic/text retrieval path ranks candidates by a single blended key.
+ * Relevance (cosine) is the *primary* sort key; importance/recency is a decaying
+ * tie-breaker, NOT a floor. This is deliberately the no-floor `rawWeight`
+ * (importance × time decay) rather than `effectiveWeight` — the 0.70 importance
+ * floor in {@link DEFAULT_WEIGHTING_CONFIG} exists to protect important memories
+ * from *housekeeping deletion* and must not leak into retrieval ranking, where it
+ * gives high-importance memories a permanent score floor with zero topical match
+ * (they then get whispered every turn regardless of topic).
+ *
+ * Centralized here because these coefficients were previously inlined at four
+ * call sites in memory-service.ts and drifted out of view. All four call
+ * {@link computeRankingBlend}.
+ */
+export const RANKING_RELEVANCE_WEIGHT = 0.75
+export const RANKING_PRIORITY_WEIGHT = 0.25
+
+/**
+ * Blend a candidate's relevance (cosine, 0–1) with its decaying priority
+ * (`rawWeight` from {@link calculateEffectiveWeight}, no floor). Returns the
+ * ranking key; recall-tag and anti-repetition multipliers are applied to this
+ * value *afterward* (see lib/memory/recall-tags.ts).
+ */
+export function computeRankingBlend(cosine: number, rawWeight: number): number {
+  return RANKING_RELEVANCE_WEIGHT * cosine + RANKING_PRIORITY_WEIGHT * rawWeight
+}
+
+/**
+ * Default minimum *cosine* (raw relevance) for a memory to be eligible for
+ * recall, below which it is dropped before the blend. Two embedding scales
+ * coexist and distribute very differently, so the floor is provider-aware:
+ * neural API embeddings live in a compressed band (~0.25 unrelated, ~0.45–0.75
+ * related), while the built-in TF-IDF profile produces much sparser cosines.
+ * A single global floor would silently break one of them.
+ *
+ * Starting points — tune against real chats via the per-turn debug output
+ * before tightening.
+ */
+export const DEFAULT_MIN_COSINE_NEURAL = 0.30
+export const DEFAULT_MIN_COSINE_TFIDF = 0.10
+
+/**
+ * Resolve the default relevance floor for an embedding profile's provider.
+ * `BUILTIN` is the local TF-IDF provider; everything else is a neural API
+ * provider (OPENAI / OLLAMA / OPENROUTER).
+ */
+export function defaultMinCosineForProvider(provider: string | undefined | null): number {
+  return provider === 'BUILTIN' ? DEFAULT_MIN_COSINE_TFIDF : DEFAULT_MIN_COSINE_NEURAL
+}
+
+/**
  * Format a memory's age as a human-readable relative time label.
  * Used for temporal context in LLM memory injection.
+ *
+ * Episodic spine: the label reads off the EVENT clock — `occurredAt` when
+ * present, else the write/reinforce clock — so "last week" means when it
+ * happened, not when it was written down. Decay (above) deliberately stays on
+ * the write clock; only the human-facing age label follows the event.
  */
 export function formatRelativeAge(memory: Memory, now: Date = new Date()): string {
-  const createdTime = new Date(memory.createdAt).getTime()
-  const reinforcedTime = memory.lastReinforcedAt
-    ? new Date(memory.lastReinforcedAt).getTime()
-    : 0
-  const referenceTime = Math.max(createdTime, reinforcedTime)
+  const referenceTime = eventReferenceTimeMs(memory.occurredAt, referenceTimeMs(memory))
   const daysOld = Math.max(0, (now.getTime() - referenceTime) / 86400000)
 
   if (daysOld < 1) return 'today'
@@ -151,6 +217,13 @@ export interface ProtectionScoreConfig {
    * to cross the threshold. Honors the blended-score design goal of
    * "LLM opinion is one input among several, not a final verdict." */
   maxContentContribution: number
+  /** Additive bonus for `kind: 'episodic'` rows. Default: 0.10. Episodic
+   * memories carry the exact statistical profile housekeeping deletes first
+   * (low importance, low reinforcement, low graph degree) yet are the hardest
+   * to regenerate — a one-off visit never recurs to be re-extracted. The
+   * vault Timeline is the durable backstop, but the memory ROW is what
+   * per-turn retrieval actually hits, so it should be the last to go. */
+  episodicBonus: number
 }
 
 export const DEFAULT_PROTECTION_CONFIG: ProtectionScoreConfig = {
@@ -163,6 +236,7 @@ export const DEFAULT_PROTECTION_CONFIG: ProtectionScoreConfig = {
   recentAccessBonus: 0.10,
   recentAccessWindowDays: 90,
   maxContentContribution: 0.40,
+  episodicBonus: 0.10,
 }
 
 export interface ProtectionScoreResult {
@@ -172,6 +246,7 @@ export interface ProtectionScoreResult {
   reinforcementBonus: number
   graphDegreeBonus: number
   recentAccessBonus: number
+  episodicBonus: number
   daysSinceRefTime: number
 }
 
@@ -194,11 +269,7 @@ export function calculateProtectionScore(
 ): ProtectionScoreResult {
   const baseImportance = memory.reinforcedImportance ?? memory.importance
 
-  const createdTime = new Date(memory.createdAt).getTime()
-  const reinforcedTime = memory.lastReinforcedAt
-    ? new Date(memory.lastReinforcedAt).getTime()
-    : 0
-  const referenceTime = Math.max(createdTime, reinforcedTime)
+  const referenceTime = referenceTimeMs(memory)
   const daysSinceRefTime = Math.max(0, (now.getTime() - referenceTime) / 86400000)
 
   const decay = Math.pow(0.5, daysSinceRefTime / config.contentHalfLifeDays)
@@ -227,9 +298,13 @@ export function calculateProtectionScore(
     }
   }
 
+  // Episodic protection bump: one-off dated occurrences are the first thing
+  // the retention rules would otherwise delete and the hardest to regenerate.
+  const episodicBonus = memory.kind === 'episodic' ? config.episodicBonus : 0
+
   const score = Math.min(
     1,
-    contentComponent + reinforcementBonus + graphDegreeBonus + recentAccessBonus
+    contentComponent + reinforcementBonus + graphDegreeBonus + recentAccessBonus + episodicBonus
   )
 
   return {
@@ -238,6 +313,7 @@ export function calculateProtectionScore(
     reinforcementBonus,
     graphDegreeBonus,
     recentAccessBonus,
+    episodicBonus,
     daysSinceRefTime,
   }
 }

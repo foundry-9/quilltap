@@ -25,6 +25,8 @@ jest.mock('@/lib/chat/turn-manager', () => ({
   getActiveCharacterParticipants: jest.fn().mockReturnValue([]),
   isAllLLMChat: jest.fn().mockReturnValue(false),
   shouldPauseForAllLLM: jest.fn().mockReturnValue(false),
+  isUserDrivenSeat: (p: { id?: string; controlledBy?: string } | null | undefined, ids?: readonly string[] | null) =>
+    p?.controlledBy === 'user' || (Array.isArray(ids) && !!p?.id && ids.includes(p.id)),
 }));
 
 jest.mock('@/lib/services/chat-message/streaming.service', () => ({
@@ -266,6 +268,102 @@ describe('turn-orchestrator.service', () => {
         participantId: 'llm-1',
         chainDepth: 1,
       }));
+    });
+
+    it('continues the chain when a chained turn is skipped (nothing to add)', async () => {
+      const repos = createMockRepos();
+      const controller = { enqueue: jest.fn() } as any;
+      const decideNextTurn = jest
+        .fn()
+        .mockResolvedValueOnce({ chain: true, participantId: 'llm-1', characterName: 'Alice', reason: 'continue' })
+        .mockResolvedValueOnce({ chain: true, participantId: 'llm-2', characterName: 'Bob', reason: 'continue' })
+        .mockResolvedValueOnce({ chain: false, participantId: null, reason: 'cycle_complete' });
+      const persistTurnParticipant = jest.fn().mockResolvedValue(undefined);
+      // First chained turn is a skip; second has content. The skip must NOT stop
+      // the chain — decideNextTurn should be consulted a second time.
+      const processChainedMessage = jest
+        .fn()
+        .mockResolvedValueOnce({ ...initialResult, hasContent: false, skipped: true, skippedParticipantId: 'llm-1', messageId: null })
+        .mockResolvedValueOnce({ ...initialResult, messageId: 'msg-2' });
+
+      await executeTurnChain({
+        repos: repos as any,
+        chatId: 'chat-1',
+        userId: 'user-1',
+        initialResult,
+        initialContinueMode: false,
+        controller,
+        encoder,
+        processChainedMessage,
+        decideNextTurn,
+        persistTurnParticipant,
+      });
+
+      expect(processChainedMessage).toHaveBeenCalledTimes(2);
+      // The turnComplete event for the skipped turn carries skipped:true.
+      expect(controller.enqueue).toHaveBeenCalledWith(expect.objectContaining({
+        participantId: 'llm-1',
+        skipped: true,
+      }));
+    });
+
+    it('continues the chain when the INITIAL turn is skipped', async () => {
+      const repos = createMockRepos();
+      const controller = { enqueue: jest.fn() } as any;
+      const decideNextTurn = jest
+        .fn()
+        .mockResolvedValueOnce({ chain: true, participantId: 'llm-1', characterName: 'Alice', reason: 'continue' })
+        .mockResolvedValueOnce({ chain: false, participantId: null, reason: 'cycle_complete' });
+      const persistTurnParticipant = jest.fn().mockResolvedValue(undefined);
+      const processChainedMessage = jest.fn().mockResolvedValue({ ...initialResult, messageId: 'msg-2' });
+
+      // Initial turn skipped (no content) but skipped:true — the entry gate must
+      // NOT short-circuit; the chain proceeds to the next speaker.
+      await executeTurnChain({
+        repos: repos as any,
+        chatId: 'chat-1',
+        userId: 'user-1',
+        initialResult: { ...initialResult, hasContent: false, skipped: true, skippedParticipantId: 'llm-0', messageId: null },
+        initialContinueMode: false,
+        controller,
+        encoder,
+        processChainedMessage,
+        decideNextTurn,
+        persistTurnParticipant,
+      });
+
+      expect(processChainedMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('stops the chain on a genuinely empty turn (no content, no skip)', async () => {
+      const repos = createMockRepos();
+      const controller = { enqueue: jest.fn() } as any;
+      const decideNextTurn = jest
+        .fn()
+        .mockResolvedValueOnce({ chain: true, participantId: 'llm-1', characterName: 'Alice', reason: 'continue' })
+        .mockResolvedValueOnce({ chain: true, participantId: 'llm-2', characterName: 'Bob', reason: 'continue' });
+      const persistTurnParticipant = jest.fn().mockResolvedValue(undefined);
+      const processChainedMessage = jest.fn().mockResolvedValue({
+        ...initialResult,
+        hasContent: false,
+        messageId: null,
+      });
+
+      await executeTurnChain({
+        repos: repos as any,
+        chatId: 'chat-1',
+        userId: 'user-1',
+        initialResult,
+        initialContinueMode: false,
+        controller,
+        encoder,
+        processChainedMessage,
+        decideNextTurn,
+        persistTurnParticipant,
+      });
+
+      // Empty (not skipped) stops after the first chained turn.
+      expect(processChainedMessage).toHaveBeenCalledTimes(1);
     });
 
     it('stops immediately when chaining should not continue', async () => {

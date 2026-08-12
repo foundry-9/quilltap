@@ -26,6 +26,7 @@ _quilltap() {
     'instances:Register or inspect named Quilltap instances'
     'memories:Search, browse, and graph memories'
     'memory-diff:Dump existing memories and dry-run re-extraction'
+    'recall-replay:Replay a turn'\''s memory recall, old vs episodic ranking'
     'logs:Tail or print an instance log file'
     'migrations:Inspect migration status'
     'maintenance:Run retention/cleanup sweeps'
@@ -72,6 +73,9 @@ _quilltap_subcommand() {
     memory-diff)
       _quilltap_memory_diff
       ;;
+    recall-replay)
+      _arguments '--turn[interchange to replay]:turn:' '--char[character id]:char:' '--limit[rows per path]:limit:' '--port[server port]:port:' '--json[raw JSON output]' '--help[show help]'
+      ;;
     logs)
       _quilltap_logs
       ;;
@@ -80,6 +84,9 @@ _quilltap_subcommand() {
       ;;
     maintenance)
       _quilltap_maintenance
+      ;;
+    file-verify)
+      _arguments '--all[read every top-level file, not just dataless ones]' '--stall-ms[per-chunk stall threshold in ms]:ms:' '--json[machine-readable output]' '--help[show help]'
       ;;
     completion)
       _quilltap_completion
@@ -142,7 +149,39 @@ _quilltap_db() {
 
   if (( CURRENT == 2 )); then
     _describe 'db subcommand' subverbs
+    return
   fi
+
+  if [[ "$words[2]" == "characters" ]]; then
+    local -a char_verbs char_opts
+    char_verbs=(
+      'status:Per-character vault status report'
+      'archives:List archived characters and ARCHIVE bundles'
+      'archive:Archive a character (runs through the server)'
+      'rehydrate:Wake an archived character (runs through the server)'
+      'export:Write a plaintext .qtap for a character'
+    )
+    char_opts=(
+      '(-i --instance)'{-i,--instance}'[Registered instance name]:instance:_quilltap_instance_names'
+      '(-d --data-dir)'{-d,--data-dir}'[Data directory]:directory:_directories'
+      '--passphrase[Database passphrase]:passphrase:'
+      '--json[JSON output]'
+      '--limit[Result limit]:limit:'
+      '--diverged[Only characters whose DB and vault differ]'
+      '--blocked[Only characters with vault issues]'
+      '--id[Single character by name or id]:character:'
+      '--write[Perform the archive/rehydrate write]'
+      '(-p --port)'{-p,--port}'[Server port]:port:'
+      '--out[Output .qtap path]:path:_files'
+      '(-h --help)'{-h,--help}'[Show help]'
+    )
+    if (( CURRENT == 3 )); then
+      _describe 'characters subcommand' char_verbs
+    fi
+    _arguments $char_opts
+    return
+  fi
+
   _arguments $db_opts
 }
 
@@ -161,6 +200,7 @@ _quilltap_docs() {
     'find:Substring search'
     'grep:Pattern search inside text'
     'status:Per-mount status'
+    'docker-mounts:Bind mounts needed under Docker'
     'reindex:Re-extract and re-chunk'
     'embed:Enqueue embedding jobs'
     'write:Write a file'

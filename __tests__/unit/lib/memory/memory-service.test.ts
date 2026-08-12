@@ -145,6 +145,7 @@ describe('Memory Service', () => {
   }
 
   // Import the module functions after mocks are set up
+  let createMemoryWithGate: typeof import('@/lib/memory/memory-service').createMemoryWithGate
   let createMemoryWithEmbedding: typeof import('@/lib/memory/memory-service').createMemoryWithEmbedding
   let updateMemoryWithEmbedding: typeof import('@/lib/memory/memory-service').updateMemoryWithEmbedding
   let deleteMemoryWithVector: typeof import('@/lib/memory/memory-service').deleteMemoryWithVector
@@ -184,6 +185,7 @@ describe('Memory Service', () => {
     // Fresh import for each test
     jest.isolateModules(() => {
       const serviceModule = require('@/lib/memory/memory-service')
+      createMemoryWithGate = serviceModule.createMemoryWithGate
       createMemoryWithEmbedding = serviceModule.createMemoryWithEmbedding
       updateMemoryWithEmbedding = serviceModule.updateMemoryWithEmbedding
       deleteMemoryWithVector = serviceModule.deleteMemoryWithVector
@@ -256,6 +258,70 @@ describe('Memory Service', () => {
       expect(mockMemoriesRepo.create).toHaveBeenCalled()
       expect(result.id).toBe('new-memory')
       expect(mockLogger.warn).toHaveBeenCalled()
+    })
+  })
+
+  // ============================================================================
+  // createMemoryWithGate — INSERT_RELATED link preservation (Bug 26)
+  // ============================================================================
+  describe('createMemoryWithGate INSERT_RELATED (Bug 26)', () => {
+    it('returns the POST-LINK row so relatedMemoryIds carries the gate links', async () => {
+      // A gate hit in the RELATED band (0.70–0.85) routes to INSERT_RELATED.
+      const relatedMemory = {
+        id: 'related-1',
+        characterId: 'char-1',
+        content: 'A related memory',
+        summary: 'related',
+        relatedMemoryIds: [],
+      }
+
+      mockGenerateEmbedding.mockResolvedValue({
+        embedding: [0.1, 0.2, 0.3],
+        model: 'test-model',
+      })
+      // One neighbour in the RELATED band → INSERT_RELATED.
+      mockVectorStore.search.mockReturnValue([{ id: 'related-1', score: 0.75 }])
+      mockVectorStore.hasVector.mockReturnValue(false)
+      ;(mockMemoriesRepo as any).findByIds = jest.fn<any>().mockResolvedValue([relatedMemory])
+
+      // create() persists with relatedMemoryIds: [] (the stale array that used
+      // to leak out as outcome.memory).
+      mockMemoriesRepo.create.mockResolvedValue({
+        id: 'new-mem',
+        characterId: 'char-1',
+        relatedMemoryIds: [],
+      })
+      // updateForCharacter echoes the patch merged onto the row — mirrors the
+      // real repo returning the persisted state.
+      mockMemoriesRepo.updateForCharacter.mockImplementation(
+        (charId: string, id: string, patch: Record<string, unknown>) =>
+          Promise.resolve({ id, characterId: charId, relatedMemoryIds: [], ...patch }),
+      )
+
+      const outcome = await createMemoryWithGate(
+        {
+          characterId: 'char-1',
+          content: 'A brand new observation',
+          summary: 'new',
+          importance: 0.6,
+          // MANUAL keeps the name-presence / episodic-fallback safety nets out
+          // of the way; they don't matter to the link-preservation path.
+          source: 'MANUAL',
+        },
+        { userId: 'user-123' },
+      )
+
+      expect(outcome.action).toBe('INSERT_RELATED')
+      // The gate wrote 'related-1' onto the new row; the returned memory must
+      // reflect it (pre-fix this was the stale [] and the fold pass clobbered it).
+      expect(outcome.memory?.relatedMemoryIds).toEqual(['related-1'])
+      expect(outcome.relatedMemoryIds).toEqual(['related-1'])
+      // The link write actually happened on the new memory row.
+      expect(mockMemoriesRepo.updateForCharacter).toHaveBeenCalledWith(
+        'char-1',
+        'new-mem',
+        { relatedMemoryIds: ['related-1'] },
+      )
     })
   })
 

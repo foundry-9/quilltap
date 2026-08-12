@@ -213,6 +213,8 @@ Configure which service generates automatic descriptions for images in chats.
 - When an image is attached to a chat message, Quilltap automatically generates a description
 - The description helps the AI understand the image context
 - Descriptions are cached to save on API usage
+- For portraits and scenes conjured by the establishment's own hand — a character's avatar, a story backdrop, an image summoned by the tools — no describer is troubled at all: the very prompt that painted the picture is kept on file and read back verbatim, instantly and without charge. The vision profile is consulted only for pictures of unknown provenance, such as an image you upload yourself.
+- Should a describer prove sluggish, the consultation is abandoned after a minute so a single slow portrait can never hold your correspondent's reply hostage.
 
 **Prerequisites:**
 
@@ -467,12 +469,39 @@ To remedy this situation:
    ```
    docker run -e QUILLTAP_TIMEZONE=America/New_York ...
    ```
+   The container obligingly winds its own clock to match, so the one variable settles the whole household.
 
 The timezone resolution follows a courteous chain of precedence: per-chat setting wins, then the Salon default, then the `QUILLTAP_TIMEZONE` environment variable, and finally the server's system timezone.
+
+A word on why the container's own clock matters, and not merely the formatting: some of the establishment's business consults the wall clock directly rather than asking how to phrase things. Rooms that wake on a schedule, the daily token allowance that turns over at midnight, and the Commonplace Book's notion of what counts as "today" all take their cue from the server's hour. Set the timezone in the Salon alone and your timestamps will read handsomely while a room scheduled for seven in the morning rings at two — a discrepancy that has ruined many a well-planned breakfast. The environment variable sets both at once and spares you the arithmetic.
 
 **Fictional Time:**
 
 For those engaged in period dramas or interstellar adventures, toggle "Use fictional time" to inject a made-up timestamp that advances in real time from a base you specify. The timezone setting still applies to how the fictional time is formatted.
+
+The base timestamp is read as a clock face in the chat's own timezone — set 10:15 for a tale in Constantinople and your characters will be told it is a quarter past ten there, regardless of what hour it happens to be in the room where the server sits. From that moment the fictional clock keeps step with the real one, minute for minute: an hour of your conversation is an hour of theirs. The clock is wound when the chat is created, so a chat begun this morning and resumed this evening will find that the afternoon has passed in the story as surely as it did outside your window.
+
+A caution for the impatient: because the fictional clock is anchored at the chat's creation, it cannot be re-wound afterwards. Should you wish to begin a tale at a different hour, begin a new chat.
+
+### Data Retention
+
+Sets how many days a chat may sit with nobody actually speaking in it (Staff announcements don't count) before Quilltap's nightly housekeeping tidies away its regenerable working data — compression caches, pre-rendered pages, model scratch-work, superseded generated images, and semantic-search embeddings. The conversation itself is never touched, keyword search keeps working, and a tidied chat re-indexes itself for semantic search the moment you reopen it.
+
+- **Keep inactive chats' working data for N days** — 1 to 3650; the default is 30. Global only — no per-chat dial.
+
+Full particulars, including what precisely is and isn't tidied: [Data Retention](data-retention.md).
+
+### Taboo
+
+A standing list of phrases nobody in the house is to utter — the stock verbal tics of the age, the borrowed cleverness that arrives already exhausted. Every character receives the list as part of their standing instructions, with orders to avoid each entry not merely word for word but in all its inflections, rewordings, and near-variants, and to say the plain thing instead. They are likewise forbidden to mention the list, which spares you characters remarking archly upon what they've been told not to say.
+
+- **Add a phrase** — one at a time; commas belong inside a phrase, so they cannot serve as separators
+- **Remove a phrase** — the small × beside it
+- Up to 500 phrases, each up to 200 characters. Duplicates are quietly discarded regardless of capitalisation; your ordering is left exactly as you arranged it
+
+The list is instance-wide — one register for the whole establishment, no per-character or per-chat exceptions. An empty list adds nothing whatever to any prompt.
+
+Full particulars: [Taboo](taboo.md).
 
 ## Saving Chat Settings
 

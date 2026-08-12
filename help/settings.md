@@ -26,7 +26,7 @@ The beating mechanical heart of the operation. Here you configure everything tha
 - **API Keys** --- Store authentication credentials for LLM providers and services
 - **Connection Profiles** --- Link API keys to specific providers and models for AI chat
 - **Cheap LLM Settings** --- Configure the lightweight model that handles background tasks (summarization, memory extraction, and the like)
-- **Capabilities Report** --- Generate reports documenting what your configured providers can actually do
+- **The Almanack (System Report)** --- Compile a compendium of the whole establishment: configuration, contents and condition
 
 > See [API Keys Settings](api-keys-settings.md), [Connection Profiles](connection-profiles.md), and [Setup Wizard](setup-wizard.md) for full details
 

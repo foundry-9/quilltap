@@ -85,12 +85,11 @@ const MEMORY_COMPRESSION_PROMPT = `You are a memory compression assistant. You a
 - Important facts about the world, setting, and locations
 - Preferences, habits, and personality-defining moments
 - Decisions {{characterName}} made and why
+- Dates attached to events — keep the date with the event it dates
 
 **What to DROP:**
 - Redundant entries that say the same thing in different words
 - Minor details that don't affect future interactions
-- Exact dates/times when relative timing is sufficient
-- Details about concluded events with no ongoing impact
 
 **Output Format:**
 Produce a single block of condensed memory notes as a bulleted list. Each bullet should be one key fact or relationship. Do not add commentary or headers.

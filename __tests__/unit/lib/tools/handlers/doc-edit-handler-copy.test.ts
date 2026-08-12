@@ -229,7 +229,7 @@ describe('doc_copy_file handler', () => {
           dest_mount_point: 'beta',
           dest_path: 'notes.md',
         }),
-      ).toBe(true);
+      ).not.toBeNull();
     });
 
     it('allows empty dest_path (means "dest root")', () => {
@@ -240,7 +240,7 @@ describe('doc_copy_file handler', () => {
           dest_mount_point: 'beta',
           dest_path: '',
         }),
-      ).toBe(true);
+      ).not.toBeNull();
     });
 
     it('rejects missing source_mount_point', () => {
@@ -250,7 +250,7 @@ describe('doc_copy_file handler', () => {
           dest_mount_point: 'beta',
           dest_path: '',
         }),
-      ).toBe(false);
+      ).toBeNull();
     });
 
     it('rejects non-string source_path', () => {
@@ -261,7 +261,7 @@ describe('doc_copy_file handler', () => {
           dest_mount_point: 'beta',
           dest_path: '',
         }),
-      ).toBe(false);
+      ).toBeNull();
     });
   });
 

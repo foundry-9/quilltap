@@ -14,10 +14,12 @@ interface ProjectCardProps {
   project: Project
   onClick: (e: React.MouseEvent) => void
   onDelete: () => void
+  /** When provided (workspace tab), the Open action selects in place instead of routing. */
+  onOpen?: (projectId: string) => void
 }
 
 
-export function ProjectCard({ project, onClick, onDelete }: ProjectCardProps) {
+export function ProjectCard({ project, onClick, onDelete, onOpen }: ProjectCardProps) {
   return (
     <div
       className="qt-entity-card cursor-pointer hover:qt-border-primary/50 transition-colors"
@@ -45,12 +47,21 @@ export function ProjectCard({ project, onClick, onDelete }: ProjectCardProps) {
       )}
 
       <div className="qt-entity-card-actions flex gap-2">
-        <Link
-          href={`/projects/${project.id}`}
-          className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground qt-shadow-sm transition hover:qt-bg-primary/90"
-        >
-          Open
-        </Link>
+        {onOpen ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); onOpen(project.id) }}
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground qt-shadow-sm transition hover:qt-bg-primary/90"
+          >
+            Open
+          </button>
+        ) : (
+          <Link
+            href={`/projects/${project.id}`}
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground qt-shadow-sm transition hover:qt-bg-primary/90"
+          >
+            Open
+          </Link>
+        )}
         <button
           onClick={(e) => { e.stopPropagation(); onDelete() }}
           className="qt-button-destructive qt-shadow-sm"

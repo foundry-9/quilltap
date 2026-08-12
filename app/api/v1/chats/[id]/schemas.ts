@@ -20,7 +20,10 @@ export const updateChatSchema = z.object({
   allowCrossCharacterVaultReads: z.boolean().optional(),
   coreWhisperEnabled: z.boolean().nullish(),
   coreWhisperInterval: z.number().int().min(1).nullish(),
+  turnSkippingEnabled: z.boolean().nullish(), // "Nothing to add" turn-skipping toggle. null = enabled (default); false = disabled.
   showThinking: z.boolean().nullish(), // Per-chat thinking visibility (tri-state). DISPLAY ONLY.
+  timelineMode: z.enum(['realtime', 'narrative']).nullish(), // Which clock the chat's story keeps (episodic memory). null = realtime default.
+  answerConfirmationOverride: z.enum(['ON', 'OFF']).nullish(), // Per-chat answer-confirmation override (tri-state; null = inherit project/global)
   // Layout state for the salon split panes
   documentMode: z.enum(['normal', 'split', 'focus']).optional(),
   dividerPosition: z.number().min(20).max(80).optional(),
@@ -65,6 +68,26 @@ export const addParticipantSchema = z.object({
 
 export const removeParticipantSchema = z.object({
   participantId: z.uuid(),
+});
+
+/**
+ * Merge another conversation's characters + summary into this chat. The source
+ * chat's present characters that aren't already here are added as LLM-driven
+ * participants; `outfitSelections` mirrors the new-chat/add-participant outfit
+ * options (defaulting to "Same as last conversation" per character when
+ * omitted). Validated server-side — the source chat is re-resolved, never
+ * trusted from the client.
+ */
+export const mergeConversationSchema = z.object({
+  sourceChatId: z.uuid(),
+  /**
+   * Optional allowlist of source character IDs to bring across. When provided,
+   * only these characters merge in (still minus any already present); when
+   * omitted, every eligible source character merges. Lets the operator gate the
+   * merge, not just rely on de-duplication.
+   */
+  characterIds: z.array(z.uuid()).optional(),
+  outfitSelections: z.array(OutfitSelectionSchema).optional(),
 });
 
 export const chatUpdateRequestSchema = z.object({
@@ -164,6 +187,7 @@ const STAFF_SENDER_ENUM = z.enum([
   'commonplaceBook',
   'ariel',
   'suparna',
+  'pascal',
 ]);
 
 export const insertAnnouncementSchema = z.object({
@@ -173,6 +197,12 @@ export const insertAnnouncementSchema = z.object({
     z.object({ kind: z.literal('character'), characterId: z.uuid() }),
     z.object({ kind: z.literal('custom'), displayName: z.string().min(1).max(120) }),
   ]),
+  /**
+   * Whisper audience: CHAT PARTICIPANT ids (not character ids). Omitted / null
+   * posts the announcement publicly, as it always has. Every id is re-verified
+   * against the chat's current participants server-side.
+   */
+  targetParticipantIds: z.array(z.uuid()).nullable().optional(),
 });
 
 export const insertAnnouncementPreviewSchema = z.object({
@@ -180,6 +210,12 @@ export const insertAnnouncementPreviewSchema = z.object({
   characterId: z.uuid(),
   connectionProfileId: z.uuid(),
   systemPromptId: z.uuid().optional(),
+  /**
+   * The audience the operator has chosen for the eventual post, so the
+   * character's rewrite can be addressed to the right people (and told the
+   * remark is private). Same shape as the post action's field.
+   */
+  targetParticipantIds: z.array(z.uuid()).nullable().optional(),
 });
 
 /**

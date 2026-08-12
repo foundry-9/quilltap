@@ -12,8 +12,6 @@ import {
   removeFromQueue,
 } from '@/lib/chat/turn-manager'
 import type { ChatParticipantBase, Character } from '@/lib/schemas/types'
-import type { EphemeralMessageData } from '@/components/chat/EphemeralMessage'
-import { createEphemeralMessage } from '@/components/chat/EphemeralMessage'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
 
 export interface TurnManagementActions {
@@ -22,7 +20,6 @@ export interface TurnManagementActions {
   handleDequeue: (participantId: string) => void | Promise<void>
   handleContinue: () => void | Promise<void>
   handleSkipUserTurn: (participantId: string) => void | Promise<void>
-  handleDismissEphemeral: (ephemeralId: string) => void
 }
 
 /**
@@ -112,11 +109,9 @@ export function useTurnManagement(
   turnState: TurnState,
   userParticipantId: string | null,
   participantData: ParticipantData[],
-  ephemeralMessages: EphemeralMessageData[],
   setTurnState: (state: TurnState) => void,
   setTurnSelectionResult: (result: TurnSelectionResult | null) => void,
-  setEphemeralMessages: (messages: EphemeralMessageData[]) => void,
-  triggerContinueMode: (participantId: string) => Promise<void>,
+  triggerContinueMode: (participantId: string, nudge?: boolean) => Promise<void>,
   isPaused?: boolean,
   onUnpause?: () => Promise<void>,
 ) {
@@ -126,7 +121,6 @@ export function useTurnManagement(
 
   const handleNudge = useCallback(async (participantId: string) => {
     // Find participant to validate it's LLM-controlled
-    const participant = participantData.find(p => p.id === participantId)
     const participantBase = participantsAsBase.find(p => p.id === participantId)
 
     // Safety check: Only LLM-controlled characters can be nudged for AI response
@@ -140,11 +134,9 @@ export function useTurnManagement(
       await onUnpause()
     }
 
-    const participantName = participant?.character?.name || 'Participant'
-
-    // Add ephemeral nudge notification
-    const ephemeral = createEphemeralMessage('nudge', participantId, participantName)
-    setEphemeralMessages([...ephemeralMessages, ephemeral])
+    // The Host announces the summon as a persisted message once the request
+    // reaches the server (see postHostNudgeAnnouncement in the orchestrator),
+    // surfaced live over SSE — no client-only ephemeral note.
 
     // Optimistic local update for immediate UI feedback
     const newTurnState = nudgeParticipant(turnState, participantId)
@@ -155,8 +147,9 @@ export function useTurnManagement(
     // already requests a response for this participant.  Adding them to the
     // queue as well causes the server-side chain loop to pop the queue entry
     // and generate a second (duplicate) response.
-    triggerContinueMode(participantId)
-  }, [turnState, participantsAsBase, participantData, ephemeralMessages, setTurnState, setEphemeralMessages, triggerContinueMode, isPaused, onUnpause])
+    // Nudge is an explicit summon → withhold the "nothing to add" skip option.
+    triggerContinueMode(participantId, true)
+  }, [turnState, participantsAsBase, setTurnState, triggerContinueMode, isPaused, onUnpause])
 
   const handleQueue = useCallback(async (participantId: string) => {
     // Optimistic local update for immediate UI feedback
@@ -203,7 +196,6 @@ export function useTurnManagement(
 
     if (nextSpeakerId && nextSpeakerId !== userParticipantId) {
       if (nextSpeakerControlledBy === 'user') {
-        showInfoToast("It's a user-controlled character's turn. Type a message as them.")
         return
       }
       triggerContinueMode(nextSpeakerId)
@@ -211,10 +203,6 @@ export function useTurnManagement(
       showInfoToast('No characters available to speak. Try adding or activating a character.')
     }
   }, [chatId, hasActiveCharacters, userParticipantId, turnState, setTurnState, setTurnSelectionResult, triggerContinueMode])
-
-  const handleDismissEphemeral = useCallback((ephemeralId: string) => {
-    setEphemeralMessages(ephemeralMessages.filter(em => em.id !== ephemeralId))
-  }, [ephemeralMessages, setEphemeralMessages])
 
   const handleSkipUserTurn = useCallback(async (participantId: string) => {
     const participant = participantsAsBase.find(p => p.id === participantId)
@@ -243,7 +231,6 @@ export function useTurnManagement(
     handleDequeue,
     handleContinue,
     handleSkipUserTurn,
-    handleDismissEphemeral,
     hasActiveCharacters,
   }
 }

@@ -1,0 +1,338 @@
+/**
+ * Quilltap Component System - Tabbed Workspace
+ *
+ * The two-pane tab host: the pane grid, per-pane chrome (tab strip + contextual
+ * toolbar), the resizable divider, drag/drop affordances, and the split
+ * drop-zone. Builds on the existing `.qt-tab` family (_interactive.css) and the
+ * `qt-panel` tokens (_surfaces.css). New `--qt-workspace-*` hooks are exposed so
+ * each bundled theme can give the workspace its own take.
+ *
+ * **Theming hook:** every accented surface (active tab, divider, drop-zone)
+ * derives from a single master token `--qt-workspace-accent`, consumed as
+ * `var(--qt-workspace-accent, var(--color-primary))`. A theme re-tints the
+ * whole workspace by setting that ONE token at its `[data-theme="…"]` root
+ * (e.g. Madman's Box points it at cyan). It is intentionally never declared on
+ * `.qt-workspace` itself — doing so would shadow the theme's ancestor value;
+ * the per-consumer `var(…, fallback)` is the app default. Finer control is still
+ * available through the individual `--qt-workspace-tab-*` / `-divider-*` /
+ * `-drop-zone-*` hooks.
+ *
+ * See `docs/developer/features/tabbed-workspace.md`.
+ */
+
+@layer components {
+  /* ==========================================================================
+     PANE GRID
+     ========================================================================== */
+
+  .qt-workspace {
+    display: grid;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    position: relative;
+    isolation: isolate; /* own stacking context: backdrop below, panes above */
+    background: var(--qt-workspace-bg, var(--color-background));
+  }
+
+  /* Chrome + divider sit above the single backdrop (z-index 0). The content
+     pane is deliberately NOT given a z-index: it keeps `position: relative`
+     (its own rule below) so it still paints above the backdrop in DOM order,
+     but stays out of a stacking context — otherwise a `fixed` dialog rendered
+     inside a pane (e.g. a Salon's New Chat modal) would be trapped in that
+     pane's context and the other pane would paint over its far half. Without a
+     pane stacking context, such overlays escape to the workspace root and
+     hover over the whole thing, as dialogs must. */
+  .qt-workspace-pane-chrome,
+  .qt-workspace-divider-cell {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ==========================================================================
+     SINGLE ARBITRATED BACKDROP  (replaces the per-view story/subsystem layers)
+     ========================================================================== */
+
+  .qt-workspace-backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .qt-workspace-backdrop-layer {
+    position: absolute;
+    inset: 0;
+    background-position: top center;
+    background-size: cover;
+    background-repeat: no-repeat;
+    opacity: var(--qt-workspace-backdrop-opacity, 0.4);
+  }
+
+  /* Split: each side dominates its half and crossfades across the divider
+     (--qt-split = left pane %, --qt-backdrop-feather = crossfade half-width). */
+  .qt-workspace-backdrop-left {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      #000 calc(var(--qt-split, 50%) - var(--qt-backdrop-feather, 9%)),
+      transparent calc(var(--qt-split, 50%) + var(--qt-backdrop-feather, 9%))
+    );
+    mask-image: linear-gradient(
+      to right,
+      #000 calc(var(--qt-split, 50%) - var(--qt-backdrop-feather, 9%)),
+      transparent calc(var(--qt-split, 50%) + var(--qt-backdrop-feather, 9%))
+    );
+  }
+
+  .qt-workspace-backdrop-right {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent calc(var(--qt-split, 50%) - var(--qt-backdrop-feather, 9%)),
+      #000 calc(var(--qt-split, 50%) + var(--qt-backdrop-feather, 9%))
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent calc(var(--qt-split, 50%) - var(--qt-backdrop-feather, 9%)),
+      #000 calc(var(--qt-split, 50%) + var(--qt-backdrop-feather, 9%))
+    );
+  }
+
+  /* Subsystem pages defer to the single arbitrated backdrop. The Salon keeps
+     its OWN original story-background treatment (its ::before over an opaque
+     content base), so a conversation looks exactly as it did before. That
+     opaque base also masks the backdrop on the conversation's own side, while
+     the backdrop carries the conversation's background onto the *other* pane
+     (the "conversation wins, full-screen" rule) and handles subsystem-vs-
+     subsystem crossfades. */
+  .qt-workspace .qt-page-container::before {
+    display: none;
+  }
+
+  /* Per-pane chrome: tab strip + contextual toolbar, stacked above content. */
+  .qt-workspace-pane-chrome {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    background: var(--qt-workspace-chrome-bg, var(--qt-panel-bg, var(--color-card, var(--color-background))));
+    border-bottom: 1px solid var(--qt-workspace-chrome-border, var(--color-border));
+  }
+
+  /* Content cell holding a tab's view. */
+  .qt-tab-pane {
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    position: relative;
+  }
+
+  /* Empty-pane affordance: shown when a pane has no resolvable active view. */
+  .qt-workspace-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    text-align: center;
+  }
+
+  .qt-workspace-empty-hint {
+    max-width: 24rem;
+    color: var(--color-muted-foreground);
+    font-size: 0.9375rem;
+    line-height: 1.5;
+  }
+
+  /* ==========================================================================
+     TAB STRIP  (extends the .qt-tab family)
+     ========================================================================== */
+
+  .qt-tab-strip {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--qt-tab-group-gap, 0.25rem);
+    padding: 0.375rem 0.5rem 0;
+    overflow-x: auto;
+    scrollbar-width: thin;
+
+    /* Re-tokenize the .qt-tab family for the workspace strip only (Settings /
+       EntityTabs keep their own values). Uses the theme's --color-* vars (+
+       color-mix for alpha) — the same convention the base qt-tab tokens use.
+       Each is a --qt-workspace-tab-* hook for fine per-theme control.
+
+       The active tab leans on the master --qt-workspace-accent (a vivid accent
+       in every theme, defaulting to --color-primary): an accent border + top
+       bar + tinted fill + bold text, so it reads as clearly selected. Inactive
+       tabs are present but recessed — a faint border and dimmed, lighter-weight
+       text. A theme re-tints all of this by setting --qt-workspace-accent once. */
+    --qt-tab-bg: var(--qt-workspace-tab-bg,
+      color-mix(in srgb, var(--color-muted) 86%, var(--color-foreground) 8%));
+    --qt-tab-fg: var(--qt-workspace-tab-fg,
+      color-mix(in srgb, var(--color-foreground) 75%, transparent));
+    --qt-tab-border: var(--qt-workspace-tab-border,
+      color-mix(in srgb, var(--color-foreground) 34%, transparent));
+    --qt-tab-hover-bg: var(--qt-workspace-tab-hover-bg,
+      color-mix(in srgb, var(--color-muted) 80%, var(--color-foreground) 12%));
+    --qt-tab-hover-fg: var(--qt-workspace-tab-hover-fg, var(--color-foreground));
+    --qt-tab-active-bg: var(--qt-workspace-tab-active-bg,
+      color-mix(in srgb, var(--qt-workspace-accent, var(--color-primary)) 24%, var(--color-card)));
+    --qt-tab-active-fg: var(--qt-workspace-tab-active-fg, var(--color-foreground));
+    --qt-tab-active-border: var(--qt-workspace-tab-active-border,
+      var(--qt-workspace-accent, var(--color-primary)));
+  }
+
+  /* Thicker, opaque tabs; inactive carry a lighter weight than the active one. */
+  .qt-tab-strip .qt-tab {
+    user-select: none;
+    border-width: var(--qt-workspace-tab-border-width, 2px);
+    border-bottom-width: 0;
+    border-style: solid;
+    font-weight: 500;
+  }
+
+  .qt-tab-strip .qt-tab:hover:not(.qt-tab-active) {
+    border-color: var(--qt-workspace-tab-hover-border,
+      color-mix(in srgb, var(--color-foreground) 45%, transparent));
+  }
+
+  /* Active tab pops: bold weight + a bold accent bar across the top. */
+  .qt-tab-strip .qt-tab-active {
+    font-weight: 700;
+    box-shadow: 0 3px 0 0 var(--qt-tab-active-border) inset;
+  }
+
+  /* Per-theme accents (e.g. Madman's Box's cyan over its amber primary) now live
+     in each bundle's styles.css as a single `--qt-workspace-accent` override —
+     not here. */
+
+  .qt-tab-dragging {
+    opacity: 0.5;
+  }
+
+  .qt-tab-label {
+    max-width: 14rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Close affordance. */
+  .qt-tab-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.15rem;
+    height: 1.15rem;
+    margin-left: 0.125rem;
+    border-radius: 0.25rem;
+    opacity: 0.55;
+    transition: opacity 0.15s ease, background 0.15s ease;
+  }
+
+  .qt-tab-close:hover {
+    opacity: 1;
+    background: var(--qt-tab-close-hover-bg,
+      color-mix(in srgb, var(--color-muted-foreground) 22%, transparent));
+  }
+
+  .qt-tab-close-icon {
+    width: 0.8rem;
+    height: 0.8rem;
+  }
+
+  /* ==========================================================================
+     RESIZABLE DIVIDER  (mirrors the qt-doc-divider spirit)
+     ========================================================================== */
+
+  .qt-workspace-divider-cell {
+    position: relative;
+    min-width: 0;
+  }
+
+  .qt-workspace-divider {
+    width: 100%;
+    height: 100%;
+    cursor: col-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--qt-workspace-divider-bg, var(--color-border));
+    transition: background 0.15s ease;
+  }
+
+  .qt-workspace-divider:hover,
+  .qt-workspace-divider:focus-visible {
+    background: var(--qt-workspace-divider-active-bg,
+      color-mix(in srgb, var(--qt-workspace-accent, var(--color-primary)) 60%, transparent));
+    outline: none;
+  }
+
+  .qt-workspace-divider-grip {
+    width: 2px;
+    height: 2rem;
+    border-radius: 9999px;
+    background: var(--qt-workspace-divider-grip,
+      color-mix(in srgb, var(--color-muted-foreground) 60%, transparent));
+  }
+
+  /* ==========================================================================
+     DRAG / SPLIT DROP-ZONE
+     ========================================================================== */
+
+  .qt-tab-drop-zone {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 42%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+    background: var(--qt-tab-drop-zone-bg,
+      color-mix(in srgb, var(--qt-workspace-accent, var(--color-primary)) 14%, transparent));
+    border-left: 2px dashed var(--qt-tab-drop-zone-border,
+      color-mix(in srgb, var(--qt-workspace-accent, var(--color-primary)) 70%, transparent));
+  }
+
+  .qt-tab-drop-zone-hint {
+    padding: 0.25rem 0.75rem;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-foreground);
+    background: var(--color-background);
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--color-foreground) 15%, transparent);
+  }
+
+  /* ==========================================================================
+     CHILD-TAB PORTAL HOST  (Terminal / Document panes portaled from the Salon)
+     ========================================================================== */
+
+  .qt-tab-portal-host,
+  .qt-tab-portal-mount,
+  .qt-salon-portaled-pane {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    min-width: 0;
+  }
+
+  .qt-tab-portal-host {
+    position: relative;
+  }
+
+  .qt-salon-portaled-pane {
+    flex: 1;
+  }
+
+  .qt-tab-portal-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    text-align: center;
+  }
+}

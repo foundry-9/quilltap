@@ -126,6 +126,7 @@ export const wardrobeListToolDefinition = {
 /**
  * Helper to validate tool input parameters
  */
-export function validateWardrobeListInput(input: unknown): input is WardrobeListToolInput {
-  return wardrobeListToolInputSchema.safeParse(input).success;
+export function validateWardrobeListInput(input: unknown): WardrobeListToolInput | null {
+  const parsed = wardrobeListToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }

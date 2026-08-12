@@ -18,6 +18,7 @@ import { HelpChatProvider } from '@/components/providers/help-chat-provider'
 import { HelpChatDialog } from '@/components/help-chat/HelpChatDialog'
 import { BrahmaConsoleProvider } from '@/components/providers/brahma-console-provider'
 import { BrahmaConsoleDialog } from '@/components/brahma-console/BrahmaConsoleDialog'
+import { QtapLinkProvider } from '@/components/providers/qtap-link-provider'
 import { WardrobeDialogProvider } from '@/components/providers/wardrobe-dialog-provider'
 import { WardrobeControlDialog } from '@/components/wardrobe/wardrobe-control-dialog'
 import { LeftSidebar } from './left-sidebar'
@@ -25,6 +26,8 @@ import { PageToolbar } from './page-toolbar'
 import FooterWrapper from '@/components/footer-wrapper'
 import { StartupProgress, useStartupPhase } from '@/components/loading/StartupProgress'
 import { useDictionaryFeed } from '@/lib/spellcheck/useDictionaryFeed'
+import { WorkspaceProviders } from '@/components/workspace/WorkspaceProviders'
+import { isWorkspaceTabsEnabled } from '@/lib/config/feature-flags'
 
 interface AppLayoutProps {
   children: React.ReactNode
@@ -98,23 +101,37 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     )
   }
 
+  // Rail + content. When the tabbed workspace is enabled, the workspace store
+  // and registries live HERE (in the root layout, which never unmounts across
+  // navigation) so the shared left rail and the content both read one store and
+  // in-app navigation is pure openTab with full keep-alive.
+  const railAndContent = (
+    <div className="qt-app-layout">
+      <LeftSidebar />
+      <div className="qt-app-main">
+        <main className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          <PageToolbar />
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            {children}
+          </div>
+        </main>
+        <FooterWrapper />
+      </div>
+    </div>
+  )
+
   return (
     <HelpChatProvider>
       <BrahmaConsoleProvider>
         <WardrobeDialogProvider>
           <DictionaryFeedMount />
-          <div className="qt-app-layout">
-            <LeftSidebar />
-            <div className="qt-app-main">
-              <main className="flex flex-col flex-1 min-h-0 overflow-hidden">
-                <PageToolbar />
-                <div className="flex-1 min-h-0 overflow-y-auto">
-                  {children}
-                </div>
-              </main>
-              <FooterWrapper />
-            </div>
-          </div>
+          {isWorkspaceTabsEnabled() ? (
+            <WorkspaceProviders>
+              <QtapLinkProvider>{railAndContent}</QtapLinkProvider>
+            </WorkspaceProviders>
+          ) : (
+            <QtapLinkProvider>{railAndContent}</QtapLinkProvider>
+          )}
           <HelpChatDialog />
           <BrahmaConsoleDialog />
           <WardrobeControlDialog />
