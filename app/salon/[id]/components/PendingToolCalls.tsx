@@ -47,7 +47,7 @@ export function PendingToolCalls({ pendingToolCalls, embedded = false, beforePro
               {pendingToolCalls.map(tc => DISPLAY_NAMES[tc.name] || tc.name).join(', ')}
             </span>
             {pendingToolCalls.some(tc => tc.status === 'pending') && (
-              <QuillAnimation size="sm" className="ml-auto qt-text-secondary" />
+              <QuillAnimation size="sm" label={null} className="ml-auto qt-text-secondary" />
             )}
             {pendingToolCalls.every(tc => tc.status === 'success') && (
               <span className="ml-auto text-xs px-2 py-0.5 qt-bg-success/20 qt-text-success rounded">

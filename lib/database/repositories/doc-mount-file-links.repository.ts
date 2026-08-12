@@ -32,16 +32,139 @@ import { SQLiteCollection } from '../backends/sqlite/backend';
 import { getRawMountIndexDatabase, isMountIndexDegraded } from '../backends/sqlite/mount-index-client';
 import { generateDDL, extractSchemaMetadata } from '../schema-translator';
 import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
+import { ensureLinkNocaseUniqueIndex, ensureLinkGroupColumn } from './mount-index-case-repair';
 import { policyFromContent, DEFAULT_DOCUMENT_POLICY } from '@/lib/doc-edit/document-policy';
+import { reapOrphanedStoreChildren, type OrphanedStoreChildrenSwept } from '@/lib/mount-index/orphan-store-reaper';
 
 // Minimal subset of better-sqlite3's Database that the inline folder helper
 // uses. Avoids dragging the type into every link* method signature.
 type SyncDb = {
   prepare(sql: string): {
     get(...params: unknown[]): unknown;
+    all(...params: unknown[]): unknown[];
     run(...params: unknown[]): unknown;
   };
 };
+
+/** Identity of a link, enough to re-index it. */
+export interface GroupSibling {
+  id: string;
+  mountPointId: string;
+  relativePath: string;
+}
+
+/**
+ * Fan a content repoint out to the rest of a deliberate hard-link group.
+ *
+ * This is what makes `docs link` behave like a POSIX hard link: a write
+ * through any member moves EVERY member onto the new content row, so no
+ * member can silently drift to stale bytes. Callers pass the group id read
+ * off the link they just wrote; a null group is a no-op (an ordinary,
+ * independent link — including one that merely shares a content-addressed
+ * fileId with an unrelated file of identical bytes).
+ *
+ * Per-link metadata is deliberately NOT propagated. Two consumers of the same
+ * bytes may keep their own `description` and their own extracted text /
+ * caption — that independence is a documented property of the link model, and
+ * only the bytes are shared. Chunks are keyed by linkId and are re-built by
+ * the caller (see reindexGroupSiblings), not here.
+ *
+ * Runs synchronously inside the caller's `db.transaction(...)`.
+ *
+ * @returns the siblings that were repointed (excluding `excludeLinkId`)
+ */
+function fanOutGroupFileId(
+  db: SyncDb,
+  groupId: string | null,
+  excludeLinkId: string,
+  newFileId: string,
+  now: string,
+  /** Text-shaped columns to carry along; omit for blobs. */
+  textState: { plainTextLength: number; allowEmbed: number; allowCharacterRead: number; allowCharacterWrite: number } | null
+): GroupSibling[] {
+  if (!groupId) return [];
+
+  const siblings = db.prepare(
+    `SELECT id, mountPointId, relativePath FROM doc_mount_file_links
+     WHERE linkGroupId = ? AND id <> ?`
+  ).all(groupId, excludeLinkId) as GroupSibling[];
+  if (siblings.length === 0) return [];
+
+  if (textState) {
+    db.prepare(
+      `UPDATE doc_mount_file_links SET
+         fileId = ?, plainTextLength = ?,
+         conversionStatus = 'converted', conversionError = NULL,
+         allowEmbed = ?, allowCharacterRead = ?, allowCharacterWrite = ?,
+         lastModified = ?, updatedAt = ?
+       WHERE linkGroupId = ? AND id <> ?`
+    ).run(
+      newFileId, textState.plainTextLength,
+      textState.allowEmbed, textState.allowCharacterRead, textState.allowCharacterWrite,
+      now, now, groupId, excludeLinkId
+    );
+  } else {
+    db.prepare(
+      `UPDATE doc_mount_file_links SET fileId = ?, lastModified = ?, updatedAt = ?
+       WHERE linkGroupId = ? AND id <> ?`
+    ).run(newFileId, now, now, groupId, excludeLinkId);
+  }
+
+  return siblings;
+}
+
+/**
+ * Drop a content row that no link references any more.
+ *
+ * Every write to a database-backed mount is content-addressed: it finds-or-
+ * creates a `doc_mount_files` row for the NEW sha and repoints the link at it.
+ * Without this the row the link just left behind lingers forever, holding its
+ * `doc_mount_documents` / `doc_mount_blobs` payload — a slow leak that had
+ * accumulated dozens of orphans in the wild. Content rows still referenced by
+ * some other link (a real hard link, or an unrelated file that happens to have
+ * identical bytes) are left alone.
+ *
+ * The payload rows are deleted explicitly rather than left to the FK cascade.
+ * `ON DELETE CASCADE` is only present on databases whose tables came from the
+ * add-doc-mount-file-links migration; tables created from the Zod schema by
+ * generateDDL carry no foreign keys at all, so on those instances a cascade
+ * would silently keep every payload forever. Deleting children first is a
+ * no-op where the cascade does exist.
+ *
+ * The payload tables are created lazily by their repositories on first access
+ * (`doc_mount_blobs` has no Zod schema, so `generateDDL` never mints it; a
+ * document-only or restored-from-old-backup index may likewise never have held
+ * a blob). Deleting from a table that has never been created throws
+ * `no such table` — a hard failure on the second write to any path. So each
+ * payload delete is guarded behind a table-existence check; a missing table has
+ * nothing to collect anyway.
+ *
+ * Runs synchronously inside the caller's `db.transaction(...)`.
+ *
+ * @returns true when the row was collected
+ */
+function tableExistsSync(db: SyncDb, name: string): boolean {
+  const row = db.prepare(
+    `SELECT name FROM sqlite_master WHERE type='table' AND name = ?`
+  ).get(name) as { name: string } | undefined;
+  return Boolean(row);
+}
+
+function gcOrphanedFileRow(db: SyncDb, fileId: string | null): boolean {
+  if (!fileId) return false;
+  const still = db.prepare(
+    'SELECT COUNT(*) AS count FROM doc_mount_file_links WHERE fileId = ?'
+  ).get(fileId) as { count: number } | undefined;
+  if ((still?.count ?? 0) > 0) return false;
+  if (tableExistsSync(db, 'doc_mount_documents')) {
+    db.prepare('DELETE FROM doc_mount_documents WHERE fileId = ?').run(fileId);
+  }
+  if (tableExistsSync(db, 'doc_mount_blobs')) {
+    db.prepare('DELETE FROM doc_mount_blobs WHERE fileId = ?').run(fileId);
+  }
+  db.prepare('DELETE FROM doc_mount_files WHERE id = ?').run(fileId);
+  return true;
+}
 
 /**
  * Walk every segment of `folderPath` (relative, POSIX-style) and find-or-create
@@ -56,24 +179,33 @@ type SyncDb = {
  * Mirrors the segment-by-segment idempotent walk in
  * `lib/mount-index/folder-paths.ts#ensureFolderPath`, plus an
  * `ON CONFLICT`-style fallback for races.
+ *
+ * Folder matching is case-insensitive and case-preserving: a segment that
+ * matches an existing folder except for casing reuses that folder, and the
+ * walk continues under the folder's STORED casing. `canonicalDir` is the
+ * resulting stored-casing directory path ('' for root) so callers can keep
+ * the link's relativePath consistent with the folder rows.
  */
 function ensureLinkFolderId(
   db: SyncDb,
   mountPointId: string,
   relativePath: string,
   now: string,
-): string | null {
+): { folderId: string | null; canonicalDir: string } {
   const dir = posixPath.dirname(relativePath || '');
-  if (!dir || dir === '.' || dir === '/') return null;
+  if (!dir || dir === '.' || dir === '/') return { folderId: null, canonicalDir: '' };
 
   const normalized = dir.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/^\/+|\/+$/g, '');
-  if (!normalized) return null;
+  if (!normalized) return { folderId: null, canonicalDir: '' };
 
   const segments = normalized.split('/').filter((s) => s.length > 0);
-  if (segments.length === 0) return null;
+  if (segments.length === 0) return { folderId: null, canonicalDir: '' };
 
+  // Exact match wins; the NOCASE fallback rides the case-insensitive unique
+  // index on (mountPointId, parentId, name)-equivalent paths.
   const findStmt = db.prepare(
-    'SELECT id FROM doc_mount_folders WHERE mountPointId = ? AND path = ?'
+    `SELECT id, path FROM doc_mount_folders WHERE mountPointId = ? AND path = ? COLLATE NOCASE
+     ORDER BY (path = ?) DESC LIMIT 1`
   );
   const insertStmt = db.prepare(
     `INSERT INTO doc_mount_folders (id, mountPointId, parentId, name, path, createdAt, updatedAt)
@@ -84,24 +216,30 @@ function ensureLinkFolderId(
   let currentPath = '';
 
   for (const segment of segments) {
-    currentPath = currentPath ? `${currentPath}/${segment}` : segment;
-    let row = findStmt.get(mountPointId, currentPath) as { id: string } | undefined;
+    const requestedPath = currentPath ? `${currentPath}/${segment}` : segment;
+    let row = findStmt.get(mountPointId, requestedPath, requestedPath) as
+      | { id: string; path: string }
+      | undefined;
     if (!row) {
       const id = randomUUID();
       try {
-        insertStmt.run(id, mountPointId, currentParentId, segment, currentPath, now, now);
+        insertStmt.run(id, mountPointId, currentParentId, segment, requestedPath, now, now);
         currentParentId = id;
+        currentPath = requestedPath;
         continue;
       } catch (err) {
-        // Re-look up after conflict (UNIQUE(mountPointId, path)).
-        row = findStmt.get(mountPointId, currentPath) as { id: string } | undefined;
+        // Re-look up after conflict (UNIQUE(mountPointId, parentId, name NOCASE)).
+        row = findStmt.get(mountPointId, requestedPath, requestedPath) as
+          | { id: string; path: string }
+          | undefined;
         if (!row) throw err;
       }
     }
     currentParentId = row.id;
+    currentPath = row.path;
   }
 
-  return currentParentId;
+  return { folderId: currentParentId, canonicalDir: currentPath };
 }
 
 export type FileType = DocMountFile['fileType'];
@@ -153,6 +291,15 @@ interface LinkBlobInput {
   extractedText?: string | null;
   extractedTextSha256?: string | null;
   extractionStatus?: DocMountFileLink['extractionStatus'];
+  /**
+   * Explicit row ids for `preserveIds` imports (archive/rehydrate, spec F4).
+   * Honored only when the row in question is actually being *created*; an
+   * existing row found by sha256 or (mountPointId, relativePath) keeps its
+   * own id — the content-addressed dedup and path-upsert invariants win.
+   */
+  fileId?: string;
+  blobId?: string;
+  linkId?: string;
 }
 
 interface LinkDocumentInput {
@@ -169,6 +316,15 @@ interface LinkDocumentInput {
   allowEmbed?: boolean;
   allowCharacterRead?: boolean;
   allowCharacterWrite?: boolean;
+  /**
+   * Explicit row ids for `preserveIds` imports (archive/rehydrate, spec F4).
+   * Honored only when the row in question is actually being *created*; an
+   * existing row found by sha256 or (mountPointId, relativePath) keeps its
+   * own id — the content-addressed dedup and path-upsert invariants win.
+   */
+  fileId?: string;
+  documentId?: string;
+  linkId?: string;
 }
 
 interface LinkFilesystemFileInput {
@@ -221,12 +377,17 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
           db.exec(sql);
         }
 
-        // (mountPointId, relativePath) replaces the advisory uniqueness the
-        // old doc_mount_files row carried via app-level lookup. Now enforced.
-        db.exec(
-          `CREATE UNIQUE INDEX IF NOT EXISTS "idx_${this.collectionName}_mp_path" ` +
-          `ON "${this.collectionName}" ("mountPointId", "relativePath")`
-        );
+        // Align linkGroupId before anything reads the table — a missing column
+        // presents as every document silently not existing. See the helper.
+        ensureLinkGroupColumn(db);
+
+        // Case-insensitive (mountPointId, relativePath) uniqueness: one file
+        // per location, where `Notes.md` and `notes.md` are the same location
+        // (all path lookups already compare via LOWER()). Runs a repair scan
+        // every init (catching out-of-band edits, and swapping out the legacy
+        // case-sensitive index on older databases) before guaranteeing the
+        // NOCASE index.
+        ensureLinkNocaseUniqueIndex(db);
         db.exec(
           `CREATE INDEX IF NOT EXISTS "idx_${this.collectionName}_fileId" ` +
           `ON "${this.collectionName}" ("fileId")`
@@ -437,6 +598,72 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
   }
 
   // ============================================================================
+  // Deliberate hard-link groups
+  // ============================================================================
+
+  /**
+   * Enrol two links in the same hard-link group, so a write through either one
+   * repoints both (see {@link fanOutGroupFileId}). Reuses the source's existing
+   * group when it already has one, so linking a third location to an
+   * already-linked file extends the group rather than splitting it.
+   *
+   * Only `docs link` calls this. `docs copy` deliberately does not: a copy that
+   * happens to share a content row through sha dedup must still fork on the
+   * next write, which is exactly what a null group gives you.
+   *
+   * @returns the group id both links now carry, or null if either link is gone
+   */
+  async bindLinkGroup(sourceLinkId: string, destLinkId: string): Promise<string | null> {
+    return this.safeQuery(
+      async () => {
+        const db = getRawMountIndexDatabase();
+        if (!db) return null;
+
+        const now = new Date().toISOString();
+        const tx = db.transaction(() => {
+          const source = db.prepare(
+            'SELECT id, linkGroupId FROM doc_mount_file_links WHERE id = ?'
+          ).get(sourceLinkId) as { id: string; linkGroupId: string | null } | undefined;
+          const dest = db.prepare(
+            'SELECT id FROM doc_mount_file_links WHERE id = ?'
+          ).get(destLinkId) as { id: string } | undefined;
+          if (!source || !dest) return null;
+
+          const groupId = source.linkGroupId ?? randomUUID();
+          const stmt = db.prepare(
+            'UPDATE doc_mount_file_links SET linkGroupId = ?, updatedAt = ? WHERE id = ?'
+          );
+          if (!source.linkGroupId) stmt.run(groupId, now, sourceLinkId);
+          stmt.run(groupId, now, destLinkId);
+          return groupId;
+        });
+
+        const groupId = tx();
+        if (groupId) {
+          logger.debug('Bound links into hard-link group', { sourceLinkId, destLinkId, groupId });
+        }
+        return groupId;
+      },
+      'Error binding hard-link group',
+      { sourceLinkId, destLinkId },
+      null
+    );
+  }
+
+  /**
+   * Every link in a hard-link group, joined with content fields. Used to
+   * re-chunk the siblings a write just repointed.
+   */
+  async findByLinkGroupId(linkGroupId: string): Promise<DocMountFileLinkWithContent[]> {
+    return this.safeQuery(
+      async () => this.queryJoined('WHERE l.linkGroupId = ?', [linkGroupId]),
+      'Error finding file links by link group ID',
+      { linkGroupId },
+      []
+    );
+  }
+
+  // ============================================================================
   // Deletion with garbage-collection of the underlying file
   // ============================================================================
 
@@ -455,8 +682,9 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         if (!db) return { fileId: null, fileGC: false };
 
         const link = db.prepare(
-          'SELECT fileId, mountPointId FROM doc_mount_file_links WHERE id = ?'
-        ).get(linkId) as { fileId: string; mountPointId: string } | undefined;
+          'SELECT fileId, mountPointId, linkGroupId FROM doc_mount_file_links WHERE id = ?'
+        ).get(linkId) as
+          { fileId: string; mountPointId: string; linkGroupId: string | null } | undefined;
 
         if (!link) {
           return { fileId: null, fileGC: false };
@@ -467,16 +695,24 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
           // mount-chunk cache for this mount before the row vanishes.
           db.prepare('DELETE FROM doc_mount_file_links WHERE id = ?').run(linkId);
 
-          const remaining = db.prepare(
-            'SELECT COUNT(*) AS count FROM doc_mount_file_links WHERE fileId = ?'
-          ).get(link.fileId) as { count: number };
-
-          if (remaining.count === 0) {
-            // Last link gone — drop the file row. Documents/blobs cascade.
-            db.prepare('DELETE FROM doc_mount_files WHERE id = ?').run(link.fileId);
-            return true;
+          // A group of one is not a hard link any more — unlinking the last
+          // sibling must leave an ordinary independent file behind, or the
+          // survivor would keep a dangling group id that a future link could
+          // accidentally join.
+          if (link.linkGroupId) {
+            const survivors = db.prepare(
+              'SELECT id FROM doc_mount_file_links WHERE linkGroupId = ?'
+            ).all(link.linkGroupId) as { id: string }[];
+            if (survivors.length <= 1) {
+              db.prepare(
+                'UPDATE doc_mount_file_links SET linkGroupId = NULL, updatedAt = ? WHERE linkGroupId = ?'
+              ).run(new Date().toISOString(), link.linkGroupId);
+            }
           }
-          return false;
+
+          // Last link gone — drop the file row and its payload. Shared with
+          // the write path so both collect content the same way.
+          return gcOrphanedFileRow(db, link.fileId);
         });
 
         const fileGC = tx();
@@ -563,6 +799,8 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
     link: DocMountFileLinkWithContent;
     file: DocMountFile;
     blobId: string;
+    /** Hard-link group members repointed by this write. */
+    groupSiblings: GroupSibling[];
   }> {
     const db = getRawMountIndexDatabase();
     if (!db) throw new Error('Mount index database not initialized');
@@ -613,7 +851,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
 
     const tx = db.transaction(() => {
       if (!fileRow) {
-        const id = randomUUID();
+        const id = input.fileId ?? randomUUID();
         db.prepare(
           `INSERT INTO doc_mount_files (id, sha256, fileSizeBytes, fileType, source, createdAt, updatedAt)
            VALUES (?, ?, ?, ?, 'database', ?, ?)`
@@ -633,7 +871,10 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
       // Any caller-supplied input.folderId is informational and ignored —
       // the relativePath wins, and missing folder rows are created here so
       // doc_mount_folders stays in sync with what the link table claims.
-      const folderId = ensureLinkFolderId(db, input.mountPointId, input.relativePath, now);
+      // canonicalRel carries the stored folder casing so the link's path
+      // never disagrees with the folder rows except in the leaf name.
+      const { folderId, canonicalDir } = ensureLinkFolderId(db, input.mountPointId, input.relativePath, now);
+      const canonicalRel = canonicalDir ? `${canonicalDir}/${input.fileName}` : input.fileName;
       if (input.folderId !== undefined && input.folderId !== folderId) {
         logger.warn('linkBlobContent: caller folderId disagrees with relativePath; using derived', {
           mountPointId: input.mountPointId,
@@ -653,19 +894,23 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
       if (existingBlob) {
         blobId = existingBlob.id;
       } else {
-        blobId = randomUUID();
+        blobId = input.blobId ?? randomUUID();
         db.prepare(
           `INSERT INTO doc_mount_blobs (id, fileId, sha256, sizeBytes, storedMimeType, data, createdAt, updatedAt)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
         ).run(blobId, fileRow.id, computed, sizeBytes, input.storedMimeType, input.data, now, now);
       }
 
-      // Upsert the link row. The UNIQUE(mountPointId, relativePath) index
-      // means a second write to the same path overwrites the existing
-      // link's metadata in place rather than creating a duplicate.
+      // Upsert the link row. The UNIQUE(mountPointId, relativePath NOCASE)
+      // index means a second write to the same path — in any casing —
+      // overwrites the existing link's metadata in place rather than
+      // creating a duplicate. Case-preserving: the existing row keeps its
+      // relativePath/fileName casing.
       const existingLink = db.prepare(
-        `SELECT id FROM doc_mount_file_links WHERE mountPointId = ? AND relativePath = ?`
-      ).get(input.mountPointId, input.relativePath) as { id: string } | undefined;
+        `SELECT id, fileId, linkGroupId FROM doc_mount_file_links
+         WHERE mountPointId = ? AND relativePath = ? COLLATE NOCASE`
+      ).get(input.mountPointId, canonicalRel) as
+        { id: string; fileId: string; linkGroupId: string | null } | undefined;
 
       const description = input.description ?? '';
       const descriptionUpdatedAt = description ? now : null;
@@ -674,25 +919,32 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
       const extractedTextSha256 = input.extractedTextSha256 ?? null;
 
       let linkId: string;
+      let groupSiblings: GroupSibling[] = [];
       if (existingLink) {
         linkId = existingLink.id;
         db.prepare(
           `UPDATE doc_mount_file_links SET
-             fileId = ?, fileName = ?, folderId = ?,
+             fileId = ?, folderId = ?,
              originalFileName = ?, originalMimeType = ?,
              description = ?, descriptionUpdatedAt = ?,
              extractedText = ?, extractedTextSha256 = ?, extractionStatus = ?,
              lastModified = ?, updatedAt = ?
            WHERE id = ?`
         ).run(
-          fileRow.id, input.fileName, folderId,
+          fileRow.id, folderId,
           input.originalFileName, input.originalMimeType,
           description, descriptionUpdatedAt,
           extractedText, extractedTextSha256, extractionStatus,
           now, now, linkId
         );
+        // Bytes are shared, so the whole group moves; each member keeps its own
+        // description and extracted caption (null textState).
+        groupSiblings = fanOutGroupFileId(db, existingLink.linkGroupId, linkId, fileRow.id, now, null);
+        if (existingLink.fileId !== fileRow.id) {
+          gcOrphanedFileRow(db, existingLink.fileId);
+        }
       } else {
-        linkId = randomUUID();
+        linkId = input.linkId ?? randomUUID();
         db.prepare(
           `INSERT INTO doc_mount_file_links (
              id, fileId, mountPointId, relativePath, fileName, folderId,
@@ -710,7 +962,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
              0, ?, ?, ?
            )`
         ).run(
-          linkId, fileRow.id, input.mountPointId, input.relativePath, input.fileName, folderId,
+          linkId, fileRow.id, input.mountPointId, canonicalRel, input.fileName, folderId,
           input.originalFileName, input.originalMimeType,
           description, descriptionUpdatedAt,
           conversionStatus,
@@ -719,16 +971,24 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         );
       }
 
-      return { fileRow: fileRow!, blobId, linkId };
+      return { fileRow: fileRow!, blobId, linkId, groupSiblings };
     });
 
-    const { fileRow: finalFile, blobId, linkId } = tx();
+    const { fileRow: finalFile, blobId, linkId, groupSiblings } = tx();
+
+    if (groupSiblings.length > 0) {
+      logger.debug('linkBlobContent: fanned write out to hard-link group', {
+        linkId,
+        siblings: groupSiblings.length,
+        fileId: finalFile.id,
+      });
+    }
 
     const link = await this.findByIdWithContent(linkId);
     if (!link) {
       throw new Error(`Link disappeared immediately after upsert: ${linkId}`);
     }
-    return { link, file: finalFile, blobId };
+    return { link, file: finalFile, blobId, groupSiblings };
   }
 
   /**
@@ -739,6 +999,8 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
     link: DocMountFileLinkWithContent;
     file: DocMountFile;
     documentId: string;
+    /** Hard-link group members repointed by this write; each needs re-chunking. */
+    groupSiblings: GroupSibling[];
   }> {
     const db = getRawMountIndexDatabase();
     if (!db) throw new Error('Mount index database not initialized');
@@ -754,7 +1016,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
 
     const tx = db.transaction(() => {
       if (!fileRow) {
-        const id = randomUUID();
+        const id = input.fileId ?? randomUUID();
         db.prepare(
           `INSERT INTO doc_mount_files (id, sha256, fileSizeBytes, fileType, source, createdAt, updatedAt)
            VALUES (?, ?, ?, ?, 'database', ?, ?)`
@@ -777,7 +1039,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
       if (existingDoc) {
         documentId = existingDoc.id;
       } else {
-        documentId = randomUUID();
+        documentId = input.documentId ?? randomUUID();
         db.prepare(
           `INSERT INTO doc_mount_documents (
              id, fileId, content, contentSha256, plainTextLength, createdAt, updatedAt
@@ -785,8 +1047,10 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         ).run(documentId, fileRow.id, input.content, input.contentSha256, input.plainTextLength, now, now);
       }
 
-      // Derive folderId from relativePath (see linkBlobContent for rationale).
-      const folderId = ensureLinkFolderId(db, input.mountPointId, input.relativePath, now);
+      // Derive folderId from relativePath (see linkBlobContent for rationale,
+      // including the canonical stored-casing directory).
+      const { folderId, canonicalDir } = ensureLinkFolderId(db, input.mountPointId, input.relativePath, now);
+      const canonicalRel = canonicalDir ? `${canonicalDir}/${input.fileName}` : input.fileName;
       if (input.folderId !== undefined && input.folderId !== folderId) {
         logger.warn('linkDocumentContent: caller folderId disagrees with relativePath; using derived', {
           mountPointId: input.mountPointId,
@@ -796,9 +1060,13 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         });
       }
 
+      // Case-insensitive, case-preserving upsert: a write to `NOTES.md`
+      // updates the row stored as `notes.md` and keeps its casing.
       const existingLink = db.prepare(
-        `SELECT id FROM doc_mount_file_links WHERE mountPointId = ? AND relativePath = ?`
-      ).get(input.mountPointId, input.relativePath) as { id: string } | undefined;
+        `SELECT id, fileId, linkGroupId FROM doc_mount_file_links
+         WHERE mountPointId = ? AND relativePath = ? COLLATE NOCASE`
+      ).get(input.mountPointId, canonicalRel) as
+        { id: string; fileId: string; linkGroupId: string | null } | undefined;
 
       // Per-document policy. For markdown, derive it from the frontmatter in
       // `content` unless the caller passed explicit flags; other native text
@@ -813,24 +1081,34 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
       const allowCharacterWrite = (input.allowCharacterWrite ?? parsedPolicy.characterWrite) ? 1 : 0;
 
       let linkId: string;
+      let groupSiblings: GroupSibling[] = [];
       if (existingLink) {
         linkId = existingLink.id;
         db.prepare(
           `UPDATE doc_mount_file_links SET
-             fileId = ?, fileName = ?, folderId = ?,
+             fileId = ?, folderId = ?,
              plainTextLength = ?,
              conversionStatus = 'converted', conversionError = NULL,
              allowEmbed = ?, allowCharacterRead = ?, allowCharacterWrite = ?,
              lastModified = ?, updatedAt = ?
            WHERE id = ?`
         ).run(
-          fileRow.id, input.fileName, folderId,
+          fileRow.id, folderId,
           input.plainTextLength,
           allowEmbed, allowCharacterRead, allowCharacterWrite,
           now, now, linkId
         );
+        // Deliberate hard links move together, then the abandoned content row
+        // (if this write orphaned it) is collected.
+        groupSiblings = fanOutGroupFileId(db, existingLink.linkGroupId, linkId, fileRow.id, now, {
+          plainTextLength: input.plainTextLength,
+          allowEmbed, allowCharacterRead, allowCharacterWrite,
+        });
+        if (existingLink.fileId !== fileRow.id) {
+          gcOrphanedFileRow(db, existingLink.fileId);
+        }
       } else {
-        linkId = randomUUID();
+        linkId = input.linkId ?? randomUUID();
         db.prepare(
           `INSERT INTO doc_mount_file_links (
              id, fileId, mountPointId, relativePath, fileName, folderId,
@@ -844,23 +1122,31 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
              0, ?, ?, ?
            )`
         ).run(
-          linkId, fileRow.id, input.mountPointId, input.relativePath, input.fileName, folderId,
+          linkId, fileRow.id, input.mountPointId, canonicalRel, input.fileName, folderId,
           input.plainTextLength,
           allowEmbed, allowCharacterRead, allowCharacterWrite,
           now, now, now
         );
       }
 
-      return { fileRow: fileRow!, documentId, linkId };
+      return { fileRow: fileRow!, documentId, linkId, groupSiblings };
     });
 
-    const { fileRow: finalFile, documentId, linkId } = tx();
+    const { fileRow: finalFile, documentId, linkId, groupSiblings } = tx();
+
+    if (groupSiblings.length > 0) {
+      logger.debug('linkDocumentContent: fanned write out to hard-link group', {
+        linkId,
+        siblings: groupSiblings.length,
+        fileId: finalFile.id,
+      });
+    }
 
     const link = await this.findByIdWithContent(linkId);
     if (!link) {
       throw new Error(`Link disappeared immediately after upsert: ${linkId}`);
     }
-    return { link, file: finalFile, documentId };
+    return { link, file: finalFile, documentId, groupSiblings };
   }
 
   /**
@@ -906,7 +1192,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
       // The scanner calls this without passing folderId at all, so this
       // derivation is the only place new filesystem-scan rows get a sensible
       // folderId.
-      const folderId = ensureLinkFolderId(db, input.mountPointId, input.relativePath, now);
+      const { folderId } = ensureLinkFolderId(db, input.mountPointId, input.relativePath, now);
       if (input.folderId !== undefined && input.folderId !== null && input.folderId !== folderId) {
         logger.warn('linkFilesystemFile: caller folderId disagrees with relativePath; using derived', {
           mountPointId: input.mountPointId,
@@ -916,8 +1202,12 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         });
       }
 
+      // NOCASE match so a case-only rename on disk updates the existing row
+      // instead of minting a case-variant duplicate. Unlike the database-store
+      // writers, the update below ADOPTS the scanned casing — the filesystem
+      // is the source of truth for these rows.
       const existingLink = db.prepare(
-        `SELECT id FROM doc_mount_file_links WHERE mountPointId = ? AND relativePath = ?`
+        `SELECT id FROM doc_mount_file_links WHERE mountPointId = ? AND relativePath = ? COLLATE NOCASE`
       ).get(input.mountPointId, input.relativePath) as { id: string } | undefined;
 
       let linkId: string;
@@ -934,14 +1224,14 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         linkId = existingLink.id;
         db.prepare(
           `UPDATE doc_mount_file_links SET
-             fileId = ?, fileName = ?, folderId = ?,
+             fileId = ?, relativePath = ?, fileName = ?, folderId = ?,
              conversionStatus = ?, conversionError = ?,
              plainTextLength = ?, chunkCount = ?,
              allowEmbed = ?, allowCharacterRead = ?, allowCharacterWrite = ?,
              lastModified = ?, updatedAt = ?
            WHERE id = ?`
         ).run(
-          fileRow.id, input.fileName, folderId,
+          fileRow.id, input.relativePath, input.fileName, folderId,
           conversionStatus, input.conversionError ?? null,
           plainTextLength, chunkCount,
           allowEmbed, allowCharacterRead, allowCharacterWrite,
@@ -1005,6 +1295,40 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
     );
   }
 
+  /**
+   * Reaper for store children stranded when their mount point vanished — the
+   * orphans a pre-Bug-9 non-atomic store delete (or a hand-built index) minted.
+   * Read connections keep foreign keys off, so these `doc_mount_file_links` /
+   * `doc_mount_folders` / `doc_mount_documents` rows sit silent until a backup
+   * carries them into a restore where constraints are live, which then fails
+   * with `FOREIGN KEY constraint failed`. Runs at boot and joined to the daily
+   * maintenance sweep.
+   *
+   * Healthy rows (whose mount point still exists) are untouched. Documents are
+   * keyed by fileId, not mountPointId, so they are reaped once their file has
+   * no surviving link — which the link reap above may have just caused.
+   */
+  async sweepOrphanedStoreChildren(): Promise<OrphanedStoreChildrenSwept> {
+    return this.safeQuery(
+      async () => {
+        const db = getRawMountIndexDatabase();
+        if (!db) return { links: 0, folders: 0, documents: 0 };
+        await this.getCollection();
+
+        const swept = reapOrphanedStoreChildren(db);
+        if (swept.links > 0 || swept.folders > 0 || swept.documents > 0) {
+          logger.info('Swept orphaned doc-store children', swept);
+        } else {
+          logger.debug('Swept orphaned doc-store children (none found)');
+        }
+        return swept;
+      },
+      'Error sweeping orphaned store children',
+      {},
+      { links: 0, folders: 0, documents: 0 }
+    );
+  }
+
   // ============================================================================
   // Internal helpers
   // ============================================================================
@@ -1029,6 +1353,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         l.conversionStatus, l.conversionError, l.plainTextLength,
         l.extractedText, l.extractedTextSha256, l.extractionStatus, l.extractionError,
         l.chunkCount, l.allowEmbed, l.allowCharacterRead, l.allowCharacterWrite,
+        l.linkGroupId,
         l.lastModified, l.createdAt, l.updatedAt,
         f.sha256, f.fileSizeBytes, f.fileType, f.source
       FROM doc_mount_file_links l
@@ -1061,6 +1386,10 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
       allowEmbed: coerceAllow(row.allowEmbed),
       allowCharacterRead: coerceAllow(row.allowCharacterRead),
       allowCharacterWrite: coerceAllow(row.allowCharacterWrite),
+      // Hard-link group id. Without this in the projection, every joined read
+      // reported linkGroupId: undefined and reindexLinkGroupSiblings dead-ended
+      // its early-out, so hard-linked siblings served stale chunks (Bug 15).
+      linkGroupId: row.linkGroupId ?? null,
       lastModified: row.lastModified,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,

@@ -204,6 +204,20 @@ export async function writeConversationSummaryToVaults(
 
   for (const characterId of input.participantCharacterIds) {
     try {
+      // Archived characters keep a live (pruned) vault, but `Conversation
+      // Summaries/` is part of what the archive packed away — writing here
+      // would silently resurrect the folder outside the bundle. Skip them;
+      // rehydration restores the folder and future summaries resume.
+      const raw = await getRepositories().characters.findByIdRaw(characterId);
+      if (raw?.archivedAt) {
+        logger.debug('Skipping conversation summary write for archived character', {
+          context: 'file-storage.conversation-summary-vault-bridge',
+          chatId: input.chatId,
+          characterId,
+        });
+        continue;
+      }
+
       const target = await getCharacterVaultStore(characterId);
       if (!target) continue;
 

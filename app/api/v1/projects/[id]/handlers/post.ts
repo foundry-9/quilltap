@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { badRequest } from '@/lib/api/responses';
 import { handleAddCharacter, handleAddChat, handleAddFile, handleUpdateToolSettings } from '../actions';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 const PROJECT_POST_ACTIONS = ['add-character', 'add-chat', 'add-file', 'update-tool-settings'] as const;
 type ProjectPostAction = typeof PROJECT_POST_ACTIONS[number];
@@ -21,7 +21,7 @@ type ProjectPostAction = typeof PROJECT_POST_ACTIONS[number];
  */
 export async function handlePost(
   req: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   projectId: string
 ): Promise<NextResponse> {
   const action = getActionParam(req);

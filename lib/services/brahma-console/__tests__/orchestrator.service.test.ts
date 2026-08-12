@@ -67,6 +67,10 @@ jest.mock('@/lib/services/chat-message/memory-trigger.service', () => ({
   triggerTurnMemoryExtraction: jest.fn(),
 }))
 
+jest.mock('../turn-budget', () => ({
+  resolveBrahmaMaxAgentTurns: jest.fn().mockResolvedValue(25),
+}))
+
 jest.mock('@/lib/services/token-tracking.service', () => ({
   trackMessageTokenUsage: jest.fn(),
 }))
@@ -80,7 +84,7 @@ jest.mock('@/lib/tools', () => ({
 }))
 
 // ── Imports (after mocks) ───────────────────────────────────────────────────
-import { buildTools, streamMessage, encodeReasoningChunk } from '@/lib/services/chat-message/streaming.service'
+import { buildTools, streamMessage, encodeReasoningChunk, encodeDoneEvent } from '@/lib/services/chat-message/streaming.service'
 import {
   detectToolCallsInResponse,
   processToolCalls,
@@ -91,6 +95,7 @@ import {
   triggerTurnMemoryExtraction,
 } from '@/lib/services/chat-message/memory-trigger.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
+import { resolveBrahmaMaxAgentTurns } from '../turn-budget'
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 const MOCK_PROFILE = {
@@ -344,6 +349,49 @@ describe('handleBrahmaConsoleMessage — tool-call threading', () => {
     // Executed exactly the 3 information-bearing iterations, then the guard
     // forced a finalize instead of letting it run to the 25-turn cap.
     expect(jest.mocked(processToolCalls)).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('handleBrahmaConsoleMessage — budget exhaustion (Bug 47)', () => {
+  it('salvages a final message + done event when the forced turn only calls a tool', async () => {
+    // Budget of 2: turn 1 runs a tool, turn 2 is the forced-final turn (which
+    // executes no tools) — and the model answers it with ANOTHER native tool call
+    // instead of submit_final_response, so the turn carries no prose.
+    jest.mocked(resolveBrahmaMaxAgentTurns).mockResolvedValue(2)
+    jest.mocked(buildTools).mockResolvedValue({
+      tools: [{ name: 'run_sql' }],
+      modelSupportsNativeTools: true,
+      useNativeWebSearch: false,
+    } as never)
+
+    // Every turn: empty prose + a native tool call in the raw response.
+    jest.mocked(streamMessage).mockImplementation(async function* () {
+      yield { content: '' }
+      yield { done: true, rawResponse: { tool: 1 } }
+    } as never)
+    // Never submit_final_response — always another run_sql.
+    jest.mocked(detectToolCallsInResponse).mockReturnValue(
+      [{ name: 'run_sql', arguments: { sql: 'SELECT 1' }, callId: 'c1' }] as never,
+    )
+    jest.mocked(processToolCalls).mockResolvedValue({
+      toolMessages: [{ toolName: 'run_sql', success: true, content: '{"rows":[7]}', callId: 'c1' }],
+      generatedImagePaths: [],
+    } as never)
+    jest.mocked(saveToolMessages).mockResolvedValue(undefined as never)
+
+    const repos = makeMockRepos()
+    const stream = await handleBrahmaConsoleMessage(repos as never, 'chat-1', 'user-1', { content: 'how many rows?' })
+    await drain(stream)
+
+    // A final ASSISTANT message is persisted — not silence — and it explains the
+    // budget exhaustion and folds in the last tool result we captured.
+    const saved = repos.chats.addMessage.mock.calls.map((c: unknown[]) => c[1] as { role: string; content: string })
+    const finalAssistant = saved.find(m => m.role === 'ASSISTANT' && m.content.includes('2-turn budget'))
+    expect(finalAssistant).toBeTruthy()
+    expect(finalAssistant?.content).toContain('{"rows":[7]}')
+
+    // The stream always signals completion — the client never hangs.
+    expect(encodeDoneEvent).toHaveBeenCalledTimes(1)
   })
 })
 

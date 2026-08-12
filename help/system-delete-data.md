@@ -84,8 +84,10 @@ A complete data deletion removes:
 
 - Stored backups (cloud and local)
 - Export files
-- Archives
 - Recovery data
+
+**Archived-character bundles** are the one exception, and only if you ask. See
+[Sparing the Archive Shelf](#sparing-the-archive-shelf) below.
 
 ## Deleting Your Data
 
@@ -103,6 +105,8 @@ A complete data deletion removes:
    - Dialog shows summary of what will be removed
    - Lists counts of characters, chats, files, etc.
    - Shows storage space that will be freed
+   - If any archived-character bundles are on the shelf, a checkbox offers to
+     spare them (ticked by default — see below)
    - Review carefully
 
 5. **Understand the consequences**
@@ -131,6 +135,24 @@ A complete data deletion removes:
    - All data permanently removed
    - You're logged out
    - Can optionally delete account entirely
+
+## Sparing the Archive Shelf
+
+When a character is archived, its correspondence, photographs, memories and
+sundry effects are packed into an encrypted `.qtap` bundle and set on the
+shelf. The Delete All Data dialog, upon noticing such bundles, offers a
+checkbox — **ticked by default** — to leave them where they stand while the
+rest of the establishment is cleared out.
+
+Be clear-eyed about what survives: the bundle *file*, and nothing else. The
+archived character's own record perishes with every other record, so a spared
+bundle cannot simply be woken with the Rehydrate action afterward — it is a
+loose bundle, importable through the ordinary character import like any
+travelling `.qtap`. Because each bundle is sealed under your passphrase (never
+under anything stored in the databases being deleted), it remains perfectly
+openable after the wipe.
+
+Untick the box, and the shelf is swept bare along with everything else.
 
 ## Before Deleting: Checklist
 

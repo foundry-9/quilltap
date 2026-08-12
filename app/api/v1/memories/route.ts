@@ -32,7 +32,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  createAuthenticatedHandler,
+  createContextHandler,
   getActionParam,
 } from '@/lib/api/middleware';
 import { createMemoryWithEmbedding, searchMemoriesSemantic, generateMissingEmbeddings, rebuildVectorIndex, deleteMemoriesByChatIdWithVectors } from '@/lib/memory/memory-service';
@@ -139,7 +139,7 @@ const extractionConcurrencySchema = z.object({
 // GET /api/v1/memories - List memories
 // =============================================================================
 
-export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
+export const GET = createContextHandler(async (req, { user, repos }) => {
   const action = getActionParam(req);
   const { searchParams } = req.nextUrl;
   const characterId = searchParams.get('characterId');
@@ -215,7 +215,7 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
 // POST /api/v1/memories - Create memory or perform action
 // =============================================================================
 
-export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
+export const POST = createContextHandler(async (req, { user, repos }) => {
   const action = getActionParam(req);
 
   // Action-based operations
@@ -267,7 +267,7 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
 // PUT /api/v1/memories - Bulk operations (action-based only)
 // =============================================================================
 
-export const PUT = createAuthenticatedHandler(async (req, { user, repos }) => {
+export const PUT = createContextHandler(async (req, { user, repos }) => {
   const action = getActionParam(req);
 
   if (action === 'embeddings') {
@@ -281,7 +281,7 @@ export const PUT = createAuthenticatedHandler(async (req, { user, repos }) => {
 // DELETE /api/v1/memories - Delete memories by filter
 // =============================================================================
 
-export const DELETE = createAuthenticatedHandler(async (req, { user, repos }) => {
+export const DELETE = createContextHandler(async (req, { user, repos }) => {
   const chatId = req.nextUrl.searchParams.get('chatId');
 
   if (!chatId) {

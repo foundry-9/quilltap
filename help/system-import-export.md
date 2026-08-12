@@ -14,11 +14,23 @@ Export lets you save characters, chats, memories, and templates to files in Quil
 
 **What can you export:**
 
-- Characters and their configurations
-- Chat histories and messages
-- Associated memories
-- Roleplay templates
-- All metadata
+An export carries exactly one kind of thing, and the picker now offers the full
+roster — for a good while it offered only seven of them, and the rest sat in the
+cellar with no bell-pull:
+
+- **Characters** and their configurations
+- **Chats** — histories, messages, annotations, and Document Mode panes
+- **Memories**, riding along with either of the above
+- **Roleplay Templates** and **Prompt Templates** (your own; the house's built-ins
+  stay with the house)
+- **Connection**, **Image**, and **Embedding Profiles** — minus the keys, always
+- **Tags**, **Projects**, and **Groups**
+- **Document Stores** — the Scriptorium's shelves, contents and all
+- **Files & Folders** — the general file library, bytes included
+- **Provider Models** — the catalogue of models, for instances that cannot reach
+  out and fetch it themselves
+- **Plugin Settings** — with every password-shaped setting left behind on purpose
+- **Instance Settings** — the "move my setup" export
 
 **Why export:**
 
@@ -44,7 +56,7 @@ Export lets you save characters, chats, memories, and templates to files in Quil
 
 5. **Choose export options:**
    - **Include Memories:** Whether to include associated memories
-   - Shows how many memories will be included
+   - Shows how many memories will be included — and, for character exports, what the characters' vaults add to the luggage (documents, images, and an estimated size)
 
 6. **Review your selection**
    - Verify the items you're exporting
@@ -216,6 +228,62 @@ When you import data, Quilltap automatically preserves and updates relationships
 
 When using the "Create New" conflict strategy, all internal references are automatically updated to point to the newly created copies.
 
+## What Travels, and What Stays Behind
+
+First, a recent and welcome addition to the manifest: **a character's vault now
+travels with the character.** A character export used to carry the dossier but
+not the steamer trunk — the portrait, the photograph album, the correspondence
+in `Mail/`, the wardrobe, the conversation summaries all stayed home, and the
+character stepped off the train faceless. The whole vault now rides along, and
+on arrival the avatar and every photograph resolve exactly as they did at the
+point of departure.
+
+A few things, however, are deliberately left on the platform when an export
+departs. None of this is an oversight, and in each case the receiving instance
+rebuilds or already owns what was withheld.
+
+**Memories arrive without their search indexes.** A memory's embedding — the
+numerical impression by which semantic search finds it — is meaningful only
+against the very model that produced it. Carried into a house that keeps a
+different model, it is not merely useless but actively misleading: search would
+return confident nonsense and nothing anywhere would notice. So embeddings no
+longer travel at all.
+
+The practical effects are two, and both are to your advantage. Exports that once
+ran to hundreds of megabytes now run to a few, since the vectors were better
+than nine-tenths of the weight. And on arrival, Quilltap immediately queues each
+imported memory for re-indexing against *your* embedding profile. Watch the
+Tasks Queue; semantic search over the newcomers warms up as the queue drains. If
+no embedding profile is configured, you will be told so plainly, and the
+memories are indexed the moment you set one up.
+
+(Should you import an older `.qtap` file that still carries embeddings, they are
+discarded at the door rather than admitted.)
+
+**Plugin settings arrive without their secrets.** Any setting a plugin declares
+as a password is stripped at export time, and the import preview names exactly
+which ones went missing so you know what to type back in. Everything else is
+merged into whatever configuration this instance already holds — so a secret you
+have already entered here is left undisturbed. If the plugin is not installed on
+the exporting instance, Quilltap cannot tell which settings are sensitive and
+therefore withholds all of them: it would rather ask you to re-enter a harmless
+setting than gamble with a live one.
+
+**Instance settings overwrite, on purpose.** That is what "move my setup" means.
+A handful of keys never travel regardless — the pointers to this instance's own
+document stores, the housekeeping clock, and the version guard — because they
+name things that exist only here.
+
+**Files arrive re-shelved.** File contents travel in full, but the *address*
+where they were stored does not: it names a shelf in the exporting instance's
+own storage. Each file is re-filed here and given a fresh address. Attachments
+pointing at characters or chats not present on this instance are quietly
+unhooked, and you are told how many.
+
+**Provider models are a convenience, not a source of truth.** The catalogue
+rebuilds itself the moment you refresh models from a provider. Export it when an
+instance cannot reach the outside world; otherwise a refresh knows better.
+
 ## Import/Export File Format
 
 **File format:** `.qtap` — streaming newline-delimited JSON (NDJSON).
@@ -224,10 +292,11 @@ When using the "Create New" conflict strategy, all internal references are autom
 
 - First line is an envelope carrying the manifest (`{"format":"qtap-ndjson","version":1,"manifest":{...}}`)
 - Each subsequent line is a single tagged record — one character, one memory, one message, and so on — so nothing in the pipeline has to hold the whole export in memory at once
-- Large binary blobs (document-store attachments) are split across multiple chunk lines and stitched back together on import
+- Large binary blobs (document-store attachments) are split across multiple chunk lines and stitched back together on import. (Time was, the reader declared a large attachment complete the instant its *first* parcel arrived — the remainder was left standing on the platform, and the import ended in a bewildered complaint about a chunk with no blob to belong to. Anything under 3 MB travelled as a single parcel and so came through unharmed; anything larger did not. The reader now waits for every parcel before it signs for the delivery.)
 - A trailing footer line carries authoritative record counts
 - Relationships stored as references that are remapped on import
 - Because every line is independently valid JSON, a `.qtap` file can be browsed or grepped with any text tool
+- The manifest may carry a `preserveIds` flag, under which every record is restored at its original ID (refusing outright, before any writes, if a preserved ID would collide with something already in residence). This flag is set by Quilltap's own archive machinery; the wizard offers no such option and never sets it
 
 **Compatibility:**
 
@@ -248,6 +317,8 @@ When using the "Create New" conflict strategy, all internal references are autom
 
 - Verify file is a valid `.qtap` file (either streaming NDJSON or a legacy monolithic JSON export)
 - Check that file hasn't been corrupted (a truncated NDJSON file will report a specific line number)
+- An export that fails with **"doc_mount_blob_chunk received without preceding doc_mount_blob"** was written by a build predating this fix and read by one predating it too; the file itself is sound. Import it again on a current build and its large attachments will arrive whole
+- A genuinely truncated export now says so plainly — *"NDJSON export truncated"*, naming the attachments that never finished arriving — rather than complaining about an orphaned chunk
 - Very old exports above ~450 MB that used the monolithic JSON format are too large to import on modern runtimes — re-export them from a newer Quilltap build first
 - Try changing conflict resolution strategy
 - Contact support if error persists
@@ -264,6 +335,16 @@ When using the "Create New" conflict strategy, all internal references are autom
 - Check Tasks Queue to see memory processing jobs
 - Memories may take time to process
 - Check if "Include Memories" was selected during import
+
+**Imported memories don't turn up in search**
+
+- Expected, briefly: every imported memory is re-indexed against your own
+  embedding profile rather than arriving with the sender's. Check the Tasks
+  Queue — search over them warms up as the re-indexing jobs drain
+- If the import warned that no embedding profile is configured, set one in the
+  Commonplace Book tab; the memories are indexed once one exists
+- The memories themselves are present and readable throughout; it is only
+  semantic search that has to catch up
 
 **Duplicate items created**
 

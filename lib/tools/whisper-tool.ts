@@ -46,6 +46,7 @@ export const whisperToolDefinition = {
 /**
  * Helper to validate tool input parameters
  */
-export function validateWhisperInput(input: unknown): input is WhisperToolInput {
-  return whisperToolInputSchema.safeParse(input).success;
+export function validateWhisperInput(input: unknown): WhisperToolInput | null {
+  const parsed = whisperToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }

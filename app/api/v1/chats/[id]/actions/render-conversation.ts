@@ -8,14 +8,14 @@ import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { successResponse, serverError } from '@/lib/api/responses';
 import { enqueueConversationRender } from '@/lib/background-jobs/queue-service';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 /**
  * Queue a conversation render job with full re-embedding of all chunks
  */
 export async function handleRenderConversation(
   chatId: string,
-  ctx: AuthenticatedContext
+  ctx: RequestContext
 ): Promise<NextResponse> {
   const { user } = ctx;
 

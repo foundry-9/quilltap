@@ -17,8 +17,8 @@
 
 import path from 'path';
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
-import type { RequestContext } from '@/lib/api/middleware/auth';
+import { createContextParamsHandler } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
 import { badRequest, created, notFound, serverError } from '@/lib/api/responses';
 import { storeMountFile } from '@/lib/mount-index/store-file';
@@ -26,7 +26,7 @@ import { FileOpError } from '@/lib/mount-index/file-op-error';
 import { DatabaseStoreError } from '@/lib/mount-index/database-store';
 import { fileOpStatus } from '@/lib/mount-index/file-op-status';
 
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     try {
       const mountPoint = await repos.docMountPoints.findById(id);
@@ -47,7 +47,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   }
 );
 
-export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+export const POST = createContextParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     try {
       const mountPoint = await repos.docMountPoints.findById(id);

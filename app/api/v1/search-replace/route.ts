@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware';
+import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
 import { withCollectionActionDispatch } from '@/lib/api/middleware/actions';
 import { executeSearchReplace, getSearchReplacePreview } from '@/lib/search-replace/search-replace-service';
 import { badRequest, serverError } from '@/lib/api/responses';
@@ -32,7 +32,7 @@ const searchReplaceSchema = z.object({
  */
 async function handleExecute(
   request: NextRequest,
-  ctx: AuthenticatedContext
+  ctx: RequestContext
 ): Promise<NextResponse> {
   logger.info('POST /api/v1/search-replace?action=execute - Executing search/replace');
 
@@ -66,7 +66,7 @@ async function handleExecute(
  */
 async function handlePreview(
   request: NextRequest,
-  ctx: AuthenticatedContext
+  ctx: RequestContext
 ): Promise<NextResponse> {
   // Parse and validate request body
   const body = await request.json();
@@ -94,7 +94,7 @@ async function handlePreview(
  * POST /api/v1/search-replace
  * Requires action parameter: execute or preview
  */
-export const POST = createAuthenticatedHandler(
+export const POST = createContextHandler(
   withCollectionActionDispatch(
     {
       execute: handleExecute,

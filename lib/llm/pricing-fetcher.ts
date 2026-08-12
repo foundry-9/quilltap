@@ -223,31 +223,36 @@ async function fetchOpenRouterPricing(apiKey: string): Promise<ModelPricing[]> {
       appTitle: 'Quilltap',
     })
 
-    const response = await client.models.list()
+    // @openrouter/sdk 0.13 changed models.list() to return a paginated
+    // async-iterable; the model array now lives at page.result.data (was
+    // response.data in 0.12). Iterate pages so we capture every model.
+    const pages = await client.models.list()
     const models: ModelPricing[] = []
 
-    for (const model of response.data || []) {
-      // Parse pricing (OpenRouter returns costs per token as strings)
-      const promptCost = parseFloat(String(model.pricing?.prompt || '0'))
-      const completionCost = parseFloat(String(model.pricing?.completion || '0'))
+    for await (const page of pages) {
+      for (const model of page.result?.data || []) {
+        // Parse pricing (OpenRouter returns costs per token as strings)
+        const promptCost = parseFloat(String(model.pricing?.prompt || '0'))
+        const completionCost = parseFloat(String(model.pricing?.completion || '0'))
 
-      // Convert from per-token to per-1M tokens
-      const promptCostPer1M = promptCost * 1_000_000
-      const completionCostPer1M = completionCost * 1_000_000
+        // Convert from per-token to per-1M tokens
+        const promptCostPer1M = promptCost * 1_000_000
+        const completionCostPer1M = completionCost * 1_000_000
 
-      models.push({
-        modelId: model.id,
-        provider: 'OPENROUTER',
-        name: model.name,
-        promptCostPer1M,
-        completionCostPer1M,
-        contextLength: model.contextLength ?? null,
-        supportsVision: model.architecture?.modality?.includes('image') || false,
-        supportsTools: model.supportedParameters?.some(
-          (p: string) => p === 'tools' || p === 'tool_choice'
-        ) || false,
-        fetchedAt: new Date().toISOString(),
-      })
+        models.push({
+          modelId: model.id,
+          provider: 'OPENROUTER',
+          name: model.name,
+          promptCostPer1M,
+          completionCostPer1M,
+          contextLength: model.contextLength ?? null,
+          supportsVision: model.architecture?.modality?.includes('image') || false,
+          supportsTools: model.supportedParameters?.some(
+            (p: string) => p === 'tools' || p === 'tool_choice'
+          ) || false,
+          fetchedAt: new Date().toISOString(),
+        })
+      }
     }
 
     return sortByCost(models)
@@ -436,38 +441,5 @@ export async function getModelPricing(
 ): Promise<ModelPricing | null> {
   const models = await getProviderPricing(provider, userId)
   return models.find(m => m.modelId === modelId) || null
-}
-
-/**
- * Find the cheapest available model across all providers
- */
-export async function findCheapestAvailableModel(
-  userId: string,
-  options?: {
-    requireVision?: boolean
-    requireTools?: boolean
-    excludeProviders?: Provider[]
-  }
-): Promise<ModelPricing | null> {
-  const cache = await getPricingCache(userId)
-  const candidates: ModelPricing[] = []
-
-  for (const [provider, providerData] of Object.entries(cache.providers)) {
-    if (options?.excludeProviders?.includes(provider as Provider)) {
-      continue
-    }
-
-    if (providerData?.models) {
-      for (const model of providerData.models) {
-        if (options?.requireVision && !model.supportsVision) continue
-        if (options?.requireTools && !model.supportsTools) continue
-        candidates.push(model)
-      }
-    }
-  }
-
-  if (candidates.length === 0) return null
-
-  return sortByCost(candidates)[0]
 }
 

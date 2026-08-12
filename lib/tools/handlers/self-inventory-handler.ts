@@ -61,14 +61,15 @@ export async function executeSelfInventoryTool(
   input: unknown,
   context: SelfInventoryToolContext
 ): Promise<SelfInventoryToolOutput> {
-  if (!validateSelfInventoryInput(input)) {
+  const parsed = validateSelfInventoryInput(input);
+  if (!parsed) {
     logger.warn('self_inventory: invalid input', {
       context: 'self-inventory-handler',
       userId: context.userId,
     });
   }
 
-  const requested = resolveRequestedSections(input);
+  const requested = resolveRequestedSections(parsed ?? input);
 
   if (!context.characterId) {
     return {
@@ -100,7 +101,7 @@ export async function executeSelfInventoryTool(
   };
 
   const includeAutomaticImages = Boolean(
-    (input as { includeAutomaticImages?: boolean } | null | undefined)?.includeAutomaticImages
+    (parsed ?? (input as { includeAutomaticImages?: boolean } | null | undefined))?.includeAutomaticImages
   );
 
   const vaultParts = resolveVaultIncludedParts(requested);

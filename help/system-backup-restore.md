@@ -55,7 +55,7 @@ Certain data is intentionally excluded from backups:
 
 - **API keys** — encrypted with device-specific keys and cannot be transferred between instances. You will need to re-enter your API keys in your connection, image, and embedding profiles after a restore.
 - **Encryption key (.dbkey file)** — the master encryption key for your database is not included for security. Keep your `.dbkey` file backed up separately if you use database encryption.
-- **Embedding vectors and search indices** — these are regenerated automatically after restore. Semantic search in the Commonplace Book may be temporarily unavailable until reindexing completes.
+- **Nothing about your search indexes, ordinarily** — a full backup carries every embedding and search index intact, so semantic search is working the moment a restore finishes. This is precisely why a backup is not the same article as a portable `.qtap` export, which leaves embeddings behind on purpose. Tick **Compact backup** and the indexes are the one thing left out; see below.
 - **Background jobs** — any in-flight or queued tasks (embedding generation, memory extraction, etc.) are not preserved. They will be re-triggered as needed.
 - **Built-in plugins** — these ship with Quilltap and do not need backing up.
 - **Cached provider model lists** — while included in backups for convenience, these are refreshed automatically from your providers.
@@ -68,17 +68,22 @@ Certain data is intentionally excluded from backups:
 
 2. **Find the Backup & Restore card**
 
-3. **Click the "Create Backup" button**
+3. **Decide whether you want a compact backup**
+   - Leave the **Compact backup** box unticked for the full article, which is
+     the recommendation and the default
+   - Tick it for a considerably slimmer archive, at the cost described below
 
-4. **Wait for the backup to be created**
+4. **Click the "Create Backup" button**
+
+5. **Wait for the backup to be created**
    - A progress indicator may be displayed
    - Time depends on amount of data
 
-5. **Download the backup file**
+6. **Download the backup file**
    - Your browser will download a ZIP file
    - The file contains all your data
 
-6. **Store the backup safely**
+7. **Store the backup safely**
    - Save it to a secure location on your computer
    - Consider cloud storage (Google Drive, Dropbox, etc.) for redundancy
 
@@ -87,6 +92,33 @@ Certain data is intentionally excluded from backups:
 - Varies based on your data volume
 - Typically 10 MB - 1 GB depending on number of characters, chats, and files
 - Backups are compressed to save space
+
+### The Compact Backup
+
+Search indexes are, by weight, the overwhelming majority of a well-used
+archive — a great silent ballast of numbers beneath a comparatively modest cargo
+of actual prose. A **compact backup** declines to carry them.
+
+**What is left behind:** every embedding vector and every table derived from
+one — conversation chunks, vector indexes, TF-IDF vocabularies, indexing status,
+and document-store chunks.
+
+**What is emphatically *not* left behind:** anything you wrote. Characters,
+chats, messages, memories, files, settings, and all the rest travel exactly as
+they do in a full backup. Only the machinery of *finding* things quickly is
+omitted, and that machinery is rebuilt from the words themselves.
+
+**On restoring one**, Quilltap notices the archive is compact and queues a full
+re-indexing pass at once. Everything is readable immediately; semantic search
+warms back up as the Tasks Queue drains. Conversation and document chunks are
+rebuilt as those chats and stores are next opened.
+
+**Which should you choose?** The full backup, nearly always. A backup exists to
+restore *this* instance, where the indexes are still perfectly valid on arrival,
+and rebuilding them costs real time and — with a paid embedding provider — real
+money, at precisely the moment you are recovering from a misfortune and least
+want either. Reach for compact when the size of the archive is itself the
+problem: a thin pipe, a full disc, a mail attachment that will not have it.
 
 ## Restoring from a Backup
 
@@ -114,6 +146,9 @@ Certain data is intentionally excluded from backups:
 
 7. **Confirm and start restore**
    - For "Replace" mode, you must confirm the deletion warning
+   - "Replace" mode also offers to spare archived-character bundles from the
+     preceding wipe (ticked by default — see "Replace Mode and the Archive
+     Shelf" below)
    - Click "Start Restore"
 
 8. **Wait for restore to complete**
@@ -123,6 +158,30 @@ Certain data is intentionally excluded from backups:
 9. **Restore complete**
    - Your system reloads with the restored data
    - npm plugins are extracted and ready to use
+   - The restore summary may mention re-indexing; see below
+
+## After a Restore: The Indexing Sweep
+
+Every restore now ends with a brief inspection of the search indexes it has just
+laid down, and this is not idle ceremony. An archive made on one machine can
+land on another that keeps a different embedding profile entirely — or be
+restored in "Import as New Data" mode, which is much the same situation wearing
+a different hat. Vectors made under one standard mean nothing under another, and
+until now the mismatch went unnoticed until the *following* startup.
+
+Three outcomes, all reported in the restore summary:
+
+- **Nothing to do.** The indexes match this instance's profile. This is the
+  ordinary case for restoring a backup onto the machine that made it, and it
+  costs essentially nothing.
+- **Re-indexing queued.** Some indexes did not match and have been sent for
+  repair. Everything is readable at once; semantic search warms up as the Tasks
+  Queue drains.
+- **Inspection skipped.** No embedding profile is configured yet, or it is the
+  built-in one, which keeps no fixed measure. The next startup will look again.
+
+A compact backup always takes the second road, by design — it brought no indexes
+to inspect.
 
 ## Restore Modes Explained
 
@@ -139,6 +198,22 @@ Certain data is intentionally excluded from backups:
 - Use to merge data from another instance
 - Use to duplicate content for testing
 - Existing data remains untouched
+
+## Replace Mode and the Archive Shelf
+
+A "Replace" restore begins by clearing out your current data, and archived
+characters' encrypted `.qtap` bundles would ordinarily be swept out with it.
+The mode step therefore offers a checkbox — **ticked by default** — to leave
+those bundles on the shelf while the wipe proceeds.
+
+What survives is the bundle *file* alone. The archived character's record is
+replaced along with everything else by the backup's contents, so a spared
+bundle cannot simply be woken afterward with the Rehydrate action — it is a
+loose bundle, importable through the ordinary character import. Each bundle is
+sealed under your passphrase rather than under anything kept in the databases
+being replaced, so it opens perfectly well on the restored instance.
+
+Untick the box to have the wipe take the archive shelf too.
 
 ## Understanding Backup Timing
 
@@ -189,6 +264,14 @@ Certain data is intentionally excluded from backups:
 - Large file collections increase backup size
 - Consider archiving old files you don't need
 - Backups are compressed but can still be large with many images
+
+**Files or document stores missing after restore**
+
+- Three faults conspired here, and all three are now mended. Your archives are not at fault — the contents were always packed correctly; it was the unpacking that went astray, and an archive taken before the fix restores perfectly well on a current build.
+  - Every document store and every link within it was refused on the way back in, on a technicality of bookkeeping, and the restore reported a cheerful success regardless. The result was a house full of furniture with every door bricked over: character vaults, project stores and group stores all present in the archive and none of them reachable.
+  - The unpacker looked for your uploaded files under a filing scheme three revisions out of date, and so found none of them.
+  - And it looked for them *before* it had rebuilt the stores those files must be placed into — which mattered enormously when restoring into a fresh or freshly-wiped instance, that being precisely the calamity a restore is kept for. Restoring over a populated instance had concealed the whole business, the stores happening to be there already.
+- If you restored on an earlier build and found your vaults unreachable or your uploads absent, restore that same archive again on this one.
 
 **API keys missing after restore**
 

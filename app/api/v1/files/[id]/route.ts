@@ -8,17 +8,17 @@
  * GET /api/v1/files/[id]?action=thumbnail - Get thumbnail for image
  */
 
-import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
+import { createContextParamsHandler } from '@/lib/api/middleware';
 import { handleDelete, handleGet, handlePost } from './handlers';
 
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   (req, ctx, { id }) => handleGet(req, ctx, id)
 );
 
-export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+export const DELETE = createContextParamsHandler<{ id: string }>(
   (req, ctx, { id }) => handleDelete(req, ctx, id)
 );
 
-export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+export const POST = createContextParamsHandler<{ id: string }>(
   (req, ctx, { id }) => handlePost(req, ctx, id)
 );

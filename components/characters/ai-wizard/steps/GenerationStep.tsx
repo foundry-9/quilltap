@@ -9,6 +9,8 @@
 import { useState } from 'react'
 import { Icon } from '@/components/ui/icon'
 import ReactMarkdown from 'react-markdown'
+import { QtapLink } from '@/components/qtap/QtapLink'
+import { isQtapUri } from '@/lib/doc-edit/qtap-uri'
 import type { GeneratableField, GenerationProgress, GeneratedCharacterData } from '../types'
 import { FIELD_LABELS, normalizeGeneratedScenarios } from '../types'
 
@@ -95,7 +97,18 @@ export function GenerationStep({
               <div>
                 <strong className="text-foreground">Full Description:</strong>
                 <div className="prose prose-sm qt-prose-auto max-w-none mt-1">
-                  <ReactMarkdown>{pd.fullDescription}</ReactMarkdown>
+                  <ReactMarkdown
+                    components={{
+                      a({ href, children }) {
+                        if (isQtapUri(href)) {
+                          return <QtapLink href={href}>{children}</QtapLink>
+                        }
+                        return <a href={href}>{children}</a>
+                      },
+                    }}
+                  >
+                    {pd.fullDescription}
+                  </ReactMarkdown>
                 </div>
               </div>
             </div>

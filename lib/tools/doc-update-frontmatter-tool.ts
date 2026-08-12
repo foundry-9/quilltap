@@ -56,8 +56,9 @@ export const docUpdateFrontmatterToolDefinition = {
 /**
  * Validates input for doc_update_frontmatter tool.
  */
-export function validateDocUpdateFrontmatterInput(input: unknown): input is DocUpdateFrontmatterInput {
-  return docUpdateFrontmatterToolInputSchema.safeParse(input).success;
+export function validateDocUpdateFrontmatterInput(input: unknown): DocUpdateFrontmatterInput | null {
+  const parsed = docUpdateFrontmatterToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 

@@ -64,6 +64,26 @@ describe('user-identity-resolver.service', () => {
         expect(repos.characters.findById).toHaveBeenCalledWith(characterId);
       });
 
+      it('should prefer the active "Speaking As" participant over the first user-controlled one', async () => {
+        const repos = createMockRepos();
+        const chat = createMockChat([
+          { id: 'p-jackie', characterId: 'char-jackie', controlledBy: 'user', type: 'CHARACTER', isActive: true, status: 'active' },
+          { id: 'p-revenant', characterId: 'char-revenant', controlledBy: 'user', type: 'CHARACTER', isActive: true, status: 'active' },
+        ]);
+
+        repos.characters.findById.mockImplementation((id: string) =>
+          Promise.resolve(id === 'char-revenant'
+            ? { id, name: 'Revenant', description: 'A formal presence' }
+            : { id, name: 'Jackie', description: 'The first one' })
+        );
+
+        const result = await resolveUserIdentity(repos as any, 'user-1', chat as any, 'p-revenant');
+
+        expect(result.name).toBe('Revenant');
+        expect(result.characterId).toBe('char-revenant');
+        expect(repos.characters.findById).toHaveBeenCalledWith('char-revenant');
+      });
+
       it('should use character name and description from user-controlled participant', async () => {
         const repos = createMockRepos();
         const characterId = 'char-1';

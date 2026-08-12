@@ -48,6 +48,7 @@ export const requestFullContextToolDefinition = {
  */
 export function validateRequestFullContextInput(
   input: unknown
-): input is RequestFullContextToolInput {
-  return requestFullContextToolInputSchema.safeParse(input).success
+): RequestFullContextToolInput | null {
+  const parsed = requestFullContextToolInputSchema.safeParse(input)
+  return parsed.success ? parsed.data : null
 }

@@ -39,7 +39,7 @@ export function buildOpeningOutfitContent(params: BuildContentParams): string {
   const { characterName, outfit } = params;
   const outfitText = describeOutfit(outfit);
   const lines: string[] = [
-    `*Aurora regards ${characterName} and pronounces upon their attire —*`,
+    `Aurora regards ${characterName} and pronounces upon their attire:`,
     '',
     '',
     outfitText.trimEnd(),
@@ -66,7 +66,7 @@ export function buildOutfitChangeContent(params: BuildContentParams): string {
   const { characterName, outfit } = params;
   const outfitText = describeOutfit(outfit);
   const lines: string[] = [
-    `*Aurora marks an alteration to ${characterName}'s attire. They are now turned out as follows —*`,
+    `Aurora marks an alteration to ${characterName}'s attire. They are now turned out as follows:`,
     '',
     '',
     outfitText.trimEnd(),

@@ -4,6 +4,9 @@ import { useEffect, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Icon } from '@/components/ui/icon'
+import { QtapLink } from '@/components/qtap/QtapLink'
+import { isQtapUri } from '@/lib/doc-edit/qtap-uri'
+import { ALMANACK_TITLE } from '@/lib/tools/almanack/phases'
 
 interface CapabilitiesReportDialogProps {
   isOpen: boolean
@@ -75,7 +78,7 @@ export function CapabilitiesReportDialog({
               </button>
             </div>
             <p className="qt-dialog-description qt-text-small">
-              Capabilities Report
+              {ALMANACK_TITLE}
             </p>
           </div>
 
@@ -85,6 +88,12 @@ export function CapabilitiesReportDialog({
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{
+                  a: ({ href, children }) => {
+                    if (isQtapUri(href)) {
+                      return <QtapLink href={href}>{children}</QtapLink>
+                    }
+                    return <a href={href}>{children}</a>
+                  },
                   // Custom table styling
                   table: ({ children }) => (
                     <div className="overflow-x-auto my-4">

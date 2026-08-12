@@ -16,8 +16,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
-import type { RequestContext } from '@/lib/api/middleware/auth';
+import { createContextHandler } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware/context';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { badRequest, serverError, created } from '@/lib/api/responses';
@@ -47,7 +47,7 @@ const createScenarioSchema = z.object({
 // GET — list scenarios
 // ============================================================================
 
-export const GET = createAuthenticatedHandler(
+export const GET = createContextHandler(
   async (_req: NextRequest, _ctx: RequestContext) => {
     try {
       const ensured = await ensureGeneralScenariosFolder();
@@ -76,7 +76,7 @@ export const GET = createAuthenticatedHandler(
 // POST — create a new scenario
 // ============================================================================
 
-export const POST = createAuthenticatedHandler(
+export const POST = createContextHandler(
   async (req: NextRequest, { user }: RequestContext) => {
     try {
       const body = await req.json();

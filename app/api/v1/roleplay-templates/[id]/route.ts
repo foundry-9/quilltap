@@ -8,7 +8,7 @@
  * Roleplay templates provide formatting instructions that are prepended to character system prompts.
  */
 
-import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware';
+import { createContextParamsHandler, exists } from '@/lib/api/middleware';
 import { successResponse, errorResponse, notFound, forbidden } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
@@ -42,7 +42,7 @@ const updateRoleplayTemplateSchema = z.object({
  * Get a specific roleplay template by ID
  * Returns 404 if template not found or user doesn't own it (for user-created templates)
  */
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     const template = await repos.roleplayTemplates.findById(id);
 
@@ -81,7 +81,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
  *   dialogueDetection?: any | null
  * }
  */
-export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
+export const PUT = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     const existingTemplate = await repos.roleplayTemplates.findById(id);
 
@@ -154,7 +154,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
  * Returns 404 if template not found or user doesn't own it
  * Returns 403 if trying to delete a built-in template
  */
-export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+export const DELETE = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     const existingTemplate = await repos.roleplayTemplates.findById(id);
 

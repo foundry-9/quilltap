@@ -23,6 +23,7 @@ import type {
   FileMetadata,
 } from '../../interfaces';
 import { withFsRetry } from './retry';
+import { FileContentMissingError } from '../../errors';
 
 const logger = createLogger('file-storage:local');
 
@@ -272,6 +273,13 @@ export class LocalFileStorageBackend implements FileStorageBackend {
     } catch (error) {
       const errorMsg =
         error instanceof Error ? error.message : 'Unknown download error';
+
+      // Nothing at that path is a "gone" condition, not a read fault — the
+      // caller needs to tell the two apart to answer 404 instead of 500.
+      if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+        logger.warn('Download found no file at the storage key', { key });
+        throw new FileContentMissingError(key, `No file at storage key '${key}'`);
+      }
 
       logger.error('Download failed', {
         key,

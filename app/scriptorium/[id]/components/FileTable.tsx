@@ -12,11 +12,18 @@
  */
 
 import { Fragment, useCallback, useMemo, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Icon } from '@/components/ui/icon'
 import { formatBytes } from '@/lib/utils/format-bytes'
 import { showConfirmation } from '@/lib/alert'
 import { buildMountFileItemUrl } from '@/components/files/mountBlobUrl'
+import { useWorkspaceOptional } from '@/components/providers/workspace-provider'
 import type { DocumentStoreFile, DocumentStoreBlob } from '../../types'
+
+/** Root-level custom-tool definitions get an "open in Pascal's Workbench" action. */
+function isCustomToolDefinition(relativePath: string): boolean {
+  return /^tools\/[^/]+\.tool\.json$/i.test(relativePath)
+}
 
 interface FileTableProps {
   files: DocumentStoreFile[]
@@ -92,6 +99,22 @@ function encodePath(relativePath: string): string {
 }
 
 export function FileTable({ files, loading, mountPointId, mountType, onRefresh }: FileTableProps) {
+  const workspace = useWorkspaceOptional()
+  const router = useRouter()
+
+  /** Open a Tools/*.tool.json on Pascal's Workbench (tab inside the workspace). */
+  const openInWorkbench = useCallback(
+    (relativePath: string) => {
+      if (workspace) {
+        workspace.openTab('custom-tools', { mountPointId, path: relativePath })
+        return
+      }
+      const search = new URLSearchParams({ mount: mountPointId, path: relativePath })
+      router.push(`/custom-tools?${search.toString()}`)
+    },
+    [workspace, router, mountPointId],
+  )
+
   const [sortField, setSortField] = useState<SortField>('fileName')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [filter, setFilter] = useState('')
@@ -404,6 +427,11 @@ export function FileTable({ files, loading, mountPointId, mountType, onRefresh }
                             canUpload={canUpload}
                             onDelete={() => handleBlobDelete(file)}
                             onSaveDescription={desc => handleDescriptionSave(file, desc)}
+                            onOpenInWorkbench={
+                              isCustomToolDefinition(file.relativePath)
+                                ? () => openInWorkbench(file.relativePath)
+                                : undefined
+                            }
                           />
                         </td>
                       </tr>
@@ -426,9 +454,11 @@ interface FileDetailRowProps {
   canUpload: boolean
   onDelete: () => void
   onSaveDescription: (description: string) => void
+  /** Present only for root-level Tools/*.tool.json files. */
+  onOpenInWorkbench?: () => void
 }
 
-function FileDetailRow({ file, blob, blobUrl, canUpload, onDelete, onSaveDescription }: FileDetailRowProps) {
+function FileDetailRow({ file, blob, blobUrl, canUpload, onDelete, onSaveDescription, onOpenInWorkbench }: FileDetailRowProps) {
   const [description, setDescription] = useState(blob?.description ?? '')
   const [dirty, setDirty] = useState(false)
 
@@ -444,6 +474,13 @@ function FileDetailRow({ file, blob, blobUrl, canUpload, onDelete, onSaveDescrip
 
   return (
     <div className="flex flex-wrap gap-4 text-xs qt-text-secondary">
+      {onOpenInWorkbench && (
+        <div className="w-full">
+          <button type="button" onClick={onOpenInWorkbench} className="qt-button-secondary text-xs">
+            Open in Pascal&apos;s Workbench
+          </button>
+        </div>
+      )}
       {isBlobBackedFile && blob && (
         <div className="flex items-start gap-3 min-w-[16rem]">
           {isImage && blobUrl ? (

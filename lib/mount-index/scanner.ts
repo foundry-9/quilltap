@@ -21,6 +21,7 @@ import { convertToPlainText } from './converters';
 import { chunkDocument } from './chunker';
 import { DocMountPoint } from '@/lib/schemas/mount-index.types';
 import { policyFromContent, DEFAULT_DOCUMENT_POLICY } from '@/lib/doc-edit/document-policy';
+import { assertBasePathAvailable } from './base-path-availability';
 
 const logger = createServiceLogger('MountIndex:Scanner');
 
@@ -511,20 +512,17 @@ export async function createFilesystemFolder(
     throw new Error('Folder path escapes mount point boundary');
   }
 
-  await fs.mkdir(target, { recursive: true });
-}
+  // The mkdir below is recursive, which is what makes this check load-bearing
+  // rather than merely polite. Without it, a mount whose basePath is absent —
+  // a store pointing at an unmounted volume, or at a host path that was never
+  // bound into this container — sends mkdir walking all the way up to the
+  // topmost missing ancestor and creating the entire chain. Where the process
+  // has the privileges to do that, the folder is reported as created while
+  // living in a fabricated tree that has nothing to do with the user's store.
+  // Fail loudly against the absent base instead.
+  await assertBasePathAvailable(basePath);
 
-/**
- * Verify that a filesystem path is accessible (readable/traversable).
- * Returns `true` if accessible, `false` otherwise.
- *
- * @param basePath - Absolute path to check
- */
-export async function verifyBasePath(basePath: string): Promise<boolean> {
-  try {
-    await fs.access(basePath);
-    return true;
-  } catch {
-    return false;
-  }
+  logger.debug('Creating filesystem folder', { mountPointId, basePath, relativePath, target });
+
+  await fs.mkdir(target, { recursive: true });
 }

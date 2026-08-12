@@ -4,7 +4,7 @@ The background-job processor runs in a forked child process (`child_process.fork
 
 ## Why a child process
 
-Eighteen background-job handlers run through `lib/background-jobs/processor.ts`. Before this refactor, that processor was a `setInterval` polling loop on the same Node thread that serves Next.js HTTP. Heavy handlers — most notably `MEMORY_HOUSEKEEPING` on a character with tens of thousands of memories — pinned the event loop and blocked HTTP responses for minutes. The `Promise.race` timeout in `executeJob` could not fire because its `setTimeout` was starved on the same loop.
+Twenty-four background-job handlers run through `lib/background-jobs/processor.ts` (registered in `lib/background-jobs/handlers/index.ts`). Before this refactor, that processor was a `setInterval` polling loop on the same Node thread that serves Next.js HTTP. Heavy handlers — most notably `MEMORY_HOUSEKEEPING` on a character with tens of thousands of memories — pinned the event loop and blocked HTTP responses for minutes. The `Promise.race` timeout in `executeJob` could not fire because its `setTimeout` was starved on the same loop.
 
 Moving the processor into a child process means the HTTP event loop is free regardless of what handlers are doing. Native modules (`better-sqlite3-multiple-ciphers`, `sharp`) load cleanly in a forked Node process, crash isolation is total (a SIGSEGV in `sharp` only kills the child), and `child_process.fork` has less surface area against the packaged Electron shell than `worker_threads` would.
 
@@ -41,7 +41,8 @@ Child → parent:
 | `job-result` | `{ id, ok, writes, error? }` | Job finished; `writes` is the batched list of repository write calls accumulated during the handler run (`{ method, args }[]`) |
 | `log` | `{ record }` | Forwards a log record to the parent's file transport (single writer; no rotation races) |
 | `status` | `{ inFlight, completedSinceLast, ... }` | Periodic snapshot for `getProcessorStatus()` |
-| `host-rpc` | `{ requestId, method, args }` | Synchronous request for an RW operation the child cannot perform on its readonly connection. The parent runs it immediately (outside the per-job buffered-writes transaction) and replies with `host-rpc-response`. Methods: `uploadFile`, `writeCharacterAvatarToVault`, `writeLanternBackgroundToMountStore` — all file-storage writes whose server-computed return values (`storageKey`/`blobId`/`linkId`) the buffered-write proxy cannot model. Side-effects committed here are **not** rolled back if the job's later buffered writes fail; periodic file reconciliation cleans up orphan blobs. See `host/host-rpc-dispatcher.ts` and `child/host-rpc-client.ts`. |
+| `shutdown-ack` | `{}` | Child's acknowledgement that it has drained in-flight jobs and is exiting; lets the parent resolve its shutdown promise instead of waiting on the kill timeout. |
+| `host-rpc` | `{ requestId, method, args }` | Synchronous request for an RW operation the child cannot perform on its readonly connection. The parent runs it immediately (outside the per-job buffered-writes transaction) and replies with `host-rpc-response`. Methods (see the `switch` in `host/host-rpc-dispatcher.ts`): `uploadFile`, `writeCharacterAvatarToVault`, `writeLanternBackgroundToMountStore`, `writeConversationSummaryToVaults`, `removeConversationSummariesFromVaults`, and `startScheduledAutonomousRun`. The first five are file-storage / vault writes whose server-computed return values (`storageKey`/`blobId`/`linkId`) the buffered-write proxy cannot model; `startScheduledAutonomousRun` is an *ordering* bridge (see its note in the handler audit) — it must commit `currentRunId` on the parent's RW connection *before* the turn job it enqueues becomes claimable. Side-effects committed here are **not** rolled back if the job's later buffered writes fail; periodic file reconciliation cleans up orphan blobs. See `host/host-rpc-dispatcher.ts` and `child/host-rpc-client.ts`. |
 
 ## Job lifecycle
 
@@ -53,15 +54,17 @@ Child → parent:
 
 ## Concurrency
 
-A single global cap of 4 in-flight jobs of any type, enforced in the dispatcher. This replaced per-type caps and the user-configurable memory-extraction slider.
+A single global cap on in-flight jobs of any type, enforced in the dispatcher (`host/job-dispatcher.ts`). This replaced the old per-type caps. The cap is read live from the `maxConcurrentJobs` instance setting (via `getMaxConcurrentJobs()`); `DEFAULT_MAX_IN_FLIGHT = 4` is only the fallback when the setting is unreadable. (The earlier `chatSettings.memoryExtractionConcurrency` per-type slider is gone; a single instance-wide knob took its place.)
 
-**Trade-off**: a flat global cap means a burst of one job type starves others. Concretely, four concurrent housekeeping jobs (long-running, read-heavy) will queue all memory-extraction work behind them. Memory extraction produces the memories that the next conversation will recall, so housekeeping bursts can delay future memory availability by seconds-to-minutes. This is acceptable because (a) housekeeping is rarely concurrent in normal operation, (b) the chat path doesn't depend on extraction completion to assemble its prompt, (c) per the design guidance, the chat path is OK getting "a little ahead of memory extraction." If this trade-off bites in practice, the fix is per-category caps (deferred follow-up), not raising the global cap.
+**Trade-off**: a flat global cap means a burst of one job type starves others. Concretely, a full slate of concurrent housekeeping jobs (long-running, read-heavy) will queue all memory-extraction work behind them. Memory extraction produces the memories that the next conversation will recall, so housekeeping bursts can delay future memory availability by seconds-to-minutes. This is acceptable because (a) housekeeping is rarely concurrent in normal operation, (b) the chat path doesn't depend on extraction completion to assemble its prompt, (c) per the design guidance, the chat path is OK getting "a little ahead of memory extraction." If this trade-off bites in practice, the fix is per-category caps (deferred follow-up), not raising the global cap.
 
 ## Batched writes and read-your-writes
 
 Writes are batched at job end. The proxy resolves write calls immediately with **client-generated IDs** (string UUIDs via `crypto.randomUUID()`, matching the existing schema convention — every Quilltap table uses string UUIDs). Subsequent reads inside the same handler cannot see those uncommitted rows. If a handler genuinely needs read-your-writes within a single job, the handler must be restructured to compute everything from in-memory state before flushing.
 
-The proxy logs a runtime warning when a read method hits a key recently appended to the pending-writes buffer. This is a cheap diagnostic for read-your-writes regressions.
+The proxy logs a runtime warning ("Read after buffered write on same table") when a read hits a table already written this job, deduped per `(jobId, readMethod)`. This is a cheap diagnostic for read-your-writes regressions: it compares method names, not row identity, so it flags suspicion rather than proof.
+
+The grouping key is the *table* a method implies, not the repository object — a repository fronting several tables would otherwise warn on pairs that cannot stale each other. `TABLE_GROUP_RESOLVERS` in `child-repositories-proxy.ts` holds the per-repository resolvers (today: `connections` splits `api_keys` from `connection_profiles`); a repository with no resolver is treated as a single table. **When you add a repository that fronts more than one table, add a resolver entry** — otherwise its every read/write pairing warns.
 
 ## Per-database partitioned apply
 
@@ -111,7 +114,12 @@ The fix is the **deferred-file-write pattern**: the child stages files in `<data
 | **character-avatar** | No | **Requires deferred-file-write** | Danger classification LLM, image generation, file upload (before-batch) | `folders.create`, `folders.findByPath`, `files.create`, `chats.update`, `characters.update`, `__finalizeFile` |
 | character-headshoulders-backfill | No | Yes (idempotent overwrite; skips if already set) | Cheap-LLM `generateField` (before-batch) | `characters.update` (→ `linkDocumentContent` ×2 via `writeDatabaseDocument` — text docs only, no deferred file) |
 | conversation-render | No | Yes (deterministic upsert) | None | `chats.update`, `conversationChunks.upsert`, enqueue embedding-generate |
-| wardrobe-outfit-announcement | No | Yes (deterministic) | None | `postOutfitChangeWhisper` (notify) |
+| wardrobe-announcement | No | Yes (deterministic) | None | `postOutfitChangeWhisper` (notify) |
+| **autonomous-room-turn** | No | **No — main-primary** (each turn is a distinct chat turn; retry would duplicate it). The sole `MAIN_PRIMARY_JOB_TYPES` member; commits main first/authoritatively, secondaries best-effort. | LLM turn via the ordinary Salon path (`handleSendMessage`, `continueMode`); enqueues memory extraction; stale-run guard (`payload.runId !== chat.currentRunId` → clean exit) | assistant message + run-state writes (`chats.update*`), context-summary side-effects, self-re-enqueue of the next `AUTONOMOUS_ROOM_TURN`; `doc_*` tool writes (mount-index partition) when a character uses document tools mid-turn |
+| autonomous-run-start | No | Yes (run-start contract is single-sourced; rolls the row back on enqueue failure) | Posts the "run begun" banner | Flips `currentRunId`/run-state to `running` and enqueues the first turn. **Scheduled path routes the whole run-start through host-RPC** (`startScheduledAutonomousRun`) so `currentRunId` commits on the parent's RW connection *before* the turn job is claimable — otherwise the turn handler's stale-run guard reads the previous run id and self-aborts, wedging the room. Manual/API path runs synchronously on the parent and is race-free by construction. |
+| autonomous-room-schedule-tick | No | Yes (advances `scheduleNextRunAt`; freshness-window + 60s wedge-grace self-heal) | None | For each due room: `startScheduledAutonomousRun` (via the bridge above) + `chats.update` to advance the cron anchor; skips stale slots |
+| autonomous-room-announce | No | Yes (deterministic banners; shared run-start patch helper) | None | `runStartPatch` spread into callers' `chats.update`; lifecycle system-event writes (start/end/paused/halfway/nearing-end/grace) |
+| regenerate-conversation-summaries | No | Yes (bridge replaces each conversation's prior file by frontmatter UUID; best-effort per chat) | None | `writeConversationSummaryToVaults` per summarized chat — short-circuits to the parent via host-RPC inside the forked child (like the other vault bridges) |
 
 ## Method-name overrides
 

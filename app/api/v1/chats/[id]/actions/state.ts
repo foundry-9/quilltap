@@ -1,41 +1,38 @@
 /**
  * Chats API v1 - State Actions
  *
- * GET /api/v1/chats/[id]?action=get-state - Get chat state (merged with project)
+ * GET /api/v1/chats/[id]?action=get-state - Get merged cascade state
  * PUT /api/v1/chats/[id]?action=set-state - Set chat state
  * DELETE /api/v1/chats/[id]?action=reset-state - Reset chat state to empty
+ *
+ * `handleGetState` returns the full four-tier cascade (chat → project → group →
+ * general) using the participants-union group scope: the group tier spans every
+ * active character participant, merging only when exactly one group applies.
+ * Set/reset stay bespoke via the shared handlers and only ever touch the chat's
+ * own state column.
  */
 
 import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { serverError, notFound } from '@/lib/api/responses';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import { createResetStateHandler, createSetStateHandler } from '@/lib/api/state-handlers';
+import { resolveStateCascade } from '@/lib/state/state-cascade';
 
 const STATE_CFG = {
   entityName: 'Chat',
   idLogKey: 'chatId',
-  selectRepo: (repos: AuthenticatedContext['repos']) => repos.chats,
-  useOwnershipCheck: false,
+  selectRepo: (repos: RequestContext['repos']) => repos.chats,
 } as const;
 
 /**
- * Merge project state into chat state (chat overrides project)
- * Only merges top-level keys
- */
-function mergeState(
-  projectState: Record<string, unknown>,
-  chatState: Record<string, unknown>
-): Record<string, unknown> {
-  return { ...projectState, ...chatState };
-}
-
-/**
- * Get chat state (optionally merged with project state)
+ * Get the merged cascade state for a chat, plus each tier and the group-tier
+ * status. Empty tiers are omitted (the "undefined when empty" convention) so
+ * the response stays compatible with the previous chat/project-only shape.
  */
 export async function handleGetState(
   chatId: string,
-  { user, repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   try {
     const chat = await repos.chats.findById(chatId);
@@ -43,36 +40,20 @@ export async function handleGetState(
       return notFound('Chat');
     }
 
-    const chatState = (chat.state || {}) as Record<string, unknown>;
-
-    // Get project state if chat belongs to a project. Project state is a
-    // secondary enrichment here — if the project's document store is unavailable,
-    // degrade to empty project state rather than failing the chat's own state read.
-    let projectState: Record<string, unknown> = {};
-    if (chat.projectId) {
-      try {
-        const project = await repos.projects.findById(chat.projectId);
-        if (project) {
-          projectState = (project.state || {}) as Record<string, unknown>;
-        }
-      } catch (projectError) {
-        logger.warn('[Chats v1] Could not load project state for merge; using chat state only', {
-          chatId,
-          projectId: chat.projectId,
-          error: projectError instanceof Error ? projectError.message : String(projectError),
-        });
-      }
-    }
-
-    // Return merged state (chat overrides project at top level)
-    const mergedState = mergeState(projectState, chatState);
+    const cascade = await resolveStateCascade({
+      chat,
+      groupScope: { kind: 'participants-union' },
+    });
 
     return NextResponse.json({
       success: true,
-      state: mergedState,
-      chatState,
-      projectState: Object.keys(projectState).length > 0 ? projectState : undefined,
-      projectId: chat.projectId || undefined,
+      state: cascade.merged,
+      chatState: cascade.chatState,
+      projectState: Object.keys(cascade.projectState).length > 0 ? cascade.projectState : undefined,
+      groupState: Object.keys(cascade.groupState).length > 0 ? cascade.groupState : undefined,
+      generalState: Object.keys(cascade.generalState).length > 0 ? cascade.generalState : undefined,
+      groupTier: cascade.groupTier,
+      projectId: cascade.projectId,
     });
   } catch (error) {
     logger.error('[Chats v1] Error getting state', { chatId }, error instanceof Error ? error : undefined);

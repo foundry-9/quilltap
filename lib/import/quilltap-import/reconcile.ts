@@ -15,9 +15,66 @@ import type {
   ChatParticipantBase,
   Project,
 } from '@/lib/schemas/types';
+import { deleteStoreCascade } from '@/lib/mount-index/delete-store-cascade';
 import type { IdMappingState } from './types';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
+
+/**
+ * Tear down the scaffold vault `characters.create()` provisioned, now that the
+ * character points at the vault its bundle carried.
+ *
+ * Goes through `deleteStoreCascade` — the chokepoint that runs link-group
+ * orphan GC — never a bare mount-point delete.
+ *
+ * Also hands the canonical vault name back: store names live in one
+ * case-insensitive namespace, so with the scaffold holding
+ * "<name> Character Vault" the imported vault was uniquified to "… (2)" on the
+ * way in. With the scaffold gone the plain name is free, and a character whose
+ * vault is permanently named "(2)" is a visible wart in the Scriptorium.
+ */
+async function discardScaffoldVault(
+  scaffoldMountId: string,
+  importedVaultId: string,
+  characterId: string,
+  warnings: string[]
+): Promise<void> {
+  const storeRepos = getRepositories();
+  try {
+    const scaffold = await storeRepos.docMountPoints.findById(scaffoldMountId);
+    deleteStoreCascade(scaffoldMountId);
+    moduleLogger.debug('Discarded scaffold vault in favour of the imported one', {
+      characterId,
+      scaffoldMountId,
+      importedVaultId,
+    });
+
+    if (!scaffold) return;
+    const allStores = await storeRepos.docMountPoints.findAll();
+    // The scaffold itself never counts as holding the name — we just deleted
+    // it, and a read served from a stale cache would otherwise block the
+    // rename forever.
+    const nameTaken = allStores.some(
+      (mp) =>
+        mp.id !== importedVaultId &&
+        mp.id !== scaffoldMountId &&
+        mp.name.toLowerCase() === scaffold.name.toLowerCase()
+    );
+    if (nameTaken) return;
+    const imported = allStores.find((mp) => mp.id === importedVaultId);
+    if (imported && imported.name !== scaffold.name) {
+      await storeRepos.docMountPoints.update(importedVaultId, { name: scaffold.name });
+    }
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    warnings.push(`Failed to remove the placeholder vault for an imported character: ${msg}`);
+    moduleLogger.warn('Failed to discard scaffold vault', {
+      characterId,
+      scaffoldMountId,
+      error: msg,
+    });
+  }
+}
 
 /**
  * Updates all entity relationships with correct remapped IDs
@@ -45,11 +102,20 @@ export async function reconcileRelationships(
   // Reconcile characters
   for (const [backupId, newId] of idMaps.characters) {
     try {
+      // Skip-if-present rehydrate (spec §6/F4): the surviving character was
+      // never re-created — every id it references maps to itself, so there is
+      // nothing to remap and no scaffold to tear down ("no reconcile pass
+      // needed"). Attempting the identity patch anyway would be refused by
+      // the archived-row write guard and surface as a spurious warning.
+      if (backupId === newId && idMaps.preserveIdsSkips.has(newId)) continue;
+
       const character = await repos.characters.findById(newId);
       if (!character) continue;
 
       const updates: Partial<Character> = {};
       let hasUpdates = false;
+      /** Scaffold vault to cascade-delete once the repoint below has landed. */
+      let scaffoldMountId: string | null = null;
 
       // Remap tags
       if (character.tags && character.tags.length > 0) {
@@ -96,15 +162,24 @@ export async function reconcileRelationships(
         }
       }
 
-      // Remap characterDocumentMountPointId. Only rewrite when the imported
-      // value resolves to a remapped mount-point row — character vaults are
-      // provisioned fresh at import time by `repos.characters.create()`, and
-      // the post-create row holds a freshly-allocated id we must not blow
-      // away. The earlier behavior of nulling the field on a failed remap
-      // created orphaned vaults: the importer would provision a vault, then
-      // this pass would clear the link, and the startup vault backfill would
-      // provision yet another one.
-      if (character.characterDocumentMountPointId) {
+      // The bundle carried this character's whole vault (WP A2), and
+      // `create()` has already provisioned a scaffold vault whose fresh id is
+      // what the row currently holds. Bundle wins, whole-store: repoint at the
+      // imported store, then tear the scaffold down after the update lands.
+      // Never merge the two.
+      const bundleVaultId = idMaps.characterVaultMounts.get(newId);
+      const importedVaultId = bundleVaultId ? remapId(bundleVaultId, idMaps.mountPoints) : null;
+      if (importedVaultId && importedVaultId !== character.characterDocumentMountPointId) {
+        scaffoldMountId = character.characterDocumentMountPointId ?? null;
+        updates.characterDocumentMountPointId = importedVaultId;
+        hasUpdates = true;
+      } else if (character.characterDocumentMountPointId) {
+        // Pre-A2 bundle (no vault records): only rewrite when the stored value
+        // resolves to a remapped mount-point row. The post-create row holds a
+        // freshly-allocated scaffold id we must not blow away. The earlier
+        // behavior of nulling the field on a failed remap created orphaned
+        // vaults: the importer would provision a vault, this pass would clear
+        // the link, and the startup backfill would provision yet another one.
         const newMountId = remapId(character.characterDocumentMountPointId, idMaps.mountPoints);
         if (newMountId) {
           updates.characterDocumentMountPointId = newMountId;
@@ -112,8 +187,68 @@ export async function reconcileRelationships(
         }
       }
 
+      // Remap avatar ids through the imported document-store link map. These
+      // values are doc_mount_file_links.id values in the source instance's
+      // vault. If the source used a legacy files.id, leave it unchanged;
+      // otherwise null it with a warning so the character never keeps a
+      // dangling reference after import.
+      if (character.defaultImageId) {
+        const remappedDefaultImageId = remapId(character.defaultImageId, idMaps.docMountFileLinks);
+        if (remappedDefaultImageId) {
+          updates.defaultImageId = remappedDefaultImageId;
+          hasUpdates = true;
+        } else if (!(await repos.files.findById(character.defaultImageId))) {
+          warnings.push(
+            `Character "${character.name}" defaultImageId could not be remapped and was cleared: ${character.defaultImageId}`
+          );
+          updates.defaultImageId = null;
+          hasUpdates = true;
+        }
+      }
+
+      if (character.avatarOverrides && character.avatarOverrides.length > 0) {
+        let overridesChanged = false;
+        const remapped = await Promise.all(
+          character.avatarOverrides.map(async (override) => {
+            const remappedImageId = remapId(override.imageId, idMaps.docMountFileLinks);
+            if (remappedImageId) {
+              overridesChanged = true;
+              return { ...override, imageId: remappedImageId };
+            }
+            if (await repos.files.findById(override.imageId)) {
+              return override;
+            }
+            warnings.push(
+              `Character "${character.name}" avatar override could not be remapped and was dropped: ${override.imageId}`
+            );
+            // Drop the entry rather than nulling its imageId: the schema
+            // requires a string there, so a null would fail the next
+            // validated read of the character.
+            overridesChanged = true;
+            return null;
+          })
+        );
+        // Only touch the field when something actually moved — an unconditional
+        // write forces a pointless update (and a vault round-trip) on every
+        // character that merely happens to own overrides.
+        if (overridesChanged) {
+          updates.avatarOverrides = remapped.filter(
+            (override): override is NonNullable<typeof override> => override !== null
+          ) as Character['avatarOverrides'];
+          hasUpdates = true;
+        }
+      }
+
       if (hasUpdates) {
         await repos.characters.update(newId, updates);
+      }
+
+      // Only now that the character points at its imported vault is the
+      // scaffold safe to remove: reversing the order would leave a window
+      // where the row references a store that no longer exists, and any
+      // overlay read in it throws CharacterVaultUnavailableError.
+      if (scaffoldMountId && importedVaultId) {
+        await discardScaffoldVault(scaffoldMountId, importedVaultId, newId, warnings);
       }
     } catch (error) {
       warnings.push(

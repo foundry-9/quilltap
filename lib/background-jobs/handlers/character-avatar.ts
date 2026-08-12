@@ -249,6 +249,7 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
       characterId: payload.characterId,
       provider: effectiveImageProfile.provider,
       modelName: effectiveImageProfile.modelName,
+      imageProfileId: effectiveImageProfile.id,
       request: {
         messages: [{ role: 'user', content: prompt }],
       },
@@ -268,6 +269,7 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
       characterId: payload.characterId,
       provider: effectiveImageProfile.provider,
       modelName: effectiveImageProfile.modelName,
+      imageProfileId: effectiveImageProfile.id,
       request: {
         messages: [{ role: 'user', content: prompt }],
       },
@@ -331,6 +333,7 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
         characterId: payload.characterId,
         provider: reroute.profile.provider,
         modelName: reroute.profile.modelName,
+        imageProfileId: reroute.profile.id,
         request: {
           messages: [{ role: 'user', content: prompt }],
         },
@@ -363,6 +366,7 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
         characterId: payload.characterId,
         provider: reroute.profile.provider,
         modelName: reroute.profile.modelName,
+        imageProfileId: reroute.profile.id,
         request: {
           messages: [{ role: 'user', content: prompt }],
         },

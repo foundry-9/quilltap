@@ -17,7 +17,7 @@ import {
   handleRemoveFile,
   handleResetState,
 } from '../actions';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 const PROJECT_DELETE_ACTIONS = ['remove-character', 'remove-chat', 'remove-file', 'reset-state'] as const;
 type ProjectDeleteAction = typeof PROJECT_DELETE_ACTIONS[number];
@@ -27,7 +27,7 @@ type ProjectDeleteAction = typeof PROJECT_DELETE_ACTIONS[number];
  */
 export async function handleDelete(
   req: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   projectId: string
 ): Promise<NextResponse> {
   const action = getActionParam(req);

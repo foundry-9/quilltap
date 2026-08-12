@@ -13,6 +13,7 @@ import {
   temporalMultiplier,
   contextMultiplier,
   participantMultiplier,
+  freshEventMultiplier,
   combineRecallMultipliers,
   RECALL_MULTIPLIERS,
   MULTIPLIER_CLAMP,
@@ -184,6 +185,66 @@ describe('participantMultiplier', () => {
   })
 })
 
+describe('freshEventMultiplier', () => {
+  const NOW = Date.parse('2026-07-29T02:44:00.000Z')
+  const HOUR = 60 * 60 * 1000
+  const CHAT = 'chat-current'
+  const at = (msAgo: number) => new Date(NOW - msAgo).toISOString()
+
+  it('boosts an event inside the 24h band', () => {
+    const r = freshEventMultiplier({ occurredAt: at(6 * HOUR) }, NOW, CHAT)
+    expect(r.multiplier).toBe(RECALL_MULTIPLIERS.freshEvent24h)
+    expect(r.fired).toEqual(['fresh24↑'])
+  })
+
+  it('treats the 24h boundary as inside the 24h band', () => {
+    expect(freshEventMultiplier({ occurredAt: at(24 * HOUR) }, NOW, CHAT).fired).toEqual(['fresh24↑'])
+  })
+
+  it('boosts an event between 24h and 48h at the lower rate', () => {
+    const r = freshEventMultiplier({ occurredAt: at(30 * HOUR) }, NOW, CHAT)
+    expect(r.multiplier).toBe(RECALL_MULTIPLIERS.freshEvent48h)
+    expect(r.fired).toEqual(['fresh48↑'])
+  })
+
+  it('treats the 48h boundary as inside the 48h band', () => {
+    expect(freshEventMultiplier({ occurredAt: at(48 * HOUR) }, NOW, CHAT).fired).toEqual(['fresh48↑'])
+  })
+
+  it('passes through an event older than 48h', () => {
+    expect(freshEventMultiplier({ occurredAt: at(49 * HOUR) }, NOW, CHAT)).toEqual({ multiplier: 1, fired: [] })
+  })
+
+  it('falls back to createdAt when there is no occurredAt', () => {
+    expect(freshEventMultiplier({ createdAt: at(2 * HOUR) }, NOW, CHAT).fired).toEqual(['fresh24↑'])
+    expect(freshEventMultiplier({ occurredAt: null, createdAt: at(2 * HOUR) }, NOW, CHAT).fired).toEqual(['fresh24↑'])
+  })
+
+  it('passes through with no clock (boost disabled)', () => {
+    expect(freshEventMultiplier({ occurredAt: at(HOUR) }, undefined, CHAT)).toEqual({ multiplier: 1, fired: [] })
+    expect(freshEventMultiplier({ occurredAt: at(HOUR) }, null, CHAT)).toEqual({ multiplier: 1, fired: [] })
+    expect(freshEventMultiplier({ occurredAt: at(HOUR) }, NaN, CHAT)).toEqual({ multiplier: 1, fired: [] })
+  })
+
+  it('passes through with no parsable event time (never penalize on missing data)', () => {
+    expect(freshEventMultiplier({}, NOW, CHAT)).toEqual({ multiplier: 1, fired: [] })
+    expect(freshEventMultiplier({ occurredAt: 'not a date' }, NOW, CHAT)).toEqual({ multiplier: 1, fired: [] })
+  })
+
+  it('passes through a future event time (negative age)', () => {
+    expect(freshEventMultiplier({ occurredAt: at(-HOUR) }, NOW, CHAT)).toEqual({ multiplier: 1, fired: [] })
+  })
+
+  it('skips memories extracted from the current chat (echo guard)', () => {
+    const memory = { occurredAt: at(HOUR), chatId: CHAT }
+    expect(freshEventMultiplier(memory, NOW, CHAT)).toEqual({ multiplier: 1, fired: [] })
+    // …but a memory from any OTHER chat still gets the boost.
+    expect(freshEventMultiplier({ ...memory, chatId: 'chat-other' }, NOW, CHAT).fired).toEqual(['fresh24↑'])
+    // …and so does one with no chat of record.
+    expect(freshEventMultiplier({ ...memory, chatId: null }, NOW, CHAT).fired).toEqual(['fresh24↑'])
+  })
+})
+
 describe('RELATED_EXPANSION caps', () => {
   it('bounds per-hit below total so a single hit cannot fill the whole expansion', () => {
     expect(RELATED_EXPANSION.maxPerHit).toBeLessThanOrEqual(RELATED_EXPANSION.maxTotal)
@@ -259,6 +320,66 @@ describe('combineRecallMultipliers', () => {
     const r = combineRecallMultipliers(memory, ctx())
     expect(r.multiplier).toBe(1)
     expect(r.fired).toEqual([])
+  })
+
+  it('composes the fresh-event boost with the moment demotion', () => {
+    const now = Date.parse('2026-07-29T02:44:00.000Z')
+    const memory = {
+      projectId: PROJ_A,
+      chatId: 'chat-other',
+      occurredAt: new Date(now - 6 * 60 * 60 * 1000).toISOString(),
+      keywords: ['moment', 'scope: narrow', 'history'],
+    }
+    const r = combineRecallMultipliers(memory, ctx({ currentChatId: 'chat-current', nowMs: now }))
+    expect(r.multiplier).toBeCloseTo(
+      RECALL_MULTIPLIERS.scopeNarrowSameProject *
+        RECALL_MULTIPLIERS.temporalMoment *
+        RECALL_MULTIPLIERS.freshEvent24h,
+      5,
+    )
+    expect(r.fired).toEqual(['narrow✓', 'moment↓', 'fresh24↑'])
+  })
+
+  it('leaves the fresh boost inert when the context carries no clock', () => {
+    const memory = {
+      projectId: PROJ_A,
+      chatId: 'chat-other',
+      occurredAt: new Date().toISOString(),
+      keywords: [],
+    }
+    const r = combineRecallMultipliers(memory, ctx())
+    expect(r.multiplier).toBe(1)
+    expect(r.fired).toEqual([])
+  })
+
+  it('keeps a maximal fresh + window + retro stack decisive but under the clamp', () => {
+    const now = Date.parse('2026-07-29T02:44:00.000Z')
+    const occurredAt = new Date(now - 3 * 60 * 60 * 1000).toISOString()
+    const memory = {
+      projectId: PROJ_A,
+      chatId: 'chat-other',
+      aboutCharacterId: 'char-aaaa',
+      occurredAt,
+      keywords: ['past', 'scope: narrow', 'history'],
+    }
+    const r = combineRecallMultipliers(
+      memory,
+      ctx({
+        currentChatId: 'chat-current',
+        nowMs: now,
+        turnRetrospective: true,
+        turnContext: 'history',
+        presentAboutCharacterIds: ['char-aaaa'],
+        occurredWithin: { from: new Date(now - 24 * 60 * 60 * 1000).toISOString(), to: new Date(now).toISOString() },
+      }),
+    )
+    // Every boost the recall path can fire at once: narrow-same × past-retro ×
+    // ctx × present × fresh24 × window ≈ ×3.63. Decisive against the ~×1.5
+    // evergreen stack, and still short of the clamp — so the ceiling stays a
+    // backstop rather than the value every fresh memory collapses onto.
+    expect(r.fired).toContain('fresh24↑')
+    expect(r.multiplier).toBeGreaterThan(3)
+    expect(r.multiplier).toBeLessThan(MULTIPLIER_CLAMP.max)
   })
 
   it('clamps the combined multiplier to the configured ceiling', () => {

@@ -14,6 +14,7 @@ import { stripTextBlockMarkers } from '../legacy/text-block-parser';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { canReceiveWhisper } from '@/lib/schemas/chat.types';
+import type { Character } from '@/lib/schemas/types';
 
 /**
  * Sanitize whisper message content.
@@ -74,7 +75,8 @@ export async function executeWhisperTool(
   context: WhisperToolContext
 ): Promise<WhisperToolOutput> {
   try {
-    if (!validateWhisperInput(input)) {
+    const parsed = validateWhisperInput(input);
+    if (!parsed) {
       logger.warn('Whisper validation failed', { userId: context.userId, input });
       return {
         success: false,
@@ -82,7 +84,7 @@ export async function executeWhisperTool(
       };
     }
 
-    const { target, message } = input;
+    const { target, message } = parsed;
     const repos = getRepositories();
 
     // Load chat and participants
@@ -95,18 +97,24 @@ export async function executeWhisperTool(
     const activeParticipants = chat.participants.filter(p => canReceiveWhisper(p.status));
     const targetLower = target.toLowerCase();
 
+    // Resolve each active participant's character once, then derive both the
+    // match set and the (fallback) available-names list from it — no second
+    // per-character query.
+    const resolved: Array<{ participantId: string; character: Character }> = [];
+    for (const participant of activeParticipants) {
+      if (!participant.characterId) continue;
+      const character = await repos.characters.findById(participant.characterId);
+      if (!character) continue;
+      resolved.push({ participantId: participant.id, character });
+    }
+
     // Try matching by character name first, then aliases
     const matches: Array<{ participantId: string; characterName: string }> = [];
 
-    for (const participant of activeParticipants) {
-      if (!participant.characterId) continue;
-
-      const character = await repos.characters.findById(participant.characterId);
-      if (!character) continue;
-
+    for (const { participantId, character } of resolved) {
       // Exact name match (case-insensitive)
       if (character.name.toLowerCase() === targetLower) {
-        matches.push({ participantId: participant.id, characterName: character.name });
+        matches.push({ participantId, characterName: character.name });
         continue;
       }
 
@@ -114,7 +122,7 @@ export async function executeWhisperTool(
       if (character.aliases && Array.isArray(character.aliases)) {
         for (const alias of character.aliases) {
           if (typeof alias === 'string' && alias.toLowerCase() === targetLower) {
-            matches.push({ participantId: participant.id, characterName: character.name });
+            matches.push({ participantId, characterName: character.name });
             break;
           }
         }
@@ -122,14 +130,7 @@ export async function executeWhisperTool(
     }
 
     if (matches.length === 0) {
-      // Build available names list
-      const availableNames: string[] = [];
-      for (const p of activeParticipants) {
-        if (p.characterId) {
-          const ch = await repos.characters.findById(p.characterId);
-          if (ch) availableNames.push(ch.name);
-        }
-      }
+      const availableNames = resolved.map(r => r.character.name);
       return {
         success: false,
         error: `No character found matching "${target}". Available characters: ${availableNames.join(', ')}`,

@@ -29,6 +29,18 @@ export interface MemoryCandidate {
   temporal?: string
   scope?: string
   context?: string
+  // ── Episodic spine (validated by the parser; resolved by the processor) ────
+  /** 'semantic' (default) or 'episodic' — an EVENT pick emits 'episodic'. */
+  kind?: 'semantic' | 'episodic'
+  /**
+   * When the event happened, as the model phrased it — absolute ("2026-07-14",
+   * "July 14th") or relative ("last week"). The processor resolves it against
+   * the source turn's timestamp into `occurredAt` server-side; on fictional
+   * timelines the phrase itself is preserved as `narrativeTime`.
+   */
+  when?: string
+  /** Proper nouns of the episode: places, people, named things. */
+  entities?: string[]
 }
 
 /**

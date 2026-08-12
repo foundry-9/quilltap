@@ -27,10 +27,10 @@
 
 import { logger } from '@/lib/logger';
 import { enqueueConversationRender } from '@/lib/background-jobs/queue-service';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import type { Character, CharacterScenario, CharacterSystemPrompt, PhysicalDescription } from '@/lib/schemas/character.types';
 
-type Repos = AuthenticatedContext['repos'];
+type Repos = RequestContext['repos'];
 
 export interface ReplacementPair {
   oldValue: string;

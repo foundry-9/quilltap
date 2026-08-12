@@ -127,7 +127,8 @@ export async function executeWebSearchTool(
 ): Promise<WebSearchToolOutput> {
   try {
     // Validate input
-    if (!validateWebSearchInput(input)) {
+    const parsed = validateWebSearchInput(input)
+    if (!parsed) {
       logger.warn('Web search validation failed', { userId: context.userId, input })
       return {
         success: false,
@@ -137,7 +138,7 @@ export async function executeWebSearchTool(
       }
     }
 
-    const { query, maxResults = 5 } = input
+    const { query, maxResults = 5 } = parsed
 
     // Try to use a registered search provider plugin
     const provider = searchProviderRegistry.getDefaultProvider()

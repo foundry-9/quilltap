@@ -14,7 +14,7 @@
 
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { createAuthenticatedParamsHandler, type AuthenticatedContext } from '@/lib/api/middleware';
+import { createContextParamsHandler, type RequestContext } from '@/lib/api/middleware';
 import { withActionDispatch } from '@/lib/api/middleware/actions';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, successResponse, serverError } from '@/lib/api/responses';
@@ -34,7 +34,7 @@ import { getCharacterVaultStore } from '@/lib/file-storage/character-vault-bridg
  */
 async function handleOverrideDangerFlag(
   _req: NextRequest,
-  { user, repos }: AuthenticatedContext,
+  { user, repos }: RequestContext,
   { id, messageId }: { id: string; messageId: string }
 ) {
   try {
@@ -95,7 +95,7 @@ const resolveExternalTurnSchema = z.object({
  */
 async function handleResolveExternalTurn(
   req: NextRequest,
-  { user, repos }: AuthenticatedContext,
+  { user, repos }: RequestContext,
   { id, messageId }: { id: string; messageId: string }
 ) {
   try {
@@ -236,7 +236,7 @@ async function handleResolveExternalTurn(
  */
 async function handleCancelExternalTurn(
   _req: NextRequest,
-  { user, repos }: AuthenticatedContext,
+  { user, repos }: RequestContext,
   { id, messageId }: { id: string; messageId: string }
 ) {
   try {
@@ -289,7 +289,7 @@ const saveImageSchema = z.object({
  */
 async function handleSaveImage(
   req: NextRequest,
-  { user, repos }: AuthenticatedContext,
+  { user, repos }: RequestContext,
   { id, messageId }: { id: string; messageId: string }
 ) {
   try {
@@ -404,7 +404,7 @@ async function handleSaveImage(
   }
 }
 
-export const POST = createAuthenticatedParamsHandler<{ id: string; messageId: string }>(
+export const POST = createContextParamsHandler<{ id: string; messageId: string }>(
   withActionDispatch({
     'override-danger-flag': handleOverrideDangerFlag,
     'resolve-external-turn': handleResolveExternalTurn,

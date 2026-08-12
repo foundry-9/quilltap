@@ -39,6 +39,7 @@ interface UploadRawParams {
 }
 
 import { createLogger } from '@/lib/logging/create-logger';
+import { FileContentMissingError } from './errors';
 import { getFilesDir } from '@/lib/paths';
 import {
   getProjectDocumentStore,
@@ -385,7 +386,10 @@ class FileStorageManager {
       if (isMountBlobStorageKey(effectiveStorageKey)) {
         const bytes = await readMountBlob(effectiveStorageKey);
         if (!bytes) {
-          throw new Error(`Mount-blob not found for storageKey: ${effectiveStorageKey}`);
+          throw new FileContentMissingError(
+            effectiveStorageKey,
+            `Mount-blob not found for storageKey: ${effectiveStorageKey}`
+          );
         }
         return bytes;
       }
@@ -397,6 +401,18 @@ class FileStorageManager {
     } catch (error) {
       const errorMsg =
         error instanceof Error ? error.message : 'Unknown download error';
+
+      // A row that outlived its bytes is a "gone" condition, not a fault:
+      // pass the typed error through un-wrapped so the HTTP layer can answer
+      // 404, and log it as a warning rather than crying error on every render
+      // of a dangling avatar.
+      if (error instanceof FileContentMissingError) {
+        logger.warn('File content is missing; the row outlived its bytes', {
+          fileId: file.id,
+          storageKey: error.storageKey,
+        });
+        throw error;
+      }
 
       logger.error('File download failed', {
         fileId: file.id,
@@ -478,6 +494,37 @@ class FileStorageManager {
       });
 
       throw new Error(`Failed to upload raw content at '${storageKey}': ${errorMsg}`);
+    }
+  }
+
+  /**
+   * List every storage key under a prefix (recursively).
+   *
+   * Counterpart to uploadRaw()/deleteRaw() for derived-data housekeeping — e.g.
+   * enumerating `_thumbnails/` to reap entries whose source file is gone. A
+   * missing prefix directory yields an empty list rather than throwing.
+   *
+   * @param prefix - Key prefix to match (e.g. `_thumbnails`)
+   * @param maxKeys - Optional cap on the number of keys returned
+   * @returns Matching storage keys
+   * @throws {Error} If listing fails
+   */
+  async listRaw(prefix: string, maxKeys?: number): Promise<string[]> {
+    try {
+      const backend = await this.getBackend();
+      if (!backend.getMetadata().capabilities.list || !backend.list) {
+        return [];
+      }
+      return await backend.list(prefix, maxKeys);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown listing error';
+
+      logger.error('Raw list failed', {
+        prefix,
+        error: errorMsg,
+      });
+
+      throw new Error(`Failed to list raw content under '${prefix}': ${errorMsg}`);
     }
   }
 

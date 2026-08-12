@@ -10,8 +10,10 @@
  * A single help document (without embedding — embedding is managed separately)
  */
 export interface HelpDocument {
-  /** Unique document ID (derived from filename) */
+  /** Unique document ID (database primary key) */
   id: string
+  /** Stable slug derived from the filename — the identifier used outside the database */
+  slug: string
   /** Document title (from first H1 or filename) */
   title: string
   /** Relative path to the Markdown file */

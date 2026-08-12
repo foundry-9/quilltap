@@ -1,11 +1,23 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { NewChatForm } from './NewChatForm'
 import { CharacterPickerPanel } from './CharacterPickerPanel'
 import { useNewChat } from './hooks'
 import type { TimestampConfig } from '@/lib/schemas/types'
 import type { PreviousOutfitSummary } from '@/components/wardrobe'
+
+interface ChatSettingsResponse {
+  autonomousRoomSettings?: {
+    visibilityDefault?: 'owner_only' | 'household' | 'open'
+    destructiveToolPolicy?: 'always_refuse' | 'opt_in_per_room'
+    defaultFreshnessWindowMs?: number
+  }
+}
 
 interface NewChatModalProps {
   isOpen: boolean
@@ -33,6 +45,8 @@ interface NewChatModalProps {
   initialAvatarGenerationEnabled?: boolean
   /** Timestamp config to pre-fill (continuation mode). */
   initialTimestampConfig?: TimestampConfig | null
+  /** Open in autonomous-room creation mode (≥2 LLM cast, no user character). */
+  autonomous?: boolean
 }
 
 export function NewChatModal({
@@ -48,12 +62,33 @@ export function NewChatModal({
   initialImageProfileId,
   initialAvatarGenerationEnabled,
   initialTimestampConfig,
+  autonomous,
 }: NewChatModalProps) {
   const isContinuation = Boolean(continuationFromChatId)
 
-  // In continuation mode, default the character picker open so the user can
-  // see (and remove or augment) the carried-over cast without an extra click.
-  const [pickerExpanded, setPickerExpanded] = useState(isContinuation)
+  // Default the character picker open in continuation mode (so the carried-over
+  // cast is visible), in autonomous mode (which needs ≥2 characters), and in the
+  // seedless "Start a chat" mode (no character to start from, so the user must
+  // pick at least one). A seeded single-character start keeps it collapsed.
+  const [pickerExpanded, setPickerExpanded] = useState(isContinuation || !characterId || Boolean(autonomous))
+
+  // Autonomous-room defaults to surface as hints in the form (visibility,
+  // destructive-tool policy, freshness window). Only fetched in autonomous mode.
+  const { data: chatSettings } = useQuery({
+    queryKey: queryKeys.settings.chat,
+    queryFn: ({ signal }) => apiFetch<ChatSettingsResponse>('/api/v1/settings/chat', { signal }),
+    enabled: isOpen && Boolean(autonomous),
+  })
+  const autonomousHint = chatSettings?.autonomousRoomSettings
+    ? {
+        visibilityDefault: chatSettings.autonomousRoomSettings.visibilityDefault,
+        destructiveToolPolicy: chatSettings.autonomousRoomSettings.destructiveToolPolicy,
+        defaultFreshnessHours:
+          chatSettings.autonomousRoomSettings.defaultFreshnessWindowMs != null
+            ? Math.round(chatSettings.autonomousRoomSettings.defaultFreshnessWindowMs / (60 * 60 * 1000))
+            : undefined,
+      }
+    : undefined
 
   // Continuation mode: per-character per-slot summary of what was equipped at
   // the end of the source chat. Threaded through NewChatForm to OutfitSelector
@@ -87,6 +122,8 @@ export function NewChatModal({
     project,
     projectScenarios,
     generalScenarios,
+    roleplayTemplates,
+    defaultRoleplayTemplateId,
     availableProjects,
     selectedProjectId,
     setSelectedProjectId,
@@ -104,7 +141,10 @@ export function NewChatModal({
     initialImageProfileId: isOpen ? initialImageProfileId : undefined,
     initialAvatarGenerationEnabled: isOpen ? initialAvatarGenerationEnabled : undefined,
     initialTimestampConfig: isOpen ? initialTimestampConfig : undefined,
+    initialAutonomous: isOpen ? autonomous : undefined,
   })
+
+  const isAutonomous = state.autonomous.enabled
 
   if (!isOpen) return null
 
@@ -127,23 +167,33 @@ export function NewChatModal({
     const llm = selectedCharacters.filter((sc) => sc.controlledBy === 'llm')
     if (llm.length === 0) return false
     if (llm.some((sc) => !sc.connectionProfileId)) return false
+    // An autonomous room runs character-to-character: at least two LLM cast and
+    // no user-controlled character.
+    if (isAutonomous) {
+      const hasUserCharacter = selectedCharacters.some((sc) => sc.controlledBy === 'user')
+      if (llm.length < 2 || hasUserCharacter) return false
+    }
     return true
   })()
 
   const widthClass = pickerExpanded ? 'md:max-w-5xl' : 'md:max-w-3xl'
 
-  return (
+  const modalContent = (
     <div className="new-chat-modal fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
       <div
         className={`w-full max-w-md ${widthClass} rounded-2xl border qt-border-default qt-bg-card p-6 qt-shadow-lg max-h-[90vh] flex flex-col`}
       >
         <div className="mb-4 flex items-start justify-between gap-4 flex-shrink-0">
           <h3 className="qt-dialog-title">
-            {isContinuation
-              ? 'Continue Conversation Elsewhere'
-              : selectedCharacters.length > 1
-                ? `Start Chat (${selectedCharacters.length} characters)`
-                : `Start Chat with ${characterName}`}
+            {isAutonomous
+              ? 'New Autonomous Room'
+              : isContinuation
+                ? 'Continue Conversation Elsewhere'
+                : selectedCharacters.length > 1
+                  ? `Start Chat (${selectedCharacters.length} characters)`
+                  : characterName
+                    ? `Start Chat with ${characterName}`
+                    : 'Start Chat'}
           </h3>
           <button
             type="button"
@@ -208,6 +258,8 @@ export function NewChatModal({
               project={project}
               projectScenarios={projectScenarios}
               generalScenarios={generalScenarios}
+              roleplayTemplates={roleplayTemplates}
+              defaultRoleplayTemplateId={defaultRoleplayTemplateId}
               availableProjects={isContinuation ? undefined : availableProjects}
               selectedProjectId={isContinuation ? undefined : selectedProjectId}
               onSelectedProjectIdChange={isContinuation ? undefined : setSelectedProjectId}
@@ -215,6 +267,7 @@ export function NewChatModal({
               showSingleCharacterControls={!pickerExpanded}
               continuationFromChatId={continuationFromChatId ?? null}
               previousOutfitSummary={previousOutfitSummary}
+              autonomousSettingsHint={autonomousHint}
             />
           </div>
         )}
@@ -235,10 +288,18 @@ export function NewChatModal({
           >
             {creating
               ? (isContinuation ? 'Continuing...' : 'Creating...')
-              : (isContinuation ? 'Continue' : 'Start Chat')}
+              : (isAutonomous ? 'Create Autonomous Room' : isContinuation ? 'Continue' : 'Start Chat')}
           </button>
         </div>
       </div>
     </div>
   )
+
+  // Render at the document root so the dialog hovers over the WHOLE workspace.
+  // Inside a split pane, a `fixed` overlay is otherwise trapped in that pane's
+  // stacking context (`.qt-tab-pane` z-index) and the other pane paints over its
+  // far half. The portal preserves React context, so useNewChat/useWorkspaceNavigate
+  // (and theming) still work.
+  if (typeof document === 'undefined') return null
+  return createPortal(modalContent, document.body)
 }

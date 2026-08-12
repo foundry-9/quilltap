@@ -152,7 +152,8 @@ export async function executeWardrobeCreateTool(
   const repos = getRepositories();
 
   try {
-    if (!validateWardrobeCreateInput(input)) {
+    const parsed = validateWardrobeCreateInput(input);
+    if (!parsed) {
       logger.warn('Wardrobe create tool validation failed', {
         context: 'wardrobe-create-handler',
         userId: context.userId,
@@ -183,7 +184,7 @@ export async function executeWardrobeCreateTool(
       component_item_ids,
       component_titles,
       replace,
-    } = input as WardrobeCreateToolInput;
+    } = parsed;
 
     // Resolve the target character — defaults to the calling character
     let targetCharacterId = context.characterId;

@@ -11,10 +11,11 @@ import type { RenderItem } from '../announcement-render-items'
 import { Icon } from '@/components/ui/icon'
 import { MessageRow } from './MessageRow'
 import { AnnouncementGroup } from './AnnouncementChip'
-import { EphemeralMessages as EphemeralMessagesComponent } from './EphemeralMessages'
+import { isOperatorAuthoredAnnouncement } from '../whisper-visibility'
+import { resolveToolRowAttributionMessage } from '../group-tool-messages'
 import { StreamingMessage } from './StreamingMessage'
 import type { StreamingToolBatch } from '../hooks/useSSEStreaming'
-import type { EphemeralMessageData } from '@/components/chat/EphemeralMessage'
+import { useDeferredMeasureRef } from '../hooks/useDeferredMeasureRef'
 
 interface VirtualizedMessageListProps {
   /** Flat (post-tool-grouping) message list. Still needed for the TOOL-row
@@ -69,7 +70,6 @@ interface VirtualizedMessageListProps {
     handleQueue: (participantId: string) => void
     handleDequeue: (participantId: string) => void
     handleContinue: () => void
-    handleDismissEphemeral: (id: string) => void
   }
   // Handlers
   setEditContent: (content: string) => void
@@ -86,8 +86,6 @@ interface VirtualizedMessageListProps {
   onViewLLMLogs: (messageId: string) => void
   // In-progress tool calls, batched by prose offset, for the streaming bubble
   streamingToolBatches: StreamingToolBatch[]
-  // Ephemeral messages
-  ephemeralMessages: EphemeralMessageData[]
   // Streaming message display
   getRespondingCharacter: () => CharacterData | undefined
   shouldShowAvatars: () => boolean
@@ -100,6 +98,8 @@ interface VirtualizedMessageListProps {
   } | null
   /** Mapping of participant IDs to display names for whisper labels */
   participantNames?: Record<string, string>
+  /** The operator's own userId, for resolving a self-targeted whisper label to "you" (Bug 30). */
+  currentUserId?: string | null
   /** Set of participant IDs controlled by the user */
   userParticipantIdSet?: Set<string>
   /** Whether the Concierge has flagged this chat as dangerous */
@@ -155,12 +155,12 @@ export function VirtualizedMessageList({
   messagesWithLogs,
   onViewLLMLogs,
   streamingToolBatches,
-  ephemeralMessages,
   getRespondingCharacter,
   shouldShowAvatars,
   getFirstCharacter,
   getMessageAvatar,
   participantNames,
+  currentUserId,
   userParticipantIdSet,
   isDangerousChat = false,
   showThinking = false,
@@ -169,6 +169,11 @@ export function VirtualizedMessageList({
   showScrollToBottom = false,
   onScrollToBottom,
 }: VirtualizedMessageListProps) {
+  // Measure rows on a microtask rather than during commit — measuring inline
+  // makes the virtualizer call `flushSync` from a ref callback, which React
+  // refuses (and warns about) while it is already rendering. See the hook.
+  const measureRow = useDeferredMeasureRef(virtualizer)
+
   // Resolve per-message character from participantData, falling back to first character
   const getCharacterForMessage = (message: Message): CharacterData | undefined => {
     if (message.participantId) {
@@ -203,7 +208,7 @@ export function VirtualizedMessageList({
                 <div
                   key={item.id}
                   data-index={virtualRow.index}
-                  ref={virtualizer.measureElement}
+                  ref={measureRow}
                   style={{
                     position: 'absolute',
                     top: 0,
@@ -215,6 +220,7 @@ export function VirtualizedMessageList({
                   <AnnouncementGroup
                     members={item.members}
                     onToggleSystemMessageExpanded={onToggleSystemMessageExpanded}
+                    participantNames={participantNames}
                   />
                 </div>
               )
@@ -227,22 +233,11 @@ export function VirtualizedMessageList({
             const showResendButton = messageActions.canResendMessage(message.id)
 
             if (message.role === 'TOOL') {
-              // Fall back to the most recent ASSISTANT message's participant
-              // when this row has no participantId itself — historical TOOL
-              // rows persisted before character attribution was added are
-              // identifiable by position only.
-              const messageForAvatar = message.systemSender || message.participantId
-                ? message
-                : (() => {
-                    for (let k = messageIndex - 1; k >= 0; k--) {
-                      const prev = messages[k]
-                      if (prev.role === 'ASSISTANT' && prev.participantId) {
-                        return { ...message, participantId: prev.participantId }
-                      }
-                      if (prev.role === 'USER') break
-                    }
-                    return message
-                  })()
+              // Resolve which author heads this standalone tool card. A
+              // user-initiated (composer) run wears the operator's face; a
+              // character-initiated run borrows the calling character by
+              // position. See resolveToolRowAttributionMessage (Bug 29).
+              const messageForAvatar = resolveToolRowAttributionMessage(message, messageIndex, messages)
               const avatarData = getMessageAvatar(messageForAvatar)
               const headerAvatar = avatarData
                 ? {
@@ -255,7 +250,7 @@ export function VirtualizedMessageList({
                 <div
                   key={message.id}
                   data-index={virtualRow.index}
-                  ref={virtualizer.measureElement}
+                  ref={measureRow}
                   style={{
                     position: 'absolute',
                     top: 0,
@@ -283,7 +278,7 @@ export function VirtualizedMessageList({
               <div
                 key={message.id}
                 data-index={virtualRow.index}
-                ref={virtualizer.measureElement}
+                ref={measureRow}
                 style={{
                   position: 'absolute',
                   top: 0,
@@ -353,8 +348,19 @@ export function VirtualizedMessageList({
                   showThinking={showThinking}
                   thinkingCollapsedByDefault={thinkingCollapsedByDefault}
                   participantNames={participantNames}
+                  currentUserId={currentUserId}
                   isOverheardWhisper={
                     !!(message.targetParticipantIds?.length) &&
+                    // Staff whispers (Pascal, the Commonplace Book, …) are
+                    // surfaced to the operator on purpose — see the visibility
+                    // rule in SalonView. Dimming what we deliberately showed
+                    // them to read would undercut the reason we showed it. They
+                    // keep the whisper border and "whispered" label, so the
+                    // privacy status stays legible without the 0.6 opacity.
+                    // An announcement the operator wrote themselves is not
+                    // overheard by definition — they are its author.
+                    !message.systemSender &&
+                    !isOperatorAuthoredAnnouncement(message) &&
                     !!(userParticipantIdSet) &&
                     !(message.participantId && userParticipantIdSet.has(message.participantId)) &&
                     !message.targetParticipantIds.some(id => userParticipantIdSet.has(id))
@@ -365,12 +371,6 @@ export function VirtualizedMessageList({
             )
           })}
         </div>
-
-        {/* Ephemeral messages */}
-        <EphemeralMessagesComponent
-          messages={ephemeralMessages}
-          onDismiss={turnManagement.handleDismissEphemeral}
-        />
 
         {/* Streaming message — in-progress tool calls nest inside this bubble */}
         <StreamingMessage

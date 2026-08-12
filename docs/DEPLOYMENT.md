@@ -16,6 +16,7 @@ Quilltap uses **SQLite** for data storage and the **local filesystem** for files
 - [Monitoring](#monitoring)
 - [Backup Strategy](#backup-strategy)
 - [Updating](#updating)
+- [Container Contents](#container-contents)
 - [Troubleshooting](#troubleshooting)
 
 ## Prerequisites
@@ -102,6 +103,26 @@ Only needed when exposing Quilltap on a custom domain. For local use, everything
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `QUILLTAP_TIMEZONE` | IANA timezone name (e.g., `America/New_York`, `Europe/London`, `Asia/Tokyo`) for timestamp injection. Auto-detected in Electron app. | System default (usually UTC in Docker) |
+| `TZ` | Standard Unix timezone for the process clock. Governs the paths that read local time directly rather than the formatting chain: episodic day-references ("today"/"yesterday" recall windows), the autonomous-room daily token budget rollover at local midnight, and croner schedule evaluation. | System default (UTC in Docker) |
+
+Setting either one in Docker is enough: the container entrypoint copies whichever is present into the other, with `QUILLTAP_TIMEZONE` winning if both are set and disagree. This mirrors what `lima/wsl-init.sh` does for the Lima and WSL2 shells. No `tzdata` package is needed — Node resolves `TZ` through its bundled ICU.
+
+Setting only one *outside* the entrypoint (a bare `node server.js`, say) leaves the two halves disagreeing: chat timestamps on your clock, schedules and recall windows on UTC.
+
+**The startup scripts set this for you.** `scripts/start-quilltap.sh`, `scripts/start-quilltap.ps1`, and `npm run start:docker` detect the host's IANA timezone and pass it as `QUILLTAP_TIMEZONE`, so a container started through any of them follows your clock rather than UTC. Supplying your own value always wins:
+
+```bash
+./scripts/start-quilltap.sh -e "QUILLTAP_TIMEZONE=Europe/Paris"   # explicit zone
+./scripts/start-quilltap.sh -e "QUILLTAP_TIMEZONE=UTC"            # pin to UTC
+```
+
+Each script prints what it resolved (`Timezone:  America/Chicago (detected)`), and falls back to UTC with a note if the host zone can't be determined. If you invoke `docker run` yourself, pass it explicitly:
+
+```bash
+docker run -d -e "QUILLTAP_TIMEZONE=$(node -p 'Intl.DateTimeFormat().resolvedOptions().timeZone')" foundry9/quilltap:latest
+```
+
+Use an IANA name, not an abbreviation — `America/Chicago`, not `CDT`. ICU can't resolve abbreviations and will silently fall back to UTC, so the scripts reject them rather than pass them through.
 
 ### Logging
 
@@ -350,6 +371,53 @@ docker stop quilltap
 docker rm quilltap
 docker run -d --name quilltap ... foundry9/quilltap:previous-version
 ```
+
+## Container Contents
+
+The production image is deliberately minimal. Beyond Node.js and the application
+itself, it ships only what a code path actually invokes:
+
+| Present | Why |
+| --- | --- |
+| `node` | The container's only command (`node server.js`) |
+| `bash` | Ariel's terminal — the PTY hard-codes `/bin/bash` |
+| `zip`, `unzip` | Backup creation and restore shell out to these |
+| `quilltap` | The CLI, for in-container debugging (`quilltap db --tables`) |
+
+**Deliberately absent:** `npm`, `npx`, `corepack`, `yarn`, `perl`, `git`, `curl`,
+`wget`, `jq`.
+
+Each was removed to shrink the image's CVE surface, and none is on a code path:
+
+- **npm / npx / corepack / yarn** ship in the Node base image and carry a critical
+  and several high findings in their own bundled dependencies. Plugin installation
+  does not use them — Quilltap downloads and extracts registry tarballs over HTTP
+  directly, so Settings → Plugins and the install API work exactly as before.
+- **perl** carries critical findings with no fix available in any current Debian
+  release. Nothing in Quilltap invokes it; it was present only as a dependency of
+  `git`.
+- **git / curl / wget / jq** were previously pre-installed as a convenience toolbox
+  for the LLM shell agent. The `curl` **tool** your characters use is a plugin that
+  makes HTTP requests from within Node, so it is unaffected. Only a human typing at
+  Ariel's bash prompt loses these commands.
+
+If your deployment genuinely needs one of them, layer it on top rather than
+patching the base:
+
+```dockerfile
+FROM foundry9/quilltap:latest
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+USER nextjs
+```
+
+Be aware that you are reintroducing that package's vulnerabilities, and that
+`git` in particular pulls `perl` in behind it.
+
+Non-Docker installations are unaffected — they use whatever tools are already on
+the host.
 
 ## Troubleshooting
 

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
+import { llmNumber } from './llm-number';
 
 /**
  * Zod schema for the terminal read tool's input.
@@ -8,23 +9,29 @@ export const terminalReadToolInputSchema = z.object({
   sessionId: z
     .string()
     .describe('Terminal session id (UUID). Get this from terminal_list.'),
-  lines: z
-    .number()
-    .int()
-    .min(1)
-    .max(2000)
+  lines: llmNumber(
+    z
+      .number()
+      .int()
+      .min(1)
+      .max(2000)
+      .describe('Maximum number of lines to return from the tail of the scrollback when start/end are not provided. Default 200. Ignored when start or end is set.')
+  )
     .default(200)
-    .describe('Maximum number of lines to return from the tail of the scrollback when start/end are not provided. Default 200. Ignored when start or end is set.')
     .optional(),
-  start: z
-    .number()
-    .int()
-    .describe('Optional 0-indexed inclusive start line. Negative values mean (last line number) - abs(value). Defaults to 0 when end is provided alone.')
+  start: llmNumber(
+    z
+      .number()
+      .int()
+      .describe('Optional 0-indexed inclusive start line. Negative values mean (last line number) - abs(value). Defaults to 0 when end is provided alone.')
+  )
     .optional(),
-  end: z
-    .number()
-    .int()
-    .describe('Optional 0-indexed inclusive end line. Negative values mean (last line number) - abs(value). Defaults to the last line number when start is provided alone.')
+  end: llmNumber(
+    z
+      .number()
+      .int()
+      .describe('Optional 0-indexed inclusive end line. Negative values mean (last line number) - abs(value). Defaults to the last line number when start is provided alone.')
+  )
     .optional(),
   raw: z
     .boolean()
@@ -44,8 +51,9 @@ export const terminalReadToolDefinition = {
   },
 };
 
-export function validateTerminalReadInput(input: unknown): input is TerminalReadInput {
-  return terminalReadToolInputSchema.safeParse(input).success;
+export function validateTerminalReadInput(input: unknown): TerminalReadInput | null {
+  const parsed = terminalReadToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 export interface TerminalReadOutput {

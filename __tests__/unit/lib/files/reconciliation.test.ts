@@ -50,7 +50,7 @@ let mockFilesRepo: {
 }
 
 let mockCharactersRepo: {
-  findByUserId: jest.Mock
+  findAllRaw: jest.Mock
 }
 
 jest.mock('@/lib/database/repositories', () => ({
@@ -124,7 +124,7 @@ beforeEach(() => {
   }
 
   mockCharactersRepo = {
-    findByUserId: jest.fn().mockResolvedValue([]),
+    findAllRaw: jest.fn().mockResolvedValue([]),
   }
 
   mockGetRepositories.mockReturnValue({
@@ -152,7 +152,7 @@ describe('reconcileFilesystem', () => {
       mockScanDirectory.mockResolvedValue([])
 
       // Character references this file as default avatar
-      mockCharactersRepo.findByUserId.mockResolvedValue([
+      mockCharactersRepo.findAllRaw.mockResolvedValue([
         {
           id: 'char-1',
           defaultImageId: 'avatar-file-1',
@@ -175,11 +175,40 @@ describe('reconcileFilesystem', () => {
       mockFilesRepo.findByUserId.mockResolvedValue([dbRecord])
       mockScanDirectory.mockResolvedValue([])
 
-      mockCharactersRepo.findByUserId.mockResolvedValue([
+      mockCharactersRepo.findAllRaw.mockResolvedValue([
         {
           id: 'char-1',
           defaultImageId: null,
           avatarOverrides: [{ imageId: 'override-file-1', mood: 'happy' }],
+        },
+      ])
+
+      await reconcileFilesystem()
+
+      expect(mockFilesRepo.delete).not.toHaveBeenCalled()
+    })
+
+    it('preserves an archived character\'s bundle (archiveFileId) even when missing from disk', async () => {
+      // The bundle row stores the PLAINTEXT sha256 while disk bytes are
+      // encrypted, so the sha256 cross-match can never rescue it — only the
+      // reference set keeps it alive when the bytes are absent at boot.
+      const bundleRow = makeDbRecord({
+        id: 'archive-file-1',
+        storageKey: 'archive-file-1/character-archive.qtap',
+        category: 'ARCHIVE',
+        folderPath: '/archives',
+      })
+
+      mockFilesRepo.findByUserId.mockResolvedValue([bundleRow])
+      mockScanDirectory.mockResolvedValue([])
+
+      mockCharactersRepo.findAllRaw.mockResolvedValue([
+        {
+          id: 'char-1',
+          defaultImageId: null,
+          avatarOverrides: [],
+          archivedAt: '2026-08-10T00:00:00.000Z',
+          archiveFileId: 'archive-file-1',
         },
       ])
 
@@ -197,7 +226,7 @@ describe('reconcileFilesystem', () => {
       mockFilesRepo.findByUserId.mockResolvedValue([sharedFile])
       mockScanDirectory.mockResolvedValue([])
 
-      mockCharactersRepo.findByUserId.mockResolvedValue([
+      mockCharactersRepo.findAllRaw.mockResolvedValue([
         { id: 'char-1', defaultImageId: 'shared-file-1', avatarOverrides: [] },
         {
           id: 'char-2',
@@ -538,6 +567,51 @@ describe('reconcileFilesystem', () => {
       expect(mockFilesRepo.create).not.toHaveBeenCalled()
     })
 
+    it('leaves ARCHIVE and BACKUP rows\' curated folderPath alone when it differs from the derived path', async () => {
+      // '/archives' and '/backups' deliberately do NOT mirror the physical
+      // storage key ('<fileId>/character-archive.qtap' derives to '/'), so
+      // the folderPath "fix" must not strip them out of their shelf folder.
+      const archiveOnDisk = makeScannedFile('archive-1/character-archive.qtap', 4096)
+      const archiveRow = makeDbRecord({
+        id: 'archive-1',
+        storageKey: 'archive-1/character-archive.qtap',
+        category: 'ARCHIVE',
+        folderPath: '/archives',
+        size: 4096,
+      })
+
+      mockScanDirectory.mockResolvedValue([archiveOnDisk])
+      mockFilesRepo.findByUserId.mockResolvedValue([archiveRow])
+      mockDeriveFolder.mockReturnValue('/')
+
+      await reconcileFilesystem()
+
+      expect(mockFilesRepo.update).not.toHaveBeenCalled()
+      expect(mockFilesRepo.delete).not.toHaveBeenCalled()
+    })
+
+    it('still corrects folderPath drift for ordinary files', async () => {
+      const scannedFile = makeScannedFile('project-1/docs/moved.png', 1024)
+      const dbRecord = makeDbRecord({
+        id: 'drifted-file',
+        storageKey: 'project-1/docs/moved.png',
+        category: 'IMAGE',
+        folderPath: '/',
+        size: 1024,
+      })
+
+      mockScanDirectory.mockResolvedValue([scannedFile])
+      mockFilesRepo.findByUserId.mockResolvedValue([dbRecord])
+      mockDeriveFolder.mockReturnValue('/docs/')
+
+      await reconcileFilesystem()
+
+      expect(mockFilesRepo.update).toHaveBeenCalledWith(
+        'drifted-file',
+        expect.objectContaining({ folderPath: '/docs/' })
+      )
+    })
+
     it('updates size and sha256 when disk file size differs from DB record', async () => {
       const scannedFile = makeScannedFile('project-1/resized.png', 2048)
       const dbRecord = makeDbRecord({
@@ -580,7 +654,7 @@ describe('reconcileFilesystem', () => {
       mockFilesRepo.findByUserId.mockResolvedValue([staleRecord1, staleRecord2])
 
       // Character lookup throws but reconciliation should proceed cautiously
-      mockCharactersRepo.findByUserId.mockRejectedValue(new Error('Characters DB error'))
+      mockCharactersRepo.findAllRaw.mockRejectedValue(new Error('Characters DB error'))
 
       await reconcileFilesystem()
 

@@ -471,6 +471,13 @@ export async function triggerReindexIfNeeded(resolved: ResolvedPath): Promise<vo
     const repos = getRepositories();
     // Fire-and-forget: don't block the tool response on re-indexing
     reindexSingleFile(mountPointId, resolved.relativePath, resolved.absolutePath)
+      // Hard-linked siblings share these bytes and need their own chunk sets
+      // rebuilt; on filesystem mounts the inode is already shared, so this is
+      // purely the index catching up with what the OS did.
+      .then(async () => {
+        const { reindexLinkGroupSiblings } = await import('@/lib/mount-index/link-groups');
+        await reindexLinkGroupSiblings(mountPointId, resolved.relativePath);
+      })
       .then(() => Promise.all([
         enqueueEmbeddingJobsForMountPoint(mountPointId),
         repos.docMountPoints.refreshStats(mountPointId),

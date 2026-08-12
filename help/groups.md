@@ -29,6 +29,14 @@ will find:
   member keeps here is offered back to them alongside their own Core whisper —
   marked plainly as the Group's — so the few things the circle holds in common ride
   at their elbow whenever they take the floor.
+- **A shared ledger of State** — a `state.json` of persistent values the whole circle
+  reads and writes. It is the **group tier** of the four-tier state cascade
+  (chat → project → group → general); edit it from the **Group State** button on the
+  group's page, and see *[Chat State](chat-state.md)* for how the tiers stack. One
+  wrinkle particular to Groups: when a single chat draws in characters from *two*
+  different Groups, Quilltap will not guess whose ledger is meant, and quietly leaves
+  the group tier out of the merged view — reach a particular Group's state by editing
+  it on its own page instead.
 
 You may also **link additional stores** to a Group — any document store you've
 already set up in the Scriptorium — and every member gains full read-and-write run

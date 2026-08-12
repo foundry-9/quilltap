@@ -37,7 +37,8 @@ export async function executeRequestFullContextTool(
 ): Promise<RequestFullContextToolOutput> {
   try {
     // Validate input (should always pass since no params required)
-    if (!validateRequestFullContextInput(input)) {
+    const parsed = validateRequestFullContextInput(input)
+    if (!parsed) {
       return {
         success: false,
         message: 'Invalid input format',

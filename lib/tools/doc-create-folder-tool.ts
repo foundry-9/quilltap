@@ -41,8 +41,9 @@ export type DocCreateFolderInput = z.infer<typeof docCreateFolderToolInputSchema
 /**
  * Validates input for doc_create_folder tool.
  */
-export function validateDocCreateFolderInput(input: unknown): input is DocCreateFolderInput {
-  return docCreateFolderToolInputSchema.safeParse(input).success;
+export function validateDocCreateFolderInput(input: unknown): DocCreateFolderInput | null {
+  const parsed = docCreateFolderToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 export const docCreateFolderToolDefinition = {

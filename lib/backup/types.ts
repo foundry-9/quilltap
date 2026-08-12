@@ -140,6 +140,18 @@ export interface BackupManifest {
   /** Application version at the time of backup creation (e.g., '2.0.0') */
   appVersion: string;
 
+  /**
+   * Set when the backup was made in compact mode: memory embeddings are NULL
+   * and the derived embedding collections (conversation chunks, vector
+   * entries/metas, TF-IDF vocabularies, embedding status, doc-mount chunks)
+   * were omitted entirely.
+   *
+   * Restore keys off this to queue a full re-index — the ordinary embedding
+   * reconcile deliberately ignores absent chunk rows, so without the flag a
+   * compact restore would come back with search quietly cold.
+   */
+  compact?: boolean;
+
   /** Counts of all backed-up entities for validation and progress tracking */
   counts: {
     /** Number of Character entities */
@@ -423,6 +435,15 @@ export interface RestoreOptions {
 
   /** UUID of the target user for restoration */
   targetUserId: string;
+
+  /**
+   * Replace mode only: when true (the default), archived-character `.qtap`
+   * bundles (`files` rows of category `ARCHIVE` and their on-disk bytes)
+   * survive the pre-restore wipe as loose bundles — importable, not
+   * rehydratable, since the tombstone character rows are replaced like any
+   * others. Pass `false` to wipe them with everything else.
+   */
+  keepArchivedCharacterBundles?: boolean;
 }
 
 // ============================================================================
@@ -562,6 +583,22 @@ export interface RestoreSummary {
 
   /** Number of TextReplacementRule entities restored */
   textReplacementRules?: number;
+
+  /**
+   * Outcome of the post-restore embedding reconcile. A restore can land a
+   * corpus whose vectors were produced by a different embedding standard than
+   * the receiving instance's default profile (new-account mode, or a machine
+   * configured differently), which nothing else would notice until the next
+   * boot. `skippedReason` explains a no-op pass; `reindexEnqueued` says
+   * whether a repair job was scheduled.
+   */
+  embeddingReconcile?: {
+    targetDimensions: number | null;
+    skippedReason: string | null;
+    vectorEntriesDeleted: number;
+    vectorIndexMetaFixed: number;
+    reindexEnqueued: boolean;
+  };
 
   /**
    * Array of warning messages for issues that occurred during restore

@@ -30,16 +30,16 @@ describe('validateHelpNavigateInput', () => {
       validateHelpNavigateInput({
         url: '/settings?tab=chat&section=dangerous-content',
       })
-    ).toBe(true)
+    ).not.toBeNull()
 
-    expect(validateHelpNavigateInput({ url: '/aurora/character-123' })).toBe(true)
+    expect(validateHelpNavigateInput({ url: '/aurora/character-123' })).not.toBeNull()
   })
 
   it('rejects missing, external, or unsupported routes', () => {
-    expect(validateHelpNavigateInput({})).toBe(false)
-    expect(validateHelpNavigateInput({ url: 'https://example.com/settings' })).toBe(false)
-    expect(validateHelpNavigateInput({ url: '/api/v1/system/unlock' })).toBe(false)
-    expect(validateHelpNavigateInput({ url: '   ' })).toBe(false)
+    expect(validateHelpNavigateInput({})).toBeNull()
+    expect(validateHelpNavigateInput({ url: 'https://example.com/settings' })).toBeNull()
+    expect(validateHelpNavigateInput({ url: '/api/v1/system/unlock' })).toBeNull()
+    expect(validateHelpNavigateInput({ url: '   ' })).toBeNull()
   })
 })
 

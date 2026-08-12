@@ -18,18 +18,24 @@ import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext
 import {
   FORMAT_TEXT_COMMAND,
   COMMAND_PRIORITY_NORMAL,
+  INDENT_CONTENT_COMMAND,
+  OUTDENT_CONTENT_COMMAND,
+  KEY_TAB_COMMAND,
   $getSelection,
+  $getPreviousSelection,
+  $setSelection,
   $isRangeSelection,
   $isElementNode,
   $createTextNode,
   $createParagraphNode,
+  $findMatchingParent,
   createCommand,
   type LexicalCommand,
   type TextNode,
 } from 'lexical'
 import { $setBlocksType } from '@lexical/selection'
 import { $createHeadingNode, $createQuoteNode, type HeadingTagType } from '@lexical/rich-text'
-import { $insertList } from '@lexical/list'
+import { $insertList, $isListItemNode } from '@lexical/list'
 import { $createCodeNode, $isCodeNode } from '@lexical/code'
 import type { TemplateDelimiter } from '@/lib/schemas/template.types'
 import { delimiterToPrefixSuffix } from '@/lib/chat/annotations'
@@ -81,6 +87,51 @@ export const APPLY_DELIMITER_COMMAND: LexicalCommand<TemplateDelimiter> =
  */
 export const TOGGLE_CODE_BLOCK_COMMAND: LexicalCommand<void> =
   createCommand('TOGGLE_CODE_BLOCK_COMMAND')
+
+/**
+ * Command to nest the selected list item(s) one level deeper — the sub-list
+ * that Markdown writes as an indented bullet.
+ */
+export const INDENT_LIST_ITEM_COMMAND: LexicalCommand<void> =
+  createCommand('INDENT_LIST_ITEM_COMMAND')
+
+/** Command to lift the selected list item(s) out one nesting level. */
+export const OUTDENT_LIST_ITEM_COMMAND: LexicalCommand<void> =
+  createCommand('OUTDENT_LIST_ITEM_COMMAND')
+
+/**
+ * True when the selection sits anywhere inside a list item — mid-word, inside a
+ * bold run, on an empty item, or spanning several items.
+ *
+ * The caret's own anchor/focus are checked alongside `getNodes()` because a
+ * collapsed selection expressed as an *element* point (which is what clicking
+ * into a line can produce, rather than a text point) makes `getNodes()` return
+ * an empty array. Relying on it alone left the indent controls dead for a caret
+ * that was plainly sitting in a list.
+ *
+ * Indenting is deliberately confined to lists: Markdown has no notion of an
+ * indented paragraph, so indenting one would produce editor state that vanishes
+ * silently on the next save.
+ */
+export function $selectionIsInListItem(): boolean {
+  const selection = $getSelection()
+  if (!$isRangeSelection(selection)) return false
+  const nodes = [selection.anchor.getNode(), selection.focus.getNode(), ...selection.getNodes()]
+  return nodes.some((node) => $findMatchingParent(node, $isListItemNode) !== null)
+}
+
+/**
+ * Put the caret back where it was if the editor has no live selection.
+ *
+ * Toolbar buttons suppress focus loss on mousedown, but a click that arrives
+ * after the editor has been blurred some other way would otherwise act on a
+ * null selection and appear to do nothing at all.
+ */
+function $restoreSelection(): void {
+  if ($getSelection() !== null) return
+  const previous = $getPreviousSelection()
+  if (previous !== null) $setSelection(previous.clone())
+}
 
 export function FormattingCommandPlugin() {
   const [editor] = useLexicalComposerContext()
@@ -222,6 +273,45 @@ export function FormattingCommandPlugin() {
       COMMAND_PRIORITY_NORMAL,
     )
 
+    const unregisterIndent = editor.registerCommand(
+      INDENT_LIST_ITEM_COMMAND,
+      () => {
+        $restoreSelection()
+        if (!$selectionIsInListItem()) return true
+        editor.dispatchCommand(INDENT_CONTENT_COMMAND, undefined)
+        return true
+      },
+      COMMAND_PRIORITY_NORMAL,
+    )
+
+    const unregisterOutdent = editor.registerCommand(
+      OUTDENT_LIST_ITEM_COMMAND,
+      () => {
+        $restoreSelection()
+        if (!$selectionIsInListItem()) return true
+        editor.dispatchCommand(OUTDENT_CONTENT_COMMAND, undefined)
+        return true
+      },
+      COMMAND_PRIORITY_NORMAL,
+    )
+
+    // Tab nests a list item, Shift+Tab lifts it — but only inside a list.
+    // Everywhere else Tab is left to the browser so it still moves focus out
+    // of the editor, which keyboard users depend on.
+    const unregisterTab = editor.registerCommand(
+      KEY_TAB_COMMAND,
+      (event: KeyboardEvent) => {
+        if (!$selectionIsInListItem()) return false
+        event.preventDefault()
+        editor.dispatchCommand(
+          event.shiftKey ? OUTDENT_CONTENT_COMMAND : INDENT_CONTENT_COMMAND,
+          undefined,
+        )
+        return true
+      },
+      COMMAND_PRIORITY_NORMAL,
+    )
+
     return () => {
       unregisterHeading()
       unregisterUL()
@@ -229,6 +319,9 @@ export function FormattingCommandPlugin() {
       unregisterBlockquote()
       unregisterDelimiter()
       unregisterCodeBlock()
+      unregisterIndent()
+      unregisterOutdent()
+      unregisterTab()
     }
   }, [editor])
 

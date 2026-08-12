@@ -91,6 +91,8 @@ Quilltap treats JSON and JSONL files as first-class document types alongside Mar
 - **`doc_update_frontmatter`** — Update individual YAML frontmatter properties
 - **`doc_update_heading`** — Replace content under a specific heading
 
+In Lexical-based markdown editors (including Document Mode), markdown delimiter characters are preserved as typed on save/export. Quilltap no longer rewrites ordinary delimiters as escaped punctuation (for example, writing `*`, `_`, `` ` ``, and `~` back as `\*`, `\_`, `\```, and `\~`).
+
 ### File Management
 
 - **`doc_move_file`** — Move or rename a file. If the destination is in a different directory, the file is moved; if in the same directory, it is renamed. The destination must not already exist. The Librarian announces the move in the chat, naming the old and new addresses.

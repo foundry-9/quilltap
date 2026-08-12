@@ -12,6 +12,14 @@ export function toExportEntityType(key: string): ExportEntityType {
     imageProfiles: 'image-profiles',
     embeddingProfiles: 'embedding-profiles',
     roleplayTemplates: 'roleplay-templates',
+    promptTemplates: 'prompt-templates',
+    projects: 'projects',
+    groups: 'groups',
+    documentStores: 'document-stores',
+    files: 'files',
+    providerModels: 'provider-models',
+    pluginConfigs: 'plugin-configs',
+    instanceSettings: 'instance-settings',
   }
   return mapping[key] || (key as ExportEntityType)
 }

@@ -314,11 +314,19 @@ async function handleStore(passphrase: string): Promise<NextResponse> {
  * Requires the app to be in 'resolved' state (unlocked).
  * Accepts { oldPassphrase, newPassphrase } — either can be empty string
  * (empty = no passphrase / internal sentinel).
+ *
+ * After the `.dbkey` re-wrap succeeds, every ARCHIVE bundle is re-encrypted
+ * from the old passphrase to the new one (§4.2c of the character-archive
+ * spec) — archives are encrypted under the passphrase, not the pepper, and
+ * would otherwise silently still want the old one. A partial failure there
+ * does NOT fail the passphrase change (which has already happened); the
+ * response's `archives` summary names the bundles left behind so the UI can
+ * report them.
  */
 async function handleChangePassphrase(body: Record<string, unknown>): Promise<NextResponse> {
   unlockLogger.info('Passphrase change requested');
 
-  const { getDbKeyState, changePassphrase } = await import('@/lib/startup/dbkey');
+  const { getDbKeyState, changePassphrase, INTERNAL_PASSPHRASE } = await import('@/lib/startup/dbkey');
   const state = getDbKeyState();
 
   if (state !== 'resolved') {
@@ -336,8 +344,40 @@ async function handleChangePassphrase(body: Record<string, unknown>): Promise<Ne
     return unauthorized(result.error || 'Passphrase change failed');
   }
 
-  unlockLogger.info('Passphrase changed successfully');
-  return successResponse({ success: true });
+  // Phase two: rewrite the archive library under the new passphrase, using
+  // the same empty-string → internal-sentinel rule changePassphrase applied.
+  let archives;
+  try {
+    const { reencryptArchiveBundles } = await import('@/lib/characters/archive-reencrypt');
+    archives = await reencryptArchiveBundles(
+      oldPassphrase.length > 0 ? oldPassphrase : INTERNAL_PASSPHRASE,
+      newPassphrase.length > 0 ? newPassphrase : INTERNAL_PASSPHRASE
+    );
+  } catch (error) {
+    // The passphrase change itself already succeeded; report the archive
+    // sweep as wholly failed rather than pretending it ran.
+    unlockLogger.error('Archive re-encryption pass failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    archives = {
+      total: -1,
+      reencrypted: 0,
+      failures: [
+        {
+          fileId: '',
+          filename: '(all archives)',
+          reason: error instanceof Error ? error.message : String(error),
+        },
+      ],
+    };
+  }
+
+  unlockLogger.info('Passphrase changed successfully', {
+    archivesTotal: archives.total,
+    archivesReencrypted: archives.reencrypted,
+    archivesFailed: archives.failures.length,
+  });
+  return successResponse({ success: true, archives });
 }
 
 /**

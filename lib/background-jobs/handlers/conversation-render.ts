@@ -81,8 +81,11 @@ export async function handleConversationRender(job: BackgroundJob): Promise<void
   // When fullReembed is true, embed ALL chunks; otherwise only the newest
   if (result.interchanges.length > 0) {
     try {
+      // Default profile only — every vector in the instance must come from
+      // the same profile. With no default marked, chunks wait for the
+      // startup reconcile rather than embedding under an arbitrary one.
       const embeddingProfiles = await repos.embeddingProfiles.findAll();
-      const defaultProfile = embeddingProfiles.find(p => p.isDefault) || embeddingProfiles[0];
+      const defaultProfile = embeddingProfiles.find(p => p.isDefault);
 
       if (defaultProfile) {
         // Embed all chunks that don't already have embeddings,

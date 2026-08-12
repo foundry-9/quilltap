@@ -41,3 +41,26 @@ export async function apiFetch<T = unknown>(url: string, init?: RequestInit): Pr
   }
   return res.json() as Promise<T>
 }
+
+/**
+ * Pull a human-readable message out of a thrown value.
+ *
+ * The v1 API answers a failure with `{ error }` (see `@/lib/api/responses`), so
+ * an `ApiFetchError`'s parsed `info` carries the sentence a person should read;
+ * `message` is accepted as the older shape. Anything that is not an
+ * `ApiFetchError` falls back to its own `Error.message`, and a non-Error to the
+ * caller's `fallback` — which is where each surface says what it could not do.
+ */
+export function apiErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof ApiFetchError) {
+    const info = err.info
+    if (info && typeof info === 'object') {
+      const record = info as Record<string, unknown>
+      if (typeof record.error === 'string') return record.error
+      if (typeof record.message === 'string') return record.message
+    }
+    return err.message
+  }
+  if (err instanceof Error) return err.message
+  return fallback
+}

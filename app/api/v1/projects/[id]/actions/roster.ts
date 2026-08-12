@@ -7,22 +7,22 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { checkOwnership } from '@/lib/api/middleware';
+import { exists } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
-import { notFound, serverError, successResponse } from '@/lib/api/responses';
+import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
 import { addCharacterSchema, removeCharacterSchema } from '../schemas';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 /**
  * List characters in project roster
  */
 export async function handleListCharacters(
   projectId: string,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   try {
     const project = await repos.projects.findById(projectId);
-    if (!checkOwnership(project, user.id)) {
+    if (!exists(project)) {
       return notFound('Project');
     }
 
@@ -56,10 +56,10 @@ export async function handleListCharacters(
 export async function handleAddCharacter(
   req: NextRequest,
   projectId: string,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   const project = await repos.projects.findById(projectId);
-  if (!checkOwnership(project, user.id)) {
+  if (!exists(project)) {
     return notFound('Project');
   }
 
@@ -70,6 +70,12 @@ export async function handleAddCharacter(
   const character = await repos.characters.findById(characterId);
   if (!character) {
     return notFound('Character');
+  }
+
+  // Archived characters can't join a roster — but existing roster edges are
+  // never removed by archiving, so removal below stays unguarded (spec §5.1).
+  if (character.archivedAt) {
+    return badRequest('That character is archived; rehydrate them before adding them to a roster.');
   }
 
   // Add to roster if not already there
@@ -89,10 +95,10 @@ export async function handleAddCharacter(
 export async function handleRemoveCharacter(
   req: NextRequest,
   projectId: string,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   const project = await repos.projects.findById(projectId);
-  if (!checkOwnership(project, user.id)) {
+  if (!exists(project)) {
     return notFound('Project');
   }
 

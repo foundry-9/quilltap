@@ -24,6 +24,7 @@ interface UseProjectDetailReturn {
   handleSave: () => Promise<void>
   handleToggleAllowAnyCharacter: () => Promise<void>
   handleSaveAgentMode: (enabled: boolean | null) => Promise<void>
+  handleSaveAnswerConfirmationOverride: (value: 'ON' | 'OFF' | null) => Promise<void>
   handleSaveAvatarGeneration: (enabled: boolean | null) => Promise<void>
   handleSaveDefaultImageProfile: (profileId: string | null) => Promise<void>
   handleSaveDefaultRoleplayTemplate: (templateId: string | null) => Promise<void>
@@ -123,6 +124,30 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to update agent mode'
       console.error('useProjectDetail: save agent mode error', errorMsg)
+      showErrorToast(errorMsg)
+    }
+  }, [projectId])
+
+  const handleSaveAnswerConfirmationOverride = useCallback(async (value: 'ON' | 'OFF' | null) => {
+    try {
+      const res = await fetch(`/api/v1/projects/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answerConfirmationOverride: value }),
+      })
+
+      if (!res.ok) throw new Error('Failed to update answer confirmation setting')
+      const data = await res.json()
+      setProject(data.project)
+      const message = value === null
+        ? 'Answer confirmation set to inherit from global'
+        : value === 'ON'
+          ? 'Answer confirmation enabled by default for project'
+          : 'Answer confirmation disabled by default for project'
+      showSuccessToast(message)
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to update answer confirmation'
+      console.error('useProjectDetail: save answer confirmation error', errorMsg)
       showErrorToast(errorMsg)
     }
   }, [projectId])
@@ -272,6 +297,7 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
     handleSave,
     handleToggleAllowAnyCharacter,
     handleSaveAgentMode,
+    handleSaveAnswerConfirmationOverride,
     handleSaveAvatarGeneration,
     handleSaveDefaultImageProfile,
     handleSaveDefaultRoleplayTemplate,

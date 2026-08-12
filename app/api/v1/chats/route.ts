@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware';
+import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { buildChatContext, type ChatContext } from '@/lib/chat/initialize';
 import { combineScenarioText } from '@/lib/chat/scenario-text';
@@ -17,6 +17,7 @@ import { generateGreetingMessage } from '@/lib/chat/initial-greeting';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { resolveProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service';
 import { buildFirstMessageContext } from '@/lib/chat/first-message-context';
+import { ensureFictionalBaseRealTime } from '@/lib/chat/timestamp-utils';
 import { buildRecentConversationsBlock, calculateRecentConversationsLimit } from '@/lib/memory/memory-recap';
 import { getModelContextLimit } from '@/lib/llm/model-context-data';
 import { logger } from '@/lib/logger';
@@ -35,7 +36,8 @@ import {
   buildCheapLLMConfig,
   type OutfitSelectionContext,
 } from '@/lib/wardrobe/apply-outfit-selections';
-import { notFound, badRequest, serverError } from '@/lib/api/responses';
+import { createCreationProgressEmitter } from '@/lib/chat/creation-progress';
+import { notFound, badRequest, serverError, successResponse, created } from '@/lib/api/responses';
 import {
   enrichParticipantSummary,
   enrichChatsForList,
@@ -118,6 +120,13 @@ const createChatSchema = z.object({
   timestampConfig: TimestampConfigSchema.optional(),
   projectId: z.uuid().optional(),
   imageProfileId: z.uuid().optional(), // Chat-level image profile (shared by all participants)
+  /**
+   * Roleplay template for the new chat, chosen in the New Chat dialog. When the
+   * key is present it wins outright — including an explicit `null`, which means
+   * "no template" — over the project default and the user's global default.
+   * Omit the key entirely to fall back to that default chain.
+   */
+  roleplayTemplateId: z.uuid().nullable().optional(),
   outfitSelections: z.array(OutfitSelectionSchema).optional(), // Per-character outfit selections for chat start
   avatarGenerationEnabled: z.boolean().optional(), // Enable auto-generated character avatars on outfit changes
   /**
@@ -129,6 +138,14 @@ const createChatSchema = z.object({
    * The source chat must belong to the same user.
    */
   continuationFromChatId: z.uuid().optional(),
+  /**
+   * Client-generated correlation id for the chat-creation status dialog ("The
+   * Green Room"). When present, this handler publishes progress (setup
+   * milestones and per-character LLM wardrobe choices) to the in-memory bus
+   * keyed by this id; the dialog subscribes via
+   * `GET /api/v1/chats/creation-progress?id=…`. Absent → no progress channel.
+   */
+  progressId: z.uuid().optional(),
 
   // 4.6 Private Character Rooms — autonomous-room creation fields.
   // All only consulted when chatType === 'autonomous'.
@@ -668,6 +685,11 @@ async function autoGenerateFirstMessage(
     temperature: extractNumber(parameters.temperature),
     maxTokens: extractNumber(parameters.maxTokens),
     topP: extractNumber(parameters.topP),
+    // Forward the character's profile parameters so per-model settings like
+    // DeepSeek thinking mode take effect on the greeting too.
+    profileParameters: connectionProfile.parameters && typeof connectionProfile.parameters === 'object'
+      ? (connectionProfile.parameters as Record<string, unknown>)
+      : undefined,
   };
 
   // Track whether any attempt hit a content filter so we can try the Concierge fallback
@@ -821,7 +843,7 @@ async function autoGenerateFirstMessage(
 /**
  * List chats
  */
-async function handleList(req: NextRequest, context: AuthenticatedContext) {
+async function handleList(req: NextRequest, context: RequestContext) {
   const { user, repos } = context;
 
   try {
@@ -854,7 +876,7 @@ async function handleList(req: NextRequest, context: AuthenticatedContext) {
 
     const result = cleanEnrichedChats(filteredChats);
 
-    return NextResponse.json({ chats: result });
+    return successResponse({ chats: result });
   } catch (error) {
     logger.error('[Chats v1] Error listing chats', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to fetch chats');
@@ -864,13 +886,13 @@ async function handleList(req: NextRequest, context: AuthenticatedContext) {
 /**
  * Check if any dangerous chats exist for the current user
  */
-async function handleHasDangerous(context: AuthenticatedContext) {
+async function handleHasDangerous(context: RequestContext) {
   const { user, repos } = context;
 
   try {
     const allChats = await repos.chats.findByUserId(user.id);
     const hasDangerous = allChats.some((c: any) => c.isDangerousChat === true);
-    return NextResponse.json({ hasDangerous });
+    return successResponse({ hasDangerous });
   } catch (error) {
     logger.error('[Chats v1] Error checking dangerous chats', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to check dangerous chats');
@@ -880,12 +902,18 @@ async function handleHasDangerous(context: AuthenticatedContext) {
 /**
  * Create chat
  */
-async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
+async function handleCreate(req: NextRequest, context: RequestContext) {
   const { user, repos } = context;
 
   const body = await req.json();
   const validatedData = createChatSchema.parse(body);
   const isAutonomous = validatedData.chatType === 'autonomous';
+
+  // Status dialog ("The Green Room"): narrate the slow, blocking creation work
+  // to the client over a side-channel keyed by the client-supplied progressId.
+  // Inert when no progressId was sent.
+  const progress = createCreationProgressEmitter(validatedData.progressId);
+  progress.status('Assembling the cast…');
 
   // Permission-check the continuation source up front, before doing any
   // create work. The user-scoped repos.chats.findById returns null for chats
@@ -1092,16 +1120,36 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     }
   }
 
-  // Resolve timestamp config with fallback chain: request > character default > global default
-  const resolvedTimestampConfig = validatedData.timestampConfig || primaryCharacter?.defaultTimestampConfig || chatSettings?.defaultTimestampConfig || null;
+  // Resolve timestamp config with fallback chain: request > character default > global default.
+  // Anchor a fictional clock to now as it lands on the chat — this is the moment the config stops
+  // being a default and starts being a running clock, and without the anchor it never advances.
+  const resolvedTimestampConfig = ensureFictionalBaseRealTime(
+    validatedData.timestampConfig || primaryCharacter?.defaultTimestampConfig || chatSettings?.defaultTimestampConfig || null
+  );
 
   // Resolve image profile: request > project default > character default > null
   const chatImageProfileId = validatedData.imageProfileId || projectDefaultImageProfileId || buildResult.firstImageProfileId || null;
 
-  // Resolve roleplay template: project default > user/global default > null.
-  // Baked onto the chat at creation so the project's preference sticks.
+  // Resolve roleplay template: explicit request (including a deliberate null)
+  // > project default > user/global default > null. Baked onto the chat at
+  // creation so the choice — or the project's preference — sticks.
+  if (validatedData.roleplayTemplateId) {
+    const template = await repos.roleplayTemplates.findById(validatedData.roleplayTemplateId);
+    if (!template) {
+      return badRequest('Roleplay template not found');
+    }
+  }
   const defaultRoleplayTemplateId =
-    projectDefaultRoleplayTemplateId || chatSettings?.defaultRoleplayTemplateId || null;
+    typeof validatedData.roleplayTemplateId !== 'undefined'
+      ? validatedData.roleplayTemplateId
+      : projectDefaultRoleplayTemplateId || chatSettings?.defaultRoleplayTemplateId || null;
+  logger.debug('[Chats v1] Resolved roleplay template for new chat', {
+    requested: validatedData.roleplayTemplateId ?? null,
+    requestedExplicitly: typeof validatedData.roleplayTemplateId !== 'undefined',
+    projectDefault: projectDefaultRoleplayTemplateId,
+    userDefault: chatSettings?.defaultRoleplayTemplateId ?? null,
+    resolved: defaultRoleplayTemplateId,
+  });
 
   const chat = await repos.chats.create({
     userId: user.id,
@@ -1148,10 +1196,15 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
   // If no selections provided, apply 'default' mode for all LLM-controlled participants
   const outfitContext: OutfitSelectionContext = {
     userId: user.id,
+    // Shared wardrobe tiers in scope for this chat's project — General is
+    // always folded in by the repository; these add the project stores.
+    projectMountPointIds: await resolveProjectMountPointIds(validatedData.projectId || null),
     scenarioText: resolvedScenario,
     cheapLLMConfig: buildCheapLLMConfig(chatSettings),
     sourceChatId: validatedData.continuationFromChatId ?? null,
+    progress,
   };
+  progress.status('Consulting the wardrobe…');
   try {
     if (validatedData.outfitSelections && validatedData.outfitSelections.length > 0) {
       // Apply explicit selections, then backfill defaults for any participants not covered
@@ -1195,6 +1248,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
   // so the per-turn buildSystemPrompt can hit the cache from the very first
   // user message. Failure to compile is non-fatal — buildSystemPrompt's
   // read-through fallback rebuilds fresh on miss.
+  progress.status('Committing everyone’s particulars to memory…');
   try {
     await compileAllIdentityStacks(chat);
   } catch (error) {
@@ -1209,6 +1263,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     // turn-state replication + cross-link bubbles → scenario/staff
     // (Prospero, Host scenario, Host adds, Aurora outfits, avatar gen),
     // skipping the auto first message.
+    progress.status('Recalling the previous chapter…');
     await writeSystemPromptMessage(chat.id, chatContext, repos);
     try {
       await applyChatContinuation({
@@ -1251,6 +1306,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       { skipFirstMessage: true },
     );
   } else {
+    progress.status('Setting the opening scene…');
     await createInitialMessages(
       chat.id,
       chatContext,
@@ -1275,6 +1331,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
   // the user just configured the participants and budget; there's no separate
   // Start step. Cron-scheduled rooms wait for the scheduler instead.
   if (isAutonomous && !chat.scheduleCron) {
+    progress.status('Ringing up the room to begin…');
     try {
       const result = await startAutonomousRoomManually(chat.id, user.id);
       if (!result.ok) {
@@ -1292,13 +1349,16 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     }
   }
 
-  return NextResponse.json({ chat: { ...chat, participants: enrichedParticipants } }, { status: 201 });
+  progress.status('The players are ready.');
+  progress.finish();
+
+  return created({ chat: { ...chat, participants: enrichedParticipants } });
 }
 
 /**
  * Import chat (SillyTavern format)
  */
-async function handleImport(req: NextRequest, context: AuthenticatedContext) {
+async function handleImport(req: NextRequest, context: RequestContext) {
   const { user, repos } = context;
 
   try {
@@ -1323,15 +1383,12 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
       try {
         const result = await importMultiCharacterChat(user.id, options, repos);
 
-        return NextResponse.json(
-          {
-            ...result.chat,
-            createdEntities: result.createdEntities,
-            triggerTitleGeneration: options.triggerTitleGeneration || false,
-            memoryJobCount: result.memoryJobCount,
-          },
-          { status: 201 }
-        );
+        return created({
+          ...result.chat,
+          createdEntities: result.createdEntities,
+          triggerTitleGeneration: options.triggerTitleGeneration || false,
+          memoryJobCount: result.memoryJobCount,
+        });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -1359,14 +1416,11 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
 
         const character = result.chat.participants.find((p) => p.type === 'CHARACTER')?.character;
 
-        return NextResponse.json(
-          {
-            ...result.chat,
-            character,
-            connectionProfile: { id: body.connectionProfileId },
-          },
-          { status: 201 }
-        );
+        return created({
+          ...result.chat,
+          character,
+          connectionProfile: { id: body.connectionProfileId },
+        });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -1391,7 +1445,7 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
 /**
  * GET /api/v1/chats - Action dispatch or list
  */
-export const GET = createAuthenticatedHandler(async (req, context) => {
+export const GET = createContextHandler(async (req, context) => {
   const action = getActionParam(req);
 
   if (!action) {
@@ -1412,7 +1466,7 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
 /**
  * POST /api/v1/chats - Action dispatch or create
  */
-export const POST = createAuthenticatedHandler(async (req, context) => {
+export const POST = createContextHandler(async (req, context) => {
   const action = getActionParam(req);
 
   if (!action) {

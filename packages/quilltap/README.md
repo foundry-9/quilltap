@@ -187,6 +187,7 @@ quilltap docs status                            # Per-mount extraction + embeddi
 quilltap docs scan <mount>                                    # Trigger a rescan
 quilltap docs reindex <mount> [path] [--force]                # Re-extract + re-chunk
 quilltap docs embed <mount> [path] [--force] [--wait]         # Enqueue embedding jobs
+quilltap docs grep --semantic [--top N] [--threshold 0..1] <query>  # Embedding search over indexed chunks
 quilltap docs write [--force] [--base64] <mount> <path> [file]  # Stdin or file → mount
 quilltap docs read [--rendered] [--base64] <mount> <path>       # File contents → stdout
 quilltap docs delete <mount> <path>                           # Idempotent delete
@@ -226,6 +227,7 @@ quilltap memories grep -i --max 3 --context 1 "concrete examples"      # Pattern
 quilltap memories show <id|prefix> [--depth N] [--no-related]          # Full record + related-memory neighbourhood
 quilltap memories tree <id|prefix> [--depth N] [--max-nodes N]         # ASCII walk of the bidirectional related-memory graph
 quilltap memories status [--character <name|id>]                       # Per-holder rollup + dangling-edge check
+quilltap memories grep --semantic --character Ariadne "the argument"   # Embedding search (server required, one holder)
 ```
 
 Shared filter flags apply to `ls`, `find`, `grep`, and `status` where they make sense: `--character`, `--about` (with `self` / `none` shortcuts), `--source`, `--chat` (with `none` for manual entries), `--project`, `--since`, `--until`, `--min-importance`, `--min-reinforced`, `--has-embedding` / `--no-embedding`. Sort flags (`--sort reinforced|importance|created|accessed|reinforcement-count|links`, plus `-r` to reverse) apply to `ls`, `find`, and `grep`. Names accept fuzzy substrings; ambiguous names print candidates and exit 2. `--json` is supported by every verb. The legacy `quilltap db memories --character <name>` verb remains undisturbed.
@@ -240,6 +242,18 @@ quilltap memory-diff <chatId> --out /tmp/diff --concurrency 8
 ```
 
 Needs a running server (`--port`, default 3000) to reach the extraction pipeline. `--out <dir>` sets the report destination (default: cwd); `--concurrency N` bounds parallel turns (default 4, max 32).
+
+## Recall Replay
+
+`quilltap recall-replay <chatId>` replays a turn's memory recall against the running server and prints the candidate table twice — the pre-overhaul ranking vs. the episodic (retrospective / time-window / entity-anchored) ranking — with cosine, blend, every multiplier fired, and head selection per row. Read-only; used to tune the recall constants against real "the character forgot" turns.
+
+```bash
+quilltap recall-replay <chatId>                 # Replay the last turn
+quilltap recall-replay <chatId> --turn 42       # Replay at interchange 42 (its own clock)
+quilltap recall-replay <chatId> --json          # Raw JSON for scripting
+```
+
+Flags: `--turn <n>` (default: last), `--char <characterId>` (default: first LLM-controlled participant), `--limit <n>` (default 25), `--port <n>` (default 3000), `--json`.
 
 ## Maintenance & Cleanup
 
@@ -277,6 +291,18 @@ quilltap migrations run --dry-run # List what would run (refuses without --dry-r
 ```
 
 `--json` works on all three. "Not yet recorded" includes migrations whose `shouldRun()` is `false` on this instance — the CLI doesn't evaluate the predicate, so it can't distinguish "would skip" from "would run."
+
+## File Verification
+
+`quilltap file-verify` force-downloads an instance's cloud-evicted (dataless) top-level data files so the databases are fully local before anything opens them. It reads each placeholder, which faults it in through the cloud provider (iCloud Drive, etc.). Safe to run repeatedly — a no-op when nothing is evicted. macOS only for now.
+
+```bash
+quilltap file-verify --instance Ignite        # Fault in only the dataless top-level files
+quilltap file-verify --instance Friday --all  # Read every top-level file, not just dataless ones
+quilltap file-verify --instance Friday --json # Machine-readable report
+```
+
+Only the **top-level** files of the data directory are considered; the `backups/` subdirectory is left alone. Flags: `--all` (read every top-level file, not just dataless ones), `--stall-ms <ms>` (treat a download as stalled after this many ms with no bytes per chunk; default 30000), `--json`. Resolves the instance via the usual `--instance` / `--data-dir` plumbing.
 
 ## Theme Management
 

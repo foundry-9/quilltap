@@ -28,9 +28,8 @@ interface UseChatControlsParams {
   isPaused: boolean
   setIsPaused: (paused: boolean) => void
   fetchChat: () => Promise<void>
-  setEphemeralMessages: React.Dispatch<React.SetStateAction<import('@/components/chat/EphemeralMessage').EphemeralMessageData[]>>
   setTurnState: React.Dispatch<React.SetStateAction<TurnState>>
-  triggerContinueModeRef: React.MutableRefObject<(participantId: string) => Promise<void>>
+  triggerContinueModeRef: React.MutableRefObject<(participantId: string, nudge?: boolean) => Promise<void>>
   setChat: (fn: (prev: Chat | null) => Chat | null) => void
   startBackgroundPolling: () => void
 }
@@ -50,7 +49,6 @@ export function useChatControls({
   isPaused,
   setIsPaused,
   fetchChat,
-  setEphemeralMessages,
   setTurnState,
   triggerContinueModeRef,
   setChat,
@@ -63,8 +61,12 @@ export function useChatControls({
   const [allowCrossCharacterVaultReads, setAllowCrossCharacterVaultReads] = useState(false)
   const [coreWhisperEnabled, setCoreWhisperEnabled] = useState<boolean | null>(null)
   const [coreWhisperInterval, setCoreWhisperInterval] = useState<number | null>(null)
+  // "Nothing to add" turn-skipping toggle (null = enabled default; false = disabled).
+  const [turnSkippingEnabled, setTurnSkippingEnabled] = useState<boolean | null>(null)
   // Per-chat thinking visibility override (tri-state: null = inherit global). DISPLAY ONLY.
   const [showThinking, setShowThinking] = useState<boolean | null>(null)
+  // Per-chat answer-confirmation override (tri-state: null = inherit project/global).
+  const [answerConfirmationOverride, setAnswerConfirmationOverride] = useState<'ON' | 'OFF' | null>(null)
 
   // Refs
   const userStoppedStreamRef = useRef<boolean>(false)
@@ -120,6 +122,13 @@ export function useChatControls({
       setCoreWhisperInterval(chat.coreWhisperInterval ?? null)
     }
   }, [chat?.coreWhisperInterval])
+  // Initialize turnSkippingEnabled from chat data (null = enabled default)
+  useEffect(() => {
+    if (chat?.turnSkippingEnabled !== undefined) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state
+      setTurnSkippingEnabled(chat.turnSkippingEnabled ?? null)
+    }
+  }, [chat?.turnSkippingEnabled])
   // Initialize showThinking from chat data (tri-state: null = inherit global)
   useEffect(() => {
     if (chat?.showThinking !== undefined) {
@@ -127,6 +136,13 @@ export function useChatControls({
       setShowThinking(chat.showThinking ?? null)
     }
   }, [chat?.showThinking])
+  // Initialize answerConfirmationOverride from chat data (tri-state: null = inherit)
+  useEffect(() => {
+    if (chat?.answerConfirmationOverride !== undefined) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state
+      setAnswerConfirmationOverride(chat.answerConfirmationOverride ?? null)
+    }
+  }, [chat?.answerConfirmationOverride])
 
   // Initialize lastAllLLMPauseTurnCountRef when chat loads as paused
   useEffect(() => {
@@ -238,6 +254,28 @@ export function useChatControls({
     }
   }, [chatId, coreWhisperEnabled])
 
+  // Per-chat "nothing to add" turn-skipping toggle. null = enabled (default); false = disabled.
+  const handleSetTurnSkippingEnabled = useCallback(async (value: boolean | null) => {
+    const previous = turnSkippingEnabled
+    setTurnSkippingEnabled(value)
+    try {
+      const response = await fetch(`/api/v1/chats/${chatId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat: { turnSkippingEnabled: value } }),
+      })
+      if (!response.ok) {
+        console.error('[Chat] Failed to persist turnSkippingEnabled', response.status)
+        setTurnSkippingEnabled(previous)
+        showErrorToast('Could not update turn-skipping setting')
+      }
+    } catch (error) {
+      console.error('[Chat] Error persisting turnSkippingEnabled', error)
+      setTurnSkippingEnabled(previous)
+      showErrorToast('Could not update turn-skipping setting')
+    }
+  }, [chatId, turnSkippingEnabled])
+
   // Per-chat Core whisper cadence override. null = inherit, positive integer = explicit.
   const handleSetCoreWhisperInterval = useCallback(async (value: number | null) => {
     const previous = coreWhisperInterval
@@ -283,6 +321,29 @@ export function useChatControls({
       showErrorToast('Could not update Thinking visibility')
     }
   }, [chatId, showThinking])
+
+  // Per-chat answer-confirmation override. Tri-state: null = inherit (project
+  // then global), 'ON'/'OFF' = explicit.
+  const handleSetAnswerConfirmationOverride = useCallback(async (value: 'ON' | 'OFF' | null) => {
+    const previous = answerConfirmationOverride
+    setAnswerConfirmationOverride(value)
+    try {
+      const response = await fetch(`/api/v1/chats/${chatId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat: { answerConfirmationOverride: value } }),
+      })
+      if (!response.ok) {
+        console.error('[Chat] Failed to persist answerConfirmationOverride', response.status)
+        setAnswerConfirmationOverride(previous)
+        showErrorToast('Could not update Answer Confirmation')
+      }
+    } catch (error) {
+      console.error('[Chat] Error persisting answerConfirmationOverride', error)
+      setAnswerConfirmationOverride(previous)
+      showErrorToast('Could not update Answer Confirmation')
+    }
+  }, [chatId, answerConfirmationOverride])
 
   // Toggle document editing mode and persist to database
   const handleToggleDocumentEditingMode = useCallback(async () => {
@@ -416,7 +477,6 @@ export function useChatControls({
 
       showSuccessToast(`${characterName} has been removed from the chat`)
 
-      setEphemeralMessages(prev => prev.filter(em => em.participantId !== participantId))
       setTurnState(prev => ({
         ...prev,
         queue: prev.queue.filter(qId => qId !== participantId),
@@ -434,7 +494,7 @@ export function useChatControls({
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to remove character')
     }
-  }, [chatId, participantData, fetchChat, streamingRef, turnState.lastSpeakerId, participantsAsBase, setEphemeralMessages, setTurnState])
+  }, [chatId, participantData, fetchChat, streamingRef, turnState.lastSpeakerId, participantsAsBase, setTurnState])
 
   // Handle connection profile change from participant sidebar
   const handleConnectionProfileChange = useCallback(async (
@@ -598,8 +658,12 @@ export function useChatControls({
     coreWhisperInterval,
     handleSetCoreWhisperEnabled,
     handleSetCoreWhisperInterval,
+    turnSkippingEnabled,
+    handleSetTurnSkippingEnabled,
     showThinking,
     handleSetShowThinking,
+    answerConfirmationOverride,
+    handleSetAnswerConfirmationOverride,
     connectionProfiles,
     userStoppedStreamRef,
     setPauseState,

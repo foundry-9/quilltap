@@ -6,7 +6,7 @@ import type { Message } from './types'
  * User-initiated runs (Run Tool modal, composer-attached results) carry
  * `initiatedBy: 'user'`; character-initiated tool results omit it.
  */
-function readInitiatedBy(content: string): string | undefined {
+export function readInitiatedBy(content: string): string | undefined {
   try {
     const parsed = JSON.parse(content) as { initiatedBy?: unknown }
     return typeof parsed.initiatedBy === 'string' ? parsed.initiatedBy : undefined
@@ -40,6 +40,45 @@ function isCharacterToolMessage(message: Message): boolean {
   if (message.systemSender) return false
   if (readInitiatedBy(message.content) === 'user') return false
   return true
+}
+
+/**
+ * Resolve the message whose avatar and name should head a standalone TOOL row.
+ *
+ * A TOOL row that already knows its author (a Staff `systemSender`, or its own
+ * `participantId`) heads itself. Otherwise:
+ *  - A **user-initiated** run (composer / Run Tool modal, `initiatedBy: 'user'`)
+ *    is the operator's action, so it is resolved as a USER row and wears the
+ *    operator's face. The pending TOOL result is persisted *before* the user's
+ *    own message, so the positional borrow below would otherwise hand it
+ *    whoever spoke last — an unrelated character (Bug 29).
+ *  - A **character-initiated** run borrows the nearest preceding assistant's
+ *    participant, stopping at a USER boundary — that assistant is the character
+ *    that called the tool. Historical rows persisted before attribution existed
+ *    are identifiable by position only, and this heuristic is correct for them.
+ *
+ * Purely a rendering transform — the returned object is a shallow copy or the
+ * original by reference; the underlying message is never mutated.
+ */
+export function resolveToolRowAttributionMessage(
+  message: Message,
+  messageIndex: number,
+  messages: Message[],
+): Message {
+  if (message.systemSender || message.participantId) return message
+
+  if (readInitiatedBy(message.content) === 'user') {
+    return { ...message, role: 'USER', participantId: null }
+  }
+
+  for (let k = messageIndex - 1; k >= 0; k--) {
+    const prev = messages[k]
+    if (prev.role === 'ASSISTANT' && prev.participantId) {
+      return { ...message, participantId: prev.participantId }
+    }
+    if (prev.role === 'USER') break
+  }
+  return message
 }
 
 /**

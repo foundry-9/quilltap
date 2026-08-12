@@ -18,6 +18,7 @@ describe('RNG Pattern Detector', () => {
           type: 'dice',
           sides: 6,
           count: 1,
+          modifier: 0,
           matchText: 'd6',
         })
       })
@@ -29,8 +30,42 @@ describe('RNG Pattern Detector', () => {
           type: 'dice',
           sides: 6,
           count: 2,
+          modifier: 0,
           matchText: '2d6',
         })
+      })
+
+      it('should carry a positive modifier through, e.g. 3d6+2', () => {
+        const patterns = detectRngPatterns('Rolling 3d6+2 for damage')
+        expect(patterns).toHaveLength(1)
+        expect(patterns[0]).toEqual({
+          type: 'dice',
+          sides: 6,
+          count: 3,
+          modifier: 2,
+          matchText: '3d6+2',
+        })
+      })
+
+      it('should carry a negative modifier through, e.g. 2d10-1', () => {
+        const patterns = detectRngPatterns('Rolling 2d10-1 to hit')
+        expect(patterns).toHaveLength(1)
+        expect(patterns[0]).toEqual({
+          type: 'dice',
+          sides: 10,
+          count: 2,
+          modifier: -1,
+          matchText: '2d10-1',
+        })
+      })
+
+      it('should not swallow a detached number as a modifier', () => {
+        // "2d6 - 1 apple" is a 2d6 roll next to unrelated prose, not 2d6-1.
+        // Real notation is written closed up, so spacing disambiguates.
+        const patterns = detectRngPatterns('Rolling 2d6 - 1 apple remains')
+        expect(patterns).toHaveLength(1)
+        expect(patterns[0].matchText).toBe('2d6')
+        expect(patterns[0].modifier).toBe(0)
       })
 
       it('should detect d20', () => {
@@ -164,7 +199,20 @@ describe('RNG Pattern Detector', () => {
       expect(calls[0]).toEqual({
         type: 20,
         rolls: 1,
+        modifier: 0,
         matchText: 'd20',
+      })
+    })
+
+    it('should pass a dice modifier through to the tool call', () => {
+      const patterns = [{ type: 'dice' as const, sides: 6, count: 3, modifier: 2, matchText: '3d6+2' }]
+      const calls = convertPatternsToToolCalls(patterns)
+      expect(calls).toHaveLength(1)
+      expect(calls[0]).toEqual({
+        type: 6,
+        rolls: 3,
+        modifier: 2,
+        matchText: '3d6+2',
       })
     })
 
@@ -198,7 +246,19 @@ describe('RNG Pattern Detector', () => {
       expect(calls[0]).toEqual({
         type: 6,
         rolls: 3,
+        modifier: 0,
         matchText: '3d6',
+      })
+    })
+
+    it('should detect and convert a modified roll in one call', () => {
+      const calls = detectAndConvertRngPatterns('Roll 3d6+2 for stats')
+      expect(calls).toHaveLength(1)
+      expect(calls[0]).toEqual({
+        type: 6,
+        rolls: 3,
+        modifier: 2,
+        matchText: '3d6+2',
       })
     })
 

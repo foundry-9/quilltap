@@ -10,6 +10,7 @@
  */
 
 import { z } from 'zod';
+import { blobToFloat32 } from '@/lib/embedding/float32-conversion';
 import { UUIDSchema, TimestampSchema } from './common.types';
 
 // ============================================================================
@@ -108,6 +109,15 @@ export type DocMountFile = z.infer<typeof DocMountFileSchema>;
 export const DocMountFileLinkSchema = z.object({
   id: UUIDSchema,
   fileId: UUIDSchema,                // FK -> doc_mount_files.id
+  // Deliberate hard-link group. Links sharing a non-null linkGroupId were
+  // explicitly linked (`docs link`) and behave like POSIX hard links: a write
+  // through any member repoints EVERY member at the new content row.
+  //
+  // This is deliberately NOT the same thing as sharing a fileId. File rows are
+  // content-addressed by sha256, so two unrelated files with byte-identical
+  // content share a fileId by coincidence — writing to one of those must fork,
+  // not rewrite the other. Only a non-null group means "these are one file".
+  linkGroupId: UUIDSchema.nullable().optional(),
   mountPointId: UUIDSchema,          // FK -> doc_mount_points.id
   relativePath: z.string().min(1),   // Relative to basePath (or virtual for database-backed)
   fileName: z.string().min(1),
@@ -173,10 +183,9 @@ export const DocMountChunkSchema = z.object({
   embedding: z.union([
     z.instanceof(Float32Array),
     z.array(z.number()).transform((arr): Float32Array => new Float32Array(arr)),
-    z.instanceof(Buffer).transform((buf): Float32Array => {
-      const view = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / Float32Array.BYTES_PER_ELEMENT);
-      return new Float32Array(view);
-    }),
+    // Header-aware decode: handles both legacy raw Float32 blobs and the
+    // self-describing quantized format (see lib/embedding/float32-conversion.ts).
+    z.instanceof(Buffer).transform((buf): Float32Array => blobToFloat32(buf)),
   ]).nullable().optional(),  // Unit-length Float32 BLOB on disk
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

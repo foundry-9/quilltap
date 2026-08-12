@@ -46,6 +46,7 @@ interface UseCharacterViewReturn {
   savingHelpTools: boolean
   savingCanDressThemselves: boolean
   savingCanCreateOutfits: boolean
+  savingCanChooseOutfit: boolean
   savingTimestampConfig: boolean
   savingDefaultScenario: boolean
   savingDefaultSystemPrompt: boolean
@@ -68,6 +69,7 @@ interface UseCharacterViewReturn {
   handleSaveHelpTools: (enabled: boolean | null) => Promise<void>
   handleSaveCanDressThemselves: (enabled: boolean | null) => Promise<void>
   handleSaveCanCreateOutfits: (enabled: boolean | null) => Promise<void>
+  handleSaveCanChooseOutfit: (enabled: boolean) => Promise<void>
   handleSaveTimestampConfig: (config: TimestampConfig | null) => Promise<void>
   handleSaveDefaultScenario: (scenarioId: string | null) => Promise<void>
   handleSaveDefaultSystemPrompt: (promptId: string | null) => Promise<void>
@@ -101,6 +103,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   const [savingHelpTools, setSavingHelpTools] = useState(false)
   const [savingCanDressThemselves, setSavingCanDressThemselves] = useState(false)
   const [savingCanCreateOutfits, setSavingCanCreateOutfits] = useState(false)
+  const [savingCanChooseOutfit, setSavingCanChooseOutfit] = useState(false)
   const [savingTimestampConfig, setSavingTimestampConfig] = useState(false)
   const [savingDefaultScenario, setSavingDefaultScenario] = useState(false)
   const [savingDefaultSystemPrompt, setSavingDefaultSystemPrompt] = useState(false)
@@ -493,6 +496,34 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     }
   }
 
+  const handleSaveCanChooseOutfit = async (enabled: boolean) => {
+    setSavingCanChooseOutfit(true)
+    try {
+      const res = await fetch(`/api/v1/characters/${characterId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ canChooseOutfit: enabled }),
+      })
+      if (!res.ok) throw new Error('Failed to update outfit-choice setting')
+
+      // Update local state
+      if (character) {
+        setCharacter({ ...character, canChooseOutfit: enabled })
+      }
+      showSuccessToast(
+        enabled
+          ? 'New chats will let this character choose their own opening outfit'
+          : 'New chats will use this character’s default opening outfit',
+      )
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update outfit-choice setting')
+      console.error('Failed to save outfit-choice setting', { error: err instanceof Error ? err.message : String(err) })
+      await fetchCharacter() // Revert to server state
+    } finally {
+      setSavingCanChooseOutfit(false)
+    }
+  }
+
   const handleSaveTimestampConfig = async (config: TimestampConfig | null) => {
     setSavingTimestampConfig(true)
     try {
@@ -677,6 +708,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     savingHelpTools,
     savingCanDressThemselves,
     savingCanCreateOutfits,
+    savingCanChooseOutfit,
     savingTimestampConfig,
     savingDefaultScenario,
     savingDefaultSystemPrompt,
@@ -699,6 +731,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     handleSaveHelpTools,
     handleSaveCanDressThemselves,
     handleSaveCanCreateOutfits,
+    handleSaveCanChooseOutfit,
     handleSaveTimestampConfig,
     handleSaveDefaultScenario,
     handleSaveDefaultSystemPrompt,

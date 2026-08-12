@@ -20,7 +20,7 @@ import {
   handleGetBackground,
   handleGetAesthetic,
 } from '../actions';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 const PROJECT_GET_ACTIONS = ['list-characters', 'list-chats', 'list-files', 'get-state', 'get-background', 'aesthetic'] as const;
 type ProjectGetAction = typeof PROJECT_GET_ACTIONS[number];
@@ -30,7 +30,7 @@ type ProjectGetAction = typeof PROJECT_GET_ACTIONS[number];
  */
 export async function handleGet(
   req: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   projectId: string
 ): Promise<NextResponse> {
   const action = getActionParam(req);

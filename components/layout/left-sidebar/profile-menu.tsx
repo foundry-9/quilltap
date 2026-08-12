@@ -9,16 +9,18 @@
  */
 
 import { useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import { useSession } from '@/components/providers/session-provider'
 import { useSidebar } from '@/components/providers/sidebar-provider'
 import { useClickOutside } from '@/hooks/useClickOutside'
+import { useWorkspaceNavigate } from '@/components/workspace/useWorkspaceNavigate'
 import { Icon } from '@/components/ui/icon'
 
 export function ProfileMenu() {
   const { data: session } = useSession()
   const { isCollapsed } = useSidebar()
-  const router = useRouter()
+  // Keep-alive-safe: inside the workspace this opens Profile/About as tabs in
+  // place; elsewhere it falls back to a normal route push.
+  const navigate = useWorkspaceNavigate()
   const menuRef = useRef<HTMLDivElement>(null)
 
   const [isOpen, setIsOpen] = useState(false)
@@ -37,12 +39,12 @@ export function ProfileMenu() {
 
   const handleProfileClick = () => {
     setIsOpen(false)
-    router.push('/profile')
+    navigate('/profile')
   }
 
   const handleAboutClick = () => {
     setIsOpen(false)
-    router.push('/about')
+    navigate('/about')
   }
 
   if (!user) {

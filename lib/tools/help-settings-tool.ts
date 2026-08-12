@@ -66,6 +66,7 @@ export const helpSettingsToolDefinition = {
  */
 export function validateHelpSettingsInput(
   input: unknown
-): input is HelpSettingsToolInput {
-  return helpSettingsToolInputSchema.safeParse(input).success
+): HelpSettingsToolInput | null {
+  const parsed = helpSettingsToolInputSchema.safeParse(input)
+  return parsed.success ? parsed.data : null
 }

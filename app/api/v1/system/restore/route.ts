@@ -14,7 +14,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { randomUUID } from 'crypto';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { restore, previewRestore } from '@/lib/backup/restore-service';
 import { logger } from '@/lib/logger';
@@ -180,13 +180,13 @@ async function handlePreview(req: NextRequest, userId: string): Promise<NextResp
 /**
  * POST /api/v1/system/restore (no action)
  *
- * Accepts JSON body: { uploadId, mode }
+ * Accepts JSON body: { uploadId, mode, keepArchivedCharacterBundles? }
  * Performs the restore and cleans up the temp file.
  */
 async function handleRestore(req: NextRequest, userId: string): Promise<NextResponse> {
   cleanupExpiredUploads();
 
-  let body: { uploadId?: string; mode?: string };
+  let body: { uploadId?: string; mode?: string; keepArchivedCharacterBundles?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -194,6 +194,9 @@ async function handleRestore(req: NextRequest, userId: string): Promise<NextResp
   }
 
   const { uploadId, mode } = body;
+  // Replace mode spares archived-character bundles unless the client
+  // explicitly opts out (spec §4.7).
+  const keepArchivedCharacterBundles = body.keepArchivedCharacterBundles !== false;
 
   if (!uploadId) {
     return badRequest('uploadId is required');
@@ -209,11 +212,17 @@ async function handleRestore(req: NextRequest, userId: string): Promise<NextResp
   }
 
   try {
-    logger.info('[System Restore v1] Starting restore', { userId, uploadId, mode });
+    logger.info('[System Restore v1] Starting restore', {
+      userId,
+      uploadId,
+      mode,
+      keepArchivedCharacterBundles,
+    });
 
     const summary = await restore(upload.path, {
       mode: mode as 'replace' | 'new-account',
       targetUserId: userId,
+      keepArchivedCharacterBundles,
     });
 
     logger.info('[System Restore v1] Restore completed', {
@@ -243,7 +252,7 @@ async function handleRestore(req: NextRequest, userId: string): Promise<NextResp
 /**
  * POST /api/v1/system/restore
  */
-export const POST = createAuthenticatedHandler(async (req, { user }) => {
+export const POST = createContextHandler(async (req, { user }) => {
   const action = getActionParam(req);
 
   if (action === 'upload') {

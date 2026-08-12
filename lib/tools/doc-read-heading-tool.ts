@@ -6,6 +6,7 @@
 
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
+import { llmNumber } from './llm-number';
 
 /**
  * Zod schema for the doc-read-heading tool's input.
@@ -32,12 +33,14 @@ export const docReadHeadingToolInputSchema = z.object({
     .string()
     .describe('Heading text without # markers. For example, "Character Backstory" for the heading "## Character Backstory".')
     .optional(),
-  level: z
-    .number()
-    .int()
-    .min(1)
-    .max(6)
-    .describe('Heading level (1-6) if the heading text is ambiguous. Use this to disambiguate when the same heading text appears at different levels.')
+  level: llmNumber(
+    z
+      .number()
+      .int()
+      .min(1)
+      .max(6)
+      .describe('Heading level (1-6) if the heading text is ambiguous. Use this to disambiguate when the same heading text appears at different levels.')
+  )
     .optional(),
 }).refine((d) => Boolean(d.uri || d.path), 'Provide either a `uri` or a `path`.');
 
@@ -59,8 +62,9 @@ export const docReadHeadingToolDefinition = {
 /**
  * Validates input for doc_read_heading tool.
  */
-export function validateDocReadHeadingInput(input: unknown): input is DocReadHeadingInput {
-  return docReadHeadingToolInputSchema.safeParse(input).success;
+export function validateDocReadHeadingInput(input: unknown): DocReadHeadingInput | null {
+  const parsed = docReadHeadingToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 

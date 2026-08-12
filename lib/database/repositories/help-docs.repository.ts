@@ -22,8 +22,6 @@ import { registerBlobColumns } from '../manager';
  * embedding storage for semantic search.
  */
 export class HelpDocsRepository extends AbstractBaseRepository<HelpDoc> {
-  private blobColumnsRegistered = false;
-
   constructor() {
     super('help_docs', HelpDocSchema);
   }
@@ -31,14 +29,21 @@ export class HelpDocsRepository extends AbstractBaseRepository<HelpDoc> {
   /**
    * Override getCollection to register blob columns for embedding.
    * The embedding column stores Float32 BLOBs.
-   * Without this registration, BLOB embeddings are not deserialized to number[] and fail
-   * Zod validation, causing docs to be silently filtered out.
+   *
+   * Registration is keyed to the backend, so it must be re-asserted rather than
+   * remembered on this instance: a repository outlives the backend it first ran
+   * against (reconnect, or a dev-server reload), and a stale "already registered"
+   * flag would leave the fresh backend without blob handling. The write path would
+   * then reach JSON.stringify with a Float32Array and persist an index-keyed object
+   * (`{"0":...}`) in place of the BLOB, corrupting the embedding on the next write.
+   * Merging an already-registered column is a no-op, so re-asserting is cheap.
+   *
+   * `lib/database/manager.ts` also registers this column when it builds a backend,
+   * which is what makes the common path safe; this override covers a backend built
+   * elsewhere.
    */
   protected async getCollection(): Promise<DatabaseCollection<HelpDoc>> {
-    if (!this.blobColumnsRegistered) {
-      await registerBlobColumns('help_docs', ['embedding']);
-      this.blobColumnsRegistered = true;
-    }
+    await registerBlobColumns('help_docs', ['embedding']);
     return super.getCollection();
   }
 

@@ -16,6 +16,7 @@
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
+import { ensureCharacterMetadataFile } from '@/lib/mount-index/character-scaffold';
 import {
   readCharacterVaultProperties,
   writeCharacterVaultManagedFields,
@@ -29,6 +30,8 @@ export interface BackfillResult {
   alreadyLinked: number;
   /** Pre-linked vaults whose missing files we repopulated from the raw row. */
   filesRepopulated: number;
+  /** Pre-existing vaults we seeded an empty `metadata.json` into. */
+  metadataSeeded: number;
   errors: number;
 }
 
@@ -38,6 +41,7 @@ export async function backfillCharacterVaults(): Promise<BackfillResult> {
     vaultsCreated: 0,
     alreadyLinked: 0,
     filesRepopulated: 0,
+    metadataSeeded: 0,
     errors: 0,
   };
 
@@ -56,6 +60,13 @@ export async function backfillCharacterVaults(): Promise<BackfillResult> {
 
   let index = 0;
   for (const character of characters) {
+    if (character.archivedAt) {
+      index++;
+      startupProgress.setSubProgress([
+        { current: index, total: characters.length, unit: 'characters' },
+      ]);
+      continue;
+    }
     index++;
     startupProgress.setSubProgress([
       { current: index, total: characters.length, unit: 'characters' },
@@ -76,12 +87,25 @@ export async function backfillCharacterVaults(): Promise<BackfillResult> {
           // Repopulate the missing content files. Wardrobe is not part of this
           // projection — it lives solely in the vault (no DB rows to source
           // from) and is reconciled by the one-time refresh-vault-wardrobe task.
+          // `metadata` is in the same position and is likewise not projected
+          // from a raw row; the seed below is what gives it a file.
           await writeCharacterVaultManagedFields(outcome.mountPointId, { character });
           result.filesRepopulated++;
           logger.warn('Repopulated character vault with missing files', {
             characterId: character.id,
             mountPointId: outcome.mountPointId,
           });
+        }
+
+        // Every vault provisioned before the fact sheet existed has no
+        // metadata.json. Hydration copes with that perfectly well — absence
+        // reads as {} — but the file manager is the only place a sheet can be
+        // edited, so without a file there is nothing for the user to open and
+        // the feature is unreachable on an existing roster. Seeding here rather
+        // than in a one-time migration also covers vaults adopted or restored
+        // later, which arrive by paths no migration would ever revisit.
+        if (await ensureCharacterMetadataFile(outcome.mountPointId)) {
+          result.metadataSeeded++;
         }
       }
     } catch (err) {
@@ -102,7 +126,7 @@ export async function backfillCharacterVaults(): Promise<BackfillResult> {
   logger.info('Character vault backfill complete', result);
   startupProgress.publish({
     rawLabel: 'subsystem:vault-backfill:complete',
-    detail: `${result.vaultsCreated} created, ${result.alreadyLinked} already linked${result.filesRepopulated > 0 ? `, ${result.filesRepopulated} repopulated` : ''}${result.errors > 0 ? `, ${result.errors} errors` : ''}`,
+    detail: `${result.vaultsCreated} created, ${result.alreadyLinked} already linked${result.filesRepopulated > 0 ? `, ${result.filesRepopulated} repopulated` : ''}${result.metadataSeeded > 0 ? `, ${result.metadataSeeded} fact sheets seeded` : ''}${result.errors > 0 ? `, ${result.errors} errors` : ''}`,
     level: result.errors > 0 ? 'warn' : 'info',
   });
   startupProgress.setSubProgress(null);

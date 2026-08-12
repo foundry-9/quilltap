@@ -44,12 +44,12 @@ import { imageGenerationToolDefinition } from '../image-generation-tool'
 import { keepImageToolDefinition } from '../keep-image-tool'
 import { listEmailToolDefinition } from '../list-email-tool'
 import { listImagesToolDefinition } from '../list-images-tool'
-import { memorySearchToolDefinition } from '../memory-search-tool'
 import { sendMailToolDefinition } from '../send-mail-tool'
 import { projectInfoToolDefinition } from '../project-info-tool'
 import { readConversationToolDefinition } from '../read-conversation-tool'
 import { requestFullContextToolDefinition } from '../request-full-context-tool'
 import { rngToolDefinition } from '../rng-tool'
+import { runCustomToolDefinition } from '../run-custom-tool'
 import { runSqlToolDefinition } from '../run-sql-tool'
 import { searchScriptoriumToolDefinition, searchScriptoriumBrahmaToolDefinition } from '../search-scriptorium-tool'
 import { selfInventoryToolDefinition } from '../self-inventory-tool'
@@ -102,12 +102,12 @@ const ALL_TOOLS = {
   keepImage: keepImageToolDefinition,
   listEmail: listEmailToolDefinition,
   listImages: listImagesToolDefinition,
-  memorySearch: memorySearchToolDefinition,
   sendMail: sendMailToolDefinition,
   projectInfo: projectInfoToolDefinition,
   readConversation: readConversationToolDefinition,
   requestFullContext: requestFullContextToolDefinition,
   rng: rngToolDefinition,
+  runCustom: runCustomToolDefinition,
   runSql: runSqlToolDefinition,
   searchScriptorium: searchScriptoriumToolDefinition,
   searchScriptoriumBrahma: searchScriptoriumBrahmaToolDefinition,

@@ -9,8 +9,8 @@
  */
 
 import { NextRequest } from 'next/server';
-import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
-import type { RequestContext } from '@/lib/api/middleware/auth';
+import { createContextParamsHandler } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, successResponse } from '@/lib/api/responses';
 import { ensureProjectOfficialStore } from '@/lib/mount-index/ensure-project-store';
@@ -36,7 +36,7 @@ async function resolveProjectMount(
 // GET — fetch one item
 // ============================================================================
 
-export const GET = createAuthenticatedParamsHandler<{ id: string; itemId: string }>(
+export const GET = createContextParamsHandler<{ id: string; itemId: string }>(
   async (_req: NextRequest, { repos }: RequestContext, { id, itemId }) => {
     const mountPointId = await resolveProjectMount(repos, id);
     if (!mountPointId) return notFound('Project');
@@ -53,7 +53,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string; itemId: string
 // PUT — update one item
 // ============================================================================
 
-export const PUT = createAuthenticatedParamsHandler<{ id: string; itemId: string }>(
+export const PUT = createContextParamsHandler<{ id: string; itemId: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id, itemId }) => {
     const mountPointId = await resolveProjectMount(repos, id);
     if (!mountPointId) return notFound('Project');
@@ -89,7 +89,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string; itemId: string
 // DELETE — delete one item
 // ============================================================================
 
-export const DELETE = createAuthenticatedParamsHandler<{ id: string; itemId: string }>(
+export const DELETE = createContextParamsHandler<{ id: string; itemId: string }>(
   async (_req: NextRequest, { repos }: RequestContext, { id, itemId }) => {
     const mountPointId = await resolveProjectMount(repos, id);
     if (!mountPointId) return notFound('Project');

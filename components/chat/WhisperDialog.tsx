@@ -11,6 +11,8 @@ interface WhisperDialogProps {
   targetParticipantId: string
   /** Chat ID to send the whisper in */
   chatId: string
+  /** The user-controlled participant the human is "Speaking As" (null = default) */
+  speakingAsParticipantId?: string | null
   /** Callback when dialog is closed */
   onClose: () => void
   /** Callback when whisper is sent successfully */
@@ -22,6 +24,7 @@ export function WhisperDialog({
   targetName,
   targetParticipantId,
   chatId,
+  speakingAsParticipantId,
   onClose,
   onSent,
 }: WhisperDialogProps) {
@@ -39,6 +42,7 @@ export function WhisperDialog({
         body: JSON.stringify({
           content: message.trim(),
           targetParticipantIds: [targetParticipantId],
+          speakingAsParticipantId: speakingAsParticipantId ?? undefined,
         }),
       })
 
@@ -69,7 +73,7 @@ export function WhisperDialog({
     } finally {
       setSending(false)
     }
-  }, [message, sending, chatId, targetParticipantId, onSent, onClose])
+  }, [message, sending, chatId, targetParticipantId, speakingAsParticipantId, onSent, onClose])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {

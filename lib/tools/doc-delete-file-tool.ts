@@ -41,8 +41,9 @@ export type DocDeleteFileInput = z.infer<typeof docDeleteFileToolInputSchema>;
 /**
  * Validates input for doc_delete_file tool.
  */
-export function validateDocDeleteFileInput(input: unknown): input is DocDeleteFileInput {
-  return docDeleteFileToolInputSchema.safeParse(input).success;
+export function validateDocDeleteFileInput(input: unknown): DocDeleteFileInput | null {
+  const parsed = docDeleteFileToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 export const docDeleteFileToolDefinition = {

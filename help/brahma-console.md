@@ -65,6 +65,14 @@ The Console need not be summoned from the sidebar to be of use. From inside any 
 
 Consulted this way, the Console keeps all of its console powers — the read-only ledger inspection and document-store access described above — but loses every scrap of continuity: each Salon query is wholly standalone, with no memory of the surrounding scene or of any earlier Brahma consultation, and it forms no memories afterward. Because those powers are not to be handed about lightly, the Salon line opens only for you (the proprietor), for your own user-controlled persona, and for characters you have granted **system transparency**; to anyone else, Brahma simply does not answer. See [Carina](carina.md) for the full etiquette.
 
+## Setting the Console's patience
+
+A thorny question — *"where in all these ledgers is the airship first mentioned?"* — is rarely answered in a single stroke. The Console works such a problem the way any diligent clerk would: one step at a time, a query here, a document read there, each step a **turn** at the telegraph key. It takes as many turns as the question demands, up to a ceiling you set, at which point it must lay down its tools and report whatever it has gathered so far.
+
+That ceiling lives in **Settings → Chat → Brahma Console**, as **"Let the Console take up to N turns"** (5–200; the default is 50). Raise it when you find the Console repeatedly running out of rope in the middle of a deep search of the ledgers; lower it if you would rather it answer briskly from what lies near to hand. The same figure governs the Console summoned from the sidebar and the `@Brahma` line called from the Salon floor alike.
+
+A generous ceiling costs nothing on questions the Console dispatches quickly, and it carries no risk of a runaway search: should the engine fall to asking the very same question twice, Quilltap recognises it chasing its own tail and calls a halt at once — no matter how high the ceiling stands. The dial buys patience for genuine progress, never licence to spin.
+
 ## What the Console deliberately forgets
 
 The Console is, by design, an amnesiac of impeccable discretion:
@@ -79,6 +87,11 @@ The Console is, by design, an amnesiac of impeccable discretion:
 To direct the user to the sidebar where the Console mark lives:
 ```
 help_navigate(url: "/")
+```
+
+To take the user straight to the Console's turn-budget setting:
+```
+help_navigate(url: "/settings?tab=chat&section=brahma-console")
 ```
 
 ## Related Pages

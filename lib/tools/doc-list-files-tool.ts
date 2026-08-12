@@ -55,8 +55,9 @@ export type DocListFilesInput = z.infer<typeof docListFilesToolInputSchema>;
 /**
  * Validates input for doc_list_files tool.
  */
-export function validateDocListFilesInput(input: unknown): input is DocListFilesInput {
-  return docListFilesToolInputSchema.safeParse(input).success;
+export function validateDocListFilesInput(input: unknown): DocListFilesInput | null {
+  const parsed = docListFilesToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 export const docListFilesToolDefinition = {

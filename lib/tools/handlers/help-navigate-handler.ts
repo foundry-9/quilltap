@@ -38,7 +38,8 @@ export async function executeHelpNavigateTool(
   context: HelpNavigateToolContext
 ): Promise<HelpNavigateToolOutput> {
   try {
-    if (!validateHelpNavigateInput(input)) {
+    const parsed = validateHelpNavigateInput(input)
+    if (!parsed) {
       logger_.warn('Help navigate validation failed', {
         userId: context.userId,
         input,
@@ -50,7 +51,7 @@ export async function executeHelpNavigateTool(
       }
     }
 
-    const { url } = input
+    const { url } = parsed
 
     logger_.info('Help navigate tool executed', {
       userId: context.userId,

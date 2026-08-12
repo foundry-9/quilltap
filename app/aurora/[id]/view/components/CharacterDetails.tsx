@@ -125,13 +125,17 @@ export function CharacterDetails({
           </button>
         )}
 
-        <Link
-          href={`/characters/${characterId}/edit`}
-          className="character-edit-link flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow transition hover:qt-bg-primary/90"
-        >
-          <Icon name="pencil" className="w-4 h-4" />
-          Edit Character
-        </Link>
+        {/* A disabled fieldset can't inert a Link, so the edit door hides
+            itself for an archived character (the write guard is the lock). */}
+        {!character?.archivedAt && (
+          <Link
+            href={`/characters/${characterId}/edit`}
+            className="character-edit-link flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow transition hover:qt-bg-primary/90"
+          >
+            <Icon name="pencil" className="w-4 h-4" />
+            Edit Character
+          </Link>
+        )}
       </div>
 
       {/* Main Content with Template Highlighting */}

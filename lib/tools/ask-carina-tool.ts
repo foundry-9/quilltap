@@ -68,6 +68,7 @@ export const askCarinaToolDefinition = {
  */
 export function validateAskCarinaInput(
   input: unknown
-): input is AskCarinaToolInput {
-  return askCarinaToolInputSchema.safeParse(input).success;
+): AskCarinaToolInput | null {
+  const parsed = askCarinaToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }

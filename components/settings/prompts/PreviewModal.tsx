@@ -2,6 +2,8 @@
 
 import { PromptTemplate } from './types'
 import ReactMarkdown from 'react-markdown'
+import { QtapLink } from '@/components/qtap/QtapLink'
+import { isQtapUri } from '@/lib/doc-edit/qtap-uri'
 import { BaseModal } from '@/components/ui/BaseModal'
 
 interface PreviewModalProps {
@@ -89,7 +91,18 @@ export function PreviewModal({
       </div>
 
       <div className="border qt-border-default rounded-lg p-4 qt-bg-muted/30 prose prose-sm qt-prose-auto max-w-none">
-        <ReactMarkdown>{template.content}</ReactMarkdown>
+        <ReactMarkdown
+          components={{
+            a({ href, children }) {
+              if (isQtapUri(href)) {
+                return <QtapLink href={href}>{children}</QtapLink>
+              }
+              return <a href={href}>{children}</a>
+            },
+          }}
+        >
+          {template.content}
+        </ReactMarkdown>
       </div>
     </BaseModal>
   )

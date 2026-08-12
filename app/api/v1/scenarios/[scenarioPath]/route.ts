@@ -13,8 +13,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
-import type { RequestContext } from '@/lib/api/middleware/auth';
+import { createContextParamsHandler } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware/context';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
@@ -73,7 +73,7 @@ async function loadGeneralStore(): Promise<
 // GET — read one scenario
 // ============================================================================
 
-export const GET = createAuthenticatedParamsHandler<{ scenarioPath: string }>(
+export const GET = createContextParamsHandler<{ scenarioPath: string }>(
   async (_req: NextRequest, _ctx: RequestContext, { scenarioPath }) => {
     try {
       const resolved = resolveScenarioPath(scenarioPath, GENERAL_SCENARIOS_FOLDER);
@@ -101,7 +101,7 @@ export const GET = createAuthenticatedParamsHandler<{ scenarioPath: string }>(
 // PUT — update scenario content + frontmatter
 // ============================================================================
 
-export const PUT = createAuthenticatedParamsHandler<{ scenarioPath: string }>(
+export const PUT = createContextParamsHandler<{ scenarioPath: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { scenarioPath }) => {
     try {
       const resolved = resolveScenarioPath(scenarioPath, GENERAL_SCENARIOS_FOLDER);
@@ -160,7 +160,7 @@ export const PUT = createAuthenticatedParamsHandler<{ scenarioPath: string }>(
 // POST ?action=rename — rename a scenario file
 // ============================================================================
 
-export const POST = createAuthenticatedParamsHandler<{ scenarioPath: string }>(
+export const POST = createContextParamsHandler<{ scenarioPath: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { scenarioPath }) => {
     try {
       const url = new URL(req.url);
@@ -231,7 +231,7 @@ export const POST = createAuthenticatedParamsHandler<{ scenarioPath: string }>(
 // DELETE — delete a scenario file
 // ============================================================================
 
-export const DELETE = createAuthenticatedParamsHandler<{ scenarioPath: string }>(
+export const DELETE = createContextParamsHandler<{ scenarioPath: string }>(
   async (_req: NextRequest, { user }: RequestContext, { scenarioPath }) => {
     try {
       const resolved = resolveScenarioPath(scenarioPath, GENERAL_SCENARIOS_FOLDER);

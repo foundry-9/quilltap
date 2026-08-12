@@ -36,7 +36,14 @@ export interface ExpandOptions {
   maxDepth?: number;
 }
 
-const DEFAULT_MAX_DEPTH = 4;
+/**
+ * Default recursion bound for composite expansion. Exported so callers that
+ * hydrate the component graph ahead of expansion (see `resolve-equipped`) can
+ * fetch exactly as many levels as expansion will actually walk.
+ */
+export const COMPOSITE_MAX_DEPTH = 4;
+
+const DEFAULT_MAX_DEPTH = COMPOSITE_MAX_DEPTH;
 
 /**
  * Expand a list of wardrobe item IDs (some of which may be composites) into

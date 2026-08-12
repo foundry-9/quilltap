@@ -1,4 +1,9 @@
-import { getAnnouncementImportance, getSystemKindDisplayLabel } from './system-message-labels'
+import {
+  getAnnouncementAccentClasses,
+  getAnnouncementImportance,
+  getAnnouncementOutcomeState,
+  getSystemKindDisplayLabel,
+} from './system-message-labels'
 import type { Message } from '../types'
 
 function ann(
@@ -32,6 +37,51 @@ describe('getAnnouncementImportance', () => {
     expect(getSystemKindDisplayLabel(ann('librarian', 'moved-by-character'))).toBe('moved by character')
     expect(getSystemKindDisplayLabel(ann('librarian', 'copied-by-character'))).toBe('copied by character')
     expect(getSystemKindDisplayLabel(ann('librarian', 'blob-written-by-character'))).toBe('asset added by character')
+  })
+
+  describe('a roll outcome names the tool, not the machinery', () => {
+    const roll = (pascalMeta: Partial<NonNullable<Message['pascalMeta']>> | null) =>
+      ({
+        systemSender: 'pascal',
+        systemKind: 'custom-tool-result',
+        content: '',
+        pascalMeta: pascalMeta as Message['pascalMeta'],
+      }) as Pick<Message, 'systemSender' | 'systemKind' | 'content' | 'pascalMeta'>
+
+    it('prefers the rendered chip label over the title — the per-run name of the deal', () => {
+      expect(
+        getSystemKindDisplayLabel(
+          roll({ tool: 'agent_lambda', toolTitle: 'Agent lambda', chipLabel: 'Agent lambda — Jackie' }),
+        ),
+      ).toBe('Agent lambda — Jackie')
+    })
+
+    it('ignores a blank chip label rather than showing an empty chip', () => {
+      expect(
+        getSystemKindDisplayLabel(roll({ tool: 'unlock', toolTitle: 'Force the Lock', chipLabel: '   ' })),
+      ).toBe('Force the Lock')
+    })
+
+    it('prefers the display title recorded with the roll', () => {
+      expect(getSystemKindDisplayLabel(roll({ tool: 'scan_hawking_radiation', toolTitle: 'Scan Hawking Radiation' })))
+        .toBe('Scan Hawking Radiation')
+    })
+
+    it('falls back to the tool name on a roll recorded before toolTitle existed', () => {
+      expect(getSystemKindDisplayLabel(roll({ tool: 'scan_hawking_radiation' }))).toBe('scan_hawking_radiation')
+    })
+
+    it('ignores a blank title rather than showing an empty chip', () => {
+      expect(getSystemKindDisplayLabel(roll({ tool: 'unlock', toolTitle: '   ' }))).toBe('unlock')
+    })
+
+    it('falls back to the generic label when there is no roll record at all', () => {
+      expect(getSystemKindDisplayLabel(roll(null))).toBe('roll outcome')
+    })
+
+    it('leaves the error chip alone — it is Prospero\'s, and names no tool', () => {
+      expect(getSystemKindDisplayLabel(ann('prospero', 'custom-tool-error'))).toBe("the table couldn't deal")
+    })
   })
 
   it('rates Host arrivals/status high and time calls low', () => {
@@ -87,5 +137,35 @@ describe('getAnnouncementImportance', () => {
 
   it('defaults to medium when there is no systemSender', () => {
     expect(getAnnouncementImportance({ systemSender: null, systemKind: null, content: '' })).toBe('medium')
+  })
+})
+
+describe('getAnnouncementOutcomeState / getAnnouncementAccentClasses', () => {
+  const roll = (pascalMeta: Partial<NonNullable<Message['pascalMeta']>> | null) =>
+    ({
+      systemSender: 'pascal',
+      pascalMeta: pascalMeta as Message['pascalMeta'],
+    }) as Pick<Message, 'systemSender' | 'pascalMeta'>
+
+  it('reports the state the roll landed on', () => {
+    for (const state of ['success', 'partial', 'failure', 'info'] as const) {
+      expect(getAnnouncementOutcomeState(roll({ state }))).toBe(state)
+      expect(getAnnouncementAccentClasses(roll({ state }))).toBe(`qt-pascal-result qt-pascal-result--${state}`)
+    }
+  })
+
+  it('leaves every other Staff sender unaccented', () => {
+    expect(getAnnouncementOutcomeState({ systemSender: 'librarian', pascalMeta: null })).toBeNull()
+    expect(getAnnouncementAccentClasses({ systemSender: 'host', pascalMeta: null })).toBe('')
+    // Prospero authors the custom-tool ERROR chip, and it carries no roll record.
+    expect(getAnnouncementAccentClasses({ systemSender: 'prospero', pascalMeta: null })).toBe('')
+  })
+
+  it('falls back to the importance dot on a roll record with no usable state', () => {
+    expect(getAnnouncementOutcomeState(roll(null))).toBeNull()
+    expect(getAnnouncementOutcomeState(roll({}))).toBeNull()
+    // A state from a future build this one doesn't know how to colour.
+    expect(getAnnouncementOutcomeState(roll({ state: 'triumph' as 'success' }))).toBeNull()
+    expect(getAnnouncementAccentClasses(roll({ state: 'triumph' as 'success' }))).toBe('')
   })
 })

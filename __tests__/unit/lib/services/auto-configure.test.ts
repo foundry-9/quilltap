@@ -49,6 +49,10 @@ jest.mock('@/lib/services/ai-import.service', () => ({
 
 jest.mock('@/lib/llm/cheap-llm', () => ({
   getCheapLLMProvider: jest.fn(),
+  profileParams: (profile: { parameters?: unknown }) =>
+    profile?.parameters && typeof profile.parameters === 'object'
+      ? (profile.parameters as Record<string, unknown>)
+      : undefined,
 }))
 
 jest.mock('@/lib/repositories/user-scoped', () => ({

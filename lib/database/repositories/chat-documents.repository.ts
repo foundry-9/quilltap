@@ -20,9 +20,9 @@ import { TypedQueryFilter } from '../interfaces';
 /**
  * Chat Documents Repository
  * Implements CRUD operations for chat-document associations.
- * Phase 3.5 enforces one active document per chat; the schema
- * supports future multi-document tabs without migration.
- * Closed documents are kept as inactive for quick-reopen history.
+ * Several documents may be open (`isActive`) per chat at once — each surfaces
+ * as its own tab in the tabbed workspace. Closed documents are kept as inactive
+ * rows for quick-reopen history.
  */
 export class ChatDocumentsRepository extends AbstractBaseRepository<ChatDocument> {
   constructor() {
@@ -53,20 +53,48 @@ export class ChatDocumentsRepository extends AbstractBaseRepository<ChatDocument
   // ============================================================================
 
   /**
-   * Find the active document for a chat (Phase 3.5: at most one)
+   * Find an active document for a chat.
+   *
+   * Multi-document Document Mode allows several open (`isActive`) documents per
+   * chat, so this returns the earliest-opened active row — used by the legacy
+   * single-pane `/salon/[id]` route and as the default target for doc tools that
+   * don't name a specific document. Prefer {@link findOpenForChat} when you need
+   * the full open set.
    */
   async findActiveForChat(chatId: string): Promise<ChatDocument | null> {
+    return this.safeQuery(
+      async () => {
+        const results = await this.findOpenForChat(chatId);
+        return results.length > 0 ? results[0] : null;
+      },
+      'Error finding active document for chat',
+      { chatId },
+      null
+    );
+  }
+
+  /**
+   * Find every open (`isActive`) document for a chat, oldest-opened first.
+   *
+   * This is the source of truth for which documents are open as tabs in the
+   * tabbed workspace; the client restores one pane per row on chat reopen.
+   * Ordered by createdAt so tab order is stable across cold reloads (the
+   * workspace's own localStorage tracks user reordering within a session).
+   */
+  async findOpenForChat(chatId: string): Promise<ChatDocument[]> {
     return this.safeQuery(
       async () => {
         const results = await this.findByFilter({
           chatId,
           isActive: true,
         } as TypedQueryFilter<ChatDocument>);
-        return results.length > 0 ? results[0] : null;
+        return results.sort(
+          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+        );
       },
-      'Error finding active document for chat',
+      'Error finding open documents for chat',
       { chatId },
-      null
+      []
     );
   }
 
@@ -124,10 +152,12 @@ export class ChatDocumentsRepository extends AbstractBaseRepository<ChatDocument
   }
 
   /**
-   * Open a document for a chat. If a document is already open,
-   * the existing one is deactivated (kept for history).
-   * If the requested document was previously opened, reactivates it.
-   * Auto-saves are handled by the caller before this method is invoked.
+   * Open a document for a chat. Several documents may be open at once (each
+   * becomes its own workspace tab), so previously-open documents are left
+   * active — this is the difference from the old single-document policy.
+   * If the requested document was previously opened, reactivates that row
+   * instead of creating a duplicate. Auto-saves are handled by the caller
+   * before this method is invoked.
    */
   async openDocument(chatId: string, data: {
     filePath: string;
@@ -135,12 +165,6 @@ export class ChatDocumentsRepository extends AbstractBaseRepository<ChatDocument
     mountPoint?: string | null;
     displayTitle?: string | null;
   }): Promise<ChatDocument> {
-    // Deactivate any currently active document for this chat
-    const currentDoc = await this.findActiveForChat(chatId);
-    if (currentDoc) {
-      await this.update(currentDoc.id, { isActive: false });
-    }
-
     // Check if this document was previously opened (reactivate instead of duplicate)
     const allDocs = await this.findByChatId(chatId);
     const existingDoc = allDocs.find(doc =>
@@ -172,8 +196,31 @@ export class ChatDocumentsRepository extends AbstractBaseRepository<ChatDocument
   }
 
   /**
-   * Close the active document for a chat.
-   * Deactivates instead of deleting, preserving history for quick-reopen.
+   * Close a single open document for a chat by its row id (multi-document
+   * Document Mode closes one tab at a time). Deactivates instead of deleting,
+   * preserving history for quick-reopen. Returns false if the row doesn't exist
+   * or doesn't belong to the chat.
+   */
+  async closeDocumentById(chatId: string, chatDocumentId: string): Promise<boolean> {
+    return this.safeQuery(
+      async () => {
+        const doc = await this.findById(chatDocumentId);
+        if (!doc || doc.chatId !== chatId) {
+          return false;
+        }
+        await this.update(doc.id, { isActive: false });
+        return true;
+      },
+      'Error closing document by id',
+      { chatId, chatDocumentId },
+      false,
+    );
+  }
+
+  /**
+   * Close the earliest-opened active document for a chat. Retained for the
+   * legacy single-pane route, which doesn't track per-document ids. Deactivates
+   * instead of deleting, preserving history for quick-reopen.
    */
   async closeDocument(chatId: string): Promise<boolean> {
     const currentDoc = await this.findActiveForChat(chatId);

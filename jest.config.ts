@@ -1,10 +1,26 @@
 import type { Config } from 'jest'
 import nextJest from 'next/jest.js'
 
+// Pin the timezone for the whole suite. Anything rendered with `toLocaleString`
+// /`toLocaleDateString` (the Almanack's date stamps, for one) formats in the
+// ambient zone, so a snapshot recorded on a developer's machine fails on the
+// UTC CI runner. Setting TZ inside a test file is too late: ICU resolves and
+// caches the default zone the first time a locale-aware formatter runs in the
+// worker process, so a `beforeAll` pin silently does nothing. Setting it here —
+// before Jest forks its workers — is what actually takes.
+process.env.TZ = 'UTC'
+
 const createJestConfig = nextJest({
   // Provide the path to your Next.js app to load next.config.js and .env files in your test environment
   dir: './',
 })
+
+// When jest runs INSIDE a Claude Code agent worktree (a full checkout under
+// .claude/worktrees/), every file's absolute path contains "/.claude/", so the
+// worktree-exclusion patterns below would ignore the entire test tree. The
+// patterns exist to keep the MAIN checkout from picking up worktree copies —
+// they don't apply when the rootDir itself is a worktree.
+const isAgentWorktree = process.cwd().includes('/.claude/worktrees/')
 
 // Add any custom config to be passed to Jest
 const config: Config = {
@@ -30,7 +46,9 @@ const config: Config = {
     '^@/(.*)$': '<rootDir>/$1',
     '^openid-client$': '<rootDir>/__mocks__/openid-client.ts',
     '^@openrouter/sdk$': '<rootDir>/__mocks__/@openrouter/sdk.ts',
+    '^@openrouter/sdk/lib/chat-compat$': '<rootDir>/__mocks__/@openrouter/sdk-chat-compat.ts',
     '^better-sqlite3$': '<rootDir>/__mocks__/better-sqlite3.ts',
+    '^better-sqlite3-multiple-ciphers$': '<rootDir>/__mocks__/better-sqlite3.ts',
 
     '^openai$': '<rootDir>/__mocks__/openai.ts',
     '^@anthropic-ai/sdk$': '<rootDir>/__mocks__/@anthropic-ai/sdk.ts',
@@ -59,10 +77,17 @@ const config: Config = {
   testPathIgnorePatterns: [
     '/node_modules/',
     '/.next/',
+    String.raw`\.integration\.test\.[jt]sx?$`,
     // Claude Code agent worktrees are full repo checkouts; their duplicated
     // test files must not be picked up (and their packages/plugins would
     // collide in the Haste map — see modulePathIgnorePatterns below).
-    '/\\.claude/',
+    // Skipped when jest itself runs inside a worktree (see isAgentWorktree).
+    ...(isAgentWorktree ? [] : ['/\\.claude/']),
+    // Native-port differential-harness oracle bridge — an external tool's
+    // mirror of its test cases into this checkout. Its suites drive the Rust
+    // port's harness, not this repo's jest run (they expect harness env/args
+    // and fail without them). Gitignored and eslint-ignored for the same reason.
+    '/\\.qt-oracle-mirror/',
     '/__tests__/integration/',
     '/__tests__/unit/lib/fixtures/',
   ],
@@ -71,7 +96,13 @@ const config: Config = {
     // Exclude Claude Code agent worktrees so their copies of packages/* and
     // plugins/* don't register as duplicate Haste modules ("looked up in the
     // Haste module map ... several different files") and break unrelated suites.
-    '/\\.claude/',
+    // Skipped when jest itself runs inside a worktree (a worktree contains no
+    // nested worktrees, so there is nothing to exclude — and the pattern would
+    // otherwise ignore the whole rootDir).
+    ...(isAgentWorktree ? [] : ['/\\.claude/']),
+    // See testPathIgnorePatterns — the oracle mirror carries its own
+    // package.json, which would otherwise collide in the Haste map.
+    '/\\.qt-oracle-mirror/',
   ],
   coverageThreshold: {
     global: {

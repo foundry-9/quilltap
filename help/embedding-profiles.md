@@ -169,6 +169,15 @@ For exactly this case the profile list offers a **Re-embed Mismatched** button o
 
 Two clicks; the second confirms. Unlike **Re-embed Everything**, this mode does not delete vector stores, cancel in-flight jobs, or wipe help-doc embeddings — it touches only the orphans. Track progress via the **Emb** badge in the header.
 
+## One Standard, Kept Automatically
+
+There is precisely one embedding standard per Quilltap instance: whatever the default profile produces. Quilltap now keeps the entire corpus conformant to it without your intervention:
+
+- **Switching the default triggers a full re-embed.** Making a *different* profile the default — or changing the default profile's provider, model, or dimensions — automatically queues **Re-embed Everything**. Every memory, conversation excerpt, document chunk, and help page is re-embedded with the new standard. (Narrowing only the Matryoshka truncation queues the cheaper local re-apply instead; widening it queues the full re-embed, since vectors cannot grow.)
+- **Every startup audits the ledger.** A conformance pass runs on each boot and inspects every embedding in every database against the default profile's dimension. Vectors from a previous standard are swept out of the search indices (they were invisible to search anyway) and a targeted re-embed is queued for exactly the non-conforming rows — conforming rows are never re-embedded, so a healthy instance pays nothing. Dormant chats are left to their slumber; their excerpts are re-embedded when you next open them.
+
+Mind the meter: if a large corpus predates this housekeeping, the first restart after switching to a paid provider will queue a re-embedding of every stale row. The **Emb** badge in the header shows the queue draining.
+
 ## Deleting an Embedding Profile
 
 To remove a profile:
@@ -413,9 +422,9 @@ Some installations support additional providers:
 
 **Solution:**
 
-- Open the embedding profile and confirm the **Truncate output to** value is what you intended.
-- Click **Re-apply (Matryoshka)** on the default profile to migrate the stored corpus to the new dimension. Two clicks — the second confirms.
-- The job creates database backups before touching anything; you can find them next to the original `.db` files.
+- This now heals itself: restart Quilltap and the startup conformance pass will queue the necessary re-embedding automatically (see **One Standard, Kept Automatically** above).
+- To fix it without a restart: open the embedding profile, confirm the **Truncate output to** value is what you intended, and click **Re-apply (Matryoshka)** on the default profile to migrate the stored corpus to the new dimension. Two clicks — the second confirms.
+- The re-apply job creates database backups before touching anything; you can find them next to the original `.db` files.
 
 ### Memory features not working
 

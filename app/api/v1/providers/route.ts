@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import {
   serverError,
@@ -18,7 +18,7 @@ import { searchProviderRegistry } from '@/lib/plugins/search-provider-registry';
 // GET Handler
 // ============================================================================
 
-export const GET = createAuthenticatedHandler(async (req, context) => {
+export const GET = createContextHandler(async (req, context) => {
   try {
     // Get all registered LLM providers
     const plugins = providerRegistry.getAllProviders();

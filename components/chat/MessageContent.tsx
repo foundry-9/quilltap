@@ -5,6 +5,9 @@ import Link from 'next/link'
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import { REMARK_MATH_OPTIONS, normalizeMathDelimiters } from '@/lib/markdown/math'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism'
 import type { Components } from 'react-markdown'
@@ -21,8 +24,9 @@ import {
   isDialogueParagraph,
   escapeMarkdownInBrackets,
 } from '@/lib/chat/roleplay-rendering'
+import { linkifyBareQtapUris } from '@/lib/chat/qtap-linkify'
 import { isQtapUri } from '@/lib/doc-edit/qtap-uri'
-import { QtapDocLink } from './QtapDocLink'
+import { QtapLink } from '@/components/qtap/QtapLink'
 
 // Internal links — same-origin, app-route paths starting with a single "/" —
 // must navigate via the Next.js router so they work inside the Electron shell
@@ -341,9 +345,12 @@ export default function MessageContent({
 
   // Pre-process content: trim leading/trailing whitespace (a leading tab triggers
   // markdown's indented code block rule, rendering the whole message as preformatted),
-  // then escape markdown inside roleplay brackets
+  // then normalize `\(...\)`/`\[...\]` math delimiters to `$$` form (must run
+  // before bracket escaping, which would otherwise claim `\[...\]`), then escape
+  // markdown inside roleplay brackets and autolink any surfaced bare qtap:// URI
+  // so announcement bodies become clickable.
   const processedContent = useMemo(
-    () => escapeMarkdownInBrackets(content.trim(), patterns),
+    () => linkifyBareQtapUris(escapeMarkdownInBrackets(normalizeMathDelimiters(content.trim()), patterns)),
     [content, patterns]
   )
 
@@ -428,7 +435,7 @@ export default function MessageContent({
     // handles appearance.
     a({ href, children }) {
       if (isQtapUri(href)) {
-        return <QtapDocLink href={href}>{children}</QtapDocLink>
+        return <QtapLink href={href}>{children}</QtapLink>
       }
       if (isInternalHref(href)) {
         return (
@@ -488,11 +495,15 @@ export default function MessageContent({
           // comments behave), so soft breaks should be preserved rather than
           // collapsed to a space the way CommonMark does by default. Blank-line
           // paragraph separation still works as before.
-          remarkPlugins={[remarkGfm, remarkBreaks]}
+          // remark-math + rehype-katex render $$…$$ math (single-dollar math is
+          // off — see lib/markdown/math.ts). Must stay in sync with the server
+          // pipeline in lib/services/markdown-renderer.service.ts.
+          remarkPlugins={[remarkGfm, [remarkMath, REMARK_MATH_OPTIONS], remarkBreaks]}
+          rehypePlugins={[rehypeKatex]}
           // react-markdown's default URL sanitizer only allows http(s)/mailto/
           // etc., so it would strip `qtap://` hrefs before they reach `a()`.
           // Preserve qtap:// URIs (rendered as in-app Document-Mode links by
-          // QtapDocLink) and defer everything else to the default transform.
+          // QtapLink) and defer everything else to the default transform.
           urlTransform={(url) => (isQtapUri(url) ? url : defaultUrlTransform(url))}
           components={components}
         >

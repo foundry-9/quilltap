@@ -31,6 +31,22 @@ import {
 type Repos = RepositoryContainer;
 
 /**
+ * Resolve a participant's character name for logging/announcements, falling
+ * back to `'Unknown'` when the participant is user-controlled (no character) or
+ * the character can't be loaded. Shared by every participant action handler.
+ */
+export async function resolveParticipantCharacterName(
+  participant: { characterId?: string | null } | null | undefined,
+  repos: Repos,
+): Promise<string> {
+  if (participant?.characterId) {
+    const character = await repos.characters.findById(participant.characterId);
+    if (character) return character.name;
+  }
+  return 'Unknown';
+}
+
+/**
  * Get enriched character data with default image
  */
 export async function getEnrichedCharacter(characterId: string, repos: Repos) {
@@ -47,6 +63,8 @@ export async function getEnrichedCharacter(characterId: string, repos: Repos) {
     defaultImageId: charData.defaultImageId,
     defaultImage,
     defaultConnectionProfileId: charData.defaultConnectionProfileId,
+    // Participant chips badge archived seats (character-archive spec §5.2).
+    archivedAt: charData.archivedAt ?? null,
   };
 }
 
@@ -64,6 +82,7 @@ export async function getEnrichedConnectionProfile(profileId: string, repos: Rep
     name: profile.name,
     provider: profile.provider,
     modelName: profile.modelName,
+    allowToolUse: profile.allowToolUse ?? true,
     apiKey: apiKeyInfo,
   };
 }
@@ -180,11 +199,9 @@ export async function handleParticipantUpdate(
 
       await repos.chats.update(chatId, updateData);
     }
-
-    const updatedChat = await repos.chats.findById(chatId);
-    if (updatedChat) {
-      return { chat: updatedChat };
-    }
+    // Fall through to the shared tail: the status/isActive back-compat sync and
+    // the identity-stack recompile below must run for a controlledBy patch too.
+    // The finalChat re-read (further down) picks up the impersonation update.
   }
 
   // If status was explicitly set, sync isActive and record the change event

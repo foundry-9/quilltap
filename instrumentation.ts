@@ -672,6 +672,24 @@ export async function register() {
       }
 
       // ================================================================
+      // PHASE 3.3b: Reap orphaned doc-store children (Bug 9)
+      // ================================================================
+      // Sweep links/folders/documents whose mount point no longer exists —
+      // orphans a pre-fix non-atomic store delete (or a hand-built index) left
+      // behind. Read connections keep FKs off, so these sit silent until a
+      // backup carries them into a restore that fails with a FK error. Cheap,
+      // synchronous, and idempotent; the daily maintenance sweep repeats it.
+      try {
+        const { getRepositories } = await import('./lib/repositories/factory');
+        await getRepositories().docMountFileLinks.sweepOrphanedStoreChildren();
+      } catch (reapError) {
+        logger.warn('Error reaping orphaned doc-store children, continuing startup', {
+          context: 'instrumentation.register',
+          error: reapError instanceof Error ? reapError.message : String(reapError),
+        });
+      }
+
+      // ================================================================
       // PHASE 3.4a: Project Store Backfill
       // ================================================================
       // For every project, ensure its official document store is populated
@@ -757,6 +775,27 @@ export async function register() {
         });
       }
 
+      // Companion: ensure the instance-wide "Quilltap General" mount has its
+      // root state.json (the bottom tier of the state cascade). Idempotent and
+      // silent when the mount hasn't been provisioned yet; never heals existing
+      // content.
+      try {
+        const { ensureGeneralStateFile } = await import(
+          './lib/mount-index/general-state'
+        );
+        const seeded = await ensureGeneralStateFile();
+        if (seeded) {
+          logger.info('Seeded general state.json in the Quilltap General mount', {
+            context: 'instrumentation.register',
+          });
+        }
+      } catch (ensureError) {
+        logger.warn('Error ensuring general state.json, continuing startup', {
+          context: 'instrumentation.register',
+          error: ensureError instanceof Error ? ensureError.message : String(ensureError),
+        });
+      }
+
       // ================================================================
       // PHASE 3.5: Start Background Schedulers (non-critical)
       // ================================================================
@@ -835,6 +874,33 @@ export async function register() {
         logger.warn('Failed to import conversation render reconciliation module', {
           context: 'instrumentation.register',
           error: reconcileImportError instanceof Error ? reconcileImportError.message : String(reconcileImportError),
+        });
+      }
+
+      // ================================================================
+      // PHASE 3.7: Reconcile embedding dimensions against the default profile
+      // ================================================================
+      // There is one embedding standard per instance — the default profile's
+      // output. This pass deletes non-conforming vector-index entries, snaps
+      // index metadata, converges stale chats to the cold tier, and enqueues
+      // a mismatched-dim reindex for anything that needs re-embedding.
+      // Fire-and-forget: a large backlog must not delay readiness; a no-op
+      // (COUNT-only) on a conforming corpus. Runs every boot because the gap
+      // recurs (killed reindexes, restored backups, provider outages).
+      try {
+        const { reconcileEmbeddingDimensions } = await import(
+          './lib/startup/reconcile-embedding-dimensions'
+        );
+        reconcileEmbeddingDimensions().catch((dimReconcileError) => {
+          logger.warn('Embedding dimension reconciliation failed', {
+            context: 'instrumentation.register',
+            error: dimReconcileError instanceof Error ? dimReconcileError.message : String(dimReconcileError),
+          });
+        });
+      } catch (dimReconcileImportError) {
+        logger.warn('Failed to import embedding dimension reconciliation module', {
+          context: 'instrumentation.register',
+          error: dimReconcileImportError instanceof Error ? dimReconcileImportError.message : String(dimReconcileImportError),
         });
       }
 

@@ -41,7 +41,13 @@ interface ConsoleMessage {
   reasoningContent?: string | null
 }
 
-export function BrahmaConsoleDialog() {
+/**
+ * @param asTab When true, renders the console body bare (for a workspace tab)
+ *   instead of inside the floating dialog, and stays live regardless of the
+ *   provider's `isOpen`. The chrome (model picker / new conversation) moves into
+ *   an inline header.
+ */
+export function BrahmaConsoleDialog({ asTab = false }: { asTab?: boolean } = {}) {
   const {
     isOpen,
     closeConsole,
@@ -104,7 +110,7 @@ export function BrahmaConsoleDialog() {
   const { data: pastChatsData, refetch: refetchPastChats } = useQuery({
     queryKey: queryKeys.brahmaConsole.pastChats,
     queryFn: ({ signal }) => apiFetch<{ chats: PastChat[] }>('/api/v1/brahma-console', { signal }),
-    enabled: isOpen && !currentChatId,
+    enabled: (isOpen || asTab) && !currentChatId,
   })
 
   useEffect(() => {
@@ -193,35 +199,25 @@ export function BrahmaConsoleDialog() {
     }
   }, [currentChatId, setCurrentChatId, refetchPastChats])
 
-  return (
-    <FloatingDialog
-      isOpen={isOpen}
-      onClose={closeConsole}
-      title="Brahma Console"
-      minWidth={480}
-      minHeight={400}
-      initialGeometry={{ width: 560 }}
-      storageKey="quilltap:brahma-console-geometry"
-      headerActions={
-        currentChatId ? (
-          <div className="flex items-center gap-1">
-            <ModelPicker
-              profiles={profiles}
-              activeId={activeConnectionProfileId}
-              onSelect={setModel}
-            />
-            <button
-              type="button"
-              onClick={handleNewChat}
-              className="p-1 rounded qt-hover-accent qt-text-secondary transition-colors"
-              title="New conversation"
-            >
-              <Icon name="plus" className="w-4 h-4" />
-            </button>
-          </div>
-        ) : undefined
-      }
-    >
+  const headerActions = currentChatId ? (
+    <div className="flex items-center gap-1">
+      <ModelPicker
+        profiles={profiles}
+        activeId={activeConnectionProfileId}
+        onSelect={setModel}
+      />
+      <button
+        type="button"
+        onClick={handleNewChat}
+        className="p-1 rounded qt-hover-accent qt-text-secondary transition-colors"
+        title="New conversation"
+      >
+        <Icon name="plus" className="w-4 h-4" />
+      </button>
+    </div>
+  ) : undefined
+
+  const body = (
       <div className="flex-1 min-h-0">
         {!currentChatId ? (
           /* Launcher: past chats + opening composer */
@@ -296,6 +292,34 @@ export function BrahmaConsoleDialog() {
           </div>
         )}
       </div>
+  )
+
+  // Workspace-tab mode: render bare with an inline header (no floating dialog).
+  if (asTab) {
+    return (
+      <div className="flex flex-col h-full min-h-0">
+        {headerActions && (
+          <div className="flex items-center justify-end gap-1 px-3 py-2 border-b qt-border-default/60">
+            {headerActions}
+          </div>
+        )}
+        {body}
+      </div>
+    )
+  }
+
+  return (
+    <FloatingDialog
+      isOpen={isOpen}
+      onClose={closeConsole}
+      title="Brahma Console"
+      minWidth={480}
+      minHeight={400}
+      initialGeometry={{ width: 560 }}
+      storageKey="quilltap:brahma-console-geometry"
+      headerActions={headerActions}
+    >
+      {body}
     </FloatingDialog>
   )
 }

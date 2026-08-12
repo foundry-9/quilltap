@@ -469,6 +469,7 @@ describe('processTurnForMemory regressions', () => {
       2048,                    // resolvedMaxTokens
       false,                   // inAutonomousRoom (added in b437f0af, Sub-task D)
       { projectDescription: null, chatContextSummary: null }, // orienting context
+      expect.objectContaining({ timelineMode: 'realtime' }),  // extraction clock (episodic spine)
     )
     expect(createMemoryWithGate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -569,6 +570,7 @@ describe('processTurnForMemory regressions', () => {
       expect(tasks.extractSelfMemoriesFromTurn).toHaveBeenCalledWith(
         expect.anything(), 'user-char-1', expect.anything(), expect.anything(),
         'user-1', undefined, 'chat-1', expect.anything(), false, expect.anything(),
+        expect.anything(), // extraction clock (episodic spine)
       )
       expect(createMemoryWithGate).toHaveBeenCalledWith(
         expect.objectContaining({ characterId: 'user-char-1', aboutCharacterId: 'user-char-1' }),

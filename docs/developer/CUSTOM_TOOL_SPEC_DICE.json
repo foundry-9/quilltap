@@ -1,0 +1,30 @@
+{
+  "$schema": "/schemas/qtap-custom-tool.schema.json",
+  "name": "saving_throw",
+  "description": "Roll a saving throw against the house's better judgement. Reference specimen for the dice form: `roll` is either a range object (see CUSTOM_TOOL_SPEC.json) or a dice string — never both — so the three features below cannot be shown in the same file as that one. Note also what is NOT here: with no `title`, Pascal announces this one as 'Saving Throw', title-cased from the name. Write a `title` only when the derived form is not what you want.",
+  "revealOdds": false,
+  "defaultVisibility": "whisper",
+  "roll": "3d6+2",
+  "outcomes": [
+    {
+      "when": { "gte": 15 },
+      "message": "Saved, and with something to spare. {{dice}}",
+      "state": "success"
+    },
+    {
+      "when": { "gte": 11, "metadata": { "blessed": { "eq": true } } },
+      "message": "Saved — the total was only {{value}}, but the house respects a blessing where it finds one. {{dice}} Demonstrates: `metadata` tests the rolling character's metadata.json in the dice form exactly as in the range form; a character whose sheet lacks `blessed` falls through to the ordinary band below.",
+      "state": "success"
+    },
+    {
+      "when": { "gte": 11, "lte": 14 },
+      "message": "Saved, but the house noticed. {{dice}}",
+      "state": "partial"
+    },
+    {
+      "when": true,
+      "message": "Not saved. The total was {{value}}, and the dice are not interested in your opinion of them. {{dice}}",
+      "state": "failure"
+    }
+  ]
+}

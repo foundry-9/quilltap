@@ -172,7 +172,8 @@ export async function executeProjectInfoTool(
 
   try {
     // Validate input
-    if (!validateProjectInfoInput(input)) {
+    const parsed = validateProjectInfoInput(input)
+    if (!parsed) {
 
       return {
         success: false,
@@ -181,7 +182,7 @@ export async function executeProjectInfoTool(
       }
     }
 
-    const { action } = input
+    const { action } = parsed
 
     switch (action) {
       case 'get_info': {

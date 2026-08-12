@@ -16,7 +16,7 @@
 
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { badRequest, serverError } from '@/lib/api/responses';
 import { buildCharacterAvatarPrompt } from '@/lib/wardrobe/avatar-prompt';
@@ -37,7 +37,7 @@ const previewAvatarSchema = z.object({
   imageProfileId: z.string().min(1).optional(),
 });
 
-export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
+export const POST = createContextHandler(async (req, { user, repos }) => {
   let parsed: z.infer<typeof previewAvatarSchema>;
   try {
     parsed = previewAvatarSchema.parse(await req.json());

@@ -7,11 +7,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { checkOwnership, enrichWithDefaultImage, getFilePath } from '@/lib/api/middleware';
+import { exists, enrichWithDefaultImage, getFilePath } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { notFound, serverError, successResponse } from '@/lib/api/responses';
 import { addChatSchema, removeChatSchema } from '../schemas';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 /**
  * List chats associated with project (paginated)
@@ -19,11 +19,11 @@ import type { AuthenticatedContext } from '@/lib/api/middleware';
 export async function handleListChats(
   req: NextRequest,
   projectId: string,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   try {
     const project = await repos.projects.findById(projectId);
-    if (!checkOwnership(project, user.id)) {
+    if (!exists(project)) {
       return notFound('Project');
     }
 
@@ -131,10 +131,10 @@ export async function handleListChats(
 export async function handleAddChat(
   req: NextRequest,
   projectId: string,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   const project = await repos.projects.findById(projectId);
-  if (!checkOwnership(project, user.id)) {
+  if (!exists(project)) {
     return notFound('Project');
   }
 
@@ -161,10 +161,10 @@ export async function handleAddChat(
 export async function handleRemoveChat(
   req: NextRequest,
   projectId: string,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   const project = await repos.projects.findById(projectId);
-  if (!checkOwnership(project, user.id)) {
+  if (!exists(project)) {
     return notFound('Project');
   }
 

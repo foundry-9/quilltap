@@ -37,6 +37,10 @@ import type {
 } from '@quilltap/plugin-types';
 import { createPluginLogger } from '../logging';
 import { getQuilltapUserAgent } from '../version';
+import { DEFAULT_REQUEST_TIMEOUT_MS, buildSdkRequestOptions } from './request-budget';
+
+/** Matches the OpenAI SDK default; retries never apply to a caller-supplied budget. */
+const DEFAULT_MAX_RETRIES = 2;
 
 /**
  * Configuration options for OpenAI-compatible providers.
@@ -71,6 +75,31 @@ export interface OpenAICompatibleProviderConfig {
    * @default 'OpenAI-compatible provider file attachment support varies by implementation (not yet implemented)'
    */
   attachmentErrorMessage?: string;
+
+  /**
+   * Default wall-clock budget per request, in milliseconds.
+   *
+   * The OpenAI SDK's own default is 600 000 ms, which means a service that
+   * accepts a connection and then goes quiet holds the caller for ten minutes
+   * before the first retry. That is far longer than any Quilltap caller wants
+   * to wait, so the base class lowers it.
+   *
+   * Individual requests can tighten this further via `LLMParams.requestTimeoutMs`.
+   *
+   * @default 300000 (5 minutes)
+   */
+  requestTimeoutMs?: number;
+
+  /**
+   * How many times the SDK may retry a failed or timed-out request.
+   *
+   * Applies only to requests that did *not* specify their own
+   * `LLMParams.requestTimeoutMs` — a caller-supplied budget is a hard ceiling
+   * and never retries.
+   *
+   * @default 2 (the OpenAI SDK default)
+   */
+  maxRetries?: number;
 }
 
 /**
@@ -106,6 +135,10 @@ export class OpenAICompatibleProvider implements TextProvider {
   protected readonly requireApiKey: boolean;
   /** Error message for attachment failures */
   protected readonly attachmentErrorMessage: string;
+  /** Default per-request wall-clock budget in milliseconds */
+  protected readonly requestTimeoutMs: number;
+  /** Retry count for requests that carry no caller-supplied budget */
+  protected readonly maxRetries: number;
   /** Logger instance */
   protected readonly logger: PluginLogger;
 
@@ -122,6 +155,8 @@ export class OpenAICompatibleProvider implements TextProvider {
       this.requireApiKey = false;
       this.attachmentErrorMessage =
         'OpenAI-compatible provider file attachment support varies by implementation (not yet implemented)';
+      this.requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS;
+      this.maxRetries = DEFAULT_MAX_RETRIES;
     } else {
       this.baseUrl = config.baseUrl;
       this.providerName = config.providerName ?? 'OpenAICompatible';
@@ -129,6 +164,8 @@ export class OpenAICompatibleProvider implements TextProvider {
       this.attachmentErrorMessage =
         config.attachmentErrorMessage ??
         'OpenAI-compatible provider file attachment support varies by implementation (not yet implemented)';
+      this.requestTimeoutMs = config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+      this.maxRetries = config.maxRetries ?? DEFAULT_MAX_RETRIES;
     }
 
     this.logger = createPluginLogger(`${this.providerName}Provider`);
@@ -188,7 +225,29 @@ export class OpenAICompatibleProvider implements TextProvider {
       apiKey: this.getEffectiveApiKey(apiKey),
       baseURL: this.baseUrl,
       defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+      timeout: this.requestTimeoutMs,
+      maxRetries: this.maxRetries,
     });
+  }
+
+  /**
+   * Builds the per-request options for a single call.
+   *
+   * When the caller supplied `params.requestTimeoutMs` it is a hard ceiling:
+   * the request uses that budget and does not retry, so the total time spent is
+   * what the caller asked for rather than a multiple of it. Otherwise the
+   * client-level defaults apply.
+   *
+   * Subclasses that build their own request bodies should pass the result as
+   * the second argument to `client.chat.completions.create(...)`.
+   *
+   * @param params - LLM parameters for the request
+   * @returns Request options for the OpenAI SDK, or undefined to use defaults
+   */
+  protected buildRequestOptions(
+    params: LLMParams
+  ): { timeout: number; maxRetries: number } | undefined {
+    return buildSdkRequestOptions(params);
   }
 
   /**
@@ -248,7 +307,7 @@ export class OpenAICompatibleProvider implements TextProvider {
         top_p: params.topP ?? 1,
         stop: params.stop,
         ...(params.cacheKey ? { user: params.cacheKey } : {}),
-      });
+      }, this.buildRequestOptions(params));
 
       const choice = response.choices[0];
       return {
@@ -331,7 +390,7 @@ export class OpenAICompatibleProvider implements TextProvider {
         stream: true,
         stream_options: { include_usage: true },
         ...(params.cacheKey ? { user: params.cacheKey } : {}),
-      });
+      }, this.buildRequestOptions(params));
 
       let chunkCount = 0;
 

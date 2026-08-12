@@ -3,6 +3,7 @@
  *
  * GET /api/v1/chats/[id] - Get a specific chat
  * GET /api/v1/chats/[id]?action=export - Export chat (SillyTavern JSONL)
+ * GET /api/v1/chats/[id]?action=export-markdown - Export chat as a Markdown transcript
  * GET /api/v1/chats/[id]?action=cost - Get cost breakdown
  * GET /api/v1/chats/[id]?action=get-avatars - Get avatar overrides for chat
  * GET /api/v1/chats/[id]?action=get-background - Get story background URL
@@ -21,13 +22,14 @@ import { notFound, forbidden, serverError } from '@/lib/api/responses';
 import { resolveAgentModeSetting } from '@/lib/services/chat-message/agent-mode-resolver.service';
 import { reconcileTerminalSessionsForChat } from '@/lib/terminal/reconcile';
 import { surfaceOperatorMailForChat } from '@/lib/post-office/surface-operator-mail';
+import { maybeEnqueueColdChunkReembed } from '@/lib/scriptorium/cold-chunk-reembed';
 import { BRAHMA_CARINA_ANSWERER_ID } from '@/lib/services/carina/brahma-answerer';
-import { handleGetAvatars, handleGetState, handleGetOutfit, handleGetOutfitSummary, handleGetPhotoAlbums, handleGetGroupStores, handleAccessibleStores, handleGetMailbox } from '../actions';
+import { handleGetAvatars, handleGetState, handleGetOutfit, handleGetOutfitSummary, handleGetPhotoAlbums, handleGetGroupStores, handleAccessibleStores, handleGetMailbox, handleExportMarkdown } from '../actions';
 import {
   getPhotoLinkSummaryBySha256,
   type PhotoLinkSummary,
 } from '@/lib/photos/photo-link-summary';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types';
 
 /**
@@ -35,7 +37,7 @@ import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template
  */
 export async function handleGet(
   req: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   chatId: string
 ): Promise<NextResponse> {
   const { user, repos } = ctx;
@@ -123,6 +125,11 @@ export async function handleGet(
       logger.error('[Chats v1] Error exporting chat', { chatId }, error instanceof Error ? error : undefined);
       return serverError('Failed to export chat');
     }
+  }
+
+  // Handle export-markdown action
+  if (action === 'export-markdown') {
+    return handleExportMarkdown(chatId, ctx);
   }
 
   // Handle get-avatars action
@@ -236,6 +243,17 @@ export async function handleGet(
     if (!chatMetadata) {
       return notFound('Chat');
     }
+
+    // Cold-tier re-warm: if the maintenance sweep cold-tiered this chat's
+    // conversation-chunk embeddings, opening it re-enqueues them through the
+    // standard embedding pipeline. Fire-and-forget (debounced + deduped
+    // inside) — never allowed to slow or break the chat load.
+    maybeEnqueueColdChunkReembed(user.id, chatId).catch((error) => {
+      logger.warn('[Chats v1] Cold-chunk re-embed check failed — continuing', {
+        chatId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
 
     // Sweep terminal sessions whose PTYs were lost across a server restart
     // (DB row says "live" but ptyManager doesn't have it) and post the close
@@ -412,8 +430,12 @@ export async function handleGet(
             isSilentMessage: event.isSilentMessage || null,
             systemSender: event.systemSender || null,
             systemKind: event.systemKind || null,
+            // Host structured payload — projected so the client can reconstruct
+            // turn-pass records (hostEvent.participantId) for the Skip-button guard.
+            hostEvent: event.hostEvent || null,
             customAnnouncer: event.customAnnouncer || null,
             carinaMeta: event.carinaMeta || null,
+            pascalMeta: event.pascalMeta || null,
             pendingExternalPrompt: event.pendingExternalPrompt || null,
             pendingExternalPromptFull: event.pendingExternalPromptFull || null,
             pendingExternalAttachments: event.pendingExternalAttachments || null,
@@ -421,6 +443,14 @@ export async function handleGet(
             // render the collapsible thinking block on reload. Never re-fed to a model.
             reasoningContent: event.reasoningContent || null,
             reasoningSegments: event.reasoningSegments || null,
+            // Answer-confirmation verdict — drives the badge on reload. `confirmed`
+            // may be false/null (both meaningful), so preserve the tri-state
+            // explicitly instead of `|| null`; undefined = no check ran.
+            confirmed: event.confirmed ?? undefined,
+            confirmationChecked: event.confirmationChecked ?? undefined,
+            confirmationRevised: event.confirmationRevised ?? undefined,
+            confirmationNotes: event.confirmationNotes ?? null,
+            confirmationOriginalContent: event.confirmationOriginalContent ?? null,
           };
         })
     ).then((results) => results.filter(Boolean));
@@ -513,7 +543,17 @@ export async function handleGet(
       roleplayTemplateId: chatMetadata.roleplayTemplateId,
       imageProfileId: chatMetadata.imageProfileId ?? null,
       lastTurnParticipantId: chatMetadata.lastTurnParticipantId ?? null,
+      // Impersonation overlay state — projected so a reload (or a mid-session
+      // server restart) restores the "speaking as" selection and the impersonated
+      // seats instead of snapping every seat back to LLM-controlled. Without these
+      // the client's useImpersonation sync reads `undefined` and shows an
+      // impersonated character as not impersonated.
+      impersonatingParticipantIds: chatMetadata.impersonatingParticipantIds ?? [],
+      activeTypingParticipantId: chatMetadata.activeTypingParticipantId ?? null,
       isPaused: chatMetadata.isPaused ?? false,
+      // All-LLM-pause bookkeeping — surfaced so the client can explain a silent
+      // pause (opens AllLLMPauseModal on load / mid-session).
+      allLLMPauseTurnCount: chatMetadata.allLLMPauseTurnCount ?? 0,
       isManuallyRenamed: chatMetadata.isManuallyRenamed ?? false,
       updatedAt: chatMetadata.updatedAt,
       createdAt: chatMetadata.createdAt,
@@ -527,6 +567,13 @@ export async function handleGet(
       allowCrossCharacterVaultReads: chatMetadata.allowCrossCharacterVaultReads ?? false,
       coreWhisperEnabled: chatMetadata.coreWhisperEnabled ?? null,
       coreWhisperInterval: chatMetadata.coreWhisperInterval ?? null,
+      turnSkippingEnabled: chatMetadata.turnSkippingEnabled ?? null,
+      // Controlled selects in chat settings — projected so the UI reflects the
+      // saved value on reload instead of snapping back to its default.
+      timelineMode: chatMetadata.timelineMode ?? null,
+      alertCharactersOfLanternImages: chatMetadata.alertCharactersOfLanternImages ?? null,
+      showThinking: chatMetadata.showThinking ?? null,
+      answerConfirmationOverride: chatMetadata.answerConfirmationOverride ?? null,
       agentModeEnabled: chatMetadata.agentModeEnabled ?? false,
       resolvedAgentModeEnabled: resolvedAgentMode.enabled,
       agentModeSource: resolvedAgentMode.enabledSource,

@@ -640,6 +640,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       chatId: payload.chatId,
       provider: imageProfile.provider,
       modelName: imageProfile.modelName,
+      imageProfileId: imageProfile.id,
       request: {
         messages: [{ role: 'user', content: finalPrompt }],
       },
@@ -658,6 +659,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       chatId: payload.chatId,
       provider: imageProfile.provider,
       modelName: imageProfile.modelName,
+      imageProfileId: imageProfile.id,
       request: {
         messages: [{ role: 'user', content: finalPrompt }],
       },
@@ -721,6 +723,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         chatId: payload.chatId,
         provider: reroute.profile.provider,
         modelName: reroute.profile.modelName,
+        imageProfileId: reroute.profile.id,
         request: {
           messages: [{ role: 'user', content: finalPrompt }],
         },
@@ -749,6 +752,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         chatId: payload.chatId,
         provider: reroute.profile.provider,
         modelName: reroute.profile.modelName,
+        imageProfileId: reroute.profile.id,
         request: {
           messages: [{ role: 'user', content: finalPrompt }],
         },

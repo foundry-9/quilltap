@@ -101,17 +101,18 @@ For detailed instructions, see [Import & Export Data](system-import-export.md).
 
 For detailed instructions, see [Managing Tasks](system-tasks-queue.md).
 
-### 5. Capabilities Report
+### 5. The Almanack (System Report)
 
-**Purpose:** Generate detailed reports about your system's capabilities and configuration.
+**Purpose:** Compile a comprehensive compendium of your entire establishment — formerly the Capabilities Report.
 
 **What it does:**
 
-- Generates comprehensive system capability reports
-- Documents installed providers (AI, image generation, etc.)
-- Lists available models and their configurations
-- Shows connection profiles and their settings
-- Saves reports for later reference
+- Records the machine, the three databases, the backups and the migration state
+- Documents every plugin, provider, model, API key and theme
+- Takes the census of the main database — chats, memories, characters, every feature dial
+- Tours the Scriptorium: document stores, blobs, character vaults, wardrobe, custom tools, mail, photographs
+- Lists the ten busiest characters, every project and every group
+- Reads the LLM logs for per-type and per-profile usage, latency and prompt-cache figures
 
 **When to use it:**
 
@@ -120,7 +121,7 @@ For detailed instructions, see [Managing Tasks](system-tasks-queue.md).
 - Sharing configuration details with support
 - Planning system upgrades
 
-For detailed instructions, see [Capabilities Report](system-capabilities-report.md).
+For detailed instructions, see [The Almanack](the-almanack.md).
 
 ### 6. LLM Logs
 
@@ -196,13 +197,13 @@ For detailed instructions, see [Deleting Your Data](system-delete-data.md).
 
 - Create a backup
 - Check Tasks Queue to ensure no jobs are running
-- Note your current configuration in a Capabilities Report
+- Note your current configuration by compiling an Almanack
 
 **Monitoring System Health:**
 
 - Check Tasks Queue regularly to ensure jobs complete successfully
 - Review LLM Logs if experiencing issues
-- Generate Capabilities Reports periodically to document your setup
+- Compile an Almanack periodically to document your setup
 
 ## In-Chat Navigation
 
@@ -215,6 +216,6 @@ Characters with help tools enabled can navigate directly to this page:
 - [Backup & Restore](system-backup-restore.md) - Detailed backup and restore guide
 - [Import & Export Data](system-import-export.md) - Moving data in and out of Quilltap
 - [Managing Tasks](system-tasks-queue.md) - Background job management
-- [Capabilities Report](system-capabilities-report.md) - System capability documentation
+- [The Almanack](the-almanack.md) - The full system report
 - [LLM Logs](system-llm-logs.md) - AI interaction logging and troubleshooting
 - [Deleting Your Data](system-delete-data.md) - Account and data deletion

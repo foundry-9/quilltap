@@ -31,7 +31,7 @@ jest.mock('@/lib/chat/tool-executor', () => ({
 }));
 
 import { handleRunTool } from '@/app/api/v1/chats/[id]/actions/run-tool';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 // Helper to create a mock NextRequest with JSON body
 function createRequest(body: Record<string, unknown>): NextRequest {
@@ -42,10 +42,10 @@ function createRequest(body: Record<string, unknown>): NextRequest {
   });
 }
 
-// Helper to create a mock AuthenticatedContext
+// Helper to create a mock RequestContext
 function createMockContext(overrides: {
   chatData?: Record<string, unknown> | null;
-} = {}): AuthenticatedContext {
+} = {}): RequestContext {
   const mockChat = overrides.chatData !== undefined ? overrides.chatData : {
     id: 'chat-123',
     title: 'Test Chat',
@@ -75,7 +75,7 @@ function createMockContext(overrides: {
       },
     },
     session: { user: { id: 'user-1' } },
-  } as unknown as AuthenticatedContext;
+  } as unknown as RequestContext;
 }
 
 describe('handleRunTool', () => {

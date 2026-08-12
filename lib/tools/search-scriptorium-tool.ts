@@ -8,6 +8,7 @@
 
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
+import { llmNumber } from './llm-number'
 
 /**
  * Zod schema for the search-scriptorium tool's input.
@@ -33,21 +34,47 @@ export const searchScriptoriumToolInputSchema = z.object({
       "Which document stores the `documents` and `knowledge` sources reach into. \"all\" (the default) searches every store you can see — your own character vault, the stores of every group you belong to, every document store linked to this chat's project, and the instance-wide Quilltap General store. \"project\" narrows to just the document stores linked to this chat's project (returns nothing if no project is attached). \"character\" narrows to just your own character vault. \"group\" narrows to just the document stores of the groups you are a member of (returns nothing if you belong to no groups). `scope` has no effect on `memories` or `conversations`."
     )
     .optional(),
-  limit: z
-    .number()
-    .int()
-    .min(1)
-    .max(20)
+  limit: llmNumber(
+    z
+      .number()
+      .int()
+      .min(1)
+      .max(20)
+      .describe('Maximum number of results to return across all sources. Default is 10.')
+  )
     .default(10)
-    .describe('Maximum number of results to return across all sources. Default is 10.')
     .optional(),
-  minImportance: z
-    .number()
-    .min(0)
-    .max(1)
+  minImportance: llmNumber(
+    z
+      .number()
+      .min(0)
+      .max(1)
+      .describe(
+        'Minimum importance score (0-1) for memory results. Only affects memory search, not conversations. Default is 0.'
+      )
+  )
     .default(0)
+    .optional(),
+  since: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}/, 'ISO date (YYYY-MM-DD) required')
     .describe(
-      'Minimum importance score (0-1) for memory results. Only affects memory search, not conversations. Default is 0.'
+      'Only return memories/conversations from this ISO date (YYYY-MM-DD) onward. Use when a time period is mentioned ("last week", "back in March") — memories filter on when the event HAPPENED, conversations on when they took place. Affects only the memories and conversations sources.'
+    )
+    .optional(),
+  until: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}/, 'ISO date (YYYY-MM-DD) required')
+    .describe(
+      'Only return memories/conversations up to this ISO date (YYYY-MM-DD), inclusive. Pair with `since` to bracket a period.'
+    )
+    .optional(),
+  aboutCharacter: z
+    .string()
+    .min(1)
+    .max(100)
+    .describe(
+      'Only return memories you hold ABOUT this character (by name). Affects only the memories source.'
     )
     .optional(),
 })
@@ -72,7 +99,14 @@ export interface SearchScriptoriumResult {
     effectiveWeight?: number
     createdAt?: string
     source?: 'AUTO' | 'MANUAL'
-    // Conversation-specific
+    /** When the remembered EVENT happened (episodic spine) — distinct from createdAt (write time). */
+    occurredAt?: string | null
+    /** In-story time phrase, for fictional-timeline chats. */
+    narrativeTime?: string | null
+    /** 'semantic' | 'episodic' declared memory kind. */
+    kind?: string
+    // Conversation-specific (also set on memory hits: the memory's source
+    // conversation, callable via `read_conversation`)
     conversationId?: string
     interchangeIndex?: number
     conversationTitle?: string
@@ -119,8 +153,9 @@ export const searchScriptoriumToolDefinition = {
  */
 export function validateSearchScriptoriumInput(
   input: unknown
-): input is SearchScriptoriumToolInput {
-  return searchScriptoriumToolInputSchema.safeParse(input).success
+): SearchScriptoriumToolInput | null {
+  const parsed = searchScriptoriumToolInputSchema.safeParse(input)
+  return parsed.success ? parsed.data : null
 }
 
 // ============================================================================
@@ -157,13 +192,15 @@ export const searchScriptoriumBrahmaToolInputSchema = z.object({
       'Which document stores the `documents` and `knowledge` sources reach into. The Brahma Console searches every enabled document store regardless of scope, so this parameter has no practical effect here.'
     )
     .optional(),
-  limit: z
-    .number()
-    .int()
-    .min(1)
-    .max(20)
+  limit: llmNumber(
+    z
+      .number()
+      .int()
+      .min(1)
+      .max(20)
+      .describe('Maximum number of results to return across all sources. Default is 10.')
+  )
     .default(10)
-    .describe('Maximum number of results to return across all sources. Default is 10.')
     .optional(),
 })
 

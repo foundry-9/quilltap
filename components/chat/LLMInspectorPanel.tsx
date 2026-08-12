@@ -15,7 +15,7 @@ const FILTER_GROUPS: Record<FilterCategory, LLMLogType[] | null> = {
   system: ['TITLE_GENERATION', 'SUMMARIZATION', 'CONTEXT_COMPRESSION'],
   image: ['IMAGE_PROMPT_CRAFTING', 'IMAGE_DESCRIPTION', 'APPEARANCE_RESOLUTION'],
   safety: ['DANGER_CLASSIFICATION'],
-  other: ['CHARACTER_WIZARD', 'AI_IMPORT'],
+  other: ['CHARACTER_WIZARD', 'AI_IMPORT', 'CUSTOM_TOOL_CONSULT'],
 }
 
 const FILTER_LABELS: Record<FilterCategory, string> = {

@@ -57,7 +57,13 @@ export interface ShouldFireCoreWhisperOptions {
   fireOnContextTransition?: boolean;
 }
 
-function isVisibleConversationalTurn(
+/**
+ * A conversational turn visible to the responding character: a real
+ * (non-Staff) USER/ASSISTANT message with content, not silent, and not a
+ * whisper targeted away from this character. Shared single source of truth —
+ * also consumed by `lib/chat/turn-manager/skip-signal.ts`.
+ */
+export function isVisibleConversationalTurn(
   m: MessageEvent,
   respondingParticipantId: string,
 ): boolean {

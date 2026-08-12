@@ -19,12 +19,15 @@ import { zodToOpenAISchema } from './zod-to-openai-schema'
 export type StateOperation = 'fetch' | 'set' | 'delete';
 
 /**
- * Context for state operations
- * - 'chat': Operates on chat-specific state only
- * - 'project': Operates on project state only
- * - When not specified for fetch: Returns merged state (chat overrides project)
+ * Context for state operations. State cascades across four tiers, narrowest
+ * winning: chat → project → group → general.
+ * - 'chat': chat-specific state only
+ * - 'project': the chat's project state only
+ * - 'group': the responding character's group state (see the `group` param)
+ * - 'general': instance-wide state shared by every chat
+ * - When not specified for fetch: returns the merged cascade (chat wins).
  */
-export type StateContext = 'chat' | 'project';
+export type StateContext = 'chat' | 'project' | 'group' | 'general';
 
 /**
  * Zod schema for the state tool's input.
@@ -36,10 +39,18 @@ export const stateToolInputSchema = z.object({
       'Operation to perform: "fetch" reads state, "set" updates a value, "delete" removes a value.'
     ),
   context: z
-    .enum(['chat', 'project'])
+    .enum(['chat', 'project', 'group', 'general'])
     .describe(
-      'Where to operate: "chat" for chat-specific state, "project" for project state. ' +
-      'For fetch without context, returns merged state (chat values override project values).'
+      'Which tier to operate on: "chat" (this conversation), "project" (its project), ' +
+      '"group" (a group you belong to — see the "group" parameter), or "general" (instance-wide). ' +
+      'For fetch without context, returns the merged cascade where narrower tiers win ' +
+      '(chat over project over group over general). Set/delete without context default to "chat".'
+    )
+    .optional(),
+  group: z
+    .string()
+    .describe(
+      'Group name or ID; required with context "group" when the character belongs to more than one group.'
     )
     .optional(),
   path: z
@@ -89,7 +100,8 @@ export const stateToolDefinition = {
     name: 'state',
     description:
       'Manage persistent state for games, inventory, session data, and other information that should persist across messages. ' +
-      'State is stored per-chat and optionally per-project (project state is inherited by chats). ' +
+      'State cascades across four tiers, narrowest winning: chat → project → group → general. ' +
+      'A fetch with no context returns the merged view; set/delete with no context default to the chat tier. ' +
       'Use "fetch" to read state, "set" to update values, "delete" to remove values. ' +
       'Paths support dot notation (player.health) and array indexing (inventory[0]). ' +
       'Keys starting with underscore (_) are user-only and should not be modified by AI.',
@@ -100,6 +112,7 @@ export const stateToolDefinition = {
 /**
  * Helper to validate tool input parameters
  */
-export function validateStateInput(input: unknown): input is StateToolInput {
-  return stateToolInputSchema.safeParse(input).success;
+export function validateStateInput(input: unknown): StateToolInput | null {
+  const parsed = stateToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }

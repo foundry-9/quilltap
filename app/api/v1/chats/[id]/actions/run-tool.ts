@@ -12,7 +12,7 @@ import { logger } from '@/lib/logger';
 import { badRequest } from '@/lib/api/responses';
 import { executeToolCallWithContext } from '@/lib/chat/tool-executor';
 import type { ToolExecutionContext } from '@/lib/chat/tool-executor';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 /**
  * Tools that cannot be invoked directly by users
@@ -41,7 +41,7 @@ const runToolRequestSchema = z.object({
 export async function handleRunTool(
   req: NextRequest,
   chatId: string,
-  { user, repos }: AuthenticatedContext
+  { user, repos }: RequestContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const validated = runToolRequestSchema.parse(body);

@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler, type AuthenticatedContext } from '@/lib/api/middleware';
+import { createContextParamsHandler, type RequestContext } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { ensureProcessorRunning } from '@/lib/background-jobs';
 import { logger } from '@/lib/logger';
@@ -18,8 +18,8 @@ import { notFound, forbidden, badRequest, serverError } from '@/lib/api/response
 /**
  * GET /api/v1/system/jobs/[id] - Get detailed information about a specific job
  */
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
-  async (req: NextRequest, { user, repos }: AuthenticatedContext, { id }) => {
+export const GET = createContextParamsHandler<{ id: string }>(
+  async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     try {
 
       const job = await repos.backgroundJobs.findById(id);
@@ -40,8 +40,8 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 /**
  * DELETE /api/v1/system/jobs/[id] - Delete a specific job
  */
-export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
-  async (req: NextRequest, { user, repos }: AuthenticatedContext, { id }) => {
+export const DELETE = createContextParamsHandler<{ id: string }>(
+  async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     try {
 
       const job = await repos.backgroundJobs.findById(id);
@@ -73,8 +73,8 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
 /**
  * POST /api/v1/system/jobs/[id]?action=pause|resume
  */
-export const POST = createAuthenticatedParamsHandler<{ id: string }>(
-  async (req: NextRequest, { user, repos }: AuthenticatedContext, { id }) => {
+export const POST = createContextParamsHandler<{ id: string }>(
+  async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     const action = getActionParam(req);
 
     if (!action || !['pause', 'resume'].includes(action)) {

@@ -36,6 +36,10 @@ export interface VaultConversationMatch {
   relativePath: string
   /** Best cosine score among this conversation's chunks. */
   score: number
+  /** ISO timestamp of the conversation's first message (frontmatter), when recorded. */
+  firstMessageAt: string | null
+  /** ISO timestamp of the conversation's last message (frontmatter), when recorded. */
+  lastMessageAt: string | null
 }
 
 export interface SearchVaultConversationSummariesOptions {
@@ -53,6 +57,14 @@ export interface SearchVaultConversationSummariesOptions {
   minScore?: number
   /** Conversation id to exclude from results (usually the current chat). */
   excludeConversationId?: string
+  /**
+   * Event-time window (episodic recall): prefer conversations whose
+   * [firstMessageAt, lastMessageAt] span overlaps the window. Two-stage with
+   * the same fallback the memory path uses — filter first; when fewer than
+   * `limit` overlap, fall back to the full pool with window hits boosted
+   * (×1.3) instead. Never fewer results than an unwindowed search.
+   */
+  timeRange?: { from: string; to: string } | null
 }
 
 /**
@@ -128,10 +140,13 @@ export async function searchVaultConversationSummaries(
     .sort((a, b) => b.score - a.score)
 
   // Read frontmatter per surviving file to recover the conversationId (the
-  // filename is derived from the title, not the id).
+  // filename is derived from the title, not the id) and the message-span
+  // timestamps. With a timeRange in play, read past `limit` so the window
+  // staging below has a pool to choose from.
+  const readCap = options.timeRange ? Math.max(limit * 3, 15) : limit
   const matches: VaultConversationMatch[] = []
   for (const file of orderedFiles) {
-    if (matches.length >= limit) break
+    if (matches.length >= readCap) break
     try {
       const { content } = await readDatabaseDocument(vault.mountPointId, file.relativePath)
       const { data } = parseFrontmatter(content)
@@ -140,18 +155,50 @@ export async function searchVaultConversationSummaries(
       if (!conversationId) continue
       if (excludeConversationId && conversationId === excludeConversationId) continue
       const titleValue = data && typeof data.conversationTitle === 'string' ? data.conversationTitle.trim() : ''
+      const tsField = (key: string): string | null => {
+        const value = data ? (data as Record<string, unknown>)[key] : null
+        return typeof value === 'string' && Number.isFinite(Date.parse(value)) ? value : null
+      }
       matches.push({
         conversationId,
         conversationTitle: titleValue.length > 0 ? titleValue : 'Untitled conversation',
         relativePath: file.relativePath,
         score: file.score,
+        firstMessageAt: tsField('firstMessageAt'),
+        lastMessageAt: tsField('lastMessageAt'),
       })
     } catch {
       // Unreadable / garbled summary file — skip it.
     }
   }
 
-  return matches
+  // Window staging: filter-first with boost fallback (mirrors the memory
+  // path's two-stage rule — never fewer results than an unwindowed search).
+  const window = options.timeRange
+  if (window) {
+    const from = Date.parse(window.from)
+    const to = Date.parse(window.to)
+    if (Number.isFinite(from) && Number.isFinite(to) && from <= to) {
+      const overlapsWindow = (m: VaultConversationMatch): boolean => {
+        const start = m.firstMessageAt ? Date.parse(m.firstMessageAt) : NaN
+        const end = m.lastMessageAt ? Date.parse(m.lastMessageAt) : start
+        if (!Number.isFinite(start)) return false
+        const spanEnd = Number.isFinite(end) ? end : start
+        return start <= to && spanEnd >= from
+      }
+      const windowHits = matches.filter(overlapsWindow)
+      if (windowHits.length >= limit) {
+        return windowHits.slice(0, limit)
+      }
+      const CONVERSATION_WINDOW_BOOST = 1.3
+      const boosted = matches
+        .map(m => (overlapsWindow(m) ? { ...m, score: m.score * CONVERSATION_WINDOW_BOOST } : m))
+        .sort((a, b) => b.score - a.score)
+      return boosted.slice(0, limit)
+    }
+  }
+
+  return matches.slice(0, limit)
 }
 
 /**
@@ -172,7 +219,12 @@ export const READ_CONVERSATION_CALL_NOTE =
 export function renderRelevantConversationsBlock(matches: VaultConversationMatch[]): string {
   if (matches.length === 0) return ''
   const entries = matches
-    .map(m => `#### ${m.conversationTitle} (\`${m.conversationId}\`)`)
+    .map(m => {
+      // Episodic recall: print the conversation's date so "last week"
+      // becomes confirmable — the frontmatter finally gets read.
+      const date = m.firstMessageAt ? ` (${m.firstMessageAt.slice(0, 10)})` : ''
+      return `#### ${m.conversationTitle}${date} (\`${m.conversationId}\`)`
+    })
     .join('\n')
   return `### Relevant Past Conversations\n\n${entries}`
 }

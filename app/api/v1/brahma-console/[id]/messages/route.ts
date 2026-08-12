@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler, type AuthenticatedContext } from '@/lib/api/middleware';
+import { createContextParamsHandler, type RequestContext } from '@/lib/api/middleware';
 import { z } from 'zod';
 import { handleBrahmaConsoleMessage } from '@/lib/services/brahma-console/orchestrator.service';
 import { successResponse } from '@/lib/api/responses';
@@ -27,7 +27,7 @@ const sendMessageSchema = z.object({
 
 async function handleSendMessage(
   req: NextRequest,
-  context: AuthenticatedContext,
+  context: RequestContext,
   id: string
 ): Promise<NextResponse> {
   const { user, repos } = context;
@@ -54,7 +54,7 @@ async function handleSendMessage(
 
 async function handleGetMessages(
   _req: NextRequest,
-  context: AuthenticatedContext,
+  context: RequestContext,
   id: string
 ): Promise<NextResponse> {
   const { repos } = context;
@@ -71,13 +71,13 @@ async function handleGetMessages(
 // Route Handlers
 // ============================================================================
 
-export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+export const POST = createContextParamsHandler<{ id: string }>(
   async (req, context, { id }) => {
     return handleSendMessage(req, context, id);
   }
 );
 
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   async (req, context, { id }) => {
     return handleGetMessages(req, context, id);
   }

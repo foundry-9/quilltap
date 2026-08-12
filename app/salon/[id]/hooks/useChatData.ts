@@ -63,12 +63,15 @@ export function useChatData(chatId: string) {
         }
       })
 
-      // For each swipe group, show only the current swipe (index 0 by default)
+      // For each swipe group, default to the newest variant (highest swipeIndex).
+      // Regenerate appends a new variant, so showing the latest means a freshly
+      // regenerated response is what you see — the original stays one swipe away.
       Object.entries(swipeGroups).forEach(([groupId, groupMessages]) => {
         const sorted = groupMessages.sort((a, b) => (a.swipeIndex || 0) - (b.swipeIndex || 0))
-        displayMessages.push(sorted[0])
+        const latestIndex = sorted.length - 1
+        displayMessages.push(sorted[latestIndex])
         newSwipeStates[groupId] = {
-          current: 0,
+          current: latestIndex,
           total: sorted.length,
           messages: sorted
         }

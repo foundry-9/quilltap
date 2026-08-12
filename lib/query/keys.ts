@@ -39,9 +39,15 @@ export const queryKeys = {
     groupStores: (id: string) => ['chats', id, 'group-stores'] as const,
     background: (id: string) => ['chats', id, 'background'] as const,
   },
+  groups: {
+    all: ['groups'] as const,
+    state: (id: string) => ['groups', id, 'state'] as const,
+  },
   settings: {
     chat: ['settings', 'chat'] as const,
     textReplacements: ['settings', 'text-replacements'] as const,
+    generalState: ['settings', 'general-state'] as const,
+    taboo: ['settings', 'taboo'] as const,
   },
   connectionProfiles: {
     all: ['connection-profiles'] as const,
@@ -78,6 +84,31 @@ export const queryKeys = {
   },
   tools: {
     all: ['tools'] as const,
+  },
+  customTools: {
+    all: ['custom-tools'] as const,
+    /**
+     * Pascal's roster for one chat, merged across every character participant's
+     * perspective. Resolved fresh server-side on every request — a `.tool.json`
+     * edit must show up on the next popup open — so callers should not hold this
+     * cached across an open.
+     */
+    byChat: (chatId: string) => ['custom-tools', chatId] as const,
+    /**
+     * Pascal's Workbench: every definition in every enabled store, no
+     * per-invoker shadowing. Fresh per request, same doctrine as `byChat`.
+     */
+    library: () => ['custom-tools', 'library'] as const,
+    /**
+     * Run presets for one tool in one character's vault —
+     * `Tools/{toolName}.{preset}.settings.json`, listed by the run dialog.
+     * Invalidated after a save; refetched per dialog open, same doctrine as
+     * `byChat` (the files live in a store the user edits).
+     */
+    presets: (vaultMountPointId: string, toolName: string) =>
+      ['custom-tools', 'presets', vaultMountPointId, toolName] as const,
+    /** The Workbench save-target list, grouped by attachment. */
+    destinations: () => ['custom-tools', 'destinations'] as const,
   },
   userProfile: {
     detail: ['user', 'profile'] as const,
@@ -134,5 +165,9 @@ export const queryKeys = {
     all: ['brahma-console'] as const,
     entity: (apiUrl: string) => ['brahma-console', 'entity', apiUrl] as const,
     pastChats: ['brahma-console', 'past-chats'] as const,
+  },
+  home: {
+    /** Home dashboard payload for the workspace home tab. */
+    all: ['home'] as const,
   },
 } as const

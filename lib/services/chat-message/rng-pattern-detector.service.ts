@@ -7,6 +7,7 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import type { RngType } from '@/lib/tools/rng-tool'
+import { scanDiceNotation } from '@/lib/pascal/dice'
 
 const logger = createServiceLogger('RngPatternDetector')
 
@@ -20,6 +21,8 @@ export interface DetectedRngPattern {
   sides?: number
   /** Number of rolls/flips/spins */
   count: number
+  /** For dice rolls: the flat modifier from the notation ("3d6+2" → 2). */
+  modifier?: number
   /** The matched text from the message */
   matchText: string
 }
@@ -30,17 +33,21 @@ export interface DetectedRngPattern {
 export interface RngToolCall {
   type: RngType
   rolls: number
+  modifier?: number
   matchText: string
 }
 
 /**
  * Regex patterns for RNG detection
  *
- * Dice: /\b(\d+)?d(\d+)\b/gi - matches "d6", "2d20", "3d10", etc.
+ * Dice notation is scanned by the shared dice module (`lib/pascal/dice.ts`),
+ * which is the single source of truth for the `NdS±M` grammar and is also what
+ * Pascal's custom tools roll through. It honours the modifier — "3d6+2" adds
+ * the +2 rather than dropping it on the floor as the old local regex did.
+ *
  * Coin: /\bflip.{1,3}coin\b/gi - matches "flip a coin", "flip the coin", etc.
  * Bottle: /\bspin\b.{0,50}\bbottle\b/gi - matches "spin the bottle", "spin a bottle", etc. (bounded to prevent ReDoS)
  */
-const DICE_PATTERN = /\b(\d+)?d(\d+)\b/gi
 const COIN_FLIP_PATTERN = /\bflip.{1,3}coin\b/gi
 const SPIN_BOTTLE_PATTERN = /\bspin\b.{0,50}\bbottle\b/gi
 
@@ -54,25 +61,20 @@ export function detectRngPatterns(content: string): DetectedRngPattern[] {
   const patterns: DetectedRngPattern[] = []
 
   // Reset regex lastIndex (important since we're using global flag)
-  DICE_PATTERN.lastIndex = 0
   COIN_FLIP_PATTERN.lastIndex = 0
   SPIN_BOTTLE_PATTERN.lastIndex = 0
 
-  // Detect dice rolls (e.g., "2d6", "d20", "3d10")
-  let diceMatch: RegExpExecArray | null
-  while ((diceMatch = DICE_PATTERN.exec(content)) !== null) {
-    const count = diceMatch[1] ? parseInt(diceMatch[1], 10) : 1
-    const sides = parseInt(diceMatch[2], 10)
-
-    // Validate dice parameters (2-1000 sides, 1-100 rolls)
-    if (sides >= 2 && sides <= 1000 && count >= 1 && count <= 100) {
-      patterns.push({
-        type: 'dice',
-        sides,
-        count,
-        matchText: diceMatch[0],
-      })
-    }
+  // Detect dice rolls (e.g., "2d6", "d20", "3d10", "3d6+2"). The shared scanner
+  // enforces the same 2-1000 sides / 1-100 rolls bounds this used to check
+  // inline, skipping out-of-bounds matches rather than clamping them.
+  for (const notation of scanDiceNotation(content)) {
+    patterns.push({
+      type: 'dice',
+      sides: notation.sides,
+      count: notation.count,
+      modifier: notation.modifier,
+      matchText: notation.matchText,
+    })
   }
 
   // Detect coin flips (e.g., "flip a coin", "flip the coin")
@@ -117,6 +119,7 @@ export function convertPatternsToToolCalls(patterns: DetectedRngPattern[]): RngT
       return {
         type: pattern.sides,
         rolls: pattern.count,
+        modifier: pattern.modifier ?? 0,
         matchText: pattern.matchText,
       }
     } else if (pattern.type === 'flip_coin') {

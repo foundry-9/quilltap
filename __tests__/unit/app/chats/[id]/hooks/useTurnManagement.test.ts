@@ -6,14 +6,12 @@
  * - handleQueue: Add participant to turn queue
  * - handleDequeue: Remove participant from turn queue
  * - handleContinue: Pass turn to next character
- * - handleDismissEphemeral: Dismiss ephemeral messages
  */
 
 import { renderHook, act } from '@testing-library/react'
 import type { TurnState } from '@/lib/chat/turn-manager'
 import type { ChatParticipantBase, Character } from '@/lib/schemas/types'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
-import type { EphemeralMessageData } from '@/components/chat/EphemeralMessage'
 
 
 jest.mock('@/lib/toast', () => ({
@@ -38,19 +36,6 @@ jest.mock('@/lib/chat/turn-manager', () => ({
   })),
 }))
 
-// Mock EphemeralMessage module
-jest.mock('@/components/chat/EphemeralMessage', () => ({
-  createEphemeralMessage: jest.fn(
-    (type: string, participantId: string, participantName: string) => ({
-      id: `ephemeral-${type}-${Date.now()}`,
-      type,
-      participantId,
-      participantName,
-      timestamp: Date.now(),
-    })
-  ),
-}))
-
 // Import the hook and mocked modules after mocks are set up
 import { useTurnManagement } from '@/app/salon/[id]/hooks/useTurnManagement'
 import { showErrorToast, showInfoToast } from '@/lib/toast'
@@ -59,7 +44,6 @@ import {
   addToQueue,
   removeFromQueue,
 } from '@/lib/chat/turn-manager'
-import { createEphemeralMessage } from '@/components/chat/EphemeralMessage'
 
 // Get mock references
 const mockShowErrorToast = showErrorToast as jest.MockedFunction<typeof showErrorToast>
@@ -67,9 +51,6 @@ const mockShowInfoToast = showInfoToast as jest.MockedFunction<typeof showInfoTo
 const mockNudgeParticipant = nudgeParticipant as jest.MockedFunction<typeof nudgeParticipant>
 const mockAddToQueue = addToQueue as jest.MockedFunction<typeof addToQueue>
 const mockRemoveFromQueue = removeFromQueue as jest.MockedFunction<typeof removeFromQueue>
-const mockCreateEphemeralMessage = createEphemeralMessage as jest.MockedFunction<
-  typeof createEphemeralMessage
->
 
 // Mock fetch for API calls
 const mockFetch = jest.fn()
@@ -174,24 +155,10 @@ function createMockTurnState(overrides: Partial<TurnState> = {}): TurnState {
   }
 }
 
-function createMockEphemeralMessage(
-  id: string,
-  type: 'nudge' | 'join' = 'nudge'
-): EphemeralMessageData {
-  return {
-    id,
-    type,
-    participantId: 'participant-1',
-    participantName: 'Test Participant',
-    timestamp: Date.now(),
-  }
-}
-
 describe('useTurnManagement', () => {
   // Mock state setters
   let setTurnState: jest.Mock
   let setTurnSelectionResult: jest.Mock
-  let setEphemeralMessages: jest.Mock
   let triggerContinueMode: jest.Mock
   let onUnpause: jest.Mock
 
@@ -200,7 +167,6 @@ describe('useTurnManagement', () => {
   let charactersMap: Map<string, Character>
   let turnState: TurnState
   let participantData: ParticipantData[]
-  let ephemeralMessages: EphemeralMessageData[]
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -214,7 +180,6 @@ describe('useTurnManagement', () => {
     // Initialize mock functions
     setTurnState = jest.fn()
     setTurnSelectionResult = jest.fn()
-    setEphemeralMessages = jest.fn()
     triggerContinueMode = jest.fn().mockResolvedValue(undefined)
     onUnpause = jest.fn().mockResolvedValue(undefined)
 
@@ -237,8 +202,6 @@ describe('useTurnManagement', () => {
       createMockParticipantData('p2', 'CHARACTER', 'Bob'),
       createMockParticipantData('p3', 'CHARACTER', 'User', 'user'),
     ]
-
-    ephemeralMessages = []
   })
 
   describe('Initial state', () => {
@@ -251,10 +214,8 @@ describe('useTurnManagement', () => {
           turnState,
           'p3',
           participantData,
-          ephemeralMessages,
           setTurnState,
           setTurnSelectionResult,
-          setEphemeralMessages,
           triggerContinueMode
         )
       )
@@ -263,7 +224,6 @@ describe('useTurnManagement', () => {
       expect(typeof result.current.handleQueue).toBe('function')
       expect(typeof result.current.handleDequeue).toBe('function')
       expect(typeof result.current.handleContinue).toBe('function')
-      expect(typeof result.current.handleDismissEphemeral).toBe('function')
     })
 
     it('should calculate hasActiveCharacters correctly with active characters', () => {
@@ -275,10 +235,8 @@ describe('useTurnManagement', () => {
           turnState,
           'p3',
           participantData,
-          ephemeralMessages,
           setTurnState,
           setTurnSelectionResult,
-          setEphemeralMessages,
           triggerContinueMode
         )
       )
@@ -297,10 +255,8 @@ describe('useTurnManagement', () => {
           turnState,
           'p3',
           participantData,
-          ephemeralMessages,
           setTurnState,
           setTurnSelectionResult,
-          setEphemeralMessages,
           triggerContinueMode
         )
       )
@@ -319,10 +275,8 @@ describe('useTurnManagement', () => {
           turnState,
           'p3',
           participantData,
-          ephemeralMessages,
           setTurnState,
           setTurnSelectionResult,
-          setEphemeralMessages,
           triggerContinueMode
         )
       )
@@ -341,10 +295,8 @@ describe('useTurnManagement', () => {
           turnState,
           'p3',
           participantData,
-          ephemeralMessages,
           setTurnState,
           setTurnSelectionResult,
-          setEphemeralMessages,
           triggerContinueMode
         )
       )
@@ -358,32 +310,8 @@ describe('useTurnManagement', () => {
       // Nudge should NOT call the turn action API — triggerContinueMode handles
       // the immediate response directly.  Adding to the queue AND triggering
       // continueMode caused duplicate responses from the chain loop.
-      expect(triggerContinueMode).toHaveBeenCalledWith('p1')
-    })
-
-    it('should create ephemeral message for nudge', async () => {
-      const { result } = renderHook(() =>
-        useTurnManagement(
-          TEST_CHAT_ID,
-          participantsAsBase,
-          charactersMap,
-          turnState,
-          'p3',
-          participantData,
-          ephemeralMessages,
-          setTurnState,
-          setTurnSelectionResult,
-          setEphemeralMessages,
-          triggerContinueMode
-        )
-      )
-
-      await act(async () => {
-        await result.current.handleNudge('p1')
-      })
-
-      expect(mockCreateEphemeralMessage).toHaveBeenCalledWith('nudge', 'p1', 'Alice')
-      expect(setEphemeralMessages).toHaveBeenCalled()
+      // Nudge passes `true` (summoned) so the turn-skip option is withheld.
+      expect(triggerContinueMode).toHaveBeenCalledWith('p1', true)
     })
 
     it('should not call turn action API on nudge (avoids duplicate responses)', async () => {
@@ -395,10 +323,8 @@ describe('useTurnManagement', () => {
           turnState,
           'p3',
           participantData,
-          ephemeralMessages,
           setTurnState,
           setTurnSelectionResult,
-          setEphemeralMessages,
           triggerContinueMode
         )
       )
@@ -417,7 +343,7 @@ describe('useTurnManagement', () => {
           body: JSON.stringify({ action: 'nudge', participantId: 'p1' }),
         })
       )
-      expect(triggerContinueMode).toHaveBeenCalledWith('p1')
+      expect(triggerContinueMode).toHaveBeenCalledWith('p1', true)
     })
 
     it('should trigger continue mode for the nudged participant', async () => {
@@ -429,10 +355,8 @@ describe('useTurnManagement', () => {
           turnState,
           'p3',
           participantData,
-          ephemeralMessages,
           setTurnState,
           setTurnSelectionResult,
-          setEphemeralMessages,
           triggerContinueMode
         )
       )
@@ -441,7 +365,7 @@ describe('useTurnManagement', () => {
         await result.current.handleNudge('p1')
       })
 
-      expect(triggerContinueMode).toHaveBeenCalledWith('p1')
+      expect(triggerContinueMode).toHaveBeenCalledWith('p1', true)
     })
 
     it('should unpause chat before nudge if paused', async () => {
@@ -453,10 +377,8 @@ describe('useTurnManagement', () => {
           turnState,
           'p3',
           participantData,
-          ephemeralMessages,
           setTurnState,
           setTurnSelectionResult,
-          setEphemeralMessages,
           triggerContinueMode,
           true, // isPaused
           onUnpause
@@ -479,10 +401,8 @@ describe('useTurnManagement', () => {
           turnState,
           'p3',
           participantData,
-          ephemeralMessages,
           setTurnState,
           setTurnSelectionResult,
-          setEphemeralMessages,
           triggerContinueMode,
           false, // isPaused
           onUnpause
@@ -496,62 +416,6 @@ describe('useTurnManagement', () => {
       expect(onUnpause).not.toHaveBeenCalled()
     })
 
-    it('should use participant name from participantData when character not found in charactersMap', async () => {
-      // p1 is LLM-controlled but its character is not in the (empty) map
-      const llmParticipantData = [createMockParticipantData('p1', 'CHARACTER', 'AliceFromData')]
-
-      const { result } = renderHook(() =>
-        useTurnManagement(
-          TEST_CHAT_ID,
-          participantsAsBase,
-          new Map(), // empty map — character won't be found
-          turnState,
-          'p3',
-          llmParticipantData,
-          ephemeralMessages,
-          setTurnState,
-          setTurnSelectionResult,
-          setEphemeralMessages,
-          triggerContinueMode
-        )
-      )
-
-      await act(async () => {
-        await result.current.handleNudge('p1')
-      })
-
-      expect(mockCreateEphemeralMessage).toHaveBeenCalledWith('nudge', 'p1', 'AliceFromData')
-    })
-
-    it('should use fallback name "Participant" if neither character nor persona found', async () => {
-      const emptyParticipantData: ParticipantData[] = []
-
-      const { result } = renderHook(() =>
-        useTurnManagement(
-          TEST_CHAT_ID,
-          participantsAsBase,
-          charactersMap,
-          turnState,
-          'p3',
-          emptyParticipantData,
-          ephemeralMessages,
-          setTurnState,
-          setTurnSelectionResult,
-          setEphemeralMessages,
-          triggerContinueMode
-        )
-      )
-
-      await act(async () => {
-        await result.current.handleNudge('unknown-participant')
-      })
-
-      expect(mockCreateEphemeralMessage).toHaveBeenCalledWith(
-        'nudge',
-        'unknown-participant',
-        'Participant'
-      )
-    })
   })
 
   describe('handleQueue', () => {
@@ -564,10 +428,8 @@ describe('useTurnManagement', () => {
           turnState,
           'p3',
           participantData,
-          ephemeralMessages,
           setTurnState,
           setTurnSelectionResult,
-          setEphemeralMessages,
           triggerContinueMode
         )
       )
@@ -601,10 +463,8 @@ describe('useTurnManagement', () => {
           turnState,
           'p3',
           participantData,
-          ephemeralMessages,
           setTurnState,
           setTurnSelectionResult,
-          setEphemeralMessages,
           triggerContinueMode
         )
       )
@@ -632,10 +492,8 @@ describe('useTurnManagement', () => {
           stateWithQueue,
           'p3',
           participantData,
-          ephemeralMessages,
           setTurnState,
           setTurnSelectionResult,
-          setEphemeralMessages,
           triggerContinueMode
         )
       )
@@ -671,10 +529,8 @@ describe('useTurnManagement', () => {
           turnState,
           'p3', // user participant id
           participantData,
-          ephemeralMessages,
           setTurnState,
           setTurnSelectionResult,
-          setEphemeralMessages,
           triggerContinueMode
         )
       )
@@ -708,10 +564,8 @@ describe('useTurnManagement', () => {
           turnState,
           'p3',
           participantData,
-          ephemeralMessages,
           setTurnState,
           setTurnSelectionResult,
-          setEphemeralMessages,
           triggerContinueMode
         )
       )
@@ -741,10 +595,8 @@ describe('useTurnManagement', () => {
           turnState,
           'p3',
           participantData,
-          ephemeralMessages,
           setTurnState,
           setTurnSelectionResult,
-          setEphemeralMessages,
           triggerContinueMode
         )
       )
@@ -759,7 +611,7 @@ describe('useTurnManagement', () => {
       expect(triggerContinueMode).not.toHaveBeenCalled()
     })
 
-    it('should show info toast when next speaker is user-controlled', async () => {
+    it('should not auto-continue when next speaker is user-controlled', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         json: async () => createMockTurnResponse({
@@ -776,10 +628,8 @@ describe('useTurnManagement', () => {
           turnState,
           'p3',
           participantData,
-          ephemeralMessages,
           setTurnState,
           setTurnSelectionResult,
-          setEphemeralMessages,
           triggerContinueMode
         )
       )
@@ -788,9 +638,7 @@ describe('useTurnManagement', () => {
         await result.current.handleContinue()
       })
 
-      expect(mockShowInfoToast).toHaveBeenCalledWith(
-        "It's a user-controlled character's turn. Type a message as them."
-      )
+      expect(mockShowInfoToast).not.toHaveBeenCalled()
       expect(triggerContinueMode).not.toHaveBeenCalled()
     })
 
@@ -808,10 +656,8 @@ describe('useTurnManagement', () => {
           turnState,
           'p3',
           participantData,
-          ephemeralMessages,
           setTurnState,
           setTurnSelectionResult,
-          setEphemeralMessages,
           triggerContinueMode
         )
       )
@@ -840,10 +686,8 @@ describe('useTurnManagement', () => {
           turnState,
           'p3',
           participantData,
-          ephemeralMessages,
           setTurnState,
           setTurnSelectionResult,
-          setEphemeralMessages,
           triggerContinueMode
         )
       )
@@ -859,92 +703,6 @@ describe('useTurnManagement', () => {
     })
   })
 
-  describe('handleDismissEphemeral', () => {
-    it('should filter out dismissed ephemeral message', () => {
-      const existingMessages: EphemeralMessageData[] = [
-        createMockEphemeralMessage('msg-1', 'nudge'),
-        createMockEphemeralMessage('msg-2', 'join'),
-      ]
-
-      const { result } = renderHook(() =>
-        useTurnManagement(
-          TEST_CHAT_ID,
-          participantsAsBase,
-          charactersMap,
-          turnState,
-          'p3',
-          participantData,
-          existingMessages,
-          setTurnState,
-          setTurnSelectionResult,
-          setEphemeralMessages,
-          triggerContinueMode
-        )
-      )
-
-      act(() => {
-        result.current.handleDismissEphemeral('msg-1')
-      })
-
-      expect(setEphemeralMessages).toHaveBeenCalled()
-      const callArg = setEphemeralMessages.mock.calls[0][0] as EphemeralMessageData[]
-      expect(callArg).toHaveLength(1)
-      expect(callArg[0].id).toBe('msg-2')
-    })
-
-    it('should handle dismissing non-existent message gracefully', () => {
-      const existingMessages: EphemeralMessageData[] = [createMockEphemeralMessage('msg-1', 'nudge')]
-
-      const { result } = renderHook(() =>
-        useTurnManagement(
-          TEST_CHAT_ID,
-          participantsAsBase,
-          charactersMap,
-          turnState,
-          'p3',
-          participantData,
-          existingMessages,
-          setTurnState,
-          setTurnSelectionResult,
-          setEphemeralMessages,
-          triggerContinueMode
-        )
-      )
-
-      act(() => {
-        result.current.handleDismissEphemeral('non-existent')
-      })
-
-      expect(setEphemeralMessages).toHaveBeenCalled()
-      const callArg = setEphemeralMessages.mock.calls[0][0] as EphemeralMessageData[]
-      expect(callArg).toHaveLength(1) // Original message still there
-    })
-
-    it('should handle empty ephemeral messages array', () => {
-      const { result } = renderHook(() =>
-        useTurnManagement(
-          TEST_CHAT_ID,
-          participantsAsBase,
-          charactersMap,
-          turnState,
-          'p3',
-          participantData,
-          [], // empty
-          setTurnState,
-          setTurnSelectionResult,
-          setEphemeralMessages,
-          triggerContinueMode
-        )
-      )
-
-      act(() => {
-        result.current.handleDismissEphemeral('any-id')
-      })
-
-      expect(setEphemeralMessages).toHaveBeenCalledWith([])
-    })
-  })
-
   describe('Callback stability', () => {
     it('should memoize handleQueue callback when dependencies unchanged', () => {
       const { result, rerender } = renderHook(() =>
@@ -955,10 +713,8 @@ describe('useTurnManagement', () => {
           turnState,
           'p3',
           participantData,
-          ephemeralMessages,
           setTurnState,
           setTurnSelectionResult,
-          setEphemeralMessages,
           triggerContinueMode
         )
       )
@@ -981,10 +737,8 @@ describe('useTurnManagement', () => {
           currentTurnState,
           'p3',
           participantData,
-          ephemeralMessages,
           setTurnState,
           setTurnSelectionResult,
-          setEphemeralMessages,
           triggerContinueMode
         )
       )
@@ -1010,10 +764,8 @@ describe('useTurnManagement', () => {
           turnState,
           null, // no user participant
           participantData,
-          ephemeralMessages,
           setTurnState,
           setTurnSelectionResult,
-          setEphemeralMessages,
           triggerContinueMode
         )
       )
@@ -1041,10 +793,8 @@ describe('useTurnManagement', () => {
           turnState,
           null,
           participantData,
-          ephemeralMessages,
           setTurnState,
           setTurnSelectionResult,
-          setEphemeralMessages,
           triggerContinueMode
         )
       )
@@ -1065,10 +815,8 @@ describe('useTurnManagement', () => {
           stateWithDuplicates,
           'p3',
           participantData,
-          ephemeralMessages,
           setTurnState,
           setTurnSelectionResult,
-          setEphemeralMessages,
           triggerContinueMode
         )
       )
@@ -1082,7 +830,7 @@ describe('useTurnManagement', () => {
   })
 
   describe('Integration scenarios', () => {
-    it('should handle full nudge flow: unpause -> update state -> ephemeral -> continue', async () => {
+    it('should handle full nudge flow: unpause -> update state -> continue', async () => {
       const { result } = renderHook(() =>
         useTurnManagement(
           TEST_CHAT_ID,
@@ -1091,10 +839,8 @@ describe('useTurnManagement', () => {
           turnState,
           'p3',
           participantData,
-          ephemeralMessages,
           setTurnState,
           setTurnSelectionResult,
-          setEphemeralMessages,
           triggerContinueMode,
           true, // isPaused
           onUnpause
@@ -1107,11 +853,9 @@ describe('useTurnManagement', () => {
 
       // Verify full flow (no API call — triggerContinueMode handles it directly)
       expect(onUnpause).toHaveBeenCalled()
-      expect(mockCreateEphemeralMessage).toHaveBeenCalledWith('nudge', 'p1', 'Alice')
-      expect(setEphemeralMessages).toHaveBeenCalled()
       expect(mockNudgeParticipant).toHaveBeenCalledWith(turnState, 'p1')
       expect(setTurnState).toHaveBeenCalled()
-      expect(triggerContinueMode).toHaveBeenCalledWith('p1')
+      expect(triggerContinueMode).toHaveBeenCalledWith('p1', true)
     })
 
     it('should handle queue then dequeue sequence', async () => {
@@ -1134,10 +878,8 @@ describe('useTurnManagement', () => {
             state,
             'p3',
             participantData,
-            ephemeralMessages,
             setTurnState,
             setTurnSelectionResult,
-            setEphemeralMessages,
             triggerContinueMode
           ),
         { initialProps: { state: turnState } }
@@ -1175,10 +917,8 @@ describe('useTurnManagement', () => {
           turnState,
           'p3',
           participantData,
-          ephemeralMessages,
           setTurnState,
           setTurnSelectionResult,
-          setEphemeralMessages,
           triggerContinueMode
         )
       )

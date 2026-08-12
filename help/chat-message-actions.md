@@ -118,8 +118,8 @@ Get an alternative response:
 - Current swipe position shown (e.g., "2 of 3")
 
 **What happens:**
-- AI generates fresh response to the same context
-- Original response saved in swipe group
+- The same character regenerates — in a multi-character scene the new version is spoken and attributed by the very character whose message you regenerated, with their full persona, memory, and the scene's context
+- The newest version is shown in place; the original is kept one swipe away in the same group
 - Token usage counts for each generation
 
 **Use cases:**

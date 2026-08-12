@@ -5,7 +5,7 @@
  * out of vault files rather than DB columns (those columns no longer exist
  * post-4.6 cutover). Nine vault targets participate, each independently:
  *
- *   - properties.json          — pronouns, aliases, title, firstMessage, talkativeness
+ *   - properties.json          — pronouns, aliases, title, firstMessage, talkativeness, canChooseOutfit
  *   - identity.md              — character.identity
  *   - description.md           — character.description
  *   - manifesto.md             — character.manifesto
@@ -74,10 +74,13 @@
 export {
   CharacterVaultPropertiesSchema,
   type CharacterVaultProperties,
+  CharacterVaultMetadataSchema,
+  type CharacterVaultMetadata,
   CharacterVaultPhysicalPromptsSchema,
   type CharacterVaultPhysicalPrompts,
   type CharacterVaultWardrobe,
   CHARACTER_PROPERTIES_JSON_PATH,
+  CHARACTER_METADATA_JSON_PATH,
   CHARACTER_IDENTITY_MD_PATH,
   CHARACTER_DESCRIPTION_MD_PATH,
   CHARACTER_MANIFESTO_MD_PATH,
@@ -103,6 +106,8 @@ export {
 export {
   readVaultTextFile,
   readCharacterVaultProperties,
+  readCharacterVaultPropertiesForWrite,
+  readCharacterVaultMetadata,
   readCharacterVaultIdentity,
   readCharacterVaultDescription,
   readCharacterVaultManifesto,

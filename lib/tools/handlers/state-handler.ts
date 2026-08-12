@@ -1,11 +1,12 @@
 /**
  * State Tool Handler
  *
- * Executes state operations for fetching, setting, and deleting
- * persistent state in chats and projects.
+ * Executes state operations for fetching, setting, and deleting persistent
+ * state across the four-tier cascade: chat → project → group → general.
  *
- * Supports path-based access with dot notation and array indexing.
- * Chat state overrides project state when merged.
+ * Supports path-based access with dot notation and array indexing. On a merged
+ * fetch narrower tiers win (chat over project over group over general). The
+ * merge and group resolution live in `@/lib/state/state-cascade`.
  */
 
 import {
@@ -17,6 +18,26 @@ import {
 } from '../state-tool';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
+import {
+  parsePath,
+  getAtPath,
+  setAtPath as setAtPathPure,
+  deleteAtPath,
+} from '@/lib/state/state-paths';
+import {
+  resolveStateCascade,
+  resolveGroupCandidates,
+  resolveGroupForContext,
+  StateGroupResolutionError,
+  type GroupScope,
+} from '@/lib/state/state-cascade';
+import { readGeneralState, writeGeneralState } from '@/lib/mount-index/general-state';
+import type { Group } from '@/lib/schemas/group.types';
+
+// Re-export the pure path helpers so existing imports (lib/tools/index.ts,
+// tests) keep resolving through the handler. New code should import them
+// directly from '@/lib/state/state-paths'.
+export { parsePath, getAtPath, deleteAtPath } from '@/lib/state/state-paths';
 
 /**
  * Context required for state tool execution
@@ -28,6 +49,11 @@ export interface StateToolContext {
   chatId: string;
   /** Project ID (optional, for project state access) */
   projectId?: string;
+  /**
+   * Responding character ID (optional). Scopes the group tier to this
+   * character's own memberships (Knowledge's rule). Absent → no group tier.
+   */
+  characterId?: string;
 }
 
 /**
@@ -44,148 +70,23 @@ export class StateError extends Error {
 }
 
 /**
- * Parse a path string into an array of keys
- * Supports dot notation and array indexing: "player.inventory[0].name"
- */
-export function parsePath(path: string | undefined): (string | number)[] {
-  if (!path || path.trim() === '') {
-    return [];
-  }
-
-  const result: (string | number)[] = [];
-  // Match either:
-  // - A word (property name): \w+
-  // - Or an array index: \[(\d+)\]
-  const regex = /(\w+)|\[(\d+)\]/g;
-  let match;
-
-  while ((match = regex.exec(path)) !== null) {
-    if (match[1] !== undefined) {
-      // Property name
-      result.push(match[1]);
-    } else if (match[2] !== undefined) {
-      // Array index
-      result.push(parseInt(match[2], 10));
-    }
-  }
-
-  return result;
-}
-
-/**
- * Get a value at a path in an object
- * Returns undefined if path doesn't exist
- */
-export function getAtPath(obj: Record<string, unknown>, path: (string | number)[]): unknown {
-  if (path.length === 0) {
-    return obj;
-  }
-
-  let current: unknown = obj;
-
-  for (const key of path) {
-    if (current === null || current === undefined) {
-      return undefined;
-    }
-    if (typeof current !== 'object') {
-      return undefined;
-    }
-    current = (current as Record<string | number, unknown>)[key];
-  }
-
-  return current;
-}
-
-/**
- * Set a value at a path in an object
- * Creates intermediate objects/arrays as needed
- * Returns the modified object (mutates in place)
+ * Set a value at a path, re-wrapping the pure helper's root-set error as a
+ * typed `StateError` for callers in this handler. Otherwise identical to
+ * {@link setAtPathPure}.
  */
 export function setAtPath(
   obj: Record<string, unknown>,
   path: (string | number)[],
   value: unknown
 ): Record<string, unknown> {
-  if (path.length === 0) {
-    // Setting root - value must be an object
-    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-      return value as Record<string, unknown>;
-    }
-    throw new StateError('Cannot set root state to non-object value', 'VALIDATION_ERROR');
+  try {
+    return setAtPathPure(obj, path, value);
+  } catch (error) {
+    throw new StateError(
+      error instanceof Error ? error.message : 'Cannot set root state to non-object value',
+      'VALIDATION_ERROR'
+    );
   }
-
-  let current: Record<string | number, unknown> = obj;
-
-  for (let i = 0; i < path.length - 1; i++) {
-    const key = path[i];
-    const nextKey = path[i + 1];
-
-    if (current[key] === undefined || current[key] === null) {
-      // Create intermediate structure based on next key type
-      current[key] = typeof nextKey === 'number' ? [] : {};
-    } else if (typeof current[key] !== 'object') {
-      // Overwrite primitive with structure
-      current[key] = typeof nextKey === 'number' ? [] : {};
-    }
-
-    current = current[key] as Record<string | number, unknown>;
-  }
-
-  const lastKey = path[path.length - 1];
-  current[lastKey] = value;
-
-  return obj;
-}
-
-/**
- * Delete a value at a path in an object
- * Returns true if something was deleted, false otherwise
- */
-export function deleteAtPath(
-  obj: Record<string, unknown>,
-  path: (string | number)[]
-): boolean {
-  if (path.length === 0) {
-    // Cannot delete root
-    return false;
-  }
-
-  let current: Record<string | number, unknown> = obj;
-
-  for (let i = 0; i < path.length - 1; i++) {
-    const key = path[i];
-    if (current[key] === undefined || current[key] === null) {
-      return false;
-    }
-    if (typeof current[key] !== 'object') {
-      return false;
-    }
-    current = current[key] as Record<string | number, unknown>;
-  }
-
-  const lastKey = path[path.length - 1];
-  if (!(lastKey in current)) {
-    return false;
-  }
-
-  if (Array.isArray(current) && typeof lastKey === 'number') {
-    current.splice(lastKey, 1);
-  } else {
-    delete current[lastKey];
-  }
-
-  return true;
-}
-
-/**
- * Merge project state into chat state (chat overrides project)
- * Only merges top-level keys
- */
-function mergeState(
-  projectState: Record<string, unknown>,
-  chatState: Record<string, unknown>
-): Record<string, unknown> {
-  return { ...projectState, ...chatState };
 }
 
 /**
@@ -203,7 +104,8 @@ export async function executeStateTool(
 
   try {
     // Validate input
-    if (!validateStateInput(input)) {
+    const parsed = validateStateInput(input);
+    if (!parsed) {
       logger.warn('State tool validation failed', {
         context: 'state-handler',
         userId: context.userId,
@@ -218,7 +120,7 @@ export async function executeStateTool(
       };
     }
 
-    const { operation, context: stateContext, path, value } = input;
+    const { operation, context: stateContext, group: groupRef, path, value } = parsed;
     const parsedPath = parsePath(path);
 
     // Fetch chat
@@ -248,10 +150,53 @@ export async function executeStateTool(
     const chatState = (chat.state || {}) as Record<string, unknown>;
     const projectState = project ? (project.state || {}) as Record<string, unknown> : {};
 
+    // The group tier follows the responding character's own memberships
+    // (Knowledge's rule). Absent characterId → no group tier at all.
+    const groupScope: GroupScope = context.characterId
+      ? { kind: 'character', characterId: context.characterId }
+      : { kind: 'none' };
+
+    // Resolve one group for an explicit group-context op, returning a typed
+    // tool error (never throwing) when it can't be pinned down.
+    const resolveGroupOrError = async (): Promise<
+      { ok: true; group: Group } | { ok: false; error: string }
+    > => {
+      const candidates = await resolveGroupCandidates(chat, groupScope);
+      try {
+        return { ok: true, group: resolveGroupForContext({ groupRef, candidates }) };
+      } catch (error) {
+        if (error instanceof StateGroupResolutionError) {
+          return { ok: false, error: error.message };
+        }
+        throw error;
+      }
+    };
+
+    const underscoreDenied = (verb: 'modified' | 'deleted'): StateToolOutput | null => {
+      if (parsedPath.length > 0 && typeof parsedPath[0] === 'string' && parsedPath[0].startsWith('_')) {
+        logger.warn(`State tool: attempted to ${verb === 'modified' ? 'modify' : 'delete'} user-only key`, {
+          context: 'state-handler',
+          userId: context.userId,
+          chatId: context.chatId,
+          characterId: context.characterId,
+          path,
+        });
+        return {
+          success: false,
+          operation,
+          context: stateContext,
+          path,
+          error: `Keys starting with underscore are user-only and cannot be ${verb} by AI`,
+        };
+      }
+      return null;
+    };
+
     // Handle operations
     switch (operation) {
       case 'fetch': {
         let resultValue: unknown;
+        let groupIdForLog: string | undefined;
 
         if (stateContext === 'chat') {
           resultValue = getAtPath(chatState, parsedPath);
@@ -266,17 +211,30 @@ export async function executeStateTool(
             };
           }
           resultValue = getAtPath(projectState, parsedPath);
+        } else if (stateContext === 'group') {
+          const resolved = await resolveGroupOrError();
+          if (!resolved.ok) {
+            return { success: false, operation, context: stateContext, path, error: resolved.error };
+          }
+          groupIdForLog = resolved.group.id;
+          resultValue = getAtPath((resolved.group.state || {}) as Record<string, unknown>, parsedPath);
+        } else if (stateContext === 'general') {
+          const generalState = await readGeneralState();
+          resultValue = getAtPath(generalState, parsedPath);
         } else {
-          // Merged state (chat overrides project)
-          const mergedState = mergeState(projectState, chatState);
-          resultValue = getAtPath(mergedState, parsedPath);
+          // Merged cascade (chat over project over group over general).
+          const cascade = await resolveStateCascade({ chat, groupScope });
+          groupIdForLog = cascade.groupTier.appliedGroupId;
+          resultValue = getAtPath(cascade.merged, parsedPath);
         }
 
         logger.info('State fetch completed', {
           context: 'state-handler',
           userId: context.userId,
           chatId: context.chatId,
+          characterId: context.characterId,
           stateContext,
+          groupId: groupIdForLog,
           path,
           hasValue: resultValue !== undefined,
         });
@@ -291,26 +249,13 @@ export async function executeStateTool(
       }
 
       case 'set': {
-        // Check for underscore prefix (user-only keys)
-        if (parsedPath.length > 0 && typeof parsedPath[0] === 'string' && parsedPath[0].startsWith('_')) {
-          logger.warn('State tool: attempted to modify user-only key', {
-            context: 'state-handler',
-            userId: context.userId,
-            chatId: context.chatId,
-            path,
-          });
-          return {
-            success: false,
-            operation,
-            context: stateContext,
-            path,
-            error: 'Keys starting with underscore are user-only and cannot be modified by AI',
-          };
-        }
+        const denied = underscoreDenied('modified');
+        if (denied) return denied;
 
         const targetContext = stateContext || 'chat';
         let previousValue: unknown;
         let newState: Record<string, unknown>;
+        let groupIdForLog: string | undefined;
 
         if (targetContext === 'project') {
           if (!project) {
@@ -322,15 +267,27 @@ export async function executeStateTool(
               error: 'Chat is not part of a project',
             };
           }
-
           previousValue = getAtPath(projectState, parsedPath);
           newState = setAtPath({ ...projectState }, parsedPath, value);
-
           await repos.projects.update(project.id, { state: newState });
+        } else if (targetContext === 'group') {
+          const resolved = await resolveGroupOrError();
+          if (!resolved.ok) {
+            return { success: false, operation, context: targetContext, path, error: resolved.error };
+          }
+          const groupState = (resolved.group.state || {}) as Record<string, unknown>;
+          previousValue = getAtPath(groupState, parsedPath);
+          newState = setAtPath({ ...groupState }, parsedPath, value);
+          await repos.groups.update(resolved.group.id, { state: newState });
+          groupIdForLog = resolved.group.id;
+        } else if (targetContext === 'general') {
+          const generalState = await readGeneralState();
+          previousValue = getAtPath(generalState, parsedPath);
+          newState = setAtPath({ ...generalState }, parsedPath, value);
+          await writeGeneralState(newState);
         } else {
           previousValue = getAtPath(chatState, parsedPath);
           newState = setAtPath({ ...chatState }, parsedPath, value);
-
           await repos.chats.update(chat.id, { state: newState });
         }
 
@@ -338,7 +295,9 @@ export async function executeStateTool(
           context: 'state-handler',
           userId: context.userId,
           chatId: context.chatId,
+          characterId: context.characterId,
           targetContext,
+          groupId: groupIdForLog,
           path,
           hadPreviousValue: previousValue !== undefined,
         });
@@ -354,26 +313,13 @@ export async function executeStateTool(
       }
 
       case 'delete': {
-        // Check for underscore prefix (user-only keys)
-        if (parsedPath.length > 0 && typeof parsedPath[0] === 'string' && parsedPath[0].startsWith('_')) {
-          logger.warn('State tool: attempted to delete user-only key', {
-            context: 'state-handler',
-            userId: context.userId,
-            chatId: context.chatId,
-            path,
-          });
-          return {
-            success: false,
-            operation,
-            context: stateContext,
-            path,
-            error: 'Keys starting with underscore are user-only and cannot be deleted by AI',
-          };
-        }
+        const denied = underscoreDenied('deleted');
+        if (denied) return denied;
 
         const targetContext = stateContext || 'chat';
         let previousValue: unknown;
         let deleted: boolean;
+        let groupIdForLog: string | undefined;
 
         if (targetContext === 'project') {
           if (!project) {
@@ -385,19 +331,37 @@ export async function executeStateTool(
               error: 'Chat is not part of a project',
             };
           }
-
           previousValue = getAtPath(projectState, parsedPath);
           const newState = { ...projectState };
           deleted = deleteAtPath(newState, parsedPath);
-
           if (deleted) {
             await repos.projects.update(project.id, { state: newState });
+          }
+        } else if (targetContext === 'group') {
+          const resolved = await resolveGroupOrError();
+          if (!resolved.ok) {
+            return { success: false, operation, context: targetContext, path, error: resolved.error };
+          }
+          const groupState = (resolved.group.state || {}) as Record<string, unknown>;
+          previousValue = getAtPath(groupState, parsedPath);
+          const newState = { ...groupState };
+          deleted = deleteAtPath(newState, parsedPath);
+          if (deleted) {
+            await repos.groups.update(resolved.group.id, { state: newState });
+          }
+          groupIdForLog = resolved.group.id;
+        } else if (targetContext === 'general') {
+          const generalState = await readGeneralState();
+          previousValue = getAtPath(generalState, parsedPath);
+          const newState = { ...generalState };
+          deleted = deleteAtPath(newState, parsedPath);
+          if (deleted) {
+            await writeGeneralState(newState);
           }
         } else {
           previousValue = getAtPath(chatState, parsedPath);
           const newState = { ...chatState };
           deleted = deleteAtPath(newState, parsedPath);
-
           if (deleted) {
             await repos.chats.update(chat.id, { state: newState });
           }
@@ -407,7 +371,9 @@ export async function executeStateTool(
           context: 'state-handler',
           userId: context.userId,
           chatId: context.chatId,
+          characterId: context.characterId,
           targetContext,
+          groupId: groupIdForLog,
           path,
           deleted,
         });

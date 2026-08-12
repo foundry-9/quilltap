@@ -35,10 +35,16 @@ export type RenderItem =
  * see is one addressed to their own character (the visibility filter only shows
  * a targeted whisper when it targets a user-controlled participant), and those
  * are significant enough to read in full rather than pack into a chip.
+ *
+ * Pascal's roll outcomes are exempt on the same grounds: a `custom-tool-result`
+ * is the table's binding verdict on the scene — the roll, the value, and the
+ * outcome it landed on — and it must be legible in full rather than reduced to
+ * a chip the reader has to unpack.
  */
 function isCollapsedAnnouncement(message: Message, expandedSystemMessageIds: Set<string>): boolean {
   if (message.systemSender === 'carina') return false
   if (message.systemSender === 'suparna' && message.systemKind === 'mail-delivery') return false
+  if (message.systemSender === 'pascal' && message.systemKind === 'custom-tool-result') return false
   return !!message.systemSender && !expandedSystemMessageIds.has(message.id)
 }
 

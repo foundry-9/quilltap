@@ -13,7 +13,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useWorkspaceNavigate } from '@/components/workspace/useWorkspaceNavigate'
 import { TagDisplay } from '@/components/tags/tag-display'
 import { useUserCharacterDisplayName } from '@/hooks/usePersonaDisplayName'
 import AvatarStack from '@/components/ui/AvatarStack'
@@ -143,7 +143,7 @@ export function ChatCard({
   cardRef,
   characterName,
 }: ChatCardProps) {
-  const router = useRouter()
+  const navigate = useWorkspaceNavigate()
   const { formatCharacterName } = useUserCharacterDisplayName()
   const [copiedLink, setCopiedLink] = useState(false)
 
@@ -170,7 +170,7 @@ export function ChatCard({
     if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('a[href]')) {
       return
     }
-    router.push(`/salon/${chat.id}`)
+    navigate(`/salon/${chat.id}`)
   }
 
   const handleAction = (e: React.MouseEvent) => {
@@ -186,7 +186,7 @@ export function ChatCard({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
-      router.push(`/salon/${chat.id}`)
+      navigate(`/salon/${chat.id}`)
     }
   }
 

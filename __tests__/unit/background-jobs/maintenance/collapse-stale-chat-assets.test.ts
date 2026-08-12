@@ -35,7 +35,7 @@ function genFile(id: string, sha256: string) {
 
 let files: { findByLinkedTo: jest.Mock };
 let characters: { findByDefaultImageId: jest.Mock; findByAvatarOverrideImageId: jest.Mock };
-let chats: { findAll: jest.Mock };
+let chats: { findAll: jest.Mock; getLastPlayedMessageAt: jest.Mock };
 
 const staleChat = {
   id: 'chat-stale',
@@ -53,8 +53,18 @@ const activeChat = {
   characterAvatars: {},
 };
 
+// Staleness is keyed off the last *played* (participant/user) message, not the
+// chat's lastMessageAt/updatedAt (which Staff announcements also bump). Reset in
+// beforeEach because individual tests mutate it.
+let lastPlayedByChat: Record<string, string | null>;
+
 beforeEach(() => {
   jest.clearAllMocks();
+
+  lastPlayedByChat = {
+    'chat-stale': isoDaysAgo(40),
+    'chat-active': isoDaysAgo(1),
+  };
 
   files = {
     findByLinkedTo: jest.fn(async (id: string) => {
@@ -79,7 +89,12 @@ beforeEach(() => {
     findByAvatarOverrideImageId: jest.fn(async () => []),
   };
 
-  chats = { findAll: jest.fn(async () => [staleChat, activeChat]) };
+  chats = {
+    findAll: jest.fn(async () => [staleChat, activeChat]),
+    getLastPlayedMessageAt: jest.fn(async (id: string) =>
+      id in lastPlayedByChat ? lastPlayedByChat[id] : null,
+    ),
+  };
 
   mockGetRepositories.mockReturnValue({ files, characters, chats } as any);
 
@@ -156,6 +171,40 @@ describe('collapseStaleChatAssets', () => {
     expect(summary.staleChats).toBe(1);
     expect(summary.chatsCollapsed).toBe(0);
     expect(summary.filesDeleted).toBe(0);
+  });
+
+  it('treats a chat as stale by last PLAYED message, ignoring a recent Staff announcement', async () => {
+    // The chat's lastMessageAt/updatedAt look recent (a feature whisper bumped
+    // them), but no participant/user has spoken in 40 days. It must still be
+    // stale and get collapsed.
+    const freshlyWhisperedChat = {
+      ...staleChat,
+      lastMessageAt: isoDaysAgo(1),
+      updatedAt: isoDaysAgo(1),
+    };
+    chats.findAll.mockResolvedValue([freshlyWhisperedChat, activeChat]);
+    // getLastPlayedMessageAt still reports the real 40-day-old activity.
+
+    const summary = await collapseStaleChatAssets(NOW);
+
+    expect(summary.staleChats).toBe(1);
+    expect(summary.chatsCollapsed).toBe(1);
+    expect(mockDeleteFile).toHaveBeenCalled();
+  });
+
+  it('is NOT stale when a participant/user spoke recently, even if long-lived', async () => {
+    lastPlayedByChat['chat-stale'] = isoDaysAgo(2);
+    const summary = await collapseStaleChatAssets(NOW);
+    expect(summary.staleChats).toBe(0);
+    expect(mockDeleteFile).not.toHaveBeenCalled();
+  });
+
+  it('falls back to updatedAt when the chat has no played messages at all', async () => {
+    // No participant/user message ever (null) → use updatedAt (40 days) → stale.
+    lastPlayedByChat['chat-stale'] = null;
+    const summary = await collapseStaleChatAssets(NOW);
+    expect(summary.staleChats).toBe(1);
+    expect(summary.chatsCollapsed).toBe(1);
   });
 
   it('is idempotent — a chat with only its current assets is a no-op', async () => {

@@ -5,9 +5,11 @@
 
 import {
   calculateCurrentTimestamp,
+  calculateTimestampAt,
   shouldInjectTimestamp,
   formatTimestampForSystemPrompt,
-  initializeFictionalTime,
+  ensureFictionalBaseRealTime,
+  parseTimestampInTimezone,
   resolveTimezone,
 } from '@/lib/chat/timestamp-utils'
 import type { TimestampConfig } from '@/lib/schemas/types'
@@ -253,33 +255,227 @@ describe('timestamp-utils', () => {
     })
   })
 
-  describe('initializeFictionalTime', () => {
-    it('should set up fictional time configuration', () => {
-      const baseConfig: TimestampConfig = {
-        mode: 'EVERY_MESSAGE',
-        format: 'FRIENDLY',
-        useFictionalTime: false,
-        autoPrepend: true,
-      }
+  describe('ensureFictionalBaseRealTime', () => {
+    const fictionalConfig = (
+      overrides: Partial<TimestampConfig> = {}
+    ): TimestampConfig => ({
+      mode: 'EVERY_MESSAGE',
+      format: 'FRIENDLY',
+      useFictionalTime: true,
+      fictionalBaseTimestamp: '1776-07-04T16:30',
+      autoPrepend: true,
+      ...overrides,
+    })
 
-      const fictionalTimestamp = '1776-07-04T16:30:00.000Z'
+    it('should stamp the anchor when a fictional clock has none', () => {
       const before = Date.now()
-      const result = initializeFictionalTime(baseConfig, fictionalTimestamp)
+      const result = ensureFictionalBaseRealTime(fictionalConfig())
       const after = Date.now()
 
-      expect(result.useFictionalTime).toBe(true)
-      expect(result.fictionalBaseTimestamp).toBe(fictionalTimestamp)
       expect(result.fictionalBaseRealTime).toBeDefined()
 
-      // The real time should be set to approximately now
       const realTime = new Date(result.fictionalBaseRealTime!).getTime()
       expect(realTime).toBeGreaterThanOrEqual(before)
       expect(realTime).toBeLessThanOrEqual(after)
 
-      // Other config properties should be preserved
-      expect(result.mode).toBe(baseConfig.mode)
-      expect(result.format).toBe(baseConfig.format)
-      expect(result.autoPrepend).toBe(baseConfig.autoPrepend)
+      // Everything else rides through untouched
+      expect(result.mode).toBe('EVERY_MESSAGE')
+      expect(result.format).toBe('FRIENDLY')
+      expect(result.fictionalBaseTimestamp).toBe('1776-07-04T16:30')
+      expect(result.autoPrepend).toBe(true)
+    })
+
+    it('should accept an explicit anchor for retro-fitting an existing chat', () => {
+      const anchor = new Date('2026-01-02T03:04:05.000Z')
+
+      const result = ensureFictionalBaseRealTime(fictionalConfig(), anchor)
+
+      expect(result.fictionalBaseRealTime).toBe('2026-01-02T03:04:05.000Z')
+    })
+
+    it('should never re-stamp an anchored clock — that would reset it to the base', () => {
+      const existing = '2020-05-05T05:05:05.000Z'
+
+      const result = ensureFictionalBaseRealTime(
+        fictionalConfig({ fictionalBaseRealTime: existing })
+      )
+
+      expect(result.fictionalBaseRealTime).toBe(existing)
+    })
+
+    it('should leave real-time and baseless configs alone', () => {
+      expect(
+        ensureFictionalBaseRealTime(fictionalConfig({ useFictionalTime: false }))
+          .fictionalBaseRealTime
+      ).toBeUndefined()
+
+      expect(
+        ensureFictionalBaseRealTime(
+          fictionalConfig({ fictionalBaseTimestamp: null })
+        ).fictionalBaseRealTime
+      ).toBeUndefined()
+    })
+
+    it('should pass null and undefined straight through', () => {
+      expect(ensureFictionalBaseRealTime(null)).toBeNull()
+      expect(ensureFictionalBaseRealTime(undefined)).toBeUndefined()
+    })
+  })
+
+  describe('parseTimestampInTimezone', () => {
+    it('should read a zone-less base as a clock in the story timezone', () => {
+      // The bug: parsed against the server's zone, "10:15" in Istanbul surfaced as 6:01 PM
+      // on an America/Chicago host, the two 1550 LMT offsets differing by ~7h46m.
+      const parsed = parseTimestampInTimezone('1550-07-25T10:15', 'Europe/Istanbul')
+
+      const rendered = new Intl.DateTimeFormat('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'Europe/Istanbul',
+      }).format(parsed)
+
+      expect(rendered).toBe('10:15 AM')
+    })
+
+    it('should round-trip modern wall-clock times across zones', () => {
+      for (const timezone of ['Europe/Istanbul', 'America/New_York', 'Asia/Kolkata', 'UTC']) {
+        const parsed = parseTimestampInTimezone('2026-07-25T10:15', timezone)
+
+        const rendered = new Intl.DateTimeFormat('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+          timeZone: timezone,
+        }).format(parsed)
+
+        expect(rendered).toBe('10:15 AM')
+      }
+    })
+
+    it('should leave absolute timestamps untouched', () => {
+      const withZ = parseTimestampInTimezone('1776-07-04T16:30:00.000Z', 'Europe/Istanbul')
+      expect(withZ.toISOString()).toBe('1776-07-04T16:30:00.000Z')
+
+      const withOffset = parseTimestampInTimezone('2026-01-15T12:00:00+05:00', 'America/Chicago')
+      expect(withOffset.toISOString()).toBe('2026-01-15T07:00:00.000Z')
+    })
+
+    it('should fall back to system-local parsing with no timezone', () => {
+      const parsed = parseTimestampInTimezone('2026-07-25T10:15', undefined)
+
+      expect(parsed.getHours()).toBe(10)
+      expect(parsed.getMinutes()).toBe(15)
+    })
+  })
+
+  describe('fictional clock advancement', () => {
+    it('should advance 1:1 with real time from the anchor', () => {
+      const config: TimestampConfig = {
+        mode: 'EVERY_MESSAGE',
+        format: 'ISO8601',
+        useFictionalTime: true,
+        fictionalBaseTimestamp: '1550-07-25T10:15',
+        // 45 minutes and a half, so the reading lands mid-minute and cannot round across a
+        // boundary while the test runs
+        fictionalBaseRealTime: new Date(Date.now() - 45 * 60_000 - 30_000).toISOString(),
+        timezone: 'Europe/Istanbul',
+        autoPrepend: true,
+      }
+
+      const result = calculateCurrentTimestamp(config, 'Europe/Istanbul')
+
+      expect(result.isFictional).toBe(true)
+      // 45 real minutes elapsed since the anchor, so the story clock reads 11:00 AM.
+      // Asserted on `formatted` rather than `isoValue`: the latter truncates the UTC offset to
+      // whole minutes, which is lossy against Istanbul's 1550 LMT offset of +01:55:52.
+      expect(result.formatted).toMatch(/11:00:\d{2}/)
+    })
+
+    it('should not report the same instant on successive turns', () => {
+      // The original bug: with no anchor the elapsed offset was always ~0, so every turn
+      // re-reported the base and the Host announced the same moment forever.
+      const anchored = ensureFictionalBaseRealTime({
+        mode: 'EVERY_N_MINUTES',
+        format: 'ISO8601',
+        useFictionalTime: true,
+        fictionalBaseTimestamp: '1550-07-25T10:15',
+        timezone: 'Europe/Istanbul',
+        autoPrepend: true,
+        intervalMinutes: 15,
+      })
+
+      const firstTurn = calculateCurrentTimestamp(anchored, 'Europe/Istanbul')
+
+      // Rewind the anchor by an hour to stand in for an hour of real conversation
+      const later = calculateCurrentTimestamp(
+        {
+          ...anchored,
+          fictionalBaseRealTime: new Date(
+            new Date(anchored.fictionalBaseRealTime!).getTime() - 3_600_000
+          ).toISOString(),
+        },
+        'Europe/Istanbul'
+      )
+
+      const elapsed =
+        new Date(later.isoValue).getTime() - new Date(firstTurn.isoValue).getTime()
+
+      expect(elapsed).toBeGreaterThan(59 * 60_000)
+      expect(elapsed).toBeLessThan(61 * 60_000)
+    })
+  })
+
+  describe('calculateTimestampAt', () => {
+    it('should translate a historical real instant onto the fictional clock', () => {
+      const config: TimestampConfig = {
+        mode: 'EVERY_MESSAGE',
+        format: 'ISO8601',
+        useFictionalTime: true,
+        fictionalBaseTimestamp: '1920-05-01T20:00',
+        fictionalBaseRealTime: '2026-01-01T00:00:00.000Z',
+        timezone: 'UTC',
+        autoPrepend: true,
+      }
+
+      const result = calculateTimestampAt(new Date('2026-01-01T00:45:00.000Z'), config, 'UTC')
+
+      expect(result.isFictional).toBe(true)
+      expect(result.isoValue).toBe('1920-05-01T20:45:00+00:00')
+    })
+
+    it('should measure elapsed time from the fallback anchor when the config has none', () => {
+      const config: TimestampConfig = {
+        mode: 'EVERY_MESSAGE',
+        format: 'ISO8601',
+        useFictionalTime: true,
+        fictionalBaseTimestamp: '1920-05-01T20:00',
+        timezone: 'UTC',
+        autoPrepend: true,
+      }
+
+      const result = calculateTimestampAt(
+        new Date('2026-01-01T01:30:00.000Z'),
+        config,
+        'UTC',
+        new Date('2026-01-01T00:00:00.000Z')
+      )
+
+      expect(result.isoValue).toBe('1920-05-01T21:30:00+00:00')
+    })
+
+    it('should return the real instant itself for non-fictional configs', () => {
+      const config: TimestampConfig = {
+        mode: 'EVERY_MESSAGE',
+        format: 'ISO8601',
+        useFictionalTime: false,
+        autoPrepend: true,
+      }
+
+      const result = calculateTimestampAt(new Date('2026-01-01T12:00:00.000Z'), config)
+
+      expect(result.isFictional).toBe(false)
+      expect(result.isoValue).toBe('2026-01-01T12:00:00.000Z')
     })
   })
 

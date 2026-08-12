@@ -14,7 +14,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { successResponse, serverError } from '@/lib/api/responses';
 import { toolRegistry } from '@/lib/plugins/tool-registry';
@@ -29,6 +29,7 @@ import {
   helpSettingsToolDefinition,
   helpNavigateToolDefinition,
   rngToolDefinition,
+  runCustomToolDefinition,
   stateToolDefinition,
   selfInventoryToolDefinition,
   whisperToolDefinition,
@@ -78,6 +79,7 @@ const BUILT_IN_TOOL_SCHEMAS: Record<string, { function: { parameters: Record<str
   help_settings: helpSettingsToolDefinition,
   help_navigate: helpNavigateToolDefinition,
   rng: rngToolDefinition,
+  run_custom: runCustomToolDefinition,
   state: stateToolDefinition,
   self_inventory: selfInventoryToolDefinition,
   whisper: whisperToolDefinition,
@@ -183,6 +185,13 @@ const BUILT_IN_TOOLS = [
     id: 'rng',
     name: 'Random Number Generator',
     description: 'Roll dice, flip coins, or randomly select a chat participant (spin the bottle)',
+    source: 'built-in' as const,
+    category: 'utility',
+  },
+  {
+    id: 'run_custom',
+    name: 'Custom Tools',
+    description: "Run one of this scene's user-authored custom tools (Tools/*.tool.json) — Pascal rolls it server-side and announces the outcome. Only offered when the chat can actually see at least one valid definition.",
     source: 'built-in' as const,
     category: 'utility',
   },
@@ -417,7 +426,7 @@ export interface AvailableTool {
  * GET /api/v1/tools?chatId=xxx
  * List all available LLM tools that can be enabled/disabled per chat
  */
-export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
+export const GET = createContextHandler(async (req: NextRequest, { user, repos }) => {
   try {
     const chatId = req.nextUrl.searchParams.get('chatId');
     const includeSchemas = req.nextUrl.searchParams.get('includeSchemas') === 'true';

@@ -221,8 +221,8 @@ export default function MarkdownLexicalEditor({
             disabled={disabled}
             spellCheck={false}
             aria-label={ariaLabel ? `${ariaLabel} (markdown source)` : 'Markdown source'}
-            className="w-full px-3 py-2 font-mono text-sm qt-text-primary bg-transparent border-0 outline-none resize-y"
-            style={{ lineHeight: '1.6', minHeight }}
+            className="w-full px-3 py-2 font-mono text-sm qt-text-primary border-0 outline-none resize-y"
+            style={{ lineHeight: '1.6', minHeight, backgroundColor: 'var(--color-background)' }}
           />
         ) : (
           <div className="qt-doc-editor-with-gutter">

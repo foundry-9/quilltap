@@ -225,10 +225,12 @@ export async function enqueueEmbeddingJobsScoped(
     return { jobs: [], queued: 0, skipped: candidates.length };
   }
 
+  // Default profile only — never an arbitrary fallback: every vector in the
+  // instance must come from the same profile.
   const profiles = await repos.embeddingProfiles.findAll();
-  const defaultProfile = profiles.find(p => p.isDefault) || profiles[0];
+  const defaultProfile = profiles.find(p => p.isDefault);
   if (!defaultProfile) {
-    throw new Error('No embedding profile configured');
+    throw new Error('No default embedding profile configured');
   }
 
   const users = await repos.users.findAll();

@@ -9,17 +9,20 @@
 
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
+import { llmNumber } from './llm-number';
 
 /**
  * Zod schema for the upsert-annotation tool's input. The single source of truth for both
  * runtime validation and the derived OpenAI-format `parameters` JSON Schema.
  */
 export const upsertAnnotationToolInputSchema = z.object({
-  message_index: z
-    .number()
-    .int()
-    .min(0)
-    .describe('The 0-based message number to annotate (as shown in the rendered conversation, e.g., Message 0, Message 1).'),
+  message_index: llmNumber(
+    z
+      .number()
+      .int()
+      .min(0)
+      .describe('The 0-based message number to annotate (as shown in the rendered conversation, e.g., Message 0, Message 1).')
+  ),
   content: z
     .string()
     .min(1)
@@ -61,6 +64,7 @@ export const upsertAnnotationToolDefinition = {
  */
 export function validateUpsertAnnotationInput(
   input: unknown
-): input is UpsertAnnotationToolInput {
-  return upsertAnnotationToolInputSchema.safeParse(input).success;
+): UpsertAnnotationToolInput | null {
+  const parsed = upsertAnnotationToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }

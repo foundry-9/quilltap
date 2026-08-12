@@ -1,7 +1,9 @@
 /**
- * Tests for the composer gutter palette's Compose Mail button.
+ * Tests for the composer gutter palette's Compose Mail button and the
+ * custom-tools slot.
  *
- * Verifies the mail button fires `onComposeMailClick` and respects `disabled`.
+ * Verifies the mail button fires `onComposeMailClick` and respects `disabled`,
+ * and that the custom-tools dropdown appears only when a roster resolved.
  */
 
 import { describe, it, expect, jest as jestGlobal } from '@jest/globals'
@@ -13,6 +15,13 @@ import ComposerGutterTools from '@/components/chat/ComposerGutterTools'
 jest.mock('@/components/chat/RngDropdown', () => ({
   __esModule: true,
   default: () => <div data-testid="rng-dropdown" />,
+}))
+
+// Likewise CustomToolsButton: its dialog needs a QueryClient and fetches a
+// roster. Here we only care whether the gutter gives it a slot at all.
+jest.mock('@/components/chat/CustomToolsButton', () => ({
+  __esModule: true,
+  default: () => <div data-testid="custom-tools-button" />,
 }))
 
 function renderTools(overrides: Partial<React.ComponentProps<typeof ComposerGutterTools>> = {}) {
@@ -44,5 +53,17 @@ describe('ComposerGutterTools — Compose Mail button', () => {
     expect(button.disabled).toBe(true)
     fireEvent.click(button)
     expect(onComposeMailClick).not.toHaveBeenCalled()
+  })
+})
+
+describe('ComposerGutterTools — custom tools slot', () => {
+  it('omits the custom tools button when no roster resolved', () => {
+    renderTools()
+    expect(screen.queryByTestId('custom-tools-button')).toBeNull()
+  })
+
+  it('renders the custom tools button when a roster is available', () => {
+    renderTools({ customToolsAvailable: true })
+    expect(screen.getByTestId('custom-tools-button')).toBeTruthy()
   })
 })

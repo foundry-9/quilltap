@@ -91,48 +91,48 @@ describe('validateWebSearchInput()', () => {
   describe('Valid inputs', () => {
     it('should accept input with valid query string', () => {
       const input: unknown = { query: 'latest AI news' }
-      expect(validateWebSearchInput(input)).toBe(true)
+      expect(validateWebSearchInput(input)).not.toBeNull()
     })
 
     it('should accept input with query and maxResults', () => {
       const input: unknown = { query: 'python programming', maxResults: 5 }
-      expect(validateWebSearchInput(input)).toBe(true)
+      expect(validateWebSearchInput(input)).not.toBeNull()
     })
 
     it('should accept maxResults at minimum boundary', () => {
       const input: unknown = { query: 'test', maxResults: 1 }
-      expect(validateWebSearchInput(input)).toBe(true)
+      expect(validateWebSearchInput(input)).not.toBeNull()
     })
 
     it('should accept maxResults at maximum boundary', () => {
       const input: unknown = { query: 'test', maxResults: 10 }
-      expect(validateWebSearchInput(input)).toBe(true)
+      expect(validateWebSearchInput(input)).not.toBeNull()
     })
 
     it('should accept query with special characters', () => {
       const input: unknown = { query: 'search for "exact match" -exclude +include' }
-      expect(validateWebSearchInput(input)).toBe(true)
+      expect(validateWebSearchInput(input)).not.toBeNull()
     })
 
     it('should accept query with numbers', () => {
       const input: unknown = { query: 'ChatGPT 4.0 pricing 2024' }
-      expect(validateWebSearchInput(input)).toBe(true)
+      expect(validateWebSearchInput(input)).not.toBeNull()
     })
 
     it('should accept query with unicode characters', () => {
       const input: unknown = { query: '日本語検索 español português' }
-      expect(validateWebSearchInput(input)).toBe(true)
+      expect(validateWebSearchInput(input)).not.toBeNull()
     })
 
     it('should accept single character query', () => {
       const input: unknown = { query: 'a' }
-      expect(validateWebSearchInput(input)).toBe(true)
+      expect(validateWebSearchInput(input)).not.toBeNull()
     })
 
     it('should accept long query up to 500 characters', () => {
       const longQuery = 'a'.repeat(500)
       const input: unknown = { query: longQuery }
-      expect(validateWebSearchInput(input)).toBe(true)
+      expect(validateWebSearchInput(input)).not.toBeNull()
     })
 
     it('should accept input with extra properties', () => {
@@ -142,130 +142,144 @@ describe('validateWebSearchInput()', () => {
         extraProp: 'ignored',
         anotherProp: 123,
       }
-      expect(validateWebSearchInput(input)).toBe(true)
+      expect(validateWebSearchInput(input)).not.toBeNull()
     })
   })
 
   describe('Invalid inputs - missing query', () => {
     it('should reject input without query property', () => {
       const input: unknown = {}
-      expect(validateWebSearchInput(input)).toBe(false)
+      expect(validateWebSearchInput(input)).toBeNull()
     })
 
     it('should reject input with undefined query', () => {
       const input: unknown = { query: undefined }
-      expect(validateWebSearchInput(input)).toBe(false)
+      expect(validateWebSearchInput(input)).toBeNull()
     })
 
     it('should reject input with null query', () => {
       const input: unknown = { query: null }
-      expect(validateWebSearchInput(input)).toBe(false)
+      expect(validateWebSearchInput(input)).toBeNull()
     })
 
     it('should reject input with empty string query', () => {
       const input: unknown = { query: '' }
-      expect(validateWebSearchInput(input)).toBe(false)
+      expect(validateWebSearchInput(input)).toBeNull()
     })
 
     it('should reject input with whitespace-only query', () => {
       const input: unknown = { query: '   ' }
-      expect(validateWebSearchInput(input)).toBe(false)
+      expect(validateWebSearchInput(input)).toBeNull()
     })
 
     it('should reject input with tabs and newlines in query', () => {
       const input: unknown = { query: '\t\n  ' }
-      expect(validateWebSearchInput(input)).toBe(false)
+      expect(validateWebSearchInput(input)).toBeNull()
     })
   })
 
   describe('Invalid inputs - non-string query', () => {
     it('should reject input with number as query', () => {
       const input: unknown = { query: 123 }
-      expect(validateWebSearchInput(input)).toBe(false)
+      expect(validateWebSearchInput(input)).toBeNull()
     })
 
     it('should reject input with boolean as query', () => {
       const input: unknown = { query: true }
-      expect(validateWebSearchInput(input)).toBe(false)
+      expect(validateWebSearchInput(input)).toBeNull()
     })
 
     it('should reject input with array as query', () => {
       const input: unknown = { query: ['test'] }
-      expect(validateWebSearchInput(input)).toBe(false)
+      expect(validateWebSearchInput(input)).toBeNull()
     })
 
     it('should reject input with object as query', () => {
       const input: unknown = { query: { search: 'test' } }
-      expect(validateWebSearchInput(input)).toBe(false)
+      expect(validateWebSearchInput(input)).toBeNull()
     })
   })
 
   describe('Invalid inputs - invalid maxResults', () => {
     it('should reject maxResults less than minimum', () => {
       const input: unknown = { query: 'test', maxResults: 0 }
-      expect(validateWebSearchInput(input)).toBe(false)
+      expect(validateWebSearchInput(input)).toBeNull()
     })
 
     it('should reject negative maxResults', () => {
       const input: unknown = { query: 'test', maxResults: -5 }
-      expect(validateWebSearchInput(input)).toBe(false)
+      expect(validateWebSearchInput(input)).toBeNull()
     })
 
     it('should reject maxResults greater than maximum', () => {
       const input: unknown = { query: 'test', maxResults: 11 }
-      expect(validateWebSearchInput(input)).toBe(false)
+      expect(validateWebSearchInput(input)).toBeNull()
     })
 
     it('should reject maxResults as float', () => {
       const input: unknown = { query: 'test', maxResults: 5.5 }
-      expect(validateWebSearchInput(input)).toBe(false)
+      expect(validateWebSearchInput(input)).toBeNull()
     })
 
-    it('should reject maxResults as a string (no coercion under Zod)', () => {
+    it('should accept maxResults as a quoted number (models quote their numbers)', () => {
+      // llmNumber converts numeric-looking strings: a model sending "5" instead
+      // of 5 gets its search rather than a validation failure. The published
+      // JSON Schema still asks for an integer. See lib/tools/llm-number.ts and
+      // __tests__/unit/lib/tools/tool-input-lenient-numbers.test.ts.
       const input: unknown = { query: 'test', maxResults: '5' }
-      expect(validateWebSearchInput(input)).toBe(false)
+      expect(validateWebSearchInput(input)).not.toBeNull()
+    })
+
+    it('should still reject maxResults as a non-numeric string', () => {
+      const input: unknown = { query: 'test', maxResults: 'five' }
+      expect(validateWebSearchInput(input)).toBeNull()
+    })
+
+    it('should still reject a quoted maxResults above the maximum', () => {
+      const input: unknown = { query: 'test', maxResults: '11' }
+      expect(validateWebSearchInput(input)).toBeNull()
     })
 
     it('should reject maxResults as null', () => {
       const input: unknown = { query: 'test', maxResults: null }
-      expect(validateWebSearchInput(input)).toBe(false)
+      expect(validateWebSearchInput(input)).toBeNull()
     })
 
     it('should reject very large maxResults', () => {
       const input: unknown = { query: 'test', maxResults: 999999 }
-      expect(validateWebSearchInput(input)).toBe(false)
+      expect(validateWebSearchInput(input)).toBeNull()
     })
   })
 
   describe('Invalid inputs - non-object inputs', () => {
     it('should reject null input', () => {
       const input: unknown = null
-      expect(validateWebSearchInput(input)).toBe(false)
+      expect(validateWebSearchInput(input)).toBeNull()
     })
 
     it('should reject undefined input', () => {
       const input: unknown = undefined
-      expect(validateWebSearchInput(input)).toBe(false)
+      expect(validateWebSearchInput(input)).toBeNull()
     })
 
     it('should reject string input', () => {
       const input: unknown = 'just a string'
-      expect(validateWebSearchInput(input)).toBe(false)
+      expect(validateWebSearchInput(input)).toBeNull()
     })
 
     it('should reject number input', () => {
       const input: unknown = 123
-      expect(validateWebSearchInput(input)).toBe(false)
+      expect(validateWebSearchInput(input)).toBeNull()
     })
 
     it('should reject boolean input', () => {
       const input: unknown = true
-      expect(validateWebSearchInput(input)).toBe(false)
+      expect(validateWebSearchInput(input)).toBeNull()
     })
 
     it('should reject array input', () => {
       const input: unknown = ['query']
-      expect(validateWebSearchInput(input)).toBe(false)
+      expect(validateWebSearchInput(input)).toBeNull()
     })
   })
 
@@ -296,7 +310,7 @@ describe('validateWebSearchInput()', () => {
       ]
 
       for (const input of inputs) {
-        expect(validateWebSearchInput(input as unknown)).toBe(false)
+        expect(validateWebSearchInput(input as unknown)).toBeNull()
       }
     })
   })
@@ -305,18 +319,18 @@ describe('validateWebSearchInput()', () => {
     it('should reject query exceeding max length (Zod enforces the JSON Schema maxLength)', () => {
       const longQuery = 'a'.repeat(501)
       const input: unknown = { query: longQuery }
-      expect(validateWebSearchInput(input)).toBe(false)
+      expect(validateWebSearchInput(input)).toBeNull()
     })
 
     it('should accept query at exact min length (1 character)', () => {
       const input: unknown = { query: 'a' }
-      expect(validateWebSearchInput(input)).toBe(true)
+      expect(validateWebSearchInput(input)).not.toBeNull()
     })
 
     it('should accept query at exact max length (500 characters)', () => {
       const query = 'a'.repeat(500)
       const input: unknown = { query }
-      expect(validateWebSearchInput(input)).toBe(true)
+      expect(validateWebSearchInput(input)).not.toBeNull()
     })
 
     it('should validate maxResults as integer only', () => {
@@ -327,7 +341,7 @@ describe('validateWebSearchInput()', () => {
       ]
 
       for (const input of validInputs) {
-        expect(validateWebSearchInput(input as unknown)).toBe(true)
+        expect(validateWebSearchInput(input as unknown)).not.toBeNull()
       }
     })
 
@@ -337,7 +351,7 @@ describe('validateWebSearchInput()', () => {
         '0': 'zero',
         '1': 'one',
       }
-      expect(validateWebSearchInput(input)).toBe(true)
+      expect(validateWebSearchInput(input)).not.toBeNull()
     })
 
     it('should handle inputs with prototype pollution attempt', () => {
@@ -345,7 +359,7 @@ describe('validateWebSearchInput()', () => {
         query: 'test',
         '__proto__': { isAdmin: true },
       }
-      expect(validateWebSearchInput(input)).toBe(true)
+      expect(validateWebSearchInput(input)).not.toBeNull()
     })
   })
 })
@@ -356,7 +370,7 @@ describe('Interface compliance', () => {
       const input: WebSearchToolInput = {
         query: 'test query',
       }
-      expect(validateWebSearchInput(input)).toBe(true)
+      expect(validateWebSearchInput(input)).not.toBeNull()
     })
 
     it('should accept input with optional maxResults', () => {
@@ -364,7 +378,7 @@ describe('Interface compliance', () => {
         query: 'test query',
         maxResults: 5,
       }
-      expect(validateWebSearchInput(input)).toBe(true)
+      expect(validateWebSearchInput(input)).not.toBeNull()
     })
 
     it('should accept input with undefined optional maxResults', () => {
@@ -372,7 +386,7 @@ describe('Interface compliance', () => {
         query: 'test query',
         maxResults: undefined,
       }
-      expect(validateWebSearchInput(input)).toBe(true)
+      expect(validateWebSearchInput(input)).not.toBeNull()
     })
   })
 })

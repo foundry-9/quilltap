@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useWorkspaceNavigate } from '@/components/workspace/useWorkspaceNavigate'
+import { useCreationProgress } from '@/components/providers/creation-progress-provider'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import type {
   Character,
@@ -12,6 +13,7 @@ import type {
   NewChatFormState,
   Project,
   ProjectScenarioOption,
+  RoleplayTemplateOption,
   SelectedCharacter,
   UserControlledCharacter,
 } from '../types'
@@ -71,6 +73,14 @@ interface UseNewChatReturn {
   generalScenarios: GeneralScenarioOption[]
   /** Group scenarios from `/api/v1/groups/scenarios?characterIds=...`; fetched when characters are selected. */
   groupScenarios: GroupScenarioOption[]
+  /** Every roleplay template available to the user, for the in-form picker. */
+  roleplayTemplates: RoleplayTemplateOption[]
+  /**
+   * The template this chat would use if the picker were left alone: project
+   * default > user/global default > null. `state.roleplayTemplateId` is seeded
+   * from it; the form uses it only to label that option as the default.
+   */
+  defaultRoleplayTemplateId: string | null
   /** Every project the user owns, for the in-form picker. */
   availableProjects: ProjectListEntry[]
   /** Currently chosen project ID, or null for "no project (general)". */
@@ -87,6 +97,8 @@ interface UseNewChatReturn {
 
 const INITIAL_STATE: NewChatFormState = {
   imageProfileId: '',
+  roleplayTemplateId: null,
+  roleplayTemplateTouched: false,
   scenario: '',
   scenarioId: null,
   projectScenarioPath: null,
@@ -132,7 +144,8 @@ export function useNewChat({
   initialTimestampConfig,
   initialAutonomous = false,
 }: UseNewChatOptions = {}): UseNewChatReturn {
-  const router = useRouter()
+  const navigate = useWorkspaceNavigate()
+  const creationProgress = useCreationProgress()
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
 
@@ -144,6 +157,9 @@ export function useNewChat({
   const [projectScenarios, setProjectScenarios] = useState<ProjectScenarioOption[]>([])
   const [generalScenarios, setGeneralScenarios] = useState<GeneralScenarioOption[]>([])
   const [groupScenarios, setGroupScenarios] = useState<GroupScenarioOption[]>([])
+  const [roleplayTemplates, setRoleplayTemplates] = useState<RoleplayTemplateOption[]>([])
+  const [defaultRoleplayTemplateId, setDefaultRoleplayTemplateId] = useState<string | null>(null)
+  const [templateDefaultsLoaded, setTemplateDefaultsLoaded] = useState(false)
   const [availableProjects, setAvailableProjects] = useState<ProjectListEntry[]>([])
 
   // selectedProjectId is the live picker value. It seeds from the `projectId`
@@ -190,6 +206,7 @@ export function useNewChat({
           fetch('/api/v1/scenarios'),
           fetch('/api/v1/settings/chat'),
           fetch('/api/v1/projects'),
+          fetch('/api/v1/roleplay-templates'),
         ]
         if (selectedProjectId) {
           requests.push(fetch(`/api/v1/projects/${selectedProjectId}`))
@@ -216,6 +233,7 @@ export function useNewChat({
         const generalScenariosRes = responses[idx++]
         const chatSettingsRes = responses[idx++]
         const projectListRes = responses[idx++]
+        const roleplayTemplatesRes = responses[idx++]
         const projectRes = selectedProjectId ? responses[idx++] : null
         const projectScenariosRes = selectedProjectId ? responses[idx++] : null
         const seedCharacterRes = initialCharacterId ? responses[idx++] : null
@@ -232,9 +250,11 @@ export function useNewChat({
           const data = await charsRes.json()
           const all: Character[] = data.characters || []
           allCharacters = all
-          loadedCharacters = all.filter((c) => c.controlledBy !== 'user')
-          // Keep the full Character so the "Play As" dropdown can pull a
-          // default-user character into the cast without a second fetch.
+          // The picker on the left lists every character — including
+          // default-user personas — so they enter the cast the same way as
+          // anyone else and can then be chosen in the "Play As" dropdown.
+          loadedCharacters = all
+          // Still tracked separately for partner/persona seeding paths below.
           loadedUserChars = all.filter((c) => c.controlledBy === 'user')
         }
         let loadedProfiles: ConnectionProfile[] = []
@@ -263,6 +283,23 @@ export function useNewChat({
             status: generalScenariosRes.status,
           })
         }
+        let loadedRoleplayTemplates: RoleplayTemplateOption[] = []
+        if (roleplayTemplatesRes && roleplayTemplatesRes.ok) {
+          const data = await roleplayTemplatesRes.json()
+          const list: Array<{ id: string; name: string; description?: string | null; isBuiltIn?: boolean }> =
+            Array.isArray(data) ? data : data.templates || []
+          loadedRoleplayTemplates = list.map((t) => ({
+            id: t.id,
+            name: t.name,
+            description: t.description ?? null,
+            isBuiltIn: Boolean(t.isBuiltIn),
+          }))
+        } else if (roleplayTemplatesRes && !roleplayTemplatesRes.ok) {
+          console.warn('[useNewChat] Failed to load roleplay templates', {
+            status: roleplayTemplatesRes.status,
+          })
+        }
+
         let loadedAvailableProjects: ProjectListEntry[] = []
         if (projectListRes && projectListRes.ok) {
           const data = await projectListRes.json()
@@ -347,9 +384,13 @@ export function useNewChat({
         // toggle can flip without re-fetching.
         let autonomousSeedFreshnessHours: number | null = null
         let autonomousSeedDestructivePolicyAlwaysRefuse = false
+        // The user's global roleplay-template default; the project default (read
+        // below) outranks it, mirroring the server's resolution at create time.
+        let userDefaultRoleplayTemplateId: string | null = null
         if (chatSettingsRes && chatSettingsRes.ok) {
           try {
             const settings = await chatSettingsRes.json()
+            userDefaultRoleplayTemplateId = settings?.defaultRoleplayTemplateId ?? null
             const ar = settings?.autonomousRoomSettings ?? {}
             if (typeof ar.defaultFreshnessWindowMs === 'number' && ar.defaultFreshnessWindowMs > 0) {
               autonomousSeedFreshnessHours = Math.round(ar.defaultFreshnessWindowMs / (60 * 60 * 1000))
@@ -372,7 +413,27 @@ export function useNewChat({
         setProjectScenarios(loadedProjectScenarios)
         setGeneralScenarios(loadedGeneralScenarios)
         setGroupScenarios(loadedGroupScenarios)
+        setRoleplayTemplates(loadedRoleplayTemplates)
         setAvailableProjects(loadedAvailableProjects)
+
+        // What the chat's template would be if the user never touched the
+        // dropdown: project default > user/global default > none. Same chain the
+        // create route walks, so the pre-selection tells the truth.
+        const resolvedDefaultTemplateId =
+          loadedProject?.defaultRoleplayTemplateId || userDefaultRoleplayTemplateId || null
+        const defaultTemplateStillExists =
+          !resolvedDefaultTemplateId ||
+          loadedRoleplayTemplates.some((t) => t.id === resolvedDefaultTemplateId)
+        setDefaultRoleplayTemplateId(defaultTemplateStillExists ? resolvedDefaultTemplateId : null)
+        // Only trust the pre-selection — and send it at create time — when every
+        // source of the default answered. A failed settings/templates/project
+        // fetch would otherwise turn "couldn't read your default" into an
+        // explicit "no template", overriding a default the server knows about.
+        setTemplateDefaultsLoaded(
+          Boolean(roleplayTemplatesRes?.ok) &&
+            Boolean(chatSettingsRes?.ok) &&
+            (!selectedProjectId || Boolean(projectRes?.ok))
+        )
 
         // Project default wins over general default for pre-selection. When a
         // project default exists, seed `projectScenarioPath`; otherwise fall
@@ -518,9 +579,16 @@ export function useNewChat({
 
         // Always merge autonomous-room defaults from user settings so the
         // freshness-window placeholder and the "always refuse" ceiling are
-        // available even before the user flips the toggle on.
+        // available even before the user flips the toggle on. The roleplay
+        // template rides along: re-seeded on every reference-data load (a new
+        // project, a changed cast) until the user picks one by hand.
         setState((prev) => ({
           ...prev,
+          roleplayTemplateId: prev.roleplayTemplateTouched
+            ? prev.roleplayTemplateId
+            : defaultTemplateStillExists
+              ? resolvedDefaultTemplateId
+              : null,
           autonomous: {
             ...prev.autonomous,
             scheduleFreshnessHours:
@@ -659,6 +727,14 @@ export function useNewChat({
 
     setCreating(true)
 
+    // Correlation id for the "Green Room" status dialog. Only fresh/continued
+    // conversations get the dialog — autonomous rooms navigate to settings.
+    let progressId: string | undefined
+    if (!isAutonomous && creationProgress) {
+      progressId =
+        typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined
+    }
+
     try {
       const participants: Array<{
         type: 'CHARACTER'
@@ -681,6 +757,14 @@ export function useNewChat({
 
       if (state.imageProfileId) {
         requestBody.imageProfileId = state.imageProfileId
+      }
+
+      // Sent — including `null` for "No Template" — so the value the user saw in
+      // the dropdown is the value the chat is created with. Omitted entirely when
+      // the defaults never loaded and the user didn't choose, leaving the server
+      // to walk its own project > user default chain.
+      if (state.roleplayTemplateTouched || templateDefaultsLoaded) {
+        requestBody.roleplayTemplateId = state.roleplayTemplateId
       }
 
       // Free-text scenario notes — sent independently of any preset. The server
@@ -755,6 +839,13 @@ export function useNewChat({
         requestBody.budgetExcludeCacheHits = auto.budgetExcludeCacheHits
       }
 
+      if (progressId) {
+        requestBody.progressId = progressId
+        // Open the blocking status dialog and start streaming progress just as
+        // the create request goes out.
+        creationProgress?.begin(progressId)
+      }
+
       const res = await fetch('/api/v1/chats', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -769,16 +860,24 @@ export function useNewChat({
       const data = await res.json()
       if (isAutonomous) {
         showSuccessToast('Autonomous room created!')
-        router.push('/settings?tab=chat&section=autonomous-rooms')
+        navigate('/settings?tab=chat&section=autonomous-rooms')
       } else {
         showSuccessToast(continuationFromChatId ? 'Conversation continued in a new chat!' : 'Chat created!')
-        router.push(`/salon/${data.chat.id}`)
+        // In the workspace this opens (or focuses) the new chat as a tab in place
+        // — no route navigation, so a chat streaming in the other pane survives.
+        navigate(`/salon/${data.chat.id}`)
       }
+      // Creation succeeded and we've navigated — the conversation is ready, so
+      // dismiss the status dialog.
+      creationProgress?.complete()
       return { chatId: data.chat.id }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to create chat'
       showErrorToast(msg)
       console.error('[useNewChat] Failed to create chat', { error: msg })
+      // Surface the failure in the status dialog (if it was opened) so it stops
+      // spinning and offers a Close button.
+      if (progressId) creationProgress?.fail(msg)
       return null
     } finally {
       setCreating(false)
@@ -796,6 +895,8 @@ export function useNewChat({
     projectScenarios,
     generalScenarios,
     groupScenarios,
+    roleplayTemplates,
+    defaultRoleplayTemplateId,
     availableProjects,
     selectedProjectId,
     setSelectedProjectId,

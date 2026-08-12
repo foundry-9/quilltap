@@ -6,7 +6,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import type { ChatMetadata } from '@/lib/schemas/types';
 import { notFound } from '@/lib/api/responses';
 
@@ -16,7 +16,7 @@ import { notFound } from '@/lib/api/responses';
  */
 export async function verifyBrahmaChat(
   id: string,
-  context: AuthenticatedContext
+  context: RequestContext
 ): Promise<{ chat: ChatMetadata } | NextResponse> {
   const { user, repos } = context;
   const chat = await repos.chats.findById(id);

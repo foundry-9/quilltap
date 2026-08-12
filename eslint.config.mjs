@@ -22,6 +22,10 @@ const eslintConfig = defineConfig([
       // artifacts (plugins/dist, pdf.worker.mjs) escape the root-anchored
       // ignores below. Never lint anything under here.
       '.claude/**',
+      // Native-port differential-harness oracle bridge — an external tool's
+      // mirror of its test cases into this checkout (so they can import real
+      // lib/ code). Gitignored, generated, not ours to lint.
+      '.qt-oracle-mirror/**',
       // Bundled plugin JavaScript files (source is in TypeScript)
       'plugins/dist/**/*.js',
       // PDF.js worker file (third-party, copied from node_modules)
@@ -41,6 +45,13 @@ const eslintConfig = defineConfig([
     },
     rules: {
       'quilltap/no-quilltap-misspelling': 'error',
+    },
+  },
+  {
+    // The rule's own implementation has to spell the forbidden word to match it.
+    files: ['eslint-quilltap-plugin.js'],
+    rules: {
+      'quilltap/no-quilltap-misspelling': 'off',
     },
   },
 ])

@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { created, notFound, serverError, badRequest } from '@/lib/api/responses';
@@ -29,7 +29,7 @@ const createProjectSchema = z.object({
 // GET Handler
 // ============================================================================
 
-export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
+export const GET = createContextHandler(async (req: NextRequest, { user, repos }) => {
   try {
 
     let projects = await repos.projects.findAll();
@@ -71,7 +71,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
 // POST Handler
 // ============================================================================
 
-export const POST = createAuthenticatedHandler(async (req: NextRequest, { repos }) => {
+export const POST = createContextHandler(async (req: NextRequest, { repos }) => {
   const body = await req.json();
   const validatedData = createProjectSchema.parse(body);
 

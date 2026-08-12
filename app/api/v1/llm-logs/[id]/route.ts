@@ -6,14 +6,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
+import { createContextParamsHandler } from '@/lib/api/middleware';
 import { successResponse, serverError, notFound, forbidden } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 
 /**
  * GET /api/v1/llm-logs/[id] - Get a single log entry
  */
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id: logId }) => {
     try {
 
@@ -37,7 +37,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 /**
  * DELETE /api/v1/llm-logs/[id] - Delete a log entry
  */
-export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+export const DELETE = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id: logId }) => {
     try {
 

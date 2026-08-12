@@ -9,7 +9,7 @@
 
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { successResponse, errorResponse } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { generateRenderingPatterns } from '@/lib/chat/annotations';
@@ -20,7 +20,7 @@ import { TemplateDelimiterSchema } from '@/lib/schemas/template.types';
  * List all roleplay templates available to the authenticated user
  * Returns both built-in templates and user-created templates
  */
-export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
+export const GET = createContextHandler(async (req, { user, repos }) => {
   try {// Get all templates available to user (built-in + user's own)
     const templates = await repos.roleplayTemplates.findAllForUser(user.id);// Sort: built-in first, then by name
     templates.sort((a, b) => {
@@ -56,7 +56,7 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
  *   systemPrompt: string
  * }
  */
-export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
+export const POST = createContextHandler(async (req, { user, repos }) => {
   try {const body = await req.json();
     const { name, description, systemPrompt, narrationDelimiters } = body;
 

@@ -231,14 +231,12 @@
 
   /**
    * qtap:// document link. Active links combine with .qt-link and carry a small
-   * document affordance (📄) so they read as in-app document references rather
-   * than web links. The inert variant — shown while existence is pending, or
-   * when the target is missing/inaccessible — renders as plain muted text and
-   * is not interactive.
+   * document affordance so they read as in-app document references rather than
+   * web links. The icon comes from the shared Icon registry (theme-overridable),
+   * not a hard-coded emoji glyph.
    */
-  .qt-qtap-doc::before {
-    content: "📄\00a0";
-    font-size: 0.9em;
+  .qt-qtap-doc-icon {
+    @apply inline-block w-3.5 h-3.5 mr-1 align-middle;
     opacity: 0.8;
   }
 

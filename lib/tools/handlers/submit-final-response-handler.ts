@@ -39,7 +39,8 @@ export async function executeSubmitFinalResponseTool(
 ): Promise<SubmitFinalResponseToolOutput> {
   try {
     // Validate input
-    if (!validateSubmitFinalResponseInput(input)) {
+    const parsed = validateSubmitFinalResponseInput(input)
+    if (!parsed) {
       logger.warn('[SubmitFinalResponse] Invalid input received', {
         context: 'agent-mode',
         chatId: context.chatId,
@@ -51,7 +52,7 @@ export async function executeSubmitFinalResponseTool(
       }
     }
 
-    const validInput = input as SubmitFinalResponseToolInput
+    const validInput = parsed
 
     logger.info('[SubmitFinalResponse] Agent submitted final response', {
       context: 'agent-mode',

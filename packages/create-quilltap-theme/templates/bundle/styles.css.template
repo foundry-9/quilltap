@@ -247,7 +247,7 @@
   /* --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #9b8ec4 40%); */
   /* --qt-chat-whisper-fg: var(--qt-chat-assistant-fg); */
   /* --qt-chat-whisper-border: #9b8ec4; */
-  /* --qt-chat-whisper-label-fg: #7c6fa0; */
+  /* --qt-chat-whisper-label-fg: #5c447e; */
   /* --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, #7a9e8e 35%); */
   /* --qt-chat-silent-fg: var(--qt-chat-assistant-fg); */
   /* --qt-chat-silent-border: #7a9e8e; */
@@ -538,6 +538,18 @@
   /* --qt-tab-active-border: var(--color-border); */
   /* --qt-tab-group-gap: 0.1875rem; */
   /* --qt-tab-divider-color: var(--color-border); */
+
+  /* ======================================================================
+     WORKSPACE VARIABLES  (the tabbed two-pane workspace shell)
+     Set --qt-workspace-accent to re-tint the active tab, the pane divider,
+     and the split drop-zone in one move (it falls back to --color-primary).
+     The finer hooks below override individual surfaces if you need them.
+     ====================================================================== */
+  /* --qt-workspace-accent: var(--color-primary); */
+  /* --qt-workspace-tab-active-fg: var(--color-foreground); */
+  /* --qt-workspace-tab-active-border: var(--qt-workspace-accent); */
+  /* --qt-workspace-divider-active-bg: color-mix(in srgb, var(--qt-workspace-accent) 60%, transparent); */
+  /* --qt-tab-drop-zone-border: color-mix(in srgb, var(--qt-workspace-accent) 70%, transparent); */
 }
 
 /* ========================================================================

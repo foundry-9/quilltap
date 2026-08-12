@@ -18,6 +18,7 @@ import { DatabaseCollection, TypedQueryFilter } from '../interfaces';
 import { SQLiteCollection } from '../backends/sqlite/backend';
 import { getRawMountIndexDatabase, isMountIndexDegraded } from '../backends/sqlite/mount-index-client';
 import { generateDDL, extractSchemaMetadata } from '../schema-translator';
+import { repairMountPointNameCollisions } from './mount-index-case-repair';
 
 /**
  * Document Mount Points Repository
@@ -78,6 +79,13 @@ export class DocMountPointsRepository extends AbstractBaseRepository<DocMountPoi
           db.exec(`ALTER TABLE "${this.collectionName}" ADD COLUMN "storeType" TEXT NOT NULL DEFAULT 'documents'`);
           logger.info('Migrated doc_mount_points: added storeType column');
         }
+
+        // Repair: mount-point names form one case-insensitive namespace.
+        // Runs every init (cheap no-op scan when the invariant holds) so
+        // duplicates that slip in through a backup restore of legacy data
+        // get suffixed on the next boot. No DB unique index here — restore
+        // must be able to recreate legacy rows verbatim before this runs.
+        repairMountPointNameCollisions(db);
 
         this.mountIndexCollectionInitialized = true;
       } catch (error) {
@@ -146,10 +154,12 @@ export class DocMountPointsRepository extends AbstractBaseRepository<DocMountPoi
 
   /**
    * Find enabled mount points whose name matches (case-insensitive, trimmed).
-   * Mount-point names are NOT unique in the schema and are user-renameable, so
-   * this can return more than one row. Producers use the count to decide
-   * whether a `qtap://` URI can safely use the readable name form or must fall
-   * back to the UUID escape hatch (see `formatDocStoreUri`).
+   * Names are kept unique (case-insensitively) at the write chokepoints and by
+   * the boot-time repair, but there is no DB constraint — a restore of legacy
+   * data can hold duplicates until the next boot — so this still returns an
+   * array. Producers use the count to decide whether a `qtap://` URI can
+   * safely use the readable name form or must fall back to the UUID escape
+   * hatch (see `formatDocStoreUri`).
    * @param name The mount-point name to match
    * @returns Promise<DocMountPoint[]> Matching enabled mount points
    */

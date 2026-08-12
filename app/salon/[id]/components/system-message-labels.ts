@@ -1,17 +1,5 @@
 import type { Message } from '../types'
-
-const SENDER_DISPLAY_NAMES: Record<NonNullable<Message['systemSender']>, string> = {
-  lantern: 'The Lantern',
-  aurora: 'Aurora',
-  librarian: 'The Librarian',
-  concierge: 'The Concierge',
-  prospero: 'Prospero',
-  host: 'The Host',
-  commonplaceBook: 'The Commonplace Book',
-  ariel: 'Ariel',
-  carina: 'Carina',
-  suparna: 'Suparṇā',
-}
+import { staffDisplayName } from '@/lib/chat/staff-display-names'
 
 const KIND_DISPLAY_OVERRIDES: Record<string, string> = {
   'project-context': 'project information',
@@ -58,12 +46,15 @@ const KIND_DISPLAY_OVERRIDES: Record<string, string> = {
   'autonomous-room-halfway': 'halfway through',
   'autonomous-room-nearing-end': 'nearing the end',
   'mail-delivery': 'mail delivery',
+  'custom-tool-result': 'roll outcome',
+  'custom-tool-error': "the table couldn't deal",
+  'turn-pass': 'nothing to add',
+  nudge: 'invited to speak',
   timestamp: 'time',
 }
 
 export function getSystemSenderDisplayName(sender: Message['systemSender']): string {
-  if (!sender) return ''
-  return SENDER_DISPLAY_NAMES[sender] ?? sender
+  return staffDisplayName(sender)
 }
 
 /**
@@ -84,6 +75,8 @@ function inferKindFromContent(sender: NonNullable<Message['systemSender']>, cont
       if (c.startsWith('The Host outlines the company')) return 'roster'
       if (c.startsWith('The Host marks the time')) return 'timestamp'
       if (c.startsWith('The Host introduces')) return 'user-character'
+      if (c.startsWith('The Host inclines his head') || c.includes('declining the floor')) return 'turn-pass'
+      if (c.startsWith('The Host turns to') && c.includes('invites them to take the floor')) return 'nudge'
       if (c.startsWith('The Host whispers a private note')) {
         if (c.includes('SILENT mode')) return 'silent-mode-enter'
         if (c.includes('silence is lifted')) return 'silent-mode-exit'
@@ -131,6 +124,10 @@ function inferKindFromContent(sender: NonNullable<Message['systemSender']>, cont
       return 'terminal'
     case 'suparna':
       return 'mail-delivery'
+    // Pascal always stamps an explicit systemKind (the column landed with the
+    // sender), so this is a defensive default rather than a legacy inference.
+    case 'pascal':
+      return 'custom-tool-result'
   }
   return 'announcement'
 }
@@ -148,10 +145,77 @@ function resolveRawKind(message: Pick<Message, 'systemSender' | 'systemKind' | '
   return inferKindFromContent(message.systemSender, message.content || '')
 }
 
-export function getSystemKindDisplayLabel(message: Pick<Message, 'systemSender' | 'systemKind' | 'content'>): string {
+/**
+ * The label for a Staff message's kind chip — the "roll outcome" half of
+ * "● PASCAL · ROLL OUTCOME".
+ *
+ * A roll outcome names the RUN rather than the kind: "scan hawking radiation",
+ * not "roll outcome". The generic label described the machinery — Pascal, and
+ * something random happening — where what actually happened is that a named
+ * tool ran. Every other kind keeps its static label; only this one has a
+ * per-message subject worth naming.
+ *
+ * `chipLabel ?? toolTitle ?? tool` — the definition's rendered per-run label
+ * when the roll carries one ("Agent lambda — Jackie"), else the display title,
+ * else the declaration name, which every roll record has. All three come from
+ * `pascalMeta`, the authoritative account of the deal, rather than from parsing
+ * the body. Long rendered labels are the chip CSS's problem
+ * (`.qt-chat-system-bar-kind` already ellipsises), not this function's.
+ */
+export function getSystemKindDisplayLabel(
+  message: Pick<Message, 'systemSender' | 'systemKind' | 'content' | 'pascalMeta'>,
+): string {
   const raw = resolveRawKind(message)
   if (!raw) return ''
+
+  if (raw === 'custom-tool-result') {
+    const named =
+      message.pascalMeta?.chipLabel?.trim() ||
+      message.pascalMeta?.toolTitle?.trim() ||
+      message.pascalMeta?.tool?.trim()
+    if (named) return named
+  }
+
   return KIND_DISPLAY_OVERRIDES[raw] ?? raw.replace(/-/g, ' ')
+}
+
+/** The semantic states an author may assign to a custom tool's outcome row. */
+export type PascalOutcomeState = 'success' | 'partial' | 'failure' | 'info'
+
+const PASCAL_OUTCOME_STATES: ReadonlySet<string> = new Set<PascalOutcomeState>([
+  'success',
+  'partial',
+  'failure',
+  'info',
+])
+
+/**
+ * The outcome state a Pascal roll landed on, or null for every other Staff
+ * message. Keys off the roll record rather than the kind, so any future Pascal
+ * announcement that carries a `pascalMeta` accents itself the same way; a row
+ * with no record (or a state this build doesn't know) falls back to the
+ * importance colouring.
+ */
+export function getAnnouncementOutcomeState(
+  message: Pick<Message, 'systemSender' | 'pascalMeta'>,
+): PascalOutcomeState | null {
+  if (message.systemSender !== 'pascal') return null
+  const state = message.pascalMeta?.state
+  if (!state || !PASCAL_OUTCOME_STATES.has(state)) return null
+  return state
+}
+
+/**
+ * Accent classes for the announcement bar/chip wrapper of a Pascal roll — the
+ * same `qt-pascal-result` family the Workbench's outcome rows and the Proving
+ * Bench's miniature wear, so a success reads as a success wherever it appears.
+ * Empty for every other Staff message, which keeps its plain bar.
+ */
+export function getAnnouncementAccentClasses(
+  message: Pick<Message, 'systemSender' | 'pascalMeta'>,
+): string {
+  const state = getAnnouncementOutcomeState(message)
+  return state ? `qt-pascal-result qt-pascal-result--${state}` : ''
 }
 
 export type AnnouncementImportance = 'high' | 'medium' | 'low'
@@ -214,6 +278,11 @@ const IMPORTANCE_TABLE: Record<NonNullable<Message['systemSender']>, Record<stri
     'autonomous-room-paused': 'high',
     'autonomous-room-halfway': 'medium',
     'autonomous-room-nearing-end': 'high',
+    // A turn pass ("nothing to add") is incidental — quiet, hollow dot.
+    'turn-pass': 'low',
+    // A nudge is a deliberate operator summon — worth an amber dot, but not the
+    // red reserved for structural room changes (add / remove / status).
+    nudge: 'medium',
     '*': 'medium',
   },
   concierge: { danger: 'high', '*': 'high' },
@@ -242,6 +311,13 @@ const IMPORTANCE_TABLE: Record<NonNullable<Message['systemSender']>, Record<stri
   carina: { 'carina-response': 'medium', '*': 'medium' },
   // A fresh letter is a real event the recipient should act on.
   suparna: { 'mail-delivery': 'high', '*': 'high' },
+  // A roll outcome is binding on the scene — the table dealt it, and nobody in
+  // the room may argue with it. Pascal's results render as their own full row
+  // (never a collapsed chip), so this tier is largely a defensive fallback —
+  // and doubly so for the dot, which a roll record overrides with the outcome's
+  // own state (see getAnnouncementOutcomeState): a success has no business
+  // wearing the red dot that "high" would give it.
+  pascal: { 'custom-tool-result': 'high', 'custom-tool-error': 'high', '*': 'high' },
 }
 
 const DEFAULT_IMPORTANCE: AnnouncementImportance = 'medium'

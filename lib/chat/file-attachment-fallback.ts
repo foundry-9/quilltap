@@ -8,10 +8,25 @@
 
 import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils'
 import { createLLMProvider } from '@/lib/llm'
+import { logLLMCall } from '@/lib/services/llm-logging.service'
+import { resizeImageForProvider, canResizeImage } from '@/lib/files/image-processing'
+import { getErrorMessage } from '@/lib/error-utils'
 
 import type { ConnectionProfile } from '@/lib/schemas/types'
 import type { FileAttachment } from '@/lib/llm/base'
 import { logger } from '@/lib/logger'
+
+/**
+ * Hard ceiling on a single vision-description call. Uncensored describers can
+ * be slow or degraded, and this runs inline while assembling a chat reply — a
+ * stalled call would wedge the whole turn. On timeout we drop the image rather
+ * than block. Generously sized: real describes finish in seconds.
+ */
+const IMAGE_DESCRIPTION_TIMEOUT_MS = 60_000
+
+/** The instruction sent to the vision model. Shared with the LLM-call log. */
+const IMAGE_DESCRIPTION_INSTRUCTION =
+  'Please describe this image in great detail. Include all visible elements, colors, composition, mood, and any text or notable features. Be thorough and descriptive.'
 
 /**
  * Get image description profile from repos
@@ -109,6 +124,8 @@ export interface FallbackResult {
     usedImageDescriptionLLM?: boolean
     /** True when the uncensored fallback profile produced the description. */
     usedUncensoredFallback?: boolean
+    /** True when a persisted description/generation-prompt was reused (no vision call). */
+    reusedPersistedDescription?: boolean
     descriptionProfileId?: string
     descriptionProvider?: string
     descriptionModel?: string
@@ -183,6 +200,7 @@ async function describeImageWithProfile(
   repos: any,
   userId: string
 ): Promise<FallbackResult> {
+  const describeStart = Date.now()
   try {
     // Check if profile supports images
     if (!profileSupportsMimeType(imageDescProfile, file.mimeType)) {
@@ -228,14 +246,44 @@ async function describeImageWithProfile(
       maxTokens = 4000
     }
 
+    // Cap the payload to the *description* provider's limits. The attachment
+    // was sized for the responding model (often a non-vision provider with
+    // different limits); handing a large base64 image to the vision provider is
+    // a meaningful chunk of this call's latency. resizeImageForProvider is a
+    // no-op when the image already fits.
+    let attachmentForLLM = file
+    if (file.data && canResizeImage(file.mimeType)) {
+      try {
+        const resized = await resizeImageForProvider({
+          provider: imageDescProfile.provider,
+          buffer: Buffer.from(file.data, 'base64'),
+          mimeType: file.mimeType,
+          filename: file.filename,
+        })
+        if (resized.wasResized) {
+          attachmentForLLM = {
+            ...file,
+            data: resized.buffer.toString('base64'),
+            mimeType: resized.mimeType,
+            size: resized.finalSize,
+          }
+        }
+      } catch (err) {
+        logger.warn('[Image Fallback] Resize for description provider failed; sending original', {
+          filename: file.filename,
+          error: getErrorMessage(err),
+        })
+      }
+    }
+
     // Build message parameters - only include supported parameters
     const messageParams: any = {
       model: imageDescProfile.modelName,
       messages: [
         {
           role: 'user',
-          content: 'Please describe this image in great detail. Include all visible elements, colors, composition, mood, and any text or notable features. Be thorough and descriptive.',
-          attachments: [file],
+          content: IMAGE_DESCRIPTION_INSTRUCTION,
+          attachments: [attachmentForLLM],
         },
       ],
     }
@@ -250,9 +298,60 @@ async function describeImageWithProfile(
     if (topP !== undefined) {
       messageParams.topP = topP
     }
+    // Forward the profile's provider params (e.g. DeepSeek thinking mode) so a
+    // "reasoning off" setting on the image-description profile takes effect.
+    if (modelParams && typeof modelParams === 'object') {
+      messageParams.profileParameters = modelParams
+    }
 
-    // Send message to vision-capable LLM asking for description
-    const response = await provider.sendMessage(messageParams, apiKeyValue || '')
+    // Send message to vision-capable LLM asking for description, under a hard
+    // timeout so a slow/degraded describer can never wedge the inline reply.
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let response
+    try {
+      response = await Promise.race([
+        provider.sendMessage(messageParams, apiKeyValue || ''),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error(`Image description timed out after ${IMAGE_DESCRIPTION_TIMEOUT_MS}ms`)),
+            IMAGE_DESCRIPTION_TIMEOUT_MS,
+          )
+        }),
+      ])
+    } finally {
+      if (timer) clearTimeout(timer)
+    }
+
+    // Record the call in llm_logs like every other model call, so its latency
+    // and token usage are diagnosable (this path was previously invisible).
+    // Logging must never break description generation, so it's best-effort.
+    try {
+      await logLLMCall({
+        userId,
+        type: 'IMAGE_DESCRIPTION',
+        provider: imageDescProfile.provider,
+        modelName: imageDescProfile.modelName,
+        request: {
+          messages: [{
+            role: 'user',
+            content: IMAGE_DESCRIPTION_INSTRUCTION,
+            attachments: [{ filename: file.filename, mimeType: attachmentForLLM.mimeType }],
+          }],
+          temperature,
+          maxTokens,
+        },
+        response: {
+          content: response.content ?? '',
+          finishReason: response.finishReason ?? null,
+        },
+        usage: response.usage,
+        durationMs: Date.now() - describeStart,
+      })
+    } catch (logErr) {
+      logger.warn('[Image Fallback] Failed to record IMAGE_DESCRIPTION llm log', {
+        error: getErrorMessage(logErr),
+      })
+    }
 
     // Check for empty or invalid responses
     const trimmedContent = response.content.trim()
@@ -346,6 +445,20 @@ async function describeImageWithProfile(
     }
   } catch (error) {
     logger.error('[Image Fallback] Error generating description:', {}, error instanceof Error ? error : new Error(String(error)))
+    // Log the failed/timed-out call too, so timeouts are visible in llm_logs.
+    try {
+      await logLLMCall({
+        userId,
+        type: 'IMAGE_DESCRIPTION',
+        provider: imageDescProfile.provider,
+        modelName: imageDescProfile.modelName,
+        request: { messages: [{ role: 'user', content: IMAGE_DESCRIPTION_INSTRUCTION }] },
+        response: { content: '', error: getErrorMessage(error) },
+        durationMs: Date.now() - describeStart,
+      })
+    } catch {
+      // Logging must never mask the original failure.
+    }
     return {
       type: 'unsupported',
       error: `Failed to generate image description: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -372,6 +485,45 @@ export async function generateImageDescription(
   repos: any,
   userId: string
 ): Promise<FallbackResult> {
+  // Reuse a persisted description before spending a (slow, uncensored) vision
+  // call. Images Quilltap generated already carry the exact prompt that made
+  // them — the most faithful description available, and free — so we prefer
+  // that. User uploads may have been auto-described earlier (FileEntry.description).
+  // Either way, this takes the vision call off the inline reply path entirely.
+  try {
+    const entry = file.id ? await repos.files.findById(file.id) : null
+    const reused =
+      entry?.generationRevisedPrompt?.trim() ||
+      entry?.generationPrompt?.trim() ||
+      entry?.description?.trim()
+    if (reused) {
+      logger.info('[Image Fallback] Reusing persisted description (no vision call)', {
+        fileId: file.id,
+        source: entry?.generationRevisedPrompt?.trim()
+          ? 'generation-revised-prompt'
+          : entry?.generationPrompt?.trim()
+            ? 'generation-prompt'
+            : 'stored-description',
+        descriptionLength: reused.length,
+      })
+      return {
+        type: 'image_description',
+        imageDescription: reused,
+        processingMetadata: {
+          usedImageDescriptionLLM: false,
+          reusedPersistedDescription: true,
+          originalFilename: file.filename,
+          originalMimeType: file.mimeType,
+        },
+      }
+    }
+  } catch (err) {
+    logger.warn('[Image Fallback] Persisted-description lookup failed; falling back to vision', {
+      fileId: file.id,
+      error: getErrorMessage(err),
+    })
+  }
+
   // Get image description profile
   const imageDescProfile = await getImageDescriptionProfile(repos, userId)
 

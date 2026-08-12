@@ -18,6 +18,8 @@ interface ProjectDetailHeaderProps {
   onEditClick: () => void
   onCancelEdit: () => void
   onSave: () => void
+  /** In-view back (workspace tab). When omitted, the route Link is used. */
+  onBack?: () => void
 }
 
 
@@ -29,13 +31,20 @@ export function ProjectDetailHeader({
   onEditClick,
   onCancelEdit,
   onSave,
+  onBack,
 }: ProjectDetailHeaderProps) {
   return (
     <div className="flex flex-wrap items-start justify-between gap-4 border-b qt-border-default/60 pb-6">
       <div className="flex items-center gap-4">
-        <Link href="/prospero" className="qt-text-primary hover:underline text-sm">
-          &larr; Projects
-        </Link>
+        {onBack ? (
+          <button onClick={onBack} className="qt-text-primary hover:underline text-sm">
+            &larr; Projects
+          </button>
+        ) : (
+          <Link href="/prospero" className="qt-text-primary hover:underline text-sm">
+            &larr; Projects
+          </Link>
+        )}
         <div
           className="w-12 h-12 rounded-lg flex items-center justify-center text-xl"
           style={{ backgroundColor: project.color || 'var(--muted)' }}

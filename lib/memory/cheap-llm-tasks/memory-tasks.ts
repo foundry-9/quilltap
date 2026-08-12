@@ -14,7 +14,9 @@ import {
   type TemporalTag,
   type ContextTag,
 } from '@/lib/memory/recall-tags'
+import { resolveDayReference, type DayReferenceResolution } from '@/lib/memory/day-references'
 import { executeCheapLLMTask } from './core-execution'
+import { logger } from '@/lib/logger'
 import { stripCodeFences } from '@/lib/services/ai-import.service'
 import type {
   ChatMessage,
@@ -32,8 +34,32 @@ import type {
  * SELF: per-call cap (one observer, one subject — themselves).
  * OTHER: per-subject cap inside a single multi-subject call; the call's
  *        total cap is `HARD_CANDIDATE_CAP × number-of-subjects`.
+ *
+ * Episodic soft-raise: when the returned set includes a dated/placed EVENT
+ * (kind 'episodic' with a `when` or `entities`), one extra slot is allowed
+ * ({@link EVENT_EXTRA_SLOT}) so events don't crowd out hinge/state candidates.
  */
 export const HARD_CANDIDATE_CAP = 2
+
+/** Extra candidate slot granted only when a dated/placed EVENT is present. */
+export const EVENT_EXTRA_SLOT = 1
+
+/** True when a candidate is a dated/placed EVENT that earns the extra slot. */
+function isAnchoredEvent(c: MemoryCandidate): boolean {
+  return c.kind === 'episodic' && (!!c.when || (c.entities?.length ?? 0) > 0)
+}
+
+/**
+ * Apply the candidate cap with the episodic soft-raise: base cap always, plus
+ * one extra slot when a dated/placed EVENT survives inside the raised window.
+ */
+function capCandidates(candidates: MemoryCandidate[], baseCap: number): MemoryCandidate[] {
+  const raised = candidates.slice(0, baseCap + EVENT_EXTRA_SLOT)
+  if (raised.length > baseCap && raised.some(isAnchoredEvent)) {
+    return raised
+  }
+  return candidates.slice(0, baseCap)
+}
 
 /** Resolves the per-call maxMemories from the token budget, clamped to the hard cap. */
 function resolveMaxMemories(resolvedMaxTokens: number | undefined): number {
@@ -80,6 +106,46 @@ function renderOrientingContext(orienting: OrientingContext | undefined): string
 }
 
 /**
+ * The extractor's clock (episodic spine). Rendered into the variable CONTEXT
+ * footer — never the cached body prefix — so the model can resolve
+ * "yesterday" / "last spring" while extracting, and so `when` phrases come
+ * back already anchorable. Without a clock the prompt sees only the turn
+ * transcript and cannot date anything.
+ */
+export interface ExtractionClock {
+  /** ISO wall-clock timestamp of the source turn (the turn's message time). */
+  nowIso: string
+  /** Which clock the chat's story runs on. */
+  timelineMode: 'realtime' | 'narrative'
+  /** Current in-story time, when known (narrative chats only). */
+  narrativeNow?: string | null
+}
+
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+/** Render the CLOCK footer block. Returns `''` when no clock was supplied. */
+function renderClockBlock(clock: ExtractionClock | undefined): string {
+  if (!clock) return ''
+  const ms = Date.parse(clock.nowIso)
+  const stamp = Number.isFinite(ms)
+    ? `${clock.nowIso.slice(0, 10)} (${WEEKDAYS[new Date(ms).getUTCDay()]}), ${clock.nowIso}`
+    : clock.nowIso
+  const lines = [
+    'CLOCK',
+    `Current date/time: ${stamp}`,
+    `Timeline mode: ${clock.timelineMode}`,
+  ]
+  const narrativeNow = clock.narrativeNow?.trim()
+  if (narrativeNow) {
+    lines.push(`Current in-story time: ${narrativeNow}`)
+  }
+  lines.push(
+    'Resolve relative time phrases against this clock; emit "when" as an absolute date (YYYY-MM-DD) whenever you can.',
+  )
+  return `${lines.join('\n')}\n\n`
+}
+
+/**
  * Skip bullet (verbatim) appended to the WHAT TO SKIP list in both extraction
  * bodies: the ORIENTING CONTEXT block is background for tagging only, not a
  * memory source.
@@ -93,6 +159,29 @@ const ORIENTING_CONTEXT_SKIP_BULLET = `- Never extract a memory whose only sourc
  * the three targeting axes, their closed vocabularies, and the
  * exactly-one-per-axis requirement.
  */
+/**
+ * EVENT / episodic instruction block (verbatim) appended to both extraction
+ * bodies. Teaches the `kind` / `when` / `entities` output fields and the rule
+ * that an EVENT's content sentence should itself name the place and time so
+ * the prose — and its embedding — carries the anchors.
+ */
+const EVENT_INSTRUCTION_BLOCK = `EVENTS — episodic memories.
+An EVENT records a specific occurrence at a specific time and/or place
+("On July 14th we visited Lighthouse Point and bought the brass
+sextant"), as opposed to a standing fact. For an EVENT:
+  - set "kind" to "episodic" (everything else defaults to "semantic")
+  - fill "when" with the time it happened — an absolute date (YYYY-MM-DD,
+    resolved against the CLOCK below) whenever possible, otherwise the
+    relative or in-story phrase as stated ("last week", "the third night
+    at sea")
+  - fill "entities" with the proper nouns of the episode: places, people,
+    named things (2–5 entries)
+  - write the content sentence so it ITSELF names the place and time —
+    the prose must carry the anchors even on its own
+You may return ONE memory beyond the stated cap only when that extra
+memory is a dated or placed EVENT — events must not crowd out hinge or
+state candidates.`
+
 const TAGS_INSTRUCTION_BLOCK = `TAGS — every memory object MUST carry exactly one value from each axis.
 These describe the memory's frame; they do not change its content.
 
@@ -176,6 +265,10 @@ WHAT TO PICK (priority order)
    exchange. These may feed back into identity over time. Capture only
    when genuinely new — not when the subject performs a gesture already
    in the ALREADY ESTABLISHED block.
+6. EVENTS — a specific thing that happened to the subject at a specific
+   time and/or place: an outing, a visit, an arrival, a discovery, an
+   incident. Mark these "kind": "episodic" and follow the EVENTS block
+   below.
 
 WHAT TO SKIP
 - Anything in the ALREADY ESTABLISHED block, restated or slightly
@@ -216,6 +309,9 @@ OUTPUT — first person, past tense, one fact per object.
   summary      3–8 words, lowercase, no punctuation
   keywords     2–4 lowercase words
   importance   0.20–1.00, calibrated to anchors above
+  kind         "episodic" for an EVENT, otherwise omit (or "semantic")
+  when         EVENTs only: when it happened (see EVENTS block)
+  entities     EVENTs only: proper nouns of the episode
 
 EXAMPLE — good extraction:
 [
@@ -240,6 +336,8 @@ all should be skipped):
 ]
 All four are established identity, ritual, or non-actionable
 reflection. Correct output: [].
+
+${EVENT_INSTRUCTION_BLOCK}
 
 ${TAGS_INSTRUCTION_BLOCK}
 
@@ -289,14 +387,16 @@ function getSelfMemoryExtractionPrompt(
   inAutonomousRoom: boolean = false,
   orienting?: OrientingContext,
   isUserControlled: boolean = false,
+  clock?: ExtractionClock,
 ): string {
   const preamble =
     (isUserControlled ? FIRST_PERSON_USER_CLAUSE : '') +
     (inAutonomousRoom ? AUTONOMOUS_ROOM_USER_ABSENCE_CLAUSE : '')
   const orientingBlock = renderOrientingContext(orienting)
+  const clockBlock = renderClockBlock(clock)
   return `${preamble}${selfBodyForCap(maxMemories)}
 
-${orientingBlock}CONTEXT
+${clockBlock}${orientingBlock}CONTEXT
 SUBJECT: ${observerName}
 
 ${canonBlock}`
@@ -347,6 +447,10 @@ WHAT TO PICK (priority order, applied per subject)
    time, so capture them when they appear genuinely new — not when the
    subject simply exhibits a gesture already in their ALREADY
    ESTABLISHED block.
+6. EVENTS — a specific thing that happened involving the subject at a
+   specific time and/or place: an outing, a visit, an arrival, a
+   discovery, an incident. Mark these "kind": "episodic" and follow the
+   EVENTS block below.
 
 WHAT TO SKIP (do not produce a memory for any of these)
 - Anything in a subject's ALREADY ESTABLISHED block, restated or
@@ -393,6 +497,9 @@ discarded.
   summary      3–8 words, lowercase, no punctuation, useful for dedup
   keywords     2–4 lowercase words, no phrases
   importance   0.20–1.00, calibrated to anchors above
+  kind         "episodic" for an EVENT, otherwise omit (or "semantic")
+  when         EVENTs only: when it happened (see EVENTS block)
+  entities     EVENTs only: proper nouns of the episode
 
 EXAMPLE — good extraction (observer is Friday, subjects 1=Amy 2=Charlie):
 [
@@ -431,6 +538,8 @@ identity fact about subject 1, all should be skipped):
 All six restate facts in subject 1's ALREADY ESTABLISHED block.
 Correct output: [].
 
+${EVENT_INSTRUCTION_BLOCK}
+
 ${TAGS_INSTRUCTION_BLOCK}
 
 Return JSON array only. No prose, no code fences. If nothing meets the
@@ -454,6 +563,7 @@ function getOtherMemoryExtractionPrompt(
   subjects: ReadonlyArray<{ name: string; pronouns: Pronouns | null; isUser: boolean; canonBlock: string }>,
   inAutonomousRoom: boolean = false,
   orienting?: OrientingContext,
+  clock?: ExtractionClock,
 ): string {
   const subjectsBlock = subjects.map((s, i) => {
     const label = formatNameWithPronouns(s.name, s.pronouns)
@@ -463,9 +573,10 @@ function getOtherMemoryExtractionPrompt(
 
   const preamble = inAutonomousRoom ? AUTONOMOUS_ROOM_USER_ABSENCE_CLAUSE : ''
   const orientingBlock = renderOrientingContext(orienting)
+  const clockBlock = renderClockBlock(clock)
   return `${preamble}${otherBodyForCap(perSubjectCap)}
 
-${orientingBlock}CONTEXT
+${clockBlock}${orientingBlock}CONTEXT
 OBSERVER: ${observerName}
 
 ${subjectsBlock}`
@@ -487,6 +598,19 @@ function coerceMemoryCandidate(
   const freeKeywords = Array.isArray(item.keywords)
     ? (item.keywords as unknown[]).filter((k): k is string => typeof k === 'string')
     : []
+  // Episodic fields (validated; anything malformed degrades to semantic/absent)
+  const rawKind = typeof item.kind === 'string' ? item.kind.trim().toLowerCase() : ''
+  const kind: MemoryCandidate['kind'] = rawKind === 'episodic' ? 'episodic' : 'semantic'
+  const when = typeof item.when === 'string' && item.when.trim().length > 0
+    ? item.when.trim()
+    : undefined
+  const entities = Array.isArray(item.entities)
+    ? (item.entities as unknown[])
+        .filter((e): e is string => typeof e === 'string' && e.trim().length > 0)
+        .map(e => e.trim())
+        .slice(0, 8)
+    : undefined
+
   const candidate: MemoryCandidate = {
     content: typeof item.content === 'string'
       ? item.content
@@ -498,6 +622,9 @@ function coerceMemoryCandidate(
       ? applyTargetingTags(freeKeywords, item)
       : freeKeywords,
     importance: typeof item.importance === 'number' ? item.importance : 0.5,
+    kind,
+    when,
+    entities,
   }
   if ((!candidate.content || candidate.content.length === 0) &&
       (!candidate.summary || candidate.summary.length === 0)) {
@@ -508,9 +635,11 @@ function coerceMemoryCandidate(
 
 /**
  * Multi-subject parser: routes each item back to its subject by 1-based
- * `subjectIndex`. Items missing/invalid subjectIndex are dropped, items
- * beyond the per-subject cap are dropped, items beyond the total cap
- * (perSubjectCap × subjects.length) are dropped.
+ * `subjectIndex`. Items missing/invalid subjectIndex are dropped; each
+ * subject's bucket is capped at `perSubjectCap`, with the episodic soft-raise
+ * (one extra slot when a dated/placed EVENT is present — see
+ * {@link capCandidates}), which also bounds the call total at
+ * `(perSubjectCap + EVENT_EXTRA_SLOT) × subjects.length`.
  */
 function parseOtherCandidatesBySubject(
   content: string,
@@ -521,7 +650,7 @@ function parseOtherCandidatesBySubject(
   for (const s of subjects) result.set(s.id, [])
 
   if (subjects.length === 0) return result
-  const totalCap = perSubjectCap * subjects.length
+  const collectCap = perSubjectCap + EVENT_EXTRA_SLOT
 
   const cleanContent = stripCodeFences(content)
 
@@ -533,10 +662,8 @@ function parseOtherCandidatesBySubject(
   }
 
   const items = Array.isArray(parsed) ? parsed : [parsed]
-  let total = 0
 
   for (const raw of items) {
-    if (total >= totalCap) break
     if (!raw || typeof raw !== 'object') continue
     const item = raw as Record<string, unknown>
 
@@ -544,13 +671,20 @@ function parseOtherCandidatesBySubject(
     if (!Number.isInteger(idx) || idx < 1 || idx > subjects.length) continue
     const subject = subjects[idx - 1]
     const bucket = result.get(subject.id)
-    if (!bucket || bucket.length >= perSubjectCap) continue
+    if (!bucket || bucket.length >= collectCap) continue
 
     const candidate = coerceMemoryCandidate(item, { applyTags: true })
     if (!candidate) continue
 
     bucket.push(candidate)
-    total++
+  }
+
+  // Apply the per-subject cap with the episodic soft-raise.
+  for (const s of subjects) {
+    const bucket = result.get(s.id)
+    if (bucket && bucket.length > perSubjectCap) {
+      result.set(s.id, capCandidates(bucket, perSubjectCap))
+    }
   }
 
   return result
@@ -591,8 +725,17 @@ temporal — one of: past | moment | present | future
 context — the single dominant subject, one of:
   philosophy | relationships | history | banter | mannerisms | trivia | information
 
+paraphrase — ONE natural-language sentence describing what the characters are currently focused on, written as prose (not a keyword list). This is used to search memories by meaning, so make it specific and self-contained. Example: "They are arguing about whether to trust the stranger who arrived at the inn last night."
+
+retrospective — true when the conversation is currently referencing past shared events or asking to recall them, including events from earlier the same day ("remember when we…", "last week you said…", "that place we visited", "the mission today", "how did it go this morning?", "what happened at the pool?"). Talking about how things are right now or planning the future is NOT retrospective.
+
+timeRange — when the turn references a specific past period, resolve it against the TODAY line in the input into absolute ISO dates: {"from": "YYYY-MM-DD", "to": "YYYY-MM-DD"}. "last week" on a Tuesday resolves to the previous calendar week; "in March" to that month; "today" / "this morning" to the TODAY date itself; "yesterday" to the day before it. Use null when no time period is referenced or you cannot resolve one. (On a fictional timeline, use null unless real dates are actually stated.)
+
+entities — 0-5 proper nouns the turn names or clearly implies: places, people, named things ("Lighthouse Point", "Amy"). Empty array when none.
+
 Respond with a JSON object (3-10 keywords):
-{"keywords": ["keyword1", "keyword phrase 2", "keyword3"], "temporal": "present", "context": "relationships"}
+{"keywords": ["keyword1", "keyword phrase 2", "keyword3"], "temporal": "present", "context": "relationships", "paraphrase": "A single sentence describing the current focus.", "retrospective": false, "timeRange": null, "entities": []}
+{"keywords": ["mission report", "soil samples"], "temporal": "past", "context": "information", "paraphrase": "Charlie is asking how today's mission went.", "retrospective": true, "timeRange": {"from": "2026-07-28", "to": "2026-07-28"}, "entities": ["Constantinople"]}
 
 JSON only - no other text.`
 
@@ -621,10 +764,11 @@ function parseMemoryCandidateArray(content: string): MemoryCandidate[] {
     const parsed = JSON.parse(cleanContent)
     const items = Array.isArray(parsed) ? parsed : [parsed]
 
-    return items
+    const coerced = items
       .map(item => coerceMemoryCandidate(item as Record<string, unknown>, { applyTags: true }))
       .filter((m): m is MemoryCandidate => m !== null)
-      .slice(0, HARD_CANDIDATE_CAP)
+    // Episodic soft-raise: one slot beyond the cap, only for a dated/placed EVENT.
+    return capCandidates(coerced, HARD_CANDIDATE_CAP)
   } catch {
     return []
   }
@@ -709,6 +853,7 @@ export async function extractSelfMemoriesFromTurn(
   resolvedMaxTokens?: number,
   inAutonomousRoom: boolean = false,
   orienting?: OrientingContext,
+  clock?: ExtractionClock,
 ): Promise<CheapLLMTaskResult<MemoryCandidate[]>> {
   const target = transcript.characterSlices.find(s => s.characterId === targetCharacterId)
   if (!target) {
@@ -722,7 +867,7 @@ export async function extractSelfMemoriesFromTurn(
   const messages: LLMMessage[] = [
     {
       role: 'system',
-      content: getSelfMemoryExtractionPrompt(maxMemories, targetLabel, canonBlock, inAutonomousRoom, orienting, isUserControlled),
+      content: getSelfMemoryExtractionPrompt(maxMemories, targetLabel, canonBlock, inAutonomousRoom, orienting, isUserControlled, clock),
     },
     {
       role: 'user',
@@ -772,6 +917,7 @@ export async function extractOtherMemoriesFromTurn(
   resolvedMaxTokens?: number,
   inAutonomousRoom: boolean = false,
   orienting?: OrientingContext,
+  clock?: ExtractionClock,
 ): Promise<CheapLLMTaskResult<Map<string, MemoryCandidate[]>>> {
   const observer = transcript.characterSlices.find(s => s.characterId === observerCharacterId)
   if (!observer || subjects.length === 0) {
@@ -786,7 +932,7 @@ export async function extractOtherMemoriesFromTurn(
   const messages: LLMMessage[] = [
     {
       role: 'system',
-      content: getOtherMemoryExtractionPrompt(perSubjectCap, observerLabel, subjects, inAutonomousRoom, orienting),
+      content: getOtherMemoryExtractionPrompt(perSubjectCap, observerLabel, subjects, inAutonomousRoom, orienting, clock),
     },
     {
       role: 'user',
@@ -882,6 +1028,153 @@ ${exchangesText}`,
   )
 }
 
+// ============================================================================
+// Fold-time episode consolidation (episodic spine — creation-side keystone)
+// ============================================================================
+
+/**
+ * One message of the just-folded window, with its wall-clock timestamp so the
+ * model can date the episode from the transcript rather than guessing.
+ */
+export interface FoldEpisodeMessage {
+  speaker: string
+  content: string
+  createdAt: string | null
+}
+
+/**
+ * A consolidated episode record extracted from a folded window: one coherent
+ * dated narrative of something that happened, spanning however many turns it
+ * took. Written as a `kind: 'episodic'` memory for each present character.
+ */
+export interface FoldEpisode {
+  /** 2–3 sentence narrative of what happened, naming place and time. */
+  narrative: string
+  /** 3–8 word summary, lowercase. */
+  summary: string
+  /** When it happened — absolute date preferred, else a relative/in-story phrase. */
+  when?: string
+  /** In-story time phrase (narrative-timeline chats). */
+  narrativeTime?: string
+  /** Proper nouns of the episode: places, people, named things. */
+  entities: string[]
+  /** Participant names involved in the episode. */
+  participants: string[]
+  /** Importance 0.2–1.0. */
+  importance: number
+}
+
+/** Hard cap on consolidated episodes per fold. */
+export const FOLD_EPISODE_CAP = 2
+
+const FOLD_EPISODE_PROMPT = `You are consolidating a batch of roleplay conversation turns into EPISODE records — coherent, dated accounts of specific things that happened.
+
+An episode is a real occurrence at a specific time and/or place: an outing, a visit, an arrival, a completed undertaking, a notable incident. It is NOT a standing fact, an opinion, a mood, or an ongoing thread — only something that happened.
+
+Read the dated turns below. Return 0–${FOLD_EPISODE_CAP} episodes. Most windows contain none — return [] freely. Only emit an episode when the turns actually depict or recount a specific occurrence worth remembering as an event.
+
+For each episode:
+  narrative     2–3 sentences, past tense, third person, using participant
+                names. The prose must ITSELF name the place and the time
+                ("On July 14th, Amy and Charlie visited Lighthouse Point
+                and bought the brass sextant…").
+  summary       3–8 words, lowercase, no punctuation
+  when          when it happened: an absolute date (YYYY-MM-DD, resolved
+                against the message timestamps and the CLOCK line) whenever
+                possible, otherwise the phrase as stated
+  narrativeTime the in-story time phrase, only when the story runs on a
+                fictional timeline ("the third night at sea")
+  entities      2–6 proper nouns: places, people, named things
+  participants  names of those involved
+  importance    0.20–1.00 (0.9 = a day the participants will retell for
+                years; 0.5 = a pleasant but ordinary outing)
+
+Return a JSON array only. No prose, no code fences. If nothing qualifies, return [].`
+
+function parseFoldEpisodes(content: string): FoldEpisode[] {
+  try {
+    const clean = stripCodeFences(content)
+    const parsed = JSON.parse(clean)
+    const items = Array.isArray(parsed) ? parsed : [parsed]
+    const episodes: FoldEpisode[] = []
+    for (const raw of items) {
+      if (episodes.length >= FOLD_EPISODE_CAP) break
+      if (!raw || typeof raw !== 'object') continue
+      const item = raw as Record<string, unknown>
+      const narrative = typeof item.narrative === 'string' ? item.narrative.trim() : ''
+      if (!narrative) continue
+      const summary = typeof item.summary === 'string' && item.summary.trim().length > 0
+        ? item.summary.trim()
+        : narrative.slice(0, 60)
+      const strArray = (v: unknown): string[] =>
+        Array.isArray(v)
+          ? (v as unknown[]).filter((e): e is string => typeof e === 'string' && e.trim().length > 0).map(e => e.trim()).slice(0, 8)
+          : []
+      episodes.push({
+        narrative,
+        summary,
+        when: typeof item.when === 'string' && item.when.trim().length > 0 ? item.when.trim() : undefined,
+        narrativeTime: typeof item.narrativeTime === 'string' && item.narrativeTime.trim().length > 0
+          ? item.narrativeTime.trim()
+          : undefined,
+        entities: strArray(item.entities),
+        participants: strArray(item.participants),
+        importance: typeof item.importance === 'number'
+          ? Math.min(1, Math.max(0.2, item.importance))
+          : 0.6,
+      })
+    }
+    return episodes
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Fold-time episode pass: over the just-folded message window, ask the cheap
+ * LLM for 0–{@link FOLD_EPISODE_CAP} consolidated episode records. Per-turn
+ * extraction sees one turn at a time and produces fragments; a real outing
+ * spans many turns and deserves one coherent, dated record. Piggybacks the
+ * existing fold cadence — no new trigger.
+ */
+export async function extractEpisodesFromFold(
+  windowMessages: FoldEpisodeMessage[],
+  clock: ExtractionClock,
+  selection: CheapLLMSelection,
+  userId: string,
+  chatId?: string,
+): Promise<CheapLLMTaskResult<FoldEpisode[]>> {
+  if (windowMessages.length === 0) {
+    return { success: true, result: [] }
+  }
+
+  const rendered = windowMessages
+    .map(m => {
+      const stamp = m.createdAt ? `[${m.createdAt.slice(0, 16).replace('T', ' ')}] ` : ''
+      const content = m.content.length > 1500 ? `${m.content.slice(0, 1500)}…` : m.content
+      return `${stamp}${m.speaker}: ${content}`
+    })
+    .join('\n\n')
+
+  const clockLine =
+    `CLOCK: current date/time ${clock.nowIso}; timeline mode ${clock.timelineMode}` +
+    (clock.narrativeNow?.trim() ? `; current in-story time ${clock.narrativeNow.trim()}` : '')
+
+  const messages: LLMMessage[] = [
+    { role: 'system', content: FOLD_EPISODE_PROMPT },
+    { role: 'user', content: `${clockLine}\n\nDATED TURNS:\n\n${rendered}` },
+  ]
+
+  return executeCheapLLMTask(
+    selection,
+    messages,
+    userId,
+    parseFoldEpisodes,
+    'fold-episode-extraction',
+    chatId,
+  )
+}
+
 /**
  * Result of the unified keyword distillation: the search keywords plus a
  * best-guess `temporal`/`context` label for the current turn. The two guesses
@@ -893,6 +1186,85 @@ export interface MemorySearchExtraction {
   keywords: string[]
   temporal?: TemporalTag
   context?: ContextTag
+  /**
+   * A single natural-language sentence describing what the characters are
+   * currently focused on. This — not the keyword bag — is what the recall path
+   * embeds: sentence-embedding models are trained on prose, so a sentence lands
+   * in a far more discriminating region of embedding space than `keywords.join`.
+   * Undefined when the model omits it (caller falls back to the prose query).
+   */
+  paraphrase?: string
+  // ── Episodic recall (all default to inert values on parse failure) ─────────
+  /** True when the turn references past shared events. Absent → false. */
+  retrospective?: boolean
+  /**
+   * Absolute ISO time window the turn references, resolved by the model
+   * against the TODAY line ("last week" → {from, to}). Null/absent → none.
+   */
+  timeRange?: { from: string; to: string } | null
+  /** Places/people/things named or implied by the turn. Absent → []. */
+  entities?: string[]
+}
+
+/**
+ * How many of the most recent messages the deterministic day-reference scanner
+ * reads. Deliberately far tighter than the 20 the prompt sees: an override that
+ * fires on a stale "yesterday" from three topics ago is worse than no override.
+ */
+const DAY_REFERENCE_SCAN_MESSAGES = 4
+
+/** Local `YYYY-MM-DD` stamp (never `toISOString().slice(0,10)`, which is UTC). */
+function localDateStamp(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+/**
+ * Merge a deterministically-resolved day reference into the LLM's parsed
+ * signals (Fix 1 of the day-references + fresh-boost spec).
+ *
+ * - Past-pointing reference → the resolved window OVERRIDES any LLM range and
+ *   forces `retrospective: true`. The override is the point: the model's own
+ *   ranges are UTC-day-biased, and that bias is what made a same-day "the
+ *   mission today" resolve to a window containing none of the mission.
+ * - Future-only reference ("tomorrow") → nothing applied; whatever the model
+ *   said stands, since the lexicon covers less than the model does.
+ * - No reference → the parsed result passes through unchanged.
+ *
+ * Accepted cost: a purely forward-looking "let's go to the pool today" marks
+ * the turn retrospective. The consequences (a temporal flip toward today's
+ * memories, one turn without the anti-repetition penalty) are benign, and
+ * intent heuristics to dodge it would reintroduce exactly the brittleness this
+ * resolver exists to remove.
+ */
+function mergeDayReference(
+  parsed: MemorySearchExtraction,
+  dayReference: DayReferenceResolution | null,
+  chatId: string | undefined,
+  characterId: string | undefined,
+): MemorySearchExtraction {
+  if (!dayReference) return parsed
+
+  if (!dayReference.pastPointing) {
+    logger.debug('[MemorySearchKeywords] Day reference is future-pointing; leaving LLM signals alone', {
+      chatId,
+      characterId,
+      matched: dayReference.matched,
+    })
+    return parsed
+  }
+
+  logger.debug('[MemorySearchKeywords] Deterministic day reference resolved', {
+    chatId,
+    characterId,
+    matched: dayReference.matched,
+    from: dayReference.timeRange.from,
+    to: dayReference.timeRange.to,
+    overrodeLlmTimeRange: !!parsed.timeRange,
+    llmRetrospective: parsed.retrospective === true,
+  })
+
+  return { ...parsed, retrospective: true, timeRange: dayReference.timeRange }
 }
 
 /**
@@ -916,7 +1288,8 @@ export async function extractMemorySearchKeywords(
   selection: CheapLLMSelection,
   userId: string,
   chatId?: string,
-  characterId?: string
+  characterId?: string,
+  clock?: ExtractionClock
 ): Promise<CheapLLMTaskResult<MemorySearchExtraction>> {
   // Truncate messages to keep cheap LLM call fast
   const cappedMessages = recentMessages.slice(-20)
@@ -928,6 +1301,37 @@ export async function extractMemorySearchKeywords(
     })
     .join('\n\n')
 
+  // TODAY line (variable — user content, never the cached system prompt) so
+  // the model can resolve "last week" into an absolute timeRange.
+  //
+  // Rendered from the SERVER-LOCAL calendar, not UTC: Quilltap is self-hosted,
+  // so the server's timezone is the user's. A UTC TODAY line tells a user
+  // talking at 21:44 CDT that it is already tomorrow, and every "today" the
+  // model resolves then lands on a day containing none of the memories it
+  // means (see lib/memory/day-references.ts, which does the same math).
+  const nowIso = clock?.nowIso ?? new Date().toISOString()
+  const nowMs = Date.parse(nowIso)
+  const timelineMode = clock?.timelineMode ?? 'realtime'
+  const todayLine = Number.isFinite(nowMs)
+    ? `TODAY: ${localDateStamp(new Date(nowMs))} (${WEEKDAYS[new Date(nowMs).getDay()]}); timeline mode: ${timelineMode}`
+    : `TODAY: ${nowIso}; timeline mode: ${timelineMode}`
+
+  // Deterministic day-reference resolution (Fix 1). Scanned over the most
+  // recent messages only — the prompt sees 20, but older context routinely
+  // carries a stale "yesterday" from a previous topic, and a deterministic
+  // override must stay tight to the live turn. Realtime timelines only,
+  // matching the prompt's own rule for fictional clocks.
+  const dayReference =
+    timelineMode === 'realtime' && Number.isFinite(nowMs)
+      ? resolveDayReference(
+          cappedMessages
+            .slice(-DAY_REFERENCE_SCAN_MESSAGES)
+            .map(m => m.content)
+            .join('\n'),
+          new Date(nowMs),
+        )
+      : null
+
   const messages: LLMMessage[] = [
     {
       role: 'system',
@@ -935,7 +1339,7 @@ export async function extractMemorySearchKeywords(
     },
     {
       role: 'user',
-      content: `Character: ${characterName}\n\nRecent conversation:\n${conversationText}\n\nExtract keywords for searching ${characterName}'s memories:`,
+      content: `Character: ${characterName}\n${todayLine}\n\nRecent conversation:\n${conversationText}\n\nExtract keywords for searching ${characterName}'s memories:`,
     },
   ]
 
@@ -969,8 +1373,52 @@ export async function extractMemorySearchKeywords(
         const temporal = TEMPORAL_VALUES.has(rawTemporal) ? (rawTemporal as TemporalTag) : undefined
         const context = CONTEXT_VALUES.has(rawContext) ? (rawContext as ContextTag) : undefined
 
-        return { keywords, temporal, context }
+        const rawParaphrase =
+          !Array.isArray(parsed) && typeof parsed?.paraphrase === 'string'
+            ? parsed.paraphrase.trim()
+            : ''
+        const paraphrase = rawParaphrase.length > 0 ? rawParaphrase : undefined
+
+        // Episodic signals — every one defaults to inert on garbling so
+        // recall degrades to exactly today's behavior, never blocks.
+        const retrospective =
+          !Array.isArray(parsed) && parsed?.retrospective === true
+        let timeRange: { from: string; to: string } | null = null
+        if (!Array.isArray(parsed) && parsed?.timeRange && typeof parsed.timeRange === 'object') {
+          const tr = parsed.timeRange as Record<string, unknown>
+          const from = typeof tr.from === 'string' ? tr.from.trim() : ''
+          const to = typeof tr.to === 'string' ? tr.to.trim() : ''
+          if (
+            /^\d{4}-\d{2}-\d{2}/.test(from) &&
+            /^\d{4}-\d{2}-\d{2}/.test(to) &&
+            Number.isFinite(Date.parse(from)) &&
+            Number.isFinite(Date.parse(to))
+          ) {
+            // Normalize date-only bounds to full-day coverage.
+            const fromIso = from.length === 10 ? `${from}T00:00:00.000Z` : from
+            const toIso = to.length === 10 ? `${to}T23:59:59.999Z` : to
+            if (Date.parse(fromIso) <= Date.parse(toIso)) {
+              timeRange = { from: fromIso, to: toIso }
+            }
+          }
+        }
+        const entities =
+          !Array.isArray(parsed) && Array.isArray(parsed?.entities)
+            ? (parsed.entities as unknown[])
+                .filter((e): e is string => typeof e === 'string' && e.trim().length > 0)
+                .map(e => e.trim())
+                .slice(0, 5)
+            : []
+
+        return mergeDayReference(
+          { keywords, temporal, context, paraphrase, retrospective, timeRange, entities },
+          dayReference,
+          chatId,
+          characterId,
+        )
       } catch {
+        // Unparsable response — callers bail on empty keywords, so there is
+        // nothing for the deterministic window to ride along with.
         return { keywords: [] }
       }
     },

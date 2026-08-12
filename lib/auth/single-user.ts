@@ -148,17 +148,3 @@ export async function getOrCreateSingleUser(): Promise<User> {
   }
 }
 
-/**
- * Check if a user ID belongs to the single user
- *
- * @param {string} userId - The user ID to check
- * @returns {boolean} True if the user ID is the single user ID
- */
-export function isSingleUser(userId: string): boolean {
-  return userId === SINGLE_USER_ID;
-}
-
-// Backwards compatibility exports
-export const UNAUTHENTICATED_USER_ID = SINGLE_USER_ID;
-export const getOrCreateUnauthenticatedUser = getOrCreateSingleUser;
-export const isUnauthenticatedUser = isSingleUser;

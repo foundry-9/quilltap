@@ -116,6 +116,7 @@ The selection formula considers all eligible characters' weights. A character wi
 - Nudged character speaks even if they already spoke this cycle
 - Nudge takes priority over the queue
 - Only works for LLM-controlled characters
+- The Host announces the summons in the transcript ("The Host turns to _Name_ … and invites them to take the floor"), so the invitation is a permanent part of the conversation rather than a note that vanishes on reload
 
 ### Queue
 
@@ -243,6 +244,7 @@ Characters you're impersonating sit in the same weighted rotation as the LLM cha
 - Or hit **Skip** to record their turn as taken (no message) and let the next character respond
 - Talkativeness applies to user characters too — a chatty user character will come up more often than a quiet one
 - Other LLM characters continue their turns normally; you can still queue an impersonated character with the sidebar's Queue button if you want them up sooner
+- When the rotation reaches a seat you're driving, the composer defaults the voice above the input to *that* seat, so you're already speaking as whoever's turn it is. Taking up a character's pen also hands them the floor at once, rather than making you wait for the rotation to come round. A voice you pick by hand for the turn still stands; the composer only re-defaults as the turn moves on.
 
 ### All-LLM Chats
 
@@ -436,5 +438,6 @@ Characters with help tools enabled can navigate directly to this page:
 
 - [Chats Overview](chats.md) — Basic chat functionality
 - [Multi-Character Chats](chat-multi-character.md) — Setting up group conversations
+- [Nothing to Add — Turn Skipping](turn-skipping.md) — Letting a character pass a turn
 - [Chat Sidebar](chat-participants.md) — Managing participants and per-chat settings
 - [Message Actions](chat-message-actions.md) — Editing and managing messages

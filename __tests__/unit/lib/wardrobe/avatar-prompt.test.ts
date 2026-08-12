@@ -122,4 +122,38 @@ describe('buildCharacterAvatarPrompt', () => {
     const { prompt } = await buildCharacterAvatarPrompt(repos, char, {})
     expect(prompt).toMatch(/Portrait of a middle-aged man/)
   })
+
+  it('crops at the collarbone and emits no "topless"/"naked" wording for a bare-topped character', async () => {
+    mockResolve.mockResolvedValue({
+      leafItemsBySlot: {
+        top: [],
+        bottom: [],
+        footwear: [],
+        accessories: [{ title: 'silver collar', description: 'thin choker' }],
+      },
+    })
+    const { prompt } = await buildCharacterAvatarPrompt(repos, baseCharacter, { equippedSlots: equipped })
+    // Tighter framing that keeps the chest out of frame.
+    expect(prompt).toMatch(/cropped at the collarbone/)
+    expect(prompt).toMatch(/chest and torso are outside the frame/)
+    // The default head-and-shoulders intro is replaced, not appended.
+    expect(prompt).not.toMatch(/head-and-shoulders crop, three-quarter view/)
+    // None of the nudity-signalling wardrobe language that trips SFW moderation.
+    expect(prompt).not.toMatch(/topless/)
+    expect(prompt).not.toMatch(/naked/)
+    // Above-the-collar accessories are still described.
+    expect(prompt).toMatch(/silver collar/)
+  })
+
+  it('omits the wardrobe block for a bare-topped character with no accessories (never says "naked")', async () => {
+    mockResolve.mockResolvedValue({
+      leafItemsBySlot: { top: [], bottom: [], footwear: [], accessories: [] },
+    })
+    const { prompt } = await buildCharacterAvatarPrompt(repos, baseCharacter, { equippedSlots: equipped })
+    expect(prompt).toMatch(/cropped at the collarbone/)
+    expect(prompt).not.toMatch(/topless/)
+    expect(prompt).not.toMatch(/naked/)
+    // No markdown wardrobe list at all.
+    expect(prompt).not.toMatch(/\n- \*\*/)
+  })
 })

@@ -1,15 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals'
 
-const mockModelsList = jest.fn()
+// jest.config.ts maps '@openrouter/sdk' to __mocks__/@openrouter/sdk.ts. An
+// inline jest.mock factory here registers against the raw specifier, while the
+// subject's own import is rewritten to the manual mock — so the provider would
+// call a different jest.fn() than the one configured, and every assertion would
+// silently exercise the error path. Configure the manual mock's handle instead.
+import { __mocks__ as openRouterMocks } from '@openrouter/sdk'
 
-jest.mock('@openrouter/sdk', () => ({
-  __esModule: true,
-  OpenRouter: jest.fn().mockImplementation(() => ({
-    models: {
-      list: mockModelsList,
-    },
-  })),
-}))
+const { mockModelsList } = openRouterMocks as unknown as {
+  mockModelsList: jest.Mock
+}
 
 jest.mock('@quilltap/plugin-utils', () => ({
   __esModule: true,
@@ -170,6 +170,51 @@ describe('OpenRouterImageProvider', () => {
 
   it('advertises the updated fallback image-capable model list', () => {
     expect(provider.supportedModels).toEqual(FALLBACK_IMAGE_MODELS)
+  })
+
+  it('discovers image models across every page of the paginated response', async () => {
+    // models.list() resolves to a PageIterator: async-iterable, with the model
+    // array at page.result.data. Reading `response.data` instead yields
+    // undefined, which is how discovery silently returned nothing and always
+    // fell through to the fallback list. Two pages, so a single-page read
+    // can't pass this either.
+    mockModelsList.mockResolvedValue({
+      async *[Symbol.asyncIterator]() {
+        yield {
+          result: {
+            data: [
+              { id: 'vendor/paints', output_modalities: ['image'] },
+              { id: 'vendor/talks', output_modalities: ['text'] },
+            ],
+          },
+        }
+        yield {
+          result: {
+            data: [
+              { id: 'vendor/draws', architecture: { outputModality: 'image' } },
+              { id: 'vendor/sketches', supported_generation_methods: ['image'] },
+            ],
+          },
+        }
+      },
+    })
+
+    const models = await provider.getAvailableModels(apiKey)
+
+    expect(models).toEqual(['vendor/paints', 'vendor/draws', 'vendor/sketches'])
+    expect(models).not.toEqual(FALLBACK_IMAGE_MODELS)
+  })
+
+  it('falls back to the built-in model list when the API reports no image models', async () => {
+    mockModelsList.mockResolvedValue({
+      async *[Symbol.asyncIterator]() {
+        yield { result: { data: [{ id: 'vendor/talks', output_modalities: ['text'] }] } }
+      },
+    })
+
+    const models = await provider.getAvailableModels(apiKey)
+
+    expect(models).toEqual(FALLBACK_IMAGE_MODELS)
   })
 
   it('falls back to the built-in model list when discovery is unavailable', async () => {

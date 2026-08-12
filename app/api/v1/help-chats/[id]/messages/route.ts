@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler, type AuthenticatedContext } from '@/lib/api/middleware';
+import { createContextParamsHandler, type RequestContext } from '@/lib/api/middleware';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { z } from 'zod';
 import { handleHelpChatMessage } from '@/lib/services/help-chat/orchestrator.service';
@@ -33,7 +33,7 @@ const sendMessageSchema = z.object({
  */
 async function verifyHelpChat(
   id: string,
-  context: AuthenticatedContext
+  context: RequestContext
 ): Promise<{ chat: any } | NextResponse> {
   const { user, repos } = context;
   const chat = await repos.chats.findById(id);
@@ -58,7 +58,7 @@ async function verifyHelpChat(
  */
 async function handleSendMessage(
   req: NextRequest,
-  context: AuthenticatedContext,
+  context: RequestContext,
   id: string
 ): Promise<NextResponse> {
   const { user, repos } = context;
@@ -88,7 +88,7 @@ async function handleSendMessage(
  */
 async function handleGetMessages(
   _req: NextRequest,
-  context: AuthenticatedContext,
+  context: RequestContext,
   id: string
 ): Promise<NextResponse> {
   const { repos } = context;
@@ -109,7 +109,7 @@ async function handleGetMessages(
  * POST /api/v1/help-chats/[id]/messages
  * Send a message and get streaming response
  */
-export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+export const POST = createContextParamsHandler<{ id: string }>(
   async (req, context, { id }) => {
     return handleSendMessage(req, context, id);
   }
@@ -119,7 +119,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
  * GET /api/v1/help-chats/[id]/messages
  * Load messages for a help chat
  */
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   async (req, context, { id }) => {
     return handleGetMessages(req, context, id);
   }

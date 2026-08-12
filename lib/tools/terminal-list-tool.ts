@@ -17,8 +17,9 @@ export const terminalListToolDefinition = {
   },
 };
 
-export function validateTerminalListInput(input: unknown): input is TerminalListInput {
-  return terminalListToolInputSchema.safeParse(input).success;
+export function validateTerminalListInput(input: unknown): TerminalListInput | null {
+  const parsed = terminalListToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 export interface TerminalListOutput {

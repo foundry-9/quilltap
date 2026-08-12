@@ -41,8 +41,9 @@ export type DocDeleteFolderInput = z.infer<typeof docDeleteFolderToolInputSchema
 /**
  * Validates input for doc_delete_folder tool.
  */
-export function validateDocDeleteFolderInput(input: unknown): input is DocDeleteFolderInput {
-  return docDeleteFolderToolInputSchema.safeParse(input).success;
+export function validateDocDeleteFolderInput(input: unknown): DocDeleteFolderInput | null {
+  const parsed = docDeleteFolderToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 export const docDeleteFolderToolDefinition = {

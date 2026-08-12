@@ -27,6 +27,10 @@ import path from 'path';
 import { logger as migrationLogger } from '../../migrations/lib/logger';
 import { getDataDir } from '@/lib/paths';
 import {
+  cacheRuntimePassphrase,
+  clearRuntimePassphrase,
+} from './passphrase-cache';
+import {
   type PepperCryptoParams,
   decryptPepperWithParams,
   encryptPepperWithParams,
@@ -423,6 +427,7 @@ export function setupDbKey(passphrase: string): { pepper: string } {
   // Set in process.env so the app can use it immediately
   process.env.ENCRYPTION_MASTER_PEPPER = pepper;
   global.__quilltapHasUserPassphrase = hasUserPassphrase;
+  cacheRuntimePassphrase(actualPassphrase);
   setCurrentState('resolved');
 
   log.info('Database key setup complete', {
@@ -478,6 +483,7 @@ export function unlockDbKey(passphrase: string): boolean {
   // Success
   process.env.ENCRYPTION_MASTER_PEPPER = pepper;
   global.__quilltapHasUserPassphrase = true;
+  cacheRuntimePassphrase(passphrase);
   setCurrentState('resolved');
 
   log.info('Database key unlocked successfully');
@@ -550,6 +556,7 @@ export function changePassphrase(
 
   // Update the cached passphrase state
   global.__quilltapHasUserPassphrase = hasNewUserPassphrase;
+  cacheRuntimePassphrase(actualNewPassphrase);
 
   log.info('Passphrase change completed successfully');
   return { success: true };
@@ -587,6 +594,8 @@ export function storeEnvPepperInDbKey(passphrase: string): void {
   const dbKeyPath = getDbKeyPath();
   writeDbKeyFile(dbKeyPath, fileData);
 
+  global.__quilltapHasUserPassphrase = passphrase.length > 0;
+  cacheRuntimePassphrase(actualPassphrase);
   setCurrentState('resolved');
 
   log.info('Pepper stored in .dbkey file', {
@@ -605,6 +614,7 @@ export function storeEnvPepperInDbKey(passphrase: string): void {
 export function lockDbKey(): void {
   log.info('Locking database key — clearing pepper from memory');
   delete process.env.ENCRYPTION_MASTER_PEPPER;
+  clearRuntimePassphrase();
   setCurrentState('needs-passphrase');
 }
 

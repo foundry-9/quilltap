@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { z } from 'zod';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import { getFilePath } from '@/lib/api/middleware/file-path';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { writeUserUploadToMountStore } from '@/lib/file-storage/user-uploads-bridge';
@@ -101,7 +101,7 @@ export function inferMimeType(filename: string, detectedMimeType?: string | null
 }
 
 interface SaveFileEntryOptions {
-  ctx: AuthenticatedContext;
+  ctx: RequestContext;
   filename: string;
   contentBuffer: Buffer;
   mimeType: string;

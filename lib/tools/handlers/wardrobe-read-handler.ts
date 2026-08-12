@@ -14,13 +14,14 @@ import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import type { WardrobeReadToolInput, WardrobeReadToolOutput } from '../wardrobe-read-tool';
 import { validateWardrobeReadInput } from '../wardrobe-read-tool';
-import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
-import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
+import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import { resolveProjectMountPointIdsForChat } from '@/lib/mount-index/tiered-mount-pool';
 import {
+  findEquippedSlots,
   isOwnWardrobeItem,
   normalizeNoItemSentinel,
   resolveWardrobeItemAcrossTiers,
+  wardrobeItemNotFoundMessage,
 } from './wardrobe-handler-shared';
 
 export interface WardrobeReadToolContext {
@@ -30,15 +31,6 @@ export interface WardrobeReadToolContext {
 }
 
 type WardrobeRepos = ReturnType<typeof getRepositories>;
-
-function findEquippedSlots(itemId: string, equippedSlots: EquippedSlots | null): string[] {
-  if (!equippedSlots) return [];
-  const slots: string[] = [];
-  for (const slot of WARDROBE_SLOT_TYPES) {
-    if ((equippedSlots[slot] ?? []).includes(itemId)) slots.push(slot);
-  }
-  return slots;
-}
 
 /**
  * Build the full read-shaped output for a resolved wardrobe item. Shared by
@@ -115,7 +107,9 @@ export async function executeWardrobeReadTool(
 ): Promise<WardrobeReadToolOutput> {
   const repos = getRepositories();
 
-  if (!validateWardrobeReadInput(input)) {
+  const parsed = validateWardrobeReadInput(input);
+
+  if (!parsed) {
     logger.warn('Wardrobe read tool validation failed', {
       context: 'wardrobe-read-handler',
       userId: context.userId,
@@ -127,7 +121,7 @@ export async function executeWardrobeReadTool(
   }
 
   try {
-    const { item_id, item_title } = input as WardrobeReadToolInput;
+    const { item_id, item_title } = parsed;
     const projectMountPointIds = await resolveProjectMountPointIdsForChat(context.chatId);
 
     const item = await resolveWardrobeItemAcrossTiers(
@@ -138,9 +132,7 @@ export async function executeWardrobeReadTool(
       projectMountPointIds,
     );
     if (!item) {
-      return buildWardrobeReadFailure(
-        `Wardrobe item not found${item_id ? ` with ID "${item_id}"` : ''}${item_title ? ` with title "${item_title}"` : ''}`,
-      );
+      return buildWardrobeReadFailure(wardrobeItemNotFoundMessage(item_id, item_title));
     }
 
     return await buildWardrobeReadOutput(repos, context.characterId, context.chatId, item, projectMountPointIds);

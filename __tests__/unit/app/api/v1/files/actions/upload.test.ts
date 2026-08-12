@@ -57,7 +57,7 @@ describe('files upload action', () => {
 
   it('does not require file write permission for user-initiated uploads', async () => {
     // User-initiated uploads should not go through the AI file write permission system.
-    // The upload endpoint is protected by authentication (createAuthenticatedHandler),
+    // The upload endpoint is protected by authentication (createContextHandler),
     // not by the Prospero file write permission gate.
     const mockFile = {
       name: 'notes.txt',

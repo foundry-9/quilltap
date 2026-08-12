@@ -30,6 +30,7 @@ import type { DocMountDocumentWithLink as DocMountDocument } from '@/lib/databas
 import {
   SINGLE_FILE_OVERLAY_PATHS,
   CHARACTER_PROPERTIES_JSON_PATH,
+  CHARACTER_METADATA_JSON_PATH,
   CHARACTER_IDENTITY_MD_PATH,
   CHARACTER_DESCRIPTION_MD_PATH,
   CHARACTER_MANIFESTO_MD_PATH,
@@ -44,6 +45,7 @@ import {
 import {
   hasLinkedVault,
   parseVaultProperties,
+  parseVaultMetadata,
   parseVaultPhysicalPrompts,
   markdownToNullable,
   stableUuidFromString,
@@ -131,12 +133,18 @@ async function loadVaultFileMaps(mountPointIds: string[]): Promise<VaultFileMaps
  *   caller catches and drops; the single caller lets it propagate.
  */
 function hydrateOne(character: Character, maps: VaultFileMaps): Character {
+  // No archivedAt short-circuit here, deliberately (§4.2a): archiving prunes
+  // the vault but keeps every managed-field document, so an archived character
+  // hydrates exactly like a live one. Skipping would hand back a hollow row —
+  // the very outcome the prune-in-place revision exists to avoid. A *broken*
+  // archived vault is a real fault and surfaces as one, like any other.
   if (!hasLinkedVault(character)) {
     return character;
   }
   const mountId = character.characterDocumentMountPointId as string;
 
   const propsByMount = maps.contentByMountByPath.get(CHARACTER_PROPERTIES_JSON_PATH)!;
+  const metadataByMount = maps.contentByMountByPath.get(CHARACTER_METADATA_JSON_PATH)!;
   const idByMount = maps.contentByMountByPath.get(CHARACTER_IDENTITY_MD_PATH)!;
   const descByMount = maps.contentByMountByPath.get(CHARACTER_DESCRIPTION_MD_PATH)!;
   const manifestoByMount = maps.contentByMountByPath.get(CHARACTER_MANIFESTO_MD_PATH)!;
@@ -155,7 +163,8 @@ function hydrateOne(character: Character, maps: VaultFileMaps): Character {
 
   let out: Character = character;
 
-  // properties.json: pronouns, aliases, title, firstMessage, talkativeness
+  // properties.json: pronouns, aliases, title, firstMessage, talkativeness,
+  // canChooseOutfit
   // (systemTransparency is access-control state — DB column only, not vault-mirrored)
   const parsed = parseVaultProperties(propsRaw, character.id);
   if (parsed) {
@@ -166,8 +175,25 @@ function hydrateOne(character: Character, maps: VaultFileMaps): Character {
       title: parsed.title,
       firstMessage: parsed.firstMessage,
       talkativeness: parsed.talkativeness,
+      canChooseOutfit: parsed.canChooseOutfit,
     };
   }
+
+  // metadata.json: the user's freeform fact sheet. Explicitly NOT a keystone —
+  // vaults predating the feature have no such file, and the absence is the
+  // normal state rather than a broken vault, so it hydrates as {} instead of
+  // throwing. An unparseable file lands on {} too (parseVaultMetadata warns);
+  // a stray comma in a fact sheet must not hollow the character.
+  const metadataRaw = metadataByMount.get(mountId);
+  const metadata =
+    metadataRaw === undefined ? {} : (parseVaultMetadata(metadataRaw, character.id, mountId) ?? {});
+  if (metadataRaw === undefined) {
+    logger.debug('Character vault has no metadata.json; hydrating empty metadata', {
+      characterId: character.id,
+      mountPointId: mountId,
+    });
+  }
+  out = { ...out, metadata };
 
   // identity.md
   const idRaw = idByMount.get(mountId);
@@ -350,6 +376,9 @@ export async function applyDocumentStoreOverlayOne(
   if (!character) {
     return character;
   }
+  // Archived characters are NOT short-circuited (§4.2a): their vault survives
+  // the prune and must be overlaid like any other. Pre-revision tombstones
+  // (vault deleted, pointer nulled) fall through hasLinkedVault unhollowed.
   if (!hasLinkedVault(character)) {
     return character;
   }

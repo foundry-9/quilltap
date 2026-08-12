@@ -1,0 +1,466 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quilltap.ai/schemas/qtap-custom-tool.schema.json",
+  "title": "Quilltap Custom Tool",
+  "description": "Schema for a `Tools/*.tool.json` custom-tool (pseudo-tool) definition — a named action with parameters, a random roll, and an ordered table of outcomes. Place the file in a `Tools/` folder at the root of any document store; the tool's identity is its `name` field, not the filename. One tool per file. Kept in sync by hand with the Zod schema in lib/pascal/custom-tool.types.ts, which is the runtime source of truth.",
+  "type": "object",
+  "required": ["name", "description", "outcomes"],
+  "additionalProperties": true,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Editor hint pointing at this schema. Ignored at runtime."
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+      "description": "The tool's identity — what the model calls and what shadowing resolves on. Lowercase, starts with a letter, 1–64 characters. The filename is not significant."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "description": "How the tool is named to a human — in Pascal's announcement, in the composer popup, and in the roster list. Omit it and the `name` is title-cased instead ('scan_hawking_radiation' becomes 'Scan Hawking Radiation'), which is often enough. The model never sees this: it calls the tool by `name`."
+    },
+    "chipLabel": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160,
+      "description": "Templated label for the outcome chip and the announcement header — a per-run name for a tool that does many different things per run ('Agent lambda — {{params.label}}'). Takes the same placeholders as an outcome message ({{value}}, {{roll}}, {{dice}}, {{params.name}}, {{metadata.key}}, {{state.path}}, {{llm}}), rendered after the outcome is chosen. Blank or absent = the title labels the chip. Never sent to the model; to have the LLM name the chip, declare a string parameter whose description prompts it, then template that parameter here."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "description": "What the tool does IN THE FICTION. This is how the model decides when to reach for it and how the UI labels it — write 'Attempt to pick the lock,' not 'rolls 0–1 against thresholds.'"
+    },
+    "disabled": {
+      "type": "boolean",
+      "description": "true suppresses a tool of this name at this tier and every tier below it. Use to switch off an inherited tool for one character or project."
+    },
+    "availableWhen": {
+      "$ref": "#/$defs/ToolGate",
+      "description": "Availability gate: offer this tool ONLY to an invoker whose metadata.json satisfies every test here — { \"availableWhen\": { \"metadata\": { \"toolAbilities\": { \"contains\": \"programmable\" } } } }. Tested before the deal, so a withheld tool is never listed to the model and never appears in the composer popup. A key the character lacks does not match, so a character with no fact sheet at all fails every availableWhen. A definition gated out this way makes no claim on its name — a farther tier may still supply an ungated tool of the same name, which is how a character-vault variant and a General-store fallback coexist. At most one of availableWhen/withheldWhen (enforced when the file loads)."
+    },
+    "withheldWhen": {
+      "$ref": "#/$defs/ToolGate",
+      "description": "Availability gate: withhold this tool from an invoker whose metadata.json satisfies every test here. The mirror of availableWhen, and NOT its complement — a key the character lacks does not match, so a character with no fact sheet satisfies no withheldWhen and is offered the tool. At most one of availableWhen/withheldWhen (enforced when the file loads)."
+    },
+    "revealOdds": {
+      "type": "boolean",
+      "default": true,
+      "description": "When false, the model sees only name/description/parameters — never the roll spec or outcome table. NOTE: this hides the odds from the tool roster only. The .tool.json file is still an ordinary document; a character with character_read on the store can read it with doc_* tools. For genuinely secret odds, put the file in a store the character cannot read."
+    },
+    "defaultVisibility": {
+      "enum": ["public", "whisper"],
+      "default": "public",
+      "description": "Default visibility of the result. 'whisper' hides the outcome from other participants (a GM-style hidden roll); the human operator always sees it."
+    },
+    "parameters": {
+      "type": "object",
+      "maxProperties": 8,
+      "description": "Optional inputs, keyed by parameter name (same identifier rules as `name`). At most 8.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["type", "default"],
+        "properties": {
+          "type": {
+            "enum": ["number", "integer", "string", "boolean"],
+            "description": "Value type of this parameter."
+          },
+          "default": {
+            "description": "Required. Every parameter needs a default so a zero-argument run always works. Must match the declared type, or be a { \"$state\": \"path\", \"fallback\": ... } reference whose fallback matches the declared type.",
+            "oneOf": [
+              { "type": "number" },
+              { "type": "string" },
+              { "type": "boolean" },
+              { "$ref": "#/$defs/StateRef" }
+            ]
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "What this parameter means, in the fiction."
+          },
+          "min": {
+            "type": "number",
+            "description": "Numeric types only. Run-time values are clamped up to this."
+          },
+          "max": {
+            "type": "number",
+            "description": "Numeric types only. Run-time values are clamped down to this."
+          }
+        }
+      }
+    },
+    "roll": {
+      "description": "How chance is drawn. Either a numeric-range object (Form A) or a dice-notation string (Form B). Omit for a plain uniform 0–1 roll.",
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^\\s*(\\d+)?[dD](\\d+)(?:\\s*[+-]\\s*(\\d+))?\\s*$",
+          "description": "Form B — dice notation like \"3d6+2\", \"1d20\", \"2d10-1\". Rolled by Quilltap's shared dice roller (2–1000 sides, 1–100 dice, modifier within ±1000). The raw value is the dice total, and {{dice}} renders the breakdown. Dice notation does not accept $param references in v1."
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Form A — a uniform float in [min, max), then transformed: value = raw * multiplier + offset, rounded last if `round` is set. Each numeric field accepts a literal number, a { \"$param\": \"name\" } reference to a declared numeric parameter, or a { \"$state\": \"path\", \"fallback\": <number> } reference.",
+          "properties": {
+            "min": { "$ref": "#/$defs/NumberOrParamRef", "description": "Low bound, inclusive. Default 0." },
+            "max": { "$ref": "#/$defs/NumberOrParamRef", "description": "High bound, exclusive. Default 1." },
+            "multiplier": { "$ref": "#/$defs/NumberOrParamRef", "description": "Raw value is multiplied by this first. Default 1." },
+            "offset": { "$ref": "#/$defs/NumberOrParamRef", "description": "Added after multiplication. Default 0." },
+            "round": { "type": "boolean", "description": "Round the final value to a whole number. Applied last. Default false." }
+          }
+        }
+      ]
+    },
+    "llm": {
+      "type": "object",
+      "required": ["prompt", "errorMessage"],
+      "additionalProperties": false,
+      "description": "Ask an LLM for a generated result. When present, every run renders `prompt` and poses it to the instance's cheap utility model AFTER the roll and BEFORE the outcome table. The result is a pair { ok, output }: on success, output is the model's trimmed answer; on any failure (provider error, timeout, empty answer, no model configured), ok is false and output is this block's errorMessage — the author's words, never the provider's. Either way, outcomes may test the pair via the `llm` subject and messages may render it via {{llm}}, so a failed consult is an outcome the table deals with rather than an error: the run itself never fails because the model went quiet.",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000,
+          "description": "What to ask, rendered with the same placeholders an outcome message takes — {{value}}, {{roll}}, {{dice}}, {{params.name}}, {{metadata.key}}, {{state.path}} — but not {{llm}} itself. Ask for the answer shape you intend to test: a bare word, a number, a sentence."
+        },
+        "errorMessage": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000,
+          "description": "The consult's output when the call fails, in the author's own words. The technical reason goes to the roll record and the logs, never into the fiction."
+        },
+        "maxOutput": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000,
+          "description": "Cap on the answer, in characters. Default 8000. Set it low for a verdict, high for a consult whose answer IS the deliverable — the call's token budget scales with it. Applies to the model's answer only, never to errorMessage."
+        }
+      }
+    },
+    "effects": {
+      "type": "array",
+      "maxItems": 16,
+      "description": "Side effects applied after the run, in order: writes into tiered persistent state (at the tier where the key already lives, defaulting to the chat) or onto the rolling character's metadata.json fact sheet. Computed server-side as part of the roll, so the model cannot fudge them. At most 16. The Workbench's Proving Bench shows them as a dry run and never applies them.",
+      "items": { "$ref": "#/$defs/Effect" }
+    },
+    "outcomes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "description": "Ordered outcome table; the first match wins. The LAST entry must be a `true` catch-all so every roll lands somewhere, and no earlier entry may be `true` (everything below it would be unreachable). At most 32.",
+      "items": {
+        "type": "object",
+        "required": ["when", "message", "state"],
+        "additionalProperties": false,
+        "properties": {
+          "when": {
+            "description": "The test. Either the literal `true` (catch-all) or an object naming one or more subjects, ALL of which must hold. Bare comparators test the final value — `>= 0.30 && <= 0.60` is { \"gte\": 0.30, \"lte\": 0.60 }. `roll` tests the raw pre-transform draw, `params` tests what the caller supplied, so \"value > 1 and scale > 12\" is { \"gt\": 1, \"params\": { \"scale\": { \"gt\": 12 } } }, `metadata` tests the invoking character's own metadata.json fact sheet, and `llm` tests the LLM consult's answer (or its success, via `ok`). There is no OR and no nesting: ordered first-match-wins outcomes make OR unnecessary, and this keeps the evaluator free of any expression grammar.",
+            "oneOf": [
+              { "const": true },
+              {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": false,
+                "properties": {
+                  "gt": { "$ref": "#/$defs/NumberOperand", "description": "Value is greater than." },
+                  "gte": { "$ref": "#/$defs/NumberOperand", "description": "Value is greater than or equal to." },
+                  "lt": { "$ref": "#/$defs/NumberOperand", "description": "Value is less than." },
+                  "lte": { "$ref": "#/$defs/NumberOperand", "description": "Value is less than or equal to." },
+                  "eq": { "$ref": "#/$defs/NumberOperand", "description": "Value is equal to." },
+                  "neq": { "$ref": "#/$defs/NumberOperand", "description": "Value is not equal to." },
+                  "roll": {
+                    "$ref": "#/$defs/NumericComparator",
+                    "description": "Test the RAW pre-transform draw rather than the final value. Useful when multiplier/offset/round have moved the value away from what was actually rolled."
+                  },
+                  "params": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "description": "Test the resolved parameters, keyed by parameter name. Each must name a declared parameter. Ordering comparators (gt/gte/lt/lte) require a numeric parameter; eq/neq may address a string or boolean one; contains/ncontains search a string parameter for a substring.",
+                    "additionalProperties": { "$ref": "#/$defs/ParamComparator" },
+                    "propertyNames": { "pattern": "^[a-z][a-z0-9_-]{0,63}$" }
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "description": "Test the INVOKING CHARACTER's metadata.json fact sheet, keyed by metadata key — { \"metadata\": { \"hasAnsibleAccess\": { \"eq\": true } } }. Keys are the user's own, so any non-empty string is allowed and nothing about them can be validated when the file loads. At run time a key the character does not have, or one holding a list/object/null, or one whose type the comparator cannot sustain (ordering a string), simply does not match: the row is passed over and the table falls through to its catch-all. That is by design — a table branching on a key must still deal to a character who lacks it. Note { \"eq\": null } is not expressible; absence and null alike just fail to match.",
+                    "additionalProperties": { "$ref": "#/$defs/MetadataComparator" },
+                    "propertyNames": { "minLength": 1 }
+                  },
+                  "llm": {
+                    "$ref": "#/$defs/LlmComparator",
+                    "description": "Test the LLM consult's result — { \"llm\": { \"eq\": \"YES\" } } tests the answer; { \"llm\": { \"ok\": false } } tests whether the consult failed. Only valid on a tool that declares an `llm` block (enforced when the file loads, which JSON Schema cannot express here)."
+                  }
+                }
+              }
+            ]
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000,
+            "description": "The narrative result, rendered verbatim. Supports {{value}} (final post-transform value), {{roll}} (raw pre-transform value), {{dice}} (dice breakdown, e.g. \"3d6+2: [4, 2, 6] + 2 = 14\"; empty for Form A), {{params.name}} (a resolved parameter), {{metadata.key}} (a key from the invoking character's fact sheet), {{state.path}} (a path into merged persistent state), and {{llm}} (the consult's output — the model's answer, or the llm block's errorMessage on failure). Unknown placeholders are left as written — as is a {{metadata.key}} the character lacks, a {{state.path}} that is absent or non-primitive, one holding a list or object, or {{llm}} on a tool with no llm block."
+          },
+          "state": {
+            "enum": ["success", "partial", "failure", "info"],
+            "description": "Semantic state of this outcome. Accents the result bubble; authors never write CSS."
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "Effect": {
+      "type": "object",
+      "required": ["target", "value"],
+      "additionalProperties": false,
+      "description": "One side effect: a write the run records after the outcome table has dealt. Effects apply in order, each seeing the writes of the ones before it; a condition that does not hold, or an expression that fails to evaluate at run time, skips that one effect fail-soft — a broken effect never sinks a roll.",
+      "properties": {
+        "when": {
+          "$ref": "#/$defs/EffectWhen",
+          "description": "Condition for this effect. Omitted = fires on every run."
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Where to write: \"state.<path>\" (tiered persistent state — written at the tier where the key already lives, chat → project → group → general, defaulting to the chat) or \"metadata.<key>\" (the rolling character's metadata.json; the remainder after \"metadata.\" is taken whole as the key, dots included). A state path whose first segment starts with an underscore is rejected — those keys are the user's own, and no tool may write them."
+        },
+        "value": {
+          "description": "What to write. A JSON number or boolean is a literal, stored as-is. A JSON string is ALWAYS an expression — quote literal prose inside it: \"'broken pick'\", not \"broken pick\" (the bare form is a load-time parse error). Expressions take arithmetic (+ - * /), string concatenation (+ with a string operand), parentheses, number/string/boolean literals, and {{ref}} substitution ({{value}}, {{roll}}, {{dice}}, {{llm}}, {{params.x}}, {{metadata.key}}, {{state.path}}) — no identifiers, no function calls, no member access. {{dice}} and {{llm}} are strings and are never numerically coerced. Division by zero, or any reference that does not resolve, skips the effect at run time.",
+          "oneOf": [
+            { "type": "number" },
+            { "type": "boolean" },
+            { "type": "string", "minLength": 1, "maxLength": 500 }
+          ]
+        }
+      }
+    },
+    "EffectWhen": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "description": "An effect's condition: the outcome-row `when` comparator language plus one new subject — `outcome`, the winning row's semantic state — because an effect is evaluated after the table has dealt. Every subject named must hold (they AND together).",
+      "properties": {
+        "gt": { "$ref": "#/$defs/NumberOperand", "description": "Value is greater than." },
+        "gte": { "$ref": "#/$defs/NumberOperand", "description": "Value is greater than or equal to." },
+        "lt": { "$ref": "#/$defs/NumberOperand", "description": "Value is less than." },
+        "lte": { "$ref": "#/$defs/NumberOperand", "description": "Value is less than or equal to." },
+        "eq": { "$ref": "#/$defs/NumberOperand", "description": "Value is equal to." },
+        "neq": { "$ref": "#/$defs/NumberOperand", "description": "Value is not equal to." },
+        "roll": {
+          "$ref": "#/$defs/NumericComparator",
+          "description": "Test the RAW pre-transform draw rather than the final value."
+        },
+        "params": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test the resolved parameters, keyed by parameter name. Same rules as an outcome row's params subject.",
+          "additionalProperties": { "$ref": "#/$defs/ParamComparator" },
+          "propertyNames": { "pattern": "^[a-z][a-z0-9_-]{0,63}$" }
+        },
+        "metadata": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test the invoking character's metadata.json, keyed by metadata key. Fail-soft exactly as in an outcome row: a key the character lacks does not match.",
+          "additionalProperties": { "$ref": "#/$defs/MetadataComparator" },
+          "propertyNames": { "minLength": 1 }
+        },
+        "llm": {
+          "$ref": "#/$defs/LlmComparator",
+          "description": "Test the LLM consult's result. Only valid on a tool that declares an `llm` block (enforced when the file loads)."
+        },
+        "outcome": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "description": "Test the WINNING outcome's semantic state — { \"eq\": \"success\" } fires the effect only on a success. This subject exists only here: an outcome row cannot test a verdict it has not yet won.",
+          "properties": {
+            "eq": {
+              "enum": ["success", "partial", "failure", "info"],
+              "description": "The winning outcome carries this state."
+            },
+            "neq": {
+              "enum": ["success", "partial", "failure", "info"],
+              "description": "The winning outcome does not carry this state."
+            }
+          }
+        }
+      }
+    },
+    "ToolGate": {
+      "type": "object",
+      "required": ["metadata"],
+      "additionalProperties": false,
+      "description": "An availability test, answered BEFORE any run exists. Its only subject is the invoking character's metadata.json: there is no roll to test, no parameters (nobody has called anything yet), and no consult, which is also why a gate's operands are literals rather than $param/$state references. Every test must hold (they AND together), and each is fail-soft exactly as an outcome's metadata test is.",
+      "properties": {
+        "metadata": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Tests against the invoking character's metadata.json, keyed by metadata key. Keys are the user's own, so any non-empty string is allowed.",
+          "additionalProperties": { "$ref": "#/$defs/GateComparator" },
+          "propertyNames": { "minLength": 1 }
+        }
+      }
+    },
+    "GateComparator": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "description": "Comparisons against one metadata key in an availability gate. Shape-identical to MetadataComparator, and fail-soft in the same way, except that every operand must be a literal — a gate is answered before there are parameters or state to reference.",
+      "properties": {
+        "gt": { "type": "number", "description": "Greater than. Does not match unless the key holds a number." },
+        "gte": { "type": "number", "description": "Greater than or equal to. Does not match unless the key holds a number." },
+        "lt": { "type": "number", "description": "Less than. Does not match unless the key holds a number." },
+        "lte": { "type": "number", "description": "Less than or equal to. Does not match unless the key holds a number." },
+        "eq": {
+          "description": "Equal to. Does not match unless the key exists and holds a matching primitive.",
+          "oneOf": [{ "type": "number" }, { "type": "string" }, { "type": "boolean" }]
+        },
+        "neq": {
+          "description": "Not equal to. Does not match when the key is absent — absence is not inequality.",
+          "oneOf": [{ "type": "number" }, { "type": "string" }, { "type": "boolean" }]
+        },
+        "contains": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Contains this substring (case-sensitive). Does not match unless the key holds a string."
+        },
+        "ncontains": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Does not contain this substring (case-sensitive). Does not match unless the key holds a string — as with neq, absence is not a miss."
+        }
+      }
+    },
+    "NumberOperand": {
+      "description": "A number to compare against: a literal, a { \"$param\": \"name\" } reference to a declared numeric parameter, or a { \"$state\": \"path\", \"fallback\": <number> } reference. The reference form is how an opposed check is written — { \"gte\": { \"$param\": \"difficulty\" } } tests against a number the caller supplied rather than one fixed when the file was written.",
+      "$ref": "#/$defs/NumberOrParamRef"
+    },
+    "AnyOperand": {
+      "description": "A value to compare against for eq/neq: a literal number, string, or boolean, a { \"$param\": \"name\" } reference to a declared parameter of any type, or a { \"$state\": \"path\", \"fallback\": ... } reference typed by its fallback.",
+      "oneOf": [
+        { "type": "number" },
+        { "type": "string" },
+        { "type": "boolean" },
+        { "$ref": "#/$defs/ParamRef" },
+        { "$ref": "#/$defs/StateRef" }
+      ]
+    },
+    "StringOperand": {
+      "description": "The substring to look for with contains/ncontains: a non-empty literal string, a { \"$param\": \"name\" } reference to a declared string parameter, or a { \"$state\": \"path\", \"fallback\": ... } reference whose fallback is a string. Non-empty because every string contains \"\". That a referenced parameter or state fallback is a string is enforced when the file loads, which JSON Schema cannot express here.",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "$ref": "#/$defs/ParamRef" },
+        { "$ref": "#/$defs/StateRef" }
+      ]
+    },
+    "NumericComparator": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "description": "Comparisons against a number. Every key present must hold (they AND together).",
+      "properties": {
+        "gt": { "$ref": "#/$defs/NumberOperand", "description": "Greater than." },
+        "gte": { "$ref": "#/$defs/NumberOperand", "description": "Greater than or equal to." },
+        "lt": { "$ref": "#/$defs/NumberOperand", "description": "Less than." },
+        "lte": { "$ref": "#/$defs/NumberOperand", "description": "Less than or equal to." },
+        "eq": { "$ref": "#/$defs/NumberOperand", "description": "Equal to." },
+        "neq": { "$ref": "#/$defs/NumberOperand", "description": "Not equal to." }
+      }
+    },
+    "ParamComparator": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "description": "Comparisons against one declared parameter. Every key present must hold (they AND together). Identical to NumericComparator except that eq/neq widen to strings and booleans, since a parameter need not be a number.",
+      "properties": {
+        "gt": { "$ref": "#/$defs/NumberOperand", "description": "Greater than. Numeric parameters only." },
+        "gte": { "$ref": "#/$defs/NumberOperand", "description": "Greater than or equal to. Numeric parameters only." },
+        "lt": { "$ref": "#/$defs/NumberOperand", "description": "Less than. Numeric parameters only." },
+        "lte": { "$ref": "#/$defs/NumberOperand", "description": "Less than or equal to. Numeric parameters only." },
+        "eq": { "$ref": "#/$defs/AnyOperand", "description": "Equal to. The operand's type must match the parameter's." },
+        "neq": { "$ref": "#/$defs/AnyOperand", "description": "Not equal to. The operand's type must match the parameter's." },
+        "contains": { "$ref": "#/$defs/StringOperand", "description": "The parameter's text contains this substring (case-sensitive). String parameters only." },
+        "ncontains": { "$ref": "#/$defs/StringOperand", "description": "The parameter's text does not contain this substring (case-sensitive). String parameters only." }
+      }
+    },
+    "MetadataComparator": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "description": "Comparisons against one key of the invoking character's metadata sheet. Every key present must hold (they AND together). Shape-identical to ParamComparator; what differs is that nothing about the subject is knowable at load time, so every type rule below is enforced fail-soft at run time instead of as a rejection.",
+      "properties": {
+        "gt": { "$ref": "#/$defs/NumberOperand", "description": "Greater than. Does not match unless the key holds a number." },
+        "gte": { "$ref": "#/$defs/NumberOperand", "description": "Greater than or equal to. Does not match unless the key holds a number." },
+        "lt": { "$ref": "#/$defs/NumberOperand", "description": "Less than. Does not match unless the key holds a number." },
+        "lte": { "$ref": "#/$defs/NumberOperand", "description": "Less than or equal to. Does not match unless the key holds a number." },
+        "eq": { "$ref": "#/$defs/AnyOperand", "description": "Equal to. Does not match unless the key exists and holds a matching primitive." },
+        "neq": { "$ref": "#/$defs/AnyOperand", "description": "Not equal to. Does not match when the key is absent — absence is not inequality." },
+        "contains": { "$ref": "#/$defs/StringOperand", "description": "Contains this substring (case-sensitive). Does not match unless the key holds a string." },
+        "ncontains": { "$ref": "#/$defs/StringOperand", "description": "Does not contain this substring (case-sensitive). Does not match unless the key holds a string — as with neq, absence is not a miss." }
+      }
+    },
+    "LlmComparator": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "description": "Comparisons against the LLM consult's result. The comparator keys test the answer; `ok` tests whether the consult succeeded at all. Every key present must hold (they AND together). Like metadata, the answer's run-time type is the model's business, so type rules are enforced fail-soft at run time: ordering comparators need the answer to parse as a number and otherwise decline the row; eq/neq compare numerically when both sides are numbers, and otherwise as trimmed, case-insensitive strings (trailing '.'/'!' forgiven) — an author who asked for \"YES\" should not lose to a model that said \"yes.\".",
+      "properties": {
+        "gt": { "$ref": "#/$defs/NumberOperand", "description": "Greater than. Does not match unless the answer parses as a number." },
+        "gte": { "$ref": "#/$defs/NumberOperand", "description": "Greater than or equal to. Does not match unless the answer parses as a number." },
+        "lt": { "$ref": "#/$defs/NumberOperand", "description": "Less than. Does not match unless the answer parses as a number." },
+        "lte": { "$ref": "#/$defs/NumberOperand", "description": "Less than or equal to. Does not match unless the answer parses as a number." },
+        "eq": { "$ref": "#/$defs/AnyOperand", "description": "Equal to, numerically or as trimmed case-insensitive text. On a failed consult the answer is the block's errorMessage." },
+        "neq": { "$ref": "#/$defs/AnyOperand", "description": "Not equal to, under the same reconciliation as eq." },
+        "contains": { "$ref": "#/$defs/StringOperand", "description": "The answer contains this substring, compared trimmed and case-insensitively — 'west door' finds 'the West Door'." },
+        "ncontains": { "$ref": "#/$defs/StringOperand", "description": "The answer does not contain this substring, under the same reconciliation as contains." },
+        "ok": { "type": "boolean", "description": "true: this row only applies when the consult succeeded. false: only when it failed." }
+      }
+    },
+    "ParamRef": {
+      "type": "object",
+      "required": ["$param"],
+      "additionalProperties": false,
+      "properties": {
+        "$param": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "description": "Name of a declared parameter. One of the two forms of indirection in the format (the other is $state) — there are no expression strings anywhere."
+        }
+      }
+    },
+    "StateRef": {
+      "type": "object",
+      "required": ["$state", "fallback"],
+      "additionalProperties": false,
+      "description": "A reference into the merged persistent state (chat → project → group → general). The fallback is required and types the reference: it is what run-time resolution returns when the path is absent or holds a value of a different type, so a run can never fail on a $state reference.",
+      "properties": {
+        "$state": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Dot/bracket path into merged state, e.g. \"player.health\" or \"inventory[0].name\"."
+        },
+        "fallback": {
+          "oneOf": [
+            { "type": "number" },
+            { "type": "string" },
+            { "type": "boolean" }
+          ],
+          "description": "Used whenever the path is absent or holds a value of a different type. In a roll field the fallback must be a number; a contains/ncontains operand's fallback must be a string. Enforced when the file loads."
+        }
+      }
+    },
+    "NumberOrParamRef": {
+      "description": "A literal number, a reference to a declared parameter of type number or integer, or a { \"$state\": \"path\", \"fallback\": <number> } reference. That the referenced parameter is numeric, or the state fallback is a number, is enforced when the file loads, which JSON Schema cannot express here.",
+      "oneOf": [
+        { "type": "number" },
+        { "$ref": "#/$defs/ParamRef" },
+        { "$ref": "#/$defs/StateRef" }
+      ]
+    }
+  }
+}

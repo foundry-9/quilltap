@@ -36,6 +36,7 @@ const initialState: ExportState = {
   loadingEntities: false,
   includeMemories: false,
   memoryCount: 0,
+  vaultPreview: null,
   exporting: false,
   error: null,
 }
@@ -171,6 +172,33 @@ export function useExportData({
     }
   }, [setState])
 
+  /**
+   * Ask the server what the selected characters' vaults add to the bundle.
+   * Purely advisory: a failure leaves the hint absent rather than blocking the
+   * export, so this never surfaces an error to the wizard.
+   */
+  const loadVaultPreview = useCallback(async (
+    scope: 'all' | 'selected',
+    selectedIds: string[]
+  ) => {
+    setState((prev) => ({ ...prev, vaultPreview: null }))
+    try {
+      const params = new URLSearchParams({ action: 'export-preview', type: 'characters', scope })
+      if (scope === 'selected') params.set('selectedIds', selectedIds.join(','))
+
+      const response = await fetch(`/api/v1/system/tools?${params.toString()}`)
+      if (!response.ok) return
+
+      const data = await response.json()
+      setState((prev) => ({ ...prev, vaultPreview: data.vaults ?? null }))
+    } catch (error) {
+      console.error('Failed to preview character vaults', {
+        context: 'useExportData',
+        error: getErrorMessage(error),
+      })
+    }
+  }, [setState])
+
   const handleNext = useCallback(async () => {
     // Validation and step navigation based on current step
     switch (state.step) {
@@ -191,6 +219,12 @@ export function useExportData({
         // Use wizard for conditional navigation based on entity type
         if (supportsMemories(state.entityType)) {
           wizard.goTo('options')
+          // Characters carry their vaults now, which can dwarf everything else
+          // in the bundle. Ask what that costs once we know the selection —
+          // never on the way past, and never for a type without vaults.
+          if (state.entityType === 'characters') {
+            void loadVaultPreview(state.scope, state.selectedIds)
+          }
         } else {
           wizard.goTo('exporting')
         }
@@ -204,7 +238,7 @@ export function useExportData({
         // No action for other steps
         break
     }
-  }, [state.step, state.entityType, state.scope, state.selectedIds.length, wizard, loadAvailableEntities, setState])
+  }, [state.step, state.entityType, state.scope, state.selectedIds, wizard, loadAvailableEntities, loadVaultPreview, setState])
 
   const handleBack = useCallback(() => {
     // Clear error state when going back

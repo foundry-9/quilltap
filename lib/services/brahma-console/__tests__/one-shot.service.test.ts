@@ -45,10 +45,14 @@ jest.mock('../orchestrator.service', () => ({
   resolveBrahmaConnectionProfile: jest.fn(),
   normalizeToolCallSignature: jest.fn(() => 'sig'),
 }))
+jest.mock('../turn-budget', () => ({
+  resolveBrahmaMaxAgentTurns: jest.fn().mockResolvedValue(25),
+}))
 
 import { buildTools, streamMessage } from '@/lib/services/chat-message/streaming.service'
 import { processToolCalls, detectToolCallsInResponse } from '@/lib/services/chat-message/tool-execution.service'
 import { resolveBrahmaConnectionProfile } from '../orchestrator.service'
+import { resolveBrahmaMaxAgentTurns } from '../turn-budget'
 
 const MOCK_PROFILE = {
   id: 'conn-1',
@@ -142,5 +146,32 @@ describe('runBrahmaQuery', () => {
     } as never)
     const result = await runBrahmaQuery({ repos: REPOS, userId: 'u1', chatId: 'c1', question: 'q' })
     expect(result).toEqual({ ok: false, detail: 'empty response' })
+  })
+
+  it('salvages a partial answer from tool data when the turn budget is exhausted (Bug 47)', async () => {
+    // Budget of 2: turn 1 runs a tool; turn 2 is the forced-final turn (runs no
+    // tools) and the model answers it with another tool call, not a final
+    // response — so the accumulated prose is empty.
+    jest.mocked(resolveBrahmaMaxAgentTurns).mockResolvedValue(2)
+    jest.mocked(streamMessage).mockImplementation(async function* () {
+      yield { done: true, rawResponse: { tool: true } }
+    } as never)
+    jest.mocked(detectToolCallsInResponse).mockReturnValue(
+      [{ name: 'run_sql', arguments: { sql: 'select 1' }, callId: 'c1' }] as never,
+    )
+    jest.mocked(processToolCalls).mockResolvedValue({
+      toolMessages: [{ toolName: 'run_sql', success: true, content: 'rows: 7', callId: 'c1' }],
+      generatedImagePaths: [],
+    } as never)
+
+    const result = await runBrahmaQuery({ repos: REPOS, userId: 'u1', chatId: 'c1', question: 'q' })
+
+    // Rather than a bare failure after spending real budget, the caller gets an
+    // explanatory answer that folds in the last tool result.
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.answer).toContain('2-turn budget')
+      expect(result.answer).toContain('rows: 7')
+    }
   })
 })

@@ -6,7 +6,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 import { serverError, created } from '@/lib/api/responses';
@@ -30,7 +30,7 @@ const createArchetypeSchema = z.object({
 });
 
 // GET /api/v1/wardrobe
-export const GET = createAuthenticatedHandler(async (req, { repos }) => {
+export const GET = createContextHandler(async (req, { repos }) => {
   try {
 
     const archetypeItems = await repos.wardrobe.findArchetypes();
@@ -46,7 +46,7 @@ export const GET = createAuthenticatedHandler(async (req, { repos }) => {
 });
 
 // POST /api/v1/wardrobe
-export const POST = createAuthenticatedHandler(async (req, { repos }) => {
+export const POST = createContextHandler(async (req, { repos }) => {
   const body = await req.json();
   const validatedData = createArchetypeSchema.parse(body);
 

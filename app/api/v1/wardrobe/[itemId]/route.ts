@@ -7,7 +7,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
+import { createContextParamsHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 import { notFound, serverError } from '@/lib/api/responses';
@@ -28,7 +28,7 @@ const updateArchetypeSchema = z.object({
 });
 
 // GET /api/v1/wardrobe/[itemId]
-export const GET = createAuthenticatedParamsHandler<{ itemId: string }>(
+export const GET = createContextParamsHandler<{ itemId: string }>(
   async (req, { repos }, { itemId }) => {
     try {
       const item = await repos.wardrobe.findArchetypeById(itemId);
@@ -50,7 +50,7 @@ export const GET = createAuthenticatedParamsHandler<{ itemId: string }>(
 );
 
 // PUT /api/v1/wardrobe/[itemId]
-export const PUT = createAuthenticatedParamsHandler<{ itemId: string }>(
+export const PUT = createContextParamsHandler<{ itemId: string }>(
   async (req, { repos }, { itemId }) => {
     const existing = await repos.wardrobe.findArchetypeById(itemId);
     if (!existing || existing.characterId !== null) {
@@ -73,7 +73,7 @@ export const PUT = createAuthenticatedParamsHandler<{ itemId: string }>(
 );
 
 // DELETE /api/v1/wardrobe/[itemId]
-export const DELETE = createAuthenticatedParamsHandler<{ itemId: string }>(
+export const DELETE = createContextParamsHandler<{ itemId: string }>(
   async (req, { repos }, { itemId }) => {
     try {
       const existing = await repos.wardrobe.findArchetypeById(itemId);

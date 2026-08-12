@@ -81,12 +81,16 @@ export interface Character {
   defaultHelpToolsEnabled?: boolean | null
   canDressThemselves?: boolean | null
   canCreateOutfits?: boolean | null
+  canChooseOutfit?: boolean
   defaultTimestampConfig?: TimestampConfig | null
   defaultScenarioId?: string | null
   defaultSystemPromptId?: string | null
   aliases?: string[]
   pronouns?: { subject: string; object: string; possessive: string } | null
   characterDocumentMountPointId?: string | null
+  /** Set when the character is archived (tombstone with a pruned vault). */
+  archivedAt?: string | null
+  archiveFileId?: string | null
   defaultImage?: {
     id: string
     filepath: string

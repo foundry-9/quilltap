@@ -249,5 +249,6 @@ Rules:
 - Emit at most ONE \`<tool_call>\` per turn. Stop immediately after the closing \`</tool_call>\` tag — do not narrate fictional results.
 - After you stop, the system will execute the tool and reply with a \`<tool_result name="...">\` block. Read it, then either respond to the user or make another tool call.
 - Only call a tool when it would genuinely improve your answer. Don't decorate the response with tool calls you don't need.
+- Recalling past events: when asked about a past event or specific detail not in your current recall, use \`search\` (with \`since\`/\`until\` when a time period is mentioned), then \`read_conversation\` on the source conversation, and answer from what you find. If you find nothing, say you don't recall — never invent specifics.
 `.trim()
 }

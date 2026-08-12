@@ -20,20 +20,32 @@ import path from 'path';
 
 // ---------------------------------------------------------------------------
 // Load the real native SQLite driver (not the jest mock alias).
+//
+// Path-based requires come first because they bypass jest's moduleNameMapper;
+// the bare names are mapped to __mocks__/better-sqlite3.ts in the unit config,
+// so a bare require can silently hand back the mock (whose statements never
+// report readonly:true, which trips the handler's fail-closed guard). The
+// probe below rejects any candidate that isn't a real binding.
 // ---------------------------------------------------------------------------
 function loadDriver() {
-  try {
-    return require(path.join(
-      __dirname, '..', '..', '..', '..',
-      'packages', 'quilltap', 'node_modules', 'better-sqlite3-multiple-ciphers'
-    ));
-  } catch {
+  const repoRoot = path.join(__dirname, '..', '..', '..', '..');
+  const candidates = [
+    () => require(path.join(repoRoot, 'packages', 'quilltap', 'node_modules', 'better-sqlite3-multiple-ciphers')),
+    () => require(path.join(repoRoot, 'node_modules', 'better-sqlite3')),
+    () => require('better-sqlite3-multiple-ciphers'),
+  ];
+  for (const candidate of candidates) {
     try {
-      return require('better-sqlite3-multiple-ciphers');
+      const Driver = candidate();
+      const probe = new Driver(':memory:');
+      const isReal = probe.prepare('SELECT 1').readonly === true;
+      probe.close();
+      if (isReal) return Driver;
     } catch {
-      return require(path.join(__dirname, '..', '..', '..', '..', 'node_modules', 'better-sqlite3'));
+      // try the next candidate
     }
   }
+  throw new Error('run-sql-handler.test: no real SQLite binding available (only the jest mock resolved)');
 }
 const Database = loadDriver();
 type DatabaseInstance = ReturnType<typeof Database>;

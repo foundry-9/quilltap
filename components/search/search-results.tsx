@@ -226,9 +226,9 @@ function MemoryResultCard({ result, query, onResultClick }: { result: MemorySear
           <div className="flex items-center gap-2 mt-1">
             <div className="flex items-center gap-1">
               <span className="qt-text-xs">Importance:</span>
-              <div className="w-16 h-1.5 bg-border rounded-full overflow-hidden">
+              <div className="qt-progress qt-progress-sm w-16">
                 <div
-                  className="h-full bg-destructive rounded-full"
+                  className="qt-progress-fill qt-progress-fill-danger"
                   style={{ width: `${result.importance * 100}%` }}
                 />
               </div>

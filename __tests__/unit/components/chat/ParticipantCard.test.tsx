@@ -730,7 +730,7 @@ describe('ParticipantCard', () => {
       expect(select.tagName).toBe('SELECT')
     })
 
-    it('does not render dropdown for user-controlled character participant', () => {
+    it('renders dropdown for the active user ("You") participant so it can be switched to an LLM', () => {
       const props = createDefaultProps({
         participant: createUserCharacterParticipant(),
         isUserParticipant: true,
@@ -739,7 +739,10 @@ describe('ParticipantCard', () => {
       })
       render(<ParticipantCard {...props} />)
 
-      expect(screen.queryByLabelText('Connection profile for User')).not.toBeInTheDocument()
+      const select = screen.getByLabelText('Connection profile for User') as HTMLSelectElement
+      expect(select).toBeInTheDocument()
+      // A user-controlled participant defaults the dropdown to the impersonation option.
+      expect(select.value).toBe('__user__')
     })
 
     it('does not render dropdown when connectionProfiles not provided', () => {

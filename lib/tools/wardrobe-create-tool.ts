@@ -184,8 +184,9 @@ export const wardrobeCreateToolDefinition = {
  */
 export function validateWardrobeCreateInput(
   input: unknown
-): input is WardrobeCreateToolInput {
-  return wardrobeCreateToolInputSchema.safeParse(input).success
+): WardrobeCreateToolInput | null {
+  const parsed = wardrobeCreateToolInputSchema.safeParse(input)
+  return parsed.success ? parsed.data : null
 }
 
 /** Re-export the slot type for the union-of-types computation in the handler. */

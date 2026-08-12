@@ -21,7 +21,7 @@ import { logger } from '@/lib/logger';
 import { notFound, serverError } from '@/lib/api/responses';
 import { getCharacterVaultStore } from '@/lib/file-storage/character-vault-bridge';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 export type PhotoAlbumKind = 'character' | 'project' | 'document-store' | 'general';
 
@@ -42,7 +42,7 @@ export interface PhotoAlbumOption {
 
 export async function handleGetPhotoAlbums(
   chatId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   try {
     const chat = await repos.chats.findById(chatId);

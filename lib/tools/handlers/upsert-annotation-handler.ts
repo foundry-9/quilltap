@@ -44,7 +44,8 @@ export async function executeUpsertAnnotationTool(
 
   try {
     // Validate input
-    if (!validateUpsertAnnotationInput(input)) {
+    const parsed = validateUpsertAnnotationInput(input);
+    if (!parsed) {
       logger.warn('Upsert annotation tool validation failed', {
         context: 'upsert-annotation-handler',
         userId: context.userId,
@@ -61,7 +62,7 @@ export async function executeUpsertAnnotationTool(
       };
     }
 
-    const { message_index, content } = input as UpsertAnnotationToolInput;
+    const { message_index, content } = parsed;
 
     // Load chat and verify rendered markdown exists
     const chat = await repos.chats.findById(context.chatId);

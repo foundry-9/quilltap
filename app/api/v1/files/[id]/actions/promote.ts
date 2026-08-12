@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, successResponse } from '@/lib/api/responses';
 import { formatValidationIssues, normalizeAndValidateFolderPath } from '../../shared';
@@ -7,7 +7,7 @@ import { buildManagedFileResponse, promoteFileSchema } from '../shared';
 
 export async function handlePromoteFile(
   request: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   fileId: string,
   _file: any
 ): Promise<NextResponse> {

@@ -68,6 +68,17 @@ Document stores are managed from the **Scriptorium** page, accessible via the da
 
 You may also manage document stores through the API at `/api/v1/mount-points` if you prefer the programmatic approach.
 
+### One Name Per Shelf, and Casing Doesn't Count
+
+A library in which *Lore* and *lore* are two different rooms is a library designed by a prankster, and the Scriptorium will have none of it. Names here are compared without regard to capitalization, and no two things at the same level may share one:
+
+- **Store names are unique.** Attempting to create or rename a store to a name another store already holds — even dressed in different capitals — is politely declined, and you will be asked to choose another. Stores Quilltap conjures on its own behalf (project file stores, character vaults, and the like) sidestep the collision by appending a discreet ` (2)`, ` (3)`, and so on; two characters who share a name thus receive distinctly named vaults.
+- **Folders and files within a database-backed store follow the same rule.** Sibling folders may not differ only by casing, nor may two files at the same path. Writing to `lore/notes.md` when a `Lore` folder already exists simply files the note in `Lore`, keeping the folder's original capitalization; saving over `Notes.md` as `notes.md` updates the existing document rather than minting a shadow copy.
+- **Changing only the capitalization of a name is always allowed.** Renaming `notes.md` to `Notes.md`, or `lore` to `Lore`, does exactly what you intend — no spurious "destination already exists" objections.
+- **Existing collisions are tidied automatically — and re-checked at every opening.** Should an older library arrive carrying such duplicates, or should some enterprising soul introduce them by rummaging in the database directly, the inspection that runs each time Quilltap starts will find them: the newer of the two is renamed with a ` (2)` suffix (subfolders and files moving with it), and a note of the correction is made in the logs.
+
+Filesystem and Obsidian stores defer to your operating system's own opinions about casing, as they always have.
+
 ### Converting Between Backends
 
 Every store card sports a small button for changing its mind about where it keeps its things. Should you decide, mid-career, that your sprawling vault of research notes deserves the encrypted sanctuary of the mount-index database — or, on the contrary, that your database-backed store ought to be let out for a walk on the filesystem — the Scriptorium will oblige without losing so much as a single embedding.
@@ -93,11 +104,41 @@ From this version forward, new writes into a project's file area — story backg
 
 Completing the loop: the *Files* card on every project detail page — and, by extension, the *Browse All Files* modal it opens — now reads, uploads to, and deletes from the linked document store directly rather than going through the legacy file API. Opening that card on a project with a linked store will show the very same collection of bytes as the matching *Project Files* entry in the Scriptorium, rendered in the familiar grid or list layout you have always enjoyed. Folder navigation is driven by the file paths themselves (so `images/portrait.webp` appears tidily in a folder called `images`), and uploads drop into whichever folder you are currently browsing. A small subset of controls — *Sync filesystem*, orphan cleanup, *New Folder*, and *Move to project* — are politely hidden in this mode, as they only apply to the old on-disk model; folders appear the moment you upload a file into a new path. You should find the experience indistinguishable from before, except that what you see is now, at last, a faithful view of the underlying document store.
 
+## A Word on Containers
+
+Should you run Quilltap in Docker, a small but consequential fact of container life applies: the container can see only those parts of your machine that were expressly handed to it when it was built. Database-backed stores are untroubled by this — they reside within the encrypted `quilltap-mount-index.db`, which travels inside your data directory and is passed through as a matter of course. Filesystem and Obsidian stores, however, point at whatever corner of your drive you please, and unless that corner has been introduced to the container, it does not exist there at all.
+
+The symptom is a peculiarly convincing one. The store lists its folders and files quite cheerfully, because that listing is drawn from the index kept in Quilltap's own database; it is only when you ask for the actual bytes — reading a document, or creating a folder — that the absence makes itself known. Quilltap will now tell you so in as many words rather than leaving you to puzzle over a failure that names a directory five levels above the one you asked for.
+
+The remedy is arranged for you. The start script consults your document stores before it builds the container and passes each filesystem store through at its own path, so that a store's location means the same thing inside the container as out. To see what it intends to pass through:
+
+```
+quilltap docs docker-mounts --instance <name>
+```
+
+The one inconvenience worth committing to memory: these passages can only be arranged when a container is *created*, never afterward. A filesystem store added to a container already running is therefore invisible until the container is rebuilt — which the start script will notice and mention, and which you may perform at your convenience:
+
+```
+npm run start:docker -- --recreate
+```
+
+Rebuilding disturbs nothing you own: your data directory and your document stores are passed through from the host, and only the container itself is replaced. Should you prefer to make these arrangements by hand, `--no-store-mounts` will stay the script's hand entirely.
+
 ## Hard Links Between Shelves
 
 As of this revision, a single file in a database-backed document store may inhabit more than one shelf at a time. Imagine the Lantern paints a moody backdrop for your story and deposits the resulting `.webp` into its private gallery; later your character Friday decides she rather likes that very portrait and wishes to keep a copy in her own vault under a different name. In days past, this required minting an entirely new copy of the bytes — duplicate storage, duplicate embedding work, duplicate everything. No longer. The Scriptorium now treats each file's bytes as a single, content-addressable item, and each visible location of it (mount + path) as a hard link in the venerable filesystem sense. Two consumers may point at the same image without copying it; either may rewrite its description or re-extract its caption without disturbing the other; and when the last link to a file is withdrawn, the bytes themselves are politely retired.
 
 This applies only to database-backed mounts; filesystem and Obsidian mounts continue to keep their files on disk where each path is its own physical artefact. The user interface for orchestrating hard links across stores is still in fitting, but the underlying machinery is in place and quietly avoiding duplicate work whenever the same bytes turn up in more than one store.
+
+### One File, Two Shelves — And It Stays That Way
+
+A link made deliberately, with `quilltap docs link`, now behaves as any reader of the old filesystems would expect: the two shelf-marks name **one** document. Amend it at either address and the amendment appears at both, immediately and without ceremony. Search results, character context, and the extracted text on both sides are brought up to date together; only the private annotations — a description you wrote for one shelf, a caption the machinery extracted for the other — remain each location's own business, as they always have.
+
+Do note the distinction between a link and a coincidence. Because Quilltap files bytes by their fingerprint, two documents that happen to be *identical* — two empty files, two copies of the same boilerplate heading — occupy a single shelf beneath the floorboards purely by economy. Those are **not** linked, and editing one leaves the other entirely undisturbed. Only a link you asked for is a link. `quilltap docs ls --links` reports this honestly: the count beside a file is the number of deliberate links to it, not the number of unrelated documents that happen to weigh the same.
+
+A copy (`quilltap docs copy`) is likewise its own document from the moment you make it, notwithstanding that it economises on storage until one side or the other is amended.
+
+Should you dissolve a link by deleting one of its addresses, the survivor reverts to being an ordinary, unaccompanied document. And when a revision leaves an old set of bytes with no shelf-mark at all pointing to it, those bytes are now retired promptly rather than lingering in the cellar — a small housekeeping oversight, corrected, which also sweeps up whatever had accumulated there before.
 
 ## Searching Documents
 

@@ -487,12 +487,3 @@ export interface TaggableEntity extends UserOwnedEntity {
   /** Array of tag IDs */
   tags: string[];
 }
-
-// ============================================================================
-// Backend Factory Type
-// ============================================================================
-
-/**
- * Factory function type for creating database backends
- */
-export type DatabaseBackendFactory = () => Promise<DatabaseBackend>;

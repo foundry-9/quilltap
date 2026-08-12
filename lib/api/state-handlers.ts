@@ -4,19 +4,17 @@
  *
  * Both `app/api/v1/chats/[id]/actions/state.ts` and
  * `app/api/v1/projects/[id]/actions/state.ts` follow the same template:
- * look up the entity, check that it belongs to the caller, replace or clear
- * the JSON `state` column, and log. The only meaningful difference is
- * whether the entity is user-scoped via `checkOwnership` (projects) or
- * scoped indirectly via the repo's own filtering (chats). `handleGetState`
- * stays bespoke per entity — chats merge in their parent project's state.
+ * look up the entity, confirm it exists, replace or clear the JSON `state`
+ * column, and log. `handleGetState` stays bespoke per entity — chats merge in
+ * their parent project's state.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { checkOwnership } from '@/lib/api/middleware';
+import { exists } from '@/lib/api/middleware';
 import { notFound, serverError, successResponse } from '@/lib/api/responses';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 interface StatefulEntity {
   id: string;
@@ -35,9 +33,7 @@ export interface StateHandlerConfig {
   /** Property name used in log payloads (e.g. 'chatId', 'projectId'). */
   idLogKey: string;
   /** Pick the right repo off `repos`. */
-  selectRepo: (repos: AuthenticatedContext['repos']) => StatefulRepo;
-  /** When true, enforce userId-based ownership before mutating. */
-  useOwnershipCheck: boolean;
+  selectRepo: (repos: RequestContext['repos']) => StatefulRepo;
 }
 
 /**
@@ -48,27 +44,22 @@ export const stateBodySchema = z.object({
   state: z.record(z.string(), z.unknown()),
 });
 
-function authorize(
+function requireEntity(
   entity: StatefulEntity | null,
-  userId: string,
   entityName: string,
-  useOwnershipCheck: boolean,
 ): NextResponse | null {
-  if (useOwnershipCheck) {
-    return checkOwnership(entity, userId) ? null : notFound(entityName);
-  }
-  return entity ? null : notFound(entityName);
+  return exists(entity) ? null : notFound(entityName);
 }
 
 export function createSetStateHandler(cfg: StateHandlerConfig) {
   return async function handleSetState(
     req: NextRequest,
     entityId: string,
-    { user, repos }: AuthenticatedContext,
+    { user, repos }: RequestContext,
   ): Promise<NextResponse> {
     const repo = cfg.selectRepo(repos);
     const entity = await repo.findById(entityId);
-    const denied = authorize(entity, user.id, cfg.entityName, cfg.useOwnershipCheck);
+    const denied = requireEntity(entity, cfg.entityName);
     if (denied) return denied;
 
     const body = await req.json();
@@ -92,12 +83,12 @@ export function createSetStateHandler(cfg: StateHandlerConfig) {
 export function createResetStateHandler(cfg: StateHandlerConfig) {
   return async function handleResetState(
     entityId: string,
-    { user, repos }: AuthenticatedContext,
+    { user, repos }: RequestContext,
   ): Promise<NextResponse> {
     try {
       const repo = cfg.selectRepo(repos);
       const entity = await repo.findById(entityId);
-      const denied = authorize(entity, user.id, cfg.entityName, cfg.useOwnershipCheck);
+      const denied = requireEntity(entity, cfg.entityName);
       if (denied) return denied;
 
       const previousState = (entity!.state || {}) as Record<string, unknown>;

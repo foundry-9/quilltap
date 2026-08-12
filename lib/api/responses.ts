@@ -348,7 +348,7 @@ export function deprecatedRedirect(
  * @example
  * ```ts
  * // Route still works but is deprecated
- * export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
+ * export const GET = createContextHandler(async (req, { user, repos }) => {
  *   const characters = await repos.characters.findByUserId(user.id);
  *   const response = NextResponse.json({ characters });
  *   return withDeprecationHeaders(response, {

@@ -7,7 +7,7 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import type { TextProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage, ImageGenParams, ImageGenResponse } from './types'
-import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils'
+import { buildSdkClientOptions, createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils'
 
 const logger = createPluginLogger('qtap-plugin-anthropic')
 
@@ -22,6 +22,24 @@ const ANTHROPIC_SUPPORTED_MIME_TYPES = [
 ]
 
 type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
+
+/**
+ * A text-file attachment's `data` may hold either the raw text or a base64
+ * encoding of it. `Buffer.from(s, 'base64')` never throws — it silently mangles
+ * non-base64 input (`"hello"` → garbage, `"x=1"` → empty) — so a bare try/catch
+ * can't tell the two apart. Round-trip instead: decode, re-encode, and compare
+ * (normalizing padding/whitespace). A match means the input really was base64,
+ * so return the decoded text; a mismatch means it was plain text all along, so
+ * return it verbatim.
+ */
+function decodeBase64Text(data: string): string {
+  const normalize = (s: string): string => s.replace(/\s+/g, '').replace(/=+$/, '')
+  const decoded = Buffer.from(data, 'base64')
+  if (normalize(decoded.toString('base64')) === normalize(data)) {
+    return decoded.toString('utf-8')
+  }
+  return data
+}
 
 // Cache control type for prompt caching
 // TTL: '5m' = 5 minutes (default, 1.25x write cost), '1h' = 1 hour (2x write cost)
@@ -61,6 +79,24 @@ export class AnthropicProvider implements TextProvider {
   readonly supportsFileAttachments = true
   readonly supportedMimeTypes = ANTHROPIC_SUPPORTED_MIME_TYPES
   readonly supportsWebSearch = false
+
+  // Claude Sonnet 5, the Opus 4.7+ family, and Fable/Mythos models remove
+  // temperature/top_p/top_k entirely — sending either returns
+  // "`temperature` is deprecated for this model" (400), independent of
+  // whether extended thinking is enabled. Matched by prefix since these are
+  // stable aliases (no dated snapshots).
+  private static readonly SAMPLING_PARAMS_REJECTED_MODELS = [
+    /^claude-sonnet-5(-|$)/,
+    /^claude-opus-4-7(-|$)/,
+    /^claude-opus-4-8(-|$)/,
+    /^claude-fable-5(-|$)/,
+    /^claude-mythos-5(-|$)/,
+    /^claude-mythos-preview(-|$)/,
+  ]
+
+  private modelRejectsSamplingParams(model: string): boolean {
+    return AnthropicProvider.SAMPLING_PARAMS_REJECTED_MODELS.some(re => re.test(model))
+  }
 
   /**
    * Helper to build cache_control object with optional TTL
@@ -262,17 +298,13 @@ export class AnthropicProvider implements TextProvider {
             },
           })
         } else if (attachment.mimeType === 'text/plain') {
-          // Plain text document - use text source type, not base64
-          // The data for text files should be the actual text content
+          // Plain text document - use text source type, not base64.
+          // `data` may be raw text or base64; only base64-charset, newline-free
+          // data is a decode candidate, and decodeBase64Text round-trips to
+          // confirm it (a bare decode would mangle already-plain text).
           let textContent = attachment.data
-          // If the data is base64 encoded, decode it
           if (attachment.data && !attachment.data.includes('\n') && /^[A-Za-z0-9+/=]+$/.test(attachment.data)) {
-            try {
-              textContent = Buffer.from(attachment.data, 'base64').toString('utf-8')
-            } catch {
-              // If decoding fails, use the data as-is
-              textContent = attachment.data
-            }
+            textContent = decodeBase64Text(attachment.data)
           }
           content.push({
             type: 'document',
@@ -320,6 +352,9 @@ export class AnthropicProvider implements TextProvider {
     const client = new Anthropic({
       apiKey,
       defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+      // A caller-supplied budget is a ceiling; without one the SDK's 10-minute
+      // default would let a silent endpoint hold a turn open indefinitely.
+      ...buildSdkClientOptions(params),
     })
 
     // Anthropic requires system messages separate from the messages array.
@@ -341,6 +376,11 @@ export class AnthropicProvider implements TextProvider {
       ? rawThinkingBudget
       : (profileParams?.extendedThinking === true ? 4096 : 0)
     const thinkingEnabled = thinkingBudget > 0
+
+    // Sonnet 5 / Opus 4.7+ / Fable / Mythos reject both fixed-budget thinking
+    // and sampling params (temperature/top_p/top_k) — computed once and used
+    // for both decisions below.
+    const samplingParamsRejected = this.modelRejectsSamplingParams(params.model)
 
     // Format messages with optional cache control
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(
@@ -366,9 +406,16 @@ export class AnthropicProvider implements TextProvider {
       max_tokens: effectiveMaxTokens,
     }
 
-    // Enable extended thinking if requested.
+    // Enable extended thinking if requested. Sonnet 5 / Opus 4.7+ / Fable /
+    // Mythos removed fixed-budget thinking entirely — "thinking.type.enabled"
+    // 400s on those models; they require adaptive thinking instead, which has
+    // no token budget to set. These models also default thinking.display to
+    // "omitted" (empty thinking text) — request "summarized" explicitly so
+    // Quilltap's reasoningContent capture keeps working.
     if (thinkingEnabled) {
-      requestParams.thinking = { type: 'enabled', budget_tokens: thinkingBudget }
+      requestParams.thinking = samplingParamsRejected
+        ? { type: 'adaptive', display: 'summarized' }
+        : { type: 'enabled', budget_tokens: thinkingBudget }
     }
 
     // Handle system messages with optional cache control.
@@ -408,7 +455,9 @@ export class AnthropicProvider implements TextProvider {
 
     // Anthropic API requires either temperature OR top_p, not both.
     // Extended thinking forbids temperature and top_p — omit them entirely.
-    if (!thinkingEnabled) {
+    // Sonnet 5 / Opus 4.7+ / Fable / Mythos reject sampling params outright,
+    // even with thinking disabled — omit for those models too.
+    if (!thinkingEnabled && !samplingParamsRejected) {
       if (params.temperature !== undefined) {
         requestParams.temperature = params.temperature
       } else if (params.topP !== undefined) {
@@ -500,6 +549,9 @@ export class AnthropicProvider implements TextProvider {
     const client = new Anthropic({
       apiKey,
       defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+      // A caller-supplied budget is a ceiling; without one the SDK's 10-minute
+      // default would let a silent endpoint hold a turn open indefinitely.
+      ...buildSdkClientOptions(params),
     })
 
     // Quilltap may emit multiple system messages (a stable identity stack
@@ -519,6 +571,11 @@ export class AnthropicProvider implements TextProvider {
       ? streamRawThinkingBudget
       : (profileParams?.extendedThinking === true ? 4096 : 0)
     const streamThinkingEnabled = streamThinkingBudget > 0
+
+    // Sonnet 5 / Opus 4.7+ / Fable / Mythos reject both fixed-budget thinking
+    // and sampling params (temperature/top_p/top_k) — computed once and used
+    // for both decisions below.
+    const streamSamplingParamsRejected = this.modelRejectsSamplingParams(params.model)
 
     // Format messages with optional cache control
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(
@@ -543,9 +600,16 @@ export class AnthropicProvider implements TextProvider {
       stream: true,
     }
 
-    // Enable extended thinking if requested.
+    // Enable extended thinking if requested. Sonnet 5 / Opus 4.7+ / Fable /
+    // Mythos removed fixed-budget thinking entirely — "thinking.type.enabled"
+    // 400s on those models; they require adaptive thinking instead, which has
+    // no token budget to set. These models also default thinking.display to
+    // "omitted" (empty thinking text) — request "summarized" explicitly so
+    // Quilltap's reasoningContent capture keeps working.
     if (streamThinkingEnabled) {
-      requestParams.thinking = { type: 'enabled', budget_tokens: streamThinkingBudget }
+      requestParams.thinking = streamSamplingParamsRejected
+        ? { type: 'adaptive', display: 'summarized' }
+        : { type: 'enabled', budget_tokens: streamThinkingBudget }
     }
 
     // Handle system messages with optional cache control. Mirrors the
@@ -574,7 +638,9 @@ export class AnthropicProvider implements TextProvider {
     }
 
     // Extended thinking forbids temperature and top_p — omit them when enabled.
-    if (!streamThinkingEnabled) {
+    // Sonnet 5 / Opus 4.7+ / Fable / Mythos reject sampling params outright,
+    // even with thinking disabled — omit for those models too.
+    if (!streamThinkingEnabled && !streamSamplingParamsRejected) {
       if (params.temperature !== undefined) {
         requestParams.temperature = params.temperature
       } else if (params.topP !== undefined) {

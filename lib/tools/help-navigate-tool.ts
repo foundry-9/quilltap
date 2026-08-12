@@ -76,6 +76,7 @@ export const helpNavigateToolDefinition = {
  */
 export function validateHelpNavigateInput(
   input: unknown
-): input is HelpNavigateToolInput {
-  return helpNavigateToolInputSchema.safeParse(input).success
+): HelpNavigateToolInput | null {
+  const parsed = helpNavigateToolInputSchema.safeParse(input)
+  return parsed.success ? parsed.data : null
 }

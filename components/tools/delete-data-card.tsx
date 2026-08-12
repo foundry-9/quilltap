@@ -7,13 +7,15 @@ import { Icon } from '@/components/ui/icon'
 
 interface DeleteSummary {
   characters: number
-  personas: number
   chats: number
   tags: number
   files: number
   memories: number
   apiKeys: number
   backups: number
+  personas?: number
+  archiveBundles?: number
+  archiveBundlesKept?: boolean
   profiles: {
     connection: number
     image: number
@@ -38,6 +40,7 @@ export function DeleteDataCard() {
   const [deleteSummary, setDeleteSummary] = useState<DeleteSummary | null>(null)
   const [loading, setLoading] = useState(false)
   const [confirmText, setConfirmText] = useState('')
+  const [keepArchives, setKeepArchives] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const handleOpenDialog = async () => {
@@ -46,6 +49,7 @@ export function DeleteDataCard() {
     setPreview(null)
     setDeleteSummary(null)
     setConfirmText('')
+    setKeepArchives(true)
     setError(null)
     setLoading(true)
 
@@ -71,6 +75,7 @@ export function DeleteDataCard() {
     setPreview(null)
     setDeleteSummary(null)
     setConfirmText('')
+    setKeepArchives(true)
     setError(null)
   }
 
@@ -92,7 +97,10 @@ export function DeleteDataCard() {
       const response = await fetch('/api/v1/system/tools?action=delete-data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ confirm: 'DELETE_ALL_MY_DATA' }),
+        body: JSON.stringify({
+          confirm: 'DELETE_ALL_MY_DATA',
+          keepArchivedCharacterBundles: keepArchives,
+        }),
       })
 
       if (!response.ok) {
@@ -114,9 +122,11 @@ export function DeleteDataCard() {
   }
 
   const getTotalCount = (summary: DeleteSummary): number => {
+    // `personas` and `sync` are legacy shape — the current API never returns
+    // them, and an undefined addend turned the whole total into NaN.
     return (
       summary.characters +
-      summary.personas +
+      (summary.personas ?? 0) +
       summary.chats +
       summary.tags +
       summary.files +
@@ -175,10 +185,10 @@ export function DeleteDataCard() {
           />
 
           {/* Dialog */}
-          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-auto">
-            <div className="qt-bg-card rounded-lg qt-shadow-lg w-full max-w-md">
+          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-auto w-full max-w-md">
+            <div className="qt-bg-card rounded-lg qt-shadow-lg w-full max-h-[85vh] flex flex-col">
               {/* Header */}
-              <div className="px-6 py-4 border-b qt-border-default">
+              <div className="px-6 py-4 border-b qt-border-default flex-shrink-0">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 qt-bg-destructive/10 rounded-full flex items-center justify-center">
@@ -199,7 +209,7 @@ export function DeleteDataCard() {
               </div>
 
               {/* Body */}
-              <div className="px-6 py-6">
+              <div className="px-6 py-6 overflow-y-auto flex-1">
                 {step === 'preview' && (
                   <>
                     {loading ? (
@@ -286,6 +296,14 @@ export function DeleteDataCard() {
                               </div>
                             </>
                           )}
+                          {(preview.archiveBundles ?? 0) > 0 && (
+                            <div className="flex justify-between">
+                              <span className="qt-text-secondary">Archived Character Bundles</span>
+                              <span className="qt-text-primary">
+                                {preview.archiveBundles} {keepArchives ? '(kept)' : ''}
+                              </span>
+                            </div>
+                          )}
                           <div className="border-t qt-border-default pt-2 mt-2">
                             <div className="flex justify-between font-semibold">
                               <span className="text-foreground">Total Items</span>
@@ -293,6 +311,27 @@ export function DeleteDataCard() {
                             </div>
                           </div>
                         </div>
+                        {(preview.archiveBundles ?? 0) > 0 && (
+                          <div className="qt-bg-muted/50 border qt-border-default rounded-lg p-3 space-y-2">
+                            <label className="flex items-start gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={keepArchives}
+                                onChange={(e) => setKeepArchives(e.target.checked)}
+                                className="mt-0.5 w-4 h-4 rounded focus:ring-ring"
+                              />
+                              <span className="text-sm qt-text-primary">
+                                Leave the archived-character bundles on the shelf ({preview.archiveBundles}{' '}
+                                {preview.archiveBundles === 1 ? 'file' : 'files'})
+                              </span>
+                            </label>
+                            <p className="qt-text-xs qt-text-secondary">
+                              Their character records perish with everything else, so what remains is a
+                              loose bundle apiece — each may be imported afresh, but none can simply be
+                              woken. Untick to sweep the shelf bare as well.
+                            </p>
+                          </div>
+                        )}
                         <div className="qt-bg-destructive/10 border qt-border-destructive/30 rounded-lg p-3">
                           <p className="text-sm qt-text-destructive font-medium">
                             This action cannot be undone. All your data will be permanently deleted.
@@ -348,6 +387,13 @@ export function DeleteDataCard() {
                     <p className="text-center qt-text-small">
                       Successfully deleted {getTotalCount(deleteSummary)} items from your account.
                     </p>
+                    {deleteSummary.archiveBundlesKept && (deleteSummary.archiveBundles ?? 0) > 0 && (
+                      <p className="text-center qt-text-xs">
+                        {deleteSummary.archiveBundles} archived-character{' '}
+                        {deleteSummary.archiveBundles === 1 ? 'bundle remains' : 'bundles remain'} on the
+                        shelf, ready for import.
+                      </p>
+                    )}
                     <p className="text-center qt-text-xs">
                       Your account is now clean. You can start fresh or restore from a backup.
                     </p>
@@ -356,7 +402,7 @@ export function DeleteDataCard() {
               </div>
 
               {/* Footer */}
-              <div className="px-6 py-4 qt-bg-muted border-t qt-border-default flex gap-3 justify-end">
+              <div className="px-6 py-4 qt-bg-muted border-t qt-border-default flex gap-3 justify-end flex-shrink-0 rounded-b-lg">
                 {step === 'preview' && (
                   <>
                     <button

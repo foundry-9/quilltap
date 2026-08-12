@@ -82,6 +82,9 @@ export async function buildCharacterAvatarPrompt(
   }
 
   let outfitText = '';
+  // Whether the character's upper body is bare (no item bubbles up into the
+  // top slot). Drives a tighter crop below so a bare chest is never in frame.
+  let topIsBare = false;
   if (equippedSlots) {
     // Avatars are head-and-shoulders only. We pass the FULL equipped slots in
     // so the resolver can route coverage by each leaf's own `types` — an item
@@ -92,12 +95,31 @@ export async function buildCharacterAvatarPrompt(
       projectMountPointIds,
     });
 
-    outfitText = describeOutfit({
-      top: decorateOutfitItems(resolved.leafItemsBySlot.top, { titleOnly: true }),
-      bottom: decorateOutfitItems(resolved.leafItemsBySlot.bottom, { titleOnly: true }),
-      footwear: decorateOutfitItems(resolved.leafItemsBySlot.footwear, { titleOnly: true }),
-      accessories: decorateOutfitItems(resolved.leafItemsBySlot.accessories, { titleOnly: true }),
-    }, { omit: ['bottom', 'footwear'] }).trimEnd();
+    topIsBare = resolved.leafItemsBySlot.top.length === 0;
+    const accessories = decorateOutfitItems(resolved.leafItemsBySlot.accessories, { titleOnly: true });
+
+    if (topIsBare) {
+      // Bare-topped character. We deliberately do NOT emit "topless"/"naked"
+      // wardrobe language: it trips SFW image-provider moderation and implies
+      // breasts in frame. The tighter collarbone crop in the intro conveys the
+      // exposure honestly (bare shoulders, chest out of frame); here we only
+      // list any accessories that sit at or above the collar. We also avoid
+      // describeOutfit's "completely naked and unadorned" fallback, which would
+      // fire (and reintroduce nudity language) when accessories are empty too.
+      outfitText = accessories.length > 0
+        ? describeOutfit(
+            { top: [], bottom: [], footwear: [], accessories },
+            { omit: ['top', 'bottom', 'footwear'] },
+          ).trimEnd()
+        : '';
+    } else {
+      outfitText = describeOutfit({
+        top: decorateOutfitItems(resolved.leafItemsBySlot.top, { titleOnly: true }),
+        bottom: decorateOutfitItems(resolved.leafItemsBySlot.bottom, { titleOnly: true }),
+        footwear: decorateOutfitItems(resolved.leafItemsBySlot.footwear, { titleOnly: true }),
+        accessories,
+      }, { omit: ['bottom', 'footwear'] }).trimEnd();
+    }
 
     leafCounts.top = resolved.leafItemsBySlot.top.length;
     leafCounts.bottom = resolved.leafItemsBySlot.bottom.length;
@@ -114,7 +136,13 @@ export async function buildCharacterAvatarPrompt(
     // neopronouns/unset → no anchor, leaving "person" so we never force a
     // binary presentation onto a character who hasn't declared one.
     const subjectNoun = genderNounFromPronouns(character.pronouns) ?? 'person';
-    const intro = `Solo portrait of a single ${subjectNoun}: ${character.name}. Show exactly one figure, head-and-shoulders crop, three-quarter view.`;
+    // For a bare-topped character, crop higher — at the collarbone — so the
+    // chest is physically out of frame. Bare shoulders and neck are unremarkable
+    // to SFW image providers; a bare chest is what gets refused. The framing
+    // constraint keeps the portrait generatable without any "topless" wording.
+    const intro = topIsBare
+      ? `Solo portrait of a single ${subjectNoun}: ${character.name}. Show exactly one figure. Close-up headshot cropped at the collarbone — only the face, neck, and bare shoulders are visible; the chest and torso are outside the frame.`
+      : `Solo portrait of a single ${subjectNoun}: ${character.name}. Show exactly one figure, head-and-shoulders crop, three-quarter view.`;
     const outro = `Character portrait, detailed, high quality, natural lighting. Only one person in the image.`;
     // Strip any trailing terminal punctuation off the physical description so
     // we don't end up with "background.." once we re-append a period.

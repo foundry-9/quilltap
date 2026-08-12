@@ -11,6 +11,7 @@
  */
 
 import crypto from 'node:crypto';
+import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import type {
   Character,
@@ -29,6 +30,8 @@ import type { DocMountDocumentWithLink as DocMountDocument } from '@/lib/databas
 import {
   CharacterVaultPropertiesSchema,
   type CharacterVaultProperties,
+  CharacterVaultMetadataSchema,
+  type CharacterVaultMetadata,
   CharacterVaultPhysicalPromptsSchema,
   type CharacterVaultPhysicalPrompts,
   type CharacterVaultWardrobe,
@@ -44,25 +47,36 @@ export function hasLinkedVault(character: Character): boolean {
   return !!character.characterDocumentMountPointId;
 }
 
-export function parseVaultProperties(
+/**
+ * Parse one JSON-backed vault file into a validated value, returning null (and
+ * logging a warning) when the content is missing/malformed or fails schema
+ * validation. The single shape shared by every JSON vault parser below; each
+ * caller supplies only its schema, log messages, and log context.
+ */
+function parseJsonVaultFile<T>(
   raw: string,
-  characterId: string,
-): CharacterVaultProperties | null {
+  schema: z.ZodType<T>,
+  opts: {
+    parseErrorMessage: string;
+    validationErrorMessage: string;
+    logContext: Record<string, unknown>;
+  },
+): T | null {
   let json: unknown;
   try {
     json = JSON.parse(raw);
   } catch (error) {
-    logger.warn('Invalid JSON in vault properties.json; falling back to DB values', {
-      characterId,
+    logger.warn(opts.parseErrorMessage, {
+      ...opts.logContext,
       error: error instanceof Error ? error.message : String(error),
     });
     return null;
   }
 
-  const parsed = CharacterVaultPropertiesSchema.safeParse(json);
+  const parsed = schema.safeParse(json);
   if (!parsed.success) {
-    logger.warn('Vault properties.json failed schema validation; falling back to DB values', {
-      characterId,
+    logger.warn(opts.validationErrorMessage, {
+      ...opts.logContext,
       issues: parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`),
     });
     return null;
@@ -71,31 +85,48 @@ export function parseVaultProperties(
   return parsed.data;
 }
 
+export function parseVaultProperties(
+  raw: string,
+  characterId: string,
+): CharacterVaultProperties | null {
+  return parseJsonVaultFile(raw, CharacterVaultPropertiesSchema, {
+    parseErrorMessage: 'Invalid JSON in vault properties.json; falling back to DB values',
+    validationErrorMessage: 'Vault properties.json failed schema validation; falling back to DB values',
+    logContext: { characterId },
+  });
+}
+
+/**
+ * Parse `metadata.json` — the character's freeform fact sheet.
+ *
+ * Returns null for anything that isn't a JSON object (invalid JSON, a
+ * top-level array, a bare scalar), and the caller hydrates `{}` instead.
+ * Deliberately unlike `properties.json`: metadata is not a keystone, so a file
+ * the user fat-fingered costs them their metadata for that read and nothing
+ * else. Hollowing the character over it would be wildly out of proportion to a
+ * missing brace.
+ */
+export function parseVaultMetadata(
+  raw: string,
+  characterId: string,
+  mountPointId?: string,
+): CharacterVaultMetadata | null {
+  return parseJsonVaultFile(raw, CharacterVaultMetadataSchema, {
+    parseErrorMessage: 'Invalid JSON in vault metadata.json; hydrating empty metadata',
+    validationErrorMessage: 'Vault metadata.json is not a JSON object; hydrating empty metadata',
+    logContext: { characterId, mountPointId },
+  });
+}
+
 export function parseVaultPhysicalPrompts(
   raw: string,
   characterId: string,
 ): CharacterVaultPhysicalPrompts | null {
-  let json: unknown;
-  try {
-    json = JSON.parse(raw);
-  } catch (error) {
-    logger.warn('Invalid JSON in vault physical-prompts.json; falling back to DB values', {
-      characterId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return null;
-  }
-
-  const parsed = CharacterVaultPhysicalPromptsSchema.safeParse(json);
-  if (!parsed.success) {
-    logger.warn('Vault physical-prompts.json failed schema validation; falling back to DB values', {
-      characterId,
-      issues: parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`),
-    });
-    return null;
-  }
-
-  return parsed.data;
+  return parseJsonVaultFile(raw, CharacterVaultPhysicalPromptsSchema, {
+    parseErrorMessage: 'Invalid JSON in vault physical-prompts.json; falling back to DB values',
+    validationErrorMessage: 'Vault physical-prompts.json failed schema validation; falling back to DB values',
+    logContext: { characterId },
+  });
 }
 
 /**
@@ -111,27 +142,12 @@ export function parseLegacyWardrobeJson(
   raw: string,
   characterId: string,
 ): CharacterVaultWardrobe | null {
-  let json: unknown;
-  try {
-    json = JSON.parse(raw);
-  } catch (error) {
-    logger.warn('Invalid JSON in legacy vault wardrobe.json; falling back to DB values', {
-      characterId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return null;
-  }
-
-  const parsed = LegacyVaultWardrobeJsonSchema.safeParse(json);
-  if (!parsed.success) {
-    logger.warn('Legacy vault wardrobe.json failed schema validation; falling back to DB values', {
-      characterId,
-      issues: parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`),
-    });
-    return null;
-  }
-
-  return { items: parsed.data.items };
+  const parsed = parseJsonVaultFile(raw, LegacyVaultWardrobeJsonSchema, {
+    parseErrorMessage: 'Invalid JSON in legacy vault wardrobe.json; falling back to DB values',
+    validationErrorMessage: 'Legacy vault wardrobe.json failed schema validation; falling back to DB values',
+    logContext: { characterId },
+  });
+  return parsed ? { items: parsed.items } : null;
 }
 
 /**

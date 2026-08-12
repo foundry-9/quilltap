@@ -6,7 +6,6 @@
 
 // Request context middleware
 export {
-  // Primary exports
   withContext,
   withContextParams,
   createContextHandler,
@@ -15,16 +14,7 @@ export {
   type RequestContext,
   type ContextHandler,
   type ContextParamsHandler,
-  // Legacy aliases (deprecated)
-  withAuth,
-  withAuthParams,
-  createAuthenticatedHandler,
-  createAuthenticatedParamsHandler,
-  checkOwnership,
-  type AuthenticatedContext,
-  type AuthenticatedHandler,
-  type AuthenticatedParamsHandler,
-} from './auth';
+} from './context';
 
 // Action parameter middleware (v1 API consolidation)
 export {

@@ -1,0 +1,628 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`renderAlmanackMarkdown renders the whole volume 1`] = `
+"# The Almanack (System Report)
+
+Generated: 8/5/2026, 12:00:00 PM
+
+A compendium of the establishment as it stands: what is installed, what is configured,
+and what has accumulated. Safe to share — see the privacy note in the help page.
+
+## The Premises
+
+### System Information
+
+- **Version**: 4.9.0
+- **Node Environment**: test
+- **Node Version**: v22.11.0
+- **Platform**: darwin (arm64)
+- **OS**: Darwin 25.5.0
+- **Runtime Type**: node
+- **Shell Capabilities**: open-external
+- **Total Memory**: 64.0 GB
+- **Free Memory**: 8.0 GB
+- **Uptime**: 2h 1m
+- **Timezone**: UTC
+- **Data Directory**: /tmp/quilltap-fixture
+
+### Databases & Security
+
+- **Passphrase Protected**: Yes
+- **Highest App Version Seen**: 4.9.0
+
+| Database | Size | Present |
+|----------|------|---------|
+| Main | 100.0 MB | Yes |
+| LLM Logs | 50.0 MB | Yes |
+| Mount Index | 1.0 GB | Yes |
+
+### Backup Status
+
+| Database | Backups | Newest | Oldest | Total Size |
+|----------|---------|--------|--------|------------|
+| Main | 3 | 8/4/2026 | 8/1/2026 | 286.1 MB |
+| LLM Logs | 1 | 8/4/2026 | 8/4/2026 | 47.7 MB |
+| Mount Index | 0 | N/A | N/A | 0 B |
+
+### Migration State
+
+- **Migrations Applied**: 214
+- **Last Migration**: add-llm-logs-profile-columns-v1
+- **Applied At**: 8/5/2026, 9:00:00 AM
+- **Applied By Version**: 4.9.0
+
+## The Machinery
+
+### Plugins
+
+- **Enabled**: 1
+- **Disabled**: 1
+- **Installed from npm**: 1
+- **Bundled with the app**: 1
+- **Plugin config rows**: 4
+- **Per-character plugin data rows**: 12
+
+| Capability | Plugins |
+|------------|---------|
+| provider | 2 |
+
+#### Enabled Plugins
+
+| Name | Version | Source | Capabilities |
+|------|---------|--------|--------------|
+| Anthropic | 1.0.45 | bundled | provider |
+
+#### Disabled Plugins
+
+| Name | Version | Source | Capabilities |
+|------|---------|--------|--------------|
+| Mistral | 1.1.0 | npm | provider |
+
+### LLM Providers
+
+| Provider | Configured | Capabilities |
+|----------|------------|--------------|
+| Anthropic | ✓ | Chat, Web Search |
+
+### Models by Provider
+
+#### anthropic
+
+- claude-opus-5
+- claude-sonnet-5
+
+### Model Discovery Cache
+
+How fresh the cached model lists are. A cache that has not moved in months is how a
+silently broken discovery endpoint presents itself.
+
+| Provider | Total | Chat | Image | Embedding | Last Refreshed |
+|----------|-------|------|-------|-----------|----------------|
+| anthropic | 12 | 12 | 0 | 0 | 8/1/2026, 12:00:00 AM |
+
+### API Keys
+
+| Provider | Keys | Active | Never Used | Last Used |
+|----------|------|--------|------------|-----------|
+| anthropic | 2 | 1 | 1 | 8/4/2026 |
+
+Key types the registered providers can accept:
+
+- Anthropic API Key
+
+### Designated Workers
+
+- **Cheap LLM**: anthropic / claude-haiku-4-5 (Scullery)
+- **Embedding Provider**: openai / text-embedding-3-small (Index)
+
+### Image Providers
+
+| Provider | Models |
+|----------|--------|
+| OpenAI | gpt-image-1 |
+
+### Embedding Providers
+
+| Provider | Models |
+|----------|--------|
+| OpenAI | text-embedding-3-small |
+
+### MCP Servers
+
+- **Configured**: 2
+- **Enabled**: 1
+- **Auto-Reconnect**: Yes
+- **Max Reconnect Attempts**: 5
+
+Server names (URLs and credentials are deliberately omitted):
+
+- Household Ledger
+- Weather Glass
+
+### Calliope (Themes)
+
+- **Active Theme**: madmans-box
+- **Colour Mode**: dark
+- **Total Themes**: 6
+- **With Dark Mode**: 6
+- **With CSS Overrides**: 4
+- **Shipping Icon Overrides**: 1
+- **Total Icon Overrides**: 23
+- **Overrides naming an unknown icon**: 1 (these take effect on nothing — likely typos in a theme manifest)
+
+| Theme | Version | Source | Icon Overrides | Unknown |
+|-------|---------|--------|----------------|---------|
+| Madman's Box | 1.2.0 | bundle | 23 | 1 |
+
+## The Ledgers
+
+### Census
+
+| Collection | Count |
+|------------|-------|
+| Characters | 41 |
+| Favourite Characters | 7 |
+| Chats | 380 |
+| Memories | 32,104 |
+| Tags | 18 |
+| Projects | 5 |
+| Groups | 3 |
+| Connection Profiles | 9 (3 web search, 8 tool use, 2 dangerous) |
+| Image Profiles | 3 |
+| Embedding Profiles | 2 |
+| Prompt Templates | 14 (9 built-in, 5 custom) |
+| Roleplay Templates | 8 (6 built-in, 2 custom) |
+
+### Chat Statistics
+
+- **Total Messages**: 24,000
+- **Total Prompt Tokens**: 9,000,000
+- **Total Completion Tokens**: 1,200,000
+- **Estimated Total Cost**: $12.3456
+- **Agent Mode Chats**: 22
+- **Dangerous Chats**: 4
+
+### The Shape of the Chats
+
+- **salon**: 340
+- **autonomous**: 30
+- **help**: 10
+
+- **Paused**: 6
+- **In Document Mode**: 12
+- **Open document rows**: 41
+- **Chats with several documents open**: 7
+- **With an equipped outfit**: 88
+- **With pending outfit notifications**: 2
+- **On the narrative clock**: 9
+- **Carrying chat state**: 31
+
+Cast sizes:
+
+| Participants | Chats |
+|--------------|-------|
+| 1 | 120 |
+| 2 | 200 |
+| 5 | 60 |
+
+### Autonomous Rooms
+
+- **Total**: 30
+- **Scheduled**: 11
+- **Overdue for their next run**: 2
+- **With a turn budget**: 25
+- **With a token budget**: 30
+- **With a wall-clock budget**: 8
+- **With a spend cap**: 4
+- **Permitting destructive tools**: 1
+
+| Run State | Rooms |
+|-----------|-------|
+| idle | 22 |
+| running | 5 |
+| budgetExhausted | 3 |
+
+| Visibility | Rooms |
+|------------|-------|
+| owner_only | 26 |
+| household | 4 |
+
+### The Commonplace Book
+
+- **Total memories**: 32,104
+- **Characters holding memories**: 38
+- **With an event time (\`occurredAt\`)**: 32,000
+- **With a narrative time**: 400
+- **With extracted entities**: 4,100
+- **Embedded**: 31,900
+- **Total reinforcements**: 44,000
+- **Most-reinforced memory**: 37 times
+
+**By kind**
+
+- **semantic**: 28,000
+- **episodic**: 4,104
+
+**By source**
+
+- **AUTO**: 31,500
+- **MANUAL**: 604
+
+**By witnessed context**
+
+- **user_present**: 20,000
+- **autonomous_room**: 12,104
+
+### Characters
+
+- **Total**: 41
+- **Vault-linked**: 40
+- **Without a vault**: 1
+- **NPCs**: 6
+- **User-controlled personas**: 3
+- **Carina answerers**: 2
+- **Permitted to see the Staff**: 4
+- **May dress themselves**: 30
+- **May create outfits**: 12
+- **With a Core-whisper override**: 5
+
+### Feature Configuration
+
+#### The Concierge (Dangerous Content)
+
+- **Mode**: AUTO_ROUTE
+- **Threshold**: 0.7
+- **Scan Text Chat**: Yes
+- **Scan Image Prompts**: Yes
+- **Scan Image Generation**: No
+
+#### Context Compression
+
+- **Enabled**: Yes
+- **Window Size**: 5
+- **Compression Target Tokens**: 800
+
+#### Prospero (Agent Mode)
+
+- **Max Turns**: 10
+- **Default Enabled**: No
+
+#### The Lantern (Story Backgrounds)
+
+- **Enabled**: Yes
+- **Has Default Image Profile**: Yes
+
+#### Aurora (Core Whisper)
+
+- **Enabled**: Yes
+- **Interval**: 12
+- **Silence Threshold**: 3
+- **Packet Token Budget**: 4096
+- **Fires on Context Transition**: Yes
+
+#### Pascal the Croupier (RNG)
+
+- **Auto-Detect RNG**: Yes
+
+#### Pascal's Workbench (Custom Tools)
+
+- **Custom tools offered to models**: Yes
+- *(the inventory of definitions lives in the Scriptorium section — they are documents, not settings)*
+
+#### Timestamps
+
+- **Mode**: EVERY_MESSAGE
+- **Format**: FRIENDLY
+
+#### Saquel Ytzama (Auto-Lock)
+
+- **Enabled**: No
+- **Idle Minutes**: 15
+
+#### Memory Cascade & Housekeeping
+
+- **On Message Delete**: ASK_EVERY_TIME
+- **On Swipe/Regenerate**: DELETE_MEMORIES
+- **Auto Housekeeping**: Yes
+- **Per-Character Cap**: 2000
+- **Merge Similar**: No
+- **Merge Threshold**: 0.9
+
+#### Salon Behaviour
+
+- **Answer Confirmation**: No
+- **Thinking Visible by Default**: Yes
+- **Thinking Collapsed by Default**: Yes
+- **Composer Spellcheck**: Yes
+- **Auto-Scroll on Response Complete**: No
+- **Text Replacements**: Yes (10 of 12 rules enabled)
+- **Avatar Display**: ALWAYS / CIRCULAR
+
+#### Image Description
+
+- **Primary profile configured**: Yes
+- **Uncensored fallback configured**: No
+
+### Instance Settings
+
+- **Stale-chat retention**: 30 days
+- **Chats eligible for the next sweep**: 14
+- **Max concurrent background jobs**: 4
+- **Memory recall**: scope policy \`down-weight\`, related-memory expansion No
+- **Memory extraction limits**: Yes (max 20/hour, soft start 0.7, floor 0.7)
+- **Last maintenance sweep**: 8/5/2026, 3:00:00 AM
+
+### Background Jobs
+
+**By status**
+
+- **COMPLETED**: 4,000
+- **PENDING**: 12
+- **FAILED**: 3
+
+**By type**
+
+- **MEMORY_EXTRACTION**: 3,000
+- **EMBEDDING_GENERATE**: 1,015
+
+- **Attempts exhausted**: 3
+- **Oldest pending job scheduled**: 8/5/2026, 11:00:00 AM
+
+| Failed Job Type | Count | Most Recent Error |
+|-----------------|-------|-------------------|
+| EMBEDDING_GENERATE | 3 | chunk exceeds 8192-token cap |
+
+### Embedding Pipeline
+
+- **Conversation chunks**: 9,000 (40 unembedded)
+- **Help docs**: 120 (0 unembedded)
+- **Failed rows**: 156 _(permanent for the current profile)_
+- **Active profile dimensions**: 1536
+
+| Table | Dimensions | Vectors |
+|-------|------------|---------|
+| memories | 1536 | 31,900 |
+| conversation_chunks | 1536 | 8,960 |
+
+| Entity Type | Status | Rows |
+|-------------|--------|------|
+| memory | EMBEDDED | 31,900 |
+| memory | FAILED | 156 |
+
+### Ariel (Terminal)
+
+- **Total sessions**: 22
+- **Still live**: 1
+- **Exited non-zero**: 4
+- **Shells seen**: zsh, bash
+
+### Legacy File Ledger
+
+The \`files\` table. Since the document-store cutovers the bulk of stored bytes lives in the
+Scriptorium (below); what remains here is mostly generated-image bookkeeping and residue.
+
+- **Total Files**: 1,200
+- **Total Size**: 858.3 MB
+- **Files not marked \`ok\`**: 2
+
+| Folder | Files | Size |
+|--------|-------|------|
+| /reports | 30 | 2.9 MB |
+| / | 1170 | 855.4 MB |
+
+Generated images by model:
+
+| Model | Images | Size |
+|-------|--------|------|
+| gpt-image-1 | 410 | 762.9 MB |
+
+## The Scriptorium
+
+### Document Stores
+
+- **Total stores**: 52 (50 enabled)
+- **Stores with a scan error**: 1
+- **Stores stuck mid-conversion**: 1
+
+| Mount Type | Store Type | Stores | Enabled | Files | Chunks | Size |
+|------------|------------|--------|---------|-------|--------|------|
+| database | character | 40 | 40 | 900 | 4,000 | 667.6 MB |
+| filesystem | documents | 12 | 10 | 3,000 | 20,000 | 286.1 MB |
+
+**Scan status**
+
+- **idle**: 50
+- **error**: 2
+
+**Conversion status**
+
+- **idle**: 51
+- **error**: 1
+
+The three global stores:
+
+| Store | Setting Key | Resolves |
+|-------|-------------|----------|
+| Quilltap Uploads | \`userUploadsMountPointId\` | Quilltap Uploads |
+| Quilltap General | \`generalMountPointId\` | Not provisioned |
+
+### Contents
+
+- **Content rows** (\`doc_mount_files\`): 3,800
+- **Link rows** (visible locations): 4,100
+- **Text documents**: 3,000 (38.1 MB)
+- **Binary blobs**: 800 (915.5 MB)
+- **Chunks**: 24,000 (156 unembedded, 6,000,000 tokens)
+
+| Stored MIME Type | Blobs | Size |
+|------------------|-------|------|
+| image/webp | 780 | 906.0 MB |
+
+### Links & Policy
+
+- **Links per content row**: 1.08
+- **Hard-link groups**: 14 (31 links belong to one)
+- **Extraction errors**: 2
+- **Conversion errors**: 1
+- **Documents withheld from embedding**: 9
+- **Documents hidden from characters**: 4
+- **Documents characters may not write**: 11
+
+### Character Vaults
+
+- **Vault-linked characters**: 40
+- **With the \`properties.json\` keystone**: 39
+- **⚠ Missing the keystone**: 1. Reading one of these characters raises \`CharacterVaultUnavailableError\` — a hard failure for that character, not a silently empty one.
+- **With a \`metadata.json\`**: 22
+
+### Wardrobe
+
+| Tier | Items | Archived |
+|------|-------|----------|
+| character | 410 | 38 |
+| project | 12 | 0 |
+| group | 0 | 0 |
+| general | 60 | 4 |
+
+### Pascal's Workbench (Custom Tools)
+
+- **Definitions found**: 17
+- **With saved presets**: 5 (9 preset files)
+- **Consulting an LLM**: 3
+- **With side effects**: 6
+- **Gated on invoker metadata**: 2
+- **Failed to parse**: 1
+
+| Store | Definitions |
+|-------|-------------|
+| Quilltap General | 12 |
+
+Definitions that would not load:
+
+| Store | Path | Reason |
+|-------|------|--------|
+| Quilltap General | Tools/broken.tool.json | outcomes: last entry must be a catch-all |
+
+### Suparṇā's Post Office
+
+- **Letters delivered**: 88
+- **Not yet announced**: 3
+- **Characters with a mailbox**: 14
+
+### Photographs
+
+- **In character vaults**: 640 (762.9 MB)
+- **In your gallery**: 120 (143.1 MB)
+- *Counts and bytes only — never titles, captions or filenames.*
+
+### Scenarios & State
+
+| Tier | Scenarios |
+|------|-----------|
+| character | 90 |
+| project | 14 |
+| group | 3 |
+| general | 22 |
+
+State cascade coverage (chat → project → group → general):
+
+- **Chats carrying state**: 31
+- **Projects carrying state**: 3
+- **Groups carrying state**: 1
+- **General state present**: Yes
+
+## Dramatis Personae
+
+### Ten Busiest Characters
+
+| Character | Chats | Memories | Vault Size |
+|-----------|-------|----------|------------|
+| Friday | 210 | 12,000 | 85.8 MB |
+| Bertie | 44 | 3,100 | 11.4 MB |
+
+Ranked by chats, ties broken by memories. Help chats and Brahma Console sessions are excluded. Participants marked \`removed\` still count — a character written out of a scene was still in it. Vault size is the store's cached total as of its last scan; because content is addressed by hash and hard-linkable across vaults, bytes shared between two characters appear in both rows.
+
+### Projects
+
+| Project | Linked Stores | Chats | Files | Documents | State |
+|---------|---------------|-------|-------|-----------|-------|
+| The Great Estate | 2 | 40 | 120 | 300 | ✓ |
+
+### Groups
+
+| Group | Members | Linked Stores | Official Store |
+|-------|---------|---------------|----------------|
+| The Household | Bertie, Friday | 1 | ✓ |
+| Orphans | *none* | 0 | ⚠ missing |
+
+A group without an official store never had one provisioned — its description, instructions,
+state and scenarios have nowhere to live.
+
+## The Wire Records
+
+> These figures are drawn from the LLM logs. Logging is currently **on**
+> with a retention window of **30 days**.
+> Enable LLM logging and lengthen the retention window (Settings → Chat → LLM Logging) and the Almanack's
+> arithmetic grows correspondingly richer.
+
+### Totals
+
+- **Log entries**: 48,000
+- **Prompt tokens**: 9,000,000
+- **Completion tokens**: 1,200,000
+- **Total tokens**: 10,200,000
+- **Verbose mode**: No
+
+### Requests by Type
+
+| Type | Requests | Prompt | Completion | Total | Avg Latency | Measured | Errors |
+|------|----------|--------|------------|-------|-------------|----------|--------|
+| CHAT_MESSAGE | 24,000 | 8,000,000 | 1,000,000 | 9,000,000 | 4.21 s | 23000/24000 | 12 |
+| MEMORY_EXTRACTION | 12,000 | 600,000 | 120,000 | 720,000 | 812 ms | 400/12000 | 0 |
+
+"Measured" is the denominator behind the average — requests carrying a usable \`durationMs\`.
+Rows written before the timing gaps were closed carry none and are excluded from the average.
+
+### Connection Profiles — Lifetime Counters
+
+| Profile | Provider / Model | Messages | Prompt | Completion | Total | Last Touched |
+|---------|------------------|----------|--------|------------|-------|--------------|
+| Opus (household) | anthropic / claude-opus-5 | 20,000 | 7,000,000 | 1,000,000 | 8,000,000 | 8/5/2026 |
+
+These counters live on the profile rows and cover the profile's whole life, not the log retention
+window. There is no last-used column, so "Last Touched" is the row's \`updatedAt\` — a proxy.
+
+### Connection Profiles — Within the Retention Window
+
+| Profile | Provider / Model | Requests | Tokens | Avg | Median | Measured | Errors |
+|---------|------------------|----------|--------|-----|--------|----------|--------|
+| Opus (household) | anthropic / claude-opus-5 | 20,000 | 8,000,000 | 4.40 s | 3.80 s | 19500/20000 | 8 |
+
+### Image Profiles — Within the Retention Window
+
+| Profile | Provider / Model | Requests | Tokens | Avg | Median | Measured | Errors |
+|---------|------------------|----------|--------|-----|--------|----------|--------|
+| Lantern (OpenAI) | openai / gpt-image-1 | 410 | 0 | 18.20 s | 17.40 s | 410/410 | 6 |
+
+A Concierge reroute logs a second row under the fallback profile, so a rerouted generation appears
+once under the profile that refused it and once under the profile that produced it. Naive totals
+therefore double-count rerouted work.
+
+### Prompt Cache by Provider
+
+| Key | Requests w/ Cache Data | Hits | Hit Rate | Cache Read | Cache Write | Uncached Prompt | Token Hit Rate |
+|-----|------------------------|------|----------|------------|-------------|-----------------|----------------|
+| anthropic | 22,000 | 18,000 | 81.8% | 40,000,000 | 3,000,000 | 7,000,000 | 85.1% |
+
+### Prompt Cache by Profile
+
+| Key | Requests w/ Cache Data | Hits | Hit Rate | Cache Read | Cache Write | Uncached Prompt | Token Hit Rate |
+|-----|------------------------|------|----------|------------|-------------|-----------------|----------------|
+| Opus (household) | 20,000 | 17,000 | 85.0% | 38,000,000 | 2,800,000 | 6,500,000 | 85.4% |
+
+Cache figures come from the \`cacheUsage\` payload, which in practice only chat messages carry — the
+streaming path is its sole writer. There is no "was this a hit" flag; a hit is a row reporting more
+than zero cache-read tokens. Provider plugins strip cache reads out of the reported prompt tokens, so
+"Uncached Prompt" and "Cache Read" together make the whole prompt.
+"
+`;

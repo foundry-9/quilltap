@@ -55,7 +55,7 @@ const ICON_GROUPS: IconGroup[] = [
   },
   {
     category: 'System & tooling',
-    names: ['sparkles', 'wand', 'wrench', 'code', 'cpu', 'database', 'layers', 'zap', 'swap', 'log-out'],
+    names: ['sparkles', 'wand', 'thinking', 'wrench', 'code', 'cpu', 'database', 'layers', 'zap', 'swap', 'log-out'],
   },
   {
     category: 'Appearance & system',

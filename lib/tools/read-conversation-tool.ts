@@ -9,6 +9,7 @@
 
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
+import { llmNumber } from './llm-number'
 
 /**
  * Zod schema for the read conversation tool's input.
@@ -27,6 +28,22 @@ export const readConversationToolInputSchema = z.object({
       'If true, returns clean conversation without any annotations. If false (default), includes all character annotations.'
     )
     .optional(),
+  interchange_start: llmNumber(
+    z
+      .number()
+      .int()
+      .min(1)
+      .describe(
+        'First interchange to include (1-based). Use with interchange_end to pull just the relevant slice of a long conversation instead of the whole transcript.'
+      )
+  ).optional(),
+  interchange_end: llmNumber(
+    z
+      .number()
+      .int()
+      .min(1)
+      .describe('Last interchange to include (inclusive). Omit to read to the end.')
+  ).optional(),
 })
 
 /**
@@ -53,7 +70,7 @@ export const readConversationToolDefinition = {
   function: {
     name: 'read_conversation',
     description:
-      'Read the rendered Markdown version of a conversation. Without a conversationId, reads the current conversation. With a conversationId (e.g., from search results), reads that specific conversation. Returns the full conversation with sequential message numbering and interchange grouping.',
+      'Read the rendered Markdown version of a conversation. Without a conversationId, reads the current conversation. With a conversationId (e.g., from search results), reads that specific conversation. Returns the conversation with sequential message numbering and interchange grouping; pass interchange_start/interchange_end to read just a slice of a long conversation.',
     parameters: zodToOpenAISchema(readConversationToolInputSchema),
   },
 }
@@ -63,6 +80,7 @@ export const readConversationToolDefinition = {
  */
 export function validateReadConversationInput(
   input: unknown
-): input is ReadConversationToolInput {
-  return readConversationToolInputSchema.safeParse(input).success
+): ReadConversationToolInput | null {
+  const parsed = readConversationToolInputSchema.safeParse(input)
+  return parsed.success ? parsed.data : null
 }

@@ -8,7 +8,7 @@ No subscriptions. No data harvested. No forgetting between sessions. No landlord
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap-server?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap-server/releases/latest)
-[![This Version](https://img.shields.io/badge/version-4.7.1--bugfix.0-yellow.svg?logo=github)](package.json)
+[![This Version](https://img.shields.io/badge/version-4.8.1--bugfix.0-yellow.svg?logo=github)](package.json)
 [![Docker Hub](https://img.shields.io/docker/v/foundry9/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/foundry9/quilltap)
 [![npm](https://img.shields.io/npm/v/quilltap?logo=npm)](https://www.npmjs.com/package/quilltap)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/6enCeQxY)
@@ -84,7 +84,7 @@ curl -fsSL https://raw.githubusercontent.com/foundry-9/quilltap-server/refs/head
 irm https://raw.githubusercontent.com/foundry-9/quilltap-server/refs/heads/main/scripts/start-quilltap.ps1 | iex
 ```
 
-The scripts auto-detect your platform, set the correct data directory, and find local services like Ollama — forwarding their ports into the container automatically.
+The scripts auto-detect your platform, set the correct data directory, and find local services like Ollama — forwarding their ports into the container automatically. They also bind any **filesystem or Obsidian document stores** you've set up into the container at their own host paths, so a store's folder means the same thing inside and out. (Binds are fixed when a container is created, so a store added later needs `--recreate`; run the script against an existing container and it will name any store that has become unreachable.)
 
 Or run directly:
 
@@ -99,7 +99,7 @@ docker run -d \
 
 Open [http://localhost:3000](http://localhost:3000) and the setup wizard will guide you through first-time configuration.
 
-> **Timezone tip:** Set `QUILLTAP_TIMEZONE` to your IANA timezone (e.g., `America/New_York`, `Europe/London`, `Asia/Tokyo`) so timestamps in chats show your local time instead of UTC.
+> **Timezone tip:** Set `QUILLTAP_TIMEZONE` to your IANA timezone (e.g., `America/New_York`, `Europe/London`, `Asia/Tokyo`) so timestamps in chats show your local time instead of UTC. The container entrypoint also applies it to `TZ`, so scheduled rooms, daily budget rollovers, and "today"/"yesterday" memory recall land on your calendar day too.
 
 ### The Quick Route: npx
 
@@ -159,6 +159,10 @@ Each connection profile is classified into a **model class** — Compact, Standa
 
 Agent Mode lets the AI use tools iteratively — web search, image generation, file management, memory search, and any MCP server you connect. The Run Tool feature lets you invoke any tool directly from the chat toolbar. The plugin system means additional providers and tools can be added without waiting for us.
 
+### The Workspace
+
+Quilltap opens as a **two-pane workspace of tabs**. Chats, documents, terminals, characters, settings — each is a tab that stays live in the background, so switching between them never reloads anything, and a conversation streaming in one tab keeps going while you read a document beside it. Drag a tab into the other pane to work on two things side by side. Old bookmarks still land on the right tab without disturbing whatever else you have open.
+
 ### Projects & Document Stores
 
 Organize your work into projects with custom system prompts, file uploads, folder structures, and project-scoped scenarios. Document stores come in three flavors:
@@ -169,7 +173,7 @@ Organize your work into projects with custom system prompts, file uploads, folde
 
 A **Convert** button on filesystem and Obsidian stores moves their contents into the database. A **Deconvert** button writes them back out. Embeddings are preserved across either direction, so a 14,000-document store converts in seconds rather than re-embedding for an afternoon.
 
-Document stores carry a **store type** — `documents` for general notes and references, `character` for character vaults — visible as a badge in the Scriptorium index. Folder operations are first-class: create folders inside the picker, drag entries between them, move whole subtrees with cascade updates. Markdown rendering supports wikilinks, code highlighting, and PDF preview. Semantic search finds content by meaning across your entire project: not just the file that mentions "the red door," but the one that describes "a crimson entrance" three chapters ago.
+Document stores carry a **store type** — `documents` for general notes and references, `character` for character vaults — visible as a badge in the Scriptorium index. Folder operations are first-class: create folders inside the picker, drag entries between them, move whole subtrees with cascade updates. Markdown rendering supports wikilinks, code highlighting, LaTeX math (KaTeX), and PDF preview. Semantic search finds content by meaning across your entire project: not just the file that mentions "the red door," but the one that describes "a crimson entrance" three chapters ago.
 
 ### Document Mode
 
@@ -186,6 +190,8 @@ A per-character switch flips the character's source of truth from the database r
 Characters aren't limited to a single personality template. Each can have multiple named system prompts and scenarios, letting you shift context — the same character in different settings, or different facets of the same relationship. The AI Character Import wizard can generate a complete character from source material (wiki pages, documents, freeform text). The **Non-Quilltap Prompt generator** exports any character as a standalone system prompt for use in other AI tools — taking your collaborator with you when you need to. Plugins can store per-character metadata for their own use via the character plugin data API.
 
 The **wardrobe system** gives characters a persistent closet — tops, bottoms, footwear, and accessories that the LLM knows about and can reference. Items live as Markdown files in the character's vault (`Wardrobe/<title>.md`); outfit presets live in `Outfits/`. Create items manually, generate them from the AI Wizard or lore, or **import from an image** using vision AI to analyze a photo and propose wardrobe items. Save outfit presets, gift items between characters, and let the LLM choose what to wear when a chat starts. Aurora announces outfit changes automatically, debounced so fiddling with all four slots collapses to a single notification once you stop touching the closet.
+
+**Characters can be archived rather than deleted.** When a collaborator's story has ended but you don't want to erase them, archiving packs everything heavy and private — memories, mail, conversation summaries, non-avatar photographs, and their embeddings — into a single encrypted `.qtap` bundle in your file library, then prunes that material from the live instance. What stays is the character: fields, portrait, wardrobe, and every chat she appears in, so old messages keep their faces and her page still renders. An archived character takes no turns and appears in no picker; **Rehydrate** unpacks the bundle and restores everything at its original identities, with nothing repointed. The bundle is sealed with your instance passphrase (changing it re-seals every archive on the shelf) and stays in the library afterwards as a spare copy. Available from a character's page in Aurora, from the API, and from the CLI (`npx quilltap db characters archives|archive|rehydrate|export`).
 
 **Provider limits should not decide which collaborators you get to keep.** The Concierge system treats a provider's refusal as a routing problem, not as permission to erase the collaborator or confiscate the relationship — detecting content type and, when configured, sending the request to a provider equipped to handle that kind of work. The default behavior keeps you on your primary provider; the routing kicks in only when you've configured it to. You set the boundaries. The software respects them.
 
@@ -221,7 +227,9 @@ Every run is bounded and inspectable. The Host marks two pacing milestones aloud
 
 ### Gaming & Interactivity
 
-Persistent chat state for inventories, stats, scores, and any structured data. Project-level state shared across chats with per-chat overrides. Cryptographically secure dice rolls (d4 to d1000), coin flips, and random participant selection with auto-detection — "I roll 2d6" actually rolls.
+Persistent chat state for inventories, stats, scores, and any structured data — scoped to a single chat, a whole project, a group, or your entire instance, so a fact holds exactly as widely as it should. Cryptographically secure dice rolls (d4 to d1000), coin flips, and random participant selection with auto-detection — "I roll 2d6" actually rolls.
+
+**Pascal the Croupier** lets you build your own mechanics of chance: a named action with parameters, a roll, and a table of outcomes — a lockpicking attempt, a loot drop, a reaction check. The AI can invoke them mid-scene, and every roll is settled by Quilltap rather than the model, so a character can't narrate a failure into a win. Build them in **Pascal's Workbench**, a visual editor with a test bench that runs thousands of trial rolls so you can see the odds before you play.
 
 ### Image Generation
 
@@ -390,7 +398,7 @@ Quilltap stands on the shoulders of these excellent open source projects, and is
 
 **AI & LLM:** OpenAI SDK, Anthropic SDK, Google Generative AI SDK, xAI/Grok SDK, Model Context Protocol SDK
 
-**UI:** Tailwind CSS, TanStack Query, Lexical, SVAR File Manager, React Markdown, React Syntax Highlighter, PDF.js, sharp, Lucide Icons
+**UI:** Tailwind CSS, TanStack Query, Lexical, SVAR File Manager, React Markdown, React Syntax Highlighter, KaTeX, PDF.js, sharp, Lucide Icons
 
 **Infrastructure:** Docker
 

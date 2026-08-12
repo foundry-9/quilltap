@@ -1,9 +1,19 @@
 'use client'
 
+import { formatBytes } from '@/lib/utils/format-bytes'
+import type { VaultPreview } from '../types'
+
 interface ExportOptionsStepProps {
   includeMemories: boolean
   onIncludeMemoriesChange: (include: boolean) => void
   memoryCount: number
+  /** Vault contents riding along with a characters export; null elsewhere. */
+  vaultPreview?: VaultPreview | null
+}
+
+/** Pluralize a count without the bare "1 items" indignity. */
+function count(n: number, singular: string, plural: string): string {
+  return `${n} ${n === 1 ? singular : plural}`
 }
 
 /**
@@ -13,6 +23,7 @@ export function ExportOptionsStep({
   includeMemories,
   onIncludeMemoriesChange,
   memoryCount,
+  vaultPreview,
 }: ExportOptionsStepProps) {
   return (
     <div className="space-y-4">
@@ -37,6 +48,27 @@ export function ExportOptionsStep({
           )}
         </div>
       </label>
+
+      {vaultPreview && vaultPreview.stores > 0 && (
+        <div className="p-4 border qt-border-default rounded-lg">
+          <p className="font-medium text-foreground">
+            Every character travels with their vault
+          </p>
+          <p className="qt-text-small qt-text-secondary mt-1">
+            {count(vaultPreview.stores, 'vault', 'vaults')} packed and labelled
+            {vaultPreview.documents > 0 || vaultPreview.blobs > 0 ? ': ' : '. '}
+            {[
+              vaultPreview.documents > 0 && count(vaultPreview.documents, 'paper', 'papers'),
+              vaultPreview.blobs > 0 && count(vaultPreview.blobs, 'photograph', 'photographs'),
+            ]
+              .filter(Boolean)
+              .join(' and ')}
+            {vaultPreview.documents > 0 || vaultPreview.blobs > 0 ? '. ' : ''}
+            Expect a trunk of roughly {formatBytes(vaultPreview.estimatedBytes)} — the
+            photographs, as ever, are the heavy luggage.
+          </p>
+        </div>
+      )}
     </div>
   )
 }

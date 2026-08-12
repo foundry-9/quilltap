@@ -9,17 +9,20 @@
 
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
+import { llmNumber } from './llm-number';
 
 /**
  * Zod schema for the delete-annotation tool's input. The single source of truth for both
  * runtime validation and the derived OpenAI-format `parameters` JSON Schema.
  */
 export const deleteAnnotationToolInputSchema = z.object({
-  message_index: z
-    .number()
-    .int()
-    .min(0)
-    .describe('The 0-based message number to remove your annotation from.'),
+  message_index: llmNumber(
+    z
+      .number()
+      .int()
+      .min(0)
+      .describe('The 0-based message number to remove your annotation from.')
+  ),
 });
 
 /**
@@ -55,6 +58,7 @@ export const deleteAnnotationToolDefinition = {
  */
 export function validateDeleteAnnotationInput(
   input: unknown
-): input is DeleteAnnotationToolInput {
-  return deleteAnnotationToolInputSchema.safeParse(input).success;
+): DeleteAnnotationToolInput | null {
+  const parsed = deleteAnnotationToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }

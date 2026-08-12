@@ -4,6 +4,8 @@ import { useRef, useState, useCallback } from 'react'
 import { Icon } from '@/components/ui/icon'
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
 import ComposerGutterTools from '@/components/chat/ComposerGutterTools'
+import { SpeakingAsAvatar } from './SpeakingAsAvatar'
+import type { AvatarImageSource } from '@/components/ui/Avatar'
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import { LexicalComposerWrapper } from '@/components/chat/lexical'
 import type { ComposerEditorHandle } from '@/components/chat/lexical'
@@ -80,12 +82,26 @@ interface ChatComposerProps {
   hideStopButton?: boolean
   /** Callback when a pending tool result is added */
   onPendingToolResult?: (result: Omit<PendingToolResult, 'id' | 'createdAt'>) => void
+  /** Whether this chat resolves a non-empty Pascal custom-tool roster */
+  customToolsAvailable?: boolean
+  /** Callback after a custom tool runs, so the chat can refetch */
+  onCustomToolRan?: () => void
   /** Current roleplay template narration delimiters (e.g. '*' or ['[', ']']) */
   narrationDelimiters?: NarrationDelimiters
   /** Callback to open a new terminal session */
   onOpenTerminalClick?: () => void
   /** Whether Terminal Mode is currently active (hides the open-terminal button) */
   isTerminalModeActive?: boolean
+  /**
+   * The character the human is currently speaking as — rendered as a persistent
+   * full-height portrait directly left of the toolbar cluster. Null when the
+   * human plays no character (e.g. an all-LLM room).
+   */
+  speakingAs?: {
+    name: string
+    title?: string | null
+    character?: AvatarImageSource | null
+  } | null
 }
 
 export function ChatComposer({
@@ -128,9 +144,12 @@ export function ChatComposer({
   onStopStreaming,
   hideStopButton = false,
   onPendingToolResult,
+  customToolsAvailable,
+  onCustomToolRan,
   narrationDelimiters,
   onOpenTerminalClick,
   isTerminalModeActive,
+  speakingAs,
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const sourceTextareaRef = useRef<HTMLTextAreaElement>(null)
@@ -232,7 +251,7 @@ export function ChatComposer({
           >
             <div className="qt-chat-response-status-icon">
               {responseStatus.stage === 'streaming' ? (
-                <QuillAnimation size="sm" />
+                <QuillAnimation size="sm" label={null} />
               ) : (
                 <svg className="w-4 h-4 animate-pulse" viewBox="0 0 24 24" fill="currentColor">
                   <circle cx="12" cy="12" r="10" opacity="0.3" />
@@ -332,6 +351,21 @@ export function ChatComposer({
             className="hidden"
           />
 
+          {/* "Speaking as" portrait — full-height, directly left of the toolbar
+              cluster; hidden on the narrowest viewports where there's no room.
+              The outer wrapper owns the responsive show/hide so it doesn't
+              collide with the avatar's own display utility. */}
+          {speakingAs && (
+            <div className="hidden sm:flex self-stretch flex-shrink-0">
+              <SpeakingAsAvatar
+                name={speakingAs.name}
+                title={speakingAs.title}
+                src={speakingAs.character}
+                canType={hasActiveCharacters && !sending && !streaming && !waitingForResponse}
+              />
+            </div>
+          )}
+
           {/* Left side toolbar - gutter tools, then main toolbar buttons */}
           <div className="qt-chat-toolbar-row">
             <div className="qt-composer-gutter-column">
@@ -345,6 +379,8 @@ export function ChatComposer({
               onComposeMailClick={onComposeMailClick}
               chatId={id}
               onPendingToolResult={onPendingToolResult}
+              customToolsAvailable={customToolsAvailable}
+              onCustomToolRan={onCustomToolRan}
               disabled={sending || !hasActiveCharacters}
             />
             </div>
@@ -366,8 +402,9 @@ export function ChatComposer({
                 <Icon name="file" className="w-5 h-5" />
               </button>
 
-              {/* Document Mode toggle button */}
-              {onOpenDocumentClick && !isDocumentModeActive && (
+              {/* Open Document button — stays available even with documents
+                  already open, so the user can keep adding more. */}
+              {onOpenDocumentClick && (
                 <button
                   type="button"
                   onClick={(e) => {
@@ -375,7 +412,9 @@ export function ChatComposer({
                     onOpenDocumentClick()
                   }}
                   className="qt-chat-toolbar-button qt-doc-open-button"
-                  title={`Open document (${isMac ? 'Cmd' : 'Ctrl'}+Shift+D)`}
+                  title={isDocumentModeActive
+                    ? 'Open another document'
+                    : `Open document (${isMac ? 'Cmd' : 'Ctrl'}+Shift+D)`}
                 >
                   <Icon name="pencil" className="w-5 h-5" />
                 </button>
@@ -420,7 +459,7 @@ export function ChatComposer({
               onImagePaste={onImagePaste}
               documentEditingMode={documentEditingMode}
               disabled={sending || !hasActiveCharacters}
-              placeholder={!hasActiveCharacters ? "Add a character to start chatting..." : attachedFiles.length > 0 ? "Add a message (optional)..." : "Type a message..."}
+              placeholder={!hasActiveCharacters ? "Add a character to start chatting..." : attachedFiles.length > 0 ? "Add a message (optional)..." : ""}
             />
           </div>
 

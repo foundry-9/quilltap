@@ -28,8 +28,9 @@ export type DocListBlobsInput = z.infer<typeof docListBlobsToolInputSchema>;
 /**
  * Validates input for doc_list_blobs tool.
  */
-export function validateDocListBlobsInput(input: unknown): input is DocListBlobsInput {
-  return docListBlobsToolInputSchema.safeParse(input).success;
+export function validateDocListBlobsInput(input: unknown): DocListBlobsInput | null {
+  const parsed = docListBlobsToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 export const docListBlobsToolDefinition = {

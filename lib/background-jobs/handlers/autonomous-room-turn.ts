@@ -48,17 +48,24 @@ import {
 
 const HANDLER = 'background-jobs.autonomous-room-turn';
 
-interface BudgetVerdict {
+// @port-oracle-export — exported only because it appears in the signature of
+// the oracle-exported `checkBudget` (below): a private name in an exported
+// function's return type breaks `tsc --declaration`. The export exists to keep
+// the quilltap-v5 differential port harness wiring valid; do NOT strip it as an
+// "unused export" just because nothing in THIS repo imports it by name.
+export interface BudgetVerdict {
   exhausted: false;
 }
 
-interface BudgetExhausted {
+// @port-oracle-export — see note on BudgetVerdict above.
+export interface BudgetExhausted {
   exhausted: true;
   nextState: 'budgetExhausted' | 'paused';
   reason: string;
 }
 
-type BudgetCheckResult = BudgetVerdict | BudgetExhausted;
+// @port-oracle-export — see note on BudgetVerdict above.
+export type BudgetCheckResult = BudgetVerdict | BudgetExhausted;
 
 /**
  * Compute the ISO timestamp of the most recent instance-local midnight.
@@ -76,8 +83,14 @@ function lastLocalMidnightIso(now: number): string {
  * Pre-turn budget verdict. Reads the per-row chat caps directly; for the
  * daily user-token cap, the caller passes in the summed usage since
  * instance-local midnight (read off llm_logs).
+ *
+ * @port-oracle-export — exported solely for the quilltap-v5 differential port
+ * harness (quilltap-v5/harness/oracle/cases/enclave-budget.ts), which imports
+ * the REAL function to check the Rust port against. Has no other importer in
+ * this repo; do NOT delete the `export` as unused — it would break the
+ * equivalence test guarding the budget-math port.
  */
-function checkBudget(
+export function checkBudget(
   chat: ChatMetadataBase,
   now: number,
   options: {
@@ -107,6 +120,55 @@ function checkBudget(
   return { exhausted: false };
 }
 
+/**
+ * Default number of turns a token-budgeted autonomous run should aim to span
+ * when the room has no explicit `budgetMaxTurns`. Used to slice the per-run
+ * token budget into a per-turn context cap so a run paces itself across several
+ * turns instead of spending most of the budget on a single oversized turn.
+ */
+export const DEFAULT_AUTONOMOUS_TARGET_TURNS = 6;
+
+/**
+ * Floor for the per-turn context cap (tokens). Below this a turn can't carry a
+ * functioning context (system prompt + character cards + scene state + a little
+ * history), so the cap never clamps below it — we let the run's own budget
+ * check end the run rather than ship a starved turn.
+ */
+export const MIN_AUTONOMOUS_CONTEXT_TOKENS = 16_000;
+
+/**
+ * Derive this turn's context-budget cap (tokens) from the room's per-run token
+ * budget, sliced across the turns the run should still span. The context-manager
+ * clamps its model-derived `maxAvailable` down to this value, so a room running
+ * on a big-context model still paces its per-run token budget across turns.
+ *
+ * Returns undefined when the room has no token budget (`budgetMaxTokens == null`)
+ * — leaving the model-derived context budget untouched (unchanged behavior).
+ *
+ * The slice is `remaining / turnsLeft`:
+ *   - `remaining` = `budgetMaxTokens − runTokensConsumed`, read off the local
+ *     chat snapshot (0 at run start, one turn behind thereafter — the same
+ *     basis the budget gate uses, so the cap never diverges from it; the lag
+ *     only makes the early-run cap marginally generous and self-corrects).
+ *   - `turnsLeft` = `budgetMaxTurns − runTurnsConsumed` when a turn budget is
+ *     also set (the two budgets cooperate), else `DEFAULT_AUTONOMOUS_TARGET_TURNS`.
+ *
+ * Floored at `MIN_AUTONOMOUS_CONTEXT_TOKENS` so a nearly-spent run still ships a
+ * usable context for its final turn(s).
+ *
+ * @port-oracle-export — exported for the quilltap-v5 differential port harness
+ * (the budget-math equivalence tests) and for unit coverage; do NOT strip the
+ * `export` as unused.
+ */
+export function computeAutonomousContextCap(chat: ChatMetadataBase): number | undefined {
+  if (chat.budgetMaxTokens == null) return undefined;
+  const remaining = Math.max(0, chat.budgetMaxTokens - (chat.runTokensConsumed ?? 0));
+  const turnsLeft = chat.budgetMaxTurns != null
+    ? Math.max(1, chat.budgetMaxTurns - (chat.runTurnsConsumed ?? 0))
+    : DEFAULT_AUTONOMOUS_TARGET_TURNS;
+  return Math.max(MIN_AUTONOMOUS_CONTEXT_TOKENS, Math.floor(remaining / turnsLeft));
+}
+
 // ---------------------------------------------------------------------------
 // Pacing milestones. As a run approaches its budget the Host nudges the room
 // — once at the halfway mark, once at 10% remaining — so the characters can
@@ -134,7 +196,12 @@ const GRACE_CONTENT =
 const GRACE_OPAQUE =
   'This conversation has reached its budget limit. You have one final turn to speak before it ends — say what most needs saying and bring the present scene to a graceful close.';
 
-type MilestoneBinding = 'time' | 'turns' | 'tokens' | 'daily';
+// @port-oracle-export — exported only because it appears in the return-type
+// signature of the oracle-exported `computeBudgetProgress` (a private name there
+// breaks `tsc --declaration`). It is also used internally, so a cleanup may be
+// tempted to drop just the `export` keyword — don't: that re-breaks the
+// declaration emit the port harness depends on. See @port-oracle-export above.
+export type MilestoneBinding = 'time' | 'turns' | 'tokens' | 'daily';
 
 /**
  * How far the current run has progressed toward its *binding* budget — the cap
@@ -151,8 +218,14 @@ type MilestoneBinding = 'time' | 'turns' | 'tokens' | 'daily';
  *
  * On a tie the per-run caps win (they are considered first), so an "ending"
  * nudge is preferred over a "pausing" one when both are equally close.
+ *
+ * @port-oracle-export — exported solely for the quilltap-v5 differential port
+ * harness (quilltap-v5/harness/oracle/cases/enclave-budget.ts), which imports
+ * the REAL function to check the Rust port against. Has no other importer in
+ * this repo; do NOT delete the `export` as unused — it would break the
+ * equivalence test guarding the budget-math port.
  */
-function computeBudgetProgress(
+export function computeBudgetProgress(
   chat: Pick<
     ChatMetadataBase,
     'budgetMaxTurns' | 'budgetMaxTokens' | 'budgetMaxWallClockMs' | 'runStartedAt' | 'runPausedAccumMs'
@@ -556,6 +629,12 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
         // bypassing this handler's per-turn budget check. We re-enqueue at
         // the end of this function instead.
         singleTurn: true,
+        // Pace a token-budgeted room: cap this turn's context budget at its
+        // slice of the per-run token budget (`remaining / turnsLeft`) so a
+        // big-context model doesn't spend most of the run on one turn. Computed
+        // off the local `chat` snapshot (reset to 0 at run start). Undefined
+        // for rooms without a token budget → unchanged behavior.
+        autonomousContextCap: computeAutonomousContextCap(chat),
       });
       await drainStream(stream);
     });

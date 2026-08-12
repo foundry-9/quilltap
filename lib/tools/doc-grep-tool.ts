@@ -6,6 +6,7 @@
 
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
+import { llmNumber } from './llm-number';
 
 /**
  * Zod schema for the doc_grep tool's input.
@@ -39,19 +40,23 @@ export const docGrepToolInputSchema = z.object({
     .default(true)
     .describe('Normalize Unicode diacritics for matching (e.g., "Nimue" matches "Nimuë"). Default is true.')
     .optional(),
-  context_lines: z
-    .number()
-    .int()
-    .min(0)
+  context_lines: llmNumber(
+    z
+      .number()
+      .int()
+      .min(0)
+      .describe('Number of lines of context to include before and after each match.')
+  )
     .default(0)
-    .describe('Number of lines of context to include before and after each match.')
     .optional(),
-  max_results: z
-    .number()
-    .int()
-    .min(1)
+  max_results: llmNumber(
+    z
+      .number()
+      .int()
+      .min(1)
+      .describe('Maximum number of matching lines to return.')
+  )
     .default(100)
-    .describe('Maximum number of matching lines to return.')
     .optional(),
 });
 
@@ -63,8 +68,9 @@ export type DocGrepInput = z.infer<typeof docGrepToolInputSchema>;
 /**
  * Validates input for doc_grep tool.
  */
-export function validateDocGrepInput(input: unknown): input is DocGrepInput {
-  return docGrepToolInputSchema.safeParse(input).success;
+export function validateDocGrepInput(input: unknown): DocGrepInput | null {
+  const parsed = docGrepToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 export const docGrepToolDefinition = {

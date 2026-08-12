@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals'
 
-import type { AuthenticatedContext } from '@/lib/api/middleware'
+import type { RequestContext } from '@/lib/api/middleware'
 
 const mockEnqueueCharacterAvatarGeneration = jest.fn()
 const mockLogger = {
@@ -27,7 +27,7 @@ function createContext(options: {
   updatedChat?: Record<string, unknown>
   profiles?: Array<Record<string, unknown>>
   chatProfile?: Record<string, unknown> | null
-} = {}): AuthenticatedContext {
+} = {}): RequestContext {
   const chat = {
     id: 'chat-1',
     avatarGenerationEnabled: false,
@@ -54,7 +54,7 @@ function createContext(options: {
         findAll: jest.fn().mockResolvedValue(options.profiles ?? []),
       },
     },
-  } as unknown as AuthenticatedContext
+  } as unknown as RequestContext
 }
 
 describe('handleToggleAvatarGeneration', () => {

@@ -73,6 +73,96 @@ The toggle offers three positions:
 | **Enabled** | Help tools are available for this character |
 | **Disabled** | Help tools are explicitly turned off |
 
+## Archiving Characters
+
+Between the bustle of the roster and the finality of deletion lies the archive
+shelf: a place for characters whose stories have paused but not, one hopes,
+ended. Archiving packs a character's every effect into a single sealed `.qtap`
+bundle and clears the heavier baggage from the working rooms — without
+deleting a single word anyone ever said.
+
+### What Archiving Does
+
+**Packed into the bundle and cleared away:**
+
+- Their memories — the Commonplace Book falls silent
+- Their correspondence, the whole of the mail folder
+- Every photograph beyond the portrait itself
+- Their conversation summaries
+
+**Kept in place, exactly as it stands:**
+
+- Who they are — every character field, still readable on their page
+- Their portrait, so old conversations keep their face
+- Their wardrobe
+- Every chat they took part in, word for word
+- What *other* characters remember about them
+
+That last point deserves its own sentence: **archiving silences the character,
+not everyone's memory of them.** Friends and rivals keep every recollection;
+only the archived character's own remembering is packed away.
+
+### While Archived
+
+An archived character wears an **Archived** badge, takes no turns in any
+scene, receives no letters, answers no @-queries, and cannot be added to new
+groups or rosters (existing memberships stand, marked with the badge). Their
+page remains open for reading — every field, the wardrobe, the gallery — but
+the pen is set down: nothing can be edited until they wake. They are likewise
+excused from the export wizard; their bundle *is* their export.
+
+### How to Archive
+
+1. Open the character's page from the **Characters** roster
+2. Click **Archive** in the action column
+3. The confirmation spells out precisely what is packed and what stays —
+   read it, then click **Archive**
+
+The roster hides archived characters by default; the **Show Archived** button
+reveals them, resting at the end of the shelf.
+
+### The Bundle and Your Passphrase
+
+The bundle is sealed with your instance passphrase (or, on an instance
+without one, with Quilltap's internal key) — the same protection your
+databases enjoy. Two consequences worth knowing:
+
+- **Changing your passphrase re-seals every archive** on the shelf. The
+  passphrase card warns you how many before it begins; should the rewrite be
+  interrupted, it names exactly which bundles still answer to the old
+  passphrase.
+- The bundle survives a **Delete All Data** or replace-mode restore if you
+  leave the "archive shelf" box ticked — as a loose bundle, importable but no
+  longer rehydratable, since its character record perished with the rest.
+
+### Waking Them Again
+
+The **Rehydrate** button on an archived character's page unpacks the bundle
+and restores every memory, letter, and photograph precisely where it was —
+same identifiers, same folders, nothing duplicated and nothing repointed.
+Their chat seats return to the table, their memories re-enter the
+Commonplace Book (re-indexed in the background), and the character page
+comes back to life exactly as it stood.
+
+A few particulars of the ceremony:
+
+- **The bundle stays on the shelf afterwards** as a spare copy; a small
+  dialog offers to discard it once the unpacking is done. Keeping it costs
+  nothing but shelf space, and you may discard it later from the file
+  library. (The library politely refuses to discard a bundle whose character
+  is *still* archived — that copy is the only one there is.)
+- **If your passphrase changed since the archive was sealed**, the older
+  bundle answers only to the passphrase in effect when it was written;
+  Quilltap will say so plainly rather than mumble about decryption. Re-seal
+  your archives when the passphrase card offers, and this never arises.
+- **An interrupted rehydration loses nothing.** The character simply remains
+  archived with the bundle intact; press Rehydrate again and it picks up
+  where it left off, skipping whatever already made it back.
+
+Should you prefer the character's effects without waking them, the command
+line still offers `quilltap db characters export <name>` to decant the
+bundle into a plaintext `.qtap` (see the developer CLI reference).
+
 ## Deleting Characters
 
 ### When to Delete

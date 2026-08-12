@@ -77,8 +77,9 @@ export type DocInsertTextInput = z.infer<typeof docInsertTextToolInputSchema>;
 /**
  * Validates input for doc_insert_text tool.
  */
-export function validateDocInsertTextInput(input: unknown): input is DocInsertTextInput {
-  return docInsertTextToolInputSchema.safeParse(input).success;
+export function validateDocInsertTextInput(input: unknown): DocInsertTextInput | null {
+  const parsed = docInsertTextToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 export const docInsertTextToolDefinition = {

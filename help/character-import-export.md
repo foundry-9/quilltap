@@ -122,6 +122,25 @@ When you export, the file contains:
 
 All character data in one JSON file. The Manifesto field round-trips with Quilltap exports and imports.
 
+### The Vault Travels Too
+
+A Quilltap `.qtap` character export carries more than the dossier above — it
+packs the character's entire document vault into the same file:
+
+- **The avatar** (and every alternate portrait), so the character arrives with
+  their face rather than a blank silhouette
+- **The photograph album** — every image in the vault
+- **Correspondence** — the character's `Mail/` folder in full
+- **The wardrobe** — `wardrobe.json` and every garment file
+- **Conversation summaries** and all other vault documents
+
+When you export characters, the wizard's options step shows what the vaults
+add to the bundle — how many documents and images, and roughly how large the
+file will be. On import, the vault is restored whole and the avatar resolves
+immediately; nothing needs re-uploading. (Exports made by older Quilltap
+versions carried no vault; importing one still works, but the character
+arrives without photographs or correspondence, and without a face.)
+
 ### Backing Up Your Characters
 
 **Best practice backup workflow:**

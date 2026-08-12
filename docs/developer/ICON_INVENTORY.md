@@ -2,7 +2,7 @@
 
 **Status:** Phase 1 (the `<Icon>` system), the Phase 2 sidebar pilot, **and the Phase 2b app-wide sweep are all complete.** Every icon-bearing component file has been migrated to `<Icon>`; the only inline `<svg>` left in `components/` are the genuine non-icon graphics catalogued in §4. The canonical name list below (signed off 2026-06-09, plus the 14 names the sweep surfaced — see §2.1) is the permanent public contract that `.qtap-theme` bundles target. Renaming an icon after themes ship overrides for it is a breaking change; add freely, rename with care.
 
-Source of truth for the *implemented* set: [`components/ui/icons/icon-registry.ts`](../../components/ui/icons/icon-registry.ts) (**82 icons**). Adding/renaming an icon = edit that file, drop the default SVG in `public/images/icons/`, and run `npm run generate:icon-css`.
+Source of truth for the *implemented* set: [`components/ui/icons/icon-registry.ts`](../../components/ui/icons/icon-registry.ts) (**85 icons**). Adding/renaming an icon = edit that file, drop the default SVG in `public/images/icons/`, and run `npm run generate:icon-css`.
 
 ---
 
@@ -89,6 +89,7 @@ Source of truth for the *implemented* set: [`components/ui/icons/icon-registry.t
 | `dice` | NEW | die w/ pips | RNG dropdown (Pascal) |
 | `sparkles` | NEW | sparkles | inline "generate" / AI-flavored actions |
 | `wand` | NEW | magic wand | the AI Wizard (distinct from inline `sparkles`) |
+| `thinking` | NEW | quill on the diagonal | the rocking "awaiting / streaming / tool running" indicator — see §6 (deliberately **not** `brand`) |
 
 ### Appearance / domain nav (already mostly in registry)
 | Name | Status | Glyph |
@@ -151,7 +152,7 @@ The post-sweep audit (`grep -rn '<svg' components/`) returns **only** these cate
 - **Drop-zone illustration** — `components/tools/import-export/steps/ImportFileStep.tsx` (two-way transfer-arrow drop-zone art).
 - **Empty-state illustration** — `components/tools/tasks-queue/index.tsx` clipboard "no tasks" art.
 - **Drag handle** — `components/settings/connection-profiles/ProfileCard.tsx` six-dot grip (carries drag listeners; UI chrome, see decision 4).
-- **The animated quill** — `components/chat/QuillAnimation.tsx` stays `<Image src="/quill.svg">` (bespoke `animate-quill-rock`); a `brand` theme override could later apply, but it is out of scope for the core migration.
+*(Formerly listed here: **the animated quill**. `components/chat/QuillAnimation.tsx` has since been migrated — it renders `<Icon name="thinking">` and the motion moved out of the component's styled-jsx into `.qt-thinking-indicator` in `_chat.css`. See §6.)*
 
 ---
 
@@ -169,3 +170,24 @@ All batches landed (each verified with `npx tsc` + the §4 audit; orphaned local
 Implementation note (cascade): `_icons.css` is imported **first** in `app/styles/qt-components/_index.css` so the `.qt-icon { width/height: 1em }` base is the weakest sizing in `@layer components` — call-site `w-*`/`h-*` utilities and any `qt-*` class that sizes an icon (e.g. `.qt-collapsible-card-chevron`) both win, so no icon is frozen at 1em.
 
 To add an icon later: add a registry entry, author `public/images/icons/<name>.svg` (24×24, monochrome `currentColor`), run `npm run generate:icon-css`.
+
+---
+
+## 6. The thinking indicator (`thinking` + `.qt-thinking-indicator`)
+
+The rocking quill shown while a reply is awaited, while tokens stream, and while a tool call is outstanding is **two independent theme hooks**, deliberately split so a theme can change one without inheriting the other:
+
+| Hook | Kind | What a theme does with it |
+|---|---|---|
+| `thinking` | icon name | swap the glyph via the manifest `icons` map, like any other icon |
+| `.qt-thinking-indicator` | `qt-*` class (`_chat.css`) | retune the rock via `--qt-thinking-duration` / `--qt-thinking-easing` / `--qt-thinking-origin` / `--qt-thinking-angle-rest` / `--qt-thinking-angle-lean`, or re-declare the class for a wholly different animation |
+
+It is deliberately **not** `brand`: a theme that replaces the brand mark with a wordmark should not find that wordmark rocking back and forth in the Salon.
+
+The default glyph is a diagonal quill (nib to the lower left), and the default motion sweeps between upright (`-45deg`) and that natural writing lean (`0deg`) — which is why the rest angle is the negative one. A theme shipping an upright glyph will want to override the two angle variables.
+
+It pivots on the **nib**, not the centre: `--qt-thinking-origin` defaults to `12.5% 87.5%`, which is (3,21) of the glyph's 24×24 viewBox — the point that would be touching the page. That point stays fixed and the feather swings above it. The origin belongs to the *artwork*, so a theme overriding the glyph must move it to that glyph's own nib. One consequence: a quill is longer than its box is tall, so at the upright extreme the tip paints ~8px above the 48px indicator's layout box. Nothing clips it (the mask paint rides the transform) and every call site has slack, but the indicator must not be wrapped in an `overflow: hidden` container.
+
+Because `thinking` is a `mask`-mode icon, it tints with `currentColor` — the call sites' `qt-text-secondary` and the composer's per-stage status colours all reach it. A theme override shipped as `.svg` keeps that tinting; a `.webp` override switches the icon to full-colour image mode and drops it (see `generateIconOverrideRule`).
+
+---

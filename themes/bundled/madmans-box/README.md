@@ -28,11 +28,16 @@ lamplit dusk of the cabin — no light mode, regardless of the host's toggle.
 
 ## Icons
 
-A handful of the app's icons are swapped for hand-cut Deco glyphs via the
-`icons` map in `theme.json`: a brass quill for the brand mark (drawn in full
-color), and theme-tinted line variants for **settings** (a cog), **themes** (a
-brush), **wardrobe** (an armoire), and **help** (an octagon mark). The rest of
-the icons fall back to Quilltap's built-in set.
+Nearly the whole icon set is swapped for hand-cut Deco glyphs via the `icons`
+map in `theme.json` — a brass quill for the brand mark, and theme-tinted line
+variants for the rest. Anything unmapped falls back to Quilltap's built-in set.
+
+**The thinking indicator** — the mark shown while a reply is awaited or
+streaming — is mapped to `icons/brand.svg`, the same drawing as the brand mark:
+the quill inside a circle that never quite closes. Rather than core's rock on
+the nib, this theme turns it slowly through a full revolution (see the
+`.qt-thinking-indicator` block in `styles.css`), a rotor idling rather than a
+hand writing. The two names share one file, so editing `brand.svg` changes both.
 
 ## Structure
 

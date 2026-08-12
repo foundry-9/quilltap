@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { serverError, successResponse } from '@/lib/api/responses';
 import { fileStorageManager } from '@/lib/file-storage/manager';
@@ -13,7 +13,7 @@ import type { FileEntry } from '@/lib/schemas/file.types';
  * Any orphaned file matching these must be rescued, not deleted.
  */
 async function buildReferencedFileSets(
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   allFiles: FileEntry[]
 ): Promise<{ referencedIds: Set<string>; referencedHashes: Set<string> }> {
   const referencedIds = new Set<string>();
@@ -75,7 +75,7 @@ function isFileReferenced(
 
 export async function handleCleanupOrphans(
   request: NextRequest,
-  ctx: AuthenticatedContext
+  ctx: RequestContext
 ): Promise<NextResponse> {
   try {
     let dryRun = true;

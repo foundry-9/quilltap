@@ -24,6 +24,13 @@ export interface TurnCharacterSlice {
   /** Every assistant message ID that contributed to this slice. */
   contributingMessageIds: string[]
   /**
+   * `createdAt` of the slice's most recent contributing message — the
+   * wall-clock anchor used to stamp `occurredAt` on memories derived from
+   * this slice (episodic spine). Null when the source event carried no
+   * timestamp.
+   */
+  lastMessageCreatedAt?: string | null
+  /**
    * True when this slice's text was authored by the human driving a
    * user-controlled character (role: 'USER'), not by an LLM. Such a slice is
    * built from the turn opener so the user-controlled character forms its own
@@ -45,6 +52,12 @@ export interface TurnTranscript {
   characterSlices: TurnCharacterSlice[]
   /** The most recent ASSISTANT message ID in the turn — used as sourceMessageId on derived memories. */
   latestAssistantMessageId: string | null
+  /**
+   * Wall-clock anchor for the whole turn: `createdAt` of the most recent
+   * message collected (opener or assistant). Feeds the extraction CLOCK and
+   * the fallback `occurredAt` stamp. Null when nothing carried a timestamp.
+   */
+  turnTimestamp: string | null
 }
 
 /**
@@ -60,6 +73,32 @@ export function findTurnOpenerMessageId(messages: MessageEvent[]): string | null
     return m.id
   }
   return null
+}
+
+/**
+ * Resolve the user-controlled character (if any) from a chat's participants,
+ * hydrated from a map of the chat's `Character` records.
+ *
+ * Quilltap is single-user per instance: at most one CHARACTER participant is
+ * marked as the user persona. When none exists — or its Character record is
+ * missing from the map — the caller simply omits the user from its subject set.
+ *
+ * Lives here because every caller is feeding {@link buildTurnTranscript}'s
+ * `userCharacter*` options, which is exactly what this returns.
+ */
+export function resolveUserCharacterParticipant(
+  participants: ChatParticipantBase[],
+  participantCharacters: Map<string, Character>,
+): { id: string; name: string; pronouns: Character['pronouns'] | null } | undefined {
+  const userCharParticipant = participants.find(
+    p => p.type === 'CHARACTER' && p.controlledBy === 'user' && p.characterId,
+  )
+  if (!userCharParticipant || userCharParticipant.type !== 'CHARACTER' || !userCharParticipant.characterId) {
+    return undefined
+  }
+  const character = participantCharacters.get(userCharParticipant.characterId)
+  if (!character) return undefined
+  return { id: character.id, name: character.name, pronouns: character.pronouns ?? null }
 }
 
 interface BuildTurnTranscriptOptions {
@@ -102,6 +141,7 @@ export function buildTurnTranscript(
   let userMessage: string | null = null
   let userSlice: TurnCharacterSlice | null = null
   let latestAssistantMessageId: string | null = null
+  let turnTimestamp: string | null = null
 
   let scanning = options.turnOpenerMessageId === null
   for (const m of messages) {
@@ -111,6 +151,7 @@ export function buildTurnTranscript(
       if (m.id === options.turnOpenerMessageId && m.role === 'USER') {
         userMessage = m.content
         scanning = true
+        turnTimestamp = m.createdAt ?? turnTimestamp
         // Promote a user-controlled opener to a first-class slice so its driver
         // forms memories. The opener's participantId authoritatively identifies
         // which user character spoke this turn (more reliable than the singular
@@ -131,6 +172,7 @@ export function buildTurnTranscript(
               characterPronouns: character.pronouns ?? null,
               text: m.content,
               contributingMessageIds: [m.id],
+              lastMessageCreatedAt: m.createdAt ?? null,
               isUserControlled: true,
             }
           }
@@ -160,6 +202,7 @@ export function buildTurnTranscript(
         ? `${existing.text}\n\n${m.content}`
         : m.content
       existing.contributingMessageIds.push(m.id)
+      existing.lastMessageCreatedAt = m.createdAt ?? existing.lastMessageCreatedAt
     } else {
       slices.set(participant.characterId, {
         characterId: character.id,
@@ -167,11 +210,13 @@ export function buildTurnTranscript(
         characterPronouns: character.pronouns ?? null,
         text: m.content,
         contributingMessageIds: [m.id],
+        lastMessageCreatedAt: m.createdAt ?? null,
       })
       sliceOrder.push(participant.characterId)
     }
 
     latestAssistantMessageId = m.id
+    turnTimestamp = m.createdAt ?? turnTimestamp
 
     if (options.extractionAnchorMessageId && m.id === options.extractionAnchorMessageId) {
       break
@@ -188,5 +233,6 @@ export function buildTurnTranscript(
       ? [userSlice, ...sliceOrder.map(id => slices.get(id)!)]
       : sliceOrder.map(id => slices.get(id)!),
     latestAssistantMessageId,
+    turnTimestamp,
   }
 }

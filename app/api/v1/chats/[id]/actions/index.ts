@@ -20,6 +20,7 @@ export { handleGetAvatars, handleSetAvatar, handleRemoveAvatar } from './avatars
 export { handleBulkReattribute } from './bulk';
 export { handleAddToolResult, handleUpdateToolSettings } from './tools';
 export { handleQueueMemories, handleExtractMemoriesDryRun } from './memories';
+export { handleRecallReplay } from './recall-replay';
 export { handleRng } from './rng';
 export { handleRunTool } from './run-tool';
 export { handleGetState, handleSetState, handleResetState } from './state';
@@ -32,6 +33,7 @@ export { handleRegenerateAvatar } from './regenerate-avatar';
 export { handleRenderConversation } from './render-conversation';
 export {
   handleActiveDocument,
+  handleOpenDocuments,
   handleRecentDocuments,
   handleAccessibleStores,
   handleOpenDocument,
@@ -46,7 +48,9 @@ export type { AccessibleStoreOption, AccessibleStoreKind, ProjectLibraryTarget }
 export { handleInsertAnnouncement } from './announcement';
 export { handleAnnouncementPreview } from './announcement-preview';
 export { handleSendMail } from './send-mail';
+export { handleMergeConversation } from './merge';
 export { handleGetMailbox } from './mailbox';
 export { handleGetPhotoAlbums } from './photo-albums';
 export type { PhotoAlbumOption, PhotoAlbumKind } from './photo-albums';
 export { handleGetGroupStores } from './group-stores';
+export { handleExportMarkdown } from './export-markdown';

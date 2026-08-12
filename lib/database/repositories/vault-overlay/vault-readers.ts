@@ -22,6 +22,7 @@ import { slugifyWardrobeTitle } from '@/lib/mount-index/character-vault';
 
 import {
   CHARACTER_PROPERTIES_JSON_PATH,
+  CHARACTER_METADATA_JSON_PATH,
   CHARACTER_IDENTITY_MD_PATH,
   CHARACTER_DESCRIPTION_MD_PATH,
   CHARACTER_MANIFESTO_MD_PATH,
@@ -33,12 +34,16 @@ import {
   CHARACTER_WARDROBE_FOLDER,
   CHARACTER_PROMPTS_FOLDER,
   CHARACTER_SCENARIOS_FOLDER,
+  CharacterVaultPropertiesSchema,
+  CharacterVaultUnavailableError,
   type CharacterVaultProperties,
+  type CharacterVaultMetadata,
   type CharacterVaultPhysicalPrompts,
   type CharacterVaultWardrobe,
 } from './schema';
 import {
   parseVaultProperties,
+  parseVaultMetadata,
   parseVaultPhysicalPrompts,
   parseLegacyWardrobeJson,
   parsePromptFile,
@@ -81,6 +86,101 @@ export async function readCharacterVaultProperties(
   const content = await readVaultTextFile(mountPointId, CHARACTER_PROPERTIES_JSON_PATH, characterId);
   if (content === null) return null;
   return parseVaultProperties(content, characterId ?? mountPointId);
+}
+
+/**
+ * Read `properties.json` for the WRITE path, distinguishing a genuinely absent
+ * file from a present-but-corrupt one.
+ *
+ * Returns `null` **only** when the file is genuinely absent (the read overlay's
+ * keystone `NOT_FOUND`); the caller then seeds fresh defaults, which is correct
+ * for a vault that has none yet. Every other failure — an unreadable store, a
+ * transient error, malformed JSON, a body the schema rejects — **throws**
+ * {@link CharacterVaultUnavailableError}.
+ *
+ * That distinction is load-bearing. The six fields this file owns (`pronouns`,
+ * `aliases`, `title`, `firstMessage`, `talkativeness`, `canChooseOutfit`) live
+ * ONLY here post-4.6 — the DB row carries none of them. The fail-soft
+ * {@link readCharacterVaultProperties} collapses "absent" and "corrupt" into
+ * `null`; a read-modify-write seed that treated a *corrupt* file as absent
+ * would seed empty defaults and permanently clobber all six. So the write path
+ * must refuse rather than seed. Mirrors `readProperties` in the project/group
+ * document-store overlay (commit `dcd9440a`), which fixed the identical shape.
+ */
+export async function readCharacterVaultPropertiesForWrite(
+  mountPointId: string,
+  characterId?: string,
+): Promise<CharacterVaultProperties | null> {
+  const charId = characterId ?? mountPointId;
+
+  let content: string;
+  try {
+    ({ content } = await readDatabaseDocument(mountPointId, CHARACTER_PROPERTIES_JSON_PATH));
+  } catch (error) {
+    if (error instanceof DatabaseStoreError && error.code === 'NOT_FOUND') {
+      // Genuinely absent — the caller may seed fresh defaults.
+      return null;
+    }
+    const detail = error instanceof Error ? error.message : String(error);
+    logger.error('Vault properties.json unreadable — refusing to seed defaults over it', {
+      mountPointId,
+      characterId: charId,
+      error: detail,
+    });
+    throw new CharacterVaultUnavailableError(
+      charId,
+      mountPointId,
+      `${CHARACTER_PROPERTIES_JSON_PATH} unparseable: ${detail}`,
+    );
+  }
+
+  let json: unknown;
+  try {
+    json = JSON.parse(content);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    logger.error('Vault properties.json unparseable — refusing to seed defaults over it', {
+      mountPointId,
+      characterId: charId,
+      error: detail,
+    });
+    throw new CharacterVaultUnavailableError(
+      charId,
+      mountPointId,
+      `${CHARACTER_PROPERTIES_JSON_PATH} unparseable: ${detail}`,
+    );
+  }
+
+  const parsed = CharacterVaultPropertiesSchema.safeParse(json);
+  if (!parsed.success) {
+    const issues = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
+    logger.error('Vault properties.json failed schema validation — refusing to seed defaults over it', {
+      mountPointId,
+      characterId: charId,
+      issues,
+    });
+    throw new CharacterVaultUnavailableError(
+      charId,
+      mountPointId,
+      `${CHARACTER_PROPERTIES_JSON_PATH} unparseable: schema validation failed (${issues})`,
+    );
+  }
+
+  return parsed.data;
+}
+
+/**
+ * Read a character's vault metadata.json — the freeform fact sheet — or null
+ * when the file is missing or isn't a JSON object. Callers substitute `{}`:
+ * "no metadata" and "an empty sheet" mean the same thing to every reader.
+ */
+export async function readCharacterVaultMetadata(
+  mountPointId: string,
+  characterId?: string,
+): Promise<CharacterVaultMetadata | null> {
+  const content = await readVaultTextFile(mountPointId, CHARACTER_METADATA_JSON_PATH, characterId);
+  if (content === null) return null;
+  return parseVaultMetadata(content, characterId ?? mountPointId, mountPointId);
 }
 
 /**

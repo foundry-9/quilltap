@@ -22,8 +22,55 @@ set -euo pipefail
 #   QUILLTAP_PORT               Host port
 #   QUILLTAP_CONTAINER_NAME     Container name
 #   QUILLTAP_IMAGE_TAG          Image tag
+#   QUILLTAP_TIMEZONE           IANA timezone (default: detected from this host)
+#   TZ                          Same; QUILLTAP_TIMEZONE wins if both are set
+#
+# The host's timezone is detected and passed to the container automatically, so
+# scheduled rooms, daily budget rollover, and "today"/"yesterday" recall follow
+# your clock rather than UTC. Override with `-e QUILLTAP_TIMEZONE=Europe/Paris`,
+# or pin the container to UTC with `-e QUILLTAP_TIMEZONE=UTC`.
 
 IMAGE="foundry9/quilltap"
+
+# Resolve this host's IANA timezone name (e.g. "America/Chicago"), or print
+# nothing if it can't be determined confidently.
+#
+# Deliberately never uses `date +%Z`: that yields an abbreviation such as "CDT",
+# which Node's ICU cannot resolve back to a zone — it would silently fall back
+# to UTC, which is the exact bug this is meant to avoid.
+detect_timezone() {
+  _tz=""
+
+  if [ -n "${QUILLTAP_TIMEZONE:-}" ]; then
+    _tz="$QUILLTAP_TIMEZONE"
+  elif [ -n "${TZ:-}" ]; then
+    _tz="$TZ"
+
+  # Node's own ICU lookup — authoritative here, because it returns exactly the
+  # name the container will resolve later. Tolerate node not being on PATH.
+  elif command -v node >/dev/null 2>&1 &&
+       _tz=$(node -p 'Intl.DateTimeFormat().resolvedOptions().timeZone' 2>/dev/null) &&
+       [ -n "$_tz" ]; then
+    :
+
+  elif [ -r /etc/timezone ]; then                       # Debian/Ubuntu
+    _tz=$(head -n1 /etc/timezone 2>/dev/null)
+  elif command -v timedatectl >/dev/null 2>&1; then     # systemd
+    _tz=$(timedatectl show --property=Timezone --value 2>/dev/null)
+
+  # Strip through "zoneinfo/" so this covers Linux (/usr/share/zoneinfo/...)
+  # and macOS (/var/db/timezone/zoneinfo/...) alike.
+  elif [ -L /etc/localtime ]; then
+    _tz=$(readlink /etc/localtime 2>/dev/null | sed -e 's|.*/zoneinfo/||')
+  fi
+
+  # Only emit something that looks like an IANA name. Filters out abbreviations
+  # ("CDT") and stray values ("localtime", "posixrules") from odd symlinks.
+  case "$_tz" in
+    UTC|Etc/*|*/*) printf '%s\n' "$_tz" ;;
+    *) ;;
+  esac
+}
 
 # Detect platform and set default data directory
 detect_defaults() {
@@ -76,7 +123,10 @@ while [[ $# -gt 0 ]]; do
     --dry-run)
       DRY_RUN=true; shift ;;
     -h|--help)
-      sed -n '2,/^$/{ s/^# \?//; p }' "$0"
+      # Print the usage block above: comment lines from line 4 until the first
+      # non-comment line. awk rather than sed — BSD sed rejects `p }` without a
+      # separator, so the old one-liner errored out on macOS instead of helping.
+      awk 'NR<4 {next} /^#/ {sub(/^# ?/,""); print; next} {exit}' "$0"
       exit 0 ;;
     *)
       echo "Unknown option: $1" >&2
@@ -106,6 +156,25 @@ if [ "$PLATFORM" = "linux" ]; then
   CMD+=(--add-host=host.docker.internal:host-gateway)
 fi
 
+# Pass the host timezone through, unless the caller already supplied one via
+# -e. An explicit --env always wins; detection only fills the gap.
+TIMEZONE=""
+TZ_EXPLICIT=false
+if [ ${#EXTRA_ENVS[@]} -gt 0 ]; then
+  for env in "${EXTRA_ENVS[@]}"; do
+    case "$env" in
+      QUILLTAP_TIMEZONE=*|TZ=*) TZ_EXPLICIT=true ;;
+    esac
+  done
+fi
+
+if [ "$TZ_EXPLICIT" = false ]; then
+  TIMEZONE="$(detect_timezone)"
+  if [ -n "$TIMEZONE" ]; then
+    CMD+=(-e "QUILLTAP_TIMEZONE=$TIMEZONE")
+  fi
+fi
+
 # Add extra environment variables
 if [ ${#EXTRA_ENVS[@]} -gt 0 ]; then
   for env in "${EXTRA_ENVS[@]}"; do
@@ -122,6 +191,13 @@ echo "Data dir:  $DATA_DIR"
 echo "Port:      $PORT"
 echo "Container: $CONTAINER_NAME"
 echo "Image:     ${IMAGE}:${IMAGE_TAG}"
+if [ "$TZ_EXPLICIT" = true ]; then
+  echo "Timezone:  (set explicitly via --env)"
+elif [ -n "$TIMEZONE" ]; then
+  echo "Timezone:  $TIMEZONE (detected)"
+else
+  echo "Timezone:  UTC (could not detect host timezone)"
+fi
 echo ""
 
 if [ "$DRY_RUN" = true ]; then

@@ -9,6 +9,7 @@ import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { getApiKeyForCheapLLMSelection } from '@/lib/services/api-key.service'
 import { getErrorMessage } from '@/lib/error-utils'
 import { logger } from '@/lib/logger'
+import { withTimeout } from '@/lib/promise-timeout'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import type { LLMLogType } from '@/lib/schemas/llm-log.types'
 import type { CheapLLMTaskResult, UncensoredFallbackOptions } from './types'
@@ -22,6 +23,88 @@ interface ProviderResponse {
     promptTokens: number
     completionTokens: number
     totalTokens: number
+  }
+}
+
+/**
+ * Wall-clock budget for a single cheap-LLM attempt against a remote provider.
+ *
+ * Cheap tasks are small — a few hundred completion tokens — and several of them
+ * (the memory recap in particular) are awaited *inline* on a user-visible turn.
+ * Provider SDKs default to a 10-minute request timeout, so a provider that
+ * accepts the connection and then never answers wedges the whole turn behind it
+ * with no log output. This budget abandons the attempt instead: the task fails
+ * soft, its caller drops the optional content, and the turn moves on.
+ */
+export const CHEAP_LLM_TASK_TIMEOUT_MS = 45_000
+
+/**
+ * Longer budget for local providers (Ollama and friends), where a cold model
+ * load or a CPU-bound machine can legitimately take far longer than a remote
+ * API would. A local endpoint that is merely slow is still working.
+ */
+export const CHEAP_LLM_TASK_TIMEOUT_LOCAL_MS = 180_000
+
+/**
+ * How far inside the caller's deadline the provider's own budget sits.
+ *
+ * The provider should give up first so the failure arrives as an ordinary
+ * provider error with the socket closed, rather than as our deadline firing
+ * while an orphaned request runs on.
+ */
+const PROVIDER_BUDGET_HEADROOM_MS = 5_000
+
+/** The hard per-request budget handed to the provider for a given selection. */
+function providerBudgetFor(selection: CheapLLMSelection): number {
+  const deadline = selection.isLocal ? CHEAP_LLM_TASK_TIMEOUT_LOCAL_MS : CHEAP_LLM_TASK_TIMEOUT_MS
+  return deadline - PROVIDER_BUDGET_HEADROOM_MS
+}
+
+/**
+ * Error thrown when a cheap-LLM attempt exceeds its deadline. Distinct from a
+ * provider error so callers (and the logs) can tell "the provider never
+ * answered" apart from "the provider said no".
+ */
+export class CheapLLMTimeoutError extends Error {
+  constructor(public readonly timeoutMs: number, taskType?: string) {
+    super(`Cheap LLM task${taskType ? ` (${taskType})` : ''} exceeded its ${timeoutMs}ms budget`)
+    this.name = 'CheapLLMTimeoutError'
+  }
+}
+
+/**
+ * Bounds a cheap-LLM attempt by its deadline, and says so in the log when it
+ * fires — a stall used to be completely silent, which is what made the original
+ * incident so hard to see.
+ *
+ * The abandoned request is left to finish on its own; the provider SDK owns its
+ * socket and gives up on its own schedule. We only stop *waiting* on it, which
+ * is the part that blocks the turn.
+ */
+async function withDeadline<T>(
+  work: Promise<T>,
+  timeoutMs: number,
+  taskType: string | undefined,
+  context: Record<string, unknown>
+): Promise<T> {
+  const startedAt = Date.now()
+
+  // The abandoned attempt must not surface as an unhandled rejection when it
+  // eventually fails on its own, long after we stopped listening.
+  void work.catch(() => {})
+
+  try {
+    return await withTimeout(work, timeoutMs, () => new CheapLLMTimeoutError(timeoutMs, taskType))
+  } catch (error) {
+    if (error instanceof CheapLLMTimeoutError) {
+      logger.warn('[CheapLLM] Abandoned a stalled provider call', {
+        ...context,
+        taskType,
+        timeoutMs,
+        elapsed: Date.now() - startedAt,
+      })
+    }
+    throw error
   }
 }
 
@@ -57,6 +140,9 @@ function mapTaskTypeToLogType(taskType?: string): LLMLogType {
     'resolve-character-appearances': 'APPEARANCE_RESOLUTION',
     'sanitize-appearance': 'APPEARANCE_RESOLUTION',
     'scene-state-tracking': 'SCENE_STATE_TRACKING',
+    'answer-confirmation': 'ANSWER_CONFIRMATION',
+    'answer-reaffirmation': 'ANSWER_CONFIRMATION',
+    'custom-tool-consult': 'CUSTOM_TOOL_CONSULT',
   }
   return mapping[taskType || ''] || 'SUMMARIZATION'
 }
@@ -88,7 +174,12 @@ async function sendToProvider(
   const profileKey = `${selection.provider}:${selection.modelName}`
   const effectiveMaxTokens = Math.max(maxTokens ?? 2048, 2048)
 
-  const logCall = (response: LLMResponse, temperature?: number) => {
+  // `durationMs` is the wall-clock of the provider call this row describes.
+  // This shared path covers MEMORY_EXTRACTION, TITLE_GENERATION, SUMMARIZATION,
+  // CONTEXT_COMPRESSION, SCENE_STATE_TRACKING and IMAGE_PROMPT_CRAFTING — a
+  // large share of all llm_logs rows — so leaving it null used to hollow out
+  // every latency average the Almanack draws.
+  const logCall = (response: LLMResponse, temperature: number | undefined, durationMs: number) => {
     logLLMCall({
       userId,
       type: mapTaskTypeToLogType(taskType),
@@ -97,6 +188,7 @@ async function sendToProvider(
       characterId,
       provider: selection.provider,
       modelName: selection.modelName,
+      connectionProfileId: selection.connectionProfileId ?? null,
       request: {
         messages: messages.map(m => ({ role: m.role, content: m.content })),
         ...(temperature !== undefined ? { temperature } : {}),
@@ -106,6 +198,7 @@ async function sendToProvider(
         content: response.content,
       },
       usage: response.usage,
+      durationMs,
     }).catch(err => {
       logger.warn('Failed to log cheap LLM call', {
         error: err instanceof Error ? err.message : String(err)
@@ -119,23 +212,33 @@ async function sendToProvider(
   const strictMaxTokens = true
   const cacheKey = buildCharacterCacheKey(characterId)
 
+  const baseParams = {
+    messages,
+    model: selection.modelName,
+    maxTokens: effectiveMaxTokens,
+    strictMaxTokens,
+    cacheKey,
+    profileParameters: selection.profileParameters,
+    // Give the provider a hard budget of its own, slightly inside the caller's
+    // deadline, so a stalled request is aborted at the socket rather than left
+    // running while we walk away from it. `withDeadline` remains the backstop
+    // for providers that ignore this.
+    requestTimeoutMs: providerBudgetFor(selection),
+  }
+
   // Check if we already know this profile doesn't support custom temperature
   if (profilesWithoutCustomTemp.has(profileKey)) {
-    const response: LLMResponse = await provider.sendMessage(
-      { messages, model: selection.modelName, maxTokens: effectiveMaxTokens, strictMaxTokens, cacheKey },
-      apiKey
-    )
-    logCall(response)
+    const startedAt = Date.now()
+    const response: LLMResponse = await provider.sendMessage(baseParams, apiKey)
+    logCall(response, undefined, Date.now() - startedAt)
     return { content: response.content, usage: response.usage }
   }
 
   // Try with lower temperature for more consistent outputs
+  const firstAttemptStartedAt = Date.now()
   try {
-    const response: LLMResponse = await provider.sendMessage(
-      { messages, model: selection.modelName, temperature: 0.3, maxTokens: effectiveMaxTokens, strictMaxTokens, cacheKey },
-      apiKey
-    )
-    logCall(response, 0.3)
+    const response: LLMResponse = await provider.sendMessage({ ...baseParams, temperature: 0.3 }, apiKey)
+    logCall(response, 0.3, Date.now() - firstAttemptStartedAt)
     return { content: response.content, usage: response.usage }
   } catch (error) {
     // If temperature is not supported, cache it and retry with default temperature
@@ -143,11 +246,9 @@ async function sendToProvider(
     if (errorMessage.includes('temperature') || errorMessage.includes('does not support')) {
       profilesWithoutCustomTemp.add(profileKey)
 
-      const response: LLMResponse = await provider.sendMessage(
-        { messages, model: selection.modelName, maxTokens: effectiveMaxTokens, strictMaxTokens, cacheKey },
-        apiKey
-      )
-      logCall(response)
+      const retryStartedAt = Date.now()
+      const response: LLMResponse = await provider.sendMessage(baseParams, apiKey)
+      logCall(response, undefined, Date.now() - retryStartedAt)
       return { content: response.content, usage: response.usage }
     }
     throw error
@@ -194,6 +295,9 @@ function shouldAttemptUncensoredFallback(
     baseUrl: uncensoredProfile.baseUrl || undefined,
     connectionProfileId: uncensoredProfile.id,
     isLocal: false,
+    profileParameters: uncensoredProfile.parameters && typeof uncensoredProfile.parameters === 'object'
+      ? (uncensoredProfile.parameters as Record<string, unknown>)
+      : undefined,
   }
 }
 
@@ -212,8 +316,19 @@ export async function executeCheapLLMTask<T>(
   maxTokens?: number,
   characterId?: string
 ): Promise<CheapLLMTaskResult<T>> {
+  // Each attempt gets its own budget rather than sharing one across the task:
+  // the uncensored fallback below only fires after a *completed* call came back
+  // empty, so it is a fresh attempt and deserves a fresh deadline.
+  const deadlineFor = (s: CheapLLMSelection) =>
+    s.isLocal ? CHEAP_LLM_TASK_TIMEOUT_LOCAL_MS : CHEAP_LLM_TASK_TIMEOUT_MS
+
   try {
-    let response = await sendToProvider(selection, messages, userId, taskType, chatId, messageId, maxTokens, characterId)
+    let response = await withDeadline(
+      sendToProvider(selection, messages, userId, taskType, chatId, messageId, maxTokens, characterId),
+      deadlineFor(selection),
+      taskType,
+      { chatId, characterId, provider: selection.provider, model: selection.modelName }
+    )
 
     // Check if we should retry with an uncensored provider
     const uncensoredSelection = shouldAttemptUncensoredFallback(response.content, selection, uncensoredFallback)
@@ -227,7 +342,12 @@ export async function executeCheapLLMTask<T>(
         uncensoredModel: uncensoredSelection.modelName,
       })
 
-      const retryResponse = await sendToProvider(uncensoredSelection, messages, userId, taskType, chatId, messageId, maxTokens, characterId)
+      const retryResponse = await withDeadline(
+        sendToProvider(uncensoredSelection, messages, userId, taskType, chatId, messageId, maxTokens, characterId),
+        deadlineFor(uncensoredSelection),
+        taskType,
+        { chatId, characterId, provider: uncensoredSelection.provider, model: uncensoredSelection.modelName }
+      )
 
       if (retryResponse.content.trim() === '') {
         throw new Error(`Empty response from both safe provider (${selection.provider}/${selection.modelName}) and uncensored provider (${uncensoredSelection.provider}/${uncensoredSelection.modelName})`)

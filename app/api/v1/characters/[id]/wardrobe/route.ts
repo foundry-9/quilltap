@@ -6,7 +6,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware';
+import { createContextParamsHandler, exists } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 import { notFound, serverError, created } from '@/lib/api/responses';
@@ -27,12 +27,12 @@ const createWardrobeItemSchema = z.object({
 });
 
 // GET /api/v1/characters/[id]/wardrobe
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {
       const character = await repos.characters.findById(id);
 
-      if (!checkOwnership(character, user.id)) {
+      if (!exists(character)) {
         return notFound('Character');
       }
 
@@ -46,11 +46,11 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 );
 
 // POST /api/v1/characters/[id]/wardrobe
-export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+export const POST = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     const character = await repos.characters.findById(id);
 
-    if (!checkOwnership(character, user.id)) {
+    if (!exists(character)) {
       return notFound('Character');
     }
 

@@ -18,7 +18,7 @@ FROM build-base AS deps
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-COPY scripts/fix-node-pty-permissions.js ./scripts/fix-node-pty-permissions.js
+COPY scripts/fix-node-pty-permissions.js scripts/sync-pdf-worker.js ./scripts/
 RUN npm ci
 
 # Install production-only dependencies (for the final image)
@@ -26,7 +26,7 @@ FROM build-base AS deps-prod
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-COPY scripts/fix-node-pty-permissions.js ./scripts/fix-node-pty-permissions.js
+COPY scripts/fix-node-pty-permissions.js scripts/sync-pdf-worker.js ./scripts/
 RUN npm ci --omit=dev && npm rebuild
 
 # Development stage
@@ -35,7 +35,7 @@ WORKDIR /app
 
 # Copy package files
 COPY package.json package-lock.json ./
-COPY scripts/fix-node-pty-permissions.js ./scripts/fix-node-pty-permissions.js
+COPY scripts/fix-node-pty-permissions.js scripts/sync-pdf-worker.js ./scripts/
 
 # Install all dependencies (including dev dependencies for development)
 RUN npm ci
@@ -59,7 +59,12 @@ RUN apt-get update \
       -subj "/C=US/ST=Development/L=Local/O=Quilltap Dev/OU=Dev/CN=localhost" \
       -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
 
+# Same entrypoint as production, so the timezone knobs stay in lockstep here too
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
 EXPOSE 3000
+ENTRYPOINT ["entrypoint.sh"]
 CMD ["npm", "run", "dev"]
 
 # Build stage
@@ -120,11 +125,18 @@ COPY --from=builder --chown=nextjs:nodejs /app/plugins/dist ./plugins/dist
 COPY package.json package-lock.json ./
 
 # Install runtime tools:
-#   - zip + unzip — backup/restore (lib/backup/restore-service.ts shells out to `unzip`)
+#   - zip + unzip — backup/restore (lib/backup/restore/archive.ts and
+#     lib/backup/backup-service.ts shell out to `unzip` / `zip`)
 #   - bash — required by Ariel's terminal (PTY hard-codes /bin/bash)
-#   - git, curl, wget, jq — common tools available to the LLM shell agent
+#
+# git/curl/wget/jq were previously pre-installed here as a convenience toolbox for
+# the LLM shell agent. They were removed for CVE surface: `git` drags in Debian's
+# perl (2 CRITICAL + 2 HIGH, all "not fixed" in both bookworm and trixie) and
+# curl/git pull libssh2 (CVE-2025-15661 HIGH, no fix). None of them are on a code
+# path — the `curl` *tool* is qtap-plugin-curl, which uses Node's fetch(), not the
+# binary. Only a human/agent typing at Ariel's bash prompt loses them.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends bash zip unzip git curl wget jq \
+    && apt-get install -y --no-install-recommends bash zip unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy pre-compiled production node_modules from build stage (native modules already built)
@@ -141,6 +153,26 @@ RUN ln -s /app/packages/quilltap/bin/quilltap.js /usr/local/bin/quilltap
 # Copy entrypoint script
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# --- Attack-surface reduction (must stay LAST: no apt-get or npm may follow) ---
+#
+# 1. npm / npx / corepack / yarn ship in the node base image and account for one
+#    CRITICAL and six HIGH findings (tar, brace-expansion, undici, ip-address —
+#    npm's own bundled node_modules). The container's only command is
+#    `node server.js`, and plugin installs go through lib/plugins/registry-client.ts,
+#    which downloads and extracts registry tarballs over HTTP rather than shelling
+#    out to the npm CLI. Nothing at runtime executes any of these binaries.
+#
+# 2. Debian's perl carries 2 CRITICAL + 2 HIGH with no fix available in bookworm
+#    *or* trixie, so no base-image bump clears them. perl-base is Essential, hence
+#    --force-remove-essential. Nothing in Quilltap invokes perl; it was only present
+#    as a dependency of the git package removed above.
+RUN rm -rf /usr/local/lib/node_modules/npm \
+           /usr/local/lib/node_modules/corepack \
+           /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+           /usr/local/bin/yarn /usr/local/bin/yarnpkg /opt/yarn-v* \
+    && dpkg --purge --force-remove-essential --force-depends \
+           perl perl-base perl-modules-5.36 libperl5.36 2>/dev/null || true
 
 USER nextjs
 

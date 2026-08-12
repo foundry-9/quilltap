@@ -10,7 +10,7 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { Readable } from 'stream';
-import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
+import { createContextParamsHandler } from '@/lib/api/middleware';
 import { retrieveTemporaryBackup } from '@/lib/backup/temporary-storage';
 import { logger } from '@/lib/logger';
 import { notFound, serverError } from '@/lib/api/responses';
@@ -18,7 +18,7 @@ import { notFound, serverError } from '@/lib/api/responses';
 /**
  * GET /api/v1/system/backup/[id] - Download a backup
  */
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   async (req, { user }, { id }) => {
     try {
       // Look up temporary backup (also removes it from storage)

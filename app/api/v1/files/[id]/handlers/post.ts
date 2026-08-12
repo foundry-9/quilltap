@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { badRequest, notFound } from '@/lib/api/responses';
 import { handleMoveFile, handlePromoteFile } from '../actions';
@@ -7,7 +7,7 @@ import { FILE_ITEM_POST_ACTIONS, type FileItemPostAction } from '../shared';
 
 export async function handlePost(
   request: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   fileId: string
 ): Promise<NextResponse> {
   const file = await ctx.repos.files.findById(fileId);

@@ -30,7 +30,10 @@
 // 1 — initial chatId-scoped structure (post-commit 68a9eba6).
 // 2 — re-keyed to per-character (persona block became the actual prefix);
 //     see docs/developer/features/per-character-prompt-caching.md.
-export const PROMPT_CACHE_STRUCTURE_VERSION = 2
+// 3 — Taboo section added to the universal portion of the system prompt
+//     (between the math note and tool instructions); see
+//     docs/developer/features/complete/taboo.md.
+export const PROMPT_CACHE_STRUCTURE_VERSION = 3
 
 export function buildCharacterCacheKey(characterId: string | undefined): string | undefined {
   if (!characterId) return undefined

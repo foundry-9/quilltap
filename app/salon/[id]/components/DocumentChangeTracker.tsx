@@ -10,6 +10,11 @@
  * changes, so both sides of the diff use the same representation — avoiding false
  * positives from comparing raw markdown against Lexical's plain-text output.
  *
+ * The changed set is derived from a proper line diff (Myers shortest-edit
+ * script), not a positional index comparison, so inserting or deleting a block
+ * near the top no longer marks every block below it as changed — only the blocks
+ * that are genuinely new or modified light up.
+ *
  * Scriptorium Phase 3.6
  *
  * @module app/salon/[id]/components/DocumentChangeTracker
@@ -18,6 +23,7 @@
 import { useEffect, useRef } from 'react'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
 import { $getRoot } from 'lexical'
+import { changedBlockIndices } from '@/lib/doc-edit/line-diff'
 import type { LinePosition } from './DocumentGutter'
 
 interface DocumentChangeTrackerProps {
@@ -79,16 +85,11 @@ export default function DocumentChangeTracker({
 
         const baselineTexts = baselineBlockTextsRef.current
 
-        // Diff: a block is changed if its text differs from the corresponding baseline block
-        const changedSet = new Set<number>()
-        const maxLen = Math.max(blockTexts.length, baselineTexts.length)
-        for (let i = 0; i < maxLen; i++) {
-          const current = blockTexts[i] ?? ''
-          const baseline = baselineTexts[i] ?? ''
-          if (current !== baseline) {
-            changedSet.add(i)
-          }
-        }
+        // Diff the current blocks against the baseline with a real line diff, so
+        // only blocks that are genuinely new or modified are marked — a block
+        // inserted or removed above no longer shifts everything below into the
+        // changed set.
+        const changedSet = changedBlockIndices(baselineTexts, blockTexts)
 
         onChangedLines(changedSet)
 

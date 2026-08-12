@@ -19,6 +19,7 @@ import type { RoleplayTemplate } from '@/lib/schemas/template.types'
 interface ModelBehaviorCardProps {
   project: Project
   onAgentModeChange: (enabled: boolean | null) => void
+  onAnswerConfirmationOverrideChange: (value: 'ON' | 'OFF' | null) => void
   onDefaultRoleplayTemplateChange: (templateId: string | null) => void
   expanded: boolean
   onToggle: () => void
@@ -29,6 +30,7 @@ interface ModelBehaviorCardProps {
 export function ModelBehaviorCard({
   project,
   onAgentModeChange,
+  onAnswerConfirmationOverrideChange,
   onDefaultRoleplayTemplateChange,
   expanded,
   onToggle,
@@ -104,6 +106,26 @@ export function ModelBehaviorCard({
               <option value="inherit">Inherit from global/character</option>
               <option value="enabled">Enabled by default</option>
               <option value="disabled">Disabled by default</option>
+            </select>
+          </div>
+
+          {/* Answer Confirmation */}
+          <div className="p-3 rounded-lg qt-border qt-bg-surface">
+            <h4 className="qt-label text-foreground mb-1">Answer Confirmation</h4>
+            <p className="qt-text-xs qt-text-secondary mb-2">
+              Vet looked-up answers in this project&apos;s chats against what the character actually knew this turn. On enables it for every chat here; individual chats may still overrule.
+            </p>
+            <select
+              value={project.answerConfirmationOverride ?? 'inherit'}
+              onChange={(e) => {
+                const value = e.target.value
+                onAnswerConfirmationOverrideChange(value === 'inherit' ? null : (value as 'ON' | 'OFF'))
+              }}
+              className="qt-input w-full max-w-xs"
+            >
+              <option value="inherit">Inherit from global</option>
+              <option value="ON">Enabled by default</option>
+              <option value="OFF">Disabled by default</option>
             </select>
           </div>
 

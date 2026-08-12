@@ -26,6 +26,8 @@ export interface RestoreState {
   loadingPreview: boolean
   restoreMode: RestoreMode
   confirmReplace: boolean
+  /** Replace mode: spare archived-character bundles from the pre-restore wipe. */
+  keepArchiveBundles: boolean
   restoring: boolean
   restoreSummary: RestoreSummary | null
   error: string | null

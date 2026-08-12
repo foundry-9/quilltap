@@ -89,9 +89,15 @@ export async function reconcileFilesystem(): Promise<void> {
         // Record exists — check if size or folderPath needs updating
         const dbRecord = dbByStorageKey.get(scannedFile.relativePath);
 
-        // Derive expected folderPath from the storage key
+        // Derive expected folderPath from the storage key. BACKUP and ARCHIVE
+        // rows keep curated folder paths ('/backups', '/archives') that
+        // deliberately do NOT mirror the physical storage key — "correcting"
+        // them here would strip an archived-character bundle out of its shelf
+        // folder on every boot.
+        const isSystemShelf = dbRecord.category === 'ARCHIVE' || dbRecord.category === 'BACKUP';
         const expectedFolderPath = deriveFolderPathFromStorageKey(scannedFile.relativePath);
-        const folderPathMismatch = (dbRecord.folderPath || '/') !== expectedFolderPath;
+        const folderPathMismatch =
+          !isSystemShelf && (dbRecord.folderPath || '/') !== expectedFolderPath;
 
         if (dbRecord.size !== scannedFile.size || folderPathMismatch) {
           try {
@@ -211,7 +217,10 @@ export async function reconcileFilesystem(): Promise<void> {
     const referencedFileIds = new Set<string>();
     let recordsPreserved = 0;
     try {
-      const allCharacters = await repos.characters.findByUserId(userId);
+      // Raw rows: the overlay's findByUserId drops characters whose vault is
+      // broken, and those are exactly the rows whose file references we can
+      // least afford to lose here.
+      const allCharacters = await repos.characters.findAllRaw();
       for (const char of allCharacters) {
         if (char.defaultImageId) {
           referencedFileIds.add(char.defaultImageId);
@@ -222,6 +231,17 @@ export async function reconcileFilesystem(): Promise<void> {
               referencedFileIds.add(override.imageId);
             }
           }
+        }
+        // Archived-character bundle (and the pre-revision tombstone
+        // thumbnail): the row stores the PLAINTEXT sha256 while the disk
+        // bytes are encrypted, so the sha256 cross-match can never rescue it
+        // — without this it would be deleted whenever the bytes are absent
+        // at boot (e.g. a cloud-sync dataless file), dangling archiveFileId.
+        if (char.archiveFileId) {
+          referencedFileIds.add(char.archiveFileId);
+        }
+        if (char.archivedAvatarFileId) {
+          referencedFileIds.add(char.archivedAvatarFileId);
         }
       }
     } catch (err) {

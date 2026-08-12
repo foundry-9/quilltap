@@ -46,23 +46,28 @@ quilltap docs embed <mount> [path] [--force] [--wait]
 quilltap docs write [--force] <mount> <path> [file]  # Stdin or file → mount
 quilltap docs delete <mount> <path>                  # Idempotent file delete
 quilltap docs mkdir <mount> <path>                   # Idempotent folder create
-quilltap docs move <srcMount> <srcPath> <dstMount> <dstPath>           # Move (hard-link where possible)
-quilltap docs copy [--force] <srcMount> <srcPath> <dstMount> <dstPath> # Copy (hard-link unless --force)
+quilltap docs move <srcMount> <srcPath> <dstMount> <dstPath>           # Move (relocates the entry; no byte copy)
+quilltap docs copy [--force] <srcMount> <srcPath> <dstMount> <dstPath> # Copy (independent document)
+quilltap docs link <srcMount> <srcPath> <dstMount> <dstPath>           # Hard link (one document, two addresses)
 ```
 
 ### Hard Links, Byte Copies, and Verification
 
-`move` and `copy` use hard links whenever they can — between two database-backed mounts, by way of a new entry in the `doc_mount_file_links` table pointing at the same content row; between two filesystem mounts on the same device, by way of `link(2)`. When that is impossible — across storage types, across devices, or simply because you asked for `copy --force` — the CLI falls back to a real byte copy.
+`link` is the one command that makes two addresses into **one document**. Between two database-backed mounts it adds an entry to `doc_mount_file_links` pointing at the existing content row and enrols both entries in a link group; between two filesystem mounts on the same device it calls `link(2)` and records the same grouping. Thereafter an edit through either address is an edit to both — the content row is repointed for every member of the group, and each member's chunks and embeddings are rebuilt. Cross-storage and cross-device links are refused outright rather than quietly degraded to a copy; that refusal is the entire point of `link` as against `copy`.
 
-Every write — `write`, `move`, and `copy` alike — computes a SHA-256 on both ends and refuses to declare success unless the two digests agree. Hard-linked files match trivially; byte copies match because the bytes were faithfully transcribed.
+`move` and `copy` never establish such a relationship. `move` simply relocates the existing entry. `copy` produces a genuinely independent document, which — because the store files bytes by their fingerprint — shares a content row with its original until one side or the other is written, at which point they part company. This is also why two unrelated documents that happen to be byte-identical are not linked in any meaningful sense: they share storage, not identity.
 
-`write` and `copy` both honour `--force`. For `write`, the flag means "overwrite the destination if it already exists." For `copy`, it additionally means "skip the hard-link path and copy bytes for real."
+Every write — `write`, `move`, `copy`, and `link` alike — computes a SHA-256 on both ends and refuses to declare success unless the two digests agree. Linked files match trivially; byte copies match because the bytes were faithfully transcribed.
+
+`write` and `copy` both honour `--force`. For `write`, the flag means "overwrite the destination if it already exists." For `copy`, it additionally means "skip the shared-content path and copy bytes for real" — the end state is the same either way.
+
+Deleting one address of a linked pair leaves the survivor an ordinary unlinked document.
 
 ### A POSIX-flavoured Listing — `ls` and `dir`
 
 `quilltap docs ls <mount> [path]` (with the alias `dir`, for those who came up on the other side of the operating-system aisle) produces a listing arranged after the long-form `ls -l`: a type indicator, a hard-link count, the file size, the last-modified timestamp, two slim status columns (about text extraction and embedding state), and the entry's name. Folders carry a trailing slash and report `-` for the numeric/state columns, since folders in this universe are not first-class hard-link targets. Without a `[path]` argument, the listing is rooted at the top of the mount; with one, you may name either a folder (to inspect its contents) or a file (to inspect it alone).
 
-The `links` column counts the hard-link siblings to the underlying content row — every `doc_mount_file_links` entry that shares the file's `fileId`. A file with a `links` of `1` is unique. A `2` indicates one other entry somewhere; a `20` indicates considerable popularity.
+The `links` column counts the **deliberate** hard links to the file — the other addresses of the same document, established with `docs link`. A file with a `links` of `1` stands alone. A `2` indicates one other address somewhere; a `20` indicates considerable popularity. Entries that merely share storage with an unrelated byte-identical document are not counted, since they are not links: editing one would leave the other untouched, and reporting them as links was thoroughly misleading. Pass `--links` to have the other addresses listed beneath each entry.
 
 The `text` column describes the file's textual representation, in a single character:
 
@@ -198,12 +203,15 @@ cat draft.md | quilltap docs write --force notes today.md
 # Idempotent folder creation — running twice is harmless
 quilltap docs mkdir notes 2026/may
 
-# Move a file from drafts to notes, hard-linking where the data model allows
+# Move a file from drafts to notes
 quilltap docs move drafts foo.md notes 2026/foo.md
 
-# Copy with a hard link (default), then again forcing a real byte copy
+# Copy — an independent document from here on
 quilltap docs copy notes today.md archive 2026-05/today.md
 quilltap docs copy --force notes today.md archive 2026-05/today.copy.md
+
+# Hard link — ONE document at two addresses; edit either, both change
+quilltap docs link notes today.md archive 2026-05/today.md
 
 # Idempotent delete
 quilltap docs delete notes today.md
@@ -285,6 +293,20 @@ quilltap docs status --json                           # structured output
 ```
 
 Each mount block reports counts of text-native files, extracted files, files still pending extraction, files where extraction failed, plus chunk totals and embedding state. When any "pending" or "failed" rows exist, the oldest few are listed by relative path and timestamp — the same data that drives the `~` and `!` marks in `docs ls`, lifted up to instance-wide scale.
+
+## Container Passages — `docker-mounts`
+
+A container sees only the host paths it was handed at creation. Database-backed stores ride along inside the data directory; filesystem and Obsidian stores point elsewhere on your drive and must be passed through expressly, or they are simply absent within the container.
+
+```bash
+quilltap docs docker-mounts --instance friday              # a table for human eyes
+quilltap docs docker-mounts --instance friday --format args # -v flags, one per line
+quilltap docs docker-mounts --instance friday --format json # the whole plan, structured
+```
+
+The reckoning is more considered than a list of paths. Several stores sharing one vault earn a single passage between them; a store nested inside another already passed through is left alone, as binding both would shadow the parent's view of the child. A path that does not exist on this host is *skipped and reported* rather than passed through — Docker would otherwise conjure an empty directory in its place and present a hollow store as a healthy one. On macOS, a path outside Docker Desktop's shared regions earns a warning; on Linux, so does the matter of file ownership. Windows, where container paths cannot mirror host paths, is declined outright rather than half-served.
+
+With `--format args`, only the flags reach standard output and every remark goes to standard error, so a start script may splice the result straight into its command without sifting prose from instruction. This is precisely what `npm run start:docker` does on your behalf; the subcommand exists for those who prefer to see the arrangements before they are made, or who assemble their own `docker run` by hand.
 
 ## SQL Against the Mount-Index Database
 

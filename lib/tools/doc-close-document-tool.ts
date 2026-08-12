@@ -11,6 +11,18 @@ import { zodToOpenAISchema } from './zod-to-openai-schema';
  * Zod schema for the doc_close_document tool's input.
  */
 export const docCloseDocumentToolInputSchema = z.object({
+  path: z
+    .string()
+    .describe('Which open document to close, by file path. Optional when only one document is open; omit to close the most recently opened document.')
+    .optional(),
+  scope: z
+    .enum(['project', 'document_store', 'general'])
+    .describe('Scope of the target document, matched alongside path/mount_point when several documents are open.')
+    .optional(),
+  mount_point: z
+    .string()
+    .describe('Mount point of the target document (for document_store scope), matched alongside path when several documents are open.')
+    .optional(),
   reason: z
     .string()
     .describe('Optional reason for closing the document. Shown to the user as a system note.')
@@ -25,8 +37,9 @@ export type DocCloseDocumentInput = z.infer<typeof docCloseDocumentToolInputSche
 /**
  * Validates input for doc_close_document tool.
  */
-export function validateDocCloseDocumentInput(input: unknown): input is DocCloseDocumentInput {
-  return docCloseDocumentToolInputSchema.safeParse(input).success;
+export function validateDocCloseDocumentInput(input: unknown): DocCloseDocumentInput | null {
+  const parsed = docCloseDocumentToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 export const docCloseDocumentToolDefinition = {
@@ -34,7 +47,7 @@ export const docCloseDocumentToolDefinition = {
   function: {
     name: 'doc_close_document',
     description:
-      'Close the Document Mode editor pane and return to the normal chat layout. Any pending changes are saved automatically before closing. The document state is cached for the session — reopening the same document does not require a full reload.',
+      'Close one open Document Mode editor pane. Any pending changes are saved automatically before closing. Several documents may be open at once — pass `path` (and `scope`/`mount_point` if needed) to choose which one; omit it to close the most recently opened document. The document state is cached for the session — reopening it does not require a full reload.',
     parameters: zodToOpenAISchema(docCloseDocumentToolInputSchema),
   },
 };

@@ -12,3 +12,11 @@ export {
   OpenAICompatibleProvider,
   type OpenAICompatibleProviderConfig,
 } from './openai-compatible';
+
+export {
+  DEFAULT_REQUEST_TIMEOUT_MS,
+  resolveRequestTimeoutMs,
+  buildSdkRequestOptions,
+  buildSdkClientOptions,
+  buildRequestAbortSignal,
+} from './request-budget';

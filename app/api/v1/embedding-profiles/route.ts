@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedHandler, AuthenticatedContext, enrichWithApiKey, enrichWithTags } from '@/lib/api/middleware';
+import { createContextHandler, RequestContext, enrichWithApiKey, enrichWithTags } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { successResponse, created, notFound, badRequest, serverError } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
@@ -27,7 +27,7 @@ import { isLocalEmbeddingProvider } from '@quilltap/plugin-types';
  * GET /api/v1/embedding-profiles?action=list-models - List available models
  * GET /api/v1/embedding-profiles?action=list-providers - List available providers
  */
-export const GET = createAuthenticatedHandler(async (req, context) => {
+export const GET = createContextHandler(async (req, context) => {
   const { user, repos } = context;
   const action = getActionParam(req);
 
@@ -129,7 +129,7 @@ function handleListProviders() {
  * Handle fetch-models action
  * Dynamically fetches installed models from the provider (e.g., Ollama /api/tags)
  */
-async function handleFetchModels(req: NextRequest, context: AuthenticatedContext) {
+async function handleFetchModels(req: NextRequest, context: RequestContext) {
   try {
     const { searchParams } = req.nextUrl;
     const provider = searchParams.get('provider')?.toUpperCase();
@@ -195,7 +195,7 @@ async function handleFetchModels(req: NextRequest, context: AuthenticatedContext
 /**
  * Handle list-models action
  */
-async function handleListModels(req: NextRequest, context: AuthenticatedContext) {
+async function handleListModels(req: NextRequest, context: RequestContext) {
   try {
     const { searchParams } = req.nextUrl;
     const provider = searchParams.get('provider')?.toUpperCase();
@@ -256,7 +256,7 @@ async function handleListModels(req: NextRequest, context: AuthenticatedContext)
 /**
  * POST /api/v1/embedding-profiles - Create a new embedding profile
  */
-export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
+export const POST = createContextHandler(async (req, { user, repos }) => {
   try {
     const body = await req.json();
     const {

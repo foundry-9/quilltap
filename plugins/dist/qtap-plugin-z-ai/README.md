@@ -65,6 +65,30 @@ await provider.sendMessage({
 
 The plugin adds Z.AI's native `web_search` tool alongside any function tools you supply. You do not need to define a `web_search` function yourself.
 
+## Reasoning effort
+
+The connection-profile editor exposes a **Reasoning Effort** option that maps to
+Z.AI's `reasoning_effort` request parameter. It is **glm-5.2-only** (the plugin
+gates it to glm-5.2 and any newer generation — glm-5.3, glm-6, revisioned ids
+like `glm-5.2-0626` — and never forwards it to glm-5.1, glm-5, glm-5-turbo, the
+4.x line, or vision models), and only takes effect when thinking is enabled.
+
+Z.AI's mapping is coarse: `low`/`medium` fold up to `high`, `xhigh` folds to
+`max`, and `minimal`/`none` effectively skip thinking. The editor therefore
+exposes only the distinct levels — `(model default)`, `Minimal`, `High`, `Max`.
+
+**Default-`high` behavior:** glm-5.2 thinks compulsorily — its `thinking` field
+defaults to enabled server-side, and the API's own `reasoning_effort` default is
+`max`, the most expensive setting. To curb runaway thinking-token usage, the
+plugin sends `reasoning_effort: 'high'` for glm-5.2 whenever thinking is **not
+explicitly disabled** and the profile hasn't set an explicit effort. So a
+profile left at `(model default)` still gets `high`, not `max`. Only choosing
+**Disabled** thinking (or an explicit effort) overrides this.
+
+Note that effort alone does not hard-cap output: reasoning still counts against
+`max_tokens`, and hitting that ceiling yields `finish_reason: "length"`. Pair a
+lower effort with a sane `max_tokens` for the robust fix.
+
 ## Build
 
 This plugin ships bundled with Quilltap. Built from the top-level repo via:

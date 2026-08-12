@@ -25,8 +25,9 @@ export type DocDeleteBlobInput = z.infer<typeof docDeleteBlobToolInputSchema>;
 /**
  * Validates input for doc_delete_blob tool.
  */
-export function validateDocDeleteBlobInput(input: unknown): input is DocDeleteBlobInput {
-  return docDeleteBlobToolInputSchema.safeParse(input).success;
+export function validateDocDeleteBlobInput(input: unknown): DocDeleteBlobInput | null {
+  const parsed = docDeleteBlobToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 export const docDeleteBlobToolDefinition = {

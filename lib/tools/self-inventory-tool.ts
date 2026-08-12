@@ -515,6 +515,7 @@ export const selfInventoryToolDefinition = {
 
 export function validateSelfInventoryInput(
   input: unknown
-): input is SelfInventoryToolInput {
-  return selfInventoryToolInputSchema.safeParse(input).success;
+): SelfInventoryToolInput | null {
+  const parsed = selfInventoryToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }

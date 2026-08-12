@@ -62,8 +62,9 @@ export type DocCopyFileInput = z.infer<typeof docCopyFileToolInputSchema>;
 /**
  * Validates input for doc_copy_file tool.
  */
-export function validateDocCopyFileInput(input: unknown): input is DocCopyFileInput {
-  return docCopyFileToolInputSchema.safeParse(input).success;
+export function validateDocCopyFileInput(input: unknown): DocCopyFileInput | null {
+  const parsed = docCopyFileToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 export const docCopyFileToolDefinition = {

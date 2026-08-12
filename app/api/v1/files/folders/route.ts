@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
@@ -134,7 +134,7 @@ async function ensureParentFoldersExist(
 // GET Handler - List folders
 // ============================================================================
 
-export const GET = createAuthenticatedHandler(async (request, { user, repos }) => {
+export const GET = createContextHandler(async (request, { user, repos }) => {
   const searchParams = request.nextUrl.searchParams;
   const projectId = searchParams.get('projectId');
 
@@ -172,7 +172,7 @@ export const GET = createAuthenticatedHandler(async (request, { user, repos }) =
 // POST Handler - Action dispatch
 // ============================================================================
 
-export const POST = createAuthenticatedHandler(async (request, { user, repos }) => {
+export const POST = createContextHandler(async (request, { user, repos }) => {
   const action = getActionParam(request);
 
   if (!isValidAction(action, FOLDERS_POST_ACTIONS)) {

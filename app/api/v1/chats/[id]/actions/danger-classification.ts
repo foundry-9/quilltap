@@ -8,7 +8,7 @@ import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { successResponse, serverError } from '@/lib/api/responses';
 import { enqueueChatDangerClassification } from '@/lib/background-jobs/queue-service';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import type { ChatMetadataBase } from '@/lib/schemas/types';
 
 /**
@@ -17,7 +17,7 @@ import type { ChatMetadataBase } from '@/lib/schemas/types';
 export async function handleReclassifyDanger(
   chatId: string,
   chat: ChatMetadataBase,
-  ctx: AuthenticatedContext
+  ctx: RequestContext
 ): Promise<NextResponse> {
   const { user, repos } = ctx;
 

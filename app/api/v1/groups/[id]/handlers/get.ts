@@ -10,10 +10,11 @@ import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import {
   handleGetDefault,
   handleGetMembers,
+  handleGetState,
 } from '../actions';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
-const GROUP_GET_ACTIONS = ['members'] as const;
+const GROUP_GET_ACTIONS = ['members', 'get-state'] as const;
 type GroupGetAction = typeof GROUP_GET_ACTIONS[number];
 
 /**
@@ -21,7 +22,7 @@ type GroupGetAction = typeof GROUP_GET_ACTIONS[number];
  */
 export async function handleGet(
   req: NextRequest,
-  ctx: AuthenticatedContext,
+  ctx: RequestContext,
   groupId: string
 ): Promise<NextResponse> {
   const action = getActionParam(req);
@@ -32,6 +33,7 @@ export async function handleGet(
 
   const actionHandlers: Record<GroupGetAction, () => Promise<NextResponse>> = {
     members: () => handleGetMembers(groupId, ctx),
+    'get-state': () => handleGetState(groupId, ctx),
   };
 
   return actionHandlers[action]();

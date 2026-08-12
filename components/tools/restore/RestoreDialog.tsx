@@ -125,22 +125,43 @@ export function RestoreDialog({
 
       {/* Replace Mode Warning */}
       {state.restoreMode === 'replace' && (
-        <div className="qt-bg-destructive/10 border qt-border-destructive rounded-lg p-4">
-          <p className="qt-text-destructive mb-3">
-            Warning: This will DELETE all your current data!
-          </p>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={state.confirmReplace}
-              onChange={(e) => actions.setConfirmReplace(e.target.checked)}
-              className="w-4 h-4 qt-text-destructive rounded focus:ring-ring"
-            />
-            <span className="text-sm qt-text-destructive">
-              I understand this action cannot be undone
-            </span>
-          </label>
-        </div>
+        <>
+          <div className="qt-bg-destructive/10 border qt-border-destructive rounded-lg p-4">
+            <p className="qt-text-destructive mb-3">
+              Warning: This will DELETE all your current data!
+            </p>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={state.confirmReplace}
+                onChange={(e) => actions.setConfirmReplace(e.target.checked)}
+                className="w-4 h-4 qt-text-destructive rounded focus:ring-ring"
+              />
+              <span className="text-sm qt-text-destructive">
+                I understand this action cannot be undone
+              </span>
+            </label>
+          </div>
+          <div className="qt-bg-muted/50 border qt-border-default rounded-lg p-4 space-y-2">
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={state.keepArchiveBundles}
+                onChange={(e) => actions.setKeepArchiveBundles(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded focus:ring-ring"
+              />
+              <span className="text-sm qt-text-primary">
+                Leave any archived-character bundles on the shelf
+              </span>
+            </label>
+            <p className="qt-text-xs qt-text-secondary">
+              The wipe that precedes the restore will spare each archived character&apos;s
+              .qtap bundle. Their character records are replaced with the backup&apos;s like
+              everything else, so a spared bundle is a loose one — importable afresh, but
+              not simply woken. Untick to sweep the shelf bare as well.
+            </p>
+          </div>
+        </>
       )}
 
       {state.error && (

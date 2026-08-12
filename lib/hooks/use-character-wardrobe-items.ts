@@ -25,6 +25,13 @@ export interface UseCharacterWardrobeItemsResult {
   items: WardrobeItem[]
   loading: boolean
   /**
+   * True once at least one fetch has completed for the current character —
+   * even when it resolved to an empty list. Distinct from `!loading`, which is
+   * also true in the initial pre-fetch tick. Lets callers tell "no items yet
+   * because we haven't looked" apart from "looked, found none".
+   */
+  fetched: boolean
+  /**
    * The project tier this loader resolved (from an explicit `projectId` or
    * derived from `chatId`), or null when there is none. Lets callers offer a
    * "create in this project" affordance without re-resolving the chat.
@@ -52,11 +59,13 @@ export function useCharacterWardrobeItems(
   const chatId = opts?.chatId ?? null
   const [items, setItems] = useState<WardrobeItem[]>([])
   const [loading, setLoading] = useState(false)
+  const [fetched, setFetched] = useState(false)
   const [resolvedProjectId, setResolvedProjectId] = useState<string | null>(projectId)
 
   const reload = useCallback(async (): Promise<void> => {
     if (!characterId) {
       setItems([])
+      setFetched(false)
       return
     }
     setLoading(true)
@@ -110,6 +119,7 @@ export function useCharacterWardrobeItems(
       setItems([])
     } finally {
       setLoading(false)
+      setFetched(true)
     }
   }, [characterId, projectId, chatId])
 
@@ -118,5 +128,5 @@ export function useCharacterWardrobeItems(
     void reload()
   }, [reload])
 
-  return { items, loading, projectId: resolvedProjectId, reload }
+  return { items, loading, fetched, projectId: resolvedProjectId, reload }
 }

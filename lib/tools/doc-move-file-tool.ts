@@ -44,8 +44,9 @@ export type DocMoveFileInput = z.infer<typeof docMoveFileToolInputSchema>;
 /**
  * Validates input for doc_move_file tool.
  */
-export function validateDocMoveFileInput(input: unknown): input is DocMoveFileInput {
-  return docMoveFileToolInputSchema.safeParse(input).success;
+export function validateDocMoveFileInput(input: unknown): DocMoveFileInput | null {
+  const parsed = docMoveFileToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 export const docMoveFileToolDefinition = {

@@ -3,6 +3,7 @@
 import { Icon } from '@/components/ui/icon'
 import { formatMessageTime } from '@/lib/format-time'
 import { TokenBadge } from '@/components/chat/TokenBadge'
+import { ConfirmationBadge } from './ConfirmationBadge'
 import { getImageAttachments } from './helpers'
 import type { Message, TokenDisplaySettings } from '../../types'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
@@ -154,6 +155,8 @@ export function MessageActionBar({
             <Icon name="cpu" />
           </button>
         )}
+        {/* Answer-confirmation verdict (only present when a check ran) */}
+        <ConfirmationBadge message={message} />
         {/* Resend (user messages only) */}
         {message.role === 'USER' && showResendButton && (
           <button

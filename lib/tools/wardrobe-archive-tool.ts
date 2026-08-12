@@ -66,6 +66,7 @@ export const wardrobeArchiveToolDefinition = {
  */
 export function validateWardrobeArchiveInput(
   input: unknown
-): input is WardrobeArchiveToolInput {
-  return wardrobeArchiveToolInputSchema.safeParse(input).success
+): WardrobeArchiveToolInput | null {
+  const parsed = wardrobeArchiveToolInputSchema.safeParse(input)
+  return parsed.success ? parsed.data : null
 }

@@ -15,17 +15,22 @@ import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { writeUserUploadToMountStore } from '@/lib/file-storage/user-uploads-bridge';
+import { makeCarriedStoreRowsResolver } from './carried-store-rows';
 import { getNpmPluginsDir, getThemesDir } from '@/lib/paths';
 import { isLLMLogsDegraded } from '@/lib/database/backends/sqlite/llm-logs-client';
 import { rawQuery } from '@/lib/database/manager';
 import { getRawMountIndexDatabase, isMountIndexDegraded } from '@/lib/database/backends/sqlite/mount-index-client';
 import { TextReplacementRuleConflictError } from '@/lib/database/repositories';
 import { normalizeProfileName, makeUniqueProfileName } from '@/lib/llm/connection-profile-names';
+import { reconcileEmbeddingDimensions } from '@/lib/startup/reconcile-embedding-dimensions';
+import { enqueueEmbeddingReindexAll } from '@/lib/background-jobs/queue-service';
+import { getDefaultEmbeddingProfile } from '@/lib/embedding/embedding-service';
 import type { RestoreOptions, RestoreSummary } from '../types';
 import { UuidRemapper } from '../uuid-remapper';
 import { parseBackupZip, getFileFromExtractedBackup, cleanupDir } from './archive';
 import { deleteUserData } from './delete-service';
 import { remapBackupData } from './uuid-remap';
+import { coerceDocMountPointRow, coerceDocMountFileLinkRow } from './mount-index-coercion';
 
 const moduleLogger = logger.child({ module: 'backup:restore-service' });
 
@@ -49,9 +54,13 @@ export async function restore(
   try {
     let data = parsedData;
 
-    // For replace mode, delete existing data first
+    // For replace mode, delete existing data first. Archived-character
+    // bundles survive by default (spec §4.7) — the restore replaces the
+    // tombstone rows, so what's kept is a loose, importable bundle.
     if (mode === 'replace') {
-      await deleteUserData(targetUserId);
+      await deleteUserData(targetUserId, {
+        keepArchivedCharacterBundles: options.keepArchivedCharacterBundles !== false,
+      });
     }
 
     // For new-account mode, remap all UUIDs
@@ -125,74 +134,17 @@ export async function restore(
       }
     }
 
-    // 5. Files (read from extracted dir on disk, upload to storage)
-    // In new-account mode, file IDs are remapped but on-disk filenames use original IDs.
-    // Use parsedData.files (original) for disk lookup, data.files (remapped) for DB records.
+    // 5. Files — DEFERRED to step 22a-bis (after doc-store mounts exist).
+    // Every user file now lands in a document store: project-bound files go
+    // through the project-store bridge, project-less files through the Quilltap
+    // Uploads bridge. Neither target can resolve at this point in the restore —
+    // projects arrive at 13, and the mount-point rows (including the Quilltap
+    // Uploads mount, which `deleteUserData` truncates in replace mode while
+    // deliberately leaving its `instance_settings` pointer dangling) arrive at
+    // 22a. Restoring here worked only when the target instance happened to
+    // already hold those stores; into a fresh or wiped instance — the
+    // disaster-recovery case — not one byte landed.
     let filesRestored = 0;
-    for (let i = 0; i < data.files.length; i++) {
-      const file = data.files[i];
-      const originalFile = parsedData.files[i]; // original IDs for disk lookup
-      try {
-        const fileBuffer = await getFileFromExtractedBackup(rootPath, originalFile, data.manifest?.backupFormat);
-        if (fileBuffer) {
-          // Project-bound files restore into the project mount (via FSM →
-          // project-store-bridge). Project-less files land in the Quilltap
-          // Uploads mount under restored/, not the catch-all _general/.
-          let restoredStorageKey: string;
-          let restoredMimeType: string;
-          let restoredSize: number;
-          if (file.projectId) {
-            const uploadResult = await fileStorageManager.uploadFile({
-              filename: file.originalFilename,
-              content: fileBuffer,
-              contentType: file.mimeType,
-              projectId: file.projectId,
-              folderPath: file.folderPath || '/',
-            });
-            restoredStorageKey = uploadResult.storageKey;
-            restoredMimeType = uploadResult.storedMimeType;
-            restoredSize = uploadResult.sizeBytes;
-          } else {
-            const written = await writeUserUploadToMountStore({
-              filename: file.originalFilename,
-              content: fileBuffer,
-              contentType: file.mimeType,
-              subfolder: 'restored',
-            });
-            restoredStorageKey = written.storageKey;
-            restoredMimeType = written.storedMimeType;
-            restoredSize = written.sizeBytes;
-          }
-
-          // Create file metadata with storage key. The bridges may transcode
-          // bytes (bitmaps → WebP), so we record the post-bridge mime/size
-          // rather than what the backup row claimed — a backup made before
-          // this fix may carry the pre-transcode lie, and re-writing it would
-          // re-introduce the "media_type X but bytes are Y" error.
-          // Strip auto-generated and legacy fields from backup data
-          const { userId, createdAt, updatedAt, storageKey, ...fileData } = file as typeof file & Record<string, unknown>;
-          // Remove legacy fields that may exist in older backups
-          delete (fileData as Record<string, unknown>).s3Key;
-          delete (fileData as Record<string, unknown>).s3Bucket;
-          delete (fileData as Record<string, unknown>).mountPointId;
-          await repos.files.create(
-            {
-              ...fileData,
-              mimeType: restoredMimeType,
-              size: restoredSize,
-              storageKey: restoredStorageKey,
-            },
-            { id: file.id }
-          );
-          filesRestored++;
-        } else {
-          warnings.push(`File not found in backup: ${file.originalFilename}`);
-        }
-      } catch (error) {
-        warnings.push(`Failed to restore file "${file.originalFilename}": ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore file', { fileId: file.id, error });
-      }
-    }
 
     // 6. Characters
     for (const character of data.characters) {
@@ -230,13 +182,19 @@ export async function restore(
     // 9. Memories
     // IDs are preserved during creation, so characterId/aboutCharacterId already point
     // to the correct (preserved) character IDs — no remapping needed.
+    //
+    // The memory's own id is preserved too, and that matters: memories reference
+    // each other through `relatedMemoryIds`, which uuid-remap rewrites in lockstep
+    // with `id` for new-account restores. Letting the repository mint a fresh id
+    // here would leave every one of those edges pointing at a memory that no longer
+    // exists, quietly flattening the Commonplace Book's graph on restore.
     for (const memory of data.memories) {
       try {
         const { id, createdAt, updatedAt, ...memoryData } = memory;
 
         // Strip legacy personaId from old backups (column no longer exists)
         const { personaId: _legacyPersonaId, ...cleanMemoryData } = memoryData as Record<string, unknown>;
-        await repos.memories.create(cleanMemoryData as Parameters<typeof repos.memories.create>[0]);
+        await repos.memories.create(cleanMemoryData as Parameters<typeof repos.memories.create>[0], { id });
       } catch (error) {
         warnings.push(`Failed to restore memory: ${error instanceof Error ? error.message : String(error)}`);
         moduleLogger.warn('Failed to restore memory', { memoryId: memory.id, error });
@@ -344,11 +302,14 @@ export async function restore(
     for (const config of data.pluginConfigs || []) {
       try {
         const { id, createdAt, updatedAt, ...configData } = config;
-        // Use upsert to merge with existing configs or create new ones
+        // Use upsert to merge with existing configs or create new ones.
+        // `enabled` rides along: without it a plugin the user had switched
+        // off silently came back on after a restore.
         await globalRepos.pluginConfigs.upsertForUserPlugin(
           targetUserId,
           configData.pluginName,
-          configData.config as Record<string, unknown>
+          configData.config as Record<string, unknown>,
+          configData.enabled
         );
         pluginConfigsRestored++;
       } catch (error) {
@@ -427,16 +388,131 @@ export async function restore(
     // Format-3 entities (depend on the entities created above)
     // ========================================================================
 
-    // 22a. Document store mount points
+    // 22a. Document store mount points. The archive carries these rows as the
+    // raw `SELECT *` gave them up — pattern arrays as JSON text, `enabled` as
+    // INTEGER 0/1 — so coerce back to domain shape or every row is rejected by
+    // the repository schema and the stores come back unreachable.
     let docMountPointsRestored = 0;
     for (const mp of data.docMountPoints || []) {
       try {
-        const { id, createdAt, updatedAt, ...mpData } = mp;
+        const { id, createdAt, updatedAt, ...mpData } = coerceDocMountPointRow(mp);
         await globalRepos.docMountPoints.create(mpData, { id: mp.id });
         docMountPointsRestored++;
       } catch (error) {
         warnings.push(`Failed to restore document store "${mp.name}": ${error instanceof Error ? error.message : String(error)}`);
         moduleLogger.warn('Failed to restore doc mount point', { mountPointId: mp.id, error });
+      }
+    }
+
+    // 22a-bis. Files (deferred from step 5). The mount points now exist, so
+    // both bridges resolve: projects (13) own their official stores and the
+    // Quilltap Uploads mount is back under the id its `instance_settings`
+    // pointer still names. Read from the extracted dir on disk, write through
+    // the bridge, then record the row.
+    // In new-account mode, file IDs are remapped but on-disk filenames use original IDs.
+    // Use parsedData.files (original) for disk lookup, data.files (remapped) for DB records.
+    //
+    // Bug 12: a second-generation archive (a backup of an instance that was
+    // itself restored) already carries the doc-store rows (file/link/blob) for
+    // a project-less user file — its storageKey points at an archived mount
+    // blob that 22c–22f restore verbatim, and its link already sits at
+    // `restored/<name>`. Re-ingesting it below would mint a *new* blob + link
+    // at that same path (the replay gets there first), so 22d's archived link
+    // then collides on UNIQUE(mountPointId, relativePath) and loses its id, and
+    // the store rows duplicate one more copy per generation. So detect the
+    // carried rows and skip the replay: keep the (remapped) archived storageKey
+    // and let the archived rows restore intact. First-generation archives are
+    // unaffected — their files' bytes aren't yet in a mount blob, so the
+    // storageKey isn't a `mount-blob:` key and the replay runs as before.
+    const carriedStorageKeyFor = makeCarriedStoreRowsResolver(
+      parsedData.docMountBlobs || [],
+      data.docMountBlobs || [],
+      parsedData.docMountPoints || [],
+      data.docMountPoints || [],
+    );
+
+    for (let i = 0; i < data.files.length; i++) {
+      const file = data.files[i];
+      const originalFile = parsedData.files[i]; // original IDs for disk lookup
+      try {
+        // Carried store rows (Bug 12): skip the replay, preserve the archived
+        // storageKey. Project-bound files are handled separately below (their
+        // duplication is orthogonal, per docs/developer/bugs.md), so this only fires for
+        // project-less files.
+        const carriedStorageKey = !file.projectId
+          ? carriedStorageKeyFor(originalFile.storageKey)
+          : null;
+        if (carriedStorageKey) {
+          const { userId, createdAt, updatedAt, storageKey, ...fileData } = file as typeof file & Record<string, unknown>;
+          delete (fileData as Record<string, unknown>).s3Key;
+          delete (fileData as Record<string, unknown>).s3Bucket;
+          delete (fileData as Record<string, unknown>).mountPointId;
+          await repos.files.create(
+            { ...fileData, storageKey: carriedStorageKey },
+            { id: file.id }
+          );
+          filesRestored++;
+          continue;
+        }
+
+        const fileBuffer = await getFileFromExtractedBackup(rootPath, originalFile, data.manifest?.backupFormat);
+        if (fileBuffer) {
+          // Project-bound files restore into the project mount (via FSM →
+          // project-store-bridge). Project-less files land in the Quilltap
+          // Uploads mount under restored/, not the catch-all _general/.
+          let restoredStorageKey: string;
+          let restoredMimeType: string;
+          let restoredSize: number;
+          if (file.projectId) {
+            const uploadResult = await fileStorageManager.uploadFile({
+              filename: file.originalFilename,
+              content: fileBuffer,
+              contentType: file.mimeType,
+              projectId: file.projectId,
+              folderPath: file.folderPath || '/',
+            });
+            restoredStorageKey = uploadResult.storageKey;
+            restoredMimeType = uploadResult.storedMimeType;
+            restoredSize = uploadResult.sizeBytes;
+          } else {
+            const written = await writeUserUploadToMountStore({
+              filename: file.originalFilename,
+              content: fileBuffer,
+              contentType: file.mimeType,
+              subfolder: 'restored',
+            });
+            restoredStorageKey = written.storageKey;
+            restoredMimeType = written.storedMimeType;
+            restoredSize = written.sizeBytes;
+          }
+
+          // Create file metadata with storage key. The bridges may transcode
+          // bytes (bitmaps → WebP), so we record the post-bridge mime/size
+          // rather than what the backup row claimed — a backup made before
+          // this fix may carry the pre-transcode lie, and re-writing it would
+          // re-introduce the "media_type X but bytes are Y" error.
+          // Strip auto-generated and legacy fields from backup data
+          const { userId, createdAt, updatedAt, storageKey, ...fileData } = file as typeof file & Record<string, unknown>;
+          // Remove legacy fields that may exist in older backups
+          delete (fileData as Record<string, unknown>).s3Key;
+          delete (fileData as Record<string, unknown>).s3Bucket;
+          delete (fileData as Record<string, unknown>).mountPointId;
+          await repos.files.create(
+            {
+              ...fileData,
+              mimeType: restoredMimeType,
+              size: restoredSize,
+              storageKey: restoredStorageKey,
+            },
+            { id: file.id }
+          );
+          filesRestored++;
+        } else {
+          warnings.push(`File not found in backup: ${file.originalFilename}`);
+        }
+      } catch (error) {
+        warnings.push(`Failed to restore file "${file.originalFilename}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore file', { fileId: file.id, error });
       }
     }
 
@@ -470,11 +546,13 @@ export async function restore(
       }
     }
 
-    // 22d. Document store file links (hard links to file content).
+    // 22d. Document store file links (hard links to file content). Same
+    // storage-type coercion as 22a — the three policy flags arrive as
+    // INTEGER 0/1 and the schema demands booleans.
     let docMountFileLinksRestored = 0;
     for (const link of data.docMountFileLinks || []) {
       try {
-        const { id, createdAt, updatedAt, ...linkData } = link;
+        const { id, createdAt, updatedAt, ...linkData } = coerceDocMountFileLinkRow(link);
         await globalRepos.docMountFileLinks.create(linkData, { id: link.id });
         docMountFileLinksRestored++;
       } catch (error) {
@@ -837,6 +915,75 @@ export async function restore(
 
     moduleLogger.info('All entities restored with preserved IDs - no reconciliation needed');
 
+    // 24a. Compact archives arrive with no vectors at all: memory embeddings
+    // are NULL and every derived collection (conversation chunks, vector
+    // entries, TF-IDF vocabularies, doc-mount chunks) was omitted at backup
+    // time. The reconcile below deliberately ignores *absent* chunk rows — it
+    // only repairs non-conforming ones — so without this the instance would
+    // come back with search quietly cold. Enqueued before the reconcile so the
+    // reconcile's own dedup sees this job and doesn't stack a second one.
+    if (parsedData.manifest?.compact) {
+      try {
+        const profile = await getDefaultEmbeddingProfile(targetUserId);
+        if (profile) {
+          await enqueueEmbeddingReindexAll(targetUserId, { profileId: profile.id, scope: 'all' });
+          moduleLogger.debug('Queued full re-index for compact backup restore', {
+            targetUserId,
+            profileId: profile.id,
+          });
+          warnings.push(
+            'This was a compact backup, so search indexes were rebuilt rather than restored — ' +
+              'search will warm back up as re-indexing completes. Conversation and document ' +
+              'chunks are rebuilt as those chats and stores are next touched.'
+          );
+        } else {
+          warnings.push(
+            'This was a compact backup, but no default embedding profile is configured, so ' +
+              'search cannot be rebuilt yet. Configure one and re-index from the Commonplace Book.'
+          );
+        }
+      } catch (error) {
+        warnings.push(
+          `Failed to queue re-indexing after compact restore: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+        moduleLogger.warn('Failed to enqueue reindex after compact restore', { error });
+      }
+    }
+
+    // 25. Embedding reconcile. Restore is the one moment a corpus can arrive
+    // whose vectors were produced under a different embedding standard than
+    // this instance's default profile — new-account mode, or simply a machine
+    // configured differently from the one the backup came off. Until now the
+    // only repair was the *next boot's* sweep, which is fine for an in-place
+    // restore and wrong for everything else.
+    //
+    // The reconcile takes no arguments, never throws (it catches into a null
+    // result), resolves the default profile itself and dedupes its own
+    // reindex enqueue — so in the ordinary conforming case this is a cheap
+    // no-op.
+    const reconcileResult = await reconcileEmbeddingDimensions();
+    moduleLogger.debug('Post-restore embedding reconcile complete', {
+      targetDimensions: reconcileResult.targetDimensions,
+      skippedReason: reconcileResult.skippedReason,
+      vectorEntriesDeleted: reconcileResult.vectorEntriesDeleted,
+      vectorIndexMetaFixed: reconcileResult.vectorIndexMetaFixed,
+      reindexEnqueued: reconcileResult.reindexEnqueued,
+      mismatched: reconcileResult.mismatched,
+    });
+    if (reconcileResult.skippedReason) {
+      warnings.push(
+        `Embedding reconcile was skipped after restore (${reconcileResult.skippedReason}); ` +
+          'semantic search will be repaired on the next startup.'
+      );
+    } else if (reconcileResult.reindexEnqueued) {
+      warnings.push(
+        'Some restored embeddings did not match this instance\'s embedding profile; ' +
+          're-indexing has been queued and search will warm back up as it completes.'
+      );
+    }
+
     const summary: RestoreSummary = {
       characters: data.characters.length,
       chats: data.chats.length,
@@ -883,6 +1030,13 @@ export async function restore(
       groupDocMountLinks: groupDocMountLinksRestored,
       groupCharacterMembers: groupCharacterMembersRestored,
       textReplacementRules: textReplacementRulesRestored,
+      embeddingReconcile: {
+        targetDimensions: reconcileResult.targetDimensions,
+        skippedReason: reconcileResult.skippedReason,
+        vectorEntriesDeleted: reconcileResult.vectorEntriesDeleted,
+        vectorIndexMetaFixed: reconcileResult.vectorIndexMetaFixed,
+        reindexEnqueued: reconcileResult.reindexEnqueued,
+      },
       warnings,
     };
 

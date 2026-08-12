@@ -44,8 +44,9 @@ export const docReadBlobToolDefinition = {
   },
 };
 
-export function validateDocReadBlobInput(input: unknown): input is DocReadBlobInput {
-  return docReadBlobToolInputSchema.safeParse(input).success;
+export function validateDocReadBlobInput(input: unknown): DocReadBlobInput | null {
+  const parsed = docReadBlobToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 

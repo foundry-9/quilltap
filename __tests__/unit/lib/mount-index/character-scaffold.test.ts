@@ -29,7 +29,7 @@ jest.mock('@/lib/mount-index/database-store', () => ({
   writeDatabaseDocument: jest.fn().mockResolvedValue({ mtime: 0 }),
 }));
 
-import { scaffoldCharacterMount } from '@/lib/mount-index/character-scaffold';
+import { scaffoldCharacterMount, ensureCharacterMetadataFile } from '@/lib/mount-index/character-scaffold';
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
 import { writeDatabaseDocument } from '@/lib/mount-index/database-store';
 
@@ -84,7 +84,7 @@ describe('scaffoldCharacterMount', () => {
 
     const result = await scaffoldCharacterMount(MOUNT_ID);
 
-    expect(result).toEqual({ filesCreated: 8, filesSkipped: 0, foldersCreated: 7 });
+    expect(result).toEqual({ filesCreated: 9, filesSkipped: 0, foldersCreated: 7 });
     expect(ensureFolderPathMock).toHaveBeenCalledTimes(7);
     expect(ensureFolderPathMock).toHaveBeenCalledWith(MOUNT_ID, 'Prompts');
     expect(ensureFolderPathMock).toHaveBeenCalledWith(MOUNT_ID, 'Scenarios');
@@ -94,7 +94,7 @@ describe('scaffoldCharacterMount', () => {
     expect(ensureFolderPathMock).toHaveBeenCalledWith(MOUNT_ID, 'images');
     expect(ensureFolderPathMock).toHaveBeenCalledWith(MOUNT_ID, 'files');
 
-    expect(writeDatabaseDocumentMock).toHaveBeenCalledTimes(8);
+    expect(writeDatabaseDocumentMock).toHaveBeenCalledTimes(9);
     expect(writeDatabaseDocumentMock).toHaveBeenCalledWith(MOUNT_ID, 'identity.md', '');
     expect(writeDatabaseDocumentMock).toHaveBeenCalledWith(MOUNT_ID, 'description.md', '');
     expect(writeDatabaseDocumentMock).toHaveBeenCalledWith(MOUNT_ID, 'manifesto.md', '');
@@ -115,7 +115,7 @@ describe('scaffoldCharacterMount', () => {
     expect(parsed).toEqual({ short: null, medium: null, long: null, complete: null });
   });
 
-  it('writes properties.json with pronouns, aliases, title, firstMessage, talkativeness', async () => {
+  it('writes properties.json with pronouns, aliases, title, firstMessage, talkativeness, canChooseOutfit', async () => {
     const repos = makeRepos();
     getRepositoriesMock.mockReturnValue(repos);
 
@@ -130,7 +130,32 @@ describe('scaffoldCharacterMount', () => {
       title: '',
       firstMessage: '',
       talkativeness: 0.5,
+      canChooseOutfit: false,
     });
+  });
+
+  it('seeds metadata.json as an empty fact sheet — the keys are the user\'s to invent', async () => {
+    const repos = makeRepos();
+    getRepositoriesMock.mockReturnValue(repos);
+
+    await scaffoldCharacterMount(MOUNT_ID);
+
+    const call = writeDatabaseDocumentMock.mock.calls.find(c => c[1] === 'metadata.json');
+    expect(call).toBeDefined();
+    expect(JSON.parse(call![2] as string)).toEqual({});
+  });
+
+  it('never overwrites a fact sheet the user has already written', async () => {
+    // The scaffold re-runs whenever a store is flipped to 'character', and
+    // `ensureCharacterVault` re-runs it on adoption paths. A populated
+    // metadata.json is user data; seeding over it would silently destroy it.
+    const repos = makeRepos({ existingDocuments: ['metadata.json'] });
+    getRepositoriesMock.mockReturnValue(repos);
+
+    const result = await scaffoldCharacterMount(MOUNT_ID);
+
+    expect(writeDatabaseDocumentMock.mock.calls.map(c => c[1])).not.toContain('metadata.json');
+    expect(result.filesSkipped).toBe(1);
   });
 
   it('does not seed a wardrobe.json — items live in Wardrobe/, presets in Outfits/', async () => {
@@ -186,17 +211,84 @@ describe('scaffoldCharacterMount', () => {
 
     const result = await scaffoldCharacterMount(MOUNT_ID);
 
-    expect(result.filesCreated).toBe(6);
+    expect(result.filesCreated).toBe(7);
     expect(result.filesSkipped).toBe(2);
     expect(result.foldersCreated).toBe(5);
 
     const writtenPaths = writeDatabaseDocumentMock.mock.calls.map(c => c[1]);
     expect(writtenPaths).not.toContain('identity.md');
     expect(writtenPaths).not.toContain('properties.json');
+    expect(writtenPaths).toContain('metadata.json');
     expect(writtenPaths).toContain('description.md');
     expect(writtenPaths).toContain('personality.md');
     expect(writtenPaths).toContain('physical-description.md');
     expect(writtenPaths).toContain('example-dialogues.md');
     expect(writtenPaths).not.toContain('wardrobe.json');
+  });
+});
+
+/**
+ * The startup backfill's entry point for healing vaults provisioned before the
+ * fact sheet existed. Every character on an established roster is in exactly
+ * that position, and with no file there is nothing for the file manager — the
+ * only editing surface — to open.
+ */
+describe('ensureCharacterMetadataFile', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    writeDatabaseDocumentMock.mockResolvedValue({ mtime: 0 });
+  });
+
+  it('seeds an empty sheet into a vault that has none', async () => {
+    getRepositoriesMock.mockReturnValue(makeRepos());
+
+    await expect(ensureCharacterMetadataFile(MOUNT_ID)).resolves.toBe(true);
+
+    expect(writeDatabaseDocumentMock).toHaveBeenCalledTimes(1);
+    const [, path, content] = writeDatabaseDocumentMock.mock.calls[0];
+    expect(path).toBe('metadata.json');
+    expect(JSON.parse(content as string)).toEqual({});
+  });
+
+  it('leaves an existing sheet entirely alone', async () => {
+    getRepositoriesMock.mockReturnValue(makeRepos({ existingDocuments: ['metadata.json'] }));
+
+    await expect(ensureCharacterMetadataFile(MOUNT_ID)).resolves.toBe(false);
+
+    expect(writeDatabaseDocumentMock).not.toHaveBeenCalled();
+  });
+
+  it('checks for the file rather than parsing it', async () => {
+    // A sheet the user has fat-fingered into invalid JSON is still their sheet.
+    // Deciding by a parse would "heal" it into an empty object — destroying the
+    // very hand-edit the file exists to accept.
+    const repos = makeRepos({ existingDocuments: ['metadata.json'] });
+    getRepositoriesMock.mockReturnValue(repos);
+
+    await ensureCharacterMetadataFile(MOUNT_ID);
+
+    expect(repos.docMountDocuments.findByMountPointAndPath).toHaveBeenCalledWith(MOUNT_ID, 'metadata.json');
+    expect(writeDatabaseDocumentMock).not.toHaveBeenCalled();
+  });
+
+  it('is idempotent across repeated boots', async () => {
+    // It runs for every already-linked character on every startup.
+    const seeded = new Set<string>();
+    getRepositoriesMock.mockReturnValue({
+      docMountDocuments: {
+        findByMountPointAndPath: jest.fn((_id: string, p: string) =>
+          Promise.resolve(seeded.has(p) ? { id: 'doc', relativePath: p } : null),
+        ),
+      },
+    });
+    writeDatabaseDocumentMock.mockImplementation(async (_id: string, p: string) => {
+      seeded.add(p);
+      return { mtime: 0 };
+    });
+
+    expect(await ensureCharacterMetadataFile(MOUNT_ID)).toBe(true);
+    expect(await ensureCharacterMetadataFile(MOUNT_ID)).toBe(false);
+    expect(await ensureCharacterMetadataFile(MOUNT_ID)).toBe(false);
+    expect(writeDatabaseDocumentMock).toHaveBeenCalledTimes(1);
   });
 });

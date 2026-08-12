@@ -334,7 +334,9 @@
   --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #9b8ec4 40%);
   --qt-chat-whisper-fg: var(--qt-chat-assistant-fg);
   --qt-chat-whisper-border: #9b8ec4;
-  --qt-chat-whisper-label-fg: #7c6fa0;
+  /* Deep enough to clear WCAG AA (4.5:1) against --qt-chat-whisper-bg at this
+     label's 0.75rem size; it also tints .qt-chat-system-bar-whisper. */
+  --qt-chat-whisper-label-fg: #5c447e;
 
   /* Chat: Silent messages — inner thoughts/actions from characters in silent mode */
   --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, #7a9e8e 35%);
@@ -347,6 +349,21 @@
   --qt-chat-wardrobe-fg: var(--qt-chat-assistant-fg);
   --qt-chat-wardrobe-border: #c4a24e;
   --qt-chat-wardrobe-label-fg: #9a7d2e;
+
+  /* Chat: System-message collapsed bar — thin one-line summary for Staff-authored messages */
+  --qt-chat-system-bar-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 70%, var(--color-muted) 30%);
+  --qt-chat-system-bar-fg: var(--color-muted-foreground);
+  --qt-chat-system-bar-border: var(--color-border);
+  --qt-chat-system-bar-hover-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 55%, var(--color-muted) 45%);
+  --qt-chat-system-bar-sender-fg: var(--color-foreground);
+
+  /* Chat: Announcement importance dots — high (red), medium (amber), low (hollow grey).
+     All three track theme tokens so the dots stay on-palette: high follows the theme
+     destructive, medium the theme warning, low the muted foreground. The hardcoded
+     amber/red remain as fallbacks for any theme that omits the token. */
+  --qt-chat-announcement-dot-high: var(--color-destructive, #b4452e);
+  --qt-chat-announcement-dot-medium: var(--color-warning, #d08a1e);
+  --qt-chat-announcement-dot-low: var(--color-muted-foreground);
 
   /* Chat composer variables */
   --qt-chat-composer-bg: var(--color-background);
@@ -476,6 +493,12 @@
   /* Spinner variables */
   --qt-spinner-track: color-mix(in srgb, var(--color-primary) 20%, transparent);
   --qt-spinner-indicator: var(--color-primary);
+
+  /* Progress bar variables — every bar-shaped construct in the app */
+  --qt-progress-track: var(--color-muted);
+  --qt-progress-indicator: var(--color-primary);
+  --qt-progress-indicator-success: var(--color-success);
+  --qt-progress-indicator-danger: var(--color-destructive);
 
   /* Favorite star color */
   --qt-favorite-color: hsl(45 96% 58%);
@@ -1166,6 +1189,267 @@
 }
 
 /**
+ * Pascal result — the outcome of a custom tool (pseudo-tool) roll, announced by
+ * Pascal the Croupier. The accent carries the outcome's semantic `state`.
+ * Built on the --qt-alert-* families, which every bundled theme defines.
+ */
+.qt-pascal-result {
+  border-left: 3px solid var(--qt-alert-info-border);
+  padding-left: 0.75rem;
+}
+
+.qt-pascal-result--success {
+  border-left-color: var(--qt-alert-success-border);
+}
+
+.qt-pascal-result--partial {
+  border-left-color: var(--qt-alert-warning-border);
+}
+
+.qt-pascal-result--failure {
+  border-left-color: var(--qt-alert-error-border);
+}
+
+.qt-pascal-result--info {
+  border-left-color: var(--qt-alert-info-border);
+}
+
+/* ==========================================================================
+   CHAT — STAFF ANNOUNCEMENTS
+   Messages authored by a personified feature (the Librarian, the Host, Pascal
+   the Croupier, …) rather than by a character. They summarise to a one-line
+   bar, and a run of consecutive ones packs into a row of content-width chips.
+   ========================================================================== */
+
+/**
+ * Collapsed bar for Staff-authored messages.
+ * Single-line summary: dot · sender name · kind · timestamp · chevron.
+ * Click to expand into the regular message body.
+ */
+.qt-chat-system-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  padding: 0.25rem 0.625rem;
+  margin: 0.125rem 0;
+  background: var(--qt-chat-system-bar-bg);
+  color: var(--qt-chat-system-bar-fg);
+  border: 1px solid var(--qt-chat-system-bar-border);
+  border-radius: var(--radius-sm, 0.25rem);
+  font-size: 0.75rem;
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.qt-chat-system-bar:hover,
+.qt-chat-system-bar:focus-visible {
+  background: var(--qt-chat-system-bar-hover-bg);
+  outline: none;
+}
+
+.qt-chat-system-bar-sender {
+  color: var(--qt-chat-system-bar-sender-fg);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.qt-chat-system-bar-kind {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/**
+ * Whisper audience on an announcement bar or chip ("to Alice, Bob"). Wears the
+ * same ink as the message body's whisper label so a private aside reads the
+ * same whether it is collapsed to a chip or opened in full.
+ */
+.qt-chat-system-bar-whisper {
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--qt-chat-whisper-label-fg);
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qt-chat-system-bar-time {
+  color: var(--qt-chat-system-bar-fg);
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+.qt-chat-system-bar-chevron {
+  flex-shrink: 0;
+  width: 0.875rem;
+  height: 0.875rem;
+  opacity: 0.7;
+}
+
+/**
+ * Variant rendered at the top of an *expanded* Staff-authored message, giving
+ * the reader a prominent click target to re-collapse it.
+ */
+.qt-chat-system-bar-expanded {
+  margin-bottom: 0.25rem;
+}
+
+/**
+ * Packed announcement chips. A run of consecutive *collapsed* Staff messages
+ * renders as one flex-wrapping row of content-width chips instead of a
+ * full-width bar each.
+ */
+.qt-chat-announcement-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  width: 95%;
+  max-width: var(--qt-chat-message-row-max-width);
+  margin: 1.5rem auto 0;
+  align-items: flex-start;
+}
+
+/**
+ * A single collapsed announcement, sized to its content (never full width).
+ * Reuses the -sender / -kind / -time / -chevron element classes above; only the
+ * -kind sizing differs (see the override below).
+ */
+.qt-chat-announcement-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.25rem 0.625rem;
+  background: var(--qt-chat-system-bar-bg);
+  color: var(--qt-chat-system-bar-fg);
+  border: 1px solid var(--qt-chat-system-bar-border);
+  border-radius: var(--radius-sm, 0.25rem);
+  font-size: 0.75rem;
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.qt-chat-announcement-chip:hover,
+.qt-chat-announcement-chip:focus-visible {
+  background: var(--qt-chat-system-bar-hover-bg);
+  outline: none;
+}
+
+/* Inside a chip the kind must not greedily fill the row; cap it so a long kind
+   doesn't dominate a packed row. */
+.qt-chat-announcement-chip .qt-chat-system-bar-kind {
+  flex: 0 1 auto;
+  max-width: 22ch;
+}
+
+/* Same cap for a long audience list — a whisper to five people must not push
+   the timestamp and chevron off the chip. */
+.qt-chat-announcement-chip .qt-chat-system-bar-whisper {
+  max-width: 18ch;
+}
+
+/* A whispered announcement carries the whisper's border colour, so a private
+   aside is distinguishable from a public one before it is ever expanded. */
+.qt-chat-announcement-chip-whisper {
+  border-color: var(--qt-chat-whisper-label-fg);
+}
+
+/**
+ * Importance dot before the sender name. Filled for high/medium, hollow for
+ * low, so the eye lands on what matters and skims past the low-noise chatter.
+ */
+.qt-chat-announcement-dot {
+  flex-shrink: 0;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+}
+
+.qt-chat-announcement-dot-high {
+  background: var(--qt-chat-announcement-dot-high);
+}
+
+.qt-chat-announcement-dot-medium {
+  background: var(--qt-chat-announcement-dot-medium);
+}
+
+.qt-chat-announcement-dot-low {
+  background: transparent;
+  border-color: var(--qt-chat-announcement-dot-low);
+}
+
+/**
+ * Outcome dot for a Pascal roll announcement, which replaces the importance dot:
+ * a roll has a verdict of its own — success / partial / failure / info — and
+ * that verdict is what the reader is looking for. Filled with the solid
+ * --qt-alert-*-fg (the -border tints are alpha-thin and vanish at 8px); the
+ * bar's leading accent below uses the -border tints, as .qt-pascal-result does.
+ */
+.qt-chat-announcement-dot-outcome-success {
+  background: var(--qt-alert-success-fg);
+}
+
+.qt-chat-announcement-dot-outcome-partial {
+  background: var(--qt-alert-warning-fg);
+}
+
+.qt-chat-announcement-dot-outcome-failure {
+  background: var(--qt-alert-error-fg);
+}
+
+.qt-chat-announcement-dot-outcome-info {
+  background: var(--qt-alert-info-fg);
+}
+
+/**
+ * The bar/chip of a Pascal roll wears the same .qt-pascal-result accent as the
+ * outcome bubble itself, so one outcome reads identically wherever it is shown.
+ *
+ * These compound selectors only restate that accent: .qt-pascal-result is
+ * declared above, and both wrappers set `border` and `padding` SHORTHANDS at
+ * equal specificity, so the plain family would lose on source order. Nothing
+ * new is styled here — change the accent itself at .qt-pascal-result.
+ */
+.qt-chat-system-bar.qt-pascal-result,
+.qt-chat-announcement-chip.qt-pascal-result {
+  border-left-width: 3px;
+  border-left-color: var(--qt-alert-info-border);
+  padding-left: 0.75rem;
+}
+
+.qt-chat-system-bar.qt-pascal-result--success,
+.qt-chat-announcement-chip.qt-pascal-result--success {
+  border-left-color: var(--qt-alert-success-border);
+}
+
+.qt-chat-system-bar.qt-pascal-result--partial,
+.qt-chat-announcement-chip.qt-pascal-result--partial {
+  border-left-color: var(--qt-alert-warning-border);
+}
+
+.qt-chat-system-bar.qt-pascal-result--failure,
+.qt-chat-announcement-chip.qt-pascal-result--failure {
+  border-left-color: var(--qt-alert-error-border);
+}
+
+.qt-chat-system-bar.qt-pascal-result--info,
+.qt-chat-announcement-chip.qt-pascal-result--info {
+  border-left-color: var(--qt-alert-info-border);
+}
+
+/**
  * Silent message — inner thoughts and actions from character in silent mode.
  * Distinguished from whispers by a dotted border (vs dashed) and sage/teal tones.
  */
@@ -1404,6 +1688,22 @@
   margin: 0.1em 0;
 }
 
+/*
+ * Wrapper item for a sub-list. Lexical represents nesting as a list item whose
+ * only child is another list, so this <li> is structure rather than content —
+ * left to itself it draws the parent list's bullet right beside the sub-list's
+ * own first bullet.
+ */
+.qt-lexical-li-nested {
+  list-style-type: none;
+  margin: 0;
+}
+
+.qt-lexical-li-nested::before,
+.qt-lexical-li-nested::after {
+  display: none;
+}
+
 /* Checklist items */
 .qt-lexical-checklist {
   list-style: none;
@@ -1468,6 +1768,119 @@
   tab-size: 2;
 }
 
+/* ==========================================================================
+   FORMATTING TOOLBAR
+   ========================================================================== */
+
+.qt-formatting-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  background: color-mix(in srgb, var(--color-muted) 50%, transparent);
+  border-radius: var(--radius-md);
+  margin-bottom: 0.5rem;
+}
+
+.qt-formatting-toolbar-section {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.qt-formatting-toolbar-divider {
+  height: 1.25rem;
+  margin-left: 0.25rem;
+  margin-right: 0.25rem;
+  width: 1px;
+  background: var(--color-border);
+}
+
+.qt-formatting-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: color 150ms, background-color 150ms, border-color 150ms;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  padding: 0 0.375rem;
+  border-radius: var(--radius-sm);
+  background: var(--qt-content-bg);
+  color: var(--color-foreground);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+}
+
+.qt-formatting-button:hover:not(:disabled) {
+  background: var(--qt-content-bg-hover);
+  border-color: var(--color-foreground);
+}
+
+.qt-formatting-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.qt-formatting-button-bold {
+  font-weight: 700;
+}
+
+.qt-formatting-button-italic {
+  font-style: italic;
+}
+
+.qt-formatting-button-h1,
+.qt-formatting-button-h2,
+.qt-formatting-button-h3,
+.qt-formatting-button-h4,
+.qt-formatting-button-h5,
+.qt-formatting-button-h6 {
+  font-family: var(--qt-formatting-heading-font, Georgia, 'Times New Roman', serif);
+}
+
+.qt-formatting-button-blockquote {
+  font-family: var(--qt-formatting-heading-font, Georgia, 'Times New Roman', serif);
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1;
+  padding-top: 0.35em;
+  padding-bottom: 0;
+}
+
+.qt-formatting-button-code-block {
+  font-family: var(--qt-formatting-code-font, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace);
+}
+
+/* List indent / outdent buttons - arrow glyphs sized to match the text labels */
+.qt-formatting-button-indent,
+.qt-formatting-button-outdent {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.qt-formatting-button-source {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  padding: 0 0.375rem;
+}
+
+.qt-formatting-button-active {
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+  border-color: var(--color-primary);
+}
+
+.qt-formatting-button-active:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-primary) 85%, black);
+  border-color: color-mix(in srgb, var(--color-primary) 85%, black);
+}
+
 /* Lexical table styling */
 .qt-lexical-contenteditable table {
   width: 100%;
@@ -1499,6 +1912,10 @@
 /* ==========================================================================
    UTILITY CLASSES
    ========================================================================== */
+
+.qt-text {
+  color: var(--color-foreground);
+}
 
 .qt-text-primary {
   color: var(--color-foreground);
@@ -1677,6 +2094,10 @@
   color: var(--color-destructive);
 }
 
+.qt-text-danger {
+  color: var(--color-destructive);
+}
+
 /* Border utilities */
 .qt-border-primary {
   border-color: var(--color-primary);
@@ -1797,6 +2218,56 @@
 .qt-spinner-lg {
   border: 4px solid var(--qt-spinner-track, color-mix(in srgb, var(--color-primary) 20%, transparent));
   border-right-color: var(--qt-spinner-indicator, var(--color-primary));
+}
+
+/* ==========================================================================
+   PROGRESS BAR UTILITIES
+   Multi-phase task progress and static value meters.
+   ========================================================================== */
+
+.qt-progress {
+  background-color: var(--qt-progress-track, var(--color-muted));
+  border-radius: 9999px;
+  overflow: hidden;
+  height: 0.5rem;
+}
+
+.qt-progress-sm {
+  height: 0.375rem;
+}
+
+.qt-progress-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background-color: var(--qt-progress-indicator, var(--color-primary));
+  transition: width 500ms ease-out;
+}
+
+.qt-progress-fill-success {
+  background-color: var(--qt-progress-indicator-success, var(--color-success));
+}
+
+.qt-progress-fill-danger {
+  background-color: var(--qt-progress-indicator-danger, var(--color-destructive));
+}
+
+.qt-progress-fill-idle {
+  background-color: transparent;
+}
+
+.qt-progress-indeterminate {
+  width: 40% !important;
+  transition: none;
+  animation: qt-progress-slide 1.4s ease-in-out infinite;
+}
+
+@keyframes qt-progress-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
 }
 
 /* ==========================================================================
@@ -2309,7 +2780,7 @@
   /* Chat: Whisper messages — dark mode */
   --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #6b5b95 40%);
   --qt-chat-whisper-border: #6b5b95;
-  --qt-chat-whisper-label-fg: #a89cc8;
+  --qt-chat-whisper-label-fg: #b5a9d1;
 
   /* Chat: Silent messages — darker mode variants */
   --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, #4a7a6a 35%);
@@ -2320,6 +2791,17 @@
   --qt-chat-wardrobe-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #8a6d1b 40%);
   --qt-chat-wardrobe-border: #8a6d1b;
   --qt-chat-wardrobe-label-fg: #d4b65c;
+
+  /* Chat: System-message collapsed bar — dark mode */
+  --qt-chat-system-bar-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, var(--color-muted) 40%);
+  --qt-chat-system-bar-hover-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 45%, var(--color-muted) 55%);
+
+  /* Chat: Announcement importance dots — brighter on dark for contrast. Medium tracks
+     the theme warning (themes ship brightened dark-mode warning values); the amber stays
+     as a fallback. High keeps a fixed bright red so it reads on dark surfaces. */
+  --qt-chat-announcement-dot-high: #e06a52;
+  --qt-chat-announcement-dot-medium: var(--color-warning, #e3a94a);
+  --qt-chat-announcement-dot-low: var(--color-muted-foreground);
 
   /* Alert tokens - brighter, more saturated for dark backgrounds */
   --qt-alert-success-bg: hsl(142 76% 36% / 0.2);
@@ -2383,6 +2865,10 @@
   background-color: var(--color-background);
 }
 
+.qt-bg-surface-hover {
+  background-color: var(--color-muted);
+}
+
 .qt-bg-surface-alt {
   background-color: var(--color-muted);
 }
@@ -2425,6 +2911,134 @@
 
 .qt-tab-divider {
   border-top: 1px solid var(--qt-tab-divider-color);
+}
+
+/* ==========================================================================
+   WORKSPACE  (tabbed two-pane shell — strip, divider, drop-zone)
+
+   Every accented surface derives from one hook, --qt-workspace-accent, which
+   falls back to --color-primary. Set it at your [data-theme="…"] root to
+   re-tint the active tab, the pane divider, and the split drop-zone in one
+   move. Finer control: the individual --qt-workspace-tab-* / -divider-* /
+   --qt-tab-drop-zone-* hooks below.
+   ========================================================================== */
+
+.qt-tab-strip {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--qt-tab-group-gap, 0.25rem);
+  padding: 0.375rem 0.5rem 0;
+  overflow-x: auto;
+  background: var(--qt-workspace-chrome-bg, var(--qt-panel-bg, var(--color-card)));
+  border-bottom: 1px solid var(--qt-workspace-chrome-border, var(--color-border));
+
+  --qt-tab-bg: var(--qt-workspace-tab-bg,
+    color-mix(in srgb, var(--color-muted) 86%, var(--color-foreground) 8%));
+  --qt-tab-fg: var(--qt-workspace-tab-fg,
+    color-mix(in srgb, var(--color-foreground) 75%, transparent));
+  --qt-tab-border: var(--qt-workspace-tab-border,
+    color-mix(in srgb, var(--color-foreground) 34%, transparent));
+  --qt-tab-active-bg: var(--qt-workspace-tab-active-bg,
+    color-mix(in srgb, var(--qt-workspace-accent, var(--color-primary)) 24%, var(--color-card)));
+  --qt-tab-active-fg: var(--qt-workspace-tab-active-fg, var(--color-foreground));
+  --qt-tab-active-border: var(--qt-workspace-tab-active-border,
+    var(--qt-workspace-accent, var(--color-primary)));
+}
+
+.qt-tab-strip .qt-tab {
+  display: inline-flex;
+  align-items: center;
+  user-select: none;
+  border-width: var(--qt-workspace-tab-border-width, 2px);
+  border-bottom-width: 0;
+  border-style: solid;
+  border-color: var(--qt-tab-border);
+  font-weight: 500;
+}
+
+.qt-tab-strip .qt-tab-active {
+  font-weight: 700;
+  border-color: var(--qt-tab-active-border);
+  box-shadow: 0 3px 0 0 var(--qt-tab-active-border) inset;
+}
+
+.qt-tab-label {
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qt-tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-left: 0.125rem;
+  border-radius: 0.25rem;
+  opacity: 0.55;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.qt-tab-close:hover {
+  opacity: 1;
+  background: var(--qt-tab-close-hover-bg,
+    color-mix(in srgb, var(--color-muted-foreground) 22%, transparent));
+}
+
+.qt-tab-close-icon {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.qt-workspace-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: col-resize;
+  background: var(--qt-workspace-divider-bg, var(--color-border));
+  transition: background 0.15s ease;
+}
+
+.qt-workspace-divider:hover,
+.qt-workspace-divider:focus-visible {
+  background: var(--qt-workspace-divider-active-bg,
+    color-mix(in srgb, var(--qt-workspace-accent, var(--color-primary)) 60%, transparent));
+  outline: none;
+}
+
+.qt-workspace-divider-grip {
+  width: 2px;
+  height: 2rem;
+  border-radius: 9999px;
+  background: var(--qt-workspace-divider-grip,
+    color-mix(in srgb, var(--color-muted-foreground) 60%, transparent));
+}
+
+.qt-tab-drop-zone {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 42%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--qt-tab-drop-zone-bg,
+    color-mix(in srgb, var(--qt-workspace-accent, var(--color-primary)) 14%, transparent));
+  border-left: 2px dashed var(--qt-tab-drop-zone-border,
+    color-mix(in srgb, var(--qt-workspace-accent, var(--color-primary)) 70%, transparent));
+}
+
+.qt-tab-drop-zone-hint {
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-foreground);
+  background: var(--color-background);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--color-foreground) 15%, transparent);
 }
 
 /* ==========================================================================

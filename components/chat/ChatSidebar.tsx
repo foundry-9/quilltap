@@ -18,9 +18,11 @@ import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { Icon } from '@/components/ui/icon'
 import { ParticipantCard, type ParticipantData, type ConnectionProfileOption } from './ParticipantCard'
+import { CopyChatIdButton } from './CopyChatIdButton'
 import { Avatar } from '@/components/ui/Avatar'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { triggerUrlDownload } from '@/lib/download-utils'
 import { getConciergeState, isChatActiveDangerous, type ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
 import { getQueuePosition, computePredictedTurnOrder } from '@/lib/chat/turn-manager'
@@ -37,6 +39,14 @@ const MAX_WIDTH = 560
 const MIN_CHAT_WIDTH = 360
 /** Keyboard nudge step (px). */
 const WIDTH_KEY_STEP = 16
+/**
+ * Below this container width (px), an inline expanded sidebar would starve the
+ * chat (sidebar ~MIN_WIDTH + chat MIN_CHAT_WIDTH). In a narrow pane the sidebar
+ * therefore defaults to the mini strip and expands as a click-away overlay
+ * instead of squeezing the chat. In a wide/full pane it behaves exactly as
+ * before. See `docs/developer/features/tabbed-workspace.md`.
+ */
+const NARROW_PANE_WIDTH = 640
 
 type SectionId = 'participants' | 'chat' | 'visibility' | 'organize' | 'edit' | null
 
@@ -84,6 +94,42 @@ function getInitialWidth(): number {
   return Number.isFinite(parsed) ? clampWidth(parsed) : DEFAULT_WIDTH
 }
 
+/**
+ * Track the sidebar container's width by observing the parent element (the
+ * `.qt-chat-layout`, which both the expanded panel and the collapsed strip
+ * share as a parent). Returns a callback ref to attach to whichever root is
+ * rendered; the observer persists across collapse/expand toggles because the
+ * parent is the same. Falls back to a one-shot measurement where ResizeObserver
+ * is unavailable (SSR / jsdom).
+ */
+function useContainerWidth(): { rootRef: (node: HTMLElement | null) => void; width: number | null } {
+  const [width, setWidth] = useState<number | null>(null)
+  const observerRef = useRef<ResizeObserver | null>(null)
+  const observedParentRef = useRef<HTMLElement | null>(null)
+
+  const rootRef = useCallback((node: HTMLElement | null) => {
+    if (!node) return
+    const parent = node.parentElement
+    if (!parent || parent === observedParentRef.current) return
+    observedParentRef.current = parent
+    if (typeof ResizeObserver === 'undefined') {
+      setWidth(parent.getBoundingClientRect().width || null)
+      return
+    }
+    observerRef.current?.disconnect()
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) setWidth(entry.contentRect.width)
+    })
+    ro.observe(parent)
+    observerRef.current = ro
+    setWidth(parent.getBoundingClientRect().width)
+  }, [])
+
+  useEffect(() => () => observerRef.current?.disconnect(), [])
+
+  return { rootRef, width }
+}
+
 export interface ChatSidebarProps {
   // --- Participants section ---
   participants: ParticipantData[]
@@ -128,6 +174,8 @@ export interface ChatSidebarProps {
   imageProfileId?: string | null
   alertCharactersOfLanternImages?: boolean | null
   avatarGenerationEnabled?: boolean | null
+  /** Which clock the chat's story keeps for episodic memory (null = realtime default). */
+  timelineMode?: 'realtime' | 'narrative' | null
   /** Per-chat Concierge override ('OFF' = off-duty, null = follow global). */
   conciergeOverride?: 'OFF' | null
   onToolSettingsClick?: () => void
@@ -146,14 +194,21 @@ export interface ChatSidebarProps {
   onSetCoreWhisperEnabled?: (value: boolean | null) => void
   coreWhisperInterval?: number | null
   onSetCoreWhisperInterval?: (value: number | null) => void
+  // "Nothing to add" turn-skipping — per-chat toggle. null = enabled (default); false = disabled.
+  turnSkippingEnabled?: boolean | null
+  onSetTurnSkippingEnabled?: (value: boolean | null) => void
   // Thinking visibility — per-chat override (tri-state). null = inherit global. DISPLAY ONLY.
   showThinking?: boolean | null
   onSetShowThinking?: (value: boolean | null) => void
+  // Answer confirmation — per-chat override (tri-state). null = inherit project/global.
+  answerConfirmationOverride?: 'ON' | 'OFF' | null
+  onSetAnswerConfirmationOverride?: (value: 'ON' | 'OFF' | null) => void
 
   // --- Organize section ---
   onRenameClick?: () => void
   onStateClick?: () => void
   onContinueChatClick?: () => void
+  onMergeConversationClick?: () => void
   chatPhotoCount?: number
   onGalleryClick?: () => void
   /** True when this chat is an autonomous room ("enclave") — gates the Edit Enclave control. */
@@ -192,6 +247,22 @@ export function ChatSidebar(props: ChatSidebarProps) {
   const [width, setWidth] = useState(getInitialWidth)
   const [isResizing, setIsResizing] = useState(false)
   const sidebarRef = useRef<HTMLDivElement>(null)
+
+  // Narrow-pane awareness: in a narrow split pane the expanded sidebar would
+  // starve the chat, so it defaults to the mini strip and expands as a
+  // click-away overlay instead. Wide/full panes are unaffected.
+  const { rootRef: measureRootRef, width: containerWidth } = useContainerWidth()
+  const [narrowOpen, setNarrowOpen] = useState(false)
+  const isNarrow = containerWidth != null && containerWidth < NARROW_PANE_WIDTH
+
+  // Merge the measurement ref onto the expanded root (which already owns sidebarRef).
+  const setExpandedRoot = useCallback(
+    (node: HTMLDivElement | null) => {
+      sidebarRef.current = node
+      measureRootRef(node)
+    },
+    [measureRootRef]
+  )
 
   const persistWidth = useCallback((next: number) => {
     localStorage.setItem(WIDTH_STORAGE_KEY, String(next))
@@ -299,12 +370,43 @@ export function ChatSidebar(props: ChatSidebarProps) {
     return participants.filter(p => p.type === 'CHARACTER' && p.isActive && p.controlledBy !== 'user' && p.id !== userParticipantId).length
   }, [participants, userParticipantId])
 
+  // Leaving narrow mode drops any transient overlay state. Adjusting state during
+  // render (React's sanctioned pattern) instead of in an effect avoids a wasted
+  // commit and the cascading-render lint.
+  if (!isNarrow && narrowOpen) setNarrowOpen(false)
+
+  const effectiveCollapsed = isNarrow ? !narrowOpen : isCollapsed
+  const isOverlay = isNarrow && narrowOpen
+
+  // Overlay: a click outside the panel, or Escape, collapses it to the strip.
+  useEffect(() => {
+    if (!isOverlay) return
+    const onPointerDown = (e: PointerEvent) => {
+      if (sidebarRef.current && !sidebarRef.current.contains(e.target as Node)) setNarrowOpen(false)
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setNarrowOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown, true)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [isOverlay])
+
+  // In a narrow pane, expand/collapse drive the transient overlay instead of the
+  // persisted wide-pane preference.
+  const handleStripExpand = isNarrow ? () => setNarrowOpen(true) : expandSidebar
+  const handleExpandedCollapse = isNarrow ? () => setNarrowOpen(false) : toggleCollapsed
+
   const baseClasses: string[] = []
   if (className) baseClasses.push(className)
 
-  if (isCollapsed) {
+  if (effectiveCollapsed) {
     return (
       <CollapsedStrip
+        rootRef={measureRootRef}
         baseClasses={baseClasses}
         sortedParticipants={sortedParticipants}
         turnOrderMap={turnOrderMap}
@@ -314,8 +416,8 @@ export function ChatSidebar(props: ChatSidebarProps) {
         isGenerating={isGenerating}
         isPaused={isPaused}
         onTogglePause={onTogglePause}
-        toggleCollapsed={toggleCollapsed}
-        expandSidebar={expandSidebar}
+        toggleCollapsed={handleStripExpand}
+        expandSidebar={handleStripExpand}
       />
     )
   }
@@ -327,8 +429,8 @@ export function ChatSidebar(props: ChatSidebarProps) {
 
   return (
     <div
-      ref={sidebarRef}
-      className={['qt-chat-sidebar', ...baseClasses].join(' ')}
+      ref={setExpandedRoot}
+      className={['qt-chat-sidebar', ...(isOverlay ? ['qt-chat-sidebar-overlay'] : []), ...baseClasses].join(' ')}
       style={{ width }}
     >
       <div
@@ -354,7 +456,7 @@ export function ChatSidebar(props: ChatSidebarProps) {
         <div className="flex items-center justify-between">
           <h3 className="qt-chat-sidebar-heading">Chat</h3>
           <button
-            onClick={toggleCollapsed}
+            onClick={handleExpandedCollapse}
             className="qt-chat-sidebar-toggle"
             title="Collapse chat sidebar"
             aria-label="Collapse chat sidebar"
@@ -394,6 +496,7 @@ export function ChatSidebar(props: ChatSidebarProps) {
             imageProfileId={props.imageProfileId}
             alertCharactersOfLanternImages={props.alertCharactersOfLanternImages}
             avatarGenerationEnabled={props.avatarGenerationEnabled}
+            timelineMode={props.timelineMode}
             isDangerousChat={props.isDangerousChat}
             conciergeOverride={props.conciergeOverride}
             onToolSettingsClick={props.onToolSettingsClick}
@@ -404,7 +507,7 @@ export function ChatSidebar(props: ChatSidebarProps) {
           />
         </CollapsibleCard>
 
-        {(props.isMultiChar || props.onSetCoreWhisperEnabled || props.onSetCoreWhisperInterval || props.onSetShowThinking) && (
+        {(props.isMultiChar || props.onSetCoreWhisperEnabled || props.onSetCoreWhisperInterval || props.onSetTurnSkippingEnabled || props.onSetShowThinking || props.onSetAnswerConfirmationOverride) && (
           <CollapsibleCard
             title="Visibility"
             {...openController('visibility')}
@@ -418,8 +521,13 @@ export function ChatSidebar(props: ChatSidebarProps) {
               onSetCoreWhisperEnabled={props.onSetCoreWhisperEnabled}
               coreWhisperInterval={props.coreWhisperInterval}
               onSetCoreWhisperInterval={props.onSetCoreWhisperInterval}
+              turnSkippingEnabled={props.turnSkippingEnabled}
+              onSetTurnSkippingEnabled={props.onSetTurnSkippingEnabled}
+              isMultiChar={props.isMultiChar}
               showThinking={props.showThinking}
               onSetShowThinking={props.onSetShowThinking}
+              answerConfirmationOverride={props.answerConfirmationOverride}
+              onSetAnswerConfirmationOverride={props.onSetAnswerConfirmationOverride}
             />
           </CollapsibleCard>
         )}
@@ -433,6 +541,7 @@ export function ChatSidebar(props: ChatSidebarProps) {
             onRenameClick={props.onRenameClick}
             onStateClick={props.onStateClick}
             onContinueChatClick={props.onContinueChatClick}
+            onMergeConversationClick={props.onMergeConversationClick}
             chatPhotoCount={props.chatPhotoCount}
             onGalleryClick={props.onGalleryClick}
             isAutonomousRoom={props.isAutonomousRoom}
@@ -479,6 +588,7 @@ export default ChatSidebar
 // =================================================================
 
 interface CollapsedStripProps {
+  rootRef?: (node: HTMLElement | null) => void
   baseClasses: string[]
   sortedParticipants: ParticipantData[]
   turnOrderMap: Map<string, TurnOrderEntry>
@@ -493,6 +603,7 @@ interface CollapsedStripProps {
 }
 
 function CollapsedStrip({
+  rootRef,
   baseClasses,
   sortedParticipants,
   turnOrderMap,
@@ -506,7 +617,7 @@ function CollapsedStrip({
   expandSidebar,
 }: CollapsedStripProps) {
   return (
-    <div className={['qt-chat-sidebar-collapsed', ...baseClasses].join(' ')}>
+    <div ref={rootRef} className={['qt-chat-sidebar-collapsed', ...baseClasses].join(' ')}>
       <button
         onClick={toggleCollapsed}
         className="qt-chat-sidebar-toggle"
@@ -749,6 +860,7 @@ interface ChatSectionProps {
   imageProfileId?: string | null
   alertCharactersOfLanternImages?: boolean | null
   avatarGenerationEnabled?: boolean | null
+  timelineMode?: 'realtime' | 'narrative' | null
   isDangerousChat?: boolean
   conciergeOverride?: 'OFF' | null
   onToolSettingsClick?: () => void
@@ -769,6 +881,7 @@ function ChatSection({
   imageProfileId,
   alertCharactersOfLanternImages,
   avatarGenerationEnabled,
+  timelineMode,
   isDangerousChat,
   conciergeOverride,
   onToolSettingsClick,
@@ -783,6 +896,7 @@ function ChatSection({
   const [alertImagesSaving, setAlertImagesSaving] = useState(false)
   const [avatarGenSaving, setAvatarGenSaving] = useState(false)
   const [conciergeSaving, setConciergeSaving] = useState(false)
+  const [timelineModeSaving, setTimelineModeSaving] = useState(false)
 
   // Sync from props when chat record changes upstream
   useEffect(() => {
@@ -890,6 +1004,34 @@ function ChatSection({
       showErrorToast(msg || 'Failed to update Lantern image announcements')
     } finally {
       setAlertImagesSaving(false)
+    }
+  }
+
+  // Which clock the chat's story keeps for episodic memory. Persisted as the
+  // explicit enum value; NULL in the record reads as 'realtime'.
+  const handleTimelineModeChange = async (value: 'realtime' | 'narrative') => {
+    try {
+      setTimelineModeSaving(true)
+      const res = await fetch(`/api/v1/chats/${chatId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat: { timelineMode: value } }),
+      })
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`)
+      }
+      showSuccessToast(
+        value === 'narrative'
+          ? 'The story now keeps its own hours'
+          : 'The story is back on the clock on the wall'
+      )
+      onChatUpdated?.()
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      showErrorToast(msg || "Failed to change the story's clock")
+    } finally {
+      setTimelineModeSaving(false)
     }
   }
 
@@ -1001,6 +1143,25 @@ function ChatSection({
             </option>
           ))}
         </select>
+      </label>
+
+      {/* The Story's Clock — episodic-memory timeline mode */}
+      <label className="qt-label">
+        <span className="block mb-1">The Story&rsquo;s Clock</span>
+        <select
+          value={timelineMode === 'narrative' ? 'narrative' : 'realtime'}
+          onChange={(e) => handleTimelineModeChange(e.target.value === 'narrative' ? 'narrative' : 'realtime')}
+          disabled={timelineModeSaving}
+          className="qt-select text-sm"
+        >
+          <option value="realtime">Real time</option>
+          <option value="narrative">Story time</option>
+        </select>
+        <span className="block mt-1 qt-text-secondary text-xs">
+          {timelineMode === 'narrative'
+            ? 'The tale keeps its own hours: the Commonplace Book files memories by the story’s reckoning — the third night at sea, the eve of the coronation — rather than the calendar on the wall.'
+            : 'Memories are filed by the calendar on the wall — “last Tuesday” means the actual Tuesday. Switch to Story time if this chat runs on a fictional clock.'}
+        </span>
       </label>
 
       {/* Project */}
@@ -1122,8 +1283,13 @@ interface VisibilitySectionProps {
   onSetCoreWhisperEnabled?: (value: boolean | null) => void
   coreWhisperInterval?: number | null
   onSetCoreWhisperInterval?: (value: number | null) => void
+  turnSkippingEnabled?: boolean | null
+  onSetTurnSkippingEnabled?: (value: boolean | null) => void
+  isMultiChar?: boolean
   showThinking?: boolean | null
   onSetShowThinking?: (value: boolean | null) => void
+  answerConfirmationOverride?: 'ON' | 'OFF' | null
+  onSetAnswerConfirmationOverride?: (value: 'ON' | 'OFF' | null) => void
 }
 
 const CORE_WHISPER_INTERVAL_OPTIONS = [
@@ -1149,8 +1315,13 @@ function VisibilitySection({
   onSetCoreWhisperEnabled,
   coreWhisperInterval,
   onSetCoreWhisperInterval,
+  turnSkippingEnabled,
+  onSetTurnSkippingEnabled,
+  isMultiChar,
   showThinking,
   onSetShowThinking,
+  answerConfirmationOverride,
+  onSetAnswerConfirmationOverride,
 }: VisibilitySectionProps) {
   return (
     <div className="qt-chat-sidebar-section qt-chat-sidebar-section-visibility flex flex-col gap-3">
@@ -1194,6 +1365,27 @@ function VisibilitySection({
             <span
               className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
                 allowCrossCharacterVaultReads ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+      )}
+
+      {onSetTurnSkippingEnabled && isMultiChar && (
+        <div className="flex items-center justify-between pt-2 border-t qt-border-default">
+          <span className="qt-text-secondary text-xs" title="When on, characters may pass a turn with a Host note when they have nothing to add, and the Skip button posts a Host note too. NULL/on is the default.">Turn Skipping</span>
+          <button
+            onClick={() => onSetTurnSkippingEnabled(turnSkippingEnabled === false ? true : false)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              turnSkippingEnabled !== false ? 'bg-primary' : 'qt-bg-muted'
+            }`}
+            role="switch"
+            aria-checked={turnSkippingEnabled !== false}
+            title={turnSkippingEnabled !== false ? 'Characters may pass their turn. Click to require everyone to speak.' : 'Every selected character must speak. Click to allow passing.'}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
+                turnSkippingEnabled !== false ? 'translate-x-6' : 'translate-x-1'
               }`}
             />
           </button>
@@ -1264,6 +1456,27 @@ function VisibilitySection({
           </div>
         </div>
       )}
+
+      {onSetAnswerConfirmationOverride && (
+        <div className="flex flex-col gap-2 pt-2 border-t qt-border-default">
+          <div className="flex items-center justify-between gap-2">
+            <span className="qt-text-secondary text-xs">Answer Confirmation</span>
+            <select
+              value={answerConfirmationOverride ?? 'inherit'}
+              onChange={(e) => {
+                const v = e.target.value
+                onSetAnswerConfirmationOverride(v === 'ON' ? 'ON' : v === 'OFF' ? 'OFF' : null)
+              }}
+              className="qt-select qt-select-sm"
+              title="Vet this chat's looked-up answers against what the character actually knew. Inherit defers to the project, then the global default."
+            >
+              <option value="inherit">Inherit</option>
+              <option value="ON">On</option>
+              <option value="OFF">Off</option>
+            </select>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1277,6 +1490,7 @@ interface OrganizeSectionProps {
   onRenameClick?: () => void
   onStateClick?: () => void
   onContinueChatClick?: () => void
+  onMergeConversationClick?: () => void
   chatPhotoCount?: number
   onGalleryClick?: () => void
   isAutonomousRoom?: boolean
@@ -1288,6 +1502,7 @@ function OrganizeSection({
   onRenameClick,
   onStateClick,
   onContinueChatClick,
+  onMergeConversationClick,
   chatPhotoCount = 0,
   onGalleryClick,
   isAutonomousRoom = false,
@@ -1295,6 +1510,12 @@ function OrganizeSection({
 }: OrganizeSectionProps) {
   const handleExport = () => {
     window.location.href = `/api/v1/chats/${chatId}?action=export`
+  }
+
+  const handleExportMarkdown = () => {
+    // The server names the file after the chat title via Content-Disposition;
+    // the filename here is only the Electron/anchor fallback.
+    triggerUrlDownload(`/api/v1/chats/${chatId}?action=export-markdown`, 'chat_transcript.md')
   }
 
   return (
@@ -1310,6 +1531,8 @@ function OrganizeSection({
           <span>Edit Enclave</span>
         </button>
       )}
+
+      <CopyChatIdButton chatId={chatId} variant="palette" />
 
       {onRenameClick && (
         <button
@@ -1347,6 +1570,18 @@ function OrganizeSection({
         </button>
       )}
 
+      {onMergeConversationClick && !isAutonomousRoom && (
+        <button
+          type="button"
+          onClick={onMergeConversationClick}
+          className="qt-tool-palette-button"
+          title="Merge another conversation's characters and summary into this one"
+        >
+          <Icon name="user-plus" className="w-4 h-4" />
+          <span>Merge In…</span>
+        </button>
+      )}
+
       <button
         type="button"
         onClick={handleExport}
@@ -1355,6 +1590,16 @@ function OrganizeSection({
       >
         <Icon name="download" className="w-4 h-4" />
         <span>Export</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={handleExportMarkdown}
+        className="qt-tool-palette-button"
+        title="Export the conversation as a readable Markdown transcript"
+      >
+        <Icon name="file" className="w-4 h-4" />
+        <span>Export Markdown</span>
       </button>
 
       {chatPhotoCount > 0 && onGalleryClick && (

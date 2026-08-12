@@ -1,8 +1,8 @@
 # Dead Code Analysis Report
 
-**Last Updated**: 2026-06-03
+**Last Updated**: 2026-07-30
 **Tool Used**: knip
-**Codebase**: Quilltap v4.6.0-dev.111
+**Codebase**: Quilltap v4.8.0-dev.124
 
 ---
 
@@ -12,12 +12,93 @@ Dead code analysis is performed periodically using knip. A knip configuration fi
 
 | Category | Status |
 |----------|--------|
-| Unused Files | None flagged as of 2026-06-03. Prior cleanups: 2026-05-28 (clothing-records/physical-descriptions), 2026-05-17 (terminal/embedded-gallery/restore/search-replace/connection-profiles barrels + dead modals/sidebars) |
-| Unused Dependencies | None flagged as of 2026-06-03. Prior removals: @lexical/clipboard, @lexical/history, @quilltap/theme-storybook, jsdom (2026-05-17); @aws-sdk/client-s3, svgo (2026-03-05); bcrypt, qrcode, ts-jest (2026-01-30) |
-| Unused Exports | 1237 → 1170 (2026-06-03); remainder are intentional barrel/plugin/registry/lifecycle/schema surface |
-| Unused Exported Types | 754 → 727 (2026-06-03); most are intentional plugin contracts and Zod `z.infer` data-model surface |
+| Unused Files | 2 remaining as of 2026-07-30, both kept-with-reason (in-progress SVAR file-manager surface — see below). 2026-07-20 removed the superseded `QtapDocLink` Document-Mode chain. Prior cleanups: 2026-05-28 (clothing-records/physical-descriptions), 2026-05-17 (terminal/embedded-gallery/restore/search-replace/connection-profiles barrels + dead modals/sidebars) |
+| Unused Dependencies | None flagged as of 2026-07-30 (`tar` false-positive added to `ignoreDependencies`; `@anthropic-ai/sdk` transitive-in-test added 2026-07-20). Prior removals: @lexical/clipboard, @lexical/history, @quilltap/theme-storybook, jsdom (2026-05-17); @aws-sdk/client-s3, svgo (2026-03-05); bcrypt, qrcode, ts-jest (2026-01-30) |
+| Unused Exports | 1169 (2026-07-30, from 1173); remainder are intentional barrel/plugin/registry/lifecycle/schema surface |
+| Unused Exported Types | 737 (2026-07-30, from 741); most are intentional plugin contracts and Zod `z.infer` data-model surface |
 | Unused Enum Members | 3 in ErrorCode (preserved for future use) |
-| Duplicate Exports | ~44 (named + default pattern, low priority) |
+| Duplicate Exports | 54 (named + default pattern, low priority) |
+
+---
+
+## 2026-07-30 — v4.8 release sweep, second pass (knip)
+
+knip flagged **2 unused files** (both the same kept-with-reason SVAR pair as 2026-07-20), **1 unused dependency** (a false positive — see below), **1173 unused exports**, and **741 unused exported types**.
+
+Because the exports/types lists are dominated by intentional surface, this round used the same method as 2026-06-03: a whole-repo identifier reference count over all 3,010 source files (`.ts/.tsx/.js/.mjs/.json/.md/.css`, `node_modules` excluded), scoring each of the 1,914 flagged symbols by references **outside** its defining file. That isolated **77 symbols referenced nowhere at all** and **13 more referenced only by their own tests**; both sets were then checked by hand. Everything else has a real consumer somewhere knip does not follow (a barrel, a test, `packages/`, `plugins/`).
+
+Verified with `npx tsc` (clean), `npm run lint` (clean), and the full `npm run test:unit` suite (559 suites / 9,219 tests passing). Re-running knip confirms the reductions with no new unused files.
+
+### Removed — functions / consts
+
+| File | Removed |
+|------|---------|
+| `lib/chat/message-navigation.ts` | `highlightMessage` (+ its 4 tests in `__tests__/unit/lib/chat/message-navigation.test.ts`) |
+| `lib/llm/pricing-fetcher.ts` | `findCheapestAvailableModel` |
+| `lib/paths.ts` | `getThemeBundleCacheDir` (+ the stale key in the `@/lib/paths` mock in `bundle-loader.test.ts`) |
+| `components/ui/icons/icon-registry.ts` | `ICON_NAMES` |
+
+Notes:
+
+- **`highlightMessage`** was dead *and* wrong: it added the class `memory-source-highlight`, which does not exist in any stylesheet — the live `scrollToMessage` uses `qt-memory-source-highlight` (`app/styles/qt-components/_chat.css:2963`). Its three siblings stay. `getPendingMessageNavigation` and `scrollToMessage` are wired in `app/salon/[id]/SalonView.tsx`; `navigateToMessage` is the writer half of the same sessionStorage pair and is kept under the lifecycle-pair rule below.
+- **`findCheapestAvailableModel`** joins `getAllModelsSortedByCost` / `clearPricingCache` / `isCacheFresh`, removed from the same file in the 2026-02-20 sweep. Its in-file helpers `getPricingCache` and `sortByCost` remain live.
+- **`getThemeBundleCacheDir`** built `<base>/themes/.cache`, a directory nothing reads or writes; `lib/themes/bundle-loader.ts` does not import it. Its only reference was a vestigial key in a jest mock factory.
+- **`ICON_NAMES`** was a speculative "for storybook / soft validation" array with no consumer in the app, `packages/`, `plugins/`, the bundled themes, or the docs. `ICON_REGISTRY` (exported) and `isIconName` are the live surface of the themeable-icon registry, and the array is a one-liner to reinstate if the icon storybook ever needs it.
+
+### Removed — types (unused, no references anywhere)
+
+| File | Removed |
+|------|---------|
+| `lib/database/interfaces.ts` | `DatabaseBackendFactory` (`BackendRegistry` went from this file in the 2026-06-03 sweep for the same reason) |
+| `lib/export/types.ts` | `MemoryCollection` |
+| `lib/background-jobs/queue-service.ts` | `RegenerateConversationSummariesPayload` (`Record<string, never>` — `enqueueRegenerateConversationSummaries` takes no payload) |
+| `lib/mount-index/ensure-official-store.ts` | `AdoptableStore` (its siblings `OfficialStoreEntityRow` / `EnsureOfficialStoreConfig` are live) |
+
+### knip.json — silenced a legitimate false positive
+
+- **`tar`** added to `ignoreDependencies`. knip 6.29 reports it as an unused dependency, but `lib/plugins/registry-client.ts:17` does `import * as tar from 'tar'`, and that module is live: `installPackageFromRegistry` is called by `lib/plugins/installer.ts` and `getLatestVersion` by `lib/plugins/version-checker.ts`. Removing the dependency would break plugin install and update checks. (knip does not flag `registry-client.ts` itself as unused, so the miss is in its resolution of the `tar` package's `exports` map, not in reachability.)
+
+### Investigated but KEPT (intentional surface / false positives)
+
+Beyond the standing categories from prior rounds (Zod `z.infer` schema surface, `*ToolInputSchema` types, plugin SDK contracts, registry accessors, theme validation API, lifecycle `start`/`stop` pairs, barrel re-exports), this round specifically cleared:
+
+- **`components/files/svar/index.ts` and `components/files/svar/SvarFilePicker.tsx`** — unchanged from 2026-07-20. Still the in-progress SVAR file-manager surface (`docs/developer/features/svar-file-manager-implementation-plan.md`): the barrel is the documented runtime-free public API, and `SvarFilePicker` is the Phase 4 light costume awaiting page wiring. The Phase 3 `SvarFileManager` sibling **is** wired, dynamic-imported by `app/scriptorium/[id]/DocumentStoreDetailView.tsx` behind the "New file manager (beta)" toggle. `SvarAction` (`svar-types.ts`) is kept with them as part of the same quarantined type surface.
+- **`navigateToMessage`** (`lib/chat/message-navigation.ts`) — the only writer of the `scrollToMessageId` / `highlightMessageId` sessionStorage keys, whose reader is live in `SalonView`. Kept as the write half of a wired pair, same rule as the `start*`/`stop*` lifecycle pairs; note the memory-provenance feature currently has no UI entry point calling it.
+- **`invalidateFrozenArchive`** (`lib/memory/frozen-archive-cache.ts`) — the cache-invalidation half of a live cache (`getOrComputeFrozenArchive`). **Worth a follow-up:** nothing in production calls it, so the cache only refreshes when a character's compaction generation changes. The out-of-band edits its doc comment names (manual deletion, housekeeping sweep, import) leave a stale frozen archive in place until the next compaction. That is a behavior gap, not dead code — removing the function would only make it harder to fix.
+- **`findExclusiveChatsForCharacter` / `findExclusiveImagesForChats`** (`lib/cascade-delete.ts`), **`loadParticipantMemories` / `loadProjectContext`** (`lib/chat/first-message-context.ts`), and **`buildRecoverySystemPrompt` / `buildRecoveryUserMessage` / `buildStaticFallbackMessage`** (`lib/services/chat-message/recovery.service.ts`) — flagged as referenced only by tests, but each is called in-file by the module's live entry point (`getCascadeDeletePreview`, `buildFirstMessageContext`, and the recovery flow respectively). Exported for direct unit testing.
+- **`SearchScriptoriumBrahmaToolInput`** and the self-inventory `VaultSubSection` / `VaultAccessSubSection` / `ContextSubSection` types — tool input/section surface, kept under the single-source-of-truth tool convention in CLAUDE.md alongside `QuilltapSubSection`.
+- **~50 exported helpers used only inside their own module** (e.g. `getSingleUserName`/`getSingleUserEmail`, `buildCarinaErrorContent`, `collectMetadataTested`, `resolveReplyInSenderMailbox`, `generateReportData`). Un-exporting them is pure churn with real merge cost against in-flight work, and several are the natural seam for a future test. Left as-is deliberately.
+- **52 symbols whose only external reference is a barrel re-export** — concentrated in `lib/tools/index.ts` (10), `lib/background-jobs/index.ts` (9), `lib/database/backends/sqlite/index.ts` (9), and `lib/plugins/index.ts` (9). These are the documented plugin/tool API surface; see the 2026-04-29 section.
+
+---
+
+## 2026-07-20 — v4.8 release sweep (knip)
+
+knip flagged **3 unused files**, **1 unlisted dependency**, and **3 unlisted binaries**. The exports/types lists are the same intentional barrel/plugin/registry/schema surface documented in prior rounds (verified unchanged in character). Verified with `npx tsc --noEmit` (clean) and the full `npm run test:unit` suite (524 suites / 8717 tests passing).
+
+### Removed — superseded `QtapDocLink` Document-Mode chain
+
+`components/chat/QtapDocLink.tsx` was the original `qtap://` link renderer. It has been fully superseded by `QtapLink` (`components/qtap/QtapLink.tsx`) + `QtapLinkContext` + `QtapLinkProvider` (wired in `app-layout.tsx`), which is what `MessageContent`'s `a()` renderer actually uses. Removing the dead component orphaned its entire private support chain, all removed together:
+
+| File / location | Removed |
+|-----------------|---------|
+| `components/chat/QtapDocLink.tsx` | whole file (no importer; only a stale comment referenced it) |
+| `components/chat/QtapDocContext.tsx` | whole file — `QtapDocContext`, `useQtapDoc`, `QtapDocOpener` (only consumer was `QtapDocLink`) |
+| `app/salon/[id]/SalonView.tsx` | `qtapDocOpener` `useMemo`, `qtapExistsCacheRef`, the `QtapDocContext.Provider` wrapper, and the now-orphaned `QtapDocContext` / `QtapUriParts` / `resolveDocumentExistsForChat` imports |
+
+`resolveDocumentExistsForChat` (in `app/salon/[id]/hooks/documentModeApi.ts`) stays — it's still used by the live `QtapLinkProvider`. `components/chat/__tests__/QtapDocLink.test.tsx` was left in place: despite its filename it tests the live `QtapLink`, not the removed component. A stale comment in `MessageContent.tsx` was updated to name `QtapLink`.
+
+### knip.json — silenced legitimate false positives
+
+- **`@anthropic-ai/sdk`** added to `ignoreDependencies`. It's a transitive dependency (pulled in by the bundled Anthropic plugin) imported only by `__tests__/unit/plugins/anthropic-model-family-params.test.ts`; there is no direct root-`package.json` entry to flag. Same rationale as the existing `better-sqlite3-multiple-ciphers` entry.
+- **`ps`, `tasklist`, `du`** added to `ignoreBinaries`. These are legitimate OS binaries invoked at runtime: `ps`/`tasklist` for cross-platform liveness checks in `lib/database/backends/sqlite/instance-lock.ts`, `du` for size reporting in `scripts/build-standalone-tarball.ts`.
+
+### Investigated but KEPT — in-progress SVAR file-manager surface
+
+Both remaining flagged files belong to the actively-in-development SVAR file-manager migration (`docs/developer/features/svar-file-manager-implementation-plan.md`). They are pre-built ahead of the phase that wires them, not dead:
+
+- **`components/files/svar/SvarFilePicker.tsx`** — the Phase 4 "light costume" attach-a-file picker (replaces `FolderPicker.tsx` / `DocumentPickerModal.tsx`). Its support function `wirePickerSelection` is already exercised by `createSvarAdapter.test.ts`; only the page wiring (Phase 4) is outstanding. The Phase 3 `SvarFileManager` sibling **is** already wired (dynamic-imported by `app/scriptorium/[id]/DocumentStoreDetailView.tsx`).
+- **`components/files/svar/index.ts`** — the documented runtime-free public surface (barrel) of the SVAR adapter. Consumers and tests currently import the submodules directly, so nothing imports the barrel yet, but it is intentional API for the feature.
 
 ---
 
@@ -262,9 +343,11 @@ Three `ErrorCode` enum values in `lib/errors.ts` are not currently referenced bu
 
 ### Duplicate Exports (~39)
 
-Knip flags ~39 components/modules that have both named and default exports. This is a common React pattern (named export for testing, default export for lazy loading). Examples include various components across `components/` and renamed legacy exports in auth middleware and the single-user module.
+Knip flags ~39 components/modules that have both named and default exports. This is a common React pattern (named export for testing, default export for lazy loading). Examples include various components across `components/`.
 
-**Status**: Low priority. The named + default pattern is intentional and widely used in the codebase. Legacy aliases (e.g., `withAuth`/`withContext` in auth middleware) may still be needed for backwards compatibility with plugins or older code paths.
+**Status**: Low priority. The named + default pattern is intentional and widely used in the codebase.
+
+The context-middleware and single-user legacy aliases that used to appear here are gone as of 4.8: `lib/api/middleware/auth.ts` is now `context.ts` and exports only the `withContext*` / `createContext*` names plus `exists`, and `lib/auth/single-user.ts` no longer carries the `*Unauthenticated*` aliases.
 
 ### Configuration Hints (2)
 

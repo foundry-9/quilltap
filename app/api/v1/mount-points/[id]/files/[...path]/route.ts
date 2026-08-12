@@ -24,8 +24,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
-import type { RequestContext } from '@/lib/api/middleware/auth';
+import { createContextParamsHandler } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
 import { storeMountFile } from '@/lib/mount-index/store-file';
@@ -66,7 +66,7 @@ const readQuerySchema = z.object({
   raw: z.coerce.boolean().optional(),
 });
 
-export const GET = createAuthenticatedParamsHandler<Params>(
+export const GET = createContextParamsHandler<Params>(
   async (req: NextRequest, _ctx: RequestContext, { id, path }) => {
     // Raw (still-encoded) join for error-logging context until we can safely
     // decode; joinPath() may throw FileOpError on malformed encoding.
@@ -129,7 +129,7 @@ const writeBodySchema = z.object({
   force: z.boolean().optional(),
 });
 
-export const PUT = createAuthenticatedParamsHandler<Params>(
+export const PUT = createContextParamsHandler<Params>(
   async (req: NextRequest, { user }: RequestContext, { id, path }) => {
     // Raw (still-encoded) join for error-logging context until we can safely
     // decode; joinPath() may throw FileOpError on malformed encoding.
@@ -211,7 +211,7 @@ export const PUT = createAuthenticatedParamsHandler<Params>(
 // DELETE
 // ============================================================================
 
-export const DELETE = createAuthenticatedParamsHandler<Params>(
+export const DELETE = createContextParamsHandler<Params>(
   async (_req: NextRequest, { user }: RequestContext, { id, path }) => {
     // Raw (still-encoded) join for error-logging context until we can safely
     // decode; joinPath() may throw FileOpError on malformed encoding.
@@ -246,7 +246,7 @@ const patchBodySchema = z
     message: 'PATCH requires "description" or "rename"',
   });
 
-export const PATCH = createAuthenticatedParamsHandler<Params>(
+export const PATCH = createContextParamsHandler<Params>(
   async (req: NextRequest, { user, repos }: RequestContext, { id, path }) => {
     // Raw (still-encoded) join for error-logging context until we can safely
     // decode; joinPath() may throw FileOpError on malformed encoding.

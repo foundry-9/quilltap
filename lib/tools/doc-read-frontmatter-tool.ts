@@ -52,8 +52,9 @@ export const docReadFrontmatterToolDefinition = {
 /**
  * Validates input for doc_read_frontmatter tool.
  */
-export function validateDocReadFrontmatterInput(input: unknown): input is DocReadFrontmatterInput {
-  return docReadFrontmatterToolInputSchema.safeParse(input).success;
+export function validateDocReadFrontmatterInput(input: unknown): DocReadFrontmatterInput | null {
+  const parsed = docReadFrontmatterToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 

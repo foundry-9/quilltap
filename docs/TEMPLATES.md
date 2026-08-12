@@ -36,7 +36,7 @@ You are {{char}}, meeting {{user}} at the appointed hour.
 **Timestamp configuration options:**
 - **Mode**: Disabled, conversation start only, or every message
 - **Format**: Friendly, ISO 8601, date only, time only, or custom format
-- **Fictional time**: Set a base timestamp that advances with real elapsed time
+- **Fictional time**: Set a base timestamp that advances with real elapsed time. The base is read as a clock reading in the chat's configured timezone, and the clock is anchored at chat creation
 - **Auto-prepend**: Automatically adds "Current time: [timestamp]" at the start of system prompts (when enabled, `{{timestamp}}` is not needed)
 
 ### Usage Example

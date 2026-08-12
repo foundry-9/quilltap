@@ -31,9 +31,387 @@ import {
   importMemories,
 } from './import-entities';
 import { importDocumentStores } from './import-document-stores';
+import { importFiles } from './import-files';
+import {
+  importPromptTemplates,
+  importProviderModels,
+  importPluginConfigs,
+  importInstanceSettings,
+} from './import-configuration';
 import { reconcileRelationships } from './reconcile';
+import { enqueueEmbeddingGenerate } from '@/lib/background-jobs/queue-service';
+import { getDefaultEmbeddingProfile } from '@/lib/embedding/embedding-service';
+import { scheduleRefit } from '@/lib/embedding/embedding-job-scheduler';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
+
+export class PreserveIdsCollisionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PreserveIdsCollisionError';
+  }
+}
+
+function getPreserveIdsCreateOptions(sourceId: string | undefined, options: ImportOptions) {
+  if (!sourceId || !options.preserveIds) return undefined;
+  return { id: sourceId };
+}
+
+/**
+ * Pre-scan every id the bundle would claim and check it against the live
+ * instance, before a single write happens.
+ *
+ * Two modes (spec §3 / §6, F4):
+ * - `refuse-on-collision` (default): any hit throws — no partial application.
+ * - `skip-if-present` (rehydrate only): a hit *inside the rehydrate target* —
+ *   the target character itself, its vault mount, rows inside that vault, its
+ *   own memories — is recorded in `idMaps.preserveIdsSkips` for the importers
+ *   to skip. A hit anywhere else still throws, atomically.
+ */
+async function preflightPreserveIds(
+  userId: string,
+  data: ReturnType<typeof getExportData>,
+  options: ImportOptions,
+  repos: ReturnType<typeof getUserRepositories>,
+  globalRepos: ReturnType<typeof getRepositories>,
+  warnings: string[],
+  idMaps: IdMappingState
+): Promise<void> {
+  if (!options.preserveIds) return;
+
+  const mode = options.preserveIdsMode ?? { mode: 'refuse-on-collision' as const };
+  const skipTarget = mode.mode === 'skip-if-present' ? mode : null;
+
+  moduleLogger.debug('Running preserveIds preflight', {
+    userId,
+    mode: mode.mode,
+    targetCharacterId: skipTarget?.targetCharacterId,
+    targetVaultMountPointId: skipTarget?.targetVaultMountPointId,
+  });
+
+  /** Is this mount the rehydrate target's own vault? */
+  const isTargetVault = (mountPointId: string | null | undefined): boolean =>
+    skipTarget !== null &&
+    skipTarget.targetVaultMountPointId !== null &&
+    mountPointId === skipTarget.targetVaultMountPointId;
+
+  /** Does this content row have a link inside the target vault? */
+  const fileLinkedInTargetVault = async (fileId: string): Promise<boolean> => {
+    if (!skipTarget?.targetVaultMountPointId) return false;
+    const links = await globalRepos.docMountFileLinks.findByFileId(fileId);
+    return links.some((link) => link.mountPointId === skipTarget.targetVaultMountPointId);
+  };
+
+  const documents = data.documents ?? [];
+  const blobs = data.blobs ?? [];
+  const isNonEmpty = (id: string | null | undefined): id is string => Boolean(id);
+  // Hard-link groups share one content row, so the same fileId legitimately
+  // appears on several document/blob records — dedupe rather than treating
+  // the repeat as a duplicate claim.
+  const carriedFileIds = Array.from(
+    new Set([...documents.map((d) => d.fileId), ...blobs.map((b) => b.fileId)].filter(isNonEmpty))
+  );
+  const carriedLinkIds = [...documents.map((d) => d.linkId), ...blobs.map((b) => b.linkId)].filter(isNonEmpty);
+  // The blob leg of the export emits one record per LINK (`listByMountPoint`
+  // joins from `doc_mount_file_links`), so a content-addressed blob linked at
+  // two paths appears twice under one blobId — identical claims over a single
+  // row, not a duplicate claim. Dedupe, as with `carriedFileIds` above; the
+  // sha-match skip below still refuses a genuine same-id/different-bytes clash.
+  const carriedBlobIds = Array.from(new Set(blobs.map((b) => b.blobId).filter(isNonEmpty)));
+  const carriedFolderIds = (data.folders ?? [])
+    .map((folder: { id?: string | null }) => folder.id)
+    .filter(isNonEmpty);
+
+  // Content hashes the bundle claims for each carried content id. The two
+  // content-addressed tables are found-or-created **by sha256**
+  // (`linkDocumentContent` / `linkBlobContent`), so when a row for these exact
+  // bytes already exists the writer reuses it and never honors the carried id
+  // — dedup, not a claim. See the skip classifiers below.
+  const carriedContentSha = new Map<string, string>();
+  for (const doc of documents) {
+    if (doc.fileId && doc.contentSha256) carriedContentSha.set(doc.fileId, doc.contentSha256);
+  }
+  for (const blob of blobs) {
+    if (blob.fileId && blob.sha256) carriedContentSha.set(blob.fileId, blob.sha256);
+  }
+  const carriedBlobSha = new Map<string, string>();
+  for (const blob of blobs) {
+    if (blob.blobId && blob.sha256) carriedBlobSha.set(blob.blobId, blob.sha256);
+  }
+
+  const seenIds = new Map<string, string>();
+  const checks: Array<{
+    kind: string;
+    ids: string[];
+    exists: (id: string) => Promise<boolean>;
+    /**
+     * Skip-if-present classifier: given that `id` exists, does it live inside
+     * the rehydrate target? Only consulted in skip-if-present mode; kinds
+     * without one always refuse on collision.
+     */
+    skippable?: (id: string) => Promise<boolean>;
+  }> = [
+    {
+      kind: 'character',
+      ids: (data.characters ?? []).map((character) => character.id),
+      exists: async (id) => Boolean(await repos.characters.findById(id)),
+      skippable: async (id) => id === skipTarget?.targetCharacterId,
+    },
+    {
+      kind: 'tag',
+      ids: (data.tags ?? []).map((tag) => tag.id),
+      exists: async (id) => Boolean(await repos.tags.findById(id)),
+    },
+    {
+      kind: 'connection profile',
+      ids: (data.connectionProfiles ?? []).map((profile) => profile.id),
+      exists: async (id) => Boolean(await repos.connections.findById(id)),
+    },
+    {
+      kind: 'image profile',
+      ids: (data.imageProfiles ?? []).map((profile) => profile.id),
+      exists: async (id) => Boolean(await repos.imageProfiles.findById(id)),
+    },
+    {
+      kind: 'embedding profile',
+      ids: (data.embeddingProfiles ?? []).map((profile) => profile.id),
+      exists: async (id) => Boolean(await repos.embeddingProfiles.findById(id)),
+    },
+    {
+      kind: 'roleplay template',
+      ids: (data.roleplayTemplates ?? []).map((template) => template.id),
+      exists: async (id) => Boolean(await globalRepos.roleplayTemplates.findById(id)),
+    },
+    {
+      kind: 'project',
+      ids: (data.projects ?? []).map((project) => project.id),
+      exists: async (id) => Boolean(await repos.projects.findById(id)),
+    },
+    {
+      kind: 'group',
+      ids: (data.groups ?? []).map((group) => group.id),
+      exists: async (id) => Boolean(await repos.groups.findById(id)),
+    },
+    {
+      kind: 'chat',
+      ids: (data.chats ?? []).map((chat) => chat.id),
+      exists: async (id) => Boolean(await repos.chats.findById(id)),
+    },
+    {
+      kind: 'memory',
+      ids: (data.memories ?? []).map((memory) => memory.id),
+      exists: async (id) => Boolean(await repos.memories.findById(id)),
+      // The rehydrate target's own memories may already be back (a partial
+      // restore that is being re-run); another character's memory refuses.
+      skippable: async (id) => {
+        const memory = await repos.memories.findById(id);
+        return memory?.characterId === skipTarget?.targetCharacterId;
+      },
+    },
+    {
+      kind: 'document store',
+      ids: (data.mountPoints ?? []).map((mountPoint) => mountPoint.id),
+      exists: async (id) => Boolean(await globalRepos.docMountPoints.findById(id)),
+      skippable: async (id) => isTargetVault(id),
+    },
+    {
+      kind: 'file',
+      ids: (data.files ?? []).map((file) => file.id),
+      exists: async (id) => Boolean(await repos.files.findById(id)),
+    },
+    {
+      kind: 'document store folder',
+      ids: carriedFolderIds,
+      exists: async (id) => Boolean(await globalRepos.docMountFolders.findById(id)),
+      skippable: async (id) => {
+        const folder = await globalRepos.docMountFolders.findById(id);
+        return isTargetVault(folder?.mountPointId);
+      },
+    },
+    {
+      kind: 'document store file',
+      ids: carriedFileIds,
+      exists: async (id) => Boolean(await globalRepos.docMountFiles.findById(id)),
+      // Content rows are content-addressed and shared across every vault
+      // holding the same bytes — a conversation summary from a group chat
+      // lives on one row with one link per participant. Archiving deletes the
+      // target's link but leaves the row standing on its co-owners' links, so
+      // "is it linked in the target vault?" answers no for content the target
+      // legitimately owned. Matching bytes settle it instead: the writer
+      // find-or-creates by sha256 and discards the carried id, so an id whose
+      // content is already present is dedup rather than a collision. A
+      // same-id/different-bytes row is a real clash and still refuses.
+      skippable: async (id) => {
+        const existing = await globalRepos.docMountFiles.findById(id);
+        const carriedSha = carriedContentSha.get(id);
+        if (existing && carriedSha && existing.sha256 === carriedSha) return true;
+        return fileLinkedInTargetVault(id);
+      },
+    },
+    {
+      kind: 'document store link',
+      ids: carriedLinkIds,
+      exists: async (id) => Boolean(await globalRepos.docMountFileLinks.findById(id)),
+      skippable: async (id) => {
+        const link = await globalRepos.docMountFileLinks.findById(id);
+        return isTargetVault(link?.mountPointId);
+      },
+    },
+    {
+      kind: 'document store blob',
+      ids: carriedBlobIds,
+      exists: async (id) => Boolean(await globalRepos.docMountBlobs.findById(id)),
+      // Same reasoning as the content row above: a blob row is 1:1 with its
+      // content row, which `linkBlobContent` resolves by sha256 before reusing
+      // whatever blob row already hangs off it.
+      skippable: async (id) => {
+        const blob = await globalRepos.docMountBlobs.findById(id);
+        if (!blob) return false;
+        const carriedSha = carriedBlobSha.get(id);
+        if (carriedSha && blob.sha256 === carriedSha) return true;
+        return fileLinkedInTargetVault(blob.fileId);
+      },
+    },
+  ];
+
+  for (const check of checks) {
+    for (const id of check.ids) {
+      if (!id) continue;
+      if (seenIds.has(id)) {
+        const existingKind = seenIds.get(id);
+        const message = `Preserve IDs collision for ${check.kind} ${id} (also seen as ${existingKind})`;
+        warnings.push(message);
+        throw new PreserveIdsCollisionError(message);
+      }
+      const exists = await check.exists(id);
+      if (exists) {
+        if (skipTarget && check.skippable && (await check.skippable(id))) {
+          idMaps.preserveIdsSkips.add(id);
+          seenIds.set(id, check.kind);
+          continue;
+        }
+        const message = `Preserve IDs collision for ${check.kind} ${id}`;
+        warnings.push(message);
+        throw new PreserveIdsCollisionError(message);
+      }
+      seenIds.set(id, check.kind);
+    }
+  }
+
+  if (idMaps.preserveIdsSkips.size > 0) {
+    moduleLogger.debug('Preserve IDs preflight sanctioned skip-if-present ids', {
+      userId,
+      skipCount: idMaps.preserveIdsSkips.size,
+    });
+  }
+}
+
+/**
+ * Enqueue one targeted `EMBEDDING_GENERATE` per memory this import created.
+ *
+ * Imported memories arrive with a NULL embedding on purpose — a foreign
+ * instance's vectors are meaningless here (see `importMemories`). Mirrors the
+ * memory backfill sweeper (`/api/v1/memories?action=backfill-embeddings`)
+ * exactly: the **system default profile**, whatever its provider, embeds
+ * everything — memories, chunks, help docs — so imported rows use it too,
+ * never a different or second-guessed one.
+ *
+ * For the BUILTIN TF-IDF default the corpus itself just grew, so a debounced
+ * vocabulary refit (+ reindex) is also scheduled — the same follow-up manual
+ * memory creation performs. The refit's reindex additionally heals any
+ * per-row job that ran before the vocabulary was first fitted.
+ *
+ * Deliberately *not* one immediate `EMBEDDING_REINDEX_ALL`: that job walks
+ * every character's entire memory table plus conversation chunks, help docs
+ * and mount chunks — wildly disproportionate to an import of a handful of
+ * rows under an API-backed profile.
+ *
+ * Never throws: a failure to schedule re-indexing must not fail an import
+ * whose rows are already committed. The boot reconcile remains the backstop.
+ */
+async function enqueueImportedMemoryEmbeddings(
+  userId: string,
+  memoryRefs: Array<{ id: string; characterId: string }>,
+  warnings: string[]
+): Promise<void> {
+  if (memoryRefs.length === 0) return;
+
+  moduleLogger.debug('Resolving embedding profile for imported memories', {
+    userId,
+    memoryCount: memoryRefs.length,
+  });
+
+  let profile: { id: string; provider: string } | null = null;
+  try {
+    profile = await getDefaultEmbeddingProfile(userId);
+  } catch (error) {
+    moduleLogger.warn('Failed to resolve default embedding profile after import', {
+      userId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  if (!profile) {
+    moduleLogger.warn('Imported memories left unembedded', {
+      userId,
+      memoryCount: memoryRefs.length,
+      reason: 'no default embedding profile is configured',
+    });
+    warnings.push(
+      `${memoryRefs.length} memories were imported without embeddings because no default ` +
+        'embedding profile is configured; they will be indexed once one is.'
+    );
+    return;
+  }
+
+  let enqueued = 0;
+  for (const ref of memoryRefs) {
+    try {
+      const result = await enqueueEmbeddingGenerate(userId, {
+        entityType: 'MEMORY',
+        entityId: ref.id,
+        characterId: ref.characterId,
+        profileId: profile.id,
+      });
+      if (result.isNew) enqueued++;
+    } catch (error) {
+      moduleLogger.warn('Failed to enqueue embedding job for imported memory', {
+        userId,
+        memoryId: ref.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  moduleLogger.debug('Enqueued embedding jobs for imported memories', {
+    userId,
+    profileId: profile.id,
+    requested: memoryRefs.length,
+    enqueued,
+  });
+
+  if (enqueued < memoryRefs.length) {
+    warnings.push(
+      `${memoryRefs.length - enqueued} of ${memoryRefs.length} imported memories could not be ` +
+        'queued for embedding; the next startup sweep will pick them up.'
+    );
+  }
+
+  // BUILTIN TF-IDF vocabularies are corpus-derived and the corpus just grew:
+  // schedule the debounced refit-with-reindex, the same follow-up manual
+  // memory creation performs. (No-op for API-backed providers.)
+  if (profile.provider === 'BUILTIN') {
+    try {
+      await scheduleRefit(userId, profile.id);
+    } catch (error) {
+      moduleLogger.warn('Failed to schedule vocabulary refit after import', {
+        userId,
+        profileId: profile.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+}
 
 /**
  * Executes the import of QuilltapExport data
@@ -65,6 +443,10 @@ export async function executeImport(
     projects: new Map(),
     groups: new Map(),
     mountPoints: new Map(),
+    docMountFileLinks: new Map(),
+    characterVaultMounts: new Map(),
+    skippedCharacterVaults: new Set(),
+    preserveIdsSkips: new Set(),
   };
 
   // Initialize counts
@@ -97,6 +479,27 @@ export async function executeImport(
   };
 
   const data = getExportData(exportData);
+
+  try {
+    await preflightPreserveIds(userId, data, options, repos, globalRepos, warnings, idMaps);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    moduleLogger.warn('Preserve IDs preflight failed', { userId, error: errorMessage });
+    return {
+      success: false,
+      imported,
+      skipped,
+      warnings,
+      importedCharacterIds: Array.from(idMaps.characters.values()),
+    };
+  }
+
+  /**
+   * Memories created by this import, collected so we can enqueue targeted
+   * re-embedding once the whole import has settled. Imported memories always
+   * arrive with a NULL embedding (see importMemories).
+   */
+  let importedMemoryRefs: Array<{ id: string; characterId: string }> = [];
 
   try {
     // Import in dependency order
@@ -273,7 +676,44 @@ export async function executeImport(
       imported.chatDocuments = chatDocsImported;
     }
 
-    // 7c. Group character membership and linked document stores. Remap
+    // 7c. Document stores (Scriptorium) — mount point configs plus, for
+    //    database-backed mounts, folder structures, document bodies and blobs.
+    //
+    //    Must run *before* the group↔store link step below: those links
+    //    resolve through idMaps.mountPoints, which only this importer
+    //    populates. It ran last for a long time, so in a mixed archive every
+    //    group's linked stores were silently dropped. It still has to follow
+    //    importProjects — its project links remap through idMaps.projects.
+    //
+    //    A characters bundle carries each character's vault here too (WP A2).
+    //    Vaults belonging to characters the conflict strategy skipped are
+    //    dropped: the existing character keeps the vault it already has, so
+    //    importing the bundle's copy would strand an orphan store. Dropping
+    //    the mount point is enough — its folders, documents and blobs resolve
+    //    through `idMaps.mountPoints` and are skipped with it.
+    const importableMountPoints = (data.mountPoints ?? []).filter(
+      (mp) => !idMaps.skippedCharacterVaults.has(mp.id)
+    );
+    if (importableMountPoints.length > 0) {
+      const counts = await importDocumentStores(
+        importableMountPoints,
+        data.folders ?? [],
+        data.documents ?? [],
+        data.blobs ?? [],
+        data.projectLinks ?? [],
+        options,
+        repos,
+        idMaps,
+        warnings
+      );
+      imported.documentStores = counts.mountPoints;
+      imported.documentStoreFolders = counts.folders;
+      imported.documentStoreDocuments = counts.documents;
+      imported.documentStoreBlobs = counts.blobs;
+      imported.documentStoreProjectLinks = counts.projectLinks;
+    }
+
+    // 7d. Group character membership and linked document stores. Remap
     // group and character IDs; skip members/links that don't exist in the import.
     if (data.groups && data.groups.length > 0) {
       const groupsData = data.groups as Array<{
@@ -338,37 +778,66 @@ export async function executeImport(
       const counts = await importMemories(
         userId,
         data.memories,
+        options,
         idMaps,
         repos,
         warnings
       );
       imported.memories = counts.imported;
       skipped.memories = counts.skipped;
+      importedMemoryRefs = counts.createdIds;
     }
 
-    // 9. Document stores (Scriptorium) — mount point configs plus, for
-    //    database-backed mounts, folder structures, document bodies and blobs.
-    if (data.mountPoints && data.mountPoints.length > 0) {
-      const counts = await importDocumentStores(
-        data.mountPoints,
-        data.folders ?? [],
-        data.documents ?? [],
-        data.blobs ?? [],
-        data.projectLinks ?? [],
+    // 9. General file library. Runs after projects (folders and files remap
+    //    projectId) and after characters/chats (linkedTo resolution).
+    if (data.files && data.files.length > 0) {
+      const counts = await importFiles(
+        userId,
+        data.files,
+        (data.folders ?? []) as Parameters<typeof importFiles>[2],
         options,
         repos,
         idMaps,
         warnings
       );
-      imported.documentStores = counts.mountPoints;
-      imported.documentStoreFolders = counts.folders;
-      imported.documentStoreDocuments = counts.documents;
-      imported.documentStoreBlobs = counts.blobs;
-      imported.documentStoreProjectLinks = counts.projectLinks;
+      imported.files = counts.files;
+      imported.folders = counts.folders;
+      skipped.files = counts.skipped;
+    }
+
+    // 10. Configuration-shaped types. None of these are referenced by id, so
+    //     they have no ordering constraint against the entity importers.
+    if (data.promptTemplates && data.promptTemplates.length > 0) {
+      const counts = await importPromptTemplates(userId, data.promptTemplates, options, warnings);
+      imported.promptTemplates = counts.imported;
+      skipped.promptTemplates = counts.skipped;
+    }
+
+    if (data.providerModels && data.providerModels.length > 0) {
+      const counts = await importProviderModels(data.providerModels, warnings);
+      imported.providerModels = counts.imported;
+      skipped.providerModels = counts.skipped;
+    }
+
+    if (data.pluginConfigs && data.pluginConfigs.length > 0) {
+      const counts = await importPluginConfigs(userId, data.pluginConfigs, warnings);
+      imported.pluginConfigs = counts.imported;
+      skipped.pluginConfigs = counts.skipped;
+    }
+
+    if (data.instanceSettings && data.instanceSettings.length > 0) {
+      const counts = await importInstanceSettings(data.instanceSettings, warnings);
+      imported.instanceSettings = counts.imported;
+      skipped.instanceSettings = counts.skipped;
     }
 
     // Post-import reconciliation
     await reconcileRelationships(userId, repos, idMaps, warnings);
+
+    // Re-embed what we just inserted. Imported memories carry no vector, and
+    // without this their semantic search stays broken until the next boot's
+    // reconcile sweep runs.
+    await enqueueImportedMemoryEmbeddings(userId, importedMemoryRefs, warnings);
 
     // Destination character IDs — for the `duplicate` strategy every value is a
     // freshly created character (see import-characters). The Salon "Summon from

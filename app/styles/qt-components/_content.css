@@ -928,6 +928,10 @@
     @apply py-1.5;
   }
 
+  .qt-frontmatter-chip-list {
+    @apply flex flex-wrap gap-1.5;
+  }
+
   /**
    * Wikilink styling for markdown file preview
    */

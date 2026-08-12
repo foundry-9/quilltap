@@ -1,33 +1,97 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 
+export type StateEntityType = 'chat' | 'project' | 'group' | 'general'
+
 interface StateEditorModalProps {
   isOpen: boolean
   onClose: () => void
-  entityType: 'chat' | 'project'
-  entityId: string
-  entityName: string
+  entityType: StateEntityType
+  /** Entity id. Ignored for the instance-wide 'general' tier. */
+  entityId?: string
+  entityName?: string
   onSuccess?: () => void
+}
+
+interface GroupTier {
+  status: 'none' | 'single' | 'ambiguous'
+  candidates: Array<{ id: string; name: string }>
+  appliedGroupId?: string
+}
+
+interface StateResponse {
+  state: Record<string, unknown>
+  chatState?: Record<string, unknown>
+  projectState?: Record<string, unknown> | null
+  groupState?: Record<string, unknown> | null
+  generalState?: Record<string, unknown> | null
+  groupTier?: GroupTier
+  projectId?: string
+}
+
+/**
+ * Per-entity-type wiring: the query key and the three action URLs. The chat
+ * tier is the only one that surfaces inherited layers (project / group /
+ * general) beneath its own state; the others edit a single tier directly.
+ */
+function endpointConfig(entityType: StateEntityType, entityId: string) {
+  switch (entityType) {
+    case 'chat':
+      return {
+        queryKey: queryKeys.chats.state(entityId),
+        getUrl: `/api/v1/chats/${entityId}?action=get-state`,
+        setUrl: `/api/v1/chats/${entityId}?action=set-state`,
+        resetUrl: `/api/v1/chats/${entityId}?action=reset-state`,
+        label: 'Chat',
+      }
+    case 'project':
+      return {
+        queryKey: queryKeys.projects.state(entityId),
+        getUrl: `/api/v1/projects/${entityId}?action=get-state`,
+        setUrl: `/api/v1/projects/${entityId}?action=set-state`,
+        resetUrl: `/api/v1/projects/${entityId}?action=reset-state`,
+        label: 'Project',
+      }
+    case 'group':
+      return {
+        queryKey: queryKeys.groups.state(entityId),
+        getUrl: `/api/v1/groups/${entityId}?action=get-state`,
+        setUrl: `/api/v1/groups/${entityId}?action=set-state`,
+        resetUrl: `/api/v1/groups/${entityId}?action=reset-state`,
+        label: 'Group',
+      }
+    case 'general':
+      return {
+        queryKey: queryKeys.settings.generalState,
+        getUrl: `/api/v1/settings/general-state`,
+        setUrl: `/api/v1/settings/general-state`,
+        resetUrl: `/api/v1/settings/general-state`,
+        label: 'General',
+      }
+  }
 }
 
 export default function StateEditorModal({
   isOpen,
   onClose,
   entityType,
-  entityId,
+  entityId = '',
   entityName,
   onSuccess,
 }: Readonly<StateEditorModalProps>) {
+  const cfg = endpointConfig(entityType, entityId)
+
   const [state, setState] = useState<Record<string, unknown>>({})
-  const [chatState, setChatState] = useState<Record<string, unknown>>({})
   const [projectState, setProjectState] = useState<Record<string, unknown> | null>(null)
-  const [projectId, setProjectId] = useState<string | undefined>()
+  const [groupState, setGroupState] = useState<Record<string, unknown> | null>(null)
+  const [generalState, setGeneralState] = useState<Record<string, unknown> | null>(null)
+  const [groupTier, setGroupTier] = useState<GroupTier | null>(null)
   const [stateText, setStateText] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   const [jsonError, setJsonError] = useState<string | null>(null)
@@ -35,15 +99,14 @@ export default function StateEditorModal({
   const [resetting, setResetting] = useState(false)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
 
-  // Fetch state via TanStack Query (gated by isOpen)
+  // Fetch state via TanStack Query (gated by isOpen). `cfg.getUrl` is derived
+  // from the same (entityType, entityId) inputs as `cfg.queryKey`, so the
+  // factory key already uniquely identifies the request — don't append the raw
+  // URL to a query-key factory value (keys are the single source of truth).
+  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- getUrl is a pure function of the same inputs as queryKey
   const { data: stateData, isPending: loading, refetch: mutateState } = useQuery({
-    queryKey: entityType === 'chat' ? queryKeys.chats.state(entityId) : queryKeys.projects.state(entityId),
-    queryFn: ({ signal }) => apiFetch<{
-      state: Record<string, unknown>
-      chatState?: Record<string, unknown>
-      projectState?: Record<string, unknown> | null
-      projectId?: string
-    }>(entityType === 'chat' ? `/api/v1/chats/${entityId}?action=get-state` : `/api/v1/projects/${entityId}?action=get-state`, { signal }),
+    queryKey: cfg.queryKey,
+    queryFn: ({ signal }) => apiFetch<StateResponse>(cfg.getUrl, { signal }),
     enabled: isOpen,
   })
 
@@ -56,9 +119,10 @@ export default function StateEditorModal({
     setStateText(JSON.stringify(stateData.state || {}, null, 2))
 
     if (entityType === 'chat') {
-      setChatState(stateData.chatState || {})
       setProjectState(stateData.projectState || null)
-      setProjectId(stateData.projectId)
+      setGroupState(stateData.groupState || null)
+      setGeneralState(stateData.generalState || null)
+      setGroupTier(stateData.groupTier || null)
     }
 
     setIsEditing(false)
@@ -66,8 +130,6 @@ export default function StateEditorModal({
 
   const handleTextChange = (value: string) => {
     setStateText(value)
-
-    // Validate JSON
     try {
       JSON.parse(value)
       setJsonError(null)
@@ -87,11 +149,7 @@ export default function StateEditorModal({
 
       setSaving(true)
 
-      const url = entityType === 'chat'
-        ? `/api/v1/chats/${entityId}?action=set-state`
-        : `/api/v1/projects/${entityId}?action=set-state`
-
-      const res = await fetch(url, {
+      const res = await fetch(cfg.setUrl, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ state: newState }),
@@ -122,13 +180,7 @@ export default function StateEditorModal({
     try {
       setResetting(true)
 
-      const url = entityType === 'chat'
-        ? `/api/v1/chats/${entityId}?action=reset-state`
-        : `/api/v1/projects/${entityId}?action=reset-state`
-
-      const res = await fetch(url, {
-        method: 'DELETE',
-      })
+      const res = await fetch(cfg.resetUrl, { method: 'DELETE' })
 
       if (!res.ok) {
         const errorData = await res.json()
@@ -160,6 +212,10 @@ export default function StateEditorModal({
 
   const isLoading = loading || saving || resetting
   const hasState = Object.keys(state).length > 0
+
+  const title = entityType === 'general'
+    ? 'General State'
+    : `${cfg.label} State${entityName ? ` - ${entityName}` : ''}`
 
   const footer = (
     <div className="flex justify-between gap-2">
@@ -232,11 +288,26 @@ export default function StateEditorModal({
     </div>
   )
 
+  // Inherited-layer summaries shown only for the chat tier (the merged view).
+  const inheritedLayers: Array<{ label: string; keys: string[] }> = []
+  if (entityType === 'chat') {
+    if (projectState && Object.keys(projectState).length > 0) {
+      inheritedLayers.push({ label: 'project', keys: Object.keys(projectState) })
+    }
+    if (groupState && Object.keys(groupState).length > 0) {
+      inheritedLayers.push({ label: 'group', keys: Object.keys(groupState) })
+    }
+    if (generalState && Object.keys(generalState).length > 0) {
+      inheritedLayers.push({ label: 'general', keys: Object.keys(generalState) })
+    }
+  }
+  const ambiguousGroups = entityType === 'chat' && groupTier?.status === 'ambiguous'
+
   return (
     <BaseModal
       isOpen={isOpen}
       onClose={onClose}
-      title={`${entityType === 'chat' ? 'Chat' : 'Project'} State - ${entityName}`}
+      title={title}
       maxWidth="2xl"
       footer={footer}
       closeOnClickOutside={!isEditing}
@@ -266,16 +337,22 @@ export default function StateEditorModal({
         </div>
       ) : (
         <div className="space-y-4">
-          {/* Info section for chat state inheritance */}
-          {entityType === 'chat' && projectState !== null && (
+          {/* Info section for chat state inheritance across the cascade */}
+          {entityType === 'chat' && (inheritedLayers.length > 0 || ambiguousGroups) && (
             <div className="qt-text-xs p-3 qt-bg-muted rounded-md">
               <p className="mb-1">
-                <strong>Note:</strong> This chat is part of a project. The merged state shown
-                below combines project state with chat-specific state (chat values override project values).
+                <strong>Note:</strong> The merged state below layers the cascade
+                (chat over project over group over general — narrower tiers win).
               </p>
-              {Object.keys(projectState).length > 0 && (
-                <p className="qt-text-secondary">
-                  Inherited from project: {Object.keys(projectState).join(', ')}
+              {inheritedLayers.map((layer) => (
+                <p key={layer.label} className="qt-text-secondary">
+                  Inherited from {layer.label}: {layer.keys.join(', ')}
+                </p>
+              ))}
+              {ambiguousGroups && (
+                <p className="qt-text-secondary mt-1">
+                  {groupTier!.candidates.length} groups apply — group state is not merged here.
+                  Edit each group&rsquo;s state from its own page.
                 </p>
               )}
             </div>

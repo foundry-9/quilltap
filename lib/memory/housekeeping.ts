@@ -13,7 +13,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { Memory } from '@/lib/schemas/types'
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
 import { calculateEffectiveWeight, calculateProtectionScore } from './memory-weighting'
-import { deleteMemoriesWithUnlinkBatch } from './memory-gate'
+import { deleteMemoriesWithUnlinkBatch, occasionsAreDistinct } from './memory-gate'
 
 import { logger } from '@/lib/logger'
 
@@ -273,6 +273,8 @@ export async function runHousekeeping(
     try {
       const vectorStore = await getCharacterVectorStore(characterId)
       const entryById = new Map(vectorStore.getAllEntries().map(e => [e.id, e]))
+      const storeDimensions = vectorStore.getDimensions()
+      let nonconformingSkipped = 0
 
       for (let i = 0; i < remainingMemories.length; i++) {
         const memory = remainingMemories[i]
@@ -286,6 +288,14 @@ export async function runHousekeeping(
           continue
         }
 
+        // A stored vector from a previous embedding profile can't be compared
+        // against the index (and would warn on every search call). It's dead
+        // weight until the reindex re-embeds it — skip quietly here.
+        if (storeDimensions !== null && entry.embedding.length !== storeDimensions) {
+          nonconformingSkipped++
+          continue
+        }
+
         const searchResults = vectorStore.search(entry.embedding, 10)
 
         for (const match of searchResults) {
@@ -296,6 +306,11 @@ export async function runHousekeeping(
 
           const matchMemory = memoryMap.get(match.id)
           if (!matchMemory) continue
+
+          // Episodic date guard (mirrors the write-side memory gate): two
+          // memories of the same activity on occasions > 7 days apart are
+          // distinct events — never merge them, however similar the prose.
+          if (occasionsAreDistinct(memory.occurredAt, matchMemory.occurredAt)) continue
 
           const keepCurrent =
             memory.importance > matchMemory.importance ||
@@ -335,6 +350,14 @@ export async function runHousekeeping(
         if ((i + 1) % YIELD_INTERVAL === 0) {
           await yieldTick()
         }
+      }
+
+      if (nonconformingSkipped > 0) {
+        logger.info('[Housekeeping] Skipped non-conforming vectors in merge pass — awaiting re-embed', {
+          characterId,
+          nonconformingSkipped,
+          storeDimensions,
+        })
       }
     } catch (error) {
       logger.warn('[Housekeeping] Failed to run similarity merge pass', { characterId, error: String(error) })

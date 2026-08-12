@@ -776,3 +776,42 @@ export async function postProsperoCarinaError(
   const targets = params.whisper && params.askerParticipantId ? [params.askerParticipantId] : null;
   return postProsperoMessage(params.chatId, content, opaqueContent, 'carina-error', targets);
 }
+
+// ---------------------------------------------------------------------------
+// Pascal (custom tools) error announcements. Pascal the Croupier only ever
+// announces GENUINE outcomes — a run that never reached the table (unknown
+// tool, rejected parameter, unloadable definition) has no outcome to call, so
+// Prospero reports the failure instead. A private run's failure is whispered to
+// the caller alone, mirroring the Carina `?` whisper case above.
+// ---------------------------------------------------------------------------
+
+export function buildCustomToolErrorContent(toolName: string, reason: string): string {
+  return `Prospero regrets that the custom tool \`${toolName}\` could not be run — ${reason}.`;
+}
+
+export function buildCustomToolErrorOpaqueContent(toolName: string, reason: string): string {
+  return `System: The custom tool "${toolName}" could not be run — ${reason}.`;
+}
+
+export interface ProsperoCustomToolErrorAnnouncement {
+  chatId: string;
+  /** The tool the caller reached for (may not exist — that is often the reason). */
+  toolName: string;
+  /** Short summary of why the run failed. Rendered as the tail of one sentence. */
+  reason: string;
+  /** True when the run was private — the failure is whispered to the caller alone. */
+  whisper: boolean;
+  /** Participant id of the caller — the whisper target when `whisper` is true. */
+  callerParticipantId?: string | null;
+}
+
+export async function postProsperoCustomToolError(
+  params: ProsperoCustomToolErrorAnnouncement,
+): Promise<MessageEvent | null> {
+  const reason = params.reason.trim().replace(/[.\s]+$/, '') || 'the table would not deal';
+  const content = buildCustomToolErrorContent(params.toolName, reason);
+  const opaqueContent = buildCustomToolErrorOpaqueContent(params.toolName, reason);
+  const targets = params.whisper && params.callerParticipantId ? [params.callerParticipantId] : null;
+
+  return postProsperoMessage(params.chatId, content, opaqueContent, 'custom-tool-error', targets);
+}

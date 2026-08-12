@@ -219,4 +219,24 @@ export class GroupDocMountLinksRepository extends AbstractBaseRepository<GroupDo
       0
     );
   }
+
+  /**
+   * Delete every link that points at a mount point (used when a store is
+   * deleted). The sibling of {@link deleteByGroupId} on the mount-point axis —
+   * without it, deleting a store left its group's additional-store links
+   * standing (Bug 9).
+   *
+   * @param mountPointId The mount point ID
+   * @returns Promise<number> Number of link rows removed
+   */
+  async deleteByMountPointId(mountPointId: string): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        return this.deleteMany({ mountPointId } as TypedQueryFilter<GroupDocMountLink>);
+      },
+      'Error deleting group links by mount point ID',
+      { mountPointId },
+      0
+    );
+  }
 }

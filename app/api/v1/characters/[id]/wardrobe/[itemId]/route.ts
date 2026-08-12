@@ -6,11 +6,10 @@
  * DELETE /api/v1/characters/[id]/wardrobe/[itemId] - Delete a wardrobe item
  */
 
-import { NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware';
+import { createContextParamsHandler, exists } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
-import { notFound, serverError } from '@/lib/api/responses';
+import { notFound, serverError, successResponse } from '@/lib/api/responses';
 import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types';
 
 const updateWardrobeItemSchema = z.object({
@@ -28,12 +27,12 @@ const updateWardrobeItemSchema = z.object({
 });
 
 // GET /api/v1/characters/[id]/wardrobe/[itemId]
-export const GET = createAuthenticatedParamsHandler<{ id: string; itemId: string }>(
+export const GET = createContextParamsHandler<{ id: string; itemId: string }>(
   async (req, { user, repos }, { id, itemId }) => {
     try {
       const character = await repos.characters.findById(id);
 
-      if (!checkOwnership(character, user.id)) {
+      if (!exists(character)) {
         return notFound('Character');
       }
 
@@ -43,7 +42,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string; itemId: string
         return notFound('Wardrobe item');
       }
 
-      return NextResponse.json({ wardrobeItem: item });
+      return successResponse({ wardrobeItem: item });
     } catch (error) {
       logger.error('[Wardrobe v1] Error fetching wardrobe item', { characterId: id, itemId }, error instanceof Error ? error : undefined);
       return serverError('Failed to fetch wardrobe item');
@@ -52,11 +51,11 @@ export const GET = createAuthenticatedParamsHandler<{ id: string; itemId: string
 );
 
 // PUT /api/v1/characters/[id]/wardrobe/[itemId]
-export const PUT = createAuthenticatedParamsHandler<{ id: string; itemId: string }>(
+export const PUT = createContextParamsHandler<{ id: string; itemId: string }>(
   async (req, { user, repos }, { id, itemId }) => {
     const character = await repos.characters.findById(id);
 
-    if (!checkOwnership(character, user.id)) {
+    if (!exists(character)) {
       return notFound('Character');
     }
 
@@ -79,21 +78,21 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string; itemId: string
       itemId,
     });
 
-    return NextResponse.json({ wardrobeItem: item });
+    return successResponse({ wardrobeItem: item });
   }
 );
 
 // DELETE /api/v1/characters/[id]/wardrobe/[itemId]
-export const DELETE = createAuthenticatedParamsHandler<{ id: string; itemId: string }>(
+export const DELETE = createContextParamsHandler<{ id: string; itemId: string }>(
   async (req, { user, repos }, { id, itemId }) => {
     try {
       const character = await repos.characters.findById(id);
 
-      if (!checkOwnership(character, user.id)) {
+      if (!exists(character)) {
         return notFound('Character');
       }
 
-      const existing = await repos.wardrobe.findById(itemId);
+      const existing = await repos.wardrobe.findByIdForCharacter(id, itemId);
       if (!existing || existing.characterId !== id) {
         return notFound('Wardrobe item');
       }
@@ -122,7 +121,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string; itemId: str
         itemId,
       });
 
-      return NextResponse.json({ success: true });
+      return successResponse({ success: true });
     } catch (error) {
       logger.error('[Wardrobe v1] Error deleting wardrobe item', { characterId: id, itemId }, error instanceof Error ? error : undefined);
       return serverError('Failed to delete wardrobe item');

@@ -11,6 +11,11 @@
  * character has an audience to address. The result is returned to the
  * caller for the operator to review, edit, regenerate, or post. Nothing is
  * persisted by this service.
+ *
+ * When the operator has chosen a whisper audience, the roster is replaced by
+ * that audience and the character is told the remark is private. A line pitched
+ * to a full room reads wrong when only one person hears it, so the audience has
+ * to reach the rewrite rather than being applied after the fact.
  */
 
 import { logger } from '@/lib/logger'
@@ -32,6 +37,12 @@ export interface CharacterVoicedAnnouncementParams {
   seedMarkdown: string
   systemPromptId?: string
   userId: string
+  /**
+   * Display names of the whisper audience the operator has chosen, already
+   * resolved and verified. Empty / omitted means the announcement is public
+   * and the character addresses the whole room.
+   */
+  audienceNames?: string[]
 }
 
 export interface CharacterVoicedAnnouncementResult {
@@ -49,7 +60,19 @@ function buildSelection(profile: ConnectionProfile): CheapLLMSelection {
     baseUrl: profile.baseUrl || undefined,
     connectionProfileId: profile.id,
     isLocal: profile.provider === 'OLLAMA',
+    // Forward the profile's provider params (e.g. DeepSeek thinking mode) so
+    // per-model settings take effect for this utility call too.
+    profileParameters: profile.parameters && typeof profile.parameters === 'object'
+      ? (profile.parameters as Record<string, unknown>)
+      : undefined,
   }
+}
+
+/** "Alice", "Alice and Bob", "Alice, Bob, and Carol". */
+function formatNameList(names: string[]): string {
+  if (names.length === 1) return names[0]
+  if (names.length === 2) return `${names[0]} and ${names[1]}`
+  return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`
 }
 
 /**
@@ -88,7 +111,8 @@ async function buildRoster(
 export async function generateCharacterVoicedAnnouncement(
   params: CharacterVoicedAnnouncementParams,
 ): Promise<CharacterVoicedAnnouncementResult> {
-  const { chatId, character, profile, seedMarkdown, systemPromptId, userId } = params
+  const { chatId, character, profile, seedMarkdown, systemPromptId, userId, audienceNames } = params
+  const whisperAudience = audienceNames?.filter(n => n.trim().length > 0) ?? []
 
   try {
     const selection = buildSelection(profile)
@@ -129,8 +153,10 @@ export async function generateCharacterVoicedAnnouncement(
       })
     }
 
-    // Present roster — who's listening.
-    const roster = await buildRoster(chatId, character.id)
+    // Who's listening. A whisper's audience is the audience — the room's wider
+    // roster is not merely irrelevant to it, it would mislead the rewrite into
+    // pitching a private aside at people who will never hear it.
+    const roster = whisperAudience.length > 0 ? '' : await buildRoster(chatId, character.id)
 
     // Compose the user-role message.
     const seedTrimmed = seedMarkdown.trim()
@@ -138,9 +164,11 @@ export async function generateCharacterVoicedAnnouncement(
     if (recallText) {
       userParts.push(recallText)
     }
-    const presenceLine = roster
-      ? `You want to say something to the people in the chat. The following people are present:\n${roster}`
-      : 'You want to say something to the people in the chat.'
+    const presenceLine = whisperAudience.length > 0
+      ? `You want to say something privately to ${formatNameList(whisperAudience)} — others are present in the chat, but this remark is for ${whisperAudience.length === 1 ? 'them' : 'those named'} alone and no one else will hear it. Pitch it as a private aside, not a declaration to the room.`
+      : roster
+        ? `You want to say something to the people in the chat. The following people are present:\n${roster}`
+        : 'You want to say something to the people in the chat.'
     userParts.push(
       `${presenceLine}\n\nBelow is your own rough draft — the meaning and substance of what you want to convey. Rewrite it in your own voice, the way you would actually say it given your personality, manner of speech, and current circumstances. Keep the meaning, the addressees, and any specific facts; refine the voice and phrasing. Narration, action, and stage directions are welcome where they fit your voice. Do not respond to the draft — it is yours.\n\nDraft:`,
     )

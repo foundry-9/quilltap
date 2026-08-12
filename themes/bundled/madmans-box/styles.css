@@ -396,6 +396,15 @@
   --qt-tab-group-gap: 0.25rem;
 
   /* ==========================================================================
+     WORKSPACE VARIABLES (the tabbed workspace — see _workspace.css)
+     The cabin's live readouts run cool phosphor cyan, never the warm amber
+     primary. One --qt-workspace-accent re-tints the active tab's border/bar/
+     fill, the pane divider on hover, and the split drop-zone to match.
+     ========================================================================== */
+  --qt-workspace-accent: var(--rotor-cyan);
+  --qt-workspace-tab-active-fg: var(--rotor-cyan-bright);
+
+  /* ==========================================================================
      OVERLAY VARIABLES
      ========================================================================== */
   --qt-overlay-bg: hsl(28 36% 5% / 0.92);
@@ -552,15 +561,21 @@
 }
 
 /* ============================================================================
-   HEADING TYPOGRAPHY — geometric uppercase signage
+   HEADING TYPOGRAPHY — geometric small-caps signage
+
+   Small caps rather than text-transform: uppercase, so a capital still reads
+   as a capital. Raleway ships no `smcp` table (liga/kern/lnum only), so the
+   browser synthesizes these by scaling the caps — synthesized small caps come
+   out visually lighter than the full-size caps beside them, hence 400 rather
+   than the 300 this rule used to carry.
    ============================================================================ */
 [data-theme="madmans-box"] h1,
 [data-theme="madmans-box"] h2,
 [data-theme="madmans-box"] h3 {
   font-family: var(--theme-font-brand);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  font-weight: 300;
+  letter-spacing: 0.1em;
+  font-variant-caps: small-caps;
+  font-weight: 400;
 }
 
 /* The brand wordmark catches the tube glow */
@@ -615,11 +630,15 @@
 
 /* ============================================================================
    BUTTONS — Deco signage tracking
+
+   Keyed off .qt-button, not the `button` element: most buttons in the app are
+   <Link>s wearing .qt-button, so an element selector caught only the handful
+   that are real <button>s (e.g. New Project on the homepage) and left their
+   neighbors untouched — a visible mismatch in the same row. Size comes from
+   --qt-button-font-size (set above), so it isn't restated here.
    ============================================================================ */
-[data-theme="madmans-box"] button {
+[data-theme="madmans-box"] .qt-button {
   letter-spacing: 0.06em;
-  text-transform: uppercase;
-  font-size: 0.8125rem;
 }
 
 /* Primary buttons get a brass face with a faint tube underglow */
@@ -664,6 +683,33 @@
 [data-theme="madmans-box"] [class*="spinner"],
 [data-theme="madmans-box"] [role="status"] svg {
   animation: madmans-box-arc-pulse 2.4s ease-in-out infinite;
+}
+
+/* ============================================================================
+   THINKING INDICATOR — the maker's mark, turning
+   Core ships a quill that rocks on its nib while a reply is awaited. This theme
+   already owns a quill: the brand mark, ringed by a circle that never quite
+   closes. So here it simply turns, all the way round and slowly — a rotor
+   idling rather than a hand writing. `thinking` is mapped to icons/brand.svg in
+   theme.json, so both are literally the same drawing; change one and you change
+   the other.
+
+   The ring is centred on (12,12) of the 24x24 viewBox — the box centre — so the
+   origin is reset from core's nib pivot, which exists for a quill drawn on the
+   diagonal and would send this one orbiting instead of spinning. Because the
+   ring's gap is off-axis, the turn stays legible at any speed: there is always
+   a break to watch go round.
+
+   Reduced motion is handled by the global rule below.
+   ============================================================================ */
+@keyframes madmans-box-thinking-turn {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+[data-theme="madmans-box"] .qt-thinking-indicator {
+  --qt-thinking-duration: 6s;
+  --qt-thinking-origin: center center;
+  animation: madmans-box-thinking-turn var(--qt-thinking-duration) linear infinite;
 }
 
 /* ============================================================================

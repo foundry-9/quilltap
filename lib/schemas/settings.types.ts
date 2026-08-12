@@ -201,6 +201,96 @@ export const MemoryExtractionLimitsSchema = z.object({
 export type MemoryExtractionLimits = z.infer<typeof MemoryExtractionLimitsSchema>;
 
 // ============================================================================
+// DATA RETENTION (stale-chat maintenance window)
+// ============================================================================
+
+/**
+ * How long a chat must sit with no *played* message (participant character or
+ * the human user — feature whispers don't count) before the daily maintenance
+ * sweep treats it as stale. Governs every stale-gated sweep: generated-image
+ * collapse, regenerable-cache collapse, and conversation-chunk cold-tiering.
+ *
+ * Stored instance-wide in `instance_settings['dataRetention']` (single-user
+ * model — same class as `memoryRecall`), NOT on the column-per-field
+ * `chat_settings` table, so adding it needs no migration. Accessors:
+ * `getDataRetentionSettings` / `setDataRetentionSettings` in
+ * `lib/instance-settings`.
+ */
+export const DataRetentionSettingsSchema = z.object({
+  /**
+   * A chat is "stale" after this many days with no played message. Governs
+   * the maintenance sweep (image collapse + cache collapse + cold-tier).
+   */
+  staleChatDays: z.number().int().min(1).max(3650).default(30),
+});
+
+export type DataRetentionSettings = z.infer<typeof DataRetentionSettingsSchema>;
+
+// ============================================================================
+// BRAHMA CONSOLE (agentic tool-use loop budget)
+// ============================================================================
+
+/**
+ * How many agent turns the Brahma Console (and its one-shot Salon `@Brahma`
+ * cousin) may take before it is forced to answer with what it has. Each turn is
+ * one round of the tool-use loop — a search, a `run_sql` query, a document read.
+ * A generous budget lets the Console chase something deep in the ledgers; the
+ * duplicate/stale-query guard still short-circuits a genuinely stuck loop long
+ * before this cap, so raising it costs nothing when the model is making real
+ * progress.
+ *
+ * Stored instance-wide in `instance_settings['brahmaConsole']` (single-user
+ * model — same class as `dataRetention`), NOT on the column-per-field
+ * `chat_settings` table, so adding it needs no migration. Accessors:
+ * `getBrahmaConsoleSettings` / `setBrahmaConsoleSettings` in
+ * `lib/instance-settings`; resolved for the services by
+ * `resolveBrahmaMaxAgentTurns` in
+ * `lib/services/brahma-console/turn-budget.ts`.
+ */
+export const BrahmaConsoleSettingsSchema = z.object({
+  /**
+   * Maximum tool-use turns per query before the Console is made to give its
+   * final answer. Independent of the duplicate/stale-query guard, which still
+   * stops a loop that repeats itself regardless of this number.
+   */
+  maxAgentTurns: z.number().int().min(5).max(200).default(50),
+});
+
+export type BrahmaConsoleSettings = z.infer<typeof BrahmaConsoleSettingsSchema>;
+
+// ============================================================================
+// TABOO (instance-wide forbidden phrases)
+// ============================================================================
+
+/**
+ * Phrases no character may utter — the stock LLM-isms of the day ("that's not
+ * nothing", "weight-bearing"). One list per instance, rendered as a universal,
+ * character-independent section of the system prompt on every conversational
+ * character response.
+ *
+ * Stored instance-wide in `instance_settings['taboo']` (single-user model —
+ * same class as `dataRetention`), NOT on the column-per-field `chat_settings`
+ * table, so adding it needs no migration. Accessors: `getTabooSettings` /
+ * `setTabooSettings` in `lib/instance-settings`; the setter normalizes
+ * (trim, drop empties, case-insensitive dedupe) while preserving user order.
+ * Rendered by `renderTabooSection` in
+ * `lib/chat/context/system-prompt-builder.ts`.
+ */
+export const TabooSettingsSchema = z.object({
+  /**
+   * The forbidden phrases, in the order the user arranged them. Order is
+   * user-controlled on purpose: it is part of the cacheable prompt prefix, so
+   * it only shifts when the user edits the list.
+   */
+  phrases: z
+    .array(z.string().trim().min(1).max(200))
+    .max(500)
+    .default([]),
+});
+
+export type TabooSettings = z.infer<typeof TabooSettingsSchema>;
+
+// ============================================================================
 // AUTONOMOUS ROOM SETTINGS (4.6 Private Character Rooms)
 // ============================================================================
 
@@ -368,6 +458,20 @@ export const ThinkingDisplaySettingsSchema = z.object({
 
 export type ThinkingDisplaySettings = z.infer<typeof ThinkingDisplaySettingsSchema>;
 
+/**
+ * Answer confirmation — global defaults for the Salon consistency check that
+ * vets a character's tool-using reply against what it was told (Commonplace
+ * Book whisper) and looked up (read tools) this turn. Off by default; a
+ * per-project or per-chat override can flip it on. See
+ * `isAnswerConfirmationActive`.
+ */
+export const AnswerConfirmationSettingsSchema = z.object({
+  /** Whether the consistency check runs by default (global). Default: false. */
+  enabled: z.boolean().default(false),
+});
+
+export type AnswerConfirmationSettings = z.infer<typeof AnswerConfirmationSettingsSchema>;
+
 // ============================================================================
 // STORY BACKGROUNDS SETTINGS
 // ============================================================================
@@ -473,6 +577,8 @@ export const ChatSettingsSchema = z.object({
   }),
   /** Auto-detect RNG patterns (dice rolls, coin flips) in user messages and execute them automatically (default: true) */
   autoDetectRng: z.boolean().default(true),
+  /** Offer Pascal's custom pseudo-tools (`run_custom`) to models and show the composer gutter button (default: true) */
+  customTools: z.boolean().default(true),
   /** Whether new chats start in composition mode (Enter = newline, Ctrl/Cmd+Enter = submit) by default */
   compositionModeDefault: z.boolean().default(false),
   /** Whether browser spellcheck is enabled in the Salon composer and Document Mode rich editor (default: true) */
@@ -498,6 +604,10 @@ export const ChatSettingsSchema = z.object({
   thinkingDisplay: ThinkingDisplaySettingsSchema.default({
     defaultVisible: true,
     defaultCollapsed: true,
+  }),
+  /** Answer confirmation — global default for the Salon consistency check (off by default) */
+  answerConfirmationSettings: AnswerConfirmationSettingsSchema.default({
+    enabled: false,
   }),
   /** Story backgrounds settings for AI-generated chat backgrounds */
   storyBackgroundsSettings: StoryBackgroundsSettingsSchema.default({

@@ -15,7 +15,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { serverError, notFound, badRequest } from '@/lib/api/responses';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import {
   equipItem,
   replaceItem,
@@ -83,7 +83,7 @@ const equipBodySchema = z
  */
 export async function handleGetOutfit(
   chatId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   try {
 
@@ -105,7 +105,7 @@ export async function handleGetOutfit(
  */
 export async function handleGetOutfitSummary(
   chatId: string,
-  { repos }: AuthenticatedContext
+  { repos }: RequestContext
 ): Promise<NextResponse> {
   try {
 
@@ -193,7 +193,7 @@ export async function handleGetOutfitSummary(
 export async function handleEquipSlot(
   req: NextRequest,
   chatId: string,
-  ctx: AuthenticatedContext
+  ctx: RequestContext
 ): Promise<NextResponse> {
   const { repos } = ctx;
   try {

@@ -442,9 +442,15 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
   ): Promise<{ promptTokens: number; completionTokens: number; totalTokens: number }> {
     return this.safeQuery(
       async () => {
+        // `$exists: true` only. `$ne: null` used to be here too and made this
+        // method return zeroes on every install: the SQLite translator emits
+        // `usage != ?` with a NULL parameter, i.e. `usage != NULL`, which is
+        // unknown for every row by SQL NULL semantics, so the filter matched
+        // nothing. The Almanack renders exactly this number, which is how the
+        // long-standing "0 tokens logged" reading was finally traced.
         const filter: TypedQueryFilter<LLMLog> = {
           userId,
-          usage: { $exists: true, $ne: null },
+          usage: { $exists: true },
         };
 
         const logs = await this.findByFilter(filter);
@@ -482,9 +488,11 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
   ): Promise<{ promptTokens: number; completionTokens: number; totalTokens: number }> {
     return this.safeQuery(
       async () => {
+        // `$exists: true` only — see {@link getTotalTokenUsage} for why
+        // `$ne: null` must never be added back.
         const filter: TypedQueryFilter<LLMLog> = {
           userId,
-          usage: { $exists: true, $ne: null },
+          usage: { $exists: true },
           createdAt: { $gte: sinceTimestamp },
         };
 
@@ -531,8 +539,8 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
         // literally, which is unknown/false for every row by SQL NULL
         // semantics, so the filter would return zero matches and the
         // sum would always be 0. The sibling methods getTotalTokenUsage
-        // and getTotalTokenUsageSince still carry the latent `$ne: null`
-        // bug — they happen to be safe today because nothing trips them.
+        // and getTotalTokenUsageSince carried that bug until 4.9 and are
+        // now fixed the same way.
         const filter: TypedQueryFilter<LLMLog> = {
           chatId,
           usage: { $exists: true },
@@ -687,4 +695,229 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
       { characterId }
     );
   }
+
+  // ==========================================================================
+  // Aggregates (The Almanack)
+  // ==========================================================================
+  //
+  // These are GROUP BY roll-ups over the whole logs table. The sum-in-JS
+  // helpers above materialize every matching row through Zod before adding
+  // three numbers, which is fine for a single run's worth of rows and
+  // hopeless for a table with hundreds of thousands. Everything below runs
+  // in SQLite and returns only the rolled-up rows.
+  //
+  // They target the dedicated logs DB directly (`getRawLLMLogsDatabase()`),
+  // NOT `manager.rawQuery`, which addresses the main database.
+
+  /**
+   * Run a read-only aggregate against the LLM logs database.
+   *
+   * Returns `fallback` when the DB is degraded/uninitialized or the query
+   * throws — a diagnostic report must never fail because its own source of
+   * numbers is unavailable.
+   */
+  private aggregate<R>(
+    sql: string,
+    params: unknown[],
+    context: string,
+    fallback: R[],
+  ): R[] {
+    if (isLLMLogsDegraded()) {
+      return fallback;
+    }
+    const db = getRawLLMLogsDatabase();
+    if (!db) {
+      return fallback;
+    }
+    try {
+      return db.prepare(sql).all(...(params as never[])) as R[];
+    } catch (error) {
+      logger.warn('LLM logs aggregate query failed', {
+        context,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return fallback;
+    }
+  }
+
+  /** Does the table carry the 4.9 profile-attribution columns yet? */
+  hasProfileAttributionColumns(): boolean {
+    const rows = this.aggregate<{ name: string }>(
+      `PRAGMA table_info("llm_logs")`,
+      [],
+      'llm-logs.hasProfileAttributionColumns',
+      [],
+    );
+    return rows.some(r => r.name === 'connectionProfileId');
+  }
+
+  /** Per-`type` request counts, token totals and measured-latency averages. */
+  async getStatsByType(userId: string): Promise<LLMLogTypeStatsRow[]> {
+    return this.aggregate<LLMLogTypeStatsRow>(
+      `SELECT
+         "type"                                                        AS type,
+         COUNT(*)                                                      AS requests,
+         COALESCE(SUM(json_extract("usage", '$.promptTokens')), 0)     AS promptTokens,
+         COALESCE(SUM(json_extract("usage", '$.completionTokens')), 0) AS completionTokens,
+         COALESCE(SUM(json_extract("usage", '$.totalTokens')), 0)      AS totalTokens,
+         SUM(CASE WHEN "durationMs" IS NOT NULL AND "durationMs" > 0 THEN 1 ELSE 0 END) AS measuredRequests,
+         AVG(CASE WHEN "durationMs" IS NOT NULL AND "durationMs" > 0 THEN "durationMs" END) AS avgDurationMs,
+         SUM(CASE WHEN json_extract("response", '$.error') IS NOT NULL THEN 1 ELSE 0 END) AS failures
+       FROM "llm_logs"
+       WHERE "userId" = ?
+       GROUP BY "type"
+       ORDER BY requests DESC`,
+      [userId],
+      'llm-logs.getStatsByType',
+      [],
+    );
+  }
+
+  /**
+   * Per-profile roll-up.
+   *
+   * `groupBy` picks the attribution key: `'connectionProfileId'` /
+   * `'imageProfileId'` are exact (4.9+ rows only); `'providerModel'` is the
+   * approximate fallback that older rows must use, and cannot separate two
+   * profiles sharing a provider/model pair.
+   */
+  async getStatsByProfile(
+    userId: string,
+    groupBy: 'connectionProfileId' | 'imageProfileId' | 'providerModel',
+    options: { type?: LLMLogType } = {},
+  ): Promise<LLMLogProfileStatsRow[]> {
+    const keyExpr =
+      groupBy === 'providerModel'
+        ? `"provider" || '/' || "modelName"`
+        : `"${groupBy}"`;
+    const typeClause = options.type ? `AND "type" = ?` : '';
+    const params: unknown[] = options.type ? [userId, options.type] : [userId];
+
+    return this.aggregate<LLMLogProfileStatsRow>(
+      `SELECT
+         ${keyExpr}                                                    AS key,
+         "provider"                                                    AS provider,
+         "modelName"                                                   AS modelName,
+         COUNT(*)                                                      AS requests,
+         COALESCE(SUM(json_extract("usage", '$.promptTokens')), 0)     AS promptTokens,
+         COALESCE(SUM(json_extract("usage", '$.completionTokens')), 0) AS completionTokens,
+         COALESCE(SUM(json_extract("usage", '$.totalTokens')), 0)      AS totalTokens,
+         SUM(CASE WHEN "durationMs" IS NOT NULL AND "durationMs" > 0 THEN 1 ELSE 0 END) AS measuredRequests,
+         AVG(CASE WHEN "durationMs" IS NOT NULL AND "durationMs" > 0 THEN "durationMs" END) AS avgDurationMs,
+         SUM(CASE WHEN json_extract("response", '$.error') IS NOT NULL THEN 1 ELSE 0 END) AS failures
+       FROM "llm_logs"
+       WHERE "userId" = ? ${typeClause}
+         ${groupBy === 'providerModel' ? '' : `AND "${groupBy}" IS NOT NULL`}
+       GROUP BY key, "provider", "modelName"
+       ORDER BY requests DESC`,
+      params,
+      `llm-logs.getStatsByProfile:${groupBy}`,
+      [],
+    );
+  }
+
+  /**
+   * Median measured `durationMs` per attribution key.
+   *
+   * SQLite has no percentile aggregate, so this walks the ordered rows with a
+   * window function and picks the middle one. Kept separate from
+   * {@link getStatsByProfile} because the window pass is the expensive half.
+   */
+  async getMedianDurationByProfile(
+    userId: string,
+    groupBy: 'connectionProfileId' | 'imageProfileId' | 'providerModel',
+  ): Promise<Array<{ key: string; medianDurationMs: number }>> {
+    const keyExpr =
+      groupBy === 'providerModel'
+        ? `"provider" || '/' || "modelName"`
+        : `"${groupBy}"`;
+    return this.aggregate<{ key: string; medianDurationMs: number }>(
+      `WITH measured AS (
+         SELECT ${keyExpr} AS key, "durationMs" AS d,
+                ROW_NUMBER() OVER (PARTITION BY ${keyExpr} ORDER BY "durationMs") AS rn,
+                COUNT(*)    OVER (PARTITION BY ${keyExpr})                        AS n
+         FROM "llm_logs"
+         WHERE "userId" = ?
+           AND "durationMs" IS NOT NULL AND "durationMs" > 0
+           ${groupBy === 'providerModel' ? '' : `AND "${groupBy}" IS NOT NULL`}
+       )
+       SELECT key, AVG(d) AS medianDurationMs
+       FROM measured
+       WHERE rn IN ((n + 1) / 2, (n + 2) / 2)
+       GROUP BY key`,
+      [userId],
+      `llm-logs.getMedianDurationByProfile:${groupBy}`,
+      [],
+    );
+  }
+
+  /**
+   * Prompt-cache hit/miss roll-up.
+   *
+   * `cacheUsage` is populated essentially only on `CHAT_MESSAGE` rows (the
+   * streaming path is its sole writer). There is no boolean "was this a hit" —
+   * a hit is derived as `cacheReadInputTokens > 0`, and the denominator is
+   * "rows carrying any cacheUsage at all".
+   */
+  async getCacheStats(
+    userId: string,
+    groupBy: 'provider' | 'connectionProfileId',
+  ): Promise<LLMLogCacheStatsRow[]> {
+    return this.aggregate<LLMLogCacheStatsRow>(
+      `SELECT
+         "${groupBy}" AS key,
+         COUNT(*)     AS rowsWithCacheUsage,
+         SUM(CASE WHEN COALESCE(json_extract("cacheUsage", '$.cacheReadInputTokens'), 0) > 0 THEN 1 ELSE 0 END) AS rowsWithCacheRead,
+         COALESCE(SUM(json_extract("cacheUsage", '$.cacheReadInputTokens')), 0)     AS cacheReadTokens,
+         COALESCE(SUM(json_extract("cacheUsage", '$.cacheCreationInputTokens')), 0) AS cacheCreationTokens,
+         COALESCE(SUM(json_extract("usage", '$.promptTokens')), 0)                  AS promptTokens
+       FROM "llm_logs"
+       WHERE "userId" = ?
+         AND "cacheUsage" IS NOT NULL
+         AND "${groupBy}" IS NOT NULL
+       GROUP BY key
+       ORDER BY rowsWithCacheUsage DESC`,
+      [userId],
+      `llm-logs.getCacheStats:${groupBy}`,
+      [],
+    );
+  }
+}
+
+/** One row of {@link LLMLogsRepository.getStatsByType}. */
+export interface LLMLogTypeStatsRow {
+  type: string;
+  requests: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  /** Rows with a usable (non-null, non-zero) `durationMs` — the avg's denominator. */
+  measuredRequests: number;
+  avgDurationMs: number | null;
+  failures: number;
+}
+
+/** One row of {@link LLMLogsRepository.getStatsByProfile}. */
+export interface LLMLogProfileStatsRow {
+  /** Profile id, or `provider/model` when attributing approximately. */
+  key: string;
+  provider: string;
+  modelName: string;
+  requests: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  measuredRequests: number;
+  avgDurationMs: number | null;
+  failures: number;
+}
+
+/** One row of {@link LLMLogsRepository.getCacheStats}. */
+export interface LLMLogCacheStatsRow {
+  key: string;
+  rowsWithCacheUsage: number;
+  rowsWithCacheRead: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  promptTokens: number;
 }

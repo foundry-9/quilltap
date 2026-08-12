@@ -274,31 +274,37 @@ export class OpenRouterImageProvider implements ImageProvider {
         appTitle: getQuilltapUserAgent(),
       });
 
-      const response = await client.models.list();
+      // models.list() returns a paginated async-iterable and the model array
+      // lives at page.result.data. This read was left on the pre-0.13
+      // `response.data`, which is undefined on a PageIterator — so discovery
+      // silently found nothing and always fell through to FALLBACK_IMAGE_MODELS.
+      const pages = await client.models.list();
       const imageModels: string[] = [];
 
-      for (const model of response.data || []) {
-        const modelAny = model as any;
+      for await (const page of pages) {
+        for (const model of page.result?.data ?? []) {
+          const modelAny = model as any;
 
-        // Check output_modalities for "image" (OpenRouter's documented field)
-        const outputModalities = modelAny.output_modalities || modelAny.outputModalities;
-        if (Array.isArray(outputModalities) && outputModalities.includes('image')) {
-          imageModels.push(model.id);
-          continue;
-        }
+          // Check output_modalities for "image" (OpenRouter's documented field)
+          const outputModalities = modelAny.output_modalities || modelAny.outputModalities;
+          if (Array.isArray(outputModalities) && outputModalities.includes('image')) {
+            imageModels.push(model.id);
+            continue;
+          }
 
-        // Fallback: check architecture.outputModality
-        const outputModality = modelAny.architecture?.outputModality;
-        if (typeof outputModality === 'string' && outputModality.includes('image')) {
-          imageModels.push(model.id);
-          continue;
-        }
+          // Fallback: check architecture.outputModality
+          const outputModality = modelAny.architecture?.outputModality;
+          if (typeof outputModality === 'string' && outputModality.includes('image')) {
+            imageModels.push(model.id);
+            continue;
+          }
 
-        // Fallback: check supported_generation_methods
-        const genMethods = modelAny.supported_generation_methods;
-        if (Array.isArray(genMethods) && genMethods.includes('image')) {
-          imageModels.push(model.id);
-          continue;
+          // Fallback: check supported_generation_methods
+          const genMethods = modelAny.supported_generation_methods;
+          if (Array.isArray(genMethods) && genMethods.includes('image')) {
+            imageModels.push(model.id);
+            continue;
+          }
         }
       }
 

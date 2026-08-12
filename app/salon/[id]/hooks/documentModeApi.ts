@@ -17,6 +17,10 @@ interface ActiveDocumentResponse {
   document: ActiveDocumentRecord | null
 }
 
+interface OpenDocumentsResponse {
+  documents: ActiveDocumentRecord[]
+}
+
 interface ReadDocumentResponse {
   content?: string
   mtime?: number
@@ -24,6 +28,7 @@ interface ReadDocumentResponse {
 
 interface ResolveDocumentResponse {
   exists: boolean
+  kind: 'document' | 'image' | 'other'
 }
 
 interface OpenDocumentResponse {
@@ -96,6 +101,19 @@ export async function fetchActiveDocumentRecord(chatId: string): Promise<ActiveD
   return parseJsonResponse<ActiveDocumentResponse>(response, 'Failed to load active document')
 }
 
+/**
+ * List every open document for the chat. The tabbed workspace restores one
+ * editor pane per record on mount and after LLM open/close tool calls.
+ */
+export async function fetchOpenDocumentRecords(chatId: string): Promise<OpenDocumentsResponse> {
+  const response = await fetch(`/api/v1/chats/${chatId}?action=open-documents`, {
+    method: 'POST',
+    headers: JSON_HEADERS,
+  })
+
+  return parseJsonResponse<OpenDocumentsResponse>(response, 'Failed to load open documents')
+}
+
 export async function readDocumentContentForChat(
   chatId: string,
   params: {
@@ -160,10 +178,11 @@ export async function openDocumentForChat(
   return parseJsonResponse<OpenDocumentResponse>(response, 'Failed to open document')
 }
 
-export async function closeDocumentForChat(chatId: string): Promise<void> {
+export async function closeDocumentForChat(chatId: string, chatDocumentId?: string): Promise<void> {
   await fetch(`/api/v1/chats/${chatId}?action=close-document`, {
     method: 'POST',
     headers: JSON_HEADERS,
+    body: JSON.stringify({ chatDocumentId }),
   })
 }
 
@@ -200,11 +219,12 @@ interface RenameDocumentResponse {
 export async function renameDocumentForChat(
   chatId: string,
   newTitle: string,
+  chatDocumentId?: string,
 ): Promise<RenameDocumentResponse> {
   const response = await fetch(`/api/v1/chats/${chatId}?action=rename-document`, {
     method: 'POST',
     headers: JSON_HEADERS,
-    body: JSON.stringify({ newTitle }),
+    body: JSON.stringify({ newTitle, chatDocumentId }),
   })
 
   return parseJsonResponse<RenameDocumentResponse>(response, 'Failed to rename document')
@@ -216,10 +236,14 @@ interface DeleteDocumentResponse {
   librarianMessage?: Message | null
 }
 
-export async function deleteDocumentForChat(chatId: string): Promise<DeleteDocumentResponse> {
+export async function deleteDocumentForChat(
+  chatId: string,
+  chatDocumentId?: string,
+): Promise<DeleteDocumentResponse> {
   const response = await fetch(`/api/v1/chats/${chatId}?action=delete-document`, {
     method: 'POST',
     headers: JSON_HEADERS,
+    body: JSON.stringify({ chatDocumentId }),
   })
 
   return parseJsonResponse<DeleteDocumentResponse>(response, 'Failed to delete document')

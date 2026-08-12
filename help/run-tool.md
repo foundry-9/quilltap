@@ -45,7 +45,7 @@ Tick the **Private (whisper)** box before pressing **Run Tool** when the result 
 
 A private run:
 
-- **Hides from the chat by default.** Toggle "show all whispers" in The Salon to make it appear (it'll be marked with a small "whisper" label).
+- **Stays in your own view.** The row remains where you left it, marked with a small "whisper" label, whether or not "All Whispers" is lit. You commissioned the run; it would be a poor sort of secret that kept itself from you.
 - **Is excluded from every character's context.** No participant — single-character or multi — receives the run in their LLM context. As far as your cast is concerned, it never happened.
 
 Public runs (the default) behave the way they always have: visible to everyone, included in subsequent turns.

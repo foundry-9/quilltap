@@ -39,9 +39,13 @@ function LazyMessageContentInner({
   dialogueDetection,
   renderedHtml,
 }: LazyMessageContentProps) {
+  const hasQtapUri = content.includes('qtap://')
+
   // Fast path: server pre-rendered HTML for simple messages. Cheap and already
-  // height-stable, so render it directly.
-  if (renderedHtml) {
+  // height-stable, so render it directly. Messages mentioning qtap:// must use
+  // MessageContent so links are interactive via QtapLink (server-rendered HTML
+  // anchors have no React click handler for in-app open behavior).
+  if (renderedHtml && !hasQtapUri) {
     return (
       <div
         className={`qt-chat-message-content qt-prose prose prose-sm qt-prose-auto ${className}`}

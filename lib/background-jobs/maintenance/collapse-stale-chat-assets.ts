@@ -51,7 +51,7 @@ import { resolveCharacterAvatar } from '@/lib/photos/resolve-character-avatar';
 import { getPhotoLinkSummaryBySha256 } from '@/lib/photos/photo-link-summary';
 import { deleteFileCompletely } from '@/lib/cascade-delete';
 import type { ChatMetadata, FileEntry } from '@/lib/schemas/types';
-import { STALE_CHAT_RETENTION_DAYS, retentionCutoff } from './retention-constants';
+import { resolveStaleChatDays, retentionCutoff } from './retention-constants';
 
 const moduleLogger = logger.child({ module: 'maintenance.collapse-stale-chat-assets' });
 
@@ -73,9 +73,37 @@ export interface StaleChatCollapseSummary {
   bytesReleasedEstimate: number;
 }
 
-/** True when the chat's last activity is older than the staleness cutoff. */
-function isStale(chat: ChatMetadata, cutoffMs: number): boolean {
-  const lastActivity = chat.lastMessageAt ?? chat.updatedAt;
+/**
+ * True when the chat's last *played* activity is older than the staleness
+ * cutoff. "Played" means a message authored by a participant character or the
+ * human user — `getLastPlayedMessageAt` excludes Staff / personified-feature
+ * announcements (Lantern, Aurora, Host, Prospero, Carina, Concierge, Commonplace
+ * Book, Ariel, Suparṇā, Librarian), which persist as `type: 'message'` rows and
+ * therefore bump the chat's `lastMessageAt` even though no character actually
+ * spoke. We must NOT let such a whisper keep a quiet chat's images alive.
+ *
+ * Falls back to `chat.updatedAt` only when the chat has no played messages at
+ * all (a brand-new or transcript-less chat), matching the previous "unknown
+ * activity — never touch" safety: a null/NaN timestamp is never stale.
+ *
+ * Exported as THE staleness gate for every stale-gated maintenance sweep
+ * (asset collapse, cache collapse, chunk cold-tiering) AND for the startup
+ * render/embed reconcile, so they can never disagree on what "stale" means.
+ * The reconcile MUST use this gate: cold-tiering deliberately leaves stale
+ * chats with NULL `renderedMarkdown` and NULL chunk embeddings, and a
+ * reconcile that can't tell "cold-tiered" from "broken" re-embeds the entire
+ * cold tier on every boot just for the next sweep to clear it again.
+ *
+ * Takes only the fields it reads (`id`, `updatedAt`) so callers that scan
+ * with raw SQL don't have to hydrate full ChatMetadata rows.
+ */
+export async function isStale(
+  chat: Pick<ChatMetadata, 'id' | 'updatedAt'>,
+  cutoffMs: number,
+  repos: ReturnType<typeof getRepositories>,
+): Promise<boolean> {
+  const lastPlayedAt = await repos.chats.getLastPlayedMessageAt(chat.id);
+  const lastActivity = lastPlayedAt ?? chat.updatedAt;
   if (!lastActivity) return false; // unknown activity — never touch
   const ms = new Date(lastActivity).getTime();
   if (Number.isNaN(ms)) return false;
@@ -209,7 +237,7 @@ export async function collapseStaleChatAssets(
   now: number = Date.now(),
 ): Promise<StaleChatCollapseSummary> {
   const repos = getRepositories();
-  const cutoffMs = retentionCutoff(STALE_CHAT_RETENTION_DAYS, now).getTime();
+  const cutoffMs = retentionCutoff(await resolveStaleChatDays(), now).getTime();
 
   const allChats = await repos.chats.findAll();
   let staleChats = 0;
@@ -218,7 +246,7 @@ export async function collapseStaleChatAssets(
   let bytesReleasedEstimate = 0;
 
   for (const chat of allChats) {
-    if (!isStale(chat, cutoffMs)) continue;
+    if (!(await isStale(chat, cutoffMs, repos))) continue;
     staleChats++;
     try {
       const { deleted, bytes } = await collapseOneChat(chat, repos);

@@ -19,7 +19,14 @@ import {
   INSERT_UNORDERED_LIST_COMMAND,
   INSERT_ORDERED_LIST_COMMAND,
   APPLY_DELIMITER_COMMAND,
+  INDENT_LIST_ITEM_COMMAND,
+  OUTDENT_LIST_ITEM_COMMAND,
 } from '@/components/chat/lexical/plugins/FormattingCommandPlugin'
+import {
+  detectListIndentUnit,
+  indentSourceLines,
+  outdentSourceLines,
+} from '@/components/chat/lexical/transformers/list-indentation'
 import { type HeadingTagType, $createQuoteNode } from '@lexical/rich-text'
 
 interface RoleplayTemplateWithDelimiters {
@@ -302,6 +309,38 @@ export default function FormattingToolbar({
     editor.focus()
   }, [editor, showSource, sourceTextareaRef, sourceToggleWrap, sourceApply])
 
+  // Handle list indent / outdent. Both surfaces confine the change to list
+  // items: Markdown can't represent an indented paragraph, so indenting one
+  // would look right until the next save quietly dropped it.
+  const handleIndentClick = useCallback(
+    (direction: 'indent' | 'outdent') => {
+      // Source mode: shift the selected lines in the textarea directly
+      if (showSource && sourceTextareaRef?.current) {
+        const textarea = sourceTextareaRef.current
+        const state = {
+          value: textarea.value,
+          start: textarea.selectionStart,
+          end: textarea.selectionEnd,
+        }
+        const unit = detectListIndentUnit(textarea.value)
+        const result =
+          direction === 'indent'
+            ? indentSourceLines(state, unit)
+            : outdentSourceLines(state, unit)
+        sourceApply(textarea, result.value, result.cursor)
+        return
+      }
+
+      // Rich text mode: the command handler no-ops outside a list
+      editor.dispatchCommand(
+        direction === 'indent' ? INDENT_LIST_ITEM_COMMAND : OUTDENT_LIST_ITEM_COMMAND,
+        undefined,
+      )
+      editor.focus()
+    },
+    [editor, showSource, sourceTextareaRef, sourceApply],
+  )
+
   // Prevent toolbar buttons from stealing focus/selection from the editor
   const preventFocusLoss = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -389,6 +428,28 @@ export default function FormattingToolbar({
             {format.label}
           </button>
         ))}
+        <button
+          type="button"
+          onMouseDown={preventFocusLoss}
+          onClick={() => handleIndentClick('outdent')}
+          disabled={disabled}
+          className="qt-formatting-button qt-formatting-button-outdent"
+          title="Outdent list item (Shift+Tab)"
+          aria-label="Outdent list item"
+        >
+          {'⇤'}
+        </button>
+        <button
+          type="button"
+          onMouseDown={preventFocusLoss}
+          onClick={() => handleIndentClick('indent')}
+          disabled={disabled}
+          className="qt-formatting-button qt-formatting-button-indent"
+          title="Indent list item (Tab)"
+          aria-label="Indent list item"
+        >
+          {'⇥'}
+        </button>
         <button
           type="button"
           onMouseDown={preventFocusLoss}

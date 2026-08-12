@@ -20,6 +20,7 @@ import type {
   NewChatFormState,
   Project,
   ProjectScenarioOption,
+  RoleplayTemplateOption,
   SelectedCharacter,
   UserControlledCharacter,
 } from './types'
@@ -46,6 +47,18 @@ interface NewChatFormProps {
   generalScenarios?: GeneralScenarioOption[]
   /** Group scenarios from `/api/v1/groups/scenarios?characterIds=...`; fetched when characters are selected. */
   groupScenarios?: GroupScenarioOption[]
+  /**
+   * Roleplay templates from `/api/v1/roleplay-templates`. When non-empty the
+   * form renders a template dropdown, pre-set to whatever the chat would have
+   * defaulted to (`state.roleplayTemplateId`, seeded by useNewChat).
+   */
+  roleplayTemplates?: RoleplayTemplateOption[]
+  /**
+   * The template the chat would use if the dropdown were left alone (project
+   * default > user/global default > none). Used only to mark that option as
+   * the default in the list.
+   */
+  defaultRoleplayTemplateId?: string | null
   /**
    * In-form project picker plumbing. When `availableProjects` is non-empty and
    * `onSelectedProjectIdChange` is supplied, the form renders a dropdown so the
@@ -89,7 +102,8 @@ interface NewChatFormProps {
 export function NewChatForm({
   profiles,
   imageProfiles,
-  userControlledCharacters,
+  // Retained as a prop for caller compatibility, but the "Play As" dropdown now
+  // draws only from the selected cast, so it is no longer read here.
   selectedCharacters,
   setSelectedCharacters,
   state,
@@ -98,6 +112,8 @@ export function NewChatForm({
   projectScenarios = [],
   generalScenarios = [],
   groupScenarios = [],
+  roleplayTemplates = [],
+  defaultRoleplayTemplateId = null,
   availableProjects,
   selectedProjectId,
   onSelectedProjectIdChange,
@@ -300,83 +316,70 @@ export function NewChatForm({
       id: sc.character.id,
       name: sc.character.name,
       isUserControlled: false,
+      canChooseOutfit: sc.character.canChooseOutfit ?? false,
     }))
     if (userEntry) {
       list.push({
         id: userEntry.character.id,
         name: userEntry.character.name,
         isUserControlled: true,
+        canChooseOutfit: userEntry.character.canChooseOutfit ?? false,
       })
     }
     return list
   }, [llmSelected, userEntry])
 
-  // "Play As" options: every cast member (so any added character can take the
-  // user's chair) plus default-user characters not yet in the cast (preserving
-  // the ability to pull in a persona that wasn't picked).
-  const playAsOptions = useMemo(() => {
-    const castIds = new Set(selectedCharacters.map((sc) => sc.character.id))
-    const fromCast = selectedCharacters.map((sc) => ({
-      id: sc.character.id,
-      label: formatCharacterName(sc.character),
-    }))
-    const fromDefaults = userControlledCharacters
-      .filter((c) => !castIds.has(c.id))
-      .map((c) => ({ id: c.id, label: formatCharacterName(c) }))
-    return [...fromCast, ...fromDefaults]
-  }, [selectedCharacters, userControlledCharacters, formatCharacterName])
+  // "Play As" options: only characters already in the cast. Any added character
+  // can take the user's chair, and default-user personas now appear in the
+  // picker on the left, so they enter the cast the same way as everyone else
+  // rather than being pulled in from a separate roster here.
+  const playAsOptions = useMemo(
+    () =>
+      selectedCharacters.map((sc) => ({
+        id: sc.character.id,
+        label: formatCharacterName(sc.character),
+      })),
+    [selectedCharacters, formatCharacterName]
+  )
 
-  // Mark one character as the user's persona, in place. Reverting the prior
-  // user entry: a default-user persona pulled in by this dropdown is removed;
-  // a default-LLM character that was flipped is handed back to the LLM (its
-  // profile is cleared, matching CharacterPickerPanel.handleProfileChange, so
-  // the submit guard will ask for a profile again).
+  // Mark one cast member as the user's persona, in place. Any prior user entry
+  // is handed back to the LLM with its profile cleared (matching
+  // CharacterPickerPanel.handleProfileChange, so the submit guard will ask for a
+  // profile again). Every option comes from the cast, so there is nothing to
+  // pull in or remove.
   const handlePlayAsChange = useCallback(
     (nextId: string) => {
-      const defaultUserIds = new Set(userControlledCharacters.map((c) => c.id))
       setSelectedCharacters((prev) => {
-        let next = prev
-        const current = prev.find((sc) => sc.controlledBy === 'user')
-        if (current) {
-          if (defaultUserIds.has(current.character.id)) {
-            next = prev.filter((sc) => sc.character.id !== current.character.id)
-          } else {
-            next = prev.map((sc) =>
-              sc.character.id === current.character.id
-                ? { ...sc, controlledBy: 'llm' as const, connectionProfileId: '' }
-                : sc
-            )
-          }
-        }
-        if (nextId === '') return next // "Chat as yourself"
-        if (next.some((sc) => sc.character.id === nextId)) {
-          return next.map((sc) =>
-            sc.character.id === nextId
-              ? { ...sc, controlledBy: 'user' as const, connectionProfileId: '' }
-              : sc
-          )
-        }
-        const fromDefault = userControlledCharacters.find((c) => c.id === nextId)
-        if (fromDefault) {
-          return [
-            ...next,
-            {
-              character: fromDefault,
-              connectionProfileId: '',
-              selectedSystemPromptId: null,
-              controlledBy: 'user' as const,
-            },
-          ]
-        }
-        return next
+        const reverted = prev.map((sc) =>
+          sc.controlledBy === 'user'
+            ? { ...sc, controlledBy: 'llm' as const, connectionProfileId: '' }
+            : sc
+        )
+        if (nextId === '') return reverted // "Chat as yourself"
+        return reverted.map((sc) =>
+          sc.character.id === nextId
+            ? { ...sc, controlledBy: 'user' as const, connectionProfileId: '' }
+            : sc
+        )
       })
     },
-    [userControlledCharacters, setSelectedCharacters]
+    [setSelectedCharacters]
   )
 
   const handleOutfitSelectionsChange = useCallback(
     (selections: OutfitSelection[]) => {
       setState((prev) => ({ ...prev, outfitSelections: selections }))
+    },
+    [setState]
+  )
+
+  const handleRoleplayTemplateChange = useCallback(
+    (value: string) => {
+      setState((prev) => ({
+        ...prev,
+        roleplayTemplateId: value || null,
+        roleplayTemplateTouched: true,
+      }))
     },
     [setState]
   )
@@ -535,6 +538,36 @@ export function NewChatForm({
                 </option>
               ))}
             </select>
+          </div>
+        )}
+
+        {roleplayTemplates.length > 0 && (
+          <div>
+            <label htmlFor="new-chat-roleplay-template" className="mb-2 block text-sm qt-text-primary">
+              Roleplay Template
+            </label>
+            <select
+              id="new-chat-roleplay-template"
+              value={state.roleplayTemplateId ?? ''}
+              onChange={(e) => handleRoleplayTemplateChange(e.target.value)}
+              disabled={creating}
+              className="qt-select"
+            >
+              <option value="">
+                No Template{defaultRoleplayTemplateId === null ? ' (default)' : ''}
+              </option>
+              {roleplayTemplates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name}
+                  {template.isBuiltIn ? ' (Built-in)' : ''}
+                  {template.id === defaultRoleplayTemplateId ? ' (default)' : ''}
+                </option>
+              ))}
+            </select>
+            <p className="qt-text-xs qt-text-muted mt-1">
+              Sets how prose, dialogue, and asides are dressed for this conversation. You may
+              change your mind later from the chat&rsquo;s own sidebar.
+            </p>
           </div>
         )}
 

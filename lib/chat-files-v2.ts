@@ -15,6 +15,7 @@ import { logger } from '@/lib/logger';
 import { getInheritedTags } from './files/tag-inheritance';
 import { resizeImageForProvider, canResizeImage, calculateBase64Size, getProviderMaxBase64Size } from './files/image-processing';
 import { autoDescribeChatImageAttachment } from './photos/auto-describe-attachment';
+import { nativeTextAttachmentMime } from './mount-index/path-utils';
 
 export interface ChatFileUploadResult {
   id: string;
@@ -524,7 +525,27 @@ async function loadMountFileAsAttachment(
 
   const blob = await repos.docMountBlobs.findByFileId(mountLink.fileId);
   if (!blob) {
-    logger.warn('[chat-files-v2] Mount file has no blob row', {
+    // Native-text documents (.md/.txt/.json in a database store) have no blob;
+    // their bytes live in doc_mount_documents. Serve the document text so an
+    // attached markdown document actually reaches the LLM (Bug 38).
+    const textMime = nativeTextAttachmentMime(mountLink.relativePath);
+    if (textMime) {
+      const document = await repos.docMountDocuments.findByFileId(mountLink.fileId);
+      if (document) {
+        const buffer = Buffer.from(document.content, 'utf-8');
+        const url = `/api/v1/mount-points/${mountLink.mountPointId}/files/${encodeURI(mountLink.relativePath)}`;
+        return {
+          id: mountLink.id,
+          filepath: url,
+          filename: mountLink.originalFileName ?? mountLink.fileName,
+          mimeType: textMime,
+          size: buffer.length,
+          data: buffer.toString('base64'),
+          url,
+        };
+      }
+    }
+    logger.warn('[chat-files-v2] Mount file has no blob or document row', {
       mountFileId,
       mountPointId: mountLink.mountPointId,
       relativePath: mountLink.relativePath,

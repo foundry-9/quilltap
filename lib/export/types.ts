@@ -28,17 +28,45 @@ import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
  * Types of entities that can be exported
  * Each export contains a single entity type (no mixed exports)
  */
+/**
+ * Adding a member here is a cross-cutting change, not a one-liner. Every one
+ * of these layers must gain a matching case or the records are written and
+ * then silently evaporate on the way back in:
+ *
+ *   - `QuilltapExportCounts` key + `Qtap*Record` interface + `QtapRecord` union (this file)
+ *   - `lib/export/ndjson-writer.ts`: `stream*` generator, `resolveExportIds`, `streamExportRecords`
+ *   - `lib/export/quilltap-export-service.ts`: `previewExport` (its `default` throws)
+ *   - `lib/import/quilltap-import-stream.ts`: record `switch`, `CollectedArrays`,
+ *     `buildExportDataForType` (its `default` throws)
+ *   - `lib/import/quilltap-import/types.ts`: `AnyExportData` field
+ *   - `lib/import/quilltap-import/`: importer module, wired into `execute.ts`
+ *   - `components/tools/import-export/types.ts`: `ENTITY_TYPE_LABELS`
+ *   - `components/tools/import-export/steps/ExportTypeStep.tsx`: `EXPORTABLE_TYPES`
+ *   - `app/api/v1/system/tools/route.ts`: `handleExportEntities`
+ *   - `public/schemas/qtap-export.schema.json` + `qtap-export-ndjson.schema.json`
+ *
+ * Format compatibility: the NDJSON envelope stays `version: 1`. An older build
+ * warns-and-skips record kinds it doesn't know, but *throws* on an unknown
+ * `manifest.exportType` (`buildExportDataForType`), so it cannot consume an
+ * archive of a newly-added type. That's deliberate — the thrown message names
+ * the type plainly — but it means new types are forward-only.
+ */
 export type ExportEntityType =
   | 'characters'
   | 'chats'
   | 'roleplay-templates'
+  | 'prompt-templates'
   | 'connection-profiles'
   | 'image-profiles'
   | 'embedding-profiles'
   | 'tags'
   | 'projects'
   | 'groups'
-  | 'document-stores';
+  | 'document-stores'
+  | 'files'
+  | 'provider-models'
+  | 'plugin-configs'
+  | 'instance-settings';
 
 // ============================================================================
 // EXPORT MANIFEST
@@ -54,6 +82,8 @@ export interface QuilltapExportSettings {
   scope: 'all' | 'selected';
   /** List of entity IDs to export (only used when scope is 'selected') */
   selectedIds: string[];
+  /** Whether to restore the archive at its original IDs (refuse on collision) */
+  preserveIds?: boolean;
 }
 
 /**
@@ -78,6 +108,12 @@ export interface QuilltapExportCounts {
   documentStoreProjectLinks?: number;
   conversationAnnotations?: number;
   chatDocuments?: number;
+  files?: number;
+  folders?: number;
+  promptTemplates?: number;
+  providerModels?: number;
+  pluginConfigs?: number;
+  instanceSettings?: number;
 }
 
 /**
@@ -282,6 +318,13 @@ export interface ExportedDocumentStore {
 }
 
 export interface ExportedDocumentStoreFolder {
+  /**
+   * Optional source-row id, carried so a `preserveIds` import (archive /
+   * rehydrate) can restore the folder at its original id. Optional for the
+   * same back-compat reason as the document/blob id fields (§2.3): an
+   * additive field on a known record kind, ignored by older builds.
+   */
+  id?: string | null;
   mountPointId: string;
   parentId?: string | null;
   name: string;
@@ -298,6 +341,18 @@ export interface ExportedDocumentStoreDocument {
   plainTextLength: number;
   lastModified: string;
   folderId?: string | null;
+  /** Optional source-row id carried for cross-instance link remapping. */
+  fileId?: string | null;
+  /** Optional source link id carried for cross-instance avatar remapping. */
+  linkId?: string | null;
+  /**
+   * Deliberate hard-link group (see doc_mount_file_links.linkGroupId). Carried
+   * through so a file linked into two stores comes back linked rather than as
+   * two documents that silently drift apart on the next edit. Omitted for the
+   * ordinary un-linked case; a group whose other members fall outside the
+   * export's scope imports as an inert group of one.
+   */
+  linkGroupId?: string | null;
 }
 
 export interface ExportedDocumentStoreBlob {
@@ -310,6 +365,12 @@ export interface ExportedDocumentStoreBlob {
   sha256: string;
   description: string;
   descriptionUpdatedAt?: string | null;
+  /** Optional source-row id carried for cross-instance link remapping. */
+  fileId?: string | null;
+  /** Optional source link id carried for cross-instance avatar remapping. */
+  linkId?: string | null;
+  /** Optional source blob id carried for cross-instance link remapping. */
+  blobId?: string | null;
   /** Plain-text representation for pdf/docx uploads. Omitted for blobs with no converter. */
   extractedText?: string | null;
   extractedTextSha256?: string | null;
@@ -336,6 +397,132 @@ export interface DocumentStoresExportData {
   projectLinks?: ExportedProjectDocMountLink[];
 }
 
+// ============================================================================
+// FILE LIBRARY (general files + folders)
+// ============================================================================
+
+/**
+ * A general-library folder, portable form.
+ *
+ * `id` rides along so child folders and files can be matched to their parent
+ * within the same archive; the importer re-mints IDs and resolves parents by
+ * path, exactly as the document-store importer does.
+ */
+export interface ExportedFolder {
+  id: string;
+  path: string;
+  name: string;
+  parentFolderId?: string | null;
+  projectId?: string | null;
+}
+
+/**
+ * A general-library file's metadata.
+ *
+ * `userId` is dropped (the receiving instance owns the row) and so is
+ * `storageKey`: it is instance-specific — commonly
+ * `mount-blob:<mountPointId>:<blobId>`, pointing into *this* instance's
+ * mount-index database — and transferring it verbatim would produce a row
+ * whose bytes live nowhere. It travels as `_sourceStorageKey` provenance
+ * only, and the importer discards it in favour of the key its own upload
+ * bridge returns.
+ */
+export interface ExportedFile
+  extends Omit<import('@/lib/schemas/file.types').FileEntry, 'userId' | 'storageKey'> {
+  /** Where the bytes lived on the exporting instance. Provenance only. */
+  _sourceStorageKey?: string | null;
+  /** Set when the bytes could not be read at export time; metadata still travels. */
+  _bytesMissing?: boolean;
+}
+
+/** File metadata plus its bytes, as reassembled from the chunked stream. */
+export interface ExportedFileWithBytes extends ExportedFile {
+  /** Raw bytes, base64-encoded. Absent when `_bytesMissing` is set. */
+  dataBase64?: string;
+}
+
+export interface FilesExportData {
+  files: ExportedFileWithBytes[];
+  /** Optional for the same back-compat reason as the doc-store folders field. */
+  folders?: ExportedFolder[];
+}
+
+// ============================================================================
+// PROMPT TEMPLATES
+// ============================================================================
+
+/**
+ * User-created prompt templates. Built-ins are seeded from `prompts/` on every
+ * instance and never travel — mirroring the roleplay-template rule.
+ */
+export interface PromptTemplatesExportData {
+  promptTemplates: import('@/lib/schemas/types').PromptTemplate[];
+}
+
+// ============================================================================
+// PROVIDER MODELS
+// ============================================================================
+
+/**
+ * The provider model catalogue.
+ *
+ * This table is a **regenerable cache**: it is populated by live refetch from
+ * each provider (`/api/v1/models`), and a refetch supersedes anything an
+ * import wrote. Exportable purely as a convenience for offline / air-gapped
+ * instances that cannot reach the providers to build it themselves.
+ */
+export interface ProviderModelsExportData {
+  providerModels: import('@/lib/schemas/types').ProviderModel[];
+}
+
+// ============================================================================
+// PLUGIN CONFIGS
+// ============================================================================
+
+/**
+ * A plugin's per-user configuration, with secrets removed.
+ *
+ * `PluginConfig.config` is an untyped bag and plugin manifests may declare
+ * `password`-typed fields, which are stored in plaintext. A local backup may
+ * carry those; a portable `.qtap` must not. The exporter resolves the
+ * plugin's manifest and drops every `password`-typed key, listing what it
+ * removed in `_redactedKeys` so the receiving user knows what to re-enter.
+ * When the manifest can't be resolved the whole `config` is dropped and
+ * `_redactedKeys` is `['*']` — we never guess which keys are safe.
+ *
+ * Same philosophy as connection profiles, where `apiKeyId` is stripped and
+ * replaced by an `_apiKeyLabel` breadcrumb.
+ */
+export interface ExportedPluginConfig
+  extends Omit<import('@/lib/schemas/plugin-config.types').PluginConfig, 'userId'> {
+  /** Config keys withheld from the export. `['*']` means the whole bag. */
+  _redactedKeys?: string[];
+}
+
+export interface PluginConfigsExportData {
+  pluginConfigs: ExportedPluginConfig[];
+}
+
+// ============================================================================
+// INSTANCE SETTINGS
+// ============================================================================
+
+/** One row of the `instance_settings` key/value table. */
+export interface ExportedInstanceSetting {
+  key: string;
+  value: string;
+}
+
+/**
+ * The "move my setup" export: configuration rather than content. Keys that are
+ * meaningful only inside the exporting instance (mount-point pointers, timing
+ * state, the version guard) are excluded at the writer — see
+ * `NON_PORTABLE_INSTANCE_SETTING_KEYS` in `lib/instance-settings`.
+ */
+export interface InstanceSettingsExportData {
+  instanceSettings: ExportedInstanceSetting[];
+}
+
 /**
  * Union of all possible export data structures
  */
@@ -349,7 +536,12 @@ export type QuilltapExportData =
   | TagsExportData
   | ProjectsExportData
   | GroupsExportData
-  | DocumentStoresExportData;
+  | DocumentStoresExportData
+  | FilesExportData
+  | PromptTemplatesExportData
+  | ProviderModelsExportData
+  | PluginConfigsExportData
+  | InstanceSettingsExportData;
 
 /**
  * Complete export structure with manifest and data
@@ -468,9 +660,19 @@ export interface QtapChatMessageRecord {
   data: import('@/lib/schemas/types').MessageEvent;
 }
 
+/**
+ * Memory record — deliberately `Omit<Memory, 'embedding'>`.
+ *
+ * Embeddings are instance-local caches, not portable data: they are enormous
+ * (a serialized Float32Array is ~29.6 KB per memory) and they are only valid
+ * against the model that produced them, so importing a foreign vector
+ * silently corrupts semantic search whenever the dimensionality matches. The
+ * importer re-embeds every memory it inserts. Re-introducing the field here
+ * is a type error on purpose.
+ */
 export interface QtapMemoryRecord {
   kind: 'memory';
-  data: import('@/lib/schemas/types').Memory;
+  data: Omit<import('@/lib/schemas/types').Memory, 'embedding'>;
 }
 
 /**
@@ -502,7 +704,7 @@ export interface QtapDocMountPointRecord {
 
 export interface QtapDocMountFolderRecord {
   kind: 'doc_mount_folder';
-  data: any;
+  data: ExportedDocumentStoreFolder;
 }
 
 export interface QtapDocMountDocumentRecord {
@@ -547,6 +749,68 @@ export interface QtapProjectDocMountLinkRecord {
   data: ExportedProjectDocMountLink;
 }
 
+/** General-library folder. Emitted before any `file` record. */
+export interface QtapFolderRecord {
+  kind: 'folder';
+  data: ExportedFolder;
+}
+
+/** General-library file metadata. Its bytes follow as `file_blob*` records. */
+export interface QtapFileRecord {
+  kind: 'file';
+  data: ExportedFile;
+}
+
+/**
+ * File byte header, emitted once per file *before* its chunks — the exact
+ * shape of the `doc_mount_blob` / `doc_mount_blob_chunk` pair, keyed by
+ * `fileId` instead of (mountPointId, sha256). Omitted entirely when the bytes
+ * couldn't be read (the `file` record then carries `_bytesMissing`).
+ */
+export interface QtapFileBlobRecord {
+  kind: 'file_blob';
+  fileId: string;
+  sha256: string;
+  sizeBytes: number;
+  /** Total number of `file_blob_chunk` records that follow. */
+  chunkCount: number;
+}
+
+/**
+ * File byte chunk, in order, right after its parent `file_blob`. Raw slices
+ * are a multiple of 3 bytes so the base64 pieces concatenate cleanly — see
+ * `BLOB_CHUNK_BYTES` in the writer.
+ */
+export interface QtapFileBlobChunkRecord {
+  kind: 'file_blob_chunk';
+  fileId: string;
+  /** 0-based chunk index. */
+  index: number;
+  /** Total chunks for this file (mirrors the parent's chunkCount). */
+  total: number;
+  dataBase64: string;
+}
+
+export interface QtapPromptTemplateRecord {
+  kind: 'prompt_template';
+  data: import('@/lib/schemas/types').PromptTemplate;
+}
+
+export interface QtapProviderModelRecord {
+  kind: 'provider_model';
+  data: import('@/lib/schemas/types').ProviderModel;
+}
+
+export interface QtapPluginConfigRecord {
+  kind: 'plugin_config';
+  data: ExportedPluginConfig;
+}
+
+export interface QtapInstanceSettingRecord {
+  kind: 'instance_setting';
+  data: ExportedInstanceSetting;
+}
+
 /**
  * Discriminated union of every line that can appear in a streaming .qtap
  * file. Consumers switch on `kind` to dispatch.
@@ -574,7 +838,15 @@ export type QtapRecord =
   | QtapDocMountDocumentRecord
   | QtapDocMountBlobRecord
   | QtapDocMountBlobChunkRecord
-  | QtapProjectDocMountLinkRecord;
+  | QtapProjectDocMountLinkRecord
+  | QtapFolderRecord
+  | QtapFileRecord
+  | QtapFileBlobRecord
+  | QtapFileBlobChunkRecord
+  | QtapPromptTemplateRecord
+  | QtapProviderModelRecord
+  | QtapPluginConfigRecord
+  | QtapInstanceSettingRecord;
 
 // ============================================================================
 // EXPORT API TYPES
@@ -592,6 +864,8 @@ export interface ExportOptions {
   selectedIds?: string[];
   /** Whether to include related memories */
   includeMemories?: boolean;
+  /** Whether to preserve source IDs during import/re-hydration */
+  preserveIds?: boolean;
 }
 
 /**
@@ -608,6 +882,24 @@ export interface ExportPreview {
   }>;
   /** Number of memories that will be included (if applicable) */
   memoryCount?: number;
+  /**
+   * Character vaults riding along in the bundle. Set only for the `characters`
+   * type, where each character's document store now travels with it (WP A2).
+   */
+  vaults?: {
+    /** Character vaults included (one per character that has one). */
+    stores: number;
+    /** Text documents across those vaults (properties, mail, notes). */
+    documents: number;
+    /** Binary files across those vaults (photos, attachments). */
+    blobs: number;
+    /**
+     * Rough size of the finished `.qtap`, in bytes. Blob bytes dominate and
+     * are counted base64-inflated (4/3); everything else is a small constant
+     * beside them. An estimate, deliberately not a promise.
+     */
+    estimatedBytes: number;
+  };
 }
 
 // ============================================================================
@@ -629,6 +921,8 @@ export interface ImportOptions {
   includeMemories: boolean;
   /** Whether to import related entities (profiles, templates, etc.) */
   includeRelatedEntities: boolean;
+  /** Whether to preserve source IDs and fail on collisions */
+  preserveIds?: boolean;
 }
 
 /**
@@ -676,12 +970,3 @@ export interface ImportResult {
 // ============================================================================
 // EXPORT UTILITY TYPES
 // ============================================================================
-
-/**
- * Memory collection result
- */
-export interface MemoryCollection {
-  characterMemories: Record<string, Memory[]>;
-  personaMemories: Record<string, Memory[]>;
-  chatMemories: Record<string, Memory[]>;
-}

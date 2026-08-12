@@ -15,14 +15,14 @@ import { badRequest, notFound, created } from '@/lib/api/responses';
 import { composeAndDeliverLetter } from '@/lib/post-office/deliver';
 import { sendMailActionSchema } from '../schemas';
 import { findOperatorPlayedParticipant } from '../participant-auth';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 import type { ChatMetadata } from '@/lib/schemas/types';
 
 export async function handleSendMail(
   req: NextRequest,
   chatId: string,
   chat: ChatMetadata,
-  { repos }: AuthenticatedContext,
+  { repos }: RequestContext,
 ): Promise<NextResponse> {
   const body = await req.json();
   const validated = sendMailActionSchema.parse(body);
@@ -45,9 +45,15 @@ export async function handleSendMail(
   if (!sender) {
     return notFound('Sender character');
   }
+  if (sender.archivedAt) {
+    return badRequest('That character is archived; rehydrate it to continue.');
+  }
   const recipient = await repos.characters.findByIdRaw(validated.toCharacterId);
   if (!recipient) {
     return notFound('Recipient character');
+  }
+  if (recipient.archivedAt) {
+    return badRequest('That recipient is archived; rehydrate them to continue.');
   }
 
   const result = await composeAndDeliverLetter({

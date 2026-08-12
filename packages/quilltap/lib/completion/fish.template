@@ -15,7 +15,7 @@ function __quilltap_no_subcommand
   end
   for i in (seq 2 (count $cmd))
     switch $cmd[$i]
-      case db docs themes instances memories memory-diff logs migrations maintenance file-verify completion
+      case db docs themes instances memories memory-diff recall-replay logs migrations maintenance file-verify completion
         return 1
     end
   end
@@ -27,7 +27,7 @@ function __quilltap_using_subcommand
   set -l cmd (commandline -opc)
   for i in (seq 2 (count $cmd))
     switch $cmd[$i]
-      case db docs themes instances memories memory-diff logs migrations maintenance file-verify completion
+      case db docs themes instances memories memory-diff recall-replay logs migrations maintenance file-verify completion
         test "$cmd[$i]" = "$target"
         return $status
     end
@@ -55,6 +55,7 @@ complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'themes' -d 'Manage the
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'instances' -d 'Register or inspect instances'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'memories' -d 'Search and browse memories'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'memory-diff' -d 'Memory extraction dry-run'
+complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'recall-replay' -d 'Replay memory recall for a turn'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'logs' -d 'Tail or print log files'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'migrations' -d 'Inspect migration status'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'maintenance' -d 'Run retention/cleanup sweeps'
@@ -91,6 +92,14 @@ complete -c quilltap -n '__quilltap_using_subcommand db' -f -a 'characters' -d '
 complete -c quilltap -n '__quilltap_using_subcommand db' -f -a 'optimize' -d 'Optimize database'
 complete -c quilltap -n '__quilltap_using_subcommand db' -f -a 'backup' -d 'Backup database'
 complete -c quilltap -n '__quilltap_using_subcommand db' -f -a 'integrity' -d 'Check integrity'
+
+# db characters sub-subverbs
+complete -c quilltap -n '__quilltap_using_subverb db characters' -f -a 'status' -d 'Per-character vault status report'
+complete -c quilltap -n '__quilltap_using_subverb db characters' -f -a 'archives' -d 'List archived characters and bundles'
+complete -c quilltap -n '__quilltap_using_subverb db characters' -f -a 'archive' -d 'Archive a character (server required)'
+complete -c quilltap -n '__quilltap_using_subverb db characters' -f -a 'rehydrate' -d 'Wake an archived character (server required)'
+complete -c quilltap -n '__quilltap_using_subverb db characters' -f -a 'export' -d 'Write a plaintext .qtap for a character'
+complete -c quilltap -n '__quilltap_using_subverb db characters' -l 'port' -s 'p' -d 'Server port' -x
 
 # db flags
 complete -c quilltap -n '__quilltap_using_subcommand db' -l 'limit' -d 'Result limit' -x
@@ -135,6 +144,7 @@ complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'scan' -d 'Trig
 complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'find' -d 'Substring search'
 complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'grep' -d 'Pattern search in text'
 complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'status' -d 'Per-mount status'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'docker-mounts' -d 'Binds needed under Docker'
 complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'reindex' -d 'Re-extract and chunk'
 complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'embed' -d 'Enqueue embeddings'
 complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'write' -d 'Write a file'
@@ -260,6 +270,16 @@ complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'port' -s 'p' 
 complete -c quilltap -n '__quilltap_using_subcommand memory-diff' -l 'port' -s 'p' -d 'Server port' -x
 complete -c quilltap -n '__quilltap_using_subcommand memory-diff' -l 'concurrency' -d 'Concurrency limit' -x
 complete -c quilltap -n '__quilltap_using_subcommand memory-diff' -l 'out' -d 'Output file' -r -F
+
+# ---------- recall-replay flags ----------
+complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'turn' -d 'Interchange to replay (1-based)' -x
+complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'char' -d 'Character whose memories are searched' -x
+complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'limit' -d 'Candidate rows per path' -x
+complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'port' -d 'Server port' -x
+
+# ---------- file-verify flags ----------
+complete -c quilltap -n '__quilltap_using_subcommand file-verify' -l 'all' -d 'Read every top-level file, not just dataless ones'
+complete -c quilltap -n '__quilltap_using_subcommand file-verify' -l 'stall-ms' -d 'Per-chunk stall threshold (ms)' -x
 
 # ---------- logs flags ----------
 complete -c quilltap -n '__quilltap_using_subcommand logs' -l 'stream' -d 'Log stream' -x -a 'combined error stdout stderr startup'

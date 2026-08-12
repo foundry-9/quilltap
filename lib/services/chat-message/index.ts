@@ -28,6 +28,14 @@ export {
   continueMessageSchema,
 } from './orchestrator.service'
 
+// Request helpers (option-building + SSE response)
+export {
+  buildSendMessageOptions,
+  buildContinueMessageOptions,
+  sseStreamResponse,
+  type SendMessageRequestExtras,
+} from './request-helpers'
+
 // Participant Resolution
 export {
   resolveRespondingParticipant,
@@ -47,6 +55,12 @@ export {
   type MessageContextResult,
   type FileProcessingResult,
 } from './context-builder.service'
+
+// Regenerate (swipe) — alternative-response generation through the context engine
+export {
+  regenerateMessageAsSwipe,
+  type RegenerateSwipeOptions,
+} from './regenerate-swipe.service'
 
 // Tool Execution
 export {

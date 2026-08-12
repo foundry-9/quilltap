@@ -68,6 +68,7 @@ import {
   previewImport,
   executeImport,
 } from '@/lib/import/quilltap-import-service';
+import { PreserveIdsCollisionError } from '@/lib/import/quilltap-import/execute';
 import { getUserRepositories, getRepositories } from '@/lib/repositories/factory';
 
 describe('quilltap-import-service', () => {
@@ -784,6 +785,363 @@ describe('quilltap-import-service', () => {
       });
 
       expect(Array.isArray(result.warnings)).toBe(true);
+    });
+  });
+
+  // ============================================================================
+  // executeImport() - Preserve IDs Tests
+  // ============================================================================
+
+  describe('executeImport() - preserveIds', () => {
+    it('preserves source IDs when preserveIds is enabled and no collisions exist', async () => {
+      const exportedCharacter = createMockExportedCharacter({ id: 'char-preserve-1', name: 'Preserved' });
+      const exportData = createMockQuilltapExport({
+        characters: [exportedCharacter],
+        memories: [createMockMemory({ id: 'memory-preserve-1', characterId: 'char-preserve-1' })],
+      });
+
+      mockUserRepos.characters.create.mockImplementation(async (data: any, options?: { id?: string }) => ({
+        ...data,
+        id: options?.id ?? data.id ?? 'generated-id',
+      }));
+      mockUserRepos.memories.create.mockImplementation(async (data: any, options?: { id?: string }) => ({
+        ...data,
+        id: options?.id ?? data.id ?? 'generated-memory-id',
+      }));
+
+      const result = await executeImport(testUserId, exportData as any, {
+        conflictStrategy: 'skip',
+        includeMemories: true,
+        includeRelatedEntities: false,
+        preserveIds: true,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.imported.characters).toBe(1);
+      expect(mockUserRepos.characters.create).toHaveBeenCalledWith(
+        expect.objectContaining({ id: exportedCharacter.id }),
+        expect.objectContaining({ id: exportedCharacter.id })
+      );
+      expect(mockUserRepos.memories.create).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'memory-preserve-1' }),
+        expect.objectContaining({ id: 'memory-preserve-1' })
+      );
+    });
+
+    it('refuses to import when preserveIds would collide with an existing entity', async () => {
+      const exportedCharacter = createMockExportedCharacter({ id: 'char-collision-1', name: 'Colliding' });
+      const exportData = createMockQuilltapExport({ characters: [exportedCharacter] });
+
+      configureFindById(mockUserRepos.characters.findById, [createMockCharacter({ id: 'char-collision-1', userId: testUserId })]);
+
+      const result = await executeImport(testUserId, exportData as any, {
+        conflictStrategy: 'skip',
+        includeMemories: false,
+        includeRelatedEntities: false,
+        preserveIds: true,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.warnings.some((warning) => warning.includes('Preserve IDs collision'))).toBe(true);
+      expect(mockUserRepos.characters.create).not.toHaveBeenCalled();
+    });
+
+    // ==========================================================================
+    // F4 — vault-internal id checks and the skip-if-present rehydrate mode
+    // ==========================================================================
+
+    /** A character bundle carrying its vault: mount, folder, document, blob. */
+    function createVaultBundle() {
+      const exportedCharacter = createMockExportedCharacter({ id: 'char-A', name: 'Archived Ada' });
+      (exportedCharacter as any).characterDocumentMountPointId = 'vault-A';
+      const exportData = createMockQuilltapExport({
+        characters: [exportedCharacter],
+        memories: [createMockMemory({ id: 'mem-1', characterId: 'char-A' })],
+      });
+      Object.assign(exportData.data as any, {
+        mountPoints: [{
+          id: 'vault-A', name: 'Ada Vault', basePath: '', mountType: 'database',
+          storeType: 'character', includePatterns: [], excludePatterns: [], enabled: true,
+        }],
+        folders: [{ id: 'folder-1', mountPointId: 'vault-A', parentId: null, name: 'Mail', path: 'Mail' }],
+        documents: [{
+          mountPointId: 'vault-A', relativePath: 'identity.md', fileName: 'identity.md',
+          fileType: 'markdown', content: 'x', contentSha256: 'sha-1', plainTextLength: 1,
+          lastModified: '2026-08-10T00:00:00.000Z', folderId: null, fileId: 'file-1', linkId: 'link-1',
+        }],
+        blobs: [{
+          mountPointId: 'vault-A', relativePath: 'photos/avatar.webp', originalFileName: 'avatar.webp',
+          originalMimeType: 'image/webp', storedMimeType: 'image/webp', sizeBytes: 3, sha256: 'sha-2',
+          description: '', fileId: 'file-2', linkId: 'link-2', blobId: 'blob-1',
+          dataBase64: Buffer.from('abc').toString('base64'),
+        }],
+      });
+      return exportData;
+    }
+
+    const skipIfPresentOptions = {
+      conflictStrategy: 'skip' as const,
+      includeMemories: true,
+      includeRelatedEntities: false,
+      preserveIds: true,
+      preserveIdsMode: {
+        mode: 'skip-if-present' as const,
+        targetCharacterId: 'char-A',
+        targetVaultMountPointId: 'vault-A',
+      },
+    };
+
+    /** Make every id in the vault bundle collide inside vault-A. */
+    function configureFullKeepSetCollision() {
+      configureFindById(mockUserRepos.characters.findById, [
+        createMockCharacter({ id: 'char-A', userId: testUserId }),
+      ]);
+      configureFindById(mockUserRepos.memories.findById as any, [
+        { id: 'mem-1', characterId: 'char-A' },
+      ]);
+      configureFindById(mockGlobalRepos.docMountPoints.findById as any, [
+        { id: 'vault-A', mountType: 'database' },
+      ]);
+      configureFindById(mockGlobalRepos.docMountFolders.findById as any, [
+        { id: 'folder-1', mountPointId: 'vault-A' },
+      ]);
+      configureFindById(mockGlobalRepos.docMountFiles.findById as any, [
+        { id: 'file-1' }, { id: 'file-2' },
+      ]);
+      configureFindById(mockGlobalRepos.docMountFileLinks.findById as any, [
+        { id: 'link-1', mountPointId: 'vault-A' },
+        { id: 'link-2', mountPointId: 'vault-A' },
+      ]);
+      configureFindById(mockGlobalRepos.docMountBlobs.findById as any, [
+        { id: 'blob-1', fileId: 'file-2' },
+      ]);
+      mockGlobalRepos.docMountFileLinks.findByFileId.mockImplementation(async (fileId: string) =>
+        fileId === 'file-1' || fileId === 'file-2' ? [{ mountPointId: 'vault-A' }] : []
+      );
+    }
+
+    it('refuses the whole import on a single colliding vault-internal link id', async () => {
+      const exportData = createVaultBundle();
+      // Only the document's link id exists — in some *other* store.
+      configureFindById(mockGlobalRepos.docMountFileLinks.findById as any, [
+        { id: 'link-1', mountPointId: 'vault-OTHER' },
+      ]);
+
+      const result = await executeImport(testUserId, exportData as any, {
+        conflictStrategy: 'skip',
+        includeMemories: true,
+        includeRelatedEntities: false,
+        preserveIds: true,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.warnings.some((w) => w.includes('document store link link-1'))).toBe(true);
+      // Nothing was written: the refusal is atomic and pre-write.
+      expect(mockUserRepos.characters.create).not.toHaveBeenCalled();
+      expect(mockUserRepos.memories.create).not.toHaveBeenCalled();
+      expect(mockGlobalRepos.docMountFolders.create).not.toHaveBeenCalled();
+      expect(mockGlobalRepos.docMountFileLinks.linkDocumentContent).not.toHaveBeenCalled();
+      expect(mockGlobalRepos.docMountBlobs.create).not.toHaveBeenCalled();
+    });
+
+    it('refuse-on-collision stays the default even when the collision is inside the target vault', async () => {
+      const exportData = createVaultBundle();
+      configureFullKeepSetCollision();
+
+      const result = await executeImport(testUserId, exportData as any, {
+        conflictStrategy: 'skip',
+        includeMemories: true,
+        includeRelatedEntities: false,
+        preserveIds: true,
+        // no preserveIdsMode — the wizard's path
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.warnings.some((w) => w.includes('Preserve IDs collision'))).toBe(true);
+    });
+
+    it('skip-if-present tolerates a full keep-set collision inside the target vault without re-creating anything', async () => {
+      const exportData = createVaultBundle();
+      configureFullKeepSetCollision();
+
+      const result = await executeImport(testUserId, exportData as any, skipIfPresentOptions);
+
+      expect(result.success).toBe(true);
+      // Every colliding record was skipped — the surviving rows win.
+      expect(mockUserRepos.characters.create).not.toHaveBeenCalled();
+      expect(mockUserRepos.memories.create).not.toHaveBeenCalled();
+      expect(mockGlobalRepos.docMountPoints.create).not.toHaveBeenCalled();
+      expect(mockGlobalRepos.docMountFolders.create).not.toHaveBeenCalled();
+      expect(mockGlobalRepos.docMountFileLinks.linkDocumentContent).not.toHaveBeenCalled();
+      expect(mockGlobalRepos.docMountBlobs.create).not.toHaveBeenCalled();
+      // The character resolves to itself for downstream consumers.
+      expect(result.importedCharacterIds).toContain('char-A');
+    });
+
+    it('skip-if-present still refuses atomically when a claimed id lives outside the target', async () => {
+      const exportData = createVaultBundle();
+      configureFullKeepSetCollision();
+      // The blob's link now lives in a different mount: hard refusal.
+      configureFindById(mockGlobalRepos.docMountFileLinks.findById as any, [
+        { id: 'link-1', mountPointId: 'vault-A' },
+        { id: 'link-2', mountPointId: 'vault-OTHER' },
+      ]);
+
+      const result = await executeImport(testUserId, exportData as any, skipIfPresentOptions);
+
+      expect(result.success).toBe(false);
+      expect(result.warnings.some((w) => w.includes('document store link link-2'))).toBe(true);
+      expect(mockUserRepos.characters.create).not.toHaveBeenCalled();
+      expect(mockGlobalRepos.docMountFileLinks.linkDocumentContent).not.toHaveBeenCalled();
+    });
+
+    it('skip-if-present refuses another character\'s memory at a claimed id', async () => {
+      const exportData = createVaultBundle();
+      configureFullKeepSetCollision();
+      configureFindById(mockUserRepos.memories.findById as any, [
+        { id: 'mem-1', characterId: 'char-SOMEONE-ELSE' },
+      ]);
+
+      const result = await executeImport(testUserId, exportData as any, skipIfPresentOptions);
+
+      expect(result.success).toBe(false);
+      expect(result.warnings.some((w) => w.includes('memory mem-1'))).toBe(true);
+    });
+
+    // Bug 54 — a content row shared with vaults outside the rehydrate target.
+    // Archiving deletes the target's link but leaves the row standing on its
+    // co-owners' links (a group chat's conversation summary is one row with one
+    // link per participant), so "linked in the target vault?" answers no for
+    // content the target legitimately owned.
+    it('skip-if-present accepts a content row whose surviving links all live in other vaults, when the bytes match', async () => {
+      const exportData = createVaultBundle();
+      configureFullKeepSetCollision();
+      // The content row survived the prune on someone else's link, carrying
+      // the same bytes the bundle claims. The target's own link is gone.
+      configureFindById(mockGlobalRepos.docMountFiles.findById as any, [
+        { id: 'file-1', sha256: 'sha-1' },
+        { id: 'file-2', sha256: 'sha-2' },
+      ]);
+      configureFindById(mockGlobalRepos.docMountBlobs.findById as any, [
+        { id: 'blob-1', fileId: 'file-2', sha256: 'sha-2' },
+      ]);
+      configureFindById(mockGlobalRepos.docMountFileLinks.findById as any, []);
+      mockGlobalRepos.docMountFileLinks.findByFileId.mockImplementation(async () => [
+        { mountPointId: 'vault-SOMEONE-ELSE' },
+      ]);
+
+      const result = await executeImport(testUserId, exportData as any, skipIfPresentOptions);
+
+      expect(result.success).toBe(true);
+      expect(result.warnings.filter((w) => w.includes('Preserve IDs collision'))).toHaveLength(0);
+      // Crucially the link IS restored: skipping the content id must not
+      // suppress the record, or the summary silently never comes back.
+      expect(mockGlobalRepos.docMountFileLinks.linkDocumentContent).toHaveBeenCalled();
+      expect(mockGlobalRepos.docMountBlobs.create).toHaveBeenCalled();
+    });
+
+    it('skip-if-present still refuses a content row carrying different bytes at the same id', async () => {
+      const exportData = createVaultBundle();
+      configureFullKeepSetCollision();
+      // Same id, different content: a real id clash, not dedup.
+      configureFindById(mockGlobalRepos.docMountFiles.findById as any, [
+        { id: 'file-1', sha256: 'sha-DIFFERENT' },
+      ]);
+      configureFindById(mockGlobalRepos.docMountFileLinks.findById as any, []);
+      mockGlobalRepos.docMountFileLinks.findByFileId.mockImplementation(async () => [
+        { mountPointId: 'vault-SOMEONE-ELSE' },
+      ]);
+
+      const result = await executeImport(testUserId, exportData as any, skipIfPresentOptions);
+
+      expect(result.success).toBe(false);
+      expect(result.warnings.some((w) => w.includes('document store file file-1'))).toBe(true);
+      expect(mockGlobalRepos.docMountFileLinks.linkDocumentContent).not.toHaveBeenCalled();
+    });
+
+    it('does not treat a hard-link group\'s shared fileId as a duplicate claim', async () => {
+      const exportData = createMockQuilltapExport({ characters: [createMockExportedCharacter({ id: 'char-B', name: 'Fresh' })] });
+      Object.assign(exportData.data as any, {
+        mountPoints: [{
+          id: 'store-B', name: 'Lore', basePath: '', mountType: 'database',
+          storeType: 'documents', includePatterns: [], excludePatterns: [], enabled: true,
+        }],
+        documents: [
+          {
+            mountPointId: 'store-B', relativePath: 'a.md', fileName: 'a.md', fileType: 'markdown',
+            content: 'x', contentSha256: 'sha-s', plainTextLength: 1,
+            lastModified: '2026-08-10T00:00:00.000Z', folderId: null,
+            fileId: 'file-shared', linkId: 'link-a', linkGroupId: 'group-1',
+          },
+          {
+            mountPointId: 'store-B', relativePath: 'b.md', fileName: 'b.md', fileType: 'markdown',
+            content: 'x', contentSha256: 'sha-s', plainTextLength: 1,
+            lastModified: '2026-08-10T00:00:00.000Z', folderId: null,
+            fileId: 'file-shared', linkId: 'link-b', linkGroupId: 'group-1',
+          },
+        ],
+      });
+
+      mockUserRepos.characters.create.mockImplementation(async (data: any, options?: { id?: string }) => ({
+        ...data,
+        id: options?.id ?? data.id ?? 'generated-id',
+      }));
+
+      const result = await executeImport(testUserId, exportData as any, {
+        conflictStrategy: 'skip',
+        includeMemories: false,
+        includeRelatedEntities: false,
+        preserveIds: true,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.warnings.filter((w) => w.includes('Preserve IDs collision'))).toHaveLength(0);
+      expect(mockGlobalRepos.docMountFileLinks.linkDocumentContent).toHaveBeenCalledTimes(2);
+    });
+
+    // Bug 57 — the export's blob leg emits one record per LINK, so an ordinary
+    // sha-deduped blob linked at two paths (the same image saved into the
+    // gallery twice) arrives as two records over one blobId. That repeat is
+    // one row claimed twice, not two claims on one id.
+    it('does not treat a twice-linked blob\'s shared blobId as a duplicate claim', async () => {
+      const exportData = createMockQuilltapExport({ characters: [createMockExportedCharacter({ id: 'char-C', name: 'Fresh' })] });
+      Object.assign(exportData.data as any, {
+        mountPoints: [{
+          id: 'store-C', name: 'Ada Vault', basePath: '', mountType: 'database',
+          storeType: 'character', includePatterns: [], excludePatterns: [], enabled: true,
+        }],
+        blobs: [
+          {
+            mountPointId: 'store-C', relativePath: 'photos/ada.webp', originalFileName: 'ada.webp',
+            originalMimeType: 'image/webp', storedMimeType: 'image/webp', sizeBytes: 3, sha256: 'sha-b',
+            description: '', fileId: 'file-shared', linkId: 'link-a', blobId: 'blob-shared',
+            dataBase64: Buffer.from('abc').toString('base64'),
+          },
+          {
+            mountPointId: 'store-C', relativePath: 'Gallery/ada.webp', originalFileName: 'ada.webp',
+            originalMimeType: 'image/webp', storedMimeType: 'image/webp', sizeBytes: 3, sha256: 'sha-b',
+            description: '', fileId: 'file-shared', linkId: 'link-b', blobId: 'blob-shared',
+            dataBase64: Buffer.from('abc').toString('base64'),
+          },
+        ],
+      });
+
+      mockUserRepos.characters.create.mockImplementation(async (data: any, options?: { id?: string }) => ({
+        ...data,
+        id: options?.id ?? data.id ?? 'generated-id',
+      }));
+
+      const result = await executeImport(testUserId, exportData as any, {
+        conflictStrategy: 'skip',
+        includeMemories: false,
+        includeRelatedEntities: false,
+        preserveIds: true,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.warnings.filter((w) => w.includes('Preserve IDs collision'))).toHaveLength(0);
+      // Both links come back — the writer resolves the shared content by sha256.
+      expect(mockGlobalRepos.docMountBlobs.create).toHaveBeenCalledTimes(2);
     });
   });
 

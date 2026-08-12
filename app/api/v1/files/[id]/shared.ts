@@ -16,19 +16,7 @@ export const promoteFileSchema = z.object({
 export const FILE_ITEM_POST_ACTIONS = ['move', 'promote'] as const;
 export type FileItemPostAction = typeof FILE_ITEM_POST_ACTIONS[number];
 
-export function buildContentDisposition(
-  filename: string,
-  disposition: 'inline' | 'attachment' = 'inline'
-): string {
-  const hasNonAscii = /[^\x00-\x7F]/.test(filename);
-  if (!hasNonAscii) {
-    return `${disposition}; filename="${filename}"`;
-  }
-
-  const asciiFilename = filename.replace(/[^\x00-\x7F]/g, '_');
-  const encodedFilename = encodeURIComponent(filename);
-  return `${disposition}; filename="${asciiFilename}"; filename*=UTF-8''${encodedFilename}`;
-}
+export { buildContentDisposition } from '@/lib/api/content-disposition';
 
 export function buildManagedFileResponse(file: any) {
   return {

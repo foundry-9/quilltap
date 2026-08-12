@@ -4,7 +4,7 @@
   "id": "old-school",
   "name": "Old School",
   "description": "The original Quilltap default theme preserved as a plugin. Warm slate-blue palette with Inter for UI and EB Garamond for branding and long-form content. Professional, clean, and comfortable for extended sessions.",
-  "version": "1.0.10",
+  "version": "1.0.12",
   "author": "Foundry-9 LLC",
   "license": "MIT",
   "supportsDarkMode": true,

@@ -36,6 +36,9 @@ export const COMMON_THUMBNAIL_SIZES = [120, 150, 300];
 // KEY BUILDING
 // ============================================================================
 
+/** The storage-key prefix (directory) every cached thumbnail lives under. */
+export const THUMBNAIL_KEY_PREFIX = '_thumbnails';
+
 /**
  * Build the canonical storage key for a cached thumbnail.
  *
@@ -49,7 +52,24 @@ export const COMMON_THUMBNAIL_SIZES = [120, 150, 300];
  * @param size - Thumbnail size in pixels
  */
 export function buildThumbnailStorageKey(_userId: string, fileId: string, size: number): string {
-  return `_thumbnails/${fileId}_${size}.webp`;
+  return `${THUMBNAIL_KEY_PREFIX}/${fileId}_${size}.webp`;
+}
+
+/**
+ * Inverse of {@link buildThumbnailStorageKey}: pull the source `fileId` back out
+ * of a thumbnail storage key. Returns null for anything that doesn't match the
+ * canonical `_thumbnails/{uuid}_{size}.webp` shape, so the orphan sweep can skip
+ * (rather than blindly delete) unexpected entries. The UUID carries hyphens but
+ * never underscores, so the last underscore reliably separates it from the size.
+ */
+export function parseThumbnailStorageKey(
+  storageKey: string,
+): { fileId: string; size: number } | null {
+  const match = /^_thumbnails\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})_(\d+)\.webp$/.exec(
+    storageKey,
+  );
+  if (!match) return null;
+  return { fileId: match[1], size: Number(match[2]) };
 }
 
 // ============================================================================

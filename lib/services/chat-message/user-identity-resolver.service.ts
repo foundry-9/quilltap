@@ -12,6 +12,7 @@ import { createServiceLogger } from '@/lib/logging/create-logger'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { ChatMetadataBase } from '@/lib/schemas/types'
 import { isParticipantPresent } from '@/lib/schemas/chat.types'
+import { findActiveUserParticipant } from '@/lib/chat/turn-manager'
 
 const logger = createServiceLogger('UserIdentityResolver')
 
@@ -36,11 +37,17 @@ export interface ResolvedUserIdentity {
 export async function resolveUserIdentity(
   repos: ReturnType<typeof getRepositories>,
   userId: string,
-  chat: ChatMetadataBase
+  chat: ChatMetadataBase,
+  activeTypingParticipantId?: string | null
 ): Promise<ResolvedUserIdentity> {
-  // Step 1: Check if the chat already has a user-controlled character participant
-  const userControlledParticipant = chat.participants.find(
-    p => p.type === 'CHARACTER' && p.controlledBy === 'user' && p.characterId && isParticipantPresent(p.status)
+  // Step 1: Check if the chat already has a user-controlled character participant.
+  // When several characters are user-controlled, prefer the one the human is
+  // currently "Speaking As" so the responder's view of "who you're talking to"
+  // matches the active speaker rather than the first participant in order.
+  const userControlledParticipant = findActiveUserParticipant(
+    chat.participants,
+    activeTypingParticipantId,
+    chat.impersonatingParticipantIds
   )
 
   if (userControlledParticipant?.characterId) {

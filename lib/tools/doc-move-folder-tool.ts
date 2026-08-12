@@ -53,8 +53,9 @@ export const docMoveFolderToolDefinition = {
 /**
  * Validates input for doc_move_folder tool.
  */
-export function validateDocMoveFolderInput(input: unknown): input is DocMoveFolderInput {
-  return docMoveFolderToolInputSchema.safeParse(input).success;
+export function validateDocMoveFolderInput(input: unknown): DocMoveFolderInput | null {
+  const parsed = docMoveFolderToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 

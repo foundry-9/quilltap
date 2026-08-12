@@ -14,7 +14,6 @@ const mockThemesDir = path.join(os.tmpdir(), 'qtap-test-themes-' + Date.now());
 
 jest.mock('@/lib/paths', () => ({
   getThemesDir: () => mockThemesDir,
-  getThemeBundleCacheDir: () => path.join(mockThemesDir, '.cache'),
 }));
 
 jest.mock('@/lib/logger', () => ({

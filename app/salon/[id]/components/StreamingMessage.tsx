@@ -115,11 +115,23 @@ export function StreamingMessage({
                 // Skip empty interior segments, but always render the trailing
                 // one so the typing indicator has a home.
                 if (part.text.length === 0 && idx !== lastTextIdx) return null
+                // With no prose to sit beside, the indicator lands directly
+                // under the tool block — and the quill's feather paints a little
+                // above its own layout box, so inline placement crowds the two
+                // together. Give it a line of its own with the same breathing
+                // room the tool block takes above itself.
+                const standaloneIndicator = part.text.length === 0 && parts[idx - 1]?.kind === 'tools'
                 return (
                   <Fragment key={`seg-${idx}`}>
                     <MessageContent content={part.text} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} />
                     {idx === lastTextIdx && (
-                      <QuillAnimation size="sm" className="inline-block ml-2 qt-text-secondary" />
+                      standaloneIndicator ? (
+                        <div className="mt-3">
+                          <QuillAnimation size="sm" className="ml-2 qt-text-secondary" />
+                        </div>
+                      ) : (
+                        <QuillAnimation size="sm" className="inline-block ml-2 qt-text-secondary" />
+                      )
                     )}
                   </Fragment>
                 )

@@ -51,6 +51,46 @@ export interface OutfitSelectorCharacter {
    * choose` mode — for them, this dialog *is* the choosing.
    */
   isUserControlled?: boolean
+  /**
+   * The character's `canChooseOutfit` property (from their vault
+   * `properties.json`). When true — and the character is LLM-controlled — a
+   * fresh (non-continuation) chat defaults this character's Starting Outfit to
+   * `Let character choose` rather than `Use defaults`.
+   */
+  canChooseOutfit?: boolean
+}
+
+// ============================================================================
+// MODE SUMMARY LABELS
+//
+// Short badges shown on a character's collapsed "Starting Outfit" header so the
+// chosen mode is legible without expanding the section.
+// ============================================================================
+
+const MODE_SUMMARY_LABELS: Record<OutfitSelectionMode, string> = {
+  default: 'Defaults',
+  manual: 'Composed',
+  llm_choose: 'Dress Themselves',
+  none: 'Undressed',
+  previous_chat: 'Same as Last',
+}
+
+/**
+ * The Starting Outfit mode a character opens with, computed from what we can
+ * know synchronously. Continuation chats carry the previous outfit forward;
+ * an LLM-controlled character flagged `canChooseOutfit` defaults to letting
+ * the character choose. Everyone else provisionally opens on `default` and is
+ * refined to `default`-vs-`manual` once their wardrobe loads (see
+ * {@link CharacterOutfitSection}) — a character with no usable default outfit
+ * lands on `manual` with the section expanded.
+ */
+function computeSyncInitialMode(
+  char: OutfitSelectorCharacter,
+  sourceChatId?: string | null,
+): OutfitSelectionMode {
+  if (sourceChatId) return 'previous_chat'
+  if (char.canChooseOutfit && !char.isUserControlled) return 'llm_choose'
+  return 'default'
 }
 
 /**
@@ -106,6 +146,12 @@ interface CharacterOutfitSectionProps {
   /** Whether to show the character name header (hidden for single character) */
   showHeader: boolean
   /**
+   * Continuation mode flag for this character. When true (source chat present),
+   * the section never auto-resolves its mode against the wardrobe — the parent
+   * has already seeded `previous_chat`.
+   */
+  isContinuation?: boolean
+  /**
    * Continuation mode: enables the "Same as last conversation" radio option
    * for this character.
    */
@@ -128,20 +174,37 @@ function CharacterOutfitSection({
   onChange,
   disabled,
   showHeader,
+  isContinuation,
   showPreviousChatOption,
   previousChatSlots,
   projectId,
   chatId,
 }: CharacterOutfitSectionProps) {
-  const [expanded, setExpanded] = useState(false)
   const [internalMode, setInternalMode] = useState<OutfitSelectionMode>(selection.mode)
 
-  // Load wardrobe (personal + project + archetypes) only when we're in manual
-  // mode. The hook returns an empty list before items are needed.
-  const { items: allWardrobeItems, loading: loadingWardrobe } = useCharacterWardrobeItems(
-    internalMode === 'manual' ? character.id : null,
-    { projectId, chatId },
-  )
+  // Does this character's opening mode still need to be resolved against their
+  // wardrobe? Continuation chats (previous_chat) and LLM-choose characters are
+  // settled synchronously by the parent; everyone else provisionally opens on
+  // `default` and must be refined to `default`-vs-`manual` here — a character
+  // with no usable default outfit lands on `manual`, expanded.
+  const needsDefaultResolution =
+    !isContinuation && !(character.canChooseOutfit && !character.isUserControlled)
+  const [autoResolved, setAutoResolved] = useState(!needsDefaultResolution)
+
+  // Open expanded when we already know the character has to compose from
+  // scratch; otherwise start collapsed. Auto-resolution below expands the
+  // section if it lands on `manual`.
+  const [expanded, setExpanded] = useState(false)
+
+  // Load wardrobe (personal + project + archetypes) when we're in manual mode
+  // OR while we still owe this character a default-vs-manual resolution. The
+  // hook returns an empty list before items are needed.
+  const wardrobeNeeded = internalMode === 'manual' || (needsDefaultResolution && !autoResolved)
+  const {
+    items: allWardrobeItems,
+    loading: loadingWardrobe,
+    fetched: wardrobeItemsFetched,
+  } = useCharacterWardrobeItems(wardrobeNeeded ? character.id : null, { projectId, chatId })
   const wardrobeFetched = !loadingWardrobe && allWardrobeItems.length > 0
 
   // Visible items: skip archived and items lacking any of the four slots
@@ -155,6 +218,30 @@ function CharacterOutfitSection({
     () => new Map(wardrobeItems.map((i) => [i.id, i])),
     [wardrobeItems],
   )
+
+  // Resolve the provisional opening mode once the wardrobe has been read. A
+  // character with a usable default outfit (any non-archived default item —
+  // someone deliberately configured defaults) opens on `Use defaults`; one
+  // with none opens on `Compose outfit`, expanded, so the empty slots are
+  // visible. Runs at most once and never after the user has touched the radio
+  // (handleModeChange pins `autoResolved`).
+  useEffect(() => {
+    if (autoResolved) return
+    if (!wardrobeItemsFetched) return
+    const defaults = buildDefaultOutfit(allWardrobeItems)
+    const hasUsableDefault = (['top', 'bottom', 'footwear', 'accessories'] as const).some(
+      (slot) => defaults[slot].length > 0,
+    )
+    const resolved: OutfitSelectionMode = hasUsableDefault ? 'default' : 'manual'
+    /* eslint-disable react-hooks/set-state-in-effect -- a one-time latch that
+       reacts to the async wardrobe load (guarded by wardrobeItemsFetched and
+       autoResolved); the state lands after the fetch tick, not on every render. */
+    setAutoResolved(true)
+    setInternalMode(resolved)
+    if (resolved === 'manual') setExpanded(true)
+    /* eslint-enable react-hooks/set-state-in-effect */
+    onChange({ characterId: character.id, mode: resolved })
+  }, [autoResolved, wardrobeItemsFetched, allWardrobeItems, character.id, onChange])
 
   // Track whether we've already seeded the manual slots from defaults — once
   // seeded, subsequent edits stay user-driven.
@@ -174,6 +261,9 @@ function CharacterOutfitSection({
 
   const handleModeChange = useCallback(
     (mode: OutfitSelectionMode) => {
+      // A deliberate pick pins the mode so the wardrobe-driven auto-resolution
+      // can't come back and clobber it a tick later.
+      setAutoResolved(true)
       setInternalMode(mode)
       const updated: OutfitSelection = {
         characterId: character.id,
@@ -326,7 +416,10 @@ function CharacterOutfitSection({
           disabled={disabled}
         >
           <span className="text-sm font-medium qt-text-primary">{character.name}</span>
-          <Icon name="chevron-down" className={`w-4 h-4 qt-text-secondary transition-transform ${expanded ? 'rotate-180' : ''}`} />
+          <span className="flex items-center gap-2">
+            <span className="text-xs qt-text-secondary">{MODE_SUMMARY_LABELS[internalMode]}</span>
+            <Icon name="chevron-down" className={`w-4 h-4 qt-text-secondary transition-transform ${expanded ? 'rotate-180' : ''}`} />
+          </span>
         </button>
       )}
 
@@ -431,19 +524,47 @@ export function OutfitSelector({
   projectId,
   chatId,
 }: OutfitSelectorProps) {
-  // In continuation mode, default each character to "Same as last conversation"
-  // so the chat picks up where the previous one left off without the user
-  // having to flip every radio. In normal mode, keep the historical default.
-  const initialMode: OutfitSelectionMode = sourceChatId ? 'previous_chat' : 'default'
+  // Seed each character's opening mode from what we can know synchronously
+  // (see computeSyncInitialMode): continuation chats carry the previous outfit
+  // forward; a `canChooseOutfit` character lets the character choose; everyone
+  // else opens provisionally on `default` and each section refines that to
+  // `default`-vs-`manual` once its wardrobe loads.
   const [selections, setSelections] = useState<Map<string, OutfitSelection>>(
     () => {
       const map = new Map<string, OutfitSelection>()
       for (const char of characters) {
-        map.set(char.id, { characterId: char.id, mode: initialMode })
+        map.set(char.id, { characterId: char.id, mode: computeSyncInitialMode(char, sourceChatId) })
       }
       return map
     }
   )
+
+  // Keep the selection map in step with the cast: characters added after the
+  // dialog opened get their synchronous default seeded (so the form reports a
+  // choice for them), and characters removed from the cast are dropped.
+  // Existing entries are never overwritten, so a section's own resolution and
+  // any user pick both survive.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing the selection map to a changed cast; the updater is a no-op (returns prev) once stable, so no cascading renders.
+    setSelections((prev) => {
+      let changed = false
+      const next = new Map(prev)
+      const liveIds = new Set(characters.map((c) => c.id))
+      for (const char of characters) {
+        if (!next.has(char.id)) {
+          next.set(char.id, { characterId: char.id, mode: computeSyncInitialMode(char, sourceChatId) })
+          changed = true
+        }
+      }
+      for (const id of Array.from(next.keys())) {
+        if (!liveIds.has(id)) {
+          next.delete(id)
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [characters, sourceChatId])
 
   // Notify parent when selections change
   useEffect(() => {
@@ -475,12 +596,13 @@ export function OutfitSelector({
           selection={
             selections.get(char.id) || {
               characterId: char.id,
-              mode: initialMode,
+              mode: computeSyncInitialMode(char, sourceChatId),
             }
           }
           onChange={handleSelectionChange}
           disabled={disabled}
           showHeader={showHeaders}
+          isContinuation={Boolean(sourceChatId)}
           showPreviousChatOption={Boolean(sourceChatId)}
           previousChatSlots={previousOutfitSummary?.[char.id] ?? null}
           projectId={projectId}

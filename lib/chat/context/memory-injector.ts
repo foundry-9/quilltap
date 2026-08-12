@@ -44,6 +44,16 @@ export const DYNAMIC_HEAD_TOKEN_BUDGET = 200
 export const DYNAMIC_HEAD_DEFAULT_SIZE = 5
 
 /**
+ * Recall-on-reference (episodic overhaul): a retrospective turn — the user is
+ * invoking past shared events — gets an enlarged head, because that is
+ * exactly the turn that needs rich recall. Tuning knobs; validate against
+ * real chats via the recall-replay harness before tightening.
+ */
+export const RETRO_HEAD_TOKEN_BUDGET = 600
+/** Enlarged entry count for retrospective turns. */
+export const RETRO_HEAD_SIZE = 10
+
+/**
  * Build the trailing metadata tag appended to a delivered memory line so the
  * receiving model (and the human reading the Commonplace Book whisper in the
  * salon) can see *why* a particular entry surfaced — what the LLM judged at
@@ -100,15 +110,19 @@ export function formatMemoryMetadataTag(opts: {
  * Debug info for included memories
  */
 export interface DebugMemoryInfo {
+  /** The memory's id — lets callers track which entries were whispered (anti-repetition). */
+  memoryId?: string
   summary: string
   importance: number
   score: number
   effectiveWeight: number
+  /** No-floor ranking weight (importance × time decay) — the term the blend uses. */
+  rawWeight?: number
   /** Combined recall-context multiplier, when a recallContext drove the ranking. */
   recallMultiplier?: number
   /** Labels for the adjustments that fired (e.g. `narrow✓`, `past↓`). */
   recallFired?: string[]
-  /** Blended `0.4·cosine + 0.6·weight` score before the recall multiplier. */
+  /** Ranking blend (RELEVANCE·cosine + PRIORITY·rawWeight) before the recall multiplier. */
   blendedBefore?: number
   /** Blended score after the recall multiplier (what the head ranks on). */
   blendedAfter?: number
@@ -278,6 +292,7 @@ export function formatMemoriesForContext(
     // model formed at extraction time. Summary is the cache-friendly form for
     // recap LLM inputs, but the per-line whisper has the budget for the body.
     const age = formatRelativeAge(memory, now)
+    const narrative = memory.narrativeTime?.trim()
     const body = memory.content?.trim() || memory.summary
     const meta = formatMemoryMetadataTag({
       importance: memory.importance,
@@ -285,7 +300,7 @@ export function formatMemoriesForContext(
       weight,
       keywords: memory.keywords,
     })
-    const memoryLine = `- [${age}] ${body}${meta}`
+    const memoryLine = `- [${narrative ? `${age} · ${narrative}` : age}] ${body}${meta}`
     const lineTokens = estimateTokens(memoryLine + '\n', provider)
 
     if (currentTokens + lineTokens > maxTokens) {
@@ -559,10 +574,19 @@ export function formatDynamicMemoryHead(
   let currentTokens = estimateTokens(`${header}\n`, provider)
   let memoriesUsed = 0
 
-  for (const { memory, score, weight, recallAdjustment } of ranked) {
+  const now = new Date()
+  for (const { memory, score, weight, rawWeight, recallAdjustment } of ranked) {
     const summary = memory.summary?.trim() || memory.content?.trim() || ''
     if (!summary) continue
     const idTag = `[m_${memory.id.slice(0, 4)}]`
+    // Episodic spine: date every head entry. The age label reads off the
+    // event clock (occurredAt ?? write clock — see formatRelativeAge), and
+    // narrativeTime rides along verbatim so fictional-timeline anchors reach
+    // the model too. Without this, even a retrieval hit couldn't confirm
+    // "last week".
+    const age = formatRelativeAge(memory, now)
+    const narrative = memory.narrativeTime?.trim()
+    const whenTag = narrative ? `[${age} · ${narrative}]` : `[${age}]`
     const meta = formatMemoryMetadataTag({
       importance: memory.importance,
       relevance: score,
@@ -570,7 +594,7 @@ export function formatDynamicMemoryHead(
       keywords: memory.keywords,
       adjustments: recallAdjustment?.fired,
     })
-    const entry = `${idTag} ${summary}${meta}`
+    const entry = `${idTag} ${whenTag} ${summary}${meta}`
     const candidateTokens = estimateTokens(`${entry}\n`, provider)
     if (currentTokens + candidateTokens > maxTokens) {
       break
@@ -579,10 +603,12 @@ export function formatDynamicMemoryHead(
     currentTokens += candidateTokens
     memoriesUsed++
     debugMemories.push({
+      memoryId: memory.id,
       summary: memory.summary,
       importance: memory.importance,
       score,
       effectiveWeight: weight,
+      rawWeight,
       recallMultiplier: recallAdjustment?.multiplier,
       recallFired: recallAdjustment?.fired,
       blendedBefore: recallAdjustment?.blendedBefore,

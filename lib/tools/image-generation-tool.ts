@@ -6,6 +6,7 @@
 
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
+import { llmNumber } from './llm-number';
 
 /**
  * Configuration for the image generation tool
@@ -61,13 +62,15 @@ export const imageGenerationToolInputSchema = z.object({
     .enum(['1:1', '3:4', '4:3', '9:16', '16:9'])
     .describe('Advanced, provider-dependent: an exact aspect ratio honoured only by aspect-ratio providers (e.g. Google, Grok, OpenRouter). Prefer `orientation`.')
     .optional(),
-  count: z
-    .number()
-    .int()
-    .min(1)
-    .max(10)
+  count: llmNumber(
+    z
+      .number()
+      .int()
+      .min(1)
+      .max(10)
+      .describe('Number of images to generate. Default is 1.')
+  )
     .default(1)
-    .describe('Number of images to generate. Default is 1.')
     .optional(),
 });
 
@@ -124,6 +127,7 @@ export const imageGenerationToolDefinition = {
  */
 export function validateImageGenerationInput(
   input: unknown
-): input is ImageGenerationToolInput {
-  return imageGenerationToolInputSchema.safeParse(input).success;
+): ImageGenerationToolInput | null {
+  const parsed = imageGenerationToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }

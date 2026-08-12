@@ -133,6 +133,7 @@ export const wardrobeTakeOffToolDefinition = {
  */
 export function validateWardrobeTakeOffInput(
   input: unknown
-): input is WardrobeTakeOffToolInput {
-  return wardrobeTakeOffToolInputSchema.safeParse(input).success
+): WardrobeTakeOffToolInput | null {
+  const parsed = wardrobeTakeOffToolInputSchema.safeParse(input)
+  return parsed.success ? parsed.data : null
 }

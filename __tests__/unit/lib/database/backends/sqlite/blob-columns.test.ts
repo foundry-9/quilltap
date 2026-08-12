@@ -1,46 +1,72 @@
 /**
  * BLOB Column Utilities Unit Tests
  *
- * Tests Float32 BLOB serialization/deserialization for embedding storage.
+ * Tests embedding BLOB serialization/deserialization for storage. Since the
+ * int8 quantization change, `embeddingToBlob` writes the self-describing
+ * quantized format (11-byte header + 1 byte per dimension) and
+ * `blobToEmbedding` is header-aware: it dequantizes new-format blobs and
+ * falls back to raw-Float32 interpretation for legacy ones. Deeper codec
+ * accuracy tests live in __tests__/unit/lib/embedding/float32-conversion.test.ts.
  */
 
 import { describe, it, expect } from '@jest/globals'
 import { embeddingToBlob, blobToEmbedding, documentToRow, parseLegacyEmbeddingText } from '@/lib/database/backends/sqlite/json-columns'
+import { float32ToBlobRaw } from '@/lib/embedding/float32-conversion'
+
+/** int8 quantized layout: magic+version+dtype+dim(4)+scale(4) then 1 byte/dim */
+const INT8_HEADER_BYTES = 11
 
 describe('embeddingToBlob', () => {
-  it('converts a number array to a Buffer', () => {
+  it('converts a number array to a quantized Buffer', () => {
     const embedding = [1.0, 2.0, 3.0]
     const blob = embeddingToBlob(embedding)
 
     expect(Buffer.isBuffer(blob)).toBe(true)
-    expect(blob.byteLength).toBe(3 * 4) // 3 floats × 4 bytes each
+    expect(blob.byteLength).toBe(INT8_HEADER_BYTES + 3) // header + 1 byte per dim
+    expect(blob[0]).toBe(0xeb) // magic
+    expect(blob[1]).toBe(0x01) // version
+    expect(blob[2]).toBe(0x01) // dtype int8
   })
 
   it('handles empty arrays', () => {
     const blob = embeddingToBlob([])
     expect(Buffer.isBuffer(blob)).toBe(true)
-    expect(blob.byteLength).toBe(0)
+    expect(blobToEmbedding(blob)).toHaveLength(0)
   })
 
   it('handles large embeddings', () => {
-    const embedding = Array.from({ length: 1536 }, (_, i) => Math.random())
+    const embedding = Array.from({ length: 1536 }, () => Math.random())
     const blob = embeddingToBlob(embedding)
 
-    expect(blob.byteLength).toBe(1536 * 4)
+    expect(blob.byteLength).toBe(INT8_HEADER_BYTES + 1536)
   })
 })
 
 describe('blobToEmbedding', () => {
-  it('converts a Buffer back to a Float32Array', () => {
+  it('converts a quantized Buffer back to a Float32Array', () => {
     const original = [1.0, 2.0, 3.0]
     const blob = embeddingToBlob(original)
     const result = blobToEmbedding(blob)
 
     expect(result).toBeInstanceOf(Float32Array)
     expect(result).toHaveLength(3)
-    expect(result[0]).toBeCloseTo(1.0, 5)
-    expect(result[1]).toBeCloseTo(2.0, 5)
-    expect(result[2]).toBeCloseTo(3.0, 5)
+    // int8 symmetric: per-element error is bounded by scale = max|v|/127.
+    const scale = 3.0 / 127
+    for (let i = 0; i < original.length; i++) {
+      expect(Math.abs(result[i] - original[i])).toBeLessThanOrEqual(scale)
+    }
+  })
+
+  it('decodes a LEGACY raw Float32 buffer (header-aware fallback)', () => {
+    const original = [0.123456789, -0.987654321, 0.0, 1.0, -1.0]
+    const legacyBlob = float32ToBlobRaw(original)
+    const result = blobToEmbedding(legacyBlob)
+
+    expect(result).toBeInstanceOf(Float32Array)
+    expect(result).toHaveLength(5)
+    for (let i = 0; i < original.length; i++) {
+      expect(result[i]).toBeCloseTo(original[i], 5) // full Float32 precision
+    }
   })
 
   it('handles empty buffers', () => {
@@ -53,14 +79,14 @@ describe('blobToEmbedding', () => {
 })
 
 describe('embeddingToBlob/blobToEmbedding round-trip', () => {
-  it('preserves values through round-trip (Float32 precision)', () => {
-    // Note: Float32 has ~7 decimal digits of precision
+  it('preserves values through round-trip within quantization error', () => {
     const original = [0.123456789, -0.987654321, 0.0, 1.0, -1.0]
     const roundTripped = blobToEmbedding(embeddingToBlob(original))
 
     expect(roundTripped).toHaveLength(original.length)
+    const scale = 1.0 / 127 // max|v| = 1.0
     for (let i = 0; i < original.length; i++) {
-      expect(roundTripped[i]).toBeCloseTo(original[i], 5) // Float32 precision
+      expect(Math.abs(roundTripped[i] - original[i])).toBeLessThanOrEqual(scale)
     }
   })
 
@@ -70,19 +96,22 @@ describe('embeddingToBlob/blobToEmbedding round-trip', () => {
     const roundTripped = blobToEmbedding(embeddingToBlob(original))
 
     expect(roundTripped).toHaveLength(768)
+    const maxAbs = Math.max(...original.map(Math.abs))
+    const scale = maxAbs / 127
     for (let i = 0; i < original.length; i++) {
-      expect(roundTripped[i]).toBeCloseTo(original[i], 5)
+      expect(Math.abs(roundTripped[i] - original[i])).toBeLessThanOrEqual(scale)
     }
   })
 
-  it('is significantly smaller than JSON text', () => {
+  it('is significantly smaller than JSON text and than raw Float32', () => {
     const embedding = Array.from({ length: 1536 }, () => Math.random())
     const jsonSize = Buffer.byteLength(JSON.stringify(embedding), 'utf8')
+    const rawSize = float32ToBlobRaw(embedding).byteLength
     const blobSize = embeddingToBlob(embedding).byteLength
 
-    // BLOB should be ~4-5x smaller than JSON
-    expect(blobSize).toBeLessThan(jsonSize / 3)
-    expect(blobSize).toBe(1536 * 4) // Exact: 4 bytes per float
+    expect(blobSize).toBeLessThan(jsonSize / 10)
+    expect(blobSize).toBeLessThan(rawSize / 3) // ~4x smaller than raw Float32
+    expect(blobSize).toBe(INT8_HEADER_BYTES + 1536)
   })
 })
 
@@ -178,15 +207,16 @@ describe('parseLegacyEmbeddingText', () => {
     expect(parseLegacyEmbeddingText('null')).toBeUndefined()
   })
 
-  it('round-trips an index-keyed object back into a Float32 BLOB', () => {
+  it('round-trips an index-keyed object back into a stored BLOB', () => {
     const original = [0.1, 0.2, 0.3, 0.4]
     const legacyText = JSON.stringify(new Float32Array(original))
     const recovered = parseLegacyEmbeddingText(legacyText) as number[]
     const roundTripped = blobToEmbedding(embeddingToBlob(recovered))
 
     expect(roundTripped).toHaveLength(4)
+    const scale = 0.4 / 127
     for (let i = 0; i < original.length; i++) {
-      expect(roundTripped[i]).toBeCloseTo(original[i], 5)
+      expect(Math.abs(roundTripped[i] - original[i])).toBeLessThanOrEqual(scale)
     }
   })
 })

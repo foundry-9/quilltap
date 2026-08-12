@@ -25,6 +25,7 @@ export function useModalState() {
   const [galleryOpen, setGalleryOpen] = useState(false)
   const [chatProjectModalOpen, setChatProjectModalOpen] = useState(false)
   const [continueChatModalOpen, setContinueChatModalOpen] = useState(false)
+  const [mergeConversationModalOpen, setMergeConversationModalOpen] = useState(false)
   const [renameModalOpen, setRenameModalOpen] = useState(false)
   const [generateImageDialogOpen, setGenerateImageDialogOpen] = useState(false)
   const [addCharacterDialogOpen, setAddCharacterDialogOpen] = useState(false)
@@ -55,6 +56,8 @@ export function useModalState() {
   const closeChatProject = useCallback(() => setChatProjectModalOpen(false), [])
   const openContinueChat = useCallback(() => setContinueChatModalOpen(true), [])
   const closeContinueChat = useCallback(() => setContinueChatModalOpen(false), [])
+  const openMergeConversation = useCallback(() => setMergeConversationModalOpen(true), [])
+  const closeMergeConversation = useCallback(() => setMergeConversationModalOpen(false), [])
   const openRename = useCallback(() => setRenameModalOpen(true), [])
   const closeRename = useCallback(() => setRenameModalOpen(false), [])
   const openGenerateImage = useCallback(() => setGenerateImageDialogOpen(true), [])
@@ -87,6 +90,7 @@ export function useModalState() {
     galleryOpen, setGalleryOpen,
     chatProjectModalOpen,
     continueChatModalOpen,
+    mergeConversationModalOpen,
     renameModalOpen,
     generateImageDialogOpen,
     addCharacterDialogOpen,
@@ -108,6 +112,7 @@ export function useModalState() {
     openGallery, closeGallery,
     openChatProject, closeChatProject,
     openContinueChat, closeContinueChat,
+    openMergeConversation, closeMergeConversation,
     openRename, closeRename,
     openGenerateImage, closeGenerateImage,
     openAddCharacter, closeAddCharacter,

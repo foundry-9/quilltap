@@ -25,6 +25,7 @@ import {
   documentHiddenFromCharacters,
 } from '@/lib/services/librarian-notifications/writer';
 import { databaseDocumentExists } from '@/lib/mount-index/database-store';
+import type { ChatDocument } from '@/lib/schemas/chat-document.types';
 import {
   logger,
   type DocEditToolContext,
@@ -33,6 +34,33 @@ import {
   uriForResolvedPath,
   assertCharacterMayRead,
 } from './shared';
+
+/**
+ * Resolve which open document a per-document UI tool (doc_focus / doc_close)
+ * targets. With several documents open at once, the caller names one by file
+ * path (optionally narrowed by scope / mount_point); when no path is given we
+ * default to the most recently opened document. Returns null when nothing is
+ * open or the named document isn't currently open.
+ */
+async function resolveOpenDocTarget(
+  chatId: string,
+  selector: { path?: string; scope?: string; mount_point?: string },
+): Promise<ChatDocument | null> {
+  const repos = getRepositories();
+  const open = await repos.chatDocuments.findOpenForChat(chatId);
+  if (open.length === 0) return null;
+  if (!selector.path) {
+    // findOpenForChat is oldest-first, so the last entry is the newest open.
+    return open[open.length - 1];
+  }
+  const match = open.find(
+    (d) =>
+      d.filePath === selector.path &&
+      (selector.scope === undefined || d.scope === selector.scope) &&
+      (selector.mount_point === undefined || (d.mountPoint ?? undefined) === selector.mount_point),
+  );
+  return match ?? null;
+}
 
 /**
  * Handle doc_open_document: open a document in the split-panel editor.
@@ -197,19 +225,36 @@ export async function handleCloseDocument(
   const repos = getRepositories();
 
   try {
-    const closed = await repos.chatDocuments.closeDocument(context.chatId);
+    // Resolve which open document to close (named by path, or the most recently
+    // opened when omitted), then recompute documentMode from what remains so it
+    // only returns to 'normal' once the last document closes.
+    const target = await resolveOpenDocTarget(context.chatId, {
+      path: input.path,
+      scope: input.scope,
+      mount_point: input.mount_point,
+    });
 
-    // Update the chat's document mode back to normal
-    await repos.chats.update(context.chatId, {
-      documentMode: 'normal',
-    } as Record<string, unknown>);
-
-    if (!closed) {
+    if (!target) {
+      // Nothing open (or nothing matched) — make sure the flag is consistent.
+      await repos.chats.update(context.chatId, {
+        documentMode: 'normal',
+      } as Record<string, unknown>);
       return {
         success: true,
         result: { success: true, message: 'No document was open.' },
-        formattedText: 'No document was open to close.',
+        formattedText: input.path
+          ? `No open document matches "${input.path}".`
+          : 'No document was open to close.',
       };
+    }
+
+    await repos.chatDocuments.closeDocumentById(context.chatId, target.id);
+
+    const remaining = await repos.chatDocuments.findOpenForChat(context.chatId);
+    if (remaining.length === 0) {
+      await repos.chats.update(context.chatId, {
+        documentMode: 'normal',
+      } as Record<string, unknown>);
     }
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
@@ -249,26 +294,45 @@ export async function handleDocFocus(
   input: DocFocusInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: unknown; error?: string; formattedText?: string }> {
+  // Resolve which open document this focus targets so the client scrolls the
+  // correct pane when several are open. Pass the identity through in the result.
+  const target = await resolveOpenDocTarget(context.chatId, {
+    path: input.path,
+    scope: input.scope,
+    mount_point: input.mount_point,
+  });
 
-  // If clear_focus is true, return immediately
+  const targetIdentity = target
+    ? {
+        chatDocumentId: target.id,
+        filePath: target.filePath,
+        scope: target.scope,
+        mountPoint: target.mountPoint,
+      }
+    : {};
+
+  // If clear_focus is true, return immediately (best-effort identity so the
+  // matching pane clears; harmless if nothing is open).
   if (input.clear_focus) {
-    return { success: true, result: { success: true, clear_focus: true } };
+    return { success: true, result: { success: true, clear_focus: true, ...targetIdentity } };
   }
 
-  // Query the database to check if a document is open
-  const repos = getRepositories();
-  const activeDoc = await repos.chatDocuments.findActiveForChat(context.chatId);
-
-  // If no active document, return error
-  if (!activeDoc) {
-    return { success: false, error: 'No document is open in Document Mode.' };
+  // If no document matches, return error.
+  if (!target) {
+    return {
+      success: false,
+      error: input.path
+        ? `No open document matches "${input.path}".`
+        : 'No document is open in Document Mode.',
+    };
   }
 
-  // Otherwise return success with the params passed through
+  // Otherwise return success with the params passed through.
   return {
     success: true,
     result: {
       success: true,
+      ...targetIdentity,
       anchor: input.anchor,
       highlight: input.highlight,
       line: input.line,

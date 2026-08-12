@@ -68,8 +68,25 @@ exports[`tool definitions: derived OpenAI parameters docCloseDocument: parameter
 {
   "additionalProperties": false,
   "properties": {
+    "mount_point": {
+      "description": "Mount point of the target document (for document_store scope), matched alongside path when several documents are open.",
+      "type": "string",
+    },
+    "path": {
+      "description": "Which open document to close, by file path. Optional when only one document is open; omit to close the most recently opened document.",
+      "type": "string",
+    },
     "reason": {
       "description": "Optional reason for closing the document. Shown to the user as a system note.",
+      "type": "string",
+    },
+    "scope": {
+      "description": "Scope of the target document, matched alongside path/mount_point when several documents are open.",
+      "enum": [
+        "project",
+        "document_store",
+        "general",
+      ],
       "type": "string",
     },
   },
@@ -246,6 +263,23 @@ exports[`tool definitions: derived OpenAI parameters docFocus: parameters snapsh
     "line": {
       "description": "Line number to scroll to. Used as fallback when string matching is not viable.",
       "type": "number",
+    },
+    "mount_point": {
+      "description": "Mount point of the target document (for document_store scope), matched alongside path when several documents are open.",
+      "type": "string",
+    },
+    "path": {
+      "description": "Which open document to focus, by file path. Optional when only one document is open; required to disambiguate when several are open. Omit to target the most recently opened document.",
+      "type": "string",
+    },
+    "scope": {
+      "description": "Scope of the target document, matched alongside path/mount_point when several documents are open.",
+      "enum": [
+        "project",
+        "document_store",
+        "general",
+      ],
+      "type": "string",
     },
   },
   "type": "object",
@@ -1173,38 +1207,6 @@ exports[`tool definitions: derived OpenAI parameters listImages: parameters snap
 }
 `;
 
-exports[`tool definitions: derived OpenAI parameters memorySearch: parameters snapshot 1`] = `
-{
-  "additionalProperties": false,
-  "properties": {
-    "limit": {
-      "default": 5,
-      "description": "Maximum number of memories to retrieve. Default is 5.",
-      "maximum": 20,
-      "minimum": 1,
-      "type": "integer",
-    },
-    "minImportance": {
-      "default": 0,
-      "description": "Minimum importance score (0-1) for returned memories. Higher values return only the most important memories. Default is 0.",
-      "maximum": 1,
-      "minimum": 0,
-      "type": "number",
-    },
-    "query": {
-      "description": "What to search for in your memories. Be specific about the topic, person, event, or detail you want to recall. Examples: "user's favorite food", "their birthday", "what happened last time we talked about work", "their pet's name"",
-      "maxLength": 500,
-      "minLength": 1,
-      "type": "string",
-    },
-  },
-  "required": [
-    "query",
-  ],
-  "type": "object",
-}
-`;
-
 exports[`tool definitions: derived OpenAI parameters projectInfo: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
@@ -1238,6 +1240,18 @@ exports[`tool definitions: derived OpenAI parameters readConversation: parameter
       "description": "If true, returns clean conversation without any annotations. If false (default), includes all character annotations.",
       "type": "boolean",
     },
+    "interchange_end": {
+      "description": "Last interchange to include (inclusive). Omit to read to the end.",
+      "maximum": 9007199254740991,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "interchange_start": {
+      "description": "First interchange to include (1-based). Use with interchange_end to pull just the relevant slice of a long conversation instead of the whole transcript.",
+      "maximum": 9007199254740991,
+      "minimum": 1,
+      "type": "integer",
+    },
   },
   "type": "object",
 }
@@ -1255,6 +1269,13 @@ exports[`tool definitions: derived OpenAI parameters rng: parameters snapshot 1`
 {
   "additionalProperties": false,
   "properties": {
+    "modifier": {
+      "default": 0,
+      "description": "Flat amount added to the dice total after rolling (default: 0). Use for notation like 3d6+2 (modifier 2) or 2d10-1 (modifier -1). Ignored for flip_coin and spin_the_bottle.",
+      "maximum": 1000,
+      "minimum": -1000,
+      "type": "integer",
+    },
     "rolls": {
       "default": 1,
       "description": "Number of times to roll/flip (default: 1). For dice, this is like rolling multiple dice (e.g., 3 rolls of d6 = 3d6).",
@@ -1284,6 +1305,41 @@ exports[`tool definitions: derived OpenAI parameters rng: parameters snapshot 1`
   },
   "required": [
     "type",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters runCustom: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "parameters": {
+      "anyOf": [
+        {
+          "additionalProperties": {},
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+        {
+          "type": "null",
+        },
+      ],
+      "description": "Arguments for the tool, keyed by parameter name. Omit entirely to accept every default. Only parameters the tool declares are accepted.",
+    },
+    "private": {
+      "description": "Roll privately: the outcome is whispered to you alone and other characters never see it. Defaults to the tool's own setting.",
+      "type": "boolean",
+    },
+    "tool": {
+      "description": "Name of the custom tool to run, exactly as listed in this tool's description (e.g. "unlock").",
+      "type": "string",
+    },
+  },
+  "required": [
+    "tool",
   ],
   "type": "object",
 }
@@ -1327,6 +1383,12 @@ exports[`tool definitions: derived OpenAI parameters searchScriptorium: paramete
 {
   "additionalProperties": false,
   "properties": {
+    "aboutCharacter": {
+      "description": "Only return memories you hold ABOUT this character (by name). Affects only the memories source.",
+      "maxLength": 100,
+      "minLength": 1,
+      "type": "string",
+    },
     "limit": {
       "default": 10,
       "description": "Maximum number of results to return across all sources. Default is 10.",
@@ -1358,6 +1420,11 @@ exports[`tool definitions: derived OpenAI parameters searchScriptorium: paramete
       ],
       "type": "string",
     },
+    "since": {
+      "description": "Only return memories/conversations from this ISO date (YYYY-MM-DD) onward. Use when a time period is mentioned ("last week", "back in March") — memories filter on when the event HAPPENED, conversations on when they took place. Affects only the memories and conversations sources.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}",
+      "type": "string",
+    },
     "sources": {
       "description": "Which layers to search. Defaults to all sources if not specified. "memories" recalls your personal commonplace-book memories; "conversations" searches rendered transcripts of past chats; "documents" searches every file in every document store within the current \`scope\`; "knowledge" searches only files under a \`Knowledge/\` folder inside those same stores. Each knowledge result is tagged with its tier (character, project, or global) so you can tell whose voice it speaks in.",
       "items": {
@@ -1370,6 +1437,11 @@ exports[`tool definitions: derived OpenAI parameters searchScriptorium: paramete
         "type": "string",
       },
       "type": "array",
+    },
+    "until": {
+      "description": "Only return memories/conversations up to this ISO date (YYYY-MM-DD), inclusive. Pair with \`since\` to bracket a period.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}",
+      "type": "string",
     },
   },
   "required": [
@@ -1505,11 +1577,17 @@ exports[`tool definitions: derived OpenAI parameters state: parameters snapshot 
   "additionalProperties": false,
   "properties": {
     "context": {
-      "description": "Where to operate: "chat" for chat-specific state, "project" for project state. For fetch without context, returns merged state (chat values override project values).",
+      "description": "Which tier to operate on: "chat" (this conversation), "project" (its project), "group" (a group you belong to — see the "group" parameter), or "general" (instance-wide). For fetch without context, returns the merged cascade where narrower tiers win (chat over project over group over general). Set/delete without context default to "chat".",
       "enum": [
         "chat",
         "project",
+        "group",
+        "general",
       ],
+      "type": "string",
+    },
+    "group": {
+      "description": "Group name or ID; required with context "group" when the character belongs to more than one group.",
       "type": "string",
     },
     "operation": {

@@ -267,7 +267,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // node_modules/openai/version.mjs
-var VERSION = "6.44.0";
+var VERSION = "7.2.0";
 
 // node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -1019,7 +1019,7 @@ var formatRequestDetails = (details) => {
   if (details.headers) {
     details.headers = Object.fromEntries((details.headers instanceof Headers ? [...details.headers] : Object.entries(details.headers)).map(([name, value]) => [
       name,
-      name.toLowerCase() === "authorization" || name.toLowerCase() === "api-key" || name.toLowerCase() === "x-api-key" || name.toLowerCase() === "cookie" || name.toLowerCase() === "set-cookie" ? "***" : value
+      name.toLowerCase() === "authorization" || name.toLowerCase() === "api-key" || name.toLowerCase() === "x-api-key" || name.toLowerCase() === "x-amz-security-token" || name.toLowerCase() === "cookie" || name.toLowerCase() === "set-cookie" ? "***" : value
     ]));
   }
   if ("retryOfRequestLogID" in details) {
@@ -1105,14 +1105,46 @@ var Stream = class _Stream {
     let consumed = false;
     async function* iterLines() {
       const lineDecoder = new LineDecoder();
-      const iter = ReadableStreamToAsyncIterable(readableStream);
-      for await (const chunk of iter) {
-        for (const line of lineDecoder.decode(chunk)) {
+      const reader = readableStream.getReader();
+      let closed = false;
+      let cancelPromise;
+      const cancel = () => {
+        cancelPromise ?? (cancelPromise = reader.cancel());
+        cancelPromise.catch(() => {
+        });
+      };
+      controller.signal.addEventListener("abort", cancel, { once: true });
+      try {
+        if (controller.signal.aborted) {
+          cancel();
+          return;
+        }
+        while (true) {
+          const { value: chunk, done } = await reader.read();
+          if (done) {
+            closed = true;
+            break;
+          }
+          if (controller.signal.aborted)
+            return;
+          for (const line of lineDecoder.decode(chunk)) {
+            if (controller.signal.aborted)
+              return;
+            yield line;
+          }
+        }
+        if (controller.signal.aborted)
+          return;
+        for (const line of lineDecoder.flush()) {
+          if (controller.signal.aborted)
+            return;
           yield line;
         }
-      }
-      for (const line of lineDecoder.flush()) {
-        yield line;
+      } finally {
+        controller.signal.removeEventListener("abort", cancel);
+        if (!closed)
+          cancel();
+        reader.releaseLock();
       }
     }
     async function* iterator() {
@@ -1130,7 +1162,7 @@ var Stream = class _Stream {
         }
         done = true;
       } catch (e) {
-        if (isAbortError(e))
+        if (controller.signal.aborted || isAbortError(e))
           return;
         throw e;
       } finally {
@@ -1629,13 +1661,17 @@ var WorkloadIdentityAuth = class {
       throw APIError.generate(response.status, body2, `Token exchange failed with status ${response.status}`, response.headers);
     }
     const tokenResponse = await response.json();
-    const expiresIn = tokenResponse.expires_in || 3600;
+    if (typeof tokenResponse !== "object" || tokenResponse === null || !("access_token" in tokenResponse) || typeof tokenResponse.access_token !== "string" || tokenResponse.access_token.trim().length === 0) {
+      throw new OpenAIError("Token exchange response missing 'access_token' field");
+    }
+    const accessToken = tokenResponse.access_token;
+    const expiresIn = tokenResponse.expires_in ?? 3600;
     const expiresAt = Date.now() + expiresIn * 1e3;
     this.cachedToken = {
-      token: tokenResponse.access_token,
+      token: accessToken,
       expiresAt
     };
-    return tokenResponse.access_token;
+    return accessToken;
   }
   isTokenExpired(cachedToken) {
     return Date.now() >= cachedToken.expiresAt;
@@ -1651,12 +1687,91 @@ var WorkloadIdentityAuth = class {
   }
 };
 
+// node_modules/openai/internal/headers.mjs
+var brand_privateNullableHeaders = /* @__PURE__ */ Symbol("brand.privateNullableHeaders");
+var httpTokenHeaderName = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+function* iterateHeaders(headers) {
+  if (!headers)
+    return;
+  if (brand_privateNullableHeaders in headers) {
+    const { values, nulls } = headers;
+    yield* values.entries();
+    for (const name of nulls) {
+      yield [name, null];
+    }
+    return;
+  }
+  let shouldClear = false;
+  let iter;
+  if (headers instanceof Headers) {
+    iter = headers.entries();
+  } else if (isReadonlyArray(headers)) {
+    iter = headers;
+  } else {
+    shouldClear = true;
+    iter = Object.entries(headers ?? {});
+  }
+  for (let row of iter) {
+    const name = row[0];
+    if (typeof name !== "string")
+      throw new TypeError("expected header name to be a string");
+    const values = isReadonlyArray(row[1]) ? row[1] : [row[1]];
+    let didClear = false;
+    for (const value of values) {
+      if (value === void 0)
+        continue;
+      if (shouldClear && !didClear) {
+        didClear = true;
+        yield [name, null];
+      }
+      yield [name, value];
+    }
+  }
+}
+var buildHeaders = (newHeaders) => {
+  const targetHeaders = new Headers();
+  const nullHeaders = /* @__PURE__ */ new Set();
+  for (const headers of newHeaders) {
+    const seenHeaders = /* @__PURE__ */ new Set();
+    for (const [name, value] of iterateHeaders(headers)) {
+      if (!httpTokenHeaderName.test(name)) {
+        throw new TypeError(`Header name must be a valid HTTP token ["${name}"]`);
+      }
+      const lowerName = name.toLowerCase();
+      if (!seenHeaders.has(lowerName)) {
+        targetHeaders.delete(lowerName);
+        seenHeaders.add(lowerName);
+      }
+      if (value === null) {
+        targetHeaders.delete(lowerName);
+        nullHeaders.add(lowerName);
+      } else {
+        targetHeaders.append(lowerName, value);
+        nullHeaders.delete(lowerName);
+      }
+    }
+  }
+  return { [brand_privateNullableHeaders]: true, values: targetHeaders, nulls: nullHeaders };
+};
+
 // node_modules/openai/internal/uploads.mjs
+var brand_privateStreamingFile = /* @__PURE__ */ Symbol("brand.privateStreamingFile");
+function toStreamingFile(data, name, options) {
+  if (!name) {
+    throw new TypeError("toStreamingFile requires a non-empty file name");
+  }
+  return {
+    [brand_privateStreamingFile]: true,
+    data,
+    name,
+    ...options?.type ? { type: options.type } : {}
+  };
+}
 var checkFileSupport = () => {
   if (typeof File === "undefined") {
     const { process: process2 } = globalThis;
     const isOldNode = typeof process2?.versions?.node === "string" && parseInt(process2.versions.node.split(".")) < 20;
-    throw new Error("`File` is not defined as a global, which is required for file uploads." + (isOldNode ? " Update to Node 20 LTS or newer, or set `globalThis.File` to `import('node:buffer').File`." : ""));
+    throw new Error("`File` is not defined as a global, which is required for file uploads." + (isOldNode ? " Update to a supported Node.js LTS release, or set `globalThis.File` to `import('node:buffer').File`." : ""));
   }
 };
 function makeFile(fileBits, fileName, options) {
@@ -1670,9 +1785,15 @@ var isAsyncIterable = (value) => value != null && typeof value === "object" && t
 var maybeMultipartFormRequestOptions = async (opts, fetch2) => {
   if (!hasUploadableValue(opts.body))
     return opts;
+  if (hasStreamingUploadableValue(opts.body)) {
+    return createStreamingFormRequestOptions(opts);
+  }
   return { ...opts, body: await createForm(opts.body, fetch2) };
 };
 var multipartFormRequestOptions = async (opts, fetch2) => {
+  if (hasStreamingUploadableValue(opts.body)) {
+    return createStreamingFormRequestOptions(opts);
+  }
   return { ...opts, body: await createForm(opts.body, fetch2) };
 };
 var supportsFormDataMap = /* @__PURE__ */ new WeakMap();
@@ -1705,7 +1826,22 @@ var createForm = async (body, fetch2) => {
   return form;
 };
 var isNamedBlob = (value) => value instanceof Blob && "name" in value;
-var isUploadable = (value) => typeof value === "object" && value !== null && (value instanceof Response || isAsyncIterable(value) || isNamedBlob(value));
+var isReadableStream = (value) => typeof value === "object" && value !== null && "getReader" in value && typeof value.getReader === "function";
+var isStreamingFile = (value) => typeof value === "object" && value !== null && brand_privateStreamingFile in value;
+var isUploadable = (value) => typeof value === "object" && value !== null && (value instanceof Response || isAsyncIterable(value) || isReadableStream(value) || isStreamingFile(value) || isNamedBlob(value));
+var hasStreamingUploadableValue = (value) => {
+  if (isStreamingFile(value) || isAsyncIterable(value) || isReadableStream(value))
+    return true;
+  if (Array.isArray(value))
+    return value.some(hasStreamingUploadableValue);
+  if (value && typeof value === "object" && !isNamedBlob(value) && !(value instanceof Response)) {
+    for (const k in value) {
+      if (hasStreamingUploadableValue(value[k]))
+        return true;
+    }
+  }
+  return false;
+};
 var hasUploadableValue = (value) => {
   if (isUploadable(value))
     return true;
@@ -1719,6 +1855,115 @@ var hasUploadableValue = (value) => {
   }
   return false;
 };
+var createStreamingFormRequestOptions = (opts) => {
+  const boundary = `openai-${Math.random().toString(36).slice(2)}`;
+  const body = ReadableStreamFrom(iterateMultipartBody(opts.body, boundary));
+  return {
+    ...opts,
+    body,
+    headers: buildHeaders([{ "content-type": `multipart/form-data; boundary=${boundary}` }, opts.headers])
+  };
+};
+async function* iterateMultipartBody(body, boundary) {
+  for await (const { key, value } of iterateFormEntries(body)) {
+    yield encodeUTF8(`--${boundary}\r
+`);
+    if (isUploadable(value)) {
+      const filename = getStreamingFileName(value);
+      const type = getStreamingFileType(value);
+      yield encodeUTF8(`Content-Disposition: form-data; name="${escapeHeaderValue(key)}"; filename="${escapeHeaderValue(filename)}"\r
+Content-Type: ${type}\r
+\r
+`);
+      yield* iterateBytes(getStreamingFileData(value));
+    } else {
+      yield encodeUTF8(`Content-Disposition: form-data; name="${escapeHeaderValue(key)}"\r
+\r
+${String(value)}`);
+    }
+    yield encodeUTF8("\r\n");
+  }
+  yield encodeUTF8(`--${boundary}--\r
+`);
+}
+async function* iterateFormEntries(body) {
+  if (!body || typeof body !== "object")
+    return;
+  for (const [key, value] of Object.entries(body)) {
+    yield* iterateFormValue(key, value);
+  }
+}
+async function* iterateFormValue(key, value) {
+  if (value === void 0)
+    return;
+  if (value == null) {
+    throw new TypeError(`Received null for "${key}"; to pass null in FormData, you must use the string 'null'`);
+  }
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || isUploadable(value)) {
+    yield { key, value };
+  } else if (Array.isArray(value)) {
+    for (const entry of value) {
+      yield* iterateFormValue(key + "[]", entry);
+    }
+  } else if (typeof value === "object") {
+    for (const [name, prop] of Object.entries(value)) {
+      yield* iterateFormValue(`${key}[${name}]`, prop);
+    }
+  } else {
+    throw new TypeError(`Invalid value given to form, expected a string, number, boolean, object, Array, File or Blob but got ${value} instead`);
+  }
+}
+function getStreamingFileName(value) {
+  return isStreamingFile(value) ? value.name : getName(value) ?? "unknown_file";
+}
+function getStreamingFileType(value) {
+  if (isStreamingFile(value))
+    return value.type || "application/octet-stream";
+  if (isNamedBlob(value) && value.type)
+    return value.type;
+  if (value instanceof Response)
+    return value.headers.get("content-type") || "application/octet-stream";
+  return "application/octet-stream";
+}
+function getStreamingFileData(value) {
+  if (isStreamingFile(value))
+    return value.data;
+  return value;
+}
+async function* iterateBytes(value) {
+  if (typeof value === "string") {
+    yield encodeUTF8(value);
+  } else if (ArrayBuffer.isView(value)) {
+    yield new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+  } else if (value instanceof ArrayBuffer) {
+    yield new Uint8Array(value);
+  } else if (value instanceof Response) {
+    if (value.body) {
+      yield* iterateBytes(value.body);
+    } else {
+      yield* iterateBytes(await value.blob());
+    }
+  } else if (value instanceof Blob) {
+    if (typeof value.stream === "function") {
+      yield* iterateBytes(value.stream());
+    } else {
+      yield new Uint8Array(await value.arrayBuffer());
+    }
+  } else if (isReadableStream(value)) {
+    for await (const chunk of ReadableStreamToAsyncIterable(value)) {
+      yield* iterateBytes(chunk);
+    }
+  } else if (isAsyncIterable(value)) {
+    for await (const chunk of value) {
+      yield* iterateBytes(chunk);
+    }
+  } else {
+    throw new TypeError(`Invalid streaming file chunk: ${String(value)}`);
+  }
+}
+function escapeHeaderValue(value) {
+  return value.replace(/["\\\r\n]/g, (character) => encodeURIComponent(character));
+}
 var addFormValue = async (form, key, value) => {
   if (value === void 0)
     return;
@@ -2001,10 +2246,12 @@ var _EventStream_endPromise;
 var _EventStream_resolveEndPromise;
 var _EventStream_rejectEndPromise;
 var _EventStream_listeners;
+var _EventStream_abortListeners;
 var _EventStream_ended;
 var _EventStream_errored;
 var _EventStream_aborted;
 var _EventStream_catchingPromiseCreated;
+var _EventStream_removeAbortListeners;
 var _EventStream_handleError;
 var EventStream = class {
   constructor() {
@@ -2021,6 +2268,7 @@ var EventStream = class {
     _EventStream_rejectEndPromise.set(this, () => {
     });
     _EventStream_listeners.set(this, {});
+    _EventStream_abortListeners.set(this, []);
     _EventStream_ended.set(this, false);
     _EventStream_errored.set(this, false);
     _EventStream_aborted.set(this, false);
@@ -2040,8 +2288,13 @@ var EventStream = class {
   }
   _run(executor) {
     setTimeout(() => {
-      executor().then(() => {
-        this._emitFinal();
+      Promise.resolve().then(executor).then(() => {
+        try {
+          this._emitFinal();
+        } catch (error) {
+          __classPrivateFieldGet(this, _EventStream_instances, "m", _EventStream_handleError).call(this, error);
+          return;
+        }
         this._emit("end");
       }, __classPrivateFieldGet(this, _EventStream_instances, "m", _EventStream_handleError).bind(this));
     }, 0);
@@ -2063,6 +2316,17 @@ var EventStream = class {
   }
   abort() {
     this.controller.abort();
+  }
+  _listenForAbort(signal) {
+    if (!signal || this.ended)
+      return;
+    if (signal.aborted) {
+      this.controller.abort();
+      return;
+    }
+    const listener = () => this.controller.abort();
+    signal.addEventListener("abort", listener, { once: true });
+    __classPrivateFieldGet(this, _EventStream_abortListeners, "f").push({ signal, listener });
   }
   /**
    * Adds the listener function to the end of the listeners array for the event.
@@ -2121,6 +2385,102 @@ var EventStream = class {
       this.once(event, resolve);
     });
   }
+  /**
+   * Returns an async iterator that yields every time the event is triggered.
+   * The iterator ends when the stream ends and rejects if the stream errors
+   * or is aborted. If you request the 'error' or 'abort' event, the iterator
+   * yields that event instead of rejecting.
+   *
+   * Example:
+   *
+   *   for await (const [message] of stream.events('message')) {
+   *     await processMessage(message);
+   *   }
+   */
+  events(event) {
+    const pushQueue = [];
+    const readQueue = [];
+    let ended = this.ended;
+    let failure;
+    let failureDelivered = false;
+    const doneResult = () => ({ value: void 0, done: true });
+    const finishReaders = () => {
+      while (readQueue.length) {
+        readQueue.shift().resolve(doneResult());
+      }
+    };
+    const rejectReader = () => {
+      if (!failure || failureDelivered || !readQueue.length)
+        return;
+      failureDelivered = true;
+      readQueue.shift().reject(failure);
+    };
+    const cleanup = () => {
+      this.off(event, onEvent);
+      this.off("end", onEnd);
+      if (event !== "error")
+        this.off("error", onFailure);
+      if (event !== "abort")
+        this.off("abort", onFailure);
+    };
+    const onEvent = (...args) => {
+      if (ended)
+        return;
+      const reader = readQueue.shift();
+      if (reader) {
+        reader.resolve({ value: args, done: false });
+      } else {
+        pushQueue.push(args);
+      }
+    };
+    const onFailure = (error) => {
+      failure = error;
+      if (!pushQueue.length)
+        rejectReader();
+    };
+    const onEnd = () => {
+      ended = true;
+      cleanup();
+      if (!pushQueue.length) {
+        rejectReader();
+        finishReaders();
+      }
+    };
+    if (!ended) {
+      this.on(event, onEvent);
+      this.on("end", onEnd);
+      if (event !== "error")
+        this.on("error", onFailure);
+      if (event !== "abort")
+        this.on("abort", onFailure);
+    }
+    return {
+      next: () => {
+        const value = pushQueue.shift();
+        if (value)
+          return Promise.resolve({ value, done: false });
+        if (failure && !failureDelivered) {
+          failureDelivered = true;
+          return Promise.reject(failure);
+        }
+        if (ended)
+          return Promise.resolve(doneResult());
+        return new Promise((resolve, reject) => {
+          readQueue.push({ resolve, reject });
+        });
+      },
+      return: () => {
+        ended = true;
+        pushQueue.length = 0;
+        cleanup();
+        finishReaders();
+        return Promise.resolve(doneResult());
+      },
+      [Symbol.asyncIterator]() {
+        return this;
+      }
+    };
+  }
   async done() {
     __classPrivateFieldSet(this, _EventStream_catchingPromiseCreated, true, "f");
     await __classPrivateFieldGet(this, _EventStream_endPromise, "f");
@@ -2130,6 +2490,7 @@ var EventStream = class {
       return;
     }
     if (event === "end") {
+      __classPrivateFieldGet(this, _EventStream_instances, "m", _EventStream_removeAbortListeners).call(this);
       __classPrivateFieldSet(this, _EventStream_ended, true, "f");
       __classPrivateFieldGet(this, _EventStream_resolveEndPromise, "f").call(this);
     }
@@ -2161,7 +2522,11 @@ var EventStream = class {
   _emitFinal() {
   }
 };
-_EventStream_connectedPromise = /* @__PURE__ */ new WeakMap(), _EventStream_resolveConnectedPromise = /* @__PURE__ */ new WeakMap(), _EventStream_rejectConnectedPromise = /* @__PURE__ */ new WeakMap(), _EventStream_endPromise = /* @__PURE__ */ new WeakMap(), _EventStream_resolveEndPromise = /* @__PURE__ */ new WeakMap(), _EventStream_rejectEndPromise = /* @__PURE__ */ new WeakMap(), _EventStream_listeners = /* @__PURE__ */ new WeakMap(), _EventStream_ended = /* @__PURE__ */ new WeakMap(), _EventStream_errored = /* @__PURE__ */ new WeakMap(), _EventStream_aborted = /* @__PURE__ */ new WeakMap(), _EventStream_catchingPromiseCreated = /* @__PURE__ */ new WeakMap(), _EventStream_instances = /* @__PURE__ */ new WeakSet(), _EventStream_handleError = function _EventStream_handleError2(error) {
+_EventStream_connectedPromise = /* @__PURE__ */ new WeakMap(), _EventStream_resolveConnectedPromise = /* @__PURE__ */ new WeakMap(), _EventStream_rejectConnectedPromise = /* @__PURE__ */ new WeakMap(), _EventStream_endPromise = /* @__PURE__ */ new WeakMap(), _EventStream_resolveEndPromise = /* @__PURE__ */ new WeakMap(), _EventStream_rejectEndPromise = /* @__PURE__ */ new WeakMap(), _EventStream_listeners = /* @__PURE__ */ new WeakMap(), _EventStream_abortListeners = /* @__PURE__ */ new WeakMap(), _EventStream_ended = /* @__PURE__ */ new WeakMap(), _EventStream_errored = /* @__PURE__ */ new WeakMap(), _EventStream_aborted = /* @__PURE__ */ new WeakMap(), _EventStream_catchingPromiseCreated = /* @__PURE__ */ new WeakMap(), _EventStream_instances = /* @__PURE__ */ new WeakSet(), _EventStream_removeAbortListeners = function _EventStream_removeAbortListeners2() {
+  for (const { signal, listener } of __classPrivateFieldGet(this, _EventStream_abortListeners, "f").splice(0)) {
+    signal.removeEventListener("abort", listener);
+  }
+}, _EventStream_handleError = function _EventStream_handleError2(error) {
   __classPrivateFieldSet(this, _EventStream_errored, true, "f");
   if (error instanceof Error && error.name === "AbortError") {
     error = new APIUserAbortError();
@@ -2196,6 +2561,53 @@ var _AbstractChatCompletionRunner_calculateTotalUsage;
 var _AbstractChatCompletionRunner_validateParams;
 var _AbstractChatCompletionRunner_stringifyFunctionCallResult;
 var DEFAULT_MAX_CHAT_COMPLETIONS = 10;
+function normalizeToolCallIds(chatCompletion) {
+  for (const choice of chatCompletion.choices) {
+    for (const toolCall of choice.message.tool_calls ?? []) {
+      if (!toolCall.id) {
+        toolCall.id = `call_${uuid4()}`;
+      }
+    }
+  }
+}
+function toRequestMessage(message) {
+  if (!isAssistantMessage(message))
+    return message;
+  const requestMessage = { role: "assistant" };
+  if (message.audio != null)
+    requestMessage.audio = { id: message.audio.id };
+  if (message.content !== void 0)
+    requestMessage.content = message.content;
+  if (message.function_call != null)
+    requestMessage.function_call = message.function_call;
+  if (message.name !== void 0)
+    requestMessage.name = message.name;
+  if (message.refusal != null)
+    requestMessage.refusal = message.refusal;
+  if (message.tool_calls !== void 0) {
+    requestMessage.tool_calls = message.tool_calls.map((toolCall) => {
+      if (toolCall.type === "custom") {
+        return {
+          id: toolCall.id,
+          type: toolCall.type,
+          custom: {
+            input: toolCall.custom.input,
+            name: toolCall.custom.name
+          }
+        };
+      }
+      return {
+        id: toolCall.id,
+        type: toolCall.type,
+        function: {
+          arguments: toolCall.function.arguments,
+          name: toolCall.function.name
+        }
+      };
+    });
+  }
+  return requestMessage;
+}
 var AbstractChatCompletionRunner = class extends EventStream {
   constructor() {
     super(...arguments);
@@ -2204,6 +2616,7 @@ var AbstractChatCompletionRunner = class extends EventStream {
     this.messages = [];
   }
   _addChatCompletion(chatCompletion) {
+    normalizeToolCallIds(chatCompletion);
     this._chatCompletions.push(chatCompletion);
     this._emit("chatCompletion", chatCompletion);
     const message = chatCompletion.choices[0]?.message;
@@ -2248,7 +2661,7 @@ var AbstractChatCompletionRunner = class extends EventStream {
     return __classPrivateFieldGet(this, _AbstractChatCompletionRunner_instances, "m", _AbstractChatCompletionRunner_getFinalContent).call(this);
   }
   /**
-   * @returns a promise that resolves with the the final assistant ChatCompletionMessage response,
+   * @returns a promise that resolves with the final assistant ChatCompletionMessage response,
    * or rejects if an error occurred or the stream ended prematurely without producing a ChatCompletionMessage.
    */
   async finalMessage() {
@@ -2295,12 +2708,7 @@ var AbstractChatCompletionRunner = class extends EventStream {
     }
   }
   async _createChatCompletion(client, params, options) {
-    const signal = options?.signal;
-    if (signal) {
-      if (signal.aborted)
-        this.controller.abort();
-      signal.addEventListener("abort", () => this.controller.abort());
-    }
+    this._listenForAbort(options?.signal);
     __classPrivateFieldGet(this, _AbstractChatCompletionRunner_instances, "m", _AbstractChatCompletionRunner_validateParams).call(this, params);
     const chatCompletion = await client.chat.completions.create({ ...params, stream: false }, { ...options, signal: this.controller.signal });
     this._connected();
@@ -2312,11 +2720,12 @@ var AbstractChatCompletionRunner = class extends EventStream {
     }
     return await this._createChatCompletion(client, params, options);
   }
-  async _runTools(client, params, options) {
+  async _runTools(client, params, runner, options) {
     const role = "tool";
-    const { tool_choice = "auto", stream, ...restParams } = params;
+    const { tool_choice = "auto", stream, toolContext: inputToolContext, ...restParams } = params;
+    const toolContext = inputToolContext;
     const singleFunctionToCall = typeof tool_choice !== "string" && tool_choice.type === "function" && tool_choice?.function?.name;
-    const { maxChatCompletions = DEFAULT_MAX_CHAT_COMPLETIONS } = options || {};
+    const { maxChatCompletions = DEFAULT_MAX_CHAT_COMPLETIONS, afterCompletion } = options || {};
     const inputTools = params.tools.map((tool) => {
       if (isAutoParsableTool(tool)) {
         if (!tool.$callback) {
@@ -2354,50 +2763,74 @@ var AbstractChatCompletionRunner = class extends EventStream {
     for (const message of params.messages) {
       this._addMessage(message, false);
     }
+    const runToolCall = async (toolCall) => {
+      if (toolCall.type !== "function")
+        return { message: void 0, functionCalled: false };
+      const tool_call_id = toolCall.id;
+      const { name, arguments: args } = toolCall.function;
+      const fn = functionsByName[name];
+      if (!fn) {
+        const content2 = `Invalid tool_call: ${JSON.stringify(name)}. Available options are: ${Object.keys(functionsByName).map((name2) => JSON.stringify(name2)).join(", ")}. Please try again`;
+        return { message: { role, tool_call_id, content: content2 }, functionCalled: false };
+      }
+      if (singleFunctionToCall && singleFunctionToCall !== name) {
+        const content2 = `Invalid tool_call: ${JSON.stringify(name)}. ${JSON.stringify(singleFunctionToCall)} requested. Please try again`;
+        return { message: { role, tool_call_id, content: content2 }, functionCalled: false };
+      }
+      let rawContent;
+      if (isRunnableFunctionWithParse(fn)) {
+        let parsed;
+        try {
+          parsed = await fn.parse(args);
+        } catch (error) {
+          const content2 = error instanceof Error ? error.message : String(error);
+          return { message: { role, tool_call_id, content: content2 }, functionCalled: false };
+        }
+        rawContent = await fn.function(parsed, runner, toolContext);
+      } else {
+        rawContent = await fn.function(args, runner, toolContext);
+      }
+      const content = __classPrivateFieldGet(this, _AbstractChatCompletionRunner_instances, "m", _AbstractChatCompletionRunner_stringifyFunctionCallResult).call(this, rawContent);
+      return { message: { role, tool_call_id, content }, functionCalled: true };
+    };
     for (let i = 0; i < maxChatCompletions; ++i) {
       const chatCompletion = await this._createChatCompletion(client, {
         ...restParams,
         tool_choice,
         tools,
-        messages: [...this.messages]
+        messages: this.messages.map(toRequestMessage)
       }, options);
       const message = chatCompletion.choices[0]?.message;
       if (!message) {
         throw new OpenAIError(`missing message in ChatCompletion response`);
       }
       if (!message.tool_calls?.length) {
+        await afterCompletion?.(chatCompletion, runner);
         return;
       }
-      for (const tool_call of message.tool_calls) {
-        if (tool_call.type !== "function")
-          continue;
-        const tool_call_id = tool_call.id;
-        const { name, arguments: args } = tool_call.function;
-        const fn = functionsByName[name];
-        if (!fn) {
-          const content2 = `Invalid tool_call: ${JSON.stringify(name)}. Available options are: ${Object.keys(functionsByName).map((name2) => JSON.stringify(name2)).join(", ")}. Please try again`;
-          this._addMessage({ role, tool_call_id, content: content2 });
-          continue;
-        } else if (singleFunctionToCall && singleFunctionToCall !== name) {
-          const content2 = `Invalid tool_call: ${JSON.stringify(name)}. ${JSON.stringify(singleFunctionToCall)} requested. Please try again`;
-          this._addMessage({ role, tool_call_id, content: content2 });
-          continue;
+      if (singleFunctionToCall || params.parallel_tool_calls === false) {
+        for (const toolCall of message.tool_calls) {
+          const result = await runToolCall(toolCall);
+          if (result.message)
+            this._addMessage(result.message);
+          if (singleFunctionToCall && result.functionCalled) {
+            await afterCompletion?.(chatCompletion, runner);
+            return;
+          }
         }
-        let parsed;
-        try {
-          parsed = isRunnableFunctionWithParse(fn) ? await fn.parse(args) : args;
-        } catch (error) {
-          const content2 = error instanceof Error ? error.message : String(error);
-          this._addMessage({ role, tool_call_id, content: content2 });
-          continue;
+      } else {
+        const results = await Promise.allSettled(message.tool_calls.map(runToolCall));
+        for (const result of results) {
+          if (result.status === "rejected")
+            throw result.reason;
         }
-        const rawContent = await fn.function(parsed, this);
-        const content = __classPrivateFieldGet(this, _AbstractChatCompletionRunner_instances, "m", _AbstractChatCompletionRunner_stringifyFunctionCallResult).call(this, rawContent);
-        this._addMessage({ role, tool_call_id, content });
-        if (singleFunctionToCall) {
-          return;
+        for (const result of results) {
+          if (result.status === "fulfilled" && result.value.message) {
+            this._addMessage(result.value.message);
+          }
         }
       }
+      await afterCompletion?.(chatCompletion, runner);
     }
     return;
   }
@@ -2469,7 +2902,7 @@ var ChatCompletionRunner = class _ChatCompletionRunner extends AbstractChatCompl
       ...options,
       headers: { ...options?.headers, "X-Stainless-Helper-Method": "runTools" }
     };
-    runner._run(() => runner._runTools(client, params, opts));
+    runner._run(() => runner._runTools(client, params, runner, opts));
     return runner;
   }
   _addMessage(message, emit = true) {
@@ -2695,6 +3128,7 @@ var partialParse = (input) => parseJSON(input, Allow.ALL ^ Allow.NUM);
 // node_modules/openai/lib/ChatCompletionStream.mjs
 var _ChatCompletionStream_instances;
 var _ChatCompletionStream_params;
+var _ChatCompletionStream_audioDoneChoiceIndexes;
 var _ChatCompletionStream_choiceEventStates;
 var _ChatCompletionStream_currentChatCompletionSnapshot;
 var _ChatCompletionStream_beginRequest;
@@ -2705,14 +3139,40 @@ var _ChatCompletionStream_emitContentDoneEvents;
 var _ChatCompletionStream_endRequest;
 var _ChatCompletionStream_getAutoParseableResponseFormat;
 var _ChatCompletionStream_accumulateChatCompletion;
+var CHAT_COMPLETION_READABLE_STREAM_MESSAGE_PREFIX = "chat.completion.chunk.message:";
+function makeChatCompletionReadableStreamMessageChunk(chunk, message, toolCallIds) {
+  const payload = {
+    type: "message",
+    message,
+    ...toolCallIds ? { tool_call_ids: toolCallIds } : {}
+  };
+  return {
+    id: chunk.id,
+    choices: [],
+    created: chunk.created,
+    model: chunk.model,
+    object: `${CHAT_COMPLETION_READABLE_STREAM_MESSAGE_PREFIX}${JSON.stringify(payload)}`
+  };
+}
+function isChatCompletionReadableStreamMessage(item) {
+  return "type" in item && item.type === "message" && "message" in item || "object" in item && typeof item.object === "string" && item.object.startsWith(CHAT_COMPLETION_READABLE_STREAM_MESSAGE_PREFIX);
+}
+function getChatCompletionReadableStreamMessage(item) {
+  if ("type" in item) {
+    return item;
+  }
+  return JSON.parse(item.object.slice(CHAT_COMPLETION_READABLE_STREAM_MESSAGE_PREFIX.length));
+}
 var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompletionRunner {
   constructor(params) {
     super();
     _ChatCompletionStream_instances.add(this);
     _ChatCompletionStream_params.set(this, void 0);
+    _ChatCompletionStream_audioDoneChoiceIndexes.set(this, void 0);
     _ChatCompletionStream_choiceEventStates.set(this, void 0);
     _ChatCompletionStream_currentChatCompletionSnapshot.set(this, void 0);
     __classPrivateFieldSet(this, _ChatCompletionStream_params, params, "f");
+    __classPrivateFieldSet(this, _ChatCompletionStream_audioDoneChoiceIndexes, /* @__PURE__ */ new Set(), "f");
     __classPrivateFieldSet(this, _ChatCompletionStream_choiceEventStates, [], "f");
   }
   get currentChatCompletionSnapshot() {
@@ -2737,12 +3197,7 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
   }
   async _createChatCompletion(client, params, options) {
     super._createChatCompletion;
-    const signal = options?.signal;
-    if (signal) {
-      if (signal.aborted)
-        this.controller.abort();
-      signal.addEventListener("abort", () => this.controller.abort());
-    }
+    this._listenForAbort(options?.signal);
     __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_beginRequest).call(this);
     const stream = await client.chat.completions.create({ ...params, stream: true }, { ...options, signal: this.controller.signal });
     this._connected();
@@ -2755,31 +3210,52 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
     return this._addChatCompletion(__classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_endRequest).call(this));
   }
   async _fromReadableStream(readableStream, options) {
-    const signal = options?.signal;
-    if (signal) {
-      if (signal.aborted)
-        this.controller.abort();
-      signal.addEventListener("abort", () => this.controller.abort());
-    }
+    this._listenForAbort(options?.signal);
     __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_beginRequest).call(this);
     this._connected();
     const stream = Stream.fromReadableStream(readableStream, this.controller);
     let chatId;
-    for await (const chunk of stream) {
-      if (chatId && chatId !== chunk.id) {
+    for await (const item of stream) {
+      if (isChatCompletionReadableStreamMessage(item)) {
+        const message = getChatCompletionReadableStreamMessage(item);
+        if (__classPrivateFieldGet(this, _ChatCompletionStream_currentChatCompletionSnapshot, "f")) {
+          const toolCalls = __classPrivateFieldGet(this, _ChatCompletionStream_currentChatCompletionSnapshot, "f").choices[0]?.message.tool_calls;
+          for (const [index, id] of message.tool_call_ids?.entries() ?? []) {
+            const toolCall = toolCalls?.[index];
+            if (toolCall && id) {
+              toolCall.id = id;
+            }
+          }
+          this._addChatCompletion(__classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_endRequest).call(this));
+          chatId = void 0;
+        }
+        this._addMessage(message.message);
+        continue;
+      }
+      const chunk = item;
+      if (chatId && chunk.id && chatId !== chunk.id) {
         this._addChatCompletion(__classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_endRequest).call(this));
       }
       __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_addChunk).call(this, chunk);
-      chatId = chunk.id;
+      if (chunk.id)
+        chatId = chunk.id;
     }
     if (stream.controller.signal?.aborted) {
       throw new APIUserAbortError();
     }
-    return this._addChatCompletion(__classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_endRequest).call(this));
+    if (__classPrivateFieldGet(this, _ChatCompletionStream_currentChatCompletionSnapshot, "f")) {
+      return this._addChatCompletion(__classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_endRequest).call(this));
+    }
+    const lastChatCompletion = this._chatCompletions[this._chatCompletions.length - 1];
+    if (lastChatCompletion) {
+      return lastChatCompletion;
+    }
+    throw new OpenAIError(`request ended without sending any chunks`);
   }
-  [(_ChatCompletionStream_params = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_choiceEventStates = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_currentChatCompletionSnapshot = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_instances = /* @__PURE__ */ new WeakSet(), _ChatCompletionStream_beginRequest = function _ChatCompletionStream_beginRequest2() {
+  [(_ChatCompletionStream_params = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_audioDoneChoiceIndexes = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_choiceEventStates = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_currentChatCompletionSnapshot = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_instances = /* @__PURE__ */ new WeakSet(), _ChatCompletionStream_beginRequest = function _ChatCompletionStream_beginRequest2() {
     if (this.ended)
       return;
+    __classPrivateFieldSet(this, _ChatCompletionStream_audioDoneChoiceIndexes, /* @__PURE__ */ new Set(), "f");
     __classPrivateFieldSet(this, _ChatCompletionStream_currentChatCompletionSnapshot, void 0, "f");
   }, _ChatCompletionStream_getChoiceEventState = function _ChatCompletionStream_getChoiceEventState2(choice) {
     let state = __classPrivateFieldGet(this, _ChatCompletionStream_choiceEventStates, "f")[choice.index];
@@ -2803,17 +3279,18 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
     this._emit("chunk", chunk, completion);
     for (const choice of chunk.choices) {
       const choiceSnapshot = completion.choices[choice.index];
-      if (choice.delta.content != null && choiceSnapshot.message?.role === "assistant" && choiceSnapshot.message?.content) {
-        this._emit("content", choice.delta.content, choiceSnapshot.message.content);
+      const { delta } = choice;
+      if (delta?.content != null && choiceSnapshot.message?.role === "assistant" && choiceSnapshot.message?.content) {
+        this._emit("content", delta.content, choiceSnapshot.message.content);
         this._emit("content.delta", {
-          delta: choice.delta.content,
+          delta: delta.content,
           snapshot: choiceSnapshot.message.content,
           parsed: choiceSnapshot.message.parsed
         });
       }
-      if (choice.delta.refusal != null && choiceSnapshot.message?.role === "assistant" && choiceSnapshot.message?.refusal) {
+      if (delta?.refusal != null && choiceSnapshot.message?.role === "assistant" && choiceSnapshot.message?.refusal) {
         this._emit("refusal.delta", {
-          delta: choice.delta.refusal,
+          delta: delta.refusal,
           snapshot: choiceSnapshot.message.refusal
         });
       }
@@ -2836,7 +3313,7 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
           __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_emitToolCallDoneEvent).call(this, choiceSnapshot, state.current_tool_call_index);
         }
       }
-      for (const toolCall of choice.delta.tool_calls ?? []) {
+      for (const toolCall of delta?.tool_calls ?? []) {
         if (state.current_tool_call_index !== toolCall.index) {
           __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_emitContentDoneEvents).call(this, choiceSnapshot);
           if (state.current_tool_call_index != null) {
@@ -2845,7 +3322,7 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
         }
         state.current_tool_call_index = toolCall.index;
       }
-      for (const toolCallDelta of choice.delta.tool_calls ?? []) {
+      for (const toolCallDelta of delta?.tool_calls ?? []) {
         const toolCallSnapshot = choiceSnapshot.message.tool_calls?.[toolCallDelta.index];
         if (!toolCallSnapshot?.type) {
           continue;
@@ -2916,9 +3393,11 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
     if (!snapshot) {
       throw new OpenAIError(`request ended without sending any chunks`);
     }
+    const audioDoneChoiceIndexes = __classPrivateFieldGet(this, _ChatCompletionStream_audioDoneChoiceIndexes, "f");
+    __classPrivateFieldSet(this, _ChatCompletionStream_audioDoneChoiceIndexes, /* @__PURE__ */ new Set(), "f");
     __classPrivateFieldSet(this, _ChatCompletionStream_currentChatCompletionSnapshot, void 0, "f");
     __classPrivateFieldSet(this, _ChatCompletionStream_choiceEventStates, [], "f");
-    return finalizeChatCompletion(snapshot, __classPrivateFieldGet(this, _ChatCompletionStream_params, "f"));
+    return finalizeChatCompletion(snapshot, __classPrivateFieldGet(this, _ChatCompletionStream_params, "f"), audioDoneChoiceIndexes);
   }, _ChatCompletionStream_getAutoParseableResponseFormat = function _ChatCompletionStream_getAutoParseableResponseFormat2() {
     const responseFormat = __classPrivateFieldGet(this, _ChatCompletionStream_params, "f")?.response_format;
     if (isAutoParsableResponseFormat(responseFormat)) {
@@ -2926,7 +3405,7 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
     }
     return null;
   }, _ChatCompletionStream_accumulateChatCompletion = function _ChatCompletionStream_accumulateChatCompletion2(chunk) {
-    var _a3, _b, _c, _d;
+    var _a3, _b, _c, _d, _e;
     let snapshot = __classPrivateFieldGet(this, _ChatCompletionStream_currentChatCompletionSnapshot, "f");
     const { choices, ...rest } = chunk;
     if (!snapshot) {
@@ -2934,7 +3413,7 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
         ...rest,
         choices: []
       }, "f");
-    } else {
+    } else if (chunk.id) {
       Object.assign(snapshot, rest);
     }
     for (const { delta, finish_reason, index, logprobs = null, ...other } of chunk.choices) {
@@ -2973,14 +3452,30 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
       Object.assign(choice, other);
       if (!delta)
         continue;
-      const { content, refusal, function_call, role, tool_calls, ...rest2 } = delta;
+      __classPrivateFieldGet(this, _ChatCompletionStream_audioDoneChoiceIndexes, "f").delete(index);
+      const { audio, content, refusal, function_call, role, tool_calls, ...rest2 } = delta;
       assertIsEmpty(rest2);
       Object.assign(choice.message, rest2);
+      if (audio?.expires_at != null && audio.id == null && audio.data == null && audio.transcript == null && content == null && refusal == null && function_call == null && role == null && tool_calls == null && Object.keys(rest2).length === 0) {
+        __classPrivateFieldGet(this, _ChatCompletionStream_audioDoneChoiceIndexes, "f").add(index);
+      }
       if (refusal) {
         choice.message.refusal = (choice.message.refusal || "") + refusal;
       }
       if (role)
         choice.message.role = role;
+      if (audio) {
+        const audioSnapshot = (_c = choice.message).audio ?? (_c.audio = {});
+        if (audio.id != null)
+          audioSnapshot.id = audio.id;
+        if (audio.data != null)
+          audioSnapshot.data = (audioSnapshot.data ?? "") + audio.data;
+        if (audio.transcript != null) {
+          audioSnapshot.transcript = (audioSnapshot.transcript ?? "") + audio.transcript;
+        }
+        if (audio.expires_at != null)
+          audioSnapshot.expires_at = audio.expires_at;
+      }
       if (function_call) {
         if (!choice.message.function_call) {
           choice.message.function_call = function_call;
@@ -2988,7 +3483,7 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
           if (function_call.name)
             choice.message.function_call.name = function_call.name;
           if (function_call.arguments) {
-            (_c = choice.message.function_call).arguments ?? (_c.arguments = "");
+            (_d = choice.message.function_call).arguments ?? (_d.arguments = "");
             choice.message.function_call.arguments += function_call.arguments;
           }
         }
@@ -2996,14 +3491,14 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
       if (content) {
         choice.message.content = (choice.message.content || "") + content;
         if (!choice.message.refusal && __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_getAutoParseableResponseFormat).call(this)) {
-          choice.message.parsed = partialParse(choice.message.content);
+          choice.message.parsed = choice.message.content.trim() ? partialParse(choice.message.content) : null;
         }
       }
       if (tool_calls) {
         if (!choice.message.tool_calls)
           choice.message.tool_calls = [];
         for (const { index: index2, id, type, function: fn, ...rest3 } of tool_calls) {
-          const tool_call = (_d = choice.message.tool_calls)[index2] ?? (_d[index2] = {});
+          const tool_call = (_e = choice.message.tool_calls)[index2] ?? (_e[index2] = {});
           Object.assign(tool_call, rest3);
           if (id)
             tool_call.id = id;
@@ -3078,16 +3573,18 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
     return stream.toReadableStream();
   }
 };
-function finalizeChatCompletion(snapshot, params) {
+function finalizeChatCompletion(snapshot, params, audioDoneChoiceIndexes) {
   const { id, choices, created, model, system_fingerprint, ...rest } = snapshot;
   const completion = {
     ...rest,
     id,
     choices: choices.map(({ message, finish_reason, index, logprobs, ...choiceRest }) => {
-      if (!finish_reason) {
+      const { content = null, function_call, tool_calls, audio, ...messageRest } = message;
+      const finishReason = finish_reason ?? (audioDoneChoiceIndexes.has(index) && isCompleteAudio(audio) ? "stop" : null);
+      if (!finishReason) {
         throw new OpenAIError(`missing finish_reason for choice ${index}`);
       }
-      const { content = null, function_call, tool_calls, ...messageRest } = message;
+      const audioResponse = audio ? { audio } : {};
       const role = message.role;
       if (!role) {
         throw new OpenAIError(`missing role for choice ${index}`);
@@ -3103,12 +3600,13 @@ function finalizeChatCompletion(snapshot, params) {
         return {
           ...choiceRest,
           message: {
+            ...audioResponse,
             content,
             function_call: { arguments: args, name },
             role,
             refusal: message.refusal ?? null
           },
-          finish_reason,
+          finish_reason: finishReason,
           index,
           logprobs
         };
@@ -3117,20 +3615,17 @@ function finalizeChatCompletion(snapshot, params) {
         return {
           ...choiceRest,
           index,
-          finish_reason,
+          finish_reason: finishReason,
           logprobs,
           message: {
             ...messageRest,
+            ...audioResponse,
             role,
             content,
             refusal: message.refusal ?? null,
             tool_calls: tool_calls.map((tool_call, i) => {
               const { function: fn, type, id: id2, ...toolRest } = tool_call;
               const { arguments: args, name, ...fnRest } = fn || {};
-              if (id2 == null) {
-                throw new OpenAIError(`missing choices[${index}].tool_calls[${i}].id
-${str(snapshot)}`);
-              }
               if (type == null) {
                 throw new OpenAIError(`missing choices[${index}].tool_calls[${i}].type
 ${str(snapshot)}`);
@@ -3143,15 +3638,20 @@ ${str(snapshot)}`);
                 throw new OpenAIError(`missing choices[${index}].tool_calls[${i}].function.arguments
 ${str(snapshot)}`);
               }
-              return { ...toolRest, id: id2, type, function: { ...fnRest, name, arguments: args } };
+              return {
+                ...toolRest,
+                id: id2 || `call_${uuid4()}`,
+                type,
+                function: { ...fnRest, name, arguments: args }
+              };
             })
           }
         };
       }
       return {
         ...choiceRest,
-        message: { ...messageRest, content, role, refusal: message.refusal ?? null },
-        finish_reason,
+        message: { ...messageRest, ...audioResponse, content, role, refusal: message.refusal ?? null },
+        finish_reason: finishReason,
         index,
         logprobs
       };
@@ -3162,6 +3662,9 @@ ${str(snapshot)}`);
     ...system_fingerprint ? { system_fingerprint } : {}
   };
   return maybeParseChatCompletion(completion, params);
+}
+function isCompleteAudio(audio) {
+  return audio?.id != null && audio.data != null && audio.transcript != null && audio.expires_at != null;
 }
 function str(x) {
   return JSON.stringify(x);
@@ -3179,6 +3682,79 @@ var ChatCompletionStreamingRunner = class _ChatCompletionStreamingRunner extends
     runner._run(() => runner._fromReadableStream(stream));
     return runner;
   }
+  toReadableStream() {
+    const pushQueue = [];
+    const readQueue = [];
+    let done = false;
+    let lastChunk;
+    let toolCallIds;
+    const pushEvent = (event) => {
+      const reader = readQueue.shift();
+      if (reader) {
+        reader.resolve(event);
+      } else {
+        pushQueue.push(event);
+      }
+    };
+    this.on("chunk", (chunk) => {
+      lastChunk = chunk;
+      pushEvent(chunk);
+    });
+    this.on("message", (message) => {
+      if (isAssistantMessage(message)) {
+        toolCallIds = message.tool_calls?.map((toolCall) => toolCall.id);
+        return;
+      }
+      if (isToolMessage(message)) {
+        if (!lastChunk) {
+          throw new OpenAIError("cannot serialize a tool message before receiving any chunks");
+        }
+        pushEvent(makeChatCompletionReadableStreamMessageChunk(lastChunk, message, toolCallIds));
+      }
+    });
+    this.on("end", () => {
+      done = true;
+      for (const reader of readQueue) {
+        reader.resolve(void 0);
+      }
+      readQueue.length = 0;
+    });
+    this.on("abort", (err) => {
+      done = true;
+      for (const reader of readQueue) {
+        reader.reject(err);
+      }
+      readQueue.length = 0;
+    });
+    this.on("error", (err) => {
+      done = true;
+      for (const reader of readQueue) {
+        reader.reject(err);
+      }
+      readQueue.length = 0;
+    });
+    const iterator = () => ({
+      next: async () => {
+        if (!pushQueue.length) {
+          if (done) {
+            return { value: void 0, done: true };
+          }
+          return new Promise((resolve, reject) => readQueue.push({ resolve, reject })).then((event2) => event2 ? { value: event2, done: false } : { value: void 0, done: true });
+        }
+        const event = pushQueue.shift();
+        if (!event) {
+          return { value: void 0, done: true };
+        }
+        return { value: event, done: false };
+      },
+      return: async () => {
+        this.abort();
+        return { value: void 0, done: true };
+      }
+    });
+    const stream = new Stream(iterator, this.controller);
+    return stream.toReadableStream();
+  }
   static runTools(client, params, options) {
     const runner = new _ChatCompletionStreamingRunner(
       // @ts-expect-error TODO these types are incompatible
@@ -3188,7 +3764,7 @@ var ChatCompletionStreamingRunner = class _ChatCompletionStreamingRunner extends
       ...options,
       headers: { ...options?.headers, "X-Stainless-Helper-Method": "runTools" }
     };
-    runner._run(() => runner._runTools(client, params, opts));
+    runner._run(() => runner._runTools(client, params, runner, opts));
     return runner;
   }
 };
@@ -3844,6 +4420,60 @@ var SpendAlerts = class extends APIResource {
    */
   delete(alertID, options) {
     return this._client.delete(path`/organization/spend_alerts/${alertID}`, {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+};
+
+// node_modules/openai/resources/admin/organization/spend-limit.mjs
+var SpendLimit = class extends APIResource {
+  /**
+   * Get the organization's hard spend limit.
+   *
+   * @example
+   * ```ts
+   * const organizationSpendLimit =
+   *   await client.admin.organization.spendLimit.retrieve();
+   * ```
+   */
+  retrieve(options) {
+    return this._client.get("/organization/spend_limit", {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Create or replace the organization's hard spend limit.
+   *
+   * @example
+   * ```ts
+   * const organizationSpendLimit =
+   *   await client.admin.organization.spendLimit.update({
+   *     currency: 'USD',
+   *     interval: 'month',
+   *     threshold_amount: 1,
+   *   });
+   * ```
+   */
+  update(body, options) {
+    return this._client.post("/organization/spend_limit", {
+      body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Delete the organization's hard spend limit.
+   *
+   * @example
+   * ```ts
+   * const organizationSpendLimitDeleted =
+   *   await client.admin.organization.spendLimit.delete();
+   * ```
+   */
+  delete(options) {
+    return this._client.delete("/organization/spend_limit", {
       ...options,
       __security: { adminAPIKeyAuth: true }
     });
@@ -4698,100 +5328,6 @@ var Roles3 = class extends APIResource {
   }
 };
 
-// node_modules/openai/resources/admin/organization/projects/service-accounts.mjs
-var ServiceAccounts = class extends APIResource {
-  /**
-   * Creates a new service account in the project. This also returns an unredacted
-   * API key for the service account.
-   *
-   * @example
-   * ```ts
-   * const serviceAccount =
-   *   await client.admin.organization.projects.serviceAccounts.create(
-   *     'project_id',
-   *     { name: 'name' },
-   *   );
-   * ```
-   */
-  create(projectID, body, options) {
-    return this._client.post(path`/organization/projects/${projectID}/service_accounts`, {
-      body,
-      ...options,
-      __security: { adminAPIKeyAuth: true }
-    });
-  }
-  /**
-   * Retrieves a service account in the project.
-   *
-   * @example
-   * ```ts
-   * const projectServiceAccount =
-   *   await client.admin.organization.projects.serviceAccounts.retrieve(
-   *     'service_account_id',
-   *     { project_id: 'project_id' },
-   *   );
-   * ```
-   */
-  retrieve(serviceAccountID, params, options) {
-    const { project_id } = params;
-    return this._client.get(path`/organization/projects/${project_id}/service_accounts/${serviceAccountID}`, {
-      ...options,
-      __security: { adminAPIKeyAuth: true }
-    });
-  }
-  /**
-   * Updates a service account in the project.
-   *
-   * @example
-   * ```ts
-   * const projectServiceAccount =
-   *   await client.admin.organization.projects.serviceAccounts.update(
-   *     'service_account_id',
-   *     { project_id: 'project_id' },
-   *   );
-   * ```
-   */
-  update(serviceAccountID, params, options) {
-    const { project_id, ...body } = params;
-    return this._client.post(path`/organization/projects/${project_id}/service_accounts/${serviceAccountID}`, { body, ...options, __security: { adminAPIKeyAuth: true } });
-  }
-  /**
-   * Returns a list of service accounts in the project.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const projectServiceAccount of client.admin.organization.projects.serviceAccounts.list(
-   *   'project_id',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
-  list(projectID, query = {}, options) {
-    return this._client.getAPIList(path`/organization/projects/${projectID}/service_accounts`, ConversationCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
-  }
-  /**
-   * Deletes a service account from the project.
-   *
-   * Returns confirmation of service account deletion, or an error if the project is
-   * archived (archived projects have no service accounts).
-   *
-   * @example
-   * ```ts
-   * const serviceAccount =
-   *   await client.admin.organization.projects.serviceAccounts.delete(
-   *     'service_account_id',
-   *     { project_id: 'project_id' },
-   *   );
-   * ```
-   */
-  delete(serviceAccountID, params, options) {
-    const { project_id } = params;
-    return this._client.delete(path`/organization/projects/${project_id}/service_accounts/${serviceAccountID}`, { ...options, __security: { adminAPIKeyAuth: true } });
-  }
-};
-
 // node_modules/openai/resources/admin/organization/projects/spend-alerts.mjs
 var SpendAlerts2 = class extends APIResource {
   /**
@@ -4900,6 +5436,67 @@ var SpendAlerts2 = class extends APIResource {
   delete(alertID, params, options) {
     const { project_id } = params;
     return this._client.delete(path`/organization/projects/${project_id}/spend_alerts/${alertID}`, {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+};
+
+// node_modules/openai/resources/admin/organization/projects/spend-limit.mjs
+var SpendLimit2 = class extends APIResource {
+  /**
+   * Get a project's hard spend limit.
+   *
+   * @example
+   * ```ts
+   * const projectSpendLimit =
+   *   await client.admin.organization.projects.spendLimit.retrieve(
+   *     'proj_123',
+   *   );
+   * ```
+   */
+  retrieve(projectID, options) {
+    return this._client.get(path`/organization/projects/${projectID}/spend_limit`, {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Create or replace a project's hard spend limit.
+   *
+   * @example
+   * ```ts
+   * const projectSpendLimit =
+   *   await client.admin.organization.projects.spendLimit.update(
+   *     'proj_123',
+   *     {
+   *       currency: 'USD',
+   *       interval: 'month',
+   *       threshold_amount: 1,
+   *     },
+   *   );
+   * ```
+   */
+  update(projectID, body, options) {
+    return this._client.post(path`/organization/projects/${projectID}/spend_limit`, {
+      body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Delete a project's hard spend limit.
+   *
+   * @example
+   * ```ts
+   * const projectSpendLimitDeleted =
+   *   await client.admin.organization.projects.spendLimit.delete(
+   *     'proj_123',
+   *   );
+   * ```
+   */
+  delete(projectID, options) {
+    return this._client.delete(path`/organization/projects/${projectID}/spend_limit`, {
       ...options,
       __security: { adminAPIKeyAuth: true }
     });
@@ -5068,6 +5665,125 @@ var Groups2 = class extends APIResource {
   }
 };
 Groups2.Roles = Roles4;
+
+// node_modules/openai/resources/admin/organization/projects/service-accounts/api-keys.mjs
+var APIKeys2 = class extends APIResource {
+  /**
+   * Creates an API key for a service account in the project.
+   *
+   * @example
+   * ```ts
+   * const apiKey =
+   *   await client.admin.organization.projects.serviceAccounts.apiKeys.create(
+   *     'service_account_id',
+   *     { project_id: 'project_id' },
+   *   );
+   * ```
+   */
+  create(serviceAccountID, params, options) {
+    const { project_id, ...body } = params;
+    return this._client.post(path`/organization/projects/${project_id}/service_accounts/${serviceAccountID}/api_keys`, { body, ...options, __security: { adminAPIKeyAuth: true } });
+  }
+};
+
+// node_modules/openai/resources/admin/organization/projects/service-accounts/service-accounts.mjs
+var ServiceAccounts = class extends APIResource {
+  constructor() {
+    super(...arguments);
+    this.apiKeys = new APIKeys2(this._client);
+  }
+  /**
+   * Creates a new service account in the project. By default, this also returns an
+   * unredacted API key for the service account.
+   *
+   * @example
+   * ```ts
+   * const serviceAccount =
+   *   await client.admin.organization.projects.serviceAccounts.create(
+   *     'project_id',
+   *     { name: 'name' },
+   *   );
+   * ```
+   */
+  create(projectID, body, options) {
+    return this._client.post(path`/organization/projects/${projectID}/service_accounts`, {
+      body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Retrieves a service account in the project.
+   *
+   * @example
+   * ```ts
+   * const projectServiceAccount =
+   *   await client.admin.organization.projects.serviceAccounts.retrieve(
+   *     'service_account_id',
+   *     { project_id: 'project_id' },
+   *   );
+   * ```
+   */
+  retrieve(serviceAccountID, params, options) {
+    const { project_id } = params;
+    return this._client.get(path`/organization/projects/${project_id}/service_accounts/${serviceAccountID}`, {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Updates a service account in the project.
+   *
+   * @example
+   * ```ts
+   * const projectServiceAccount =
+   *   await client.admin.organization.projects.serviceAccounts.update(
+   *     'service_account_id',
+   *     { project_id: 'project_id' },
+   *   );
+   * ```
+   */
+  update(serviceAccountID, params, options) {
+    const { project_id, ...body } = params;
+    return this._client.post(path`/organization/projects/${project_id}/service_accounts/${serviceAccountID}`, { body, ...options, __security: { adminAPIKeyAuth: true } });
+  }
+  /**
+   * Returns a list of service accounts in the project.
+   *
+   * @example
+   * ```ts
+   * // Automatically fetches more pages as needed.
+   * for await (const projectServiceAccount of client.admin.organization.projects.serviceAccounts.list(
+   *   'project_id',
+   * )) {
+   *   // ...
+   * }
+   * ```
+   */
+  list(projectID, query = {}, options) {
+    return this._client.getAPIList(path`/organization/projects/${projectID}/service_accounts`, ConversationCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
+  }
+  /**
+   * Deletes a service account from the project.
+   *
+   * Returns confirmation of service account deletion, or an error if the project is
+   * archived (archived projects have no service accounts).
+   *
+   * @example
+   * ```ts
+   * const serviceAccount =
+   *   await client.admin.organization.projects.serviceAccounts.delete(
+   *     'service_account_id',
+   *     { project_id: 'project_id' },
+   *   );
+   * ```
+   */
+  delete(serviceAccountID, params, options) {
+    const { project_id } = params;
+    return this._client.delete(path`/organization/projects/${project_id}/service_accounts/${serviceAccountID}`, { ...options, __security: { adminAPIKeyAuth: true } });
+  }
+};
+ServiceAccounts.APIKeys = APIKeys2;
 
 // node_modules/openai/resources/admin/organization/projects/users/roles.mjs
 var Roles5 = class extends APIResource {
@@ -5268,6 +5984,7 @@ var Projects = class extends APIResource {
     this.groups = new Groups2(this._client);
     this.roles = new Roles3(this._client);
     this.dataRetention = new DataRetention2(this._client);
+    this.spendLimit = new SpendLimit2(this._client);
     this.spendAlerts = new SpendAlerts2(this._client);
     this.certificates = new Certificates2(this._client);
   }
@@ -5371,6 +6088,7 @@ Projects.HostedToolPermissions = HostedToolPermissions;
 Projects.Groups = Groups2;
 Projects.Roles = Roles3;
 Projects.DataRetention = DataRetention2;
+Projects.SpendLimit = SpendLimit2;
 Projects.SpendAlerts = SpendAlerts2;
 Projects.Certificates = Certificates2;
 
@@ -5537,6 +6255,7 @@ var Organization = class extends APIResource {
     this.groups = new Groups(this._client);
     this.roles = new Roles(this._client);
     this.dataRetention = new DataRetention(this._client);
+    this.spendLimit = new SpendLimit(this._client);
     this.spendAlerts = new SpendAlerts(this._client);
     this.certificates = new Certificates(this._client);
     this.projects = new Projects(this._client);
@@ -5550,6 +6269,7 @@ Organization.Users = Users3;
 Organization.Groups = Groups;
 Organization.Roles = Roles;
 Organization.DataRetention = DataRetention;
+Organization.SpendLimit = SpendLimit;
 Organization.SpendAlerts = SpendAlerts;
 Organization.Certificates = Certificates;
 Organization.Projects = Projects;
@@ -5562,69 +6282,6 @@ var Admin = class extends APIResource {
   }
 };
 Admin.Organization = Organization;
-
-// node_modules/openai/internal/headers.mjs
-var brand_privateNullableHeaders = /* @__PURE__ */ Symbol("brand.privateNullableHeaders");
-function* iterateHeaders(headers) {
-  if (!headers)
-    return;
-  if (brand_privateNullableHeaders in headers) {
-    const { values, nulls } = headers;
-    yield* values.entries();
-    for (const name of nulls) {
-      yield [name, null];
-    }
-    return;
-  }
-  let shouldClear = false;
-  let iter;
-  if (headers instanceof Headers) {
-    iter = headers.entries();
-  } else if (isReadonlyArray(headers)) {
-    iter = headers;
-  } else {
-    shouldClear = true;
-    iter = Object.entries(headers ?? {});
-  }
-  for (let row of iter) {
-    const name = row[0];
-    if (typeof name !== "string")
-      throw new TypeError("expected header name to be a string");
-    const values = isReadonlyArray(row[1]) ? row[1] : [row[1]];
-    let didClear = false;
-    for (const value of values) {
-      if (value === void 0)
-        continue;
-      if (shouldClear && !didClear) {
-        didClear = true;
-        yield [name, null];
-      }
-      yield [name, value];
-    }
-  }
-}
-var buildHeaders = (newHeaders) => {
-  const targetHeaders = new Headers();
-  const nullHeaders = /* @__PURE__ */ new Set();
-  for (const headers of newHeaders) {
-    const seenHeaders = /* @__PURE__ */ new Set();
-    for (const [name, value] of iterateHeaders(headers)) {
-      const lowerName = name.toLowerCase();
-      if (!seenHeaders.has(lowerName)) {
-        targetHeaders.delete(name);
-        seenHeaders.add(lowerName);
-      }
-      if (value === null) {
-        targetHeaders.delete(name);
-        nullHeaders.add(lowerName);
-      } else {
-        targetHeaders.append(name, value);
-        nullHeaders.delete(lowerName);
-      }
-    }
-  }
-  return { [brand_privateNullableHeaders]: true, values: targetHeaders, nulls: nullHeaders };
-};
 
 // node_modules/openai/resources/audio/speech.mjs
 var Speech = class extends APIResource {
@@ -5988,6 +6645,172 @@ var ChatKit = class extends APIResource {
 ChatKit.Sessions = Sessions2;
 ChatKit.Threads = Threads;
 
+// node_modules/openai/resources/beta/responses/input-items.mjs
+var InputItems = class extends APIResource {
+  /**
+   * Returns a list of input items for a given response.
+   *
+   * @example
+   * ```ts
+   * // Automatically fetches more pages as needed.
+   * for await (const betaResponseItem of client.beta.responses.inputItems.list(
+   *   'response_id',
+   * )) {
+   *   // ...
+   * }
+   * ```
+   */
+  list(responseID, params = {}, options) {
+    const { betas, ...query } = params ?? {};
+    return this._client.getAPIList(path`/responses/${responseID}/input_items?beta=true`, CursorPage, {
+      query,
+      ...options,
+      headers: buildHeaders([
+        { ...betas?.toString() != null ? { "openai-beta": betas?.toString() } : void 0 },
+        options?.headers
+      ]),
+      __security: { bearerAuth: true }
+    });
+  }
+};
+
+// node_modules/openai/resources/beta/responses/input-tokens.mjs
+var InputTokens = class extends APIResource {
+  /**
+   * Returns input token counts of the request.
+   *
+   * Returns an object with `object` set to `response.input_tokens` and an
+   * `input_tokens` count.
+   *
+   * @example
+   * ```ts
+   * const response =
+   *   await client.beta.responses.inputTokens.count();
+   * ```
+   */
+  count(params = {}, options) {
+    const { betas, ...body } = params ?? {};
+    return this._client.post("/responses/input_tokens?beta=true", {
+      body,
+      ...options,
+      headers: buildHeaders([
+        { ...betas?.toString() != null ? { "openai-beta": betas?.toString() } : void 0 },
+        options?.headers
+      ]),
+      __security: { bearerAuth: true }
+    });
+  }
+};
+
+// node_modules/openai/resources/beta/responses/responses.mjs
+var Responses = class extends APIResource {
+  constructor() {
+    super(...arguments);
+    this.inputItems = new InputItems(this._client);
+    this.inputTokens = new InputTokens(this._client);
+  }
+  create(params, options) {
+    const { betas, ...body } = params;
+    return this._client.post("/responses?beta=true", {
+      body,
+      ...options,
+      headers: buildHeaders([
+        { ...betas?.toString() != null ? { "openai-beta": betas?.toString() } : void 0 },
+        options?.headers
+      ]),
+      stream: params.stream ?? false,
+      __security: { bearerAuth: true }
+    });
+  }
+  retrieve(responseID, params = {}, options) {
+    const { betas, ...query } = params ?? {};
+    return this._client.get(path`/responses/${responseID}?beta=true`, {
+      query,
+      ...options,
+      headers: buildHeaders([
+        { ...betas?.toString() != null ? { "openai-beta": betas?.toString() } : void 0 },
+        options?.headers
+      ]),
+      stream: params?.stream ?? false,
+      __security: { bearerAuth: true }
+    });
+  }
+  /**
+   * Deletes a model response with the given ID.
+   *
+   * @example
+   * ```ts
+   * await client.beta.responses.delete(
+   *   'resp_677efb5139a88190b512bc3fef8e535d',
+   * );
+   * ```
+   */
+  delete(responseID, params = {}, options) {
+    const { betas } = params ?? {};
+    return this._client.delete(path`/responses/${responseID}?beta=true`, {
+      ...options,
+      headers: buildHeaders([
+        { Accept: "*/*", ...betas?.toString() != null ? { "openai-beta": betas?.toString() } : void 0 },
+        options?.headers
+      ]),
+      __security: { bearerAuth: true }
+    });
+  }
+  /**
+   * Cancels a model response with the given ID. Only responses created with the
+   * `background` parameter set to `true` can be cancelled.
+   * [Learn more](https://platform.openai.com/docs/guides/background).
+   *
+   * @example
+   * ```ts
+   * const betaResponse = await client.beta.responses.cancel(
+   *   'resp_677efb5139a88190b512bc3fef8e535d',
+   * );
+   * ```
+   */
+  cancel(responseID, params = {}, options) {
+    const { betas } = params ?? {};
+    return this._client.post(path`/responses/${responseID}/cancel?beta=true`, {
+      ...options,
+      headers: buildHeaders([
+        { ...betas?.toString() != null ? { "openai-beta": betas?.toString() } : void 0 },
+        options?.headers
+      ]),
+      __security: { bearerAuth: true }
+    });
+  }
+  /**
+   * Compact a conversation. Returns a compacted response object.
+   *
+   * Learn when and how to compact long-running conversations in the
+   * [conversation state guide](https://platform.openai.com/docs/guides/conversation-state#managing-the-context-window).
+   * For ZDR-compatible compaction details, see
+   * [Compaction (advanced)](https://platform.openai.com/docs/guides/conversation-state#compaction-advanced).
+   *
+   * @example
+   * ```ts
+   * const betaCompactedResponse =
+   *   await client.beta.responses.compact({
+   *     model: 'gpt-5.6-sol',
+   *   });
+   * ```
+   */
+  compact(params, options) {
+    const { betas, ...body } = params;
+    return this._client.post("/responses/compact?beta=true", {
+      body,
+      ...options,
+      headers: buildHeaders([
+        { ...betas?.toString() != null ? { "openai-beta": betas?.toString() } : void 0 },
+        options?.headers
+      ]),
+      __security: { bearerAuth: true }
+    });
+  }
+};
+Responses.InputItems = InputItems;
+Responses.InputTokens = InputTokens;
+
 // node_modules/openai/resources/beta/threads/messages.mjs
 var Messages2 = class extends APIResource {
   /**
@@ -6163,11 +6986,12 @@ var AssistantStream = class extends EventStream {
     const readQueue = [];
     let done = false;
     this.on("event", (event) => {
+      const eventCopy = structuredClone(event);
       const reader = readQueue.shift();
       if (reader) {
-        reader.resolve(event);
+        reader.resolve(eventCopy);
       } else {
-        pushQueue.push(event);
+        pushQueue.push(eventCopy);
       }
     });
     this.on("end", () => {
@@ -6214,12 +7038,7 @@ var AssistantStream = class extends EventStream {
     return runner;
   }
   async _fromReadableStream(readableStream, options) {
-    const signal = options?.signal;
-    if (signal) {
-      if (signal.aborted)
-        this.controller.abort();
-      signal.addEventListener("abort", () => this.controller.abort());
-    }
+    this._listenForAbort(options?.signal);
     this._connected();
     const stream = Stream.fromReadableStream(readableStream, this.controller);
     for await (const event of stream) {
@@ -6243,12 +7062,7 @@ var AssistantStream = class extends EventStream {
     return runner;
   }
   async _createToolAssistantStream(run, runId, params, options) {
-    const signal = options?.signal;
-    if (signal) {
-      if (signal.aborted)
-        this.controller.abort();
-      signal.addEventListener("abort", () => this.controller.abort());
-    }
+    this._listenForAbort(options?.signal);
     const body = { ...params, stream: true };
     const stream = await run.submitToolOutputs(runId, body, {
       ...options,
@@ -6306,12 +7120,7 @@ var AssistantStream = class extends EventStream {
     return __classPrivateFieldGet(this, _AssistantStream_finalRun, "f");
   }
   async _createThreadAssistantStream(thread, params, options) {
-    const signal = options?.signal;
-    if (signal) {
-      if (signal.aborted)
-        this.controller.abort();
-      signal.addEventListener("abort", () => this.controller.abort());
-    }
+    this._listenForAbort(options?.signal);
     const body = { ...params, stream: true };
     const stream = await thread.createAndRun(body, { ...options, signal: this.controller.signal });
     this._connected();
@@ -6324,12 +7133,7 @@ var AssistantStream = class extends EventStream {
     return this._addRun(__classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_endRequest).call(this));
   }
   async _createAssistantStream(run, threadId, params, options) {
-    const signal = options?.signal;
-    if (signal) {
-      if (signal.aborted)
-        this.controller.abort();
-      signal.addEventListener("abort", () => this.controller.abort());
-    }
+    this._listenForAbort(options?.signal);
     const body = { ...params, stream: true };
     const stream = await run.create(threadId, body, { ...options, signal: this.controller.signal });
     this._connected();
@@ -6381,7 +7185,7 @@ var AssistantStream = class extends EventStream {
           }
           const accEntry = accValue[index];
           if (accEntry == null) {
-            accValue.push(deltaEntry);
+            accValue[index] = deltaEntry;
           } else {
             accValue[index] = this.accumulateDelta(accEntry, deltaEntry);
           }
@@ -6920,12 +7724,14 @@ var Beta = class extends APIResource {
   constructor() {
     super(...arguments);
     this.realtime = new Realtime(this._client);
+    this.responses = new Responses(this._client);
     this.chatkit = new ChatKit(this._client);
     this.assistants = new Assistants(this._client);
     this.threads = new Threads2(this._client);
   }
 };
 Beta.Realtime = Realtime;
+Beta.Responses = Responses;
 Beta.ChatKit = ChatKit;
 Beta.Assistants = Assistants;
 Beta.Threads = Threads2;
@@ -7913,7 +8719,7 @@ Realtime2.Calls = Calls;
 // node_modules/openai/lib/ResponsesParser.mjs
 function maybeParseResponse(response, params) {
   if (!params || !hasAutoParseableInput2(params)) {
-    return {
+    const parsed = {
       ...response,
       output_parsed: null,
       output: response.output.map((item) => {
@@ -7936,23 +8742,25 @@ function maybeParseResponse(response, params) {
         }
       })
     };
+    if (needsOutputText(response, parsed)) {
+      addOutputText(parsed);
+    }
+    return parsed;
   }
   return parseResponse(response, params);
 }
 function parseResponse(response, params) {
+  const shouldParse = !response.status || response.status === "completed";
   const output = response.output.map((item) => {
     if (item.type === "function_call") {
-      return {
-        ...item,
-        parsed_arguments: parseToolCall2(params, item)
-      };
+      return shouldParse ? parseToolCall2(params, item) : { ...item, parsed_arguments: null };
     }
     if (item.type === "message") {
       const content = item.content.map((content2) => {
         if (content2.type === "output_text") {
           return {
             ...content2,
-            parsed: parseTextFormat(params, content2.text)
+            parsed: shouldParse ? parseTextFormat(params, content2.text) : null
           };
         }
         return content2;
@@ -7965,7 +8773,7 @@ function parseResponse(response, params) {
     return item;
   });
   const parsed = Object.assign({}, response, { output });
-  if (!Object.getOwnPropertyDescriptor(response, "output_text")) {
+  if (needsOutputText(response, parsed)) {
     addOutputText(parsed);
   }
   Object.defineProperty(parsed, "output_parsed", {
@@ -8000,7 +8808,7 @@ function hasAutoParseableInput2(params) {
   if (isAutoParsableResponseFormat(params.text?.format)) {
     return true;
   }
-  return false;
+  return Array.isArray(params.tools) && params.tools.some((tool) => isAutoParsableTool2(tool) || tool.type === "function" && tool.strict === true);
 }
 function isAutoParsableTool2(tool) {
   return tool?.["$brand"] === "auto-parseable-tool";
@@ -8015,6 +8823,9 @@ function parseToolCall2(params, toolCall) {
     ...toolCall,
     parsed_arguments: isAutoParsableTool2(inputTool) ? inputTool.$parseRaw(toolCall.arguments) : inputTool?.strict ? JSON.parse(toolCall.arguments) : null
   };
+}
+function needsOutputText(response, target) {
+  return !Object.getOwnPropertyDescriptor(response, "output_text") || target.output_text == null;
 }
 function addOutputText(rsp) {
   const texts = [];
@@ -8031,6 +8842,395 @@ function addOutputText(rsp) {
   rsp.output_text = texts.join("");
 }
 
+// node_modules/openai/lib/responses/ResponseAccumulator.mjs
+function accumulateResponse(event, snapshot) {
+  if (!snapshot) {
+    if (event.type !== "response.created") {
+      throw new OpenAIError(`When snapshot hasn't been set yet, expected 'response.created' event, got ${event.type}`);
+    }
+    return cloneResponse(event.response);
+  }
+  switch (event.type) {
+    case "response.output_item.added": {
+      snapshot.output.push(structuredClone(event.item));
+      if (event.item.type === "message") {
+        addOutputText(snapshot);
+      }
+      break;
+    }
+    case "response.output_item.done": {
+      getOutput(snapshot, event.output_index);
+      snapshot.output[event.output_index] = structuredClone(event.item);
+      if (event.item.type === "message") {
+        addOutputText(snapshot);
+      }
+      break;
+    }
+    case "response.content_part.added": {
+      const output = getOutput(snapshot, event.output_index);
+      const type = output.type;
+      const part = event.part;
+      if (type === "message" && part.type !== "reasoning_text") {
+        output.content.push(structuredClone(part));
+        if (part.type === "output_text") {
+          addOutputText(snapshot);
+        }
+      } else if (type === "reasoning" && part.type === "reasoning_text") {
+        if (!output.content) {
+          output.content = [];
+        }
+        output.content.push(structuredClone(part));
+      }
+      break;
+    }
+    case "response.content_part.done": {
+      const output = getOutput(snapshot, event.output_index);
+      const part = event.part;
+      if (output.type === "message" && part.type !== "reasoning_text") {
+        getContent(output.content, event.content_index);
+        output.content[event.content_index] = structuredClone(part);
+        if (part.type === "output_text") {
+          addOutputText(snapshot);
+        }
+      } else if (output.type === "reasoning" && part.type === "reasoning_text") {
+        const content = output.content;
+        if (!content) {
+          throw new OpenAIError(`missing content at index ${event.content_index}`);
+        }
+        getContent(content, event.content_index);
+        content[event.content_index] = structuredClone(part);
+      }
+      break;
+    }
+    case "response.output_text.delta": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "message") {
+        const content = getContent(output.content, event.content_index);
+        if (content.type !== "output_text") {
+          throw new OpenAIError(`expected content to be 'output_text', got ${content.type}`);
+        }
+        content.text += event.delta;
+        snapshot.output_text += event.delta;
+      }
+      break;
+    }
+    case "response.output_text.done": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "message") {
+        const content = getContent(output.content, event.content_index);
+        if (content.type !== "output_text") {
+          throw new OpenAIError(`expected content to be 'output_text', got ${content.type}`);
+        }
+        content.text = event.text;
+        addOutputText(snapshot);
+      }
+      break;
+    }
+    case "response.output_text.annotation.added": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "message") {
+        const content = getContent(output.content, event.content_index);
+        if (content.type !== "output_text") {
+          throw new OpenAIError(`expected content to be 'output_text', got ${content.type}`);
+        }
+        content.annotations[event.annotation_index] = structuredClone(event.annotation);
+      }
+      break;
+    }
+    case "response.refusal.delta": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "message") {
+        const content = getContent(output.content, event.content_index);
+        if (content.type !== "refusal") {
+          throw new OpenAIError(`expected content to be 'refusal', got ${content.type}`);
+        }
+        content.refusal += event.delta;
+      }
+      break;
+    }
+    case "response.refusal.done": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "message") {
+        const content = getContent(output.content, event.content_index);
+        if (content.type !== "refusal") {
+          throw new OpenAIError(`expected content to be 'refusal', got ${content.type}`);
+        }
+        content.refusal = event.refusal;
+      }
+      break;
+    }
+    case "response.function_call_arguments.delta": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "function_call") {
+        output.arguments += event.delta;
+      }
+      break;
+    }
+    case "response.function_call_arguments.done": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "function_call") {
+        output.arguments = event.arguments;
+      }
+      break;
+    }
+    case "response.reasoning_text.delta": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "reasoning") {
+        if (!output.content) {
+          throw new OpenAIError(`missing content at index ${event.content_index}`);
+        }
+        const content = getContent(output.content, event.content_index);
+        if (content.type !== "reasoning_text") {
+          throw new OpenAIError(`expected content to be 'reasoning_text', got ${content.type}`);
+        }
+        content.text += event.delta;
+      }
+      break;
+    }
+    case "response.reasoning_text.done": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "reasoning") {
+        if (!output.content) {
+          throw new OpenAIError(`missing content at index ${event.content_index}`);
+        }
+        const content = getContent(output.content, event.content_index);
+        if (content.type !== "reasoning_text") {
+          throw new OpenAIError(`expected content to be 'reasoning_text', got ${content.type}`);
+        }
+        content.text = event.text;
+      }
+      break;
+    }
+    case "response.reasoning_summary_part.added": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "reasoning") {
+        output.summary.push(structuredClone(event.part));
+      }
+      break;
+    }
+    case "response.reasoning_summary_part.done": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "reasoning") {
+        getContent(output.summary, event.summary_index);
+        output.summary[event.summary_index] = structuredClone(event.part);
+      }
+      break;
+    }
+    case "response.reasoning_summary_text.delta": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "reasoning") {
+        const part = getContent(output.summary, event.summary_index);
+        part.text += event.delta;
+      }
+      break;
+    }
+    case "response.reasoning_summary_text.done": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "reasoning") {
+        const part = getContent(output.summary, event.summary_index);
+        part.text = event.text;
+      }
+      break;
+    }
+    case "response.custom_tool_call_input.delta": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "custom_tool_call") {
+        output.input += event.delta;
+      }
+      break;
+    }
+    case "response.custom_tool_call_input.done": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "custom_tool_call") {
+        output.input = event.input;
+      }
+      break;
+    }
+    case "response.mcp_call_arguments.delta": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "mcp_call") {
+        output.arguments += event.delta;
+      }
+      break;
+    }
+    case "response.mcp_call_arguments.done": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "mcp_call") {
+        output.arguments = event.arguments;
+      }
+      break;
+    }
+    case "response.code_interpreter_call_code.delta": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "code_interpreter_call") {
+        output.code = (output.code ?? "") + event.delta;
+      }
+      break;
+    }
+    case "response.code_interpreter_call_code.done": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "code_interpreter_call") {
+        output.code = event.code;
+      }
+      break;
+    }
+    case "response.code_interpreter_call.in_progress": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "code_interpreter_call") {
+        output.status = "in_progress";
+      }
+      break;
+    }
+    case "response.code_interpreter_call.interpreting": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "code_interpreter_call") {
+        output.status = "interpreting";
+      }
+      break;
+    }
+    case "response.code_interpreter_call.completed": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "code_interpreter_call") {
+        output.status = "completed";
+      }
+      break;
+    }
+    case "response.file_search_call.in_progress": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "file_search_call") {
+        output.status = "in_progress";
+      }
+      break;
+    }
+    case "response.file_search_call.searching": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "file_search_call") {
+        output.status = "searching";
+      }
+      break;
+    }
+    case "response.file_search_call.completed": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "file_search_call") {
+        output.status = "completed";
+      }
+      break;
+    }
+    case "response.web_search_call.in_progress": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "web_search_call") {
+        output.status = "in_progress";
+      }
+      break;
+    }
+    case "response.web_search_call.searching": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "web_search_call") {
+        output.status = "searching";
+      }
+      break;
+    }
+    case "response.web_search_call.completed": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "web_search_call") {
+        output.status = "completed";
+      }
+      break;
+    }
+    case "response.image_generation_call.in_progress": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "image_generation_call") {
+        output.status = "in_progress";
+      }
+      break;
+    }
+    case "response.image_generation_call.generating": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "image_generation_call") {
+        output.status = "generating";
+      }
+      break;
+    }
+    case "response.image_generation_call.completed": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "image_generation_call") {
+        output.status = "completed";
+      }
+      break;
+    }
+    case "response.mcp_call.in_progress": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "mcp_call") {
+        output.status = "in_progress";
+      }
+      break;
+    }
+    case "response.mcp_call.completed": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "mcp_call") {
+        output.status = "completed";
+      }
+      break;
+    }
+    case "response.mcp_call.failed": {
+      const output = getOutput(snapshot, event.output_index);
+      if (output.type === "mcp_call") {
+        output.status = "failed";
+      }
+      break;
+    }
+    case "response.created":
+    case "response.queued":
+    case "response.in_progress":
+    case "response.completed":
+    case "response.failed":
+    case "response.incomplete": {
+      snapshot = cloneResponse(event.response);
+      break;
+    }
+    case "response.audio.delta":
+    case "response.audio.done":
+    case "response.audio.transcript.delta":
+    case "response.audio.transcript.done":
+    case "response.image_generation_call.partial_image":
+    case "response.mcp_list_tools.in_progress":
+    case "response.mcp_list_tools.completed":
+    case "response.mcp_list_tools.failed":
+    case "keepalive":
+    case "error": {
+      break;
+    }
+    default: {
+      assertNever3(event);
+    }
+  }
+  return snapshot;
+}
+function cloneResponse(response) {
+  const snapshot = structuredClone(response);
+  if (!Object.getOwnPropertyDescriptor(snapshot, "output_text") || snapshot.output_text == null) {
+    addOutputText(snapshot);
+  }
+  return snapshot;
+}
+function getOutput(snapshot, outputIndex) {
+  const output = snapshot.output[outputIndex];
+  if (!output) {
+    throw new OpenAIError(`missing output at index ${outputIndex}`);
+  }
+  return output;
+}
+function getContent(content, contentIndex) {
+  const part = content[contentIndex];
+  if (!part) {
+    throw new OpenAIError(`missing content at index ${contentIndex}`);
+  }
+  return part;
+}
+function assertNever3(value) {
+  throw new OpenAIError(`Unhandled response stream event: ${JSON.stringify(value)}`);
+}
+
 // node_modules/openai/lib/responses/ResponseStream.mjs
 var _ResponseStream_instances;
 var _ResponseStream_params;
@@ -8039,7 +9239,6 @@ var _ResponseStream_finalResponse;
 var _ResponseStream_beginRequest;
 var _ResponseStream_addEvent;
 var _ResponseStream_endRequest;
-var _ResponseStream_accumulateResponse;
 var ResponseStream = class _ResponseStream extends EventStream {
   constructor(params) {
     super();
@@ -8057,13 +9256,13 @@ var ResponseStream = class _ResponseStream extends EventStream {
     }));
     return runner;
   }
+  static fromReadableStream(stream) {
+    const runner = new _ResponseStream(null);
+    runner._run(() => runner._fromReadableStream(stream));
+    return runner;
+  }
   async _createOrRetrieveResponse(client, params, options) {
-    const signal = options?.signal;
-    if (signal) {
-      if (signal.aborted)
-        this.controller.abort();
-      signal.addEventListener("abort", () => this.controller.abort());
-    }
+    this._listenForAbort(options?.signal);
     __classPrivateFieldGet(this, _ResponseStream_instances, "m", _ResponseStream_beginRequest).call(this);
     let stream;
     let starting_after = null;
@@ -8082,6 +9281,19 @@ var ResponseStream = class _ResponseStream extends EventStream {
     }
     return __classPrivateFieldGet(this, _ResponseStream_instances, "m", _ResponseStream_endRequest).call(this);
   }
+  async _fromReadableStream(readableStream, options) {
+    this._listenForAbort(options?.signal);
+    __classPrivateFieldGet(this, _ResponseStream_instances, "m", _ResponseStream_beginRequest).call(this);
+    this._connected();
+    const stream = Stream.fromReadableStream(readableStream, this.controller);
+    for await (const event of stream) {
+      __classPrivateFieldGet(this, _ResponseStream_instances, "m", _ResponseStream_addEvent).call(this, event, null);
+    }
+    if (stream.controller.signal?.aborted) {
+      throw new APIUserAbortError();
+    }
+    return __classPrivateFieldGet(this, _ResponseStream_instances, "m", _ResponseStream_endRequest).call(this);
+  }
   [(_ResponseStream_params = /* @__PURE__ */ new WeakMap(), _ResponseStream_currentResponseSnapshot = /* @__PURE__ */ new WeakMap(), _ResponseStream_finalResponse = /* @__PURE__ */ new WeakMap(), _ResponseStream_instances = /* @__PURE__ */ new WeakSet(), _ResponseStream_beginRequest = function _ResponseStream_beginRequest2() {
     if (this.ended)
       return;
@@ -8094,7 +9306,8 @@ var ResponseStream = class _ResponseStream extends EventStream {
         this._emit(name, event2);
       }
     };
-    const response = __classPrivateFieldGet(this, _ResponseStream_instances, "m", _ResponseStream_accumulateResponse).call(this, event);
+    const response = accumulateResponse(event, __classPrivateFieldGet(this, _ResponseStream_currentResponseSnapshot, "f"));
+    __classPrivateFieldSet(this, _ResponseStream_currentResponseSnapshot, response, "f");
     maybeEmit("event", event);
     switch (event.type) {
       case "response.output_text.delta": {
@@ -8146,87 +9359,6 @@ var ResponseStream = class _ResponseStream extends EventStream {
     const parsedResponse = finalizeResponse(snapshot, __classPrivateFieldGet(this, _ResponseStream_params, "f"));
     __classPrivateFieldSet(this, _ResponseStream_finalResponse, parsedResponse, "f");
     return parsedResponse;
-  }, _ResponseStream_accumulateResponse = function _ResponseStream_accumulateResponse2(event) {
-    let snapshot = __classPrivateFieldGet(this, _ResponseStream_currentResponseSnapshot, "f");
-    if (!snapshot) {
-      if (event.type !== "response.created") {
-        throw new OpenAIError(`When snapshot hasn't been set yet, expected 'response.created' event, got ${event.type}`);
-      }
-      snapshot = __classPrivateFieldSet(this, _ResponseStream_currentResponseSnapshot, event.response, "f");
-      return snapshot;
-    }
-    switch (event.type) {
-      case "response.output_item.added": {
-        snapshot.output.push(event.item);
-        break;
-      }
-      case "response.content_part.added": {
-        const output = snapshot.output[event.output_index];
-        if (!output) {
-          throw new OpenAIError(`missing output at index ${event.output_index}`);
-        }
-        const type = output.type;
-        const part = event.part;
-        if (type === "message" && part.type !== "reasoning_text") {
-          output.content.push(part);
-        } else if (type === "reasoning" && part.type === "reasoning_text") {
-          if (!output.content) {
-            output.content = [];
-          }
-          output.content.push(part);
-        }
-        break;
-      }
-      case "response.output_text.delta": {
-        const output = snapshot.output[event.output_index];
-        if (!output) {
-          throw new OpenAIError(`missing output at index ${event.output_index}`);
-        }
-        if (output.type === "message") {
-          const content = output.content[event.content_index];
-          if (!content) {
-            throw new OpenAIError(`missing content at index ${event.content_index}`);
-          }
-          if (content.type !== "output_text") {
-            throw new OpenAIError(`expected content to be 'output_text', got ${content.type}`);
-          }
-          content.text += event.delta;
-        }
-        break;
-      }
-      case "response.function_call_arguments.delta": {
-        const output = snapshot.output[event.output_index];
-        if (!output) {
-          throw new OpenAIError(`missing output at index ${event.output_index}`);
-        }
-        if (output.type === "function_call") {
-          output.arguments += event.delta;
-        }
-        break;
-      }
-      case "response.reasoning_text.delta": {
-        const output = snapshot.output[event.output_index];
-        if (!output) {
-          throw new OpenAIError(`missing output at index ${event.output_index}`);
-        }
-        if (output.type === "reasoning") {
-          const content = output.content?.[event.content_index];
-          if (!content) {
-            throw new OpenAIError(`missing content at index ${event.content_index}`);
-          }
-          if (content.type !== "reasoning_text") {
-            throw new OpenAIError(`expected content to be 'reasoning_text', got ${content.type}`);
-          }
-          content.text += event.delta;
-        }
-        break;
-      }
-      case "response.completed": {
-        __classPrivateFieldSet(this, _ResponseStream_currentResponseSnapshot, event.response, "f");
-        break;
-      }
-    }
-    return snapshot;
   }, Symbol.asyncIterator)]() {
     const pushQueue = [];
     const readQueue = [];
@@ -8294,7 +9426,7 @@ function finalizeResponse(snapshot, params) {
 }
 
 // node_modules/openai/resources/responses/input-items.mjs
-var InputItems = class extends APIResource {
+var InputItems2 = class extends APIResource {
   /**
    * Returns a list of input items for a given response.
    *
@@ -8314,7 +9446,7 @@ var InputItems = class extends APIResource {
 };
 
 // node_modules/openai/resources/responses/input-tokens.mjs
-var InputTokens = class extends APIResource {
+var InputTokens2 = class extends APIResource {
   /**
    * Returns input token counts of the request.
    *
@@ -8336,11 +9468,11 @@ var InputTokens = class extends APIResource {
 };
 
 // node_modules/openai/resources/responses/responses.mjs
-var Responses = class extends APIResource {
+var Responses2 = class extends APIResource {
   constructor() {
     super(...arguments);
-    this.inputItems = new InputItems(this._client);
-    this.inputTokens = new InputTokens(this._client);
+    this.inputItems = new InputItems2(this._client);
+    this.inputTokens = new InputTokens2(this._client);
   }
   create(body, options) {
     return this._client.post("/responses", {
@@ -8423,7 +9555,7 @@ var Responses = class extends APIResource {
    * @example
    * ```ts
    * const compactedResponse = await client.responses.compact({
-   *   model: 'gpt-5.4',
+   *   model: 'gpt-5.6-sol',
    * });
    * ```
    */
@@ -8431,8 +9563,8 @@ var Responses = class extends APIResource {
     return this._client.post("/responses/compact", { body, ...options, __security: { bearerAuth: true } });
   }
 };
-Responses.InputItems = InputItems;
-Responses.InputTokens = InputTokens;
+Responses2.InputItems = InputItems2;
+Responses2.InputTokens = InputTokens2;
 
 // node_modules/openai/resources/skills/content.mjs
 var Content2 = class extends APIResource {
@@ -9170,6 +10302,22 @@ _Webhooks_instances = /* @__PURE__ */ new WeakSet(), _Webhooks_validateSecret = 
   return value;
 };
 
+// node_modules/openai/internal/provider.mjs
+var providerDefinitionsKey = /* @__PURE__ */ Symbol.for("openai.node.providerDefinitions.v1");
+var providerGlobal = globalThis;
+var existingProviderDefinitions = providerGlobal[providerDefinitionsKey];
+var providerDefinitions = existingProviderDefinitions ?? /* @__PURE__ */ new WeakMap();
+if (!existingProviderDefinitions) {
+  Object.defineProperty(providerGlobal, providerDefinitionsKey, { value: providerDefinitions });
+}
+function configureProvider(provider) {
+  const definition = providerDefinitions.get(provider);
+  if (!definition) {
+    throw new Error("Invalid provider. Providers must be created with createProvider().");
+  }
+  return definition.configure();
+}
+
 // node_modules/openai/client.mjs
 var _OpenAI_instances;
 var _a2;
@@ -9186,6 +10334,7 @@ var OpenAI = class {
    * @param {string | null | undefined} [opts.project=process.env['OPENAI_PROJECT_ID'] ?? null]
    * @param {string | null | undefined} [opts.webhookSecret=process.env['OPENAI_WEBHOOK_SECRET'] ?? null]
    * @param {string} [opts.baseURL=process.env['OPENAI_BASE_URL'] ?? https://api.openai.com/v1] - Override the default base URL for the API.
+   * @param {Provider} [opts.provider] - Configure a third-party API provider. Mutually exclusive with top-level authentication and base URL options.
    * @param {number} [opts.timeout=10 minutes] - The maximum amount of time (in milliseconds) the client will wait for a response before timing out.
    * @param {MergedRequestInit} [opts.fetchOptions] - Additional `RequestInit` options to be passed to `fetch` calls.
    * @param {Fetch} [opts.fetch] - Specify a custom `fetch` function implementation.
@@ -9194,7 +10343,7 @@ var OpenAI = class {
    * @param {Record<string, string | undefined>} opts.defaultQuery - Default query parameters to include with every request to the API.
    * @param {boolean} [opts.dangerouslyAllowBrowser=false] - By default, client-side use of this library is not allowed, as it risks exposing your secret API credentials to attackers.
    */
-  constructor({ baseURL = readEnv("OPENAI_BASE_URL"), apiKey = readEnv("OPENAI_API_KEY") ?? null, adminAPIKey = readEnv("OPENAI_ADMIN_KEY") ?? null, organization = readEnv("OPENAI_ORG_ID") ?? null, project = readEnv("OPENAI_PROJECT_ID") ?? null, webhookSecret = readEnv("OPENAI_WEBHOOK_SECRET") ?? null, workloadIdentity, ...opts } = {}) {
+  constructor(clientOptions = {}) {
     _OpenAI_instances.add(this);
     _OpenAI_encoder.set(this, void 0);
     this.completions = new Completions2(this);
@@ -9213,13 +10362,22 @@ var OpenAI = class {
     this.batches = new Batches(this);
     this.uploads = new Uploads(this);
     this.admin = new Admin(this);
-    this.responses = new Responses(this);
+    this.responses = new Responses2(this);
     this.realtime = new Realtime2(this);
     this.conversations = new Conversations(this);
     this.evals = new Evals(this);
     this.containers = new Containers(this);
     this.skills = new Skills(this);
     this.videos = new Videos(this);
+    const provider = clientOptions.provider;
+    if (provider) {
+      const conflictingOptions = ["apiKey", "adminAPIKey", "workloadIdentity", "baseURL"].filter((key) => clientOptions[key] != null);
+      if (conflictingOptions.length) {
+        throw new OpenAIError(`The \`provider\` option cannot be used with ${conflictingOptions.map((key) => `\`${key}\``).join(", ")}. Configure authentication and the base URL through the provider instead.`);
+      }
+    }
+    const { baseURL = provider ? null : readEnv("OPENAI_BASE_URL"), apiKey = provider ? null : readEnv("OPENAI_API_KEY") ?? null, adminAPIKey = provider ? null : readEnv("OPENAI_ADMIN_KEY") ?? null, organization = provider ? null : readEnv("OPENAI_ORG_ID") ?? null, project = provider ? null : readEnv("OPENAI_PROJECT_ID") ?? null, webhookSecret = readEnv("OPENAI_WEBHOOK_SECRET") ?? null, workloadIdentity, ...opts } = clientOptions;
+    const providerRuntime = provider ? configureProvider(provider) : void 0;
     const options = {
       apiKey,
       adminAPIKey,
@@ -9227,13 +10385,14 @@ var OpenAI = class {
       project,
       webhookSecret,
       workloadIdentity,
+      provider,
       ...opts,
-      baseURL: baseURL || `https://api.openai.com/v1`
+      baseURL: providerRuntime?.baseURL ?? (baseURL || `https://api.openai.com/v1`)
     };
     if (apiKey && workloadIdentity) {
       throw new OpenAIError("The `apiKey` and `workloadIdentity` options are mutually exclusive");
     }
-    if (!apiKey && !adminAPIKey && !workloadIdentity) {
+    if (!providerRuntime && !apiKey && !adminAPIKey && !workloadIdentity) {
       throw new OpenAIError("Missing credentials. Please pass an `apiKey`, `workloadIdentity`, `adminAPIKey`, or set the `OPENAI_API_KEY` or `OPENAI_ADMIN_KEY` environment variable.");
     }
     if (!options.dangerouslyAllowBrowser && isRunningInBrowser()) {
@@ -9249,7 +10408,7 @@ var OpenAI = class {
     this.maxRetries = options.maxRetries ?? 2;
     this.fetch = options.fetch ?? getDefaultFetch();
     __classPrivateFieldSet(this, _OpenAI_encoder, FallbackEncoder, "f");
-    const customHeadersEnv = readEnv("OPENAI_CUSTOM_HEADERS");
+    const customHeadersEnv = provider ? void 0 : readEnv("OPENAI_CUSTOM_HEADERS");
     if (customHeadersEnv) {
       const parsed = {};
       for (const line of customHeadersEnv.split("\n")) {
@@ -9261,6 +10420,7 @@ var OpenAI = class {
       options.defaultHeaders = buildHeaders([parsed, options.defaultHeaders]);
     }
     this._options = options;
+    this._provider = providerRuntime;
     if (workloadIdentity) {
       this._workloadIdentityAuth = new WorkloadIdentityAuth(workloadIdentity, this.fetch);
     }
@@ -9274,7 +10434,9 @@ var OpenAI = class {
    * Create a new client instance re-using the same options given to the current client with optional overriding.
    */
   withOptions(options) {
-    const client = new this.constructor({
+    const inheritedProvider = this._options.provider;
+    const provider = options.provider ?? inheritedProvider;
+    const inheritedOptions = {
       ...this._options,
       baseURL: this.baseURL,
       maxRetries: this.maxRetries,
@@ -9288,8 +10450,23 @@ var OpenAI = class {
       workloadIdentity: this._options.workloadIdentity,
       organization: this.organization,
       project: this.project,
-      webhookSecret: this.webhookSecret,
-      ...options
+      webhookSecret: this.webhookSecret
+    };
+    if (provider) {
+      delete inheritedOptions.apiKey;
+      delete inheritedOptions.adminAPIKey;
+      delete inheritedOptions.workloadIdentity;
+      delete inheritedOptions.baseURL;
+      if (provider !== inheritedProvider) {
+        delete inheritedOptions.organization;
+        delete inheritedOptions.project;
+        delete inheritedOptions.defaultHeaders;
+      }
+    }
+    const client = new this.constructor({
+      ...inheritedOptions,
+      ...options,
+      provider
     });
     return client;
   }
@@ -9348,6 +10525,8 @@ var OpenAI = class {
     return APIError.generate(status, error, message, headers);
   }
   async _callApiKey() {
+    if (this._provider)
+      return false;
     const apiKey = this._options.apiKey;
     if (typeof apiKey !== "function")
       return false;
@@ -9386,6 +10565,8 @@ var OpenAI = class {
    * Used as a callback for mutating the given `FinalRequestOptions` object.
    */
   async prepareOptions(options) {
+    if (this._provider)
+      return;
     const security = options.__security ?? { bearerAuth: true };
     if (security.bearerAuth) {
       await this._callApiKey();
@@ -9432,7 +10613,9 @@ var OpenAI = class {
     const { req, url, timeout } = await this.buildRequest(options, {
       retryCount: maxRetries - retriesRemaining
     });
+    const hasStreamingBody = options.__metadata?.["hasStreamingBody"] === true;
     await this.prepareRequest(req, { url, options });
+    await this._provider?.prepareRequest?.(req, { url, options });
     const requestLogID = "log_" + (Math.random() * (1 << 24) | 0).toString(16).padStart(6, "0");
     const retryLogStr = retryOfRequestLogID === void 0 ? "" : `, retryOf: ${retryOfRequestLogID}`;
     const startTime = Date.now();
@@ -9456,7 +10639,7 @@ var OpenAI = class {
         throw new APIUserAbortError();
       }
       const isTimeout = isAbortError(response) || /timed? ?out/i.test(String(response) + ("cause" in response ? String(response.cause) : ""));
-      if (retriesRemaining) {
+      if (retriesRemaining && !hasStreamingBody) {
         loggerFor(this).info(`[${requestLogID}] connection ${isTimeout ? "timed out" : "failed"} - ${retryMessage}`);
         loggerFor(this).debug(`[${requestLogID}] connection ${isTimeout ? "timed out" : "failed"} (${retryMessage})`, formatRequestDetails({
           retryOfRequestLogID,
@@ -9466,8 +10649,9 @@ var OpenAI = class {
         }));
         return this.retryRequest(options, retriesRemaining, retryOfRequestLogID ?? requestLogID);
       }
-      loggerFor(this).info(`[${requestLogID}] connection ${isTimeout ? "timed out" : "failed"} - error; no more retries left`);
-      loggerFor(this).debug(`[${requestLogID}] connection ${isTimeout ? "timed out" : "failed"} (error; no more retries left)`, formatRequestDetails({
+      const terminalMessage = hasStreamingBody ? "error; streaming body cannot be retried" : "error; no more retries left";
+      loggerFor(this).info(`[${requestLogID}] connection ${isTimeout ? "timed out" : "failed"} - ${terminalMessage}`);
+      loggerFor(this).debug(`[${requestLogID}] connection ${isTimeout ? "timed out" : "failed"} (${terminalMessage})`, formatRequestDetails({
         retryOfRequestLogID,
         url,
         durationMs: headersTime - startTime,
@@ -9499,7 +10683,7 @@ var OpenAI = class {
         }, retriesRemaining, retryOfRequestLogID ?? requestLogID);
       }
       const shouldRetry = await this.shouldRetry(response);
-      if (retriesRemaining && shouldRetry) {
+      if (retriesRemaining && shouldRetry && !hasStreamingBody) {
         const retryMessage2 = `retrying, ${retriesRemaining} attempts remaining`;
         await CancelReadableStream(response.body);
         loggerFor(this).info(`${responseInfo} - ${retryMessage2}`);
@@ -9512,7 +10696,7 @@ var OpenAI = class {
         }));
         return this.retryRequest(options, retriesRemaining, retryOfRequestLogID ?? requestLogID, response.headers);
       }
-      const retryMessage = shouldRetry ? `error; no more retries left` : `error; not retryable`;
+      const retryMessage = shouldRetry ? hasStreamingBody ? `error; streaming body cannot be retried` : `error; no more retries left` : `error; not retryable`;
       loggerFor(this).info(`${responseInfo} - ${retryMessage}`);
       const errText = await response.text().catch((err2) => castToError(err2).message);
       const errJSON = safeJSON(errText);
@@ -9675,24 +10859,30 @@ var OpenAI = class {
         "OpenAI-Organization": this.organization,
         "OpenAI-Project": this.project
       },
-      await this.authHeaders(options, options.__security ?? { bearerAuth: true }),
+      this._provider ? void 0 : await this.authHeaders(options, options.__security ?? { bearerAuth: true }),
       this._options.defaultHeaders,
       bodyHeaders,
       options.headers
     ]);
-    this.validateHeaders(headers, options.__security ?? { bearerAuth: true });
+    if (!this._provider) {
+      this.validateHeaders(headers, options.__security ?? { bearerAuth: true });
+    }
     return headers.values;
   }
   _makeAbort(controller) {
     return () => controller.abort();
   }
-  buildBody({ options: { body, headers: rawHeaders } }) {
+  buildBody({ options }) {
+    const { body, headers: rawHeaders } = options;
     if (!body) {
+      if (body === void 0 && "body" in options) {
+        return { ...__classPrivateFieldGet(this, _OpenAI_encoder, "f").call(this, { body, headers: buildHeaders([rawHeaders]) }), isStreamingBody: false };
+      }
       return { bodyHeaders: void 0, body: void 0, isStreamingBody: false };
     }
     const headers = buildHeaders([rawHeaders]);
-    const isReadableStream = typeof globalThis.ReadableStream !== "undefined" && body instanceof globalThis.ReadableStream;
-    const isRetryableBody = !isReadableStream && (typeof body === "string" || body instanceof ArrayBuffer || ArrayBuffer.isView(body) || typeof globalThis.Blob !== "undefined" && body instanceof globalThis.Blob || body instanceof URLSearchParams || body instanceof FormData);
+    const isReadableStream2 = typeof globalThis.ReadableStream !== "undefined" && body instanceof globalThis.ReadableStream;
+    const isRetryableBody = !isReadableStream2 && (typeof body === "string" || body instanceof ArrayBuffer || ArrayBuffer.isView(body) || typeof globalThis.Blob !== "undefined" && body instanceof globalThis.Blob || body instanceof URLSearchParams || body instanceof FormData);
     if (
       // Pass raw type verbatim
       ArrayBuffer.isView(body) || body instanceof ArrayBuffer || body instanceof DataView || typeof body === "string" && // Preserve legacy string encoding behavior for now
@@ -9700,7 +10890,7 @@ var OpenAI = class {
       globalThis.Blob && body instanceof globalThis.Blob || // `FormData` -> `multipart/form-data`
       body instanceof FormData || // `URLSearchParams` -> `application/x-www-form-urlencoded`
       body instanceof URLSearchParams || // Send chunked stream (each chunk has own `length`)
-      isReadableStream
+      isReadableStream2
     ) {
       return { bodyHeaders: void 0, body, isStreamingBody: !isRetryableBody };
     } else if (typeof body === "object" && (Symbol.asyncIterator in body || Symbol.iterator in body && "next" in body && typeof body.next === "function")) {
@@ -9721,7 +10911,7 @@ var OpenAI = class {
   }
 };
 _a2 = OpenAI, _OpenAI_encoder = /* @__PURE__ */ new WeakMap(), _OpenAI_instances = /* @__PURE__ */ new WeakSet(), _OpenAI_baseURLOverridden = function _OpenAI_baseURLOverridden2() {
-  return this.baseURL !== "https://api.openai.com/v1";
+  return this._provider !== void 0 || this.baseURL !== "https://api.openai.com/v1";
 };
 OpenAI.OpenAI = _a2;
 OpenAI.DEFAULT_TIMEOUT = 6e5;
@@ -9740,6 +10930,7 @@ OpenAI.PermissionDeniedError = PermissionDeniedError;
 OpenAI.UnprocessableEntityError = UnprocessableEntityError;
 OpenAI.InvalidWebhookSignatureError = InvalidWebhookSignatureError;
 OpenAI.toFile = toFile;
+OpenAI.toStreamingFile = toStreamingFile;
 OpenAI.Completions = Completions2;
 OpenAI.Chat = Chat;
 OpenAI.Embeddings = Embeddings;
@@ -9756,7 +10947,7 @@ OpenAI.Beta = Beta;
 OpenAI.Batches = Batches;
 OpenAI.Uploads = Uploads;
 OpenAI.Admin = Admin;
-OpenAI.Responses = Responses;
+OpenAI.Responses = Responses2;
 OpenAI.Realtime = Realtime2;
 OpenAI.Conversations = Conversations;
 OpenAI.Evals = Evals;
@@ -9885,6 +11076,18 @@ function getQuilltapVersion() {
 function getQuilltapUserAgent() {
   return `Quilltap/${getQuilltapVersion()}`;
 }
+var DEFAULT_REQUEST_TIMEOUT_MS = 3e5;
+function resolveRequestTimeoutMs(params, defaultMs = DEFAULT_REQUEST_TIMEOUT_MS) {
+  const requested = params.requestTimeoutMs;
+  return typeof requested === "number" && requested > 0 ? requested : defaultMs;
+}
+function buildSdkClientOptions(params, defaultMs = DEFAULT_REQUEST_TIMEOUT_MS) {
+  const capped = typeof params.requestTimeoutMs === "number" && params.requestTimeoutMs > 0;
+  return {
+    timeout: resolveRequestTimeoutMs(params, defaultMs),
+    maxRetries: capped ? 0 : 2
+  };
+}
 var rewriteLogger = createPluginLogger("host-rewrite");
 
 // provider.ts
@@ -9895,12 +11098,29 @@ var GROK_SUPPORTED_MIME_TYPES = [
   "image/gif",
   "image/webp"
 ];
+function decodeBase64Text(data) {
+  const normalize = (s) => s.replace(/\s+/g, "").replace(/=+$/, "");
+  const decoded = Buffer.from(data, "base64");
+  if (normalize(decoded.toString("base64")) === normalize(data)) {
+    return decoded.toString("utf-8");
+  }
+  return data;
+}
 var GrokProvider = class {
   constructor() {
     this.baseUrl = "https://api.x.ai/v1";
     this.supportsFileAttachments = true;
     this.supportedMimeTypes = GROK_SUPPORTED_MIME_TYPES;
     this.supportsWebSearch = true;
+  }
+  /**
+   * Whether an attachment MIME type has a handler behind the gate. Images send
+   * inline; `text/*` embeds inline; PDF reaches the honest "requires Grok Files
+   * API" arm. Anything else falls to the generic "unsupported" rejection. The
+   * previous gate was images-only, which made the text and PDF arms dead code.
+   */
+  isHandledMimeType(mimeType) {
+    return this.supportedMimeTypes.includes(mimeType) || mimeType.startsWith("text/") || mimeType === "application/pdf";
   }
   /**
    * Format messages from LLMMessage format to Responses API format.
@@ -9958,10 +11178,10 @@ var GrokProvider = class {
       }
       if (msg.attachments && msg.attachments.length > 0) {
         for (const attachment of msg.attachments) {
-          if (!this.supportedMimeTypes.includes(attachment.mimeType)) {
+          if (!this.isHandledMimeType(attachment.mimeType)) {
             failed.push({
               id: attachment.id,
-              error: `Unsupported file type: ${attachment.mimeType}. Grok supports: ${this.supportedMimeTypes.join(", ")}`
+              error: `Unsupported file type: ${attachment.mimeType}. Grok supports: ${this.supportedMimeTypes.join(", ")}, text/*`
             });
             continue;
           }
@@ -9980,20 +11200,13 @@ var GrokProvider = class {
             });
             sent.push(attachment.id);
           } else if (attachment.mimeType.startsWith("text/")) {
-            try {
-              const textContent = Buffer.from(attachment.data, "base64").toString("utf-8");
-              content.push({
-                type: "input_text",
-                text: `[File: ${attachment.filename}]
+            const textContent = decodeBase64Text(attachment.data);
+            content.push({
+              type: "input_text",
+              text: `[File: ${attachment.filename}]
 ${textContent}`
-              });
-              sent.push(attachment.id);
-            } catch {
-              failed.push({
-                id: attachment.id,
-                error: "Failed to decode text file"
-              });
-            }
+            });
+            sent.push(attachment.id);
           } else {
             failed.push({
               id: attachment.id,
@@ -10132,7 +11345,10 @@ ${textContent}`
     const client = new OpenAI({
       apiKey,
       baseURL: this.baseUrl,
-      defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
+      defaultHeaders: { "User-Agent": getQuilltapUserAgent() },
+      // A caller-supplied budget is a ceiling; without one the SDK's 10-minute
+      // default would let a silent endpoint hold a turn open indefinitely.
+      ...buildSdkClientOptions(params)
     });
     const { input, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
     const requestParams = {
@@ -10206,7 +11422,10 @@ ${textContent}`
     const client = new OpenAI({
       apiKey,
       baseURL: this.baseUrl,
-      defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
+      defaultHeaders: { "User-Agent": getQuilltapUserAgent() },
+      // A caller-supplied budget is a ceiling; without one the SDK's 10-minute
+      // default would let a silent endpoint hold a turn open indefinitely.
+      ...buildSdkClientOptions(params)
     });
     const { input, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
     const requestParams = {

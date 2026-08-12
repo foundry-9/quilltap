@@ -4,7 +4,15 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { Icon } from '@/components/ui/icon'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
 import type { Components } from 'react-markdown'
+import { REMARK_MATH_OPTIONS, normalizeMathDelimiters } from '@/lib/markdown/math'
+import { QtapLink } from '@/components/qtap/QtapLink'
+
+function isQtapHref(href: string): boolean {
+  return href.toLowerCase().startsWith('qtap://')
+}
 
 interface HelpTopicReaderProps {
   documentId: string
@@ -116,7 +124,7 @@ export function HelpTopicReader({
 
   const processedContent = useMemo(() => {
     if (!content) return ''
-    return processContent(content)
+    return normalizeMathDelimiters(processContent(content))
   }, [content])
 
   const markdownComponents = useMemo<Components>(() => ({
@@ -143,7 +151,11 @@ export function HelpTopicReader({
     },
     // Transform links: .md file links navigate within Guide, /path links navigate to page
     a({ href, children }) {
-      if (!href) return <span>{children}</span>
+      if (typeof href !== 'string') return <span>{children}</span>
+
+      if (isQtapHref(href)) {
+        return <QtapLink href={href}>{children}</QtapLink>
+      }
 
       // Links to other help docs (e.g., "character-creation.md")
       if (href.endsWith('.md')) {
@@ -229,7 +241,11 @@ export function HelpTopicReader({
         {categoryLabel}
       </button>
       <div ref={readerRef} className="qt-help-guide-reader">
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm, [remarkMath, REMARK_MATH_OPTIONS]]}
+          rehypePlugins={[rehypeKatex]}
+          components={markdownComponents}
+        >
           {processedContent}
         </ReactMarkdown>
       </div>

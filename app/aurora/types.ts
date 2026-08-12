@@ -28,6 +28,8 @@ export interface UseGroupsReturn {
 export interface GroupMember {
   id: string
   name: string
+  /** Set when the member is archived — shown as a badge; membership survives archiving. */
+  archivedAt?: string | null
 }
 
 export interface DocumentStore {

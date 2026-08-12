@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { Icon } from '@/components/ui/icon'
 import { useRouter } from 'next/navigation'
 import { useEscapeKey } from '@/hooks/useEscapeKey'
@@ -225,9 +226,13 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
     }
   }
 
-  if (!isOpen) return null
+  if (!isOpen || typeof document === 'undefined') return null
 
-  return (
+  // Portal to document.body so the fixed-position backdrop/dialog resolve
+  // against the viewport, not against .qt-page-toolbar — whose backdrop-filter
+  // makes it a containing block for fixed descendants, trapping the overlay
+  // inside the toolbar and leaving nothing outside to click (bug 40).
+  return createPortal(
     <>
       {/* Backdrop */}
       <button
@@ -334,6 +339,7 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
           </div>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   )
 }

@@ -6,7 +6,7 @@
  */
 
 import { z } from 'zod';
-import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware';
+import { createContextParamsHandler, exists } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { notFound, serverError, created, successResponse } from '@/lib/api/responses';
 
@@ -17,13 +17,13 @@ const createPromptSchema = z.object({
 });
 
 // GET /api/v1/characters/[id]/prompts
-export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+export const GET = createContextParamsHandler<{ id: string }>(
   async (request, { user, repos }, { id: characterId }) => {
     try {
 
       const character = await repos.characters.findById(characterId);
 
-      if (!checkOwnership(character, user.id)) {
+      if (!exists(character)) {
         return notFound('Character');
       }
 
@@ -36,13 +36,13 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 );
 
 // POST /api/v1/characters/[id]/prompts
-export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+export const POST = createContextParamsHandler<{ id: string }>(
   async (request, { user, repos }, { id: characterId }) => {
     const body = await request.json();
     const validated = createPromptSchema.parse(body);// First verify the character exists and belongs to the user
     const character = await repos.characters.findById(characterId);
 
-    if (!checkOwnership(character, user.id)) {
+    if (!exists(character)) {
       return notFound('Character');
     }
 

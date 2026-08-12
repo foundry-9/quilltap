@@ -34,7 +34,13 @@ export function useImpersonation({
     if (impersonatingIds && impersonatingIds.length > 0) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- user state must re-sync when chat prop changes (parent renders unconditionally)
       setImpersonatingParticipantIds(impersonatingIds)
-      setActiveTypingParticipantId(activeTypingId ?? null)
+      // The persisted `activeTypingParticipantId` is only the INITIAL default for
+      // "speaking as". It must not be re-applied on every chat refetch, or it
+      // clobbers the turn-follow (Bug 49) and any manual SpeakerSelector choice —
+      // the composer would snap back to the stale persisted seat after each turn,
+      // so one seat "hogs" every turn. Seed it once (when still unset); the
+      // turn-follow and the set-active-speaker handler own it thereafter.
+      setActiveTypingParticipantId(prev => prev ?? activeTypingId ?? null)
     }
     if (pauseTurnCount !== undefined) {
       setAllLLMPauseTurnCount(pauseTurnCount)

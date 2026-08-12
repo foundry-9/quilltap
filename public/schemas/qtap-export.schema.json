@@ -21,9 +21,14 @@
             "required": ["characters"],
             "properties": {
               "characters": { "type": "array", "items": { "$ref": "#/$defs/ExportedCharacter" } },
-              "memories": { "type": "array", "items": { "$ref": "#/$defs/Memory" } }
+              "memories": { "type": "array", "items": { "$ref": "#/$defs/Memory" } },
+              "mountPoints": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStore" } },
+              "folders": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreFolder" } },
+              "documents": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreDocument" } },
+              "blobs": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreBlob" } }
             },
-            "additionalProperties": false
+            "additionalProperties": false,
+            "description": "From 4.8 a characters export carries each character's vault as well: its mount point, folders, documents and blobs appear here exactly as they would in a document-stores export. That is what makes avatars, photographs and correspondence survive a cross-instance import. Project links never appear — a character vault has none."
           }
         }
       }
@@ -169,9 +174,91 @@
             "required": ["mountPoints", "documents", "blobs"],
             "properties": {
               "mountPoints": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStore" } },
+              "folders": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreFolder" } },
               "documents": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreDocument" } },
               "blobs": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreBlob" } },
               "projectLinks": { "type": "array", "items": { "$ref": "#/$defs/ExportedProjectDocMountLink" } }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "manifest": { "properties": { "exportType": { "const": "prompt-templates" } } } }
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "required": ["promptTemplates"],
+            "properties": {
+              "promptTemplates": { "type": "array", "items": { "$ref": "#/$defs/ExportedPromptTemplate" } }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "manifest": { "properties": { "exportType": { "const": "files" } } } }
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "required": ["files"],
+            "properties": {
+              "files": { "type": "array", "items": { "$ref": "#/$defs/ExportedFile" } },
+              "folders": { "type": "array", "items": { "$ref": "#/$defs/ExportedFolder" } }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "manifest": { "properties": { "exportType": { "const": "provider-models" } } } }
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "required": ["providerModels"],
+            "properties": {
+              "providerModels": { "type": "array", "items": { "$ref": "#/$defs/ExportedProviderModel" } }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "manifest": { "properties": { "exportType": { "const": "plugin-configs" } } } }
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "required": ["pluginConfigs"],
+            "properties": {
+              "pluginConfigs": { "type": "array", "items": { "$ref": "#/$defs/ExportedPluginConfig" } }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "manifest": { "properties": { "exportType": { "const": "instance-settings" } } } }
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "required": ["instanceSettings"],
+            "properties": {
+              "instanceSettings": { "type": "array", "items": { "$ref": "#/$defs/ExportedInstanceSetting" } }
             },
             "additionalProperties": false
           }
@@ -216,12 +303,18 @@
             "characters",
             "chats",
             "roleplay-templates",
+            "prompt-templates",
             "connection-profiles",
             "image-profiles",
             "embedding-profiles",
             "tags",
             "projects",
-            "document-stores"
+            "groups",
+            "document-stores",
+            "files",
+            "provider-models",
+            "plugin-configs",
+            "instance-settings"
           ],
           "description": "Type of entity contained in this export"
         },
@@ -250,6 +343,10 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "Entity IDs that were selected for export (empty when scope is 'all')"
+        },
+        "preserveIds": {
+          "type": "boolean",
+          "description": "Import this bundle at its original row ids rather than minting fresh ones. Written by the character-archive tooling, whose whole premise is that chat participants, group memberships and project rosters keep resolving without a reconcile pass. An importer honouring it must refuse the entire import on any id collision rather than silently reminting — a partial application is worse than no import. Absent on ordinary exports."
         }
       }
     },
@@ -271,9 +368,18 @@
         "projects": { "type": "integer", "minimum": 0 },
         "groups": { "type": "integer", "minimum": 0 },
         "documentStores": { "type": "integer", "minimum": 0 },
+        "documentStoreFolders": { "type": "integer", "minimum": 0 },
         "documentStoreDocuments": { "type": "integer", "minimum": 0 },
         "documentStoreBlobs": { "type": "integer", "minimum": 0 },
-        "documentStoreProjectLinks": { "type": "integer", "minimum": 0 }
+        "documentStoreProjectLinks": { "type": "integer", "minimum": 0 },
+        "conversationAnnotations": { "type": "integer", "minimum": 0 },
+        "chatDocuments": { "type": "integer", "minimum": 0 },
+        "files": { "type": "integer", "minimum": 0 },
+        "folders": { "type": "integer", "minimum": 0 },
+        "promptTemplates": { "type": "integer", "minimum": 0 },
+        "providerModels": { "type": "integer", "minimum": 0 },
+        "pluginConfigs": { "type": "integer", "minimum": 0 },
+        "instanceSettings": { "type": "integer", "minimum": 0 }
       }
     },
 
@@ -313,6 +419,11 @@
         },
         "firstMessage": { "type": "string" },
         "exampleDialogues": { "type": "string" },
+        "metadata": {
+          "type": ["object", "null"],
+          "description": "The character's freeform fact sheet — a flat object of user-authored keys with any JSON value, e.g. { \"hasAnsibleAccess\": true, \"clearanceLevel\": 3 }. Lives in the vault as metadata.json (its sole source of truth; no DB column), so it also travels as a document-store document; materialized here like the other managed fields, and applied back into the fresh vault on import. Absent/null and {} mean the same thing. Never LLM-authored and never injected into a prompt; read by Pascal's outcome tables via when.metadata.",
+          "additionalProperties": true
+        },
         "physicalDescription": {
           "oneOf": [{ "type": "object" }, { "type": "null" }],
           "description": "Singular physical description with full text plus token-sized prompt variants (headAndShoulders/short/medium/long/complete; headAndShoulders is the head-and-shoulders crop preferred for avatar generation). Pre-4.6 exports carried a `physicalDescriptions` array instead; importers fold legacy index 0 into this field."
@@ -323,6 +434,18 @@
         },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
         "updatedAt": { "$ref": "#/$defs/Timestamp" },
+        "archivedAt": {
+          "type": ["string", "null"],
+          "description": "When set, this character is a tombstone: archived to a bundle in the file library, with its vault, memories and vectors torn down. The row survives so old conversations still render a name and a face. Archived characters are read-only until rehydrated."
+        },
+        "archiveFileId": {
+          "type": ["string", "null"],
+          "description": "`files.id` of the ARCHIVE-category `.qtap` bundle holding everything the archive removed. Null unless archivedAt is set."
+        },
+        "archivedAvatarFileId": {
+          "type": ["string", "null"],
+          "description": "`files.id` of the avatar thumbnail copied out of the vault before it was deleted, so a tombstone still has a face in old chats. Null unless archivedAt is set."
+        },
         "_linkedPersonaNames": {
           "type": "array",
           "items": { "type": "string" },
@@ -340,6 +463,10 @@
         "canCreateOutfits": {
           "type": ["boolean", "null"],
           "description": "Whether this character can create new wardrobe items mid-conversation (null = enabled by default)"
+        },
+        "canChooseOutfit": {
+          "type": "boolean",
+          "description": "When true, a new chat with this character defaults its Starting Outfit to 'Let character choose'. Absent/false falls back to defaults (or Compose when there is no usable default outfit). Stored in the vault's properties.json."
         },
         "systemTransparency": {
           "type": ["boolean", "null"],
@@ -412,6 +539,15 @@
           "type": ["integer", "null"],
           "minimum": 1,
           "description": "Per-chat override of the global coreWhisper.interval setting (assistant turns between periodic whispers). Null = inherit."
+        },
+        "timelineMode": {
+          "type": ["string", "null"],
+          "enum": ["realtime", "narrative", null],
+          "description": "Which clock the chat's story runs on (episodic recall). 'realtime' (null reads as realtime): wall-clock; 'narrative': fictional timeline — extraction preserves in-story time phrases as narrativeTime."
+        },
+        "turnSkippingEnabled": {
+          "type": ["boolean", "null"],
+          "description": "\"Nothing to add\" turn-skipping toggle. Null = enabled (the default); false = disabled."
         },
         "showThinking": {
           "type": ["boolean", "null"],
@@ -509,6 +645,10 @@
         "conciergeOverride": {
           "enum": ["OFF", null],
           "description": "Per-chat Concierge mode override. NULL = follow the global Concierge setting; 'OFF' = the Concierge is off-duty for this chat and no moderation effects apply."
+        },
+        "answerConfirmationOverride": {
+          "enum": ["ON", "OFF", null],
+          "description": "Per-chat answer-confirmation override. NULL = inherit (project override, then the global setting); 'ON'/'OFF' = force the Salon consistency check on/off for this chat."
         },
 
         "chatType": {
@@ -645,13 +785,18 @@
         "content": { "type": "string" },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
         "participantId": { "$ref": "#/$defs/UUID" },
+        "targetParticipantIds": {
+          "type": ["array", "null"],
+          "items": { "$ref": "#/$defs/UUID" },
+          "description": "Whisper audience: chat participant IDs that may see this message. NULL or absent means public — visible to every participant. Set on user whispers, Staff whispers (Commonplace Book recall, Librarian summaries, private Pascal rolls and Prospero tool runs), and whispered ad-hoc announcements. Like participantId, these reference participants of the exported chat."
+        },
         "tokenCount": { "type": "integer", "minimum": 0 },
         "promptTokens": { "type": "integer", "minimum": 0 },
         "completionTokens": { "type": "integer", "minimum": 0 },
         "provider": { "type": "string", "description": "Provider that generated this message (e.g., 'openai', 'anthropic')" },
         "modelName": { "type": "string", "description": "Model name that generated this message (e.g., 'gpt-4o', 'claude-sonnet-4-20250514')" },
         "isSilentMessage": { "type": ["boolean", "null"], "description": "Whether this message was generated by a character in silent mode (inner thoughts/actions only)" },
-        "systemSender": { "type": ["string", "null"], "enum": ["lantern", "aurora", "librarian", "concierge", "prospero", "host", "commonplaceBook", "ariel", "carina", "suparna", null], "description": "Personified feature ('the Staff') that authored this message in lieu of a participant. 'lantern' = Lantern image announcements; 'aurora' = character-avatar refreshes; 'librarian' = Document Mode open/save announcements; 'concierge' = dangerous-content classification announcements; 'prospero' = agent / connection-profile change announcements; 'host' = Salon participation announcements; 'commonplaceBook' = memory recall whispers (recap, relevant memories, inter-character memories); 'ariel' = terminal session announcements (PTY open/close); 'carina' = inline-query reference answers (Carina), rendered with the answerer character's own avatar via carinaMeta.answererId; 'suparna' = Suparṇā's Post Office mail-delivery announcements (new letters arrived in the character's vault Mail/ folder)." },
+        "systemSender": { "type": ["string", "null"], "enum": ["lantern", "aurora", "librarian", "concierge", "prospero", "host", "commonplaceBook", "ariel", "carina", "suparna", "pascal", null], "description": "Personified feature ('the Staff') that authored this message in lieu of a participant. 'lantern' = Lantern image announcements; 'aurora' = character-avatar refreshes; 'librarian' = Document Mode open/save announcements; 'concierge' = dangerous-content classification announcements; 'prospero' = agent / connection-profile change announcements; 'host' = Salon participation announcements; 'commonplaceBook' = memory recall whispers (recap, relevant memories, inter-character memories); 'ariel' = terminal session announcements (PTY open/close); 'carina' = inline-query reference answers (Carina), rendered with the answerer character's own avatar via carinaMeta.answererId; 'suparna' = Suparṇā's Post Office mail-delivery announcements (new letters arrived in the character's vault Mail/ folder); 'pascal' = Pascal the Croupier's custom-tool (pseudo-tool) roll outcomes, posted server-side so a model cannot fudge a failure into a success, with the roll record in pascalMeta." },
         "systemKind": { "type": ["string", "null"], "description": "Sub-classification of a Staff-authored message — used by the Salon UI to label collapsed system-message bars (e.g. 'timestamp', 'project-context', 'memory-recap'). Always paired with systemSender." },
         "opaqueContent": { "type": ["string", "null"], "description": "Neutral, persona-free rewrite of `content` for Staff-authored messages. Swapped into every character's LLM context when the chat has any non-user-character participant with systemTransparency !== true (the user character does not count). NULL on participant-authored messages and on legacy Staff messages from before the dual-body migration (swap falls through to `content`)." },
         "reasoningContent": { "type": ["string", "null"], "description": "Reasoning models' full chain-of-thought ('thinking') for this turn. DISPLAY ONLY — surfaced in the Salon but never re-fed to any model as history, summary, or memory." },
@@ -668,6 +813,11 @@
             "required": ["anchorOffset", "content", "seq"]
           }
         },
+        "confirmed": { "type": ["boolean", "null"], "description": "Answer-confirmation verdict. true = the reply was consistent with what the character recalled/looked up this turn (or was successfully revised); false = the character stood by a flagged reply unchanged; null = the check could not run (error/timeout) or was not applicable (e.g. a user-driven turn). Absent when the feature was off / there was nothing to check." },
+        "confirmationChecked": { "type": ["boolean", "null"], "description": "True when a confirmation check actually ran. Distinguishes a persisted 'unverified' (confirmed null but checked) from 'never checked', since both store confirmed as SQL NULL." },
+        "confirmationRevised": { "type": ["boolean", "null"], "description": "Whether the shown `content` is a re-affirmation rewrite of the character's original reply." },
+        "confirmationNotes": { "type": ["string", "null"], "description": "The cheap-LLM discrepancy explanation surfaced on the confirmation badge hover; null when confirmed:true on the first pass or not applicable." },
+        "confirmationOriginalContent": { "type": ["string", "null"], "description": "The character's pre-revision text, retained for the logs when confirmationRevised is true; null otherwise." },
         "hostEvent": {
           "type": ["object", "null"],
           "description": "Structured payload on Host announcements (systemSender = 'host'). Two shapes share this field: (a) presence transitions — { participantId, toStatus } — for add / remove / status-change; (b) off-scene character introductions — { introducedCharacterIds } — stamped by the off-scene Host announcer so the context builder can detect already-introduced characters. All fields optional; one or the other is set per announcement.",
@@ -707,13 +857,63 @@
             "answererId": { "type": "string", "description": "Workspace character ID of the Carina answerer." },
             "question": { "type": "string", "description": "Verbatim question that was asked." }
           }
+        },
+        "pascalMeta": {
+          "type": ["object", "null"],
+          "description": "Pascal the Croupier (custom pseudo-tools) roll record, set on systemSender='pascal' messages. The server rolled and the server chose the outcome, so this is the authoritative account of the deal rather than the model's own. NULL on every non-Pascal message.",
+          "required": ["tool", "definitionTier", "definitionMountId", "params", "rollForm", "raw", "value", "state", "outcomeIndex", "invokedBy"],
+          "properties": {
+            "tool": { "type": "string", "description": "Name of the custom tool that was run (the definition's `name`, not its filename)." },
+            "toolTitle": { "type": "string", "description": "The tool's display title at the moment it ran (its `title`, or a title-cased `name`) — what the Salon labels the outcome with. Absent on messages posted before the field existed; readers fall back to `tool`." },
+            "chipLabel": { "type": "string", "description": "The definition's chipLabel template rendered at roll time — the per-run label the Salon chip and the bubble heading share ('Agent lambda — Jackie'). Absent on older rows and on tools that declare no label; readers fall back to toolTitle, then tool." },
+            "definitionTier": { "type": "string", "enum": ["character", "participant", "group", "project", "global"], "description": "Mount tier the definition resolved from. Tiers shadow one another, so the same tool name can mean different things in different rooms." },
+            "definitionMountId": { "type": "string", "description": "Mount point ID of the document store the definition was loaded from." },
+            "params": { "type": "object", "description": "Resolved parameter values for this run (declared defaults filled in, numeric values clamped).", "additionalProperties": { "type": ["number", "string", "boolean"] } },
+            "rollForm": { "type": "string", "enum": ["range", "dice"], "description": "Which roll shape ran: 'range' (uniform over a numeric range, optionally transformed) or 'dice' (dice notation)." },
+            "notation": { "type": "string", "description": "Dice notation that was rolled (rollForm = 'dice'), e.g. '3d6+2'." },
+            "raw": { "type": "number", "description": "The untransformed roll." },
+            "diceRolls": { "type": "array", "items": { "type": "number" }, "description": "Individual die results (rollForm = 'dice')." },
+            "value": { "type": "number", "description": "The final value the outcome table was tested against (raw after multiplier/offset/round)." },
+            "state": { "type": "string", "enum": ["success", "partial", "failure", "info"], "description": "Semantic state of the winning outcome; accents the result bubble." },
+            "outcomeIndex": { "type": "integer", "minimum": 0, "description": "Index of the winning entry in the definition's ordered outcome table." },
+            "metadataTested": { "type": "object", "description": "The invoking character's metadata as the WINNING outcome read it: only the keys that row tested, holding their values at the moment of the roll. Absent when the winning row consulted no metadata, and never the whole sheet — the sheet is the character's business.", "additionalProperties": { "type": ["number", "string", "boolean"] } },
+            "llm": {
+              "type": "object",
+              "required": ["ok", "output", "prompt"],
+              "description": "The LLM consult, when the definition declared one: what was asked (prompt, fully rendered), whether it was answered (ok), and the output the table tested — the model's trimmed answer, or the author's errorMessage when the consult failed. `reason` is the technical failure cause, recorded for the operator and never spoken in the fiction. Absent on tools with no llm block.",
+              "properties": {
+                "ok": { "type": "boolean" },
+                "output": { "type": "string" },
+                "prompt": { "type": "string" },
+                "reason": { "type": "string" },
+                "provider": { "type": "string" },
+                "model": { "type": "string" }
+              }
+            },
+            "effects": {
+              "type": "array",
+              "description": "The side effects this run applied — the audit of the definition's `effects` array. Each entry names the raw target ('state.encounter.count' / 'metadata.lockpick'), what the store held before (absent when nothing), what was written, and — state targets only — which tier the write landed in. Absent when the run declared or applied none.",
+              "items": {
+                "type": "object",
+                "required": ["target", "next"],
+                "properties": {
+                  "target": { "type": "string", "description": "The effect's raw target, as written in the definition." },
+                  "previous": { "description": "What the store held before the write. Absent when it held nothing." },
+                  "next": { "description": "What was written." },
+                  "tier": { "type": "string", "enum": ["chat", "project", "group", "general"], "description": "Which state store the write landed in. Absent on metadata writes." }
+                }
+              }
+            },
+            "invokedBy": { "type": "string", "enum": ["llm", "user"], "description": "Whether the model reached for the tool or the user ran it themselves." },
+            "callerParticipantId": { "type": "string", "description": "Participant who rolled, when there was one." }
+          }
         }
       }
     },
 
     "Memory": {
       "type": "object",
-      "description": "A memory entry from the Commonplace Book system.",
+      "description": "A memory entry from the Commonplace Book system. The `embedding` vector is deliberately absent: it is enormous (a serialized Float32Array runs ~29.6 KB per row) and only meaningful against the model that produced it, so a foreign vector corrupts semantic search silently whenever the dimensionality happens to match. The importer re-embeds every memory it inserts. Archives written before this rule may still carry the field; importers drop it on sight.",
       "required": ["id", "characterId", "content", "summary", "createdAt", "updatedAt"],
       "additionalProperties": true,
       "properties": {
@@ -726,6 +926,24 @@
         "importance": { "type": "number" },
         "keywords": { "type": "array", "items": { "type": "string" } },
         "source": { "type": "string" },
+        "occurredAt": {
+          "anyOf": [{ "$ref": "#/$defs/Timestamp" }, { "type": "null" }],
+          "description": "ISO wall-clock time of the EVENT the memory records (episodic spine) — distinct from createdAt, the write clock. Durable data; always exported."
+        },
+        "narrativeTime": {
+          "type": ["string", "null"],
+          "description": "Free-text in-story time (fictional-timeline chats), e.g. 'the third night at sea'."
+        },
+        "entities": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Proper nouns of the episode: places, people, named things."
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["semantic", "episodic"],
+          "description": "Declared memory kind: a standing fact (semantic, default) vs. a specific dated occurrence (episodic)."
+        },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
         "updatedAt": { "$ref": "#/$defs/Timestamp" }
       }
@@ -1102,6 +1320,7 @@
         "defaultDisabledTools": { "type": "array", "items": { "type": "string" } },
         "defaultDisabledToolGroups": { "type": "array", "items": { "type": "string" } },
         "defaultAgentModeEnabled": { "type": ["boolean", "null"] },
+        "answerConfirmationOverride": { "enum": ["ON", "OFF", null], "description": "Per-project answer-confirmation override for the project's chats. NULL = inherit the global setting; 'ON'/'OFF' = force the Salon consistency check on/off (a chat's own override still wins)." },
         "defaultAvatarGenerationEnabled": { "type": ["boolean", "null"] },
         "defaultImageProfileId": { "type": ["string", "null"] },
         "defaultRoleplayTemplateId": { "type": ["string", "null"] },
@@ -1171,7 +1390,7 @@
       "required": ["id", "name", "basePath", "mountType", "includePatterns", "excludePatterns", "enabled"],
       "additionalProperties": false,
       "properties": {
-        "id": { "$ref": "#/$defs/UUID" },
+        "id": { "allOf": [{ "$ref": "#/$defs/UUID" }], "description": "Durable store identity. Import preserves this id on create and matches an overwrite by it (not by name), so re-importing the same archive is recognised as an update of the same store rather than a stranger clone." },
         "name": { "type": "string", "minLength": 1 },
         "basePath": { "type": "string" },
         "mountType": { "enum": ["filesystem", "obsidian", "database"] },
@@ -1182,20 +1401,47 @@
       }
     },
 
+    "ExportedDocumentStoreFolder": {
+      "type": "object",
+      "description": "A folder inside a database-backed document store. Emitted parent-first (shortest path first) so an importer can build the tree in stream order. Character vaults are largely folders — `photos/`, `Mail/`, `Wardrobe/` — so these travel in a `characters` export too.",
+      "required": ["mountPointId", "name", "path"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "oneOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }], "description": "Source folder-row id, carried so a preserveIds import (archive/rehydrate) can restore the folder at its original id. Optional: older exports omit it, and older builds ignore it." },
+        "mountPointId": { "$ref": "#/$defs/UUID" },
+        "parentId": { "oneOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }] },
+        "name": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 }
+      }
+    },
+
     "ExportedDocumentStoreDocument": {
       "type": "object",
-      "description": "Text document inside a database-backed document store.",
+      "description": "Text document inside a database-backed document store. Instance-wide GENERAL STATE (the bottom tier of the state cascade) is not a separate export record: it lives as a `state.json` document (fileType 'json') at the root of the singleton \"Quilltap General\" mount, and therefore rides in the `documentStores` dump exactly like any other store document — but only when that mount is included in a selective document-stores export. Chat, project, and group state travel with their own entities.",
       "required": ["mountPointId", "relativePath", "fileName", "fileType", "content", "contentSha256", "plainTextLength", "lastModified"],
       "additionalProperties": false,
       "properties": {
         "mountPointId": { "$ref": "#/$defs/UUID" },
         "relativePath": { "type": "string", "minLength": 1 },
         "fileName": { "type": "string", "minLength": 1 },
-        "fileType": { "enum": ["markdown", "txt"] },
+        "fileType": { "enum": ["markdown", "txt", "json", "jsonl"] },
         "content": { "type": "string" },
         "contentSha256": { "type": "string", "minLength": 64, "maxLength": 64 },
         "plainTextLength": { "type": "integer", "minimum": 0 },
-        "lastModified": { "$ref": "#/$defs/Timestamp" }
+        "lastModified": { "$ref": "#/$defs/Timestamp" },
+        "folderId": { "oneOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }] },
+        "fileId": {
+          "description": "Source-instance `doc_mount_files.id` for this document's content row. Optional and additive: exports before 4.8 omit it, and an importer that does not recognise it simply mints fresh ids as before. Carried so a bundle can restore identity rather than only content — see `linkId`.",
+          "oneOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }]
+        },
+        "linkId": {
+          "description": "Source-instance `doc_mount_file_links.id` — the id a character's `defaultImageId` and `avatarOverrides[].imageId` actually point at. Without it a character exported with its vault imports faceless, because those pointers have nothing to be remapped through.",
+          "oneOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }]
+        },
+        "linkGroupId": {
+          "description": "Deliberate hard-link group. Documents sharing a linkGroupId are one file at several paths: a write through any of them repoints all of them. Absent/null for ordinary independent documents. Note that two documents with identical content are NOT linked — content rows are deduplicated by sha256, and only this field records intent.",
+          "oneOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }]
+        }
       }
     },
 
@@ -1224,6 +1470,18 @@
           "enum": ["none", "pending", "converted", "failed", "skipped"]
         },
         "extractionError": { "type": ["string", "null"] },
+        "fileId": {
+          "description": "Source-instance `doc_mount_files.id` for this blob's content row. Optional and additive, exactly as on ExportedDocumentStoreDocument.",
+          "oneOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }]
+        },
+        "linkId": {
+          "description": "Source-instance `doc_mount_file_links.id`. This is what a character avatar pointer resolves to, so a vault-bearing character bundle depends on it.",
+          "oneOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }]
+        },
+        "blobId": {
+          "description": "Source-instance `doc_mount_blobs.id`.",
+          "oneOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }]
+        },
         "dataBase64": { "type": "string", "contentEncoding": "base64" }
       }
     },
@@ -1236,6 +1494,137 @@
       "properties": {
         "projectId": { "$ref": "#/$defs/UUID" },
         "mountPointId": { "$ref": "#/$defs/UUID" }
+      }
+    },
+
+    "ExportedFolder": {
+      "type": "object",
+      "description": "A folder in the general file library. `id` travels so children and files can be matched to their parent inside the archive; the importer re-mints IDs and resolves parents by path, reusing a folder that already exists at the same path rather than duplicating it.",
+      "required": ["id", "path", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "path": { "type": "string", "description": "Full normalized path, e.g. '/documents/reports/'" },
+        "name": { "type": "string" },
+        "parentFolderId": {
+          "anyOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }],
+          "description": "Null at root level"
+        },
+        "projectId": {
+          "anyOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }],
+          "description": "Null for general (non-project) files"
+        }
+      }
+    },
+
+    "ExportedFile": {
+      "type": "object",
+      "description": "A general-library file: metadata plus base64 bytes. `userId` and `storageKey` never travel — a storage key names a location inside the exporting instance's own storage (commonly 'mount-blob:<mountPointId>:<blobId>'). It rides as `_sourceStorageKey` provenance and the importer discards it, recording whatever key its own upload bridge returns. Backup files (category 'BACKUP' or folderPath '/backups') and character-archive bundles (category 'ARCHIVE' or folderPath '/archives') are never exported — both are `.qtap` archives in their own right and do not nest inside another export.",
+      "required": ["id", "sha256", "originalFilename", "mimeType", "size", "source", "category"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "sha256": { "type": "string", "minLength": 64, "maxLength": 64 },
+        "originalFilename": { "type": "string" },
+        "mimeType": { "type": "string" },
+        "size": { "type": "integer", "minimum": 0 },
+        "source": { "type": "string" },
+        "category": { "type": "string", "description": "Never 'BACKUP' or 'ARCHIVE' — backup files and character-archive bundles are excluded from exports" },
+        "projectId": { "anyOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }] },
+        "folderPath": { "type": ["string", "null"] },
+        "linkedTo": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/UUID" },
+          "description": "Entities this file is attached to. On import each id is remapped where the import knows it, kept where it already names something on the receiving instance, and dropped otherwise."
+        },
+        "tags": { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
+        "description": { "type": ["string", "null"] },
+        "dataBase64": {
+          "type": "string",
+          "contentEncoding": "base64",
+          "description": "Raw file bytes. Absent when `_bytesMissing` is true. In the streaming NDJSON format these bytes arrive as separate file_blob / file_blob_chunk records."
+        },
+        "_sourceStorageKey": {
+          "type": ["string", "null"],
+          "description": "Provenance only — the storage key on the exporting instance. Never reused."
+        },
+        "_bytesMissing": {
+          "type": "boolean",
+          "description": "The bytes could not be read at export time; only metadata travels and the importer skips the row."
+        },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "updatedAt": { "$ref": "#/$defs/Timestamp" }
+      }
+    },
+
+    "ExportedPromptTemplate": {
+      "type": "object",
+      "description": "A user-created prompt template. Built-ins are seeded from `prompts/` on every instance and never travel.",
+      "required": ["id", "name", "createdAt", "updatedAt"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "userId": { "$ref": "#/$defs/UUID" },
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": ["string", "null"] },
+        "isBuiltIn": { "const": false },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "updatedAt": { "$ref": "#/$defs/Timestamp" }
+      }
+    },
+
+    "ExportedProviderModel": {
+      "type": "object",
+      "description": "One row of the provider model catalogue. This table is a REGENERABLE CACHE: it is normally populated by a live refetch from each provider, and a refetch supersedes anything an import wrote. Exportable purely as a convenience for offline or air-gapped instances. Imported by upsert on (provider, modelId); ids and timestamps are discarded.",
+      "required": ["provider", "modelId", "displayName"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "provider": { "type": "string" },
+        "modelId": { "type": "string", "minLength": 1 },
+        "modelType": { "type": "string", "enum": ["chat", "image", "embedding"] },
+        "displayName": { "type": "string" },
+        "baseUrl": { "type": ["string", "null"] },
+        "contextWindow": { "type": ["integer", "null"] },
+        "maxOutputTokens": { "type": ["integer", "null"] },
+        "deprecated": { "type": "boolean" },
+        "experimental": { "type": "boolean" },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "updatedAt": { "$ref": "#/$defs/Timestamp" }
+      }
+    },
+
+    "ExportedPluginConfig": {
+      "type": "object",
+      "description": "A plugin's per-user configuration with secrets removed. Every key the plugin's manifest declares as `password`-typed is dropped at export time and named in `_redactedKeys`. When the manifest cannot be resolved the whole `config` is withheld and `_redactedKeys` is ['*'] — the exporter never guesses which keys are safe. `userId` never travels. Import merges into any existing config, so a redacted key leaves the receiving instance's own secret intact.",
+      "required": ["pluginName", "config"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "pluginName": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "config": { "type": "object", "description": "Non-secret configuration values" },
+        "enabled": {
+          "type": "boolean",
+          "description": "Per-user enable flag, preserved through import so a disabled plugin stays disabled"
+        },
+        "_redactedKeys": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Config keys withheld from the export. ['*'] means the entire bag was withheld."
+        },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "updatedAt": { "$ref": "#/$defs/Timestamp" }
+      }
+    },
+
+    "ExportedInstanceSetting": {
+      "type": "object",
+      "description": "One row of the instance_settings key/value table — the 'move my setup' export. Keys meaningful only inside the exporting instance are withheld by the writer: the three mount-point pointers (lanternBackgroundsMountPointId, userUploadsMountPointId, generalMountPointId), lastMaintenanceSweepAt, and the version-guard key highest_app_version. Import overwrites the receiving instance's values by key.",
+      "required": ["key", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "value": { "type": "string" }
       }
     }
   }

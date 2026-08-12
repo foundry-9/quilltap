@@ -76,6 +76,8 @@ export interface ChatSettings {
   llmLoggingSettings?: LLMLoggingSettings
   /** Auto-detect RNG patterns (dice rolls, coin flips) in user messages and execute them automatically */
   autoDetectRng?: boolean
+  /** Whether Pascal's custom pseudo-tools are offered to models and the composer gutter button is shown */
+  customTools?: boolean
   /** Whether new chats start in composition mode by default */
   compositionModeDefault?: boolean
   /** Whether browser spellcheck is enabled in the composer and rich-text Document Mode editor */
@@ -98,6 +100,8 @@ export interface ChatSettings {
   coreWhisper?: CoreWhisperSettings
   /** Thinking / reasoning display — global defaults. DISPLAY ONLY. */
   thinkingDisplay?: ThinkingDisplaySettings
+  /** Answer confirmation — global default for the Salon consistency check. */
+  answerConfirmationSettings?: AnswerConfirmationSettings
   createdAt: string
   updatedAt: string
 }
@@ -117,6 +121,20 @@ export interface ThinkingDisplaySettings {
 export const DEFAULT_THINKING_DISPLAY_SETTINGS: ThinkingDisplaySettings = {
   defaultVisible: true,
   defaultCollapsed: true,
+}
+
+/**
+ * Answer confirmation — global default for the Salon consistency check that
+ * vets a character's tool-using reply against what it recalled and looked up.
+ * Off by default; a per-project or per-chat override can flip it on.
+ */
+export interface AnswerConfirmationSettings {
+  /** Whether the consistency check runs by default (global). */
+  enabled?: boolean
+}
+
+export const DEFAULT_ANSWER_CONFIRMATION_SETTINGS: AnswerConfirmationSettings = {
+  enabled: false,
 }
 
 /**
@@ -301,15 +319,10 @@ export const TIMESTAMP_FORMATS = [
 ] as const
 
 /**
- * Default timestamp configuration
+ * Default timestamp configuration. Defined with the timestamp helpers that
+ * consume it and re-exported here so the settings form keeps its usual import.
  */
-export const DEFAULT_TIMESTAMP_CONFIG: TimestampConfig = {
-  mode: 'NONE',
-  format: 'FRIENDLY',
-  useFictionalTime: false,
-  autoPrepend: true,
-  intervalMinutes: 15,
-}
+export { DEFAULT_TIMESTAMP_CONFIG } from '@/lib/chat/timestamp-utils'
 
 /**
  * Memory Cascade Action Options
@@ -438,6 +451,11 @@ export const AUTOMATION_OPTIONS = [
  * Default automation settings
  */
 export const DEFAULT_AUTO_DETECT_RNG = true
+
+/**
+ * Default custom-tools setting
+ */
+export const DEFAULT_CUSTOM_TOOLS = true
 
 /**
  * Agent Mode Settings

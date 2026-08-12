@@ -727,9 +727,6 @@ export async function enqueueMemoryRegenerateAll(
   return { jobId, isNew: true };
 }
 
-/** Payload for the conversation-summary regeneration fan-out job (no params). */
-export type RegenerateConversationSummariesPayload = Record<string, never>;
-
 /**
  * Enqueue the conversation-summary regeneration job.
  *

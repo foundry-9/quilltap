@@ -6,7 +6,7 @@
  * analyzes it using a vision-capable LLM, and returns proposed wardrobe items.
  */
 
-import { createAuthenticatedHandler } from '@/lib/api/middleware'
+import { createContextHandler } from '@/lib/api/middleware'
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
 import { successResponse, badRequest, serverError } from '@/lib/api/responses'
@@ -21,7 +21,7 @@ const analyzeImageSchema = z.object({
 })
 
 // POST /api/v1/wardrobe/analyze-image
-export const POST = createAuthenticatedHandler(async (req, { repos, user }) => {
+export const POST = createContextHandler(async (req, { repos, user }) => {
 
   const body = await req.json()
   const validated = analyzeImageSchema.parse(body)

@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { created, successResponse } from '@/lib/api/responses';
@@ -24,7 +24,7 @@ const createTagSchema = z.object({
 // GET Handler
 // ============================================================================
 
-export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
+export const GET = createContextHandler(async (req: NextRequest, { user, repos }) => {
   const searchParams = req.nextUrl.searchParams;
   const search = searchParams.get('search');
 
@@ -87,7 +87,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
 // POST Handler
 // ============================================================================
 
-export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
+export const POST = createContextHandler(async (req: NextRequest, { user, repos }) => {
   const body = await req.json();
   const validatedData = createTagSchema.parse(body);
 

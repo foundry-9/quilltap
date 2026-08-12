@@ -16,6 +16,7 @@ type StaffId =
   | 'commonplaceBook'
   | 'ariel'
   | 'suparna'
+  | 'pascal'
 
 const STAFF_OPTIONS: { id: StaffId; label: string }[] = [
   { id: 'host', label: 'The Host' },
@@ -27,6 +28,7 @@ const STAFF_OPTIONS: { id: StaffId; label: string }[] = [
   { id: 'commonplaceBook', label: 'The Commonplace Book' },
   { id: 'ariel', label: 'Ariel' },
   { id: 'suparna', label: 'Suparṇā' },
+  { id: 'pascal', label: 'Pascal the Croupier' },
 ]
 
 interface CharacterSystemPromptInfo {
@@ -54,12 +56,24 @@ interface ProfileCard {
   isDefault: boolean
 }
 
+/** A current participant of the chat, offered as a whisper target. */
+interface AudienceCandidate {
+  /** CHAT PARTICIPANT id — this is what gets persisted as a whisper target. */
+  participantId: string
+  name: string
+  controlledBy: 'llm' | 'user'
+  avatarUrl?: string | null
+  status?: 'active' | 'silent' | 'absent' | 'removed'
+}
+
 interface InsertAnnouncementDialogProps {
   isOpen: boolean
   onClose: () => void
   chatId: string
   /** Character IDs already present in the chat (filtered out of the off-scene picker). */
   participantCharacterIds: string[]
+  /** Current participants, offered as optional whisper targets. */
+  audienceCandidates?: AudienceCandidate[]
   onPosted?: () => void
 }
 
@@ -73,6 +87,7 @@ export default function InsertAnnouncementDialog({
   onClose,
   chatId,
   participantCharacterIds,
+  audienceCandidates = [],
   onPosted,
 }: InsertAnnouncementDialogProps) {
   const [mode, setMode] = useState<Mode>('staff')
@@ -92,6 +107,10 @@ export default function InsertAnnouncementDialog({
   const [stage, setStage] = useState<Stage>('compose')
   const [proposedMarkdown, setProposedMarkdown] = useState('')
   const [isPosting, setIsPosting] = useState(false)
+  // Whisper audience. Empty = public, which is the default and the historical
+  // behaviour: an announcement is a proclamation unless the operator says
+  // otherwise.
+  const [audience, setAudience] = useState<string[]>([])
 
   // Note: state resets naturally on each open because the parent conditionally
   // renders this component (`{insertAnnouncementOpen && <... />}`), so each
@@ -180,6 +199,19 @@ export default function InsertAnnouncementDialog({
     setProposedMarkdown('')
   }
 
+  // The audience reaches the in-character rewrite (a private aside is phrased
+  // differently from a proclamation), so changing it invalidates any proposal
+  // already on screen and drops back to compose.
+  const toggleAudience = (participantId: string) => {
+    setAudience((prev) =>
+      prev.includes(participantId)
+        ? prev.filter((id) => id !== participantId)
+        : [...prev, participantId],
+    )
+    setStage('compose')
+    setProposedMarkdown('')
+  }
+
   const handleModeChange = (next: Mode) => {
     setMode(next)
     setStage('compose')
@@ -202,6 +234,14 @@ export default function InsertAnnouncementDialog({
       )
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [characters, participantCharacterIds, charSearch])
+
+  const selectedAudienceNames = useMemo(
+    () =>
+      audience
+        .map((id) => audienceCandidates.find((p) => p.participantId === id)?.name)
+        .filter((name): name is string => Boolean(name)),
+    [audience, audienceCandidates],
+  )
 
   const willRewrite = mode === 'character' && profileId !== AS_IS
 
@@ -233,6 +273,7 @@ export default function InsertAnnouncementDialog({
         body: JSON.stringify({
           contentMarkdown: textToPost.trim(),
           sender,
+          targetParticipantIds: audience.length > 0 ? audience : null,
         }),
       })
 
@@ -243,7 +284,7 @@ export default function InsertAnnouncementDialog({
         return
       }
 
-      showSuccessToast('Announcement posted')
+      showSuccessToast(audience.length > 0 ? 'Whispered announcement posted' : 'Announcement posted')
       onPosted?.()
       onClose()
     } catch (error) {
@@ -267,6 +308,7 @@ export default function InsertAnnouncementDialog({
           characterId,
           connectionProfileId: profileId,
           systemPromptId: systemPromptId || undefined,
+          targetParticipantIds: audience.length > 0 ? audience : null,
         }),
       })
 
@@ -312,12 +354,15 @@ export default function InsertAnnouncementDialog({
     setProposedMarkdown('')
   }
 
+  const isWhisper = audience.length > 0
+  const postLabel = isWhisper ? 'Post Whisper' : 'Post Announcement'
+
   const primaryLabel = (() => {
     if (stage === 'generating') return 'Generating…'
     if (isPosting) return 'Posting…'
-    if (mode === 'character' && stage === 'review') return 'Post Announcement'
+    if (mode === 'character' && stage === 'review') return postLabel
     if (willRewrite && stage === 'compose') return 'Preview in character'
-    return 'Post Announcement'
+    return postLabel
   })()
 
   const showSystemPromptPicker =
@@ -529,11 +574,88 @@ export default function InsertAnnouncementDialog({
             )}
           </div>
 
+          {/* Audience — public by default; naming anyone makes it a whisper. */}
+          {audienceCandidates.length > 0 && (
+            <div className="mb-4">
+              <label className="block text-sm qt-text-primary mb-2" id="announce-audience-label">
+                Who hears it
+              </label>
+              <div
+                role="group"
+                aria-labelledby="announce-audience-label"
+                className="qt-border-primary border rounded max-h-40 overflow-y-auto"
+              >
+                {audienceCandidates.map((p) => {
+                  const checked = audience.includes(p.participantId)
+                  return (
+                    <label
+                      key={p.participantId}
+                      className={`w-full px-3 py-2 text-sm flex items-center gap-3 cursor-pointer ${
+                        checked ? 'qt-bg-primary/20' : 'hover:qt-bg-primary/10'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleAudience(p.participantId)}
+                        disabled={isPosting || stage === 'generating'}
+                        className="qt-checkbox flex-shrink-0"
+                      />
+                      {p.avatarUrl ? (
+                        <img
+                          src={p.avatarUrl}
+                          alt=""
+                          className="w-6 h-6 rounded-full object-cover flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-6 h-6 rounded-full qt-bg-secondary flex-shrink-0" />
+                      )}
+                      <span className="min-w-0 truncate">{p.name}</span>
+                      {p.controlledBy === 'user' && (
+                        <span className="qt-text-xs flex-shrink-0">(you)</span>
+                      )}
+                      {(p.status === 'silent' || p.status === 'absent') && (
+                        <span className="qt-text-xs flex-shrink-0">({p.status})</span>
+                      )}
+                    </label>
+                  )
+                })}
+              </div>
+              <div className="qt-text-xs mt-1">
+                {audience.length === 0 ? (
+                  <>Everyone present hears this — it is posted as a public announcement.</>
+                ) : (
+                  <>
+                    Whispered to {selectedAudienceNames.join(', ')}. No other character receives it in
+                    their context.
+                    {' '}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAudience([])
+                        setStage('compose')
+                        setProposedMarkdown('')
+                      }}
+                      className="qt-text-link underline"
+                      disabled={isPosting || stage === 'generating'}
+                    >
+                      Make it public
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Seed editor */}
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
               <label className="block text-sm qt-text-primary">
-                {willRewrite ? 'What you want the character to announce' : 'Announcement'}
+                {willRewrite
+                  ? `What you want the character to ${isWhisper ? 'say privately' : 'announce'}`
+                  : isWhisper
+                    ? 'Whisper'
+                    : 'Announcement'}
               </label>
               {willRewrite && stage === 'review' && (
                 <button

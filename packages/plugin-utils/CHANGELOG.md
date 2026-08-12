@@ -2,6 +2,12 @@
 
 All notable changes to @quilltap/plugin-utils will be documented in this file.
 
+## [2.2.19] - 2026-08-03
+
+### Fixed
+
+- `PLUGIN_UTILS_VERSION` no longer drifts from the published version. The constant was a hand-written literal and had been stale since 2.2.1 while the package shipped 2.2.18, so any consumer using it for a runtime compatibility check got a wrong answer. It is now generated into `src/version.generated.ts` from the `version` field in package.json by `scripts/generate-version.mjs`, which runs from `prebuild` and `pretypecheck` — bumping package.json is the only step. Both the runtime value and the literal type in `dist/index.d.ts` follow automatically.
+
 ## [2.2.0] - 2026-04-09
 
 ### Removed

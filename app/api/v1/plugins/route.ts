@@ -9,7 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { createContextHandler } from '@/lib/api/middleware';
 import { pluginRegistry } from '@/lib/plugins/registry';
 import { initializePlugins } from '@/lib/startup/plugin-initialization';
 import { installPluginFromNpm, uninstallPlugin } from '@/lib/plugins/installer';
@@ -243,7 +243,7 @@ async function handleCheckUpgrades(context: any) {
 // GET Handler
 // ============================================================================
 
-export const GET = createAuthenticatedHandler(async (req: NextRequest, context) => {
+export const GET = createContextHandler(async (req: NextRequest, context) => {
   try {
     const action = getActionParam(req);
 
@@ -291,7 +291,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, context) 
 // POST Handler
 // ============================================================================
 
-export const POST = createAuthenticatedHandler(async (req: NextRequest, context) => {
+export const POST = createContextHandler(async (req: NextRequest, context) => {
   const action = getActionParam(req);
 
   if (!isValidAction(action, PLUGINS_POST_ACTIONS)) {

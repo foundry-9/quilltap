@@ -578,6 +578,22 @@ export function invalidateCompressionCache(chatId: string, participantId?: strin
 }
 
 /**
+ * Drop a chat's in-memory compression-cache entries WITHOUT touching the
+ * database. For callers that clear `chats.compressionCache` themselves via
+ * raw SQL (the stale-chat maintenance sweep — a repo update would bump the
+ * chat's `updatedAt`) but still need the in-process `Map` to stay consistent.
+ */
+export function dropInMemoryCompressionCache(chatId: string): void {
+  compressionCache.delete(chatId)
+  const allKeys = Array.from(compressionCache.keys())
+  for (const mapKey of allKeys) {
+    if (mapKey.startsWith(`${chatId}:`)) {
+      compressionCache.delete(mapKey)
+    }
+  }
+}
+
+/**
  * Clear all in-memory cached compression results
  * Useful for testing or when settings change globally
  * Note: Does not clear database caches

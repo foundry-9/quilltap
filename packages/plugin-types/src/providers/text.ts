@@ -113,6 +113,25 @@ export interface LLMParams {
    * Undefined when no character is active (e.g. user-only chats, titling).
    */
   cacheKey?: string;
+  /**
+   * Hard wall-clock budget for this one request, in milliseconds.
+   *
+   * Providers MUST treat this as a ceiling on a single attempt and MUST NOT
+   * retry past it — a caller that sets this has already decided what the work
+   * is worth waiting for. Omitted means "use the provider's own default",
+   * which for SDK-backed providers is typically 10 minutes.
+   *
+   * Quilltap sets this on background / cheap-LLM work (memory recap, titling,
+   * compression, extraction), which is awaited inline on user-visible turns and
+   * must degrade rather than stall when a provider accepts a connection and
+   * then never answers.
+   *
+   * Note that for SDK-backed providers this budget covers time-to-response-
+   * headers, not time-to-last-token: a streaming request is measured on how
+   * long the provider takes to *start* answering, so a long generation is not
+   * penalised.
+   */
+  requestTimeoutMs?: number;
 }
 
 /**

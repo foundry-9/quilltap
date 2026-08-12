@@ -16,6 +16,7 @@ import { DatabaseCollection, TypedQueryFilter } from '../interfaces';
 import { SQLiteCollection } from '../backends/sqlite/backend';
 import { getRawMountIndexDatabase, isMountIndexDegraded } from '../backends/sqlite/mount-index-client';
 import { generateDDL, extractSchemaMetadata } from '../schema-translator';
+import { ensureFolderNocaseUniqueIndex } from './mount-index-case-repair';
 
 /**
  * Document Mount Folders Repository
@@ -57,12 +58,12 @@ export class DocMountFoldersRepository extends AbstractBaseRepository<DocMountFo
           db.exec(sql);
         }
 
-        // Unique constraint on (mountPointId, COALESCE(parentId, ''), name)
-        // The COALESCE is required because SQLite treats each NULL as distinct in UNIQUE indexes.
-        db.exec(
-          `CREATE UNIQUE INDEX IF NOT EXISTS "idx_${this.collectionName}_mp_parent_name" ` +
-          `ON "${this.collectionName}" ("mountPointId", COALESCE("parentId", ''), "name")`
-        );
+        // Case-insensitive unique constraint on (mountPointId, parentId, name):
+        // sibling folders may never differ only by casing. Runs a repair scan
+        // every init (catching out-of-band edits, and swapping out the legacy
+        // case-sensitive index on older databases) before guaranteeing the
+        // NOCASE index.
+        ensureFolderNocaseUniqueIndex(db);
 
         // Fast path lookup by (mountPointId, path)
         db.exec(
@@ -158,7 +159,10 @@ export class DocMountFoldersRepository extends AbstractBaseRepository<DocMountFo
   // ============================================================================
 
   /**
-   * Find a folder by mount point and relative path.
+   * Find a folder by mount point and relative path. Case-insensitive with an
+   * exact-match fast path: the folder namespace is case-insensitive (sibling
+   * names are unique except by casing), so `Lore/Maps` resolves the folder
+   * stored as `lore/maps`. Matches the LOWER()-based file-path lookups.
    * @param mountPointId The mount point ID
    * @param path The relative path ('' for root)
    * @returns Promise<DocMountFolder | null> The folder if found
@@ -168,11 +172,18 @@ export class DocMountFoldersRepository extends AbstractBaseRepository<DocMountFo
     path: string
   ): Promise<DocMountFolder | null> {
     return this.safeQuery(
-      async () =>
-        this.findOneByFilter({
+      async () => {
+        const exact = await this.findOneByFilter({
           mountPointId,
           path,
-        } as TypedQueryFilter<DocMountFolder>),
+        } as TypedQueryFilter<DocMountFolder>);
+        if (exact) return exact;
+        const needle = path.toLowerCase();
+        const all = await this.findByFilter({
+          mountPointId,
+        } as TypedQueryFilter<DocMountFolder>);
+        return all.find(f => f.path.toLowerCase() === needle) ?? null;
+      },
       'Error finding folder by mount point and path',
       { mountPointId, path },
       null

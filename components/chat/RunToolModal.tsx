@@ -363,8 +363,8 @@ export default function RunToolModal({
               <div className="flex-1">
                 <div className="text-sm font-medium qt-text">Private (whisper)</div>
                 <div className="text-xs qt-text-secondary">
-                  Hide from the chat by default and exclude from every character&apos;s context.
-                  Toggle &ldquo;show all whispers&rdquo; in the salon to view it.
+                  Excluded from every character&apos;s context — the run stays between
+                  you and Prospero, and remains in your own view of the salon.
                 </div>
               </div>
             </label>

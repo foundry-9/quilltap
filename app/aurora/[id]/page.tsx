@@ -1,21 +1,11 @@
-'use client'
+/**
+ * Bare character route — server redirect to view mode (which itself redirects
+ * into the workspace when enabled).
+ */
 
-import { use } from 'react'
-import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
+import { redirect } from 'next/navigation'
 
-export default function CharacterRedirectPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
-  const router = useRouter()
-
-  useEffect(() => {
-    // Redirect to view mode by default
-    router.replace(`/aurora/${id}/view`)
-  }, [id, router])
-
-  return (
-    <div className="flex items-center justify-center min-h-screen">
-      <p className="text-lg qt-text-primary">Loading...</p>
-    </div>
-  )
+export default async function CharacterRedirectPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  redirect(`/aurora/${id}/view`)
 }

@@ -21,7 +21,7 @@ import { getSeedImports } from '@/first-startup';
 import { executeImport } from '@/lib/import/quilltap-import-service';
 import { reseedAvatarsForCharacters } from '@/lib/startup/seed-initial-data';
 import { writeCharacterAvatarToVault } from '@/lib/file-storage/character-vault-bridge';
-import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RequestContext } from '@/lib/api/middleware';
 
 // ============================================================================
 // Schemas
@@ -193,7 +193,7 @@ function replaceMappedIdsRecursively(value: unknown, idMapping: Map<string, stri
 // Named Handlers
 // ============================================================================
 
-async function handleResetBuiltins(_req: NextRequest, context: AuthenticatedContext) {
+async function handleResetBuiltins(_req: NextRequest, context: RequestContext) {
   const { user, repos } = context;
   const actionContext = 'characters-reset-builtins';
 
@@ -301,7 +301,7 @@ async function handleResetBuiltins(_req: NextRequest, context: AuthenticatedCont
   }
 }
 
-async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
+async function handleCreate(req: NextRequest, context: RequestContext) {
   const { user, repos } = context;
 
   const body = await req.json();
@@ -350,7 +350,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
   return NextResponse.json({ character }, { status: 201 });
 }
 
-async function handleQuickCreate(req: NextRequest, context: AuthenticatedContext) {
+async function handleQuickCreate(req: NextRequest, context: RequestContext) {
   const { user, repos } = context;
 
   const body = await req.json();
@@ -388,7 +388,7 @@ async function handleQuickCreate(req: NextRequest, context: AuthenticatedContext
   return NextResponse.json({ character }, { status: 201 });
 }
 
-async function handleImport(req: NextRequest, context: AuthenticatedContext) {
+async function handleImport(req: NextRequest, context: RequestContext) {
   const { user, repos } = context;
 
   try {
@@ -509,7 +509,7 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
   }
 }
 
-async function handleAiWizard(req: NextRequest, context: AuthenticatedContext) {
+async function handleAiWizard(req: NextRequest, context: RequestContext) {
   const { user, repos } = context;
 
   const body = await req.json();
@@ -527,7 +527,7 @@ async function handleAiWizard(req: NextRequest, context: AuthenticatedContext) {
   return NextResponse.json(result);
 }
 
-async function handleAiWizardStream(req: NextRequest, context: AuthenticatedContext) {
+async function handleAiWizardStream(req: NextRequest, context: RequestContext) {
   const { user, repos } = context;
 
   const body = await req.json();
@@ -577,7 +577,7 @@ async function handleAiWizardStream(req: NextRequest, context: AuthenticatedCont
 
 export async function handlePost(
   req: NextRequest,
-  ctx: AuthenticatedContext
+  ctx: RequestContext
 ): Promise<NextResponse> {
   const action = getActionParam(req);
 

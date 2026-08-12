@@ -20,7 +20,7 @@
 
 ## Bundle Format: Custom Icon Overrides
 
-Theme bundles may replace any of the application's 80 built-in icons by declaring an `icons` map in `theme.json`. Each entry maps a canonical icon name to a bundle-relative asset path (`.svg` or `.webp`):
+Theme bundles may replace any of the application's 85 built-in icons by declaring an `icons` map in `theme.json`. Each entry maps a canonical icon name to a bundle-relative asset path (`.svg` or `.webp`):
 
 ```json
 {
@@ -44,7 +44,24 @@ Place assets in an `icons/` directory inside the bundle. `create-quilltap-theme`
 
 The `brand` icon follows the same extension rule as every other icon: an `.svg` override is masked and tinted; ship the brand mark as `.webp` if it should keep its own colours.
 
-**Canonical icon names:** the complete name list (80 as of 2026-06) is in [`docs/developer/ICON_INVENTORY.md`](./ICON_INVENTORY.md). The authoring reference (grouped catalogue + override recipe) is in `@quilltap/theme-storybook`'s **Icons** story; `create-quilltap-theme` includes it in the scaffolded Storybook. Source of truth for the implemented set: `components/ui/icons/icon-registry.ts` — `IconName` is derived from it.
+**The `thinking` icon is animated.** It is the quill that rocks while a reply is awaited, while tokens stream, and while a tool call is outstanding — and it is a *separate* name from `brand` precisely so replacing the brand mark doesn't set that mark rocking in the Salon. Overriding the glyph is ordinary; the **motion** is a second, independent hook — the `.qt-thinking-indicator` class in `_chat.css`, whose defaults a theme's CSS can retune:
+
+```css
+/* a gentler, slower sweep */
+.qt-thinking-indicator {
+  --qt-thinking-duration: 2s;
+  --qt-thinking-angle-rest: -20deg;
+  --qt-thinking-angle-lean: 0deg;
+}
+```
+
+Re-declaring `animation` on that class outright replaces the rock with whatever the theme prefers (a pulse, a dip, a fade). Honour `prefers-reduced-motion` in any replacement — the default does.
+
+**If you override the glyph, check `--qt-thinking-origin`.** The default is `12.5% 87.5%` — the nib's position in the default glyph, (3,21) of its 24×24 viewBox — so the quill pivots on the point that would be touching the page and the feather swings above it, rather than orbiting its own centre. That origin is a property of *the artwork*, not of the animation: a replacement glyph whose nib sits elsewhere (or that has no nib at all) needs its own value, or the pivot lands on empty space and the whole icon wheels around it.
+
+The default glyph is also drawn on the diagonal, nib to the lower left, which is why the *rest* angle is the negative one — an upright replacement wants both angle variables adjusted. And because a quill is longer than its box is tall, the tip paints slightly outside the element at the upright extreme (~8px on the 48px indicator); nothing clips it, so don't wrap the indicator in an `overflow: hidden` container.
+
+**Canonical icon names:** the complete name list (85 as of 2026-07) is in [`docs/developer/ICON_INVENTORY.md`](./ICON_INVENTORY.md). The authoring reference (grouped catalogue + override recipe) is in `@quilltap/theme-storybook`'s **Icons** story; `create-quilltap-theme` includes it in the scaffolded Storybook. Source of truth for the implemented set: `components/ui/icons/icon-registry.ts` — `IconName` is derived from it.
 
 **CSS mechanics (informational):** the override rules are emitted by `generateIconOverridesCSS` in `lib/themes/utils.ts` and appended by the theme-style-injector into the same unlayered `<style id="quilltap-theme-variables">` block as the token variables. Unlayered rules beat the `@layer components` defaults in `_icons.css` by cascade source order — no new serving route, no additional network requests.
 
@@ -684,6 +701,26 @@ Override these variables for consistent component styling:
 --qt-badge-padding-x
 --qt-badge-font-size
 --qt-badge-font-weight
+
+/* Terminal (The Ariel terminal pane).
+   Terminals keep a "terminal" identity regardless of the surrounding theme's
+   light/dark mode, so a parchment theme can still render a dark terminal. */
+--qt-terminal-bg
+--qt-terminal-fg
+--qt-terminal-cursor
+--qt-terminal-selection
+--qt-terminal-ansi-black         /* ...and red/green/yellow/blue/magenta/cyan/white */
+--qt-terminal-ansi-bright-black  /* ...and the seven matching bright- variants */
+
+/* Terminal, optional. Leave unset and xterm derives each from
+   --qt-terminal-bg / --qt-terminal-fg (slider colors default to the
+   foreground at 20/40/50% opacity). Set one only to override that. */
+--qt-terminal-cursor-accent      /* text under a block cursor */
+--qt-terminal-selection-fg       /* text inside a selection */
+--qt-terminal-selection-inactive /* selection while the pane is unfocused */
+--qt-terminal-scrollbar          /* scrollbar slider */
+--qt-terminal-scrollbar-hover    /* scrollbar slider, hovered */
+--qt-terminal-scrollbar-active   /* scrollbar slider, dragged */
 ```
 
 ---
