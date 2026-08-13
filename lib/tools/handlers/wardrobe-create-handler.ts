@@ -26,7 +26,8 @@ import { WARDROBE_SLOT_TYPES, EMPTY_EQUIPPED_SLOTS } from '@/lib/schemas/wardrob
 import { equipItem } from '@/lib/wardrobe/outfit-displacement';
 import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
 import { unionTypes } from '@/lib/wardrobe/composite-types';
-import { resolveProjectMountPointIdsForChat } from '@/lib/mount-index/tiered-mount-pool';
+import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
+import type { SharedWardrobeTiers } from '@/lib/wardrobe/shared-tiers';
 import { describeWardrobeEffect } from './wardrobe-handler-shared';
 
 export interface WardrobeCreateToolContext {
@@ -90,7 +91,7 @@ async function resolveComponentItems(
   characterId: string,
   componentIds: string[] | undefined,
   componentTitles: string[] | undefined,
-  projectMountPointIds: string[],
+  tiers: SharedWardrobeTiers,
 ): Promise<WardrobeItem[]> {
   const ids = componentIds ?? [];
   const titles = componentTitles ?? [];
@@ -98,7 +99,7 @@ async function resolveComponentItems(
 
   const repos = getRepositories();
   const ownItems = await repos.wardrobe.findByCharacterId(characterId, true);
-  const archetypes = await repos.wardrobe.findArchetypes(false, { projectMountPointIds });
+  const archetypes = await repos.wardrobe.findArchetypes(false, tiers);
 
   // Character's own items take precedence on id/title collision.
   const itemsById = new Map<string, WardrobeItem>();
@@ -213,7 +214,9 @@ export async function executeWardrobeCreateTool(
       recipientName = resolved.characterName;
     }
 
-    const projectMountPointIds = await resolveProjectMountPointIdsForChat(context.chatId);
+    // Keyed on the *target* character, not the caller: a gift is assembled from
+    // what the recipient can reach, and the group tier is per-character.
+    const tiers = await resolveSharedWardrobeTiersForChat(context.chatId, targetCharacterId);
 
     // Resolve components against the target character's wardrobe (plus shared
     // archetypes) so a gifted composite references items in the recipient's
@@ -224,7 +227,7 @@ export async function executeWardrobeCreateTool(
       targetCharacterId,
       component_item_ids,
       component_titles,
-      projectMountPointIds,
+      tiers,
     );
 
     const isComposite = components.length > 0;
@@ -265,7 +268,7 @@ export async function executeWardrobeCreateTool(
     let currentState: EquippedSlots | undefined;
 
     if (equip_now) {
-      await equipItem(repos, context.chatId, targetCharacterId, newItem);
+      await equipItem(repos, context.chatId, targetCharacterId, newItem, tiers);
 
       equipped = true;
       effect = newItem.replace ? 'replaced' : 'layered';

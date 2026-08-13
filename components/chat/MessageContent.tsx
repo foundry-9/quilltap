@@ -7,7 +7,12 @@ import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
+import remarkSmartypants from 'remark-smartypants'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { REMARK_MATH_OPTIONS, normalizeMathDelimiters } from '@/lib/markdown/math'
+import { SMARTYPANTS_OPTIONS, shouldCurlQuotes } from '@/lib/markdown/typography'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism'
 import type { Components } from 'react-markdown'
@@ -337,6 +342,39 @@ export default function MessageContent({
   // Use provided dialogue detection or fall back to default
   const dialogueConfig = dialogueDetection || DEFAULT_DIALOGUE_DETECTION
 
+  // Smart typography, Part A: curl quotes on DISPLAY only. Read here rather
+  // than threaded down as a prop because this component is the message renderer
+  // for every surface that has one — the Salon, streaming messages, thinking
+  // blocks, the help chat, the Brahma console — and the setting is a display
+  // preference that should apply to all of them consistently. TanStack Query
+  // dedupes the fetch across every mounted message and re-renders them all when
+  // the toggle flips.
+  const { data: smartTypographySettings } = useQuery({
+    queryKey: queryKeys.settings.chat,
+    queryFn: ({ signal }) =>
+      apiFetch<{ smartTypographySettings?: { displayQuotes?: boolean } }>(
+        '/api/v1/settings/chat',
+        { signal },
+      ),
+    select: (data) => data.smartTypographySettings,
+  })
+  const curlQuotes = shouldCurlQuotes({
+    displayQuotes: smartTypographySettings?.displayQuotes,
+    renderingPatterns: patterns,
+    dialogueDetection: dialogueConfig,
+  })
+
+  // The remark plugin list is rebuilt only when the typographer state flips.
+  // Smart typography sits after remarkBreaks and before react-markdown's
+  // internal remark-rehype, mirroring the server's insertion point exactly.
+  const remarkPlugins = useMemo(
+    () =>
+      curlQuotes
+        ? [remarkGfm, [remarkMath, REMARK_MATH_OPTIONS], remarkBreaks, [remarkSmartypants, SMARTYPANTS_OPTIONS]]
+        : [remarkGfm, [remarkMath, REMARK_MATH_OPTIONS], remarkBreaks],
+    [curlQuotes],
+  ) as React.ComponentProps<typeof ReactMarkdown>['remarkPlugins']
+
   // Compile patterns once for efficient matching
   const compiledRules = useMemo(
     () => compileRenderingPatterns(patterns),
@@ -496,9 +534,13 @@ export default function MessageContent({
           // collapsed to a space the way CommonMark does by default. Blank-line
           // paragraph separation still works as before.
           // remark-math + rehype-katex render $$…$$ math (single-dollar math is
-          // off — see lib/markdown/math.ts). Must stay in sync with the server
-          // pipeline in lib/services/markdown-renderer.service.ts.
-          remarkPlugins={[remarkGfm, [remarkMath, REMARK_MATH_OPTIONS], remarkBreaks]}
+          // off — see lib/markdown/math.ts). remark-smartypants curls quotes
+          // when the display setting is on (Layer 1.6, Part A — quotes only,
+          // never dashes; see lib/markdown/typography.ts). Must stay in sync
+          // with the server pipeline in
+          // lib/services/markdown-renderer.service.ts — if the two lists
+          // disagree, a message changes appearance when it stops streaming.
+          remarkPlugins={remarkPlugins}
           rehypePlugins={[rehypeKatex]}
           // react-markdown's default URL sanitizer only allows http(s)/mailto/
           // etc., so it would strip `qtap://` hrefs before they reach `a()`.

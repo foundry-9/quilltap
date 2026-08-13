@@ -39,6 +39,10 @@ export default function SetupPage() {
         const profilesData = await profilesRes.json();
         const profiles = profilesData.profiles || [];
         if (profiles.length === 0) {
+          // Full page load, not router.push: the database was just unlocked, so
+          // the session provider and all client caches must be rebuilt from
+          // scratch before the next setup step reads them.
+          // eslint-disable-next-line @next/next/no-location-assign-relative-destination
           window.location.href = '/setup/providers';
           return;
         }
@@ -48,6 +52,7 @@ export default function SetupPage() {
     }
 
     // Full page load to re-initialize session provider and all client state
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.href = '/';
   }, [router]);
 

@@ -46,6 +46,7 @@ import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
+import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { genderPrefixFromPronouns } from '@/lib/characters/pronoun-gender';
 import type { Character } from '@/lib/schemas/types';
@@ -253,9 +254,12 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     try {
       const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(payload.chatId, char!.id);
       if (equippedSlots) {
-        const resolved = await resolveEquippedOutfitForCharacter(repos, char!.id, equippedSlots, {
-          projectMountPointIds,
-        });
+        const resolved = await resolveEquippedOutfitForCharacter(
+          repos,
+          char!.id,
+          equippedSlots,
+          await sharedWardrobeTiersForCharacter(char!.id, projectMountPointIds),
+        );
         const flat: Array<{ slot: string; title: string; description?: string | null; imagePrompt?: string | null }> = [];
         for (const slot of ['top', 'bottom', 'footwear', 'accessories'] as const) {
           for (const item of resolved.leafItemsBySlot[slot]) {

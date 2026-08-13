@@ -15,7 +15,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import type { WardrobeListToolInput, WardrobeListToolOutput, WardrobeListItemResult } from '../wardrobe-list-tool';
 import { validateWardrobeListInput } from '../wardrobe-list-tool';
 import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
-import { resolveProjectMountPointIdsForChat } from '@/lib/mount-index/tiered-mount-pool';
+import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
 import { findEquippedSlots } from './wardrobe-handler-shared';
 
 /**
@@ -77,14 +77,11 @@ export async function executeWardrobeListTool(
     const validatedInput = parsed;
     const { type_filter, appropriateness_filter, include_equipped } = validatedInput;
 
-    // The character's own wardrobe merged under the shared archetypes (project
-    // + Quilltap General). Character items win on id collision so a personal
-    // override masks the shared item. (The group tier is a tracked follow-up —
-    // the repo doesn't accept group mounts yet.)
-    const projectMountPointIds = await resolveProjectMountPointIdsForChat(context.chatId);
-    const allItems = await repos.wardrobe.findWearablePoolForCharacter(context.characterId, {
-      projectMountPointIds,
-    });
+    // The character's own wardrobe merged under the shared archetypes (their
+    // groups' stores + the chat's project stores + Quilltap General). Character
+    // items win on id collision so a personal override masks the shared item.
+    const tiers = await resolveSharedWardrobeTiersForChat(context.chatId, context.characterId);
+    const allItems = await repos.wardrobe.findWearablePoolForCharacter(context.characterId, tiers);
 
     const equippedSlots: EquippedSlots | null = await repos.chats.getEquippedOutfitForCharacter(
       context.chatId,

@@ -46,7 +46,11 @@ import {
   type ExternalControlHandle,
 } from './plugins/ExternalControlPlugin'
 import { FormattingCommandPlugin } from './plugins/FormattingCommandPlugin'
+import { SmartTypographyPlugin } from './plugins/SmartTypographyPlugin'
 import { TextReplacementPlugin } from './plugins/TextReplacementPlugin'
+import { CharTypeaheadPlugin } from './plugins/CharTypeaheadPlugin'
+import { EMOJI_PROFILE } from '@/lib/char-insert/profiles/emoji'
+import { UNICODE_PROFILE } from '@/lib/char-insert/profiles/unicode'
 
 interface LexicalComposerWrapperProps {
   /**
@@ -154,6 +158,16 @@ const ComposerPlugins = forwardRef<
       <ImagePastePlugin onImagePaste={onImagePaste} />
       <ExternalControlPlugin controlRef={controlRef} />
       <FormattingCommandPlugin />
+      {/* Above TextReplacementPlugin: `:` and ` ` are word-boundary triggers for
+          both, and the character typeahead only swallows the keystroke when it
+          actually commits. One mount per dataset profile. */}
+      <CharTypeaheadPlugin profile={EMOJI_PROFILE} />
+      <CharTypeaheadPlugin profile={UNICODE_PROFILE} />
+      {/* Above TextReplacementPlugin: `.` is a trigger for both, and smart
+          typography must resolve `...` before text replacement claims the word
+          boundary. Registration order is load-bearing — see the interaction
+          table in SmartTypographyPlugin. */}
+      <SmartTypographyPlugin />
       <TextReplacementPlugin />
     </>
   )

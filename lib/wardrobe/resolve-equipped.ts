@@ -27,8 +27,10 @@
  * @module wardrobe/resolve-equipped
  */
 import { logger } from '@/lib/logger';
-import { COMPOSITE_MAX_DEPTH, expandComposites } from '@/lib/wardrobe/expand-composites';
+import { expandComposites } from '@/lib/wardrobe/expand-composites';
+import { hydrateComponentGraph } from '@/lib/wardrobe/hydrate-components';
 import type { OutfitSlotValues } from '@/lib/wardrobe/outfit-description';
+import type { SharedWardrobeTiers } from '@/lib/wardrobe/shared-tiers';
 import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
 
 /** Minimal repository surface needed to resolve equipped items. */
@@ -38,20 +40,17 @@ export interface ResolveEquippedRepos {
     findByIdsForCharacter(
       characterId: string,
       ids: string[],
-      opts?: { projectMountPointIds?: string[] },
+      opts?: SharedWardrobeTiers,
     ): Promise<WardrobeItem[]>;
   };
 }
 
-/** Options for tri-tier equipped resolution. */
-export interface ResolveEquippedOptions {
-  /**
-   * Project document stores in scope for this chat. Equipped items not found in
-   * the character's own vault are resolved against these project stores plus
-   * Quilltap General. Omit when there is no project context (two-tier fallback).
-   */
-  projectMountPointIds?: string[];
-}
+/**
+ * Options for multi-tier equipped resolution. Equipped items not found in the
+ * character's own vault are resolved against these group/project stores plus
+ * Quilltap General. Omit when there is no chat context (General alone).
+ */
+export type ResolveEquippedOptions = SharedWardrobeTiers;
 
 export interface ResolvedEquippedOutfit {
   /** Per-slot title arrays, ready for `describeOutfit`. */
@@ -125,12 +124,11 @@ export async function resolveEquippedOutfitForCharacter(
   const missing = equippedItemIds.filter((id) => !itemsById.has(id));
   if (missing.length > 0) {
     try {
-      // Resolve via the character scope so archetypes (Quilltap General) and
-      // the character's own vault items both surface — there's no global
-      // wardrobe table to hit post-cutover.
-      const fallback = await repos.wardrobe.findByIdsForCharacter(characterId, missing, {
-        projectMountPointIds: opts?.projectMountPointIds,
-      });
+      // Resolve via the character scope so archetypes (Quilltap General, the
+      // character's groups, the chat's project) and the character's own vault
+      // items both surface — there's no global wardrobe table to hit
+      // post-cutover.
+      const fallback = await repos.wardrobe.findByIdsForCharacter(characterId, missing, opts);
       for (const item of fallback) {
         itemsById.set(item.id, item);
       }
@@ -145,47 +143,9 @@ export async function resolveEquippedOutfitForCharacter(
   }
 
   // A composite may bundle components the character doesn't own and that aren't
-  // equipped in their own right — the canonical case is a shared "House Livery"
-  // whose coat, waistcoat and boots all live in Quilltap General or a project
-  // store. Without those components in `itemsById`, `expandComposites` emits
-  // each one as an unknown leaf and the routing pass below drops it, resolving
-  // the whole outfit to nothing.
-  //
-  // Walk the component graph a level at a time, one bulk query per level,
-  // bounded by the same depth `expandComposites` will walk. Bulk matters: this
-  // file is on child-process hot paths (avatar generation, story backgrounds,
-  // scene state).
-  const requestedComponentIds = new Set<string>();
-  for (let depth = 0; depth < COMPOSITE_MAX_DEPTH; depth += 1) {
-    const wanted: string[] = [];
-    for (const item of itemsById.values()) {
-      for (const componentId of item.componentItemIds ?? []) {
-        if (itemsById.has(componentId)) continue;
-        if (requestedComponentIds.has(componentId)) continue;
-        requestedComponentIds.add(componentId);
-        wanted.push(componentId);
-      }
-    }
-    if (wanted.length === 0) break;
-    try {
-      const components = await repos.wardrobe.findByIdsForCharacter(characterId, wanted, {
-        projectMountPointIds: opts?.projectMountPointIds,
-      });
-      if (components.length === 0) break;
-      for (const item of components) {
-        itemsById.set(item.id, item);
-      }
-    } catch (error) {
-      logger.warn('[resolveEquippedOutfitForCharacter] composite component hydration failed', {
-        context: 'wardrobe',
-        characterId,
-        depth,
-        wantedCount: wanted.length,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      break;
-    }
-  }
+  // equipped in their own right. Hydrating them is shared with the write side
+  // (see `hydrate-components`) so both ends see the same component graph.
+  await hydrateComponentGraph(repos, characterId, itemsById, opts);
 
   // First pass: expand each input slot's composites, dedupe by leaf id across
   // the whole equipped set, and remember the order leaves were first seen.

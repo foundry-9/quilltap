@@ -287,7 +287,7 @@ function CharacterOutfitSection({
       const currentSlots = selection.slots ?? { ...EMPTY_EQUIPPED_SLOTS }
       const item = itemsById.get(itemId)
       const next = item
-        ? wearItemIntoSlots(currentSlots, item)
+        ? wearItemIntoSlots(currentSlots, item, itemsById)
         : { ...currentSlots, [slot]: [...(currentSlots[slot] ?? []), itemId] }
       onChange({ characterId: character.id, mode: 'manual', slots: next })
     },

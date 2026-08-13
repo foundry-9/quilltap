@@ -17,6 +17,9 @@
 // match-walk / escaping, not a drifting reimplementation.
 import {
   type CompiledRule,
+  DEFAULT_RENDERING_PATTERNS,
+  DEFAULT_DIALOGUE_DETECTION,
+  compileRenderingPatterns,
   escapeMarkdownInBrackets as coreEscapeMarkdownInBrackets,
   tokenizeInline,
   segmentsToHtml,
@@ -567,6 +570,150 @@ describe('markdown-renderer.service', () => {
         { regex: /(?<!\+)\+(?<rpBody>[^+]+)\+(?!\+)/, className: 'qt-chat-narration', scope: 'inline', hideDelimiters: false },
       ];
       expect(applyWrapBlockClasses(html, shown)).toBe(html);
+    });
+  });
+
+  /**
+   * Bug 62 regression: the SHARED DEFAULTS, exercised through the same wrappers
+   * as everything else — no options passed.
+   *
+   * Every other suite here hands the renderer explicit patterns, which is how a
+   * straight-quote-only default survived for so long: the seeded Standard
+   * Roleplay template is correct, so the template path always looked fine. These
+   * assert the fallback itself.
+   *
+   * `resolveOptions` mirrors renderMarkdownToHtml's two fallback lines verbatim
+   * (`lib/services/markdown-renderer.service.ts` — the `length > 0 ? … : DEFAULT`
+   * re-assert and the `dialogueDetection || DEFAULT` re-assert), so the empty-array
+   * and null cases are covered, not just an absent options object.
+   */
+  describe('shared defaults (fallback path, no options passed)', () => {
+    function resolveOptions(options: {
+      renderingPatterns?: RenderingPattern[];
+      dialogueDetection?: DialogueDetection | null;
+    } = {}) {
+      const {
+        renderingPatterns = DEFAULT_RENDERING_PATTERNS,
+        dialogueDetection = DEFAULT_DIALOGUE_DETECTION,
+      } = options;
+      return {
+        patterns: renderingPatterns.length > 0 ? renderingPatterns : DEFAULT_RENDERING_PATTERNS,
+        dialogueConfig: dialogueDetection || DEFAULT_DIALOGUE_DETECTION,
+      };
+    }
+
+    /** Run a paragraph through the default fallback the way step 6 + step 8 do. */
+    function renderParagraph(
+      text: string,
+      options?: Parameters<typeof resolveOptions>[0]
+    ): string {
+      const { patterns, dialogueConfig } = resolveOptions(options);
+      const rules = compileRenderingPatterns(patterns);
+      let html = applyRoleplayPatterns(`<p>${text}</p>`, rules);
+      html = applyDialogueDetection(html, dialogueConfig);
+      return html;
+    }
+
+    // Guard the bytes, not the glyphs. Comparing rendered output alone would let
+    // a literal-curly-glyph regression through; these compare against explicit
+    // code points, which is the check the original defect would have failed.
+    describe('character-level integrity', () => {
+      it('DEFAULT_DIALOGUE_DETECTION carries the real curly code points, not duplicated 0x22', () => {
+        expect(DEFAULT_DIALOGUE_DETECTION.openingChars).toEqual(['"', '\u201c']);
+        expect(DEFAULT_DIALOGUE_DETECTION.closingChars).toEqual(['"', '\u201d']);
+        expect(new Set(DEFAULT_DIALOGUE_DETECTION.openingChars).size).toBe(2);
+        expect(new Set(DEFAULT_DIALOGUE_DETECTION.closingChars).size).toBe(2);
+      });
+
+      it('the default dialogue pattern compiles to a regex that accepts curly quotes', () => {
+        const entry = DEFAULT_RENDERING_PATTERNS.find(
+          (p) => p.className === 'qt-chat-dialogue'
+        );
+        expect(entry).toBeDefined();
+        const regex = new RegExp(entry!.pattern);
+        expect(regex.test('\u201cGet down,\u201d')).toBe(true);
+        expect(regex.test('"Get down,"')).toBe(true);
+      });
+    });
+
+    describe('inline dialogue pattern', () => {
+      it('styles curly-quoted dialogue', () => {
+        expect(renderParagraph('\u201cGet down,\u201d she said.')).toContain(
+          '<span class="qt-chat-dialogue">\u201cGet down,\u201d</span>'
+        );
+      });
+
+      it('still styles straight-quoted dialogue', () => {
+        expect(renderParagraph('"Get down," she said.')).toContain(
+          '<span class="qt-chat-dialogue">"Get down,"</span>'
+        );
+      });
+
+      it('leaves apostrophes alone (single quotes are deliberately not dialogue)', () => {
+        const html = renderParagraph("She didn't move; the writers' room was quiet.");
+        expect(html).not.toContain('qt-chat-dialogue');
+      });
+
+      it('leaves curly apostrophes alone', () => {
+        const html = renderParagraph('She didn\u2019t move.');
+        expect(html).not.toContain('qt-chat-dialogue');
+      });
+    });
+
+    describe('paragraph-level dialogue detection', () => {
+      it('tags a wholly curly-quoted paragraph', () => {
+        expect(renderParagraph('\u201cGet down.\u201d')).toContain('class="qt-chat-dialogue"');
+      });
+
+      it('tags a wholly straight-quoted paragraph', () => {
+        expect(renderParagraph('"Get down."')).toContain('class="qt-chat-dialogue"');
+      });
+
+      it('leaves a narrative paragraph untagged', () => {
+        expect(renderParagraph('She said nothing at all.')).not.toContain('qt-chat-dialogue');
+      });
+    });
+
+    describe('empty / null options fall through to the same defaults', () => {
+      it('an empty renderingPatterns array still styles curly dialogue', () => {
+        expect(
+          renderParagraph('\u201cGet down,\u201d she said.', { renderingPatterns: [] })
+        ).toContain('<span class="qt-chat-dialogue">\u201cGet down,\u201d</span>');
+      });
+
+      it('a null dialogueDetection still tags a curly-quoted paragraph', () => {
+        expect(renderParagraph('\u201cGet down.\u201d', { dialogueDetection: null })).toContain(
+          'class="qt-chat-dialogue"'
+        );
+      });
+    });
+
+    describe('the template path must not move', () => {
+      // Standard Roleplay's stored dialogue config, copied from
+      // lib/database/repositories/roleplay-templates.repository.ts.
+      const SEEDED_PATTERNS: RenderingPattern[] = [
+        { pattern: '["\u201c][^"\u201d]+["\u201d]', className: 'qt-chat-dialogue' },
+      ];
+      const SEEDED_DETECTION: DialogueDetection = {
+        openingChars: ['"', '\u201c'],
+        closingChars: ['"', '\u201d'],
+        className: 'qt-chat-dialogue',
+      };
+
+      it.each([
+        ['\u201cGet down,\u201d she said.'],
+        ['"Get down," she said.'],
+        ['\u201cGet down.\u201d'],
+        ['"Get down."'],
+        ['She said nothing at all.'],
+      ])('the defaults now agree with the seeded template on %p', (text) => {
+        const withDefaults = renderParagraph(text);
+        const withTemplate = renderParagraph(text, {
+          renderingPatterns: SEEDED_PATTERNS,
+          dialogueDetection: SEEDED_DETECTION,
+        });
+        expect(withDefaults).toBe(withTemplate);
+      });
     });
   });
 

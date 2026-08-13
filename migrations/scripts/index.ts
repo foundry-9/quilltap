@@ -368,6 +368,10 @@ import { addDocMountLinkGroupsMigration } from './add-doc-mount-link-groups';
 // The Almanack: connectionProfileId + imageProfileId attribution columns on llm_logs
 import { addLLMLogsProfileColumnsMigration } from './add-llm-logs-profile-columns';
 
+import { addComposerEmojiFieldMigration } from './add-composer-emoji-field';
+import { addComposerUnicodeFieldMigration } from './add-composer-unicode-field';
+import { addSmartTypographySettingsFieldMigration } from './add-smart-typography-settings-field';
+
 /**
  * All available migrations.
  * Order here doesn't matter - migrations will be sorted by dependencies.
@@ -731,6 +735,12 @@ export const migrations: Migration[] = [
   addDocMountLinkGroupsMigration,
   // The Almanack: connectionProfileId + imageProfileId attribution columns on llm_logs
   addLLMLogsProfileColumnsMigration,
+  // Layer 2.0e composer emoji: composerEmoji toggle column on chat_settings
+  addComposerEmojiFieldMigration,
+  // Layer 2.0u composer Unicode: composerUnicode toggle column on chat_settings
+  addComposerUnicodeFieldMigration,
+  // Layer 1.6 smart typography: smartTypographySettings JSON column on chat_settings
+  addSmartTypographySettingsFieldMigration,
 ];
 
 export {
@@ -1074,5 +1084,11 @@ export {
   addDocMountLinkGroupsMigration,
   // The Almanack: connectionProfileId + imageProfileId attribution columns on llm_logs
   addLLMLogsProfileColumnsMigration,
+  // Layer 2.0e composer emoji: composerEmoji toggle column on chat_settings
+  addComposerEmojiFieldMigration,
+  // Layer 2.0u composer Unicode: composerUnicode toggle column on chat_settings
+  addComposerUnicodeFieldMigration,
+  // Layer 1.6 smart typography: smartTypographySettings JSON column on chat_settings
+  addSmartTypographySettingsFieldMigration,
 };
 

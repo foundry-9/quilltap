@@ -71,9 +71,9 @@ function serverURLFromOptions(options) {
 var SDK_METADATA = {
   language: "typescript",
   openapiDocVersion: "1.0.0",
-  sdkVersion: "1.2.2",
+  sdkVersion: "1.2.32",
   genVersion: "2.914.0",
-  userAgent: "speakeasy-sdk/typescript 1.2.2 2.914.0 1.0.0 @openrouter/sdk"
+  userAgent: "speakeasy-sdk/typescript 1.2.32 2.914.0 1.0.0 @openrouter/sdk"
 };
 
 // node_modules/@openrouter/sdk/esm/lib/files.js
@@ -1053,8 +1053,8 @@ var ClientSDK = class {
       });
       return [...kept, additions].join("&");
     };
-    const encodeQueryRecord = (record87) => {
-      return Object.entries(record87).map(([k, v]) => {
+    const encodeQueryRecord = (record91) => {
+      return Object.entries(record91).map(([k, v]) => {
         if (v == null) {
           return void 0;
         }
@@ -1682,7 +1682,7 @@ async function extractSecurity(sec) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/errors/badgatewayresponseerror.js
-var z535 = __toESM(require("zod/v4"), 1);
+var z557 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/aabenchmarkentry.js
 var z6 = __toESM(require("zod/v4"), 1);
@@ -1711,7 +1711,8 @@ var ActivityItem$inboundSchema = z7.object({
   provider_name: z7.string(),
   reasoning_tokens: z7.int(),
   requests: z7.int(),
-  usage: z7.number()
+  usage: z7.number(),
+  workspace_id: z7.string().optional()
 }).transform((v) => {
   return remap(v, {
     "byok_usage_inference": "byokUsageInference",
@@ -1720,7 +1721,8 @@ var ActivityItem$inboundSchema = z7.object({
     "model_permaslug": "modelPermaslug",
     "prompt_tokens": "promptTokens",
     "provider_name": "providerName",
-    "reasoning_tokens": "reasoningTokens"
+    "reasoning_tokens": "reasoningTokens",
+    "workspace_id": "workspaceId"
   });
 });
 
@@ -2587,6 +2589,21 @@ var WebSearchEngineEnum = {
 var WebSearchEngineEnum$inboundSchema = inboundSchema(WebSearchEngineEnum);
 var WebSearchEngineEnum$outboundSchema = outboundSchema(WebSearchEngineEnum);
 
+// node_modules/@openrouter/sdk/esm/models/websearchmode.js
+var WebSearchMode = {
+  Instant: "instant",
+  Fast: "fast",
+  Auto: "auto",
+  DeepLite: "deep-lite",
+  Deep: "deep",
+  DeepReasoning: "deep-reasoning",
+  Turbo: "turbo",
+  Basic: "basic",
+  Advanced: "advanced"
+};
+var WebSearchMode$inboundSchema = inboundSchema(WebSearchMode);
+var WebSearchMode$outboundSchema = outboundSchema(WebSearchMode);
+
 // node_modules/@openrouter/sdk/esm/models/websearchuserlocation.js
 var z41 = __toESM(require("zod/v4"), 1);
 var WebSearchUserLocationType = {
@@ -2620,6 +2637,7 @@ var LegacyWebSearchServerTool$inboundSchema = z42.object({
   filters: z42.nullable(WebSearchDomainFilter$inboundSchema).optional(),
   max_results: z42.int().optional(),
   max_uses: z42.int().optional(),
+  mode: WebSearchMode$inboundSchema.optional(),
   search_context_size: SearchContextSizeEnum$inboundSchema.optional(),
   type: LegacyWebSearchServerToolType$inboundSchema,
   user_location: z42.nullable(WebSearchUserLocation$inboundSchema).optional()
@@ -2636,6 +2654,7 @@ var LegacyWebSearchServerTool$outboundSchema = z42.object({
   filters: z42.nullable(WebSearchDomainFilter$outboundSchema).optional(),
   maxResults: z42.int().optional(),
   maxUses: z42.int().optional(),
+  mode: WebSearchMode$outboundSchema.optional(),
   searchContextSize: SearchContextSizeEnum$outboundSchema.optional(),
   type: LegacyWebSearchServerToolType$outboundSchema,
   userLocation: z42.nullable(WebSearchUserLocation$outboundSchema).optional()
@@ -2905,6 +2924,7 @@ var Preview20250311WebSearchServerTool$inboundSchema = z47.object({
   filters: z47.nullable(WebSearchDomainFilter$inboundSchema).optional(),
   max_results: z47.int().optional(),
   max_uses: z47.int().optional(),
+  mode: WebSearchMode$inboundSchema.optional(),
   search_context_size: SearchContextSizeEnum$inboundSchema.optional(),
   type: Preview20250311WebSearchServerToolType$inboundSchema,
   user_location: z47.nullable(PreviewWebSearchUserLocation$inboundSchema).optional()
@@ -2921,6 +2941,7 @@ var Preview20250311WebSearchServerTool$outboundSchema = z47.object({
   filters: z47.nullable(WebSearchDomainFilter$outboundSchema).optional(),
   maxResults: z47.int().optional(),
   maxUses: z47.int().optional(),
+  mode: WebSearchMode$outboundSchema.optional(),
   searchContextSize: SearchContextSizeEnum$outboundSchema.optional(),
   type: Preview20250311WebSearchServerToolType$outboundSchema,
   userLocation: z47.nullable(PreviewWebSearchUserLocation$outboundSchema).optional()
@@ -2945,6 +2966,7 @@ var PreviewWebSearchServerTool$inboundSchema = z48.object({
   filters: z48.nullable(WebSearchDomainFilter$inboundSchema).optional(),
   max_results: z48.int().optional(),
   max_uses: z48.int().optional(),
+  mode: WebSearchMode$inboundSchema.optional(),
   search_context_size: SearchContextSizeEnum$inboundSchema.optional(),
   type: PreviewWebSearchServerToolType$inboundSchema,
   user_location: z48.nullable(PreviewWebSearchUserLocation$inboundSchema).optional()
@@ -2961,6 +2983,7 @@ var PreviewWebSearchServerTool$outboundSchema = z48.object({
   filters: z48.nullable(WebSearchDomainFilter$outboundSchema).optional(),
   maxResults: z48.int().optional(),
   maxUses: z48.int().optional(),
+  mode: WebSearchMode$outboundSchema.optional(),
   searchContextSize: SearchContextSizeEnum$outboundSchema.optional(),
   type: PreviewWebSearchServerToolType$outboundSchema,
   userLocation: z48.nullable(PreviewWebSearchUserLocation$outboundSchema).optional()
@@ -3175,6 +3198,7 @@ var WebSearchServerTool$inboundSchema = z61.object({
   filters: z61.nullable(WebSearchDomainFilter$inboundSchema).optional(),
   max_results: z61.int().optional(),
   max_uses: z61.int().optional(),
+  mode: WebSearchMode$inboundSchema.optional(),
   search_context_size: SearchContextSizeEnum$inboundSchema.optional(),
   type: WebSearchServerToolType$inboundSchema,
   user_location: z61.nullable(WebSearchUserLocation$inboundSchema).optional()
@@ -3191,6 +3215,7 @@ var WebSearchServerTool$outboundSchema = z61.object({
   filters: z61.nullable(WebSearchDomainFilter$outboundSchema).optional(),
   maxResults: z61.int().optional(),
   maxUses: z61.int().optional(),
+  mode: WebSearchMode$outboundSchema.optional(),
   searchContextSize: SearchContextSizeEnum$outboundSchema.optional(),
   type: WebSearchServerToolType$outboundSchema,
   userLocation: z61.nullable(WebSearchUserLocation$outboundSchema).optional()
@@ -3240,6 +3265,7 @@ var WebSearchServerToolConfig$outboundSchema = z63.object({
   maxResults: z63.int().optional(),
   maxTotalResults: z63.int().optional(),
   maxUses: z63.int().optional(),
+  mode: WebSearchMode$outboundSchema.optional(),
   searchContextSize: SearchQualityLevel$outboundSchema.optional(),
   userLocation: WebSearchUserLocationServerTool$outboundSchema.optional()
 }).transform((v) => {
@@ -5276,6 +5302,7 @@ var BYOKProviderSlug = {
   Coreweave: "coreweave",
   Crusoe: "crusoe",
   Darkbloom: "darkbloom",
+  Databricks: "databricks",
   Decart: "decart",
   Deepgram: "deepgram",
   Deepinfra: "deepinfra",
@@ -5368,7 +5395,7 @@ var BYOKKey$inboundSchema = z151.object({
   name: z151.nullable(z151.string()).optional(),
   provider: BYOKProviderSlug$inboundSchema,
   sort_order: z151.int(),
-  workspace_id: z151.string()
+  workspace_id: z151.nullable(z151.string())
 }).transform((v) => {
   return remap(v, {
     "allowed_api_key_hashes": "allowedApiKeyHashes",
@@ -6007,6 +6034,7 @@ var WebSearchConfig$outboundSchema = z185.object({
   maxResults: z185.int().optional(),
   maxTotalResults: z185.int().optional(),
   maxUses: z185.int().optional(),
+  mode: WebSearchMode$outboundSchema.optional(),
   searchContextSize: SearchQualityLevel$outboundSchema.optional(),
   userLocation: WebSearchUserLocationServerTool$outboundSchema.optional()
 }).transform((v) => {
@@ -6038,6 +6066,7 @@ var ChatWebSearchShorthand$outboundSchema = z186.object({
   maxResults: z186.int().optional(),
   maxTotalResults: z186.int().optional(),
   maxUses: z186.int().optional(),
+  mode: WebSearchMode$outboundSchema.optional(),
   parameters: WebSearchConfig$outboundSchema.optional(),
   searchContextSize: SearchQualityLevel$outboundSchema.optional(),
   type: ChatWebSearchShorthandType$outboundSchema,
@@ -6438,6 +6467,7 @@ var ProviderName = {
   Crucible: "Crucible",
   Crusoe: "Crusoe",
   Darkbloom: "Darkbloom",
+  Databricks: "Databricks",
   Decart: "Decart",
   Deepgram: "Deepgram",
   DeepInfra: "DeepInfra",
@@ -6749,6 +6779,7 @@ var WebSearchPlugin$outboundSchema = z224.object({
   includeDomains: z224.array(z224.string()).optional(),
   maxResults: z224.int().optional(),
   maxUses: z224.int().optional(),
+  mode: WebSearchMode$outboundSchema.optional(),
   searchPrompt: z224.string().optional(),
   userLocation: z224.nullable(z224.lazy(() => UserLocation$outboundSchema)).optional()
 }).transform((v) => {
@@ -7236,17 +7267,159 @@ var ChatStreamingResponse$inboundSchema = z240.object({
   }).pipe(ChatStreamChunk$inboundSchema)
 });
 
-// node_modules/@openrouter/sdk/esm/models/compactionitem.js
+// node_modules/@openrouter/sdk/esm/models/codeinterpretercallcodedeltaevent.js
 var z241 = __toESM(require("zod/v4"), 1);
+var CodeInterpreterCallCodeDeltaEvent$inboundSchema = z241.object({
+  delta: z241.string(),
+  item_id: z241.string(),
+  output_index: z241.int(),
+  sequence_number: z241.int(),
+  type: z241.literal("response.code_interpreter_call_code.delta")
+}).transform((v) => {
+  return remap(v, {
+    "item_id": "itemId",
+    "output_index": "outputIndex",
+    "sequence_number": "sequenceNumber"
+  });
+});
+
+// node_modules/@openrouter/sdk/esm/models/codeinterpretercallcodedoneevent.js
+var z242 = __toESM(require("zod/v4"), 1);
+var CodeInterpreterCallCodeDoneEvent$inboundSchema = z242.object({
+  code: z242.string(),
+  item_id: z242.string(),
+  output_index: z242.int(),
+  sequence_number: z242.int(),
+  type: z242.literal("response.code_interpreter_call_code.done")
+}).transform((v) => {
+  return remap(v, {
+    "item_id": "itemId",
+    "output_index": "outputIndex",
+    "sequence_number": "sequenceNumber"
+  });
+});
+
+// node_modules/@openrouter/sdk/esm/models/codeinterpretercallcompletedevent.js
+var z243 = __toESM(require("zod/v4"), 1);
+var CodeInterpreterCallCompletedEvent$inboundSchema = z243.object({
+  item_id: z243.string(),
+  output_index: z243.int(),
+  sequence_number: z243.int(),
+  type: z243.literal("response.code_interpreter_call.completed")
+}).transform((v) => {
+  return remap(v, {
+    "item_id": "itemId",
+    "output_index": "outputIndex",
+    "sequence_number": "sequenceNumber"
+  });
+});
+
+// node_modules/@openrouter/sdk/esm/models/codeinterpretercallinprogressevent.js
+var z244 = __toESM(require("zod/v4"), 1);
+var CodeInterpreterCallInProgressEvent$inboundSchema = z244.object({
+  item_id: z244.string(),
+  output_index: z244.int(),
+  sequence_number: z244.int(),
+  type: z244.literal("response.code_interpreter_call.in_progress")
+}).transform((v) => {
+  return remap(v, {
+    "item_id": "itemId",
+    "output_index": "outputIndex",
+    "sequence_number": "sequenceNumber"
+  });
+});
+
+// node_modules/@openrouter/sdk/esm/models/codeinterpretercallinterpretingevent.js
+var z245 = __toESM(require("zod/v4"), 1);
+var CodeInterpreterCallInterpretingEvent$inboundSchema = z245.object({
+  item_id: z245.string(),
+  output_index: z245.int(),
+  sequence_number: z245.int(),
+  type: z245.literal("response.code_interpreter_call.interpreting")
+}).transform((v) => {
+  return remap(v, {
+    "item_id": "itemId",
+    "output_index": "outputIndex",
+    "sequence_number": "sequenceNumber"
+  });
+});
+
+// node_modules/@openrouter/sdk/esm/models/codeinterpreterfileoutput.js
+var z246 = __toESM(require("zod/v4"), 1);
+var CodeInterpreterFileOutput$inboundSchema = z246.object({
+  download_url: z246.string().optional(),
+  error_code: z246.nullable(z246.string()).optional(),
+  expires_at: z246.string().optional(),
+  filename: z246.string().optional(),
+  id: z246.string().optional(),
+  media_type: z246.string().optional(),
+  sha256: z246.string().optional(),
+  size_bytes: z246.int().optional(),
+  status: z246.string().optional(),
+  type: z246.literal("file")
+}).transform((v) => {
+  return remap(v, {
+    "download_url": "downloadUrl",
+    "error_code": "errorCode",
+    "expires_at": "expiresAt",
+    "media_type": "mediaType",
+    "size_bytes": "sizeBytes"
+  });
+});
+var CodeInterpreterFileOutput$outboundSchema = z246.object({
+  downloadUrl: z246.string().optional(),
+  errorCode: z246.nullable(z246.string()).optional(),
+  expiresAt: z246.string().optional(),
+  filename: z246.string().optional(),
+  id: z246.string().optional(),
+  mediaType: z246.string().optional(),
+  sha256: z246.string().optional(),
+  sizeBytes: z246.int().optional(),
+  status: z246.string().optional(),
+  type: z246.literal("file")
+}).transform((v) => {
+  return remap(v, {
+    downloadUrl: "download_url",
+    errorCode: "error_code",
+    expiresAt: "expires_at",
+    mediaType: "media_type",
+    sizeBytes: "size_bytes"
+  });
+});
+
+// node_modules/@openrouter/sdk/esm/models/codeinterpreterimageoutput.js
+var z247 = __toESM(require("zod/v4"), 1);
+var CodeInterpreterImageOutput$inboundSchema = z247.object({
+  type: z247.literal("image"),
+  url: z247.string()
+});
+var CodeInterpreterImageOutput$outboundSchema = z247.object({
+  type: z247.literal("image"),
+  url: z247.string()
+});
+
+// node_modules/@openrouter/sdk/esm/models/codeinterpreterlogsoutput.js
+var z248 = __toESM(require("zod/v4"), 1);
+var CodeInterpreterLogsOutput$inboundSchema = z248.object({
+  logs: z248.string(),
+  type: z248.literal("logs")
+});
+var CodeInterpreterLogsOutput$outboundSchema = z248.object({
+  logs: z248.string(),
+  type: z248.literal("logs")
+});
+
+// node_modules/@openrouter/sdk/esm/models/compactionitem.js
+var z249 = __toESM(require("zod/v4"), 1);
 var CompactionItemType = {
   Compaction: "compaction"
 };
-var CompactionItemType$outboundSchema = z241.enum(CompactionItemType);
-var CompactionItem$outboundSchema = z241.object({
-  encryptedContent: z241.string(),
-  id: z241.nullable(z241.string()).optional(),
+var CompactionItemType$outboundSchema = z249.enum(CompactionItemType);
+var CompactionItem$outboundSchema = z249.object({
+  encryptedContent: z249.string(),
+  id: z249.nullable(z249.string()).optional(),
   type: CompactionItemType$outboundSchema,
-  additionalProperties: z241.record(z241.string(), z241.any()).optional()
+  additionalProperties: z249.record(z249.string(), z249.any()).optional()
 }).transform((v) => {
   return {
     ...v.additionalProperties,
@@ -7258,11 +7431,11 @@ var CompactionItem$outboundSchema = z241.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/conflictresponseerrordata.js
-var z242 = __toESM(require("zod/v4"), 1);
-var ConflictResponseErrorData$inboundSchema = z242.object({
-  code: z242.int(),
-  message: z242.string(),
-  metadata: z242.nullable(z242.record(z242.string(), z242.any())).optional()
+var z250 = __toESM(require("zod/v4"), 1);
+var ConflictResponseErrorData$inboundSchema = z250.object({
+  code: z250.int(),
+  message: z250.string(),
+  metadata: z250.nullable(z250.record(z250.string(), z250.any())).optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/contentfilteraction.js
@@ -7284,7 +7457,7 @@ var ContentFilterBuiltinAction$inboundSchema = inboundSchema(ContentFilterBuilti
 var ContentFilterBuiltinAction$outboundSchema = outboundSchema(ContentFilterBuiltinAction);
 
 // node_modules/@openrouter/sdk/esm/models/contentfilterbuiltinentry.js
-var z243 = __toESM(require("zod/v4"), 1);
+var z251 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/contentfilterbuiltinslug.js
 var ContentFilterBuiltinSlug = {
@@ -7309,9 +7482,9 @@ var PromptInjectionScanScope$inboundSchema = inboundSchema(PromptInjectionScanSc
 var PromptInjectionScanScope$outboundSchema = outboundSchema(PromptInjectionScanScope);
 
 // node_modules/@openrouter/sdk/esm/models/contentfilterbuiltinentry.js
-var ContentFilterBuiltinEntry$inboundSchema = z243.object({
+var ContentFilterBuiltinEntry$inboundSchema = z251.object({
   action: ContentFilterBuiltinAction$inboundSchema,
-  label: z243.string().optional(),
+  label: z251.string().optional(),
   scan_scope: PromptInjectionScanScope$inboundSchema.optional(),
   slug: ContentFilterBuiltinSlug$inboundSchema
 }).transform((v) => {
@@ -7321,10 +7494,10 @@ var ContentFilterBuiltinEntry$inboundSchema = z243.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/contentfilterbuiltinentryinput.js
-var z244 = __toESM(require("zod/v4"), 1);
-var ContentFilterBuiltinEntryInput$outboundSchema = z244.object({
+var z252 = __toESM(require("zod/v4"), 1);
+var ContentFilterBuiltinEntryInput$outboundSchema = z252.object({
   action: ContentFilterBuiltinAction$outboundSchema,
-  label: z244.string().optional(),
+  label: z252.string().optional(),
   scanScope: PromptInjectionScanScope$outboundSchema.optional(),
   slug: ContentFilterBuiltinSlug$outboundSchema
 }).transform((v) => {
@@ -7334,54 +7507,54 @@ var ContentFilterBuiltinEntryInput$outboundSchema = z244.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/contentfilterentry.js
-var z245 = __toESM(require("zod/v4"), 1);
-var ContentFilterEntry$inboundSchema = z245.object({
+var z253 = __toESM(require("zod/v4"), 1);
+var ContentFilterEntry$inboundSchema = z253.object({
   action: ContentFilterAction$inboundSchema,
-  label: z245.nullable(z245.string()).optional(),
-  pattern: z245.string()
+  label: z253.nullable(z253.string()).optional(),
+  pattern: z253.string()
 });
-var ContentFilterEntry$outboundSchema = z245.object({
+var ContentFilterEntry$outboundSchema = z253.object({
   action: ContentFilterAction$outboundSchema,
-  label: z245.nullable(z245.string()).optional(),
-  pattern: z245.string()
+  label: z253.nullable(z253.string()).optional(),
+  pattern: z253.string()
 });
 
 // node_modules/@openrouter/sdk/esm/models/contentpartaddedevent.js
-var z247 = __toESM(require("zod/v4"), 1);
+var z255 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/reasoningtextcontent.js
-var z246 = __toESM(require("zod/v4"), 1);
+var z254 = __toESM(require("zod/v4"), 1);
 var ReasoningTextContentType = {
   ReasoningText: "reasoning_text"
 };
-var ReasoningTextContentType$inboundSchema = z246.enum(ReasoningTextContentType);
+var ReasoningTextContentType$inboundSchema = z254.enum(ReasoningTextContentType);
 var ReasoningTextContentType$outboundSchema = ReasoningTextContentType$inboundSchema;
-var ReasoningTextContent$inboundSchema = z246.object({
-  text: z246.string(),
+var ReasoningTextContent$inboundSchema = z254.object({
+  text: z254.string(),
   type: ReasoningTextContentType$inboundSchema
 });
-var ReasoningTextContent$outboundSchema = z246.object({
-  text: z246.string(),
+var ReasoningTextContent$outboundSchema = z254.object({
+  text: z254.string(),
   type: ReasoningTextContentType$outboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/contentpartaddedevent.js
 var ContentPartAddedEventPart$inboundSchema = discriminatedUnion("type", {
   output_text: ResponseOutputText$inboundSchema,
-  reasoning_text: ReasoningTextContent$inboundSchema.and(z247.object({ type: z247.literal("reasoning_text") })),
+  reasoning_text: ReasoningTextContent$inboundSchema.and(z255.object({ type: z255.literal("reasoning_text") })),
   refusal: OpenAIResponsesRefusalContent$inboundSchema
 });
-var ContentPartAddedEvent$inboundSchema = z247.object({
-  content_index: z247.int(),
-  item_id: z247.string(),
-  output_index: z247.int(),
+var ContentPartAddedEvent$inboundSchema = z255.object({
+  content_index: z255.int(),
+  item_id: z255.string(),
+  output_index: z255.int(),
   part: discriminatedUnion("type", {
     output_text: ResponseOutputText$inboundSchema,
-    reasoning_text: ReasoningTextContent$inboundSchema.and(z247.object({ type: z247.literal("reasoning_text") })),
+    reasoning_text: ReasoningTextContent$inboundSchema.and(z255.object({ type: z255.literal("reasoning_text") })),
     refusal: OpenAIResponsesRefusalContent$inboundSchema
   }),
-  sequence_number: z247.int(),
-  type: z247.literal("response.content_part.added")
+  sequence_number: z255.int(),
+  type: z255.literal("response.content_part.added")
 }).transform((v) => {
   return remap(v, {
     "content_index": "contentIndex",
@@ -7392,13 +7565,13 @@ var ContentPartAddedEvent$inboundSchema = z247.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/contentpartaudio.js
-var z248 = __toESM(require("zod/v4"), 1);
-var AudioUrl$outboundSchema = z248.object({
-  url: z248.string()
+var z256 = __toESM(require("zod/v4"), 1);
+var AudioUrl$outboundSchema = z256.object({
+  url: z256.string()
 });
-var ContentPartAudio$outboundSchema = z248.object({
-  audioUrl: z248.lazy(() => AudioUrl$outboundSchema),
-  type: z248.literal("audio_url")
+var ContentPartAudio$outboundSchema = z256.object({
+  audioUrl: z256.lazy(() => AudioUrl$outboundSchema),
+  type: z256.literal("audio_url")
 }).transform((v) => {
   return remap(v, {
     audioUrl: "audio_url"
@@ -7406,23 +7579,23 @@ var ContentPartAudio$outboundSchema = z248.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/contentpartdoneevent.js
-var z249 = __toESM(require("zod/v4"), 1);
+var z257 = __toESM(require("zod/v4"), 1);
 var ContentPartDoneEventPart$inboundSchema = discriminatedUnion("type", {
   output_text: ResponseOutputText$inboundSchema,
-  reasoning_text: ReasoningTextContent$inboundSchema.and(z249.object({ type: z249.literal("reasoning_text") })),
+  reasoning_text: ReasoningTextContent$inboundSchema.and(z257.object({ type: z257.literal("reasoning_text") })),
   refusal: OpenAIResponsesRefusalContent$inboundSchema
 });
-var ContentPartDoneEvent$inboundSchema = z249.object({
-  content_index: z249.int(),
-  item_id: z249.string(),
-  output_index: z249.int(),
+var ContentPartDoneEvent$inboundSchema = z257.object({
+  content_index: z257.int(),
+  item_id: z257.string(),
+  output_index: z257.int(),
   part: discriminatedUnion("type", {
     output_text: ResponseOutputText$inboundSchema,
-    reasoning_text: ReasoningTextContent$inboundSchema.and(z249.object({ type: z249.literal("reasoning_text") })),
+    reasoning_text: ReasoningTextContent$inboundSchema.and(z257.object({ type: z257.literal("reasoning_text") })),
     refusal: OpenAIResponsesRefusalContent$inboundSchema
   }),
-  sequence_number: z249.int(),
-  type: z249.literal("response.content_part.done")
+  sequence_number: z257.int(),
+  type: z257.literal("response.content_part.done")
 }).transform((v) => {
   return remap(v, {
     "content_index": "contentIndex",
@@ -7433,16 +7606,16 @@ var ContentPartDoneEvent$inboundSchema = z249.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/contentpartimage.js
-var z250 = __toESM(require("zod/v4"), 1);
+var z258 = __toESM(require("zod/v4"), 1);
 var ContentPartImageType = {
   ImageUrl: "image_url"
 };
-var ContentPartImageImageUrl$outboundSchema = z250.object({
-  url: z250.string()
+var ContentPartImageImageUrl$outboundSchema = z258.object({
+  url: z258.string()
 });
-var ContentPartImageType$outboundSchema = z250.enum(ContentPartImageType);
-var ContentPartImage$outboundSchema = z250.object({
-  imageUrl: z250.lazy(() => ContentPartImageImageUrl$outboundSchema),
+var ContentPartImageType$outboundSchema = z258.enum(ContentPartImageType);
+var ContentPartImage$outboundSchema = z258.object({
+  imageUrl: z258.lazy(() => ContentPartImageImageUrl$outboundSchema),
   type: ContentPartImageType$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -7451,19 +7624,19 @@ var ContentPartImage$outboundSchema = z250.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/contentpartinputaudio.js
-var z252 = __toESM(require("zod/v4"), 1);
+var z260 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/multimodalmedia.js
-var z251 = __toESM(require("zod/v4"), 1);
-var MultimodalMedia$outboundSchema = z251.object({
-  data: z251.string(),
-  format: z251.string().optional()
+var z259 = __toESM(require("zod/v4"), 1);
+var MultimodalMedia$outboundSchema = z259.object({
+  data: z259.string(),
+  format: z259.string().optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/contentpartinputaudio.js
-var ContentPartInputAudio$outboundSchema = z252.object({
+var ContentPartInputAudio$outboundSchema = z260.object({
   inputAudio: MultimodalMedia$outboundSchema,
-  type: z252.literal("input_audio")
+  type: z260.literal("input_audio")
 }).transform((v) => {
   return remap(v, {
     inputAudio: "input_audio"
@@ -7471,10 +7644,10 @@ var ContentPartInputAudio$outboundSchema = z252.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/contentpartinputfile.js
-var z253 = __toESM(require("zod/v4"), 1);
-var ContentPartInputFile$outboundSchema = z253.object({
+var z261 = __toESM(require("zod/v4"), 1);
+var ContentPartInputFile$outboundSchema = z261.object({
   inputFile: MultimodalMedia$outboundSchema,
-  type: z253.literal("input_file")
+  type: z261.literal("input_file")
 }).transform((v) => {
   return remap(v, {
     inputFile: "input_file"
@@ -7482,10 +7655,10 @@ var ContentPartInputFile$outboundSchema = z253.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/contentpartinputvideo.js
-var z254 = __toESM(require("zod/v4"), 1);
-var ContentPartInputVideo$outboundSchema = z254.object({
+var z262 = __toESM(require("zod/v4"), 1);
+var ContentPartInputVideo$outboundSchema = z262.object({
   inputVideo: MultimodalMedia$outboundSchema,
-  type: z254.literal("input_video")
+  type: z262.literal("input_video")
 }).transform((v) => {
   return remap(v, {
     inputVideo: "input_video"
@@ -7493,13 +7666,13 @@ var ContentPartInputVideo$outboundSchema = z254.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/contentpartvideo.js
-var z255 = __toESM(require("zod/v4"), 1);
-var VideoUrl$outboundSchema = z255.object({
-  url: z255.string()
+var z263 = __toESM(require("zod/v4"), 1);
+var VideoUrl$outboundSchema = z263.object({
+  url: z263.string()
 });
-var ContentPartVideo$outboundSchema = z255.object({
-  type: z255.literal("video_url"),
-  videoUrl: z255.lazy(() => VideoUrl$outboundSchema)
+var ContentPartVideo$outboundSchema = z263.object({
+  type: z263.literal("video_url"),
+  videoUrl: z263.lazy(() => VideoUrl$outboundSchema)
 }).transform((v) => {
   return remap(v, {
     videoUrl: "video_url"
@@ -7507,16 +7680,16 @@ var ContentPartVideo$outboundSchema = z255.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/contextcompactionitem.js
-var z256 = __toESM(require("zod/v4"), 1);
+var z264 = __toESM(require("zod/v4"), 1);
 var ContextCompactionItemType = {
   ContextCompaction: "context_compaction"
 };
-var ContextCompactionItemType$outboundSchema = z256.enum(ContextCompactionItemType);
-var ContextCompactionItem$outboundSchema = z256.object({
-  encryptedContent: z256.nullable(z256.string()).optional(),
-  id: z256.nullable(z256.string()).optional(),
+var ContextCompactionItemType$outboundSchema = z264.enum(ContextCompactionItemType);
+var ContextCompactionItem$outboundSchema = z264.object({
+  encryptedContent: z264.nullable(z264.string()).optional(),
+  id: z264.nullable(z264.string()).optional(),
   type: ContextCompactionItemType$outboundSchema,
-  additionalProperties: z256.record(z256.string(), z256.any()).optional()
+  additionalProperties: z264.record(z264.string(), z264.any()).optional()
 }).transform((v) => {
   return {
     ...v.additionalProperties,
@@ -7528,16 +7701,16 @@ var ContextCompactionItem$outboundSchema = z256.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/createbyokkeyrequest.js
-var z257 = __toESM(require("zod/v4"), 1);
-var CreateBYOKKeyRequest$outboundSchema = z257.object({
-  allowedModels: z257.nullable(z257.array(z257.string())).optional(),
-  allowedUserIds: z257.nullable(z257.array(z257.string())).optional(),
-  disabled: z257.boolean().optional(),
-  isFallback: z257.boolean().optional(),
-  key: z257.string(),
-  name: z257.nullable(z257.string()).optional(),
+var z265 = __toESM(require("zod/v4"), 1);
+var CreateBYOKKeyRequest$outboundSchema = z265.object({
+  allowedModels: z265.nullable(z265.array(z265.string())).optional(),
+  allowedUserIds: z265.nullable(z265.array(z265.string())).optional(),
+  disabled: z265.boolean().optional(),
+  isFallback: z265.boolean().optional(),
+  key: z265.string(),
+  name: z265.nullable(z265.string()).optional(),
   provider: BYOKProviderSlug$outboundSchema,
-  workspaceId: z257.string().optional()
+  workspaceId: z265.string().optional()
 }).transform((v) => {
   return remap(v, {
     allowedModels: "allowed_models",
@@ -7548,13 +7721,13 @@ var CreateBYOKKeyRequest$outboundSchema = z257.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/createbyokkeyresponse.js
-var z258 = __toESM(require("zod/v4"), 1);
-var CreateBYOKKeyResponse$inboundSchema = z258.object({
+var z266 = __toESM(require("zod/v4"), 1);
+var CreateBYOKKeyResponse$inboundSchema = z266.object({
   data: BYOKKey$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/createguardrailrequest.js
-var z259 = __toESM(require("zod/v4"), 1);
+var z267 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/guardrailinterval.js
 var GuardrailInterval = {
@@ -7566,28 +7739,28 @@ var GuardrailInterval$inboundSchema = inboundSchema(GuardrailInterval);
 var GuardrailInterval$outboundSchema = outboundSchema(GuardrailInterval);
 
 // node_modules/@openrouter/sdk/esm/models/createguardrailrequest.js
-var CreateGuardrailRequest$outboundSchema = z259.object({
-  allowedModels: z259.nullable(z259.array(z259.string())).optional(),
-  allowedProviders: z259.nullable(z259.array(z259.string())).optional(),
-  contentFilterBuiltins: z259.nullable(z259.array(ContentFilterBuiltinEntryInput$outboundSchema)).optional(),
-  contentFilters: z259.nullable(z259.array(ContentFilterEntry$outboundSchema)).optional(),
-  description: z259.nullable(z259.string()).optional(),
-  enableFreeModelPublication: z259.nullable(z259.boolean()).optional(),
-  enableFreeModelTraining: z259.nullable(z259.boolean()).optional(),
-  enablePaidModelTraining: z259.nullable(z259.boolean()).optional(),
-  enforceZdr: z259.nullable(z259.boolean()).optional(),
-  enforceZdrAnthropic: z259.nullable(z259.boolean()).optional(),
-  enforceZdrGoogle: z259.nullable(z259.boolean()).optional(),
-  enforceZdrOpenai: z259.nullable(z259.boolean()).optional(),
-  enforceZdrOther: z259.nullable(z259.boolean()).optional(),
-  enforceZdrXai: z259.nullable(z259.boolean()).optional(),
-  ignoredModels: z259.nullable(z259.array(z259.string())).optional(),
-  ignoredProviders: z259.nullable(z259.array(z259.string())).optional(),
-  includeByokInBudgets: z259.boolean().optional(),
-  limitUsd: z259.nullable(z259.number()).optional(),
-  name: z259.string(),
-  resetInterval: z259.nullable(GuardrailInterval$outboundSchema).optional(),
-  workspaceId: z259.string().optional()
+var CreateGuardrailRequest$outboundSchema = z267.object({
+  allowedModels: z267.nullable(z267.array(z267.string())).optional(),
+  allowedProviders: z267.nullable(z267.array(z267.string())).optional(),
+  contentFilterBuiltins: z267.nullable(z267.array(ContentFilterBuiltinEntryInput$outboundSchema)).optional(),
+  contentFilters: z267.nullable(z267.array(ContentFilterEntry$outboundSchema)).optional(),
+  description: z267.nullable(z267.string()).optional(),
+  enableFreeModelPublication: z267.nullable(z267.boolean()).optional(),
+  enableFreeModelTraining: z267.nullable(z267.boolean()).optional(),
+  enablePaidModelTraining: z267.nullable(z267.boolean()).optional(),
+  enforceZdr: z267.nullable(z267.boolean()).optional(),
+  enforceZdrAnthropic: z267.nullable(z267.boolean()).optional(),
+  enforceZdrGoogle: z267.nullable(z267.boolean()).optional(),
+  enforceZdrOpenai: z267.nullable(z267.boolean()).optional(),
+  enforceZdrOther: z267.nullable(z267.boolean()).optional(),
+  enforceZdrXai: z267.nullable(z267.boolean()).optional(),
+  ignoredModels: z267.nullable(z267.array(z267.string())).optional(),
+  ignoredProviders: z267.nullable(z267.array(z267.string())).optional(),
+  includeByokInBudgets: z267.boolean().optional(),
+  limitUsd: z267.nullable(z267.number()).optional(),
+  name: z267.string(),
+  resetInterval: z267.nullable(GuardrailInterval$outboundSchema).optional(),
+  workspaceId: z267.string().optional()
 }).transform((v) => {
   return remap(v, {
     allowedModels: "allowed_models",
@@ -7613,35 +7786,35 @@ var CreateGuardrailRequest$outboundSchema = z259.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/createguardrailresponse.js
-var z261 = __toESM(require("zod/v4"), 1);
+var z269 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/guardrail.js
-var z260 = __toESM(require("zod/v4"), 1);
-var Guardrail$inboundSchema = z260.object({
-  allowed_models: z260.nullable(z260.array(z260.string())).optional(),
-  allowed_providers: z260.nullable(z260.array(z260.string())).optional(),
-  content_filter_builtins: z260.nullable(z260.array(ContentFilterBuiltinEntry$inboundSchema)).optional(),
-  content_filters: z260.nullable(z260.array(ContentFilterEntry$inboundSchema)).optional(),
-  created_at: z260.string(),
-  description: z260.nullable(z260.string()).optional(),
-  enable_free_model_publication: z260.nullable(z260.boolean()).optional(),
-  enable_free_model_training: z260.nullable(z260.boolean()).optional(),
-  enable_paid_model_training: z260.nullable(z260.boolean()).optional(),
-  enforce_zdr: z260.nullable(z260.boolean()).optional(),
-  enforce_zdr_anthropic: z260.nullable(z260.boolean()).optional(),
-  enforce_zdr_google: z260.nullable(z260.boolean()).optional(),
-  enforce_zdr_openai: z260.nullable(z260.boolean()).optional(),
-  enforce_zdr_other: z260.nullable(z260.boolean()).optional(),
-  enforce_zdr_xai: z260.nullable(z260.boolean()).optional(),
-  id: z260.string(),
-  ignored_models: z260.nullable(z260.array(z260.string())).optional(),
-  ignored_providers: z260.nullable(z260.array(z260.string())).optional(),
-  include_byok_in_budgets: z260.boolean(),
-  limit_usd: z260.nullable(z260.number()).optional(),
-  name: z260.string(),
-  reset_interval: z260.nullable(GuardrailInterval$inboundSchema).optional(),
-  updated_at: z260.nullable(z260.string()).optional(),
-  workspace_id: z260.string()
+var z268 = __toESM(require("zod/v4"), 1);
+var Guardrail$inboundSchema = z268.object({
+  allowed_models: z268.nullable(z268.array(z268.string())).optional(),
+  allowed_providers: z268.nullable(z268.array(z268.string())).optional(),
+  content_filter_builtins: z268.nullable(z268.array(ContentFilterBuiltinEntry$inboundSchema)).optional(),
+  content_filters: z268.nullable(z268.array(ContentFilterEntry$inboundSchema)).optional(),
+  created_at: z268.string(),
+  description: z268.nullable(z268.string()).optional(),
+  enable_free_model_publication: z268.nullable(z268.boolean()).optional(),
+  enable_free_model_training: z268.nullable(z268.boolean()).optional(),
+  enable_paid_model_training: z268.nullable(z268.boolean()).optional(),
+  enforce_zdr: z268.nullable(z268.boolean()).optional(),
+  enforce_zdr_anthropic: z268.nullable(z268.boolean()).optional(),
+  enforce_zdr_google: z268.nullable(z268.boolean()).optional(),
+  enforce_zdr_openai: z268.nullable(z268.boolean()).optional(),
+  enforce_zdr_other: z268.nullable(z268.boolean()).optional(),
+  enforce_zdr_xai: z268.nullable(z268.boolean()).optional(),
+  id: z268.string(),
+  ignored_models: z268.nullable(z268.array(z268.string())).optional(),
+  ignored_providers: z268.nullable(z268.array(z268.string())).optional(),
+  include_byok_in_budgets: z268.boolean(),
+  limit_usd: z268.nullable(z268.number()).optional(),
+  name: z268.string(),
+  reset_interval: z268.nullable(GuardrailInterval$inboundSchema).optional(),
+  updated_at: z268.nullable(z268.string()).optional(),
+  workspace_id: z268.nullable(z268.string())
 }).transform((v) => {
   return remap(v, {
     "allowed_models": "allowedModels",
@@ -7669,18 +7842,18 @@ var Guardrail$inboundSchema = z260.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/createguardrailresponse.js
-var CreateGuardrailResponse$inboundSchema = z261.object({
+var CreateGuardrailResponse$inboundSchema = z269.object({
   data: Guardrail$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/createobservabilitydestinationrequest.js
-var z264 = __toESM(require("zod/v4"), 1);
+var z272 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/observabilityfilterrulesconfignullable.js
-var z263 = __toESM(require("zod/v4"), 1);
+var z271 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/observabilityfilterrulegroup.js
-var z262 = __toESM(require("zod/v4"), 1);
+var z270 = __toESM(require("zod/v4"), 1);
 var Logic = {
   And: "and",
   Or: "or"
@@ -7720,31 +7893,31 @@ var Field$inboundSchema = inboundSchema(Field);
 var Field$outboundSchema = outboundSchema(Field);
 var Operator$inboundSchema = inboundSchema(Operator);
 var Operator$outboundSchema = outboundSchema(Operator);
-var ObservabilityFilterRuleGroupValue$inboundSchema = z262.union([z262.string(), z262.number()]);
-var ObservabilityFilterRuleGroupValue$outboundSchema = z262.union([z262.string(), z262.number()]);
-var Rule$inboundSchema = z262.object({
+var ObservabilityFilterRuleGroupValue$inboundSchema = z270.union([z270.string(), z270.number()]);
+var ObservabilityFilterRuleGroupValue$outboundSchema = z270.union([z270.string(), z270.number()]);
+var Rule$inboundSchema = z270.object({
   field: Field$inboundSchema,
   operator: Operator$inboundSchema,
-  value: z262.union([z262.string(), z262.number()]).optional()
+  value: z270.union([z270.string(), z270.number()]).optional()
 });
-var Rule$outboundSchema = z262.object({
+var Rule$outboundSchema = z270.object({
   field: Field$outboundSchema,
   operator: Operator$outboundSchema,
-  value: z262.union([z262.string(), z262.number()]).optional()
+  value: z270.union([z270.string(), z270.number()]).optional()
 });
-var ObservabilityFilterRuleGroup$inboundSchema = z262.object({
+var ObservabilityFilterRuleGroup$inboundSchema = z270.object({
   logic: Logic$inboundSchema.default("and"),
-  rules: z262.array(z262.lazy(() => Rule$inboundSchema))
+  rules: z270.array(z270.lazy(() => Rule$inboundSchema))
 });
-var ObservabilityFilterRuleGroup$outboundSchema = z262.object({
+var ObservabilityFilterRuleGroup$outboundSchema = z270.object({
   logic: Logic$outboundSchema.default("and"),
-  rules: z262.array(z262.lazy(() => Rule$outboundSchema))
+  rules: z270.array(z270.lazy(() => Rule$outboundSchema))
 });
 
 // node_modules/@openrouter/sdk/esm/models/observabilityfilterrulesconfignullable.js
-var ObservabilityFilterRulesConfigNullable$outboundSchema = z263.object({
-  enabled: z263.boolean().default(true),
-  groups: z263.array(ObservabilityFilterRuleGroup$outboundSchema)
+var ObservabilityFilterRulesConfigNullable$outboundSchema = z271.object({
+  enabled: z271.boolean().default(true),
+  groups: z271.array(ObservabilityFilterRuleGroup$outboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/createobservabilitydestinationrequest.js
@@ -7768,19 +7941,25 @@ var CreateObservabilityDestinationRequestType = {
   Webhook: "webhook"
 };
 var CreateObservabilityDestinationRequestType$outboundSchema = outboundSchema(CreateObservabilityDestinationRequestType);
-var CreateObservabilityDestinationRequest$outboundSchema = z264.object({
-  apiKeyHashes: z264.nullable(z264.array(z264.string())).optional(),
-  config: z264.record(z264.string(), z264.any()),
-  enabled: z264.boolean().default(true),
-  filterRules: z264.nullable(ObservabilityFilterRulesConfigNullable$outboundSchema).optional(),
-  name: z264.string(),
-  privacyMode: z264.boolean().default(false),
-  samplingRate: z264.number().optional(),
+var CreateObservabilityDestinationRequest$outboundSchema = z272.object({
+  apiKeyHashes: z272.nullable(z272.array(z272.string())).optional(),
+  broadcastGenerationCost: z272.boolean().default(false),
+  broadcastGenerationIdentity: z272.boolean().default(false),
+  broadcastGenerationRequestContext: z272.boolean().default(false),
+  config: z272.record(z272.string(), z272.any()),
+  enabled: z272.boolean().default(true),
+  filterRules: z272.nullable(ObservabilityFilterRulesConfigNullable$outboundSchema).optional(),
+  name: z272.string(),
+  privacyMode: z272.boolean().default(false),
+  samplingRate: z272.number().optional(),
   type: CreateObservabilityDestinationRequestType$outboundSchema,
-  workspaceId: z264.string().optional()
+  workspaceId: z272.string().optional()
 }).transform((v) => {
   return remap(v, {
     apiKeyHashes: "api_key_hashes",
+    broadcastGenerationCost: "broadcast_generation_cost",
+    broadcastGenerationIdentity: "broadcast_generation_identity",
+    broadcastGenerationRequestContext: "broadcast_generation_request_context",
     filterRules: "filter_rules",
     privacyMode: "privacy_mode",
     samplingRate: "sampling_rate",
@@ -7789,42 +7968,48 @@ var CreateObservabilityDestinationRequest$outboundSchema = z264.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/createobservabilitydestinationresponse.js
-var z283 = __toESM(require("zod/v4"), 1);
+var z291 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/observabilityarizedestination.js
-var z266 = __toESM(require("zod/v4"), 1);
+var z274 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/observabilityfilterrulesconfig.js
-var z265 = __toESM(require("zod/v4"), 1);
-var ObservabilityFilterRulesConfig$inboundSchema = z265.object({
-  enabled: z265.boolean().default(true),
-  groups: z265.array(ObservabilityFilterRuleGroup$inboundSchema)
+var z273 = __toESM(require("zod/v4"), 1);
+var ObservabilityFilterRulesConfig$inboundSchema = z273.object({
+  enabled: z273.boolean().default(true),
+  groups: z273.array(ObservabilityFilterRuleGroup$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/observabilityarizedestination.js
-var ObservabilityArizeDestinationConfig$inboundSchema = z266.object({
-  apiKey: z266.string(),
-  baseUrl: z266.string().default("https://otlp.arize.com"),
-  headers: z266.record(z266.string(), z266.string()).optional(),
-  modelId: z266.string(),
-  spaceKey: z266.string()
+var ObservabilityArizeDestinationConfig$inboundSchema = z274.object({
+  apiKey: z274.string(),
+  baseUrl: z274.string().default("https://otlp.arize.com"),
+  headers: z274.record(z274.string(), z274.string()).optional(),
+  modelId: z274.string(),
+  spaceKey: z274.string()
 });
-var ObservabilityArizeDestination$inboundSchema = z266.object({
-  api_key_hashes: z266.nullable(z266.array(z266.string())),
-  config: z266.lazy(() => ObservabilityArizeDestinationConfig$inboundSchema),
-  created_at: z266.string(),
-  enabled: z266.boolean(),
-  filter_rules: z266.nullable(ObservabilityFilterRulesConfig$inboundSchema),
-  id: z266.string(),
-  name: z266.nullable(z266.string()),
-  privacy_mode: z266.boolean(),
-  sampling_rate: z266.number(),
-  type: z266.literal("arize"),
-  updated_at: z266.string(),
-  workspace_id: z266.string()
+var ObservabilityArizeDestination$inboundSchema = z274.object({
+  api_key_hashes: z274.nullable(z274.array(z274.string())),
+  broadcast_generation_cost: z274.boolean(),
+  broadcast_generation_identity: z274.boolean(),
+  broadcast_generation_request_context: z274.boolean(),
+  config: z274.lazy(() => ObservabilityArizeDestinationConfig$inboundSchema),
+  created_at: z274.string(),
+  enabled: z274.boolean(),
+  filter_rules: z274.nullable(ObservabilityFilterRulesConfig$inboundSchema),
+  id: z274.string(),
+  name: z274.nullable(z274.string()),
+  privacy_mode: z274.boolean(),
+  sampling_rate: z274.number(),
+  type: z274.literal("arize"),
+  updated_at: z274.string(),
+  workspace_id: z274.string()
 }).transform((v) => {
   return remap(v, {
     "api_key_hashes": "apiKeyHashes",
+    "broadcast_generation_cost": "broadcastGenerationCost",
+    "broadcast_generation_identity": "broadcastGenerationIdentity",
+    "broadcast_generation_request_context": "broadcastGenerationRequestContext",
     "created_at": "createdAt",
     "filter_rules": "filterRules",
     "privacy_mode": "privacyMode",
@@ -7835,29 +8020,35 @@ var ObservabilityArizeDestination$inboundSchema = z266.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/observabilitybraintrustdestination.js
-var z267 = __toESM(require("zod/v4"), 1);
-var ObservabilityBraintrustDestinationConfig$inboundSchema = z267.object({
-  apiKey: z267.string(),
-  baseUrl: z267.string().default("https://api.braintrust.dev"),
-  headers: z267.record(z267.string(), z267.string()).optional(),
-  projectId: z267.string()
+var z275 = __toESM(require("zod/v4"), 1);
+var ObservabilityBraintrustDestinationConfig$inboundSchema = z275.object({
+  apiKey: z275.string(),
+  baseUrl: z275.string().default("https://api.braintrust.dev"),
+  headers: z275.record(z275.string(), z275.string()).optional(),
+  projectId: z275.string()
 });
-var ObservabilityBraintrustDestination$inboundSchema = z267.object({
-  api_key_hashes: z267.nullable(z267.array(z267.string())),
-  config: z267.lazy(() => ObservabilityBraintrustDestinationConfig$inboundSchema),
-  created_at: z267.string(),
-  enabled: z267.boolean(),
-  filter_rules: z267.nullable(ObservabilityFilterRulesConfig$inboundSchema),
-  id: z267.string(),
-  name: z267.nullable(z267.string()),
-  privacy_mode: z267.boolean(),
-  sampling_rate: z267.number(),
-  type: z267.literal("braintrust"),
-  updated_at: z267.string(),
-  workspace_id: z267.string()
+var ObservabilityBraintrustDestination$inboundSchema = z275.object({
+  api_key_hashes: z275.nullable(z275.array(z275.string())),
+  broadcast_generation_cost: z275.boolean(),
+  broadcast_generation_identity: z275.boolean(),
+  broadcast_generation_request_context: z275.boolean(),
+  config: z275.lazy(() => ObservabilityBraintrustDestinationConfig$inboundSchema),
+  created_at: z275.string(),
+  enabled: z275.boolean(),
+  filter_rules: z275.nullable(ObservabilityFilterRulesConfig$inboundSchema),
+  id: z275.string(),
+  name: z275.nullable(z275.string()),
+  privacy_mode: z275.boolean(),
+  sampling_rate: z275.number(),
+  type: z275.literal("braintrust"),
+  updated_at: z275.string(),
+  workspace_id: z275.string()
 }).transform((v) => {
   return remap(v, {
     "api_key_hashes": "apiKeyHashes",
+    "broadcast_generation_cost": "broadcastGenerationCost",
+    "broadcast_generation_identity": "broadcastGenerationIdentity",
+    "broadcast_generation_request_context": "broadcastGenerationRequestContext",
     "created_at": "createdAt",
     "filter_rules": "filterRules",
     "privacy_mode": "privacyMode",
@@ -7868,31 +8059,37 @@ var ObservabilityBraintrustDestination$inboundSchema = z267.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/observabilityclickhousedestination.js
-var z268 = __toESM(require("zod/v4"), 1);
-var ObservabilityClickhouseDestinationConfig$inboundSchema = z268.object({
-  database: z268.string(),
-  headers: z268.record(z268.string(), z268.string()).optional(),
-  host: z268.string(),
-  password: z268.string(),
-  table: z268.string().default("OPENROUTER_TRACES"),
-  username: z268.string()
+var z276 = __toESM(require("zod/v4"), 1);
+var ObservabilityClickhouseDestinationConfig$inboundSchema = z276.object({
+  database: z276.string(),
+  headers: z276.record(z276.string(), z276.string()).optional(),
+  host: z276.string(),
+  password: z276.string(),
+  table: z276.string().default("OPENROUTER_TRACES"),
+  username: z276.string()
 });
-var ObservabilityClickhouseDestination$inboundSchema = z268.object({
-  api_key_hashes: z268.nullable(z268.array(z268.string())),
-  config: z268.lazy(() => ObservabilityClickhouseDestinationConfig$inboundSchema),
-  created_at: z268.string(),
-  enabled: z268.boolean(),
-  filter_rules: z268.nullable(ObservabilityFilterRulesConfig$inboundSchema),
-  id: z268.string(),
-  name: z268.nullable(z268.string()),
-  privacy_mode: z268.boolean(),
-  sampling_rate: z268.number(),
-  type: z268.literal("clickhouse"),
-  updated_at: z268.string(),
-  workspace_id: z268.string()
+var ObservabilityClickhouseDestination$inboundSchema = z276.object({
+  api_key_hashes: z276.nullable(z276.array(z276.string())),
+  broadcast_generation_cost: z276.boolean(),
+  broadcast_generation_identity: z276.boolean(),
+  broadcast_generation_request_context: z276.boolean(),
+  config: z276.lazy(() => ObservabilityClickhouseDestinationConfig$inboundSchema),
+  created_at: z276.string(),
+  enabled: z276.boolean(),
+  filter_rules: z276.nullable(ObservabilityFilterRulesConfig$inboundSchema),
+  id: z276.string(),
+  name: z276.nullable(z276.string()),
+  privacy_mode: z276.boolean(),
+  sampling_rate: z276.number(),
+  type: z276.literal("clickhouse"),
+  updated_at: z276.string(),
+  workspace_id: z276.string()
 }).transform((v) => {
   return remap(v, {
     "api_key_hashes": "apiKeyHashes",
+    "broadcast_generation_cost": "broadcastGenerationCost",
+    "broadcast_generation_identity": "broadcastGenerationIdentity",
+    "broadcast_generation_request_context": "broadcastGenerationRequestContext",
     "created_at": "createdAt",
     "filter_rules": "filterRules",
     "privacy_mode": "privacyMode",
@@ -7903,29 +8100,35 @@ var ObservabilityClickhouseDestination$inboundSchema = z268.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/observabilitydatadogdestination.js
-var z269 = __toESM(require("zod/v4"), 1);
-var ObservabilityDatadogDestinationConfig$inboundSchema = z269.object({
-  apiKey: z269.string(),
-  headers: z269.record(z269.string(), z269.string()).optional(),
-  mlApp: z269.string(),
-  url: z269.string().default("https://api.us5.datadoghq.com")
+var z277 = __toESM(require("zod/v4"), 1);
+var ObservabilityDatadogDestinationConfig$inboundSchema = z277.object({
+  apiKey: z277.string(),
+  headers: z277.record(z277.string(), z277.string()).optional(),
+  mlApp: z277.string(),
+  url: z277.string().default("https://api.us5.datadoghq.com")
 });
-var ObservabilityDatadogDestination$inboundSchema = z269.object({
-  api_key_hashes: z269.nullable(z269.array(z269.string())),
-  config: z269.lazy(() => ObservabilityDatadogDestinationConfig$inboundSchema),
-  created_at: z269.string(),
-  enabled: z269.boolean(),
-  filter_rules: z269.nullable(ObservabilityFilterRulesConfig$inboundSchema),
-  id: z269.string(),
-  name: z269.nullable(z269.string()),
-  privacy_mode: z269.boolean(),
-  sampling_rate: z269.number(),
-  type: z269.literal("datadog"),
-  updated_at: z269.string(),
-  workspace_id: z269.string()
+var ObservabilityDatadogDestination$inboundSchema = z277.object({
+  api_key_hashes: z277.nullable(z277.array(z277.string())),
+  broadcast_generation_cost: z277.boolean(),
+  broadcast_generation_identity: z277.boolean(),
+  broadcast_generation_request_context: z277.boolean(),
+  config: z277.lazy(() => ObservabilityDatadogDestinationConfig$inboundSchema),
+  created_at: z277.string(),
+  enabled: z277.boolean(),
+  filter_rules: z277.nullable(ObservabilityFilterRulesConfig$inboundSchema),
+  id: z277.string(),
+  name: z277.nullable(z277.string()),
+  privacy_mode: z277.boolean(),
+  sampling_rate: z277.number(),
+  type: z277.literal("datadog"),
+  updated_at: z277.string(),
+  workspace_id: z277.string()
 }).transform((v) => {
   return remap(v, {
     "api_key_hashes": "apiKeyHashes",
+    "broadcast_generation_cost": "broadcastGenerationCost",
+    "broadcast_generation_identity": "broadcastGenerationIdentity",
+    "broadcast_generation_request_context": "broadcastGenerationRequestContext",
     "created_at": "createdAt",
     "filter_rules": "filterRules",
     "privacy_mode": "privacyMode",
@@ -7936,29 +8139,35 @@ var ObservabilityDatadogDestination$inboundSchema = z269.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/observabilitygrafanadestination.js
-var z270 = __toESM(require("zod/v4"), 1);
-var ObservabilityGrafanaDestinationConfig$inboundSchema = z270.object({
-  apiKey: z270.string(),
-  baseUrl: z270.string().default("https://otlp-gateway-prod-us-west-0.grafana.net"),
-  headers: z270.record(z270.string(), z270.string()).optional(),
-  instanceId: z270.string()
+var z278 = __toESM(require("zod/v4"), 1);
+var ObservabilityGrafanaDestinationConfig$inboundSchema = z278.object({
+  apiKey: z278.string(),
+  baseUrl: z278.string().default("https://otlp-gateway-prod-us-west-0.grafana.net"),
+  headers: z278.record(z278.string(), z278.string()).optional(),
+  instanceId: z278.string()
 });
-var ObservabilityGrafanaDestination$inboundSchema = z270.object({
-  api_key_hashes: z270.nullable(z270.array(z270.string())),
-  config: z270.lazy(() => ObservabilityGrafanaDestinationConfig$inboundSchema),
-  created_at: z270.string(),
-  enabled: z270.boolean(),
-  filter_rules: z270.nullable(ObservabilityFilterRulesConfig$inboundSchema),
-  id: z270.string(),
-  name: z270.nullable(z270.string()),
-  privacy_mode: z270.boolean(),
-  sampling_rate: z270.number(),
-  type: z270.literal("grafana"),
-  updated_at: z270.string(),
-  workspace_id: z270.string()
+var ObservabilityGrafanaDestination$inboundSchema = z278.object({
+  api_key_hashes: z278.nullable(z278.array(z278.string())),
+  broadcast_generation_cost: z278.boolean(),
+  broadcast_generation_identity: z278.boolean(),
+  broadcast_generation_request_context: z278.boolean(),
+  config: z278.lazy(() => ObservabilityGrafanaDestinationConfig$inboundSchema),
+  created_at: z278.string(),
+  enabled: z278.boolean(),
+  filter_rules: z278.nullable(ObservabilityFilterRulesConfig$inboundSchema),
+  id: z278.string(),
+  name: z278.nullable(z278.string()),
+  privacy_mode: z278.boolean(),
+  sampling_rate: z278.number(),
+  type: z278.literal("grafana"),
+  updated_at: z278.string(),
+  workspace_id: z278.string()
 }).transform((v) => {
   return remap(v, {
     "api_key_hashes": "apiKeyHashes",
+    "broadcast_generation_cost": "broadcastGenerationCost",
+    "broadcast_generation_identity": "broadcastGenerationIdentity",
+    "broadcast_generation_request_context": "broadcastGenerationRequestContext",
     "created_at": "createdAt",
     "filter_rules": "filterRules",
     "privacy_mode": "privacyMode",
@@ -7969,29 +8178,35 @@ var ObservabilityGrafanaDestination$inboundSchema = z270.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/observabilitylangfusedestination.js
-var z271 = __toESM(require("zod/v4"), 1);
-var ObservabilityLangfuseDestinationConfig$inboundSchema = z271.object({
-  baseUrl: z271.string().default("https://us.cloud.langfuse.com"),
-  headers: z271.record(z271.string(), z271.string()).optional(),
-  publicKey: z271.string(),
-  secretKey: z271.string()
+var z279 = __toESM(require("zod/v4"), 1);
+var ObservabilityLangfuseDestinationConfig$inboundSchema = z279.object({
+  baseUrl: z279.string().default("https://us.cloud.langfuse.com"),
+  headers: z279.record(z279.string(), z279.string()).optional(),
+  publicKey: z279.string(),
+  secretKey: z279.string()
 });
-var ObservabilityLangfuseDestination$inboundSchema = z271.object({
-  api_key_hashes: z271.nullable(z271.array(z271.string())),
-  config: z271.lazy(() => ObservabilityLangfuseDestinationConfig$inboundSchema),
-  created_at: z271.string(),
-  enabled: z271.boolean(),
-  filter_rules: z271.nullable(ObservabilityFilterRulesConfig$inboundSchema),
-  id: z271.string(),
-  name: z271.nullable(z271.string()),
-  privacy_mode: z271.boolean(),
-  sampling_rate: z271.number(),
-  type: z271.literal("langfuse"),
-  updated_at: z271.string(),
-  workspace_id: z271.string()
+var ObservabilityLangfuseDestination$inboundSchema = z279.object({
+  api_key_hashes: z279.nullable(z279.array(z279.string())),
+  broadcast_generation_cost: z279.boolean(),
+  broadcast_generation_identity: z279.boolean(),
+  broadcast_generation_request_context: z279.boolean(),
+  config: z279.lazy(() => ObservabilityLangfuseDestinationConfig$inboundSchema),
+  created_at: z279.string(),
+  enabled: z279.boolean(),
+  filter_rules: z279.nullable(ObservabilityFilterRulesConfig$inboundSchema),
+  id: z279.string(),
+  name: z279.nullable(z279.string()),
+  privacy_mode: z279.boolean(),
+  sampling_rate: z279.number(),
+  type: z279.literal("langfuse"),
+  updated_at: z279.string(),
+  workspace_id: z279.string()
 }).transform((v) => {
   return remap(v, {
     "api_key_hashes": "apiKeyHashes",
+    "broadcast_generation_cost": "broadcastGenerationCost",
+    "broadcast_generation_identity": "broadcastGenerationIdentity",
+    "broadcast_generation_request_context": "broadcastGenerationRequestContext",
     "created_at": "createdAt",
     "filter_rules": "filterRules",
     "privacy_mode": "privacyMode",
@@ -8002,30 +8217,36 @@ var ObservabilityLangfuseDestination$inboundSchema = z271.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/observabilitylangsmithdestination.js
-var z272 = __toESM(require("zod/v4"), 1);
-var ObservabilityLangsmithDestinationConfig$inboundSchema = z272.object({
-  apiKey: z272.string(),
-  endpoint: z272.string().default("https://api.smith.langchain.com"),
-  headers: z272.record(z272.string(), z272.string()).optional(),
-  project: z272.string().default("main"),
-  workspaceId: z272.string().optional()
+var z280 = __toESM(require("zod/v4"), 1);
+var ObservabilityLangsmithDestinationConfig$inboundSchema = z280.object({
+  apiKey: z280.string(),
+  endpoint: z280.string().default("https://api.smith.langchain.com"),
+  headers: z280.record(z280.string(), z280.string()).optional(),
+  project: z280.string().default("main"),
+  workspaceId: z280.string().optional()
 });
-var ObservabilityLangsmithDestination$inboundSchema = z272.object({
-  api_key_hashes: z272.nullable(z272.array(z272.string())),
-  config: z272.lazy(() => ObservabilityLangsmithDestinationConfig$inboundSchema),
-  created_at: z272.string(),
-  enabled: z272.boolean(),
-  filter_rules: z272.nullable(ObservabilityFilterRulesConfig$inboundSchema),
-  id: z272.string(),
-  name: z272.nullable(z272.string()),
-  privacy_mode: z272.boolean(),
-  sampling_rate: z272.number(),
-  type: z272.literal("langsmith"),
-  updated_at: z272.string(),
-  workspace_id: z272.string()
+var ObservabilityLangsmithDestination$inboundSchema = z280.object({
+  api_key_hashes: z280.nullable(z280.array(z280.string())),
+  broadcast_generation_cost: z280.boolean(),
+  broadcast_generation_identity: z280.boolean(),
+  broadcast_generation_request_context: z280.boolean(),
+  config: z280.lazy(() => ObservabilityLangsmithDestinationConfig$inboundSchema),
+  created_at: z280.string(),
+  enabled: z280.boolean(),
+  filter_rules: z280.nullable(ObservabilityFilterRulesConfig$inboundSchema),
+  id: z280.string(),
+  name: z280.nullable(z280.string()),
+  privacy_mode: z280.boolean(),
+  sampling_rate: z280.number(),
+  type: z280.literal("langsmith"),
+  updated_at: z280.string(),
+  workspace_id: z280.string()
 }).transform((v) => {
   return remap(v, {
     "api_key_hashes": "apiKeyHashes",
+    "broadcast_generation_cost": "broadcastGenerationCost",
+    "broadcast_generation_identity": "broadcastGenerationIdentity",
+    "broadcast_generation_request_context": "broadcastGenerationRequestContext",
     "created_at": "createdAt",
     "filter_rules": "filterRules",
     "privacy_mode": "privacyMode",
@@ -8036,33 +8257,39 @@ var ObservabilityLangsmithDestination$inboundSchema = z272.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/observabilitynewrelicdestination.js
-var z273 = __toESM(require("zod/v4"), 1);
+var z281 = __toESM(require("zod/v4"), 1);
 var Region = {
   Us: "us",
   Eu: "eu"
 };
 var Region$inboundSchema = inboundSchema(Region);
-var ObservabilityNewrelicDestinationConfig$inboundSchema = z273.object({
-  headers: z273.record(z273.string(), z273.string()).optional(),
-  licenseKey: z273.string(),
+var ObservabilityNewrelicDestinationConfig$inboundSchema = z281.object({
+  headers: z281.record(z281.string(), z281.string()).optional(),
+  licenseKey: z281.string(),
   region: Region$inboundSchema.default("us")
 });
-var ObservabilityNewrelicDestination$inboundSchema = z273.object({
-  api_key_hashes: z273.nullable(z273.array(z273.string())),
-  config: z273.lazy(() => ObservabilityNewrelicDestinationConfig$inboundSchema),
-  created_at: z273.string(),
-  enabled: z273.boolean(),
-  filter_rules: z273.nullable(ObservabilityFilterRulesConfig$inboundSchema),
-  id: z273.string(),
-  name: z273.nullable(z273.string()),
-  privacy_mode: z273.boolean(),
-  sampling_rate: z273.number(),
-  type: z273.literal("newrelic"),
-  updated_at: z273.string(),
-  workspace_id: z273.string()
+var ObservabilityNewrelicDestination$inboundSchema = z281.object({
+  api_key_hashes: z281.nullable(z281.array(z281.string())),
+  broadcast_generation_cost: z281.boolean(),
+  broadcast_generation_identity: z281.boolean(),
+  broadcast_generation_request_context: z281.boolean(),
+  config: z281.lazy(() => ObservabilityNewrelicDestinationConfig$inboundSchema),
+  created_at: z281.string(),
+  enabled: z281.boolean(),
+  filter_rules: z281.nullable(ObservabilityFilterRulesConfig$inboundSchema),
+  id: z281.string(),
+  name: z281.nullable(z281.string()),
+  privacy_mode: z281.boolean(),
+  sampling_rate: z281.number(),
+  type: z281.literal("newrelic"),
+  updated_at: z281.string(),
+  workspace_id: z281.string()
 }).transform((v) => {
   return remap(v, {
     "api_key_hashes": "apiKeyHashes",
+    "broadcast_generation_cost": "broadcastGenerationCost",
+    "broadcast_generation_identity": "broadcastGenerationIdentity",
+    "broadcast_generation_request_context": "broadcastGenerationRequestContext",
     "created_at": "createdAt",
     "filter_rules": "filterRules",
     "privacy_mode": "privacyMode",
@@ -8073,29 +8300,35 @@ var ObservabilityNewrelicDestination$inboundSchema = z273.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/observabilityopikdestination.js
-var z274 = __toESM(require("zod/v4"), 1);
-var ObservabilityOpikDestinationConfig$inboundSchema = z274.object({
-  apiKey: z274.string(),
-  headers: z274.record(z274.string(), z274.string()).optional(),
-  projectName: z274.string(),
-  workspace: z274.string()
+var z282 = __toESM(require("zod/v4"), 1);
+var ObservabilityOpikDestinationConfig$inboundSchema = z282.object({
+  apiKey: z282.string(),
+  headers: z282.record(z282.string(), z282.string()).optional(),
+  projectName: z282.string(),
+  workspace: z282.string()
 });
-var ObservabilityOpikDestination$inboundSchema = z274.object({
-  api_key_hashes: z274.nullable(z274.array(z274.string())),
-  config: z274.lazy(() => ObservabilityOpikDestinationConfig$inboundSchema),
-  created_at: z274.string(),
-  enabled: z274.boolean(),
-  filter_rules: z274.nullable(ObservabilityFilterRulesConfig$inboundSchema),
-  id: z274.string(),
-  name: z274.nullable(z274.string()),
-  privacy_mode: z274.boolean(),
-  sampling_rate: z274.number(),
-  type: z274.literal("opik"),
-  updated_at: z274.string(),
-  workspace_id: z274.string()
+var ObservabilityOpikDestination$inboundSchema = z282.object({
+  api_key_hashes: z282.nullable(z282.array(z282.string())),
+  broadcast_generation_cost: z282.boolean(),
+  broadcast_generation_identity: z282.boolean(),
+  broadcast_generation_request_context: z282.boolean(),
+  config: z282.lazy(() => ObservabilityOpikDestinationConfig$inboundSchema),
+  created_at: z282.string(),
+  enabled: z282.boolean(),
+  filter_rules: z282.nullable(ObservabilityFilterRulesConfig$inboundSchema),
+  id: z282.string(),
+  name: z282.nullable(z282.string()),
+  privacy_mode: z282.boolean(),
+  sampling_rate: z282.number(),
+  type: z282.literal("opik"),
+  updated_at: z282.string(),
+  workspace_id: z282.string()
 }).transform((v) => {
   return remap(v, {
     "api_key_hashes": "apiKeyHashes",
+    "broadcast_generation_cost": "broadcastGenerationCost",
+    "broadcast_generation_identity": "broadcastGenerationIdentity",
+    "broadcast_generation_request_context": "broadcastGenerationRequestContext",
     "created_at": "createdAt",
     "filter_rules": "filterRules",
     "privacy_mode": "privacyMode",
@@ -8106,27 +8339,33 @@ var ObservabilityOpikDestination$inboundSchema = z274.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/observabilityotelcollectordestination.js
-var z275 = __toESM(require("zod/v4"), 1);
-var ObservabilityOtelCollectorDestinationConfig$inboundSchema = z275.object({
-  endpoint: z275.string(),
-  headers: z275.record(z275.string(), z275.string()).optional()
+var z283 = __toESM(require("zod/v4"), 1);
+var ObservabilityOtelCollectorDestinationConfig$inboundSchema = z283.object({
+  endpoint: z283.string(),
+  headers: z283.record(z283.string(), z283.string()).optional()
 });
-var ObservabilityOtelCollectorDestination$inboundSchema = z275.object({
-  api_key_hashes: z275.nullable(z275.array(z275.string())),
-  config: z275.lazy(() => ObservabilityOtelCollectorDestinationConfig$inboundSchema),
-  created_at: z275.string(),
-  enabled: z275.boolean(),
-  filter_rules: z275.nullable(ObservabilityFilterRulesConfig$inboundSchema),
-  id: z275.string(),
-  name: z275.nullable(z275.string()),
-  privacy_mode: z275.boolean(),
-  sampling_rate: z275.number(),
-  type: z275.literal("otel-collector"),
-  updated_at: z275.string(),
-  workspace_id: z275.string()
+var ObservabilityOtelCollectorDestination$inboundSchema = z283.object({
+  api_key_hashes: z283.nullable(z283.array(z283.string())),
+  broadcast_generation_cost: z283.boolean(),
+  broadcast_generation_identity: z283.boolean(),
+  broadcast_generation_request_context: z283.boolean(),
+  config: z283.lazy(() => ObservabilityOtelCollectorDestinationConfig$inboundSchema),
+  created_at: z283.string(),
+  enabled: z283.boolean(),
+  filter_rules: z283.nullable(ObservabilityFilterRulesConfig$inboundSchema),
+  id: z283.string(),
+  name: z283.nullable(z283.string()),
+  privacy_mode: z283.boolean(),
+  sampling_rate: z283.number(),
+  type: z283.literal("otel-collector"),
+  updated_at: z283.string(),
+  workspace_id: z283.string()
 }).transform((v) => {
   return remap(v, {
     "api_key_hashes": "apiKeyHashes",
+    "broadcast_generation_cost": "broadcastGenerationCost",
+    "broadcast_generation_identity": "broadcastGenerationIdentity",
+    "broadcast_generation_request_context": "broadcastGenerationRequestContext",
     "created_at": "createdAt",
     "filter_rules": "filterRules",
     "privacy_mode": "privacyMode",
@@ -8137,28 +8376,34 @@ var ObservabilityOtelCollectorDestination$inboundSchema = z275.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/observabilityposthogdestination.js
-var z276 = __toESM(require("zod/v4"), 1);
-var ObservabilityPosthogDestinationConfig$inboundSchema = z276.object({
-  apiKey: z276.string(),
-  endpoint: z276.string().default("https://us.i.posthog.com"),
-  headers: z276.record(z276.string(), z276.string()).optional()
+var z284 = __toESM(require("zod/v4"), 1);
+var ObservabilityPosthogDestinationConfig$inboundSchema = z284.object({
+  apiKey: z284.string(),
+  endpoint: z284.string().default("https://us.i.posthog.com"),
+  headers: z284.record(z284.string(), z284.string()).optional()
 });
-var ObservabilityPosthogDestination$inboundSchema = z276.object({
-  api_key_hashes: z276.nullable(z276.array(z276.string())),
-  config: z276.lazy(() => ObservabilityPosthogDestinationConfig$inboundSchema),
-  created_at: z276.string(),
-  enabled: z276.boolean(),
-  filter_rules: z276.nullable(ObservabilityFilterRulesConfig$inboundSchema),
-  id: z276.string(),
-  name: z276.nullable(z276.string()),
-  privacy_mode: z276.boolean(),
-  sampling_rate: z276.number(),
-  type: z276.literal("posthog"),
-  updated_at: z276.string(),
-  workspace_id: z276.string()
+var ObservabilityPosthogDestination$inboundSchema = z284.object({
+  api_key_hashes: z284.nullable(z284.array(z284.string())),
+  broadcast_generation_cost: z284.boolean(),
+  broadcast_generation_identity: z284.boolean(),
+  broadcast_generation_request_context: z284.boolean(),
+  config: z284.lazy(() => ObservabilityPosthogDestinationConfig$inboundSchema),
+  created_at: z284.string(),
+  enabled: z284.boolean(),
+  filter_rules: z284.nullable(ObservabilityFilterRulesConfig$inboundSchema),
+  id: z284.string(),
+  name: z284.nullable(z284.string()),
+  privacy_mode: z284.boolean(),
+  sampling_rate: z284.number(),
+  type: z284.literal("posthog"),
+  updated_at: z284.string(),
+  workspace_id: z284.string()
 }).transform((v) => {
   return remap(v, {
     "api_key_hashes": "apiKeyHashes",
+    "broadcast_generation_cost": "broadcastGenerationCost",
+    "broadcast_generation_identity": "broadcastGenerationIdentity",
+    "broadcast_generation_request_context": "broadcastGenerationRequestContext",
     "created_at": "createdAt",
     "filter_rules": "filterRules",
     "privacy_mode": "privacyMode",
@@ -8169,28 +8414,34 @@ var ObservabilityPosthogDestination$inboundSchema = z276.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/observabilityrampdestination.js
-var z277 = __toESM(require("zod/v4"), 1);
-var ObservabilityRampDestinationConfig$inboundSchema = z277.object({
-  apiKey: z277.string(),
-  baseUrl: z277.string().default("https://api.ramp.com/developer/v1/ai-usage/openrouter"),
-  headers: z277.record(z277.string(), z277.string()).optional()
+var z285 = __toESM(require("zod/v4"), 1);
+var ObservabilityRampDestinationConfig$inboundSchema = z285.object({
+  apiKey: z285.string(),
+  baseUrl: z285.string().default("https://api.ramp.com/developer/v1/ai-usage/openrouter"),
+  headers: z285.record(z285.string(), z285.string()).optional()
 });
-var ObservabilityRampDestination$inboundSchema = z277.object({
-  api_key_hashes: z277.nullable(z277.array(z277.string())),
-  config: z277.lazy(() => ObservabilityRampDestinationConfig$inboundSchema),
-  created_at: z277.string(),
-  enabled: z277.boolean(),
-  filter_rules: z277.nullable(ObservabilityFilterRulesConfig$inboundSchema),
-  id: z277.string(),
-  name: z277.nullable(z277.string()),
-  privacy_mode: z277.boolean(),
-  sampling_rate: z277.number(),
-  type: z277.literal("ramp"),
-  updated_at: z277.string(),
-  workspace_id: z277.string()
+var ObservabilityRampDestination$inboundSchema = z285.object({
+  api_key_hashes: z285.nullable(z285.array(z285.string())),
+  broadcast_generation_cost: z285.boolean(),
+  broadcast_generation_identity: z285.boolean(),
+  broadcast_generation_request_context: z285.boolean(),
+  config: z285.lazy(() => ObservabilityRampDestinationConfig$inboundSchema),
+  created_at: z285.string(),
+  enabled: z285.boolean(),
+  filter_rules: z285.nullable(ObservabilityFilterRulesConfig$inboundSchema),
+  id: z285.string(),
+  name: z285.nullable(z285.string()),
+  privacy_mode: z285.boolean(),
+  sampling_rate: z285.number(),
+  type: z285.literal("ramp"),
+  updated_at: z285.string(),
+  workspace_id: z285.string()
 }).transform((v) => {
   return remap(v, {
     "api_key_hashes": "apiKeyHashes",
+    "broadcast_generation_cost": "broadcastGenerationCost",
+    "broadcast_generation_identity": "broadcastGenerationIdentity",
+    "broadcast_generation_request_context": "broadcastGenerationRequestContext",
     "created_at": "createdAt",
     "filter_rules": "filterRules",
     "privacy_mode": "privacyMode",
@@ -8201,34 +8452,40 @@ var ObservabilityRampDestination$inboundSchema = z277.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/observabilitys3destination.js
-var z278 = __toESM(require("zod/v4"), 1);
-var ObservabilityS3DestinationConfig$inboundSchema = z278.object({
-  accessKeyId: z278.string(),
-  bucketName: z278.string(),
-  endpoint: z278.string().optional(),
-  headers: z278.record(z278.string(), z278.string()).optional(),
-  pathTemplate: z278.string().default("{prefix}/{date}"),
-  prefix: z278.string().default("openrouter-traces"),
-  region: z278.string().optional(),
-  secretAccessKey: z278.string(),
-  sessionToken: z278.string().optional()
+var z286 = __toESM(require("zod/v4"), 1);
+var ObservabilityS3DestinationConfig$inboundSchema = z286.object({
+  accessKeyId: z286.string(),
+  bucketName: z286.string(),
+  endpoint: z286.string().optional(),
+  headers: z286.record(z286.string(), z286.string()).optional(),
+  pathTemplate: z286.string().default("{prefix}/{date}"),
+  prefix: z286.string().default("openrouter-traces"),
+  region: z286.string().optional(),
+  secretAccessKey: z286.string(),
+  sessionToken: z286.string().optional()
 });
-var ObservabilityS3Destination$inboundSchema = z278.object({
-  api_key_hashes: z278.nullable(z278.array(z278.string())),
-  config: z278.lazy(() => ObservabilityS3DestinationConfig$inboundSchema),
-  created_at: z278.string(),
-  enabled: z278.boolean(),
-  filter_rules: z278.nullable(ObservabilityFilterRulesConfig$inboundSchema),
-  id: z278.string(),
-  name: z278.nullable(z278.string()),
-  privacy_mode: z278.boolean(),
-  sampling_rate: z278.number(),
-  type: z278.literal("s3"),
-  updated_at: z278.string(),
-  workspace_id: z278.string()
+var ObservabilityS3Destination$inboundSchema = z286.object({
+  api_key_hashes: z286.nullable(z286.array(z286.string())),
+  broadcast_generation_cost: z286.boolean(),
+  broadcast_generation_identity: z286.boolean(),
+  broadcast_generation_request_context: z286.boolean(),
+  config: z286.lazy(() => ObservabilityS3DestinationConfig$inboundSchema),
+  created_at: z286.string(),
+  enabled: z286.boolean(),
+  filter_rules: z286.nullable(ObservabilityFilterRulesConfig$inboundSchema),
+  id: z286.string(),
+  name: z286.nullable(z286.string()),
+  privacy_mode: z286.boolean(),
+  sampling_rate: z286.number(),
+  type: z286.literal("s3"),
+  updated_at: z286.string(),
+  workspace_id: z286.string()
 }).transform((v) => {
   return remap(v, {
     "api_key_hashes": "apiKeyHashes",
+    "broadcast_generation_cost": "broadcastGenerationCost",
+    "broadcast_generation_identity": "broadcastGenerationIdentity",
+    "broadcast_generation_request_context": "broadcastGenerationRequestContext",
     "created_at": "createdAt",
     "filter_rules": "filterRules",
     "privacy_mode": "privacyMode",
@@ -8239,28 +8496,34 @@ var ObservabilityS3Destination$inboundSchema = z278.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/observabilitysentrydestination.js
-var z279 = __toESM(require("zod/v4"), 1);
-var ObservabilitySentryDestinationConfig$inboundSchema = z279.object({
-  dsn: z279.string(),
-  headers: z279.record(z279.string(), z279.string()).optional(),
-  otlpEndpoint: z279.string()
+var z287 = __toESM(require("zod/v4"), 1);
+var ObservabilitySentryDestinationConfig$inboundSchema = z287.object({
+  dsn: z287.string(),
+  headers: z287.record(z287.string(), z287.string()).optional(),
+  otlpEndpoint: z287.string()
 });
-var ObservabilitySentryDestination$inboundSchema = z279.object({
-  api_key_hashes: z279.nullable(z279.array(z279.string())),
-  config: z279.lazy(() => ObservabilitySentryDestinationConfig$inboundSchema),
-  created_at: z279.string(),
-  enabled: z279.boolean(),
-  filter_rules: z279.nullable(ObservabilityFilterRulesConfig$inboundSchema),
-  id: z279.string(),
-  name: z279.nullable(z279.string()),
-  privacy_mode: z279.boolean(),
-  sampling_rate: z279.number(),
-  type: z279.literal("sentry"),
-  updated_at: z279.string(),
-  workspace_id: z279.string()
+var ObservabilitySentryDestination$inboundSchema = z287.object({
+  api_key_hashes: z287.nullable(z287.array(z287.string())),
+  broadcast_generation_cost: z287.boolean(),
+  broadcast_generation_identity: z287.boolean(),
+  broadcast_generation_request_context: z287.boolean(),
+  config: z287.lazy(() => ObservabilitySentryDestinationConfig$inboundSchema),
+  created_at: z287.string(),
+  enabled: z287.boolean(),
+  filter_rules: z287.nullable(ObservabilityFilterRulesConfig$inboundSchema),
+  id: z287.string(),
+  name: z287.nullable(z287.string()),
+  privacy_mode: z287.boolean(),
+  sampling_rate: z287.number(),
+  type: z287.literal("sentry"),
+  updated_at: z287.string(),
+  workspace_id: z287.string()
 }).transform((v) => {
   return remap(v, {
     "api_key_hashes": "apiKeyHashes",
+    "broadcast_generation_cost": "broadcastGenerationCost",
+    "broadcast_generation_identity": "broadcastGenerationIdentity",
+    "broadcast_generation_request_context": "broadcastGenerationRequestContext",
     "created_at": "createdAt",
     "filter_rules": "filterRules",
     "privacy_mode": "privacyMode",
@@ -8271,32 +8534,38 @@ var ObservabilitySentryDestination$inboundSchema = z279.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/observabilitysnowflakedestination.js
-var z280 = __toESM(require("zod/v4"), 1);
-var ObservabilitySnowflakeDestinationConfig$inboundSchema = z280.object({
-  account: z280.string(),
-  database: z280.string().default("SNOWFLAKE_LEARNING_DB"),
-  headers: z280.record(z280.string(), z280.string()).optional(),
-  schema: z280.string().default("PUBLIC"),
-  table: z280.string().default("OPENROUTER_TRACES"),
-  token: z280.string(),
-  warehouse: z280.string().default("COMPUTE_WH")
+var z288 = __toESM(require("zod/v4"), 1);
+var ObservabilitySnowflakeDestinationConfig$inboundSchema = z288.object({
+  account: z288.string(),
+  database: z288.string().default("SNOWFLAKE_LEARNING_DB"),
+  headers: z288.record(z288.string(), z288.string()).optional(),
+  schema: z288.string().default("PUBLIC"),
+  table: z288.string().default("OPENROUTER_TRACES"),
+  token: z288.string(),
+  warehouse: z288.string().default("COMPUTE_WH")
 });
-var ObservabilitySnowflakeDestination$inboundSchema = z280.object({
-  api_key_hashes: z280.nullable(z280.array(z280.string())),
-  config: z280.lazy(() => ObservabilitySnowflakeDestinationConfig$inboundSchema),
-  created_at: z280.string(),
-  enabled: z280.boolean(),
-  filter_rules: z280.nullable(ObservabilityFilterRulesConfig$inboundSchema),
-  id: z280.string(),
-  name: z280.nullable(z280.string()),
-  privacy_mode: z280.boolean(),
-  sampling_rate: z280.number(),
-  type: z280.literal("snowflake"),
-  updated_at: z280.string(),
-  workspace_id: z280.string()
+var ObservabilitySnowflakeDestination$inboundSchema = z288.object({
+  api_key_hashes: z288.nullable(z288.array(z288.string())),
+  broadcast_generation_cost: z288.boolean(),
+  broadcast_generation_identity: z288.boolean(),
+  broadcast_generation_request_context: z288.boolean(),
+  config: z288.lazy(() => ObservabilitySnowflakeDestinationConfig$inboundSchema),
+  created_at: z288.string(),
+  enabled: z288.boolean(),
+  filter_rules: z288.nullable(ObservabilityFilterRulesConfig$inboundSchema),
+  id: z288.string(),
+  name: z288.nullable(z288.string()),
+  privacy_mode: z288.boolean(),
+  sampling_rate: z288.number(),
+  type: z288.literal("snowflake"),
+  updated_at: z288.string(),
+  workspace_id: z288.string()
 }).transform((v) => {
   return remap(v, {
     "api_key_hashes": "apiKeyHashes",
+    "broadcast_generation_cost": "broadcastGenerationCost",
+    "broadcast_generation_identity": "broadcastGenerationIdentity",
+    "broadcast_generation_request_context": "broadcastGenerationRequestContext",
     "created_at": "createdAt",
     "filter_rules": "filterRules",
     "privacy_mode": "privacyMode",
@@ -8307,30 +8576,36 @@ var ObservabilitySnowflakeDestination$inboundSchema = z280.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/observabilityweavedestination.js
-var z281 = __toESM(require("zod/v4"), 1);
-var ObservabilityWeaveDestinationConfig$inboundSchema = z281.object({
-  apiKey: z281.string(),
-  baseUrl: z281.string().default("https://trace.wandb.ai"),
-  entity: z281.string(),
-  headers: z281.record(z281.string(), z281.string()).optional(),
-  project: z281.string()
+var z289 = __toESM(require("zod/v4"), 1);
+var ObservabilityWeaveDestinationConfig$inboundSchema = z289.object({
+  apiKey: z289.string(),
+  baseUrl: z289.string().default("https://trace.wandb.ai"),
+  entity: z289.string(),
+  headers: z289.record(z289.string(), z289.string()).optional(),
+  project: z289.string()
 });
-var ObservabilityWeaveDestination$inboundSchema = z281.object({
-  api_key_hashes: z281.nullable(z281.array(z281.string())),
-  config: z281.lazy(() => ObservabilityWeaveDestinationConfig$inboundSchema),
-  created_at: z281.string(),
-  enabled: z281.boolean(),
-  filter_rules: z281.nullable(ObservabilityFilterRulesConfig$inboundSchema),
-  id: z281.string(),
-  name: z281.nullable(z281.string()),
-  privacy_mode: z281.boolean(),
-  sampling_rate: z281.number(),
-  type: z281.literal("weave"),
-  updated_at: z281.string(),
-  workspace_id: z281.string()
+var ObservabilityWeaveDestination$inboundSchema = z289.object({
+  api_key_hashes: z289.nullable(z289.array(z289.string())),
+  broadcast_generation_cost: z289.boolean(),
+  broadcast_generation_identity: z289.boolean(),
+  broadcast_generation_request_context: z289.boolean(),
+  config: z289.lazy(() => ObservabilityWeaveDestinationConfig$inboundSchema),
+  created_at: z289.string(),
+  enabled: z289.boolean(),
+  filter_rules: z289.nullable(ObservabilityFilterRulesConfig$inboundSchema),
+  id: z289.string(),
+  name: z289.nullable(z289.string()),
+  privacy_mode: z289.boolean(),
+  sampling_rate: z289.number(),
+  type: z289.literal("weave"),
+  updated_at: z289.string(),
+  workspace_id: z289.string()
 }).transform((v) => {
   return remap(v, {
     "api_key_hashes": "apiKeyHashes",
+    "broadcast_generation_cost": "broadcastGenerationCost",
+    "broadcast_generation_identity": "broadcastGenerationIdentity",
+    "broadcast_generation_request_context": "broadcastGenerationRequestContext",
     "created_at": "createdAt",
     "filter_rules": "filterRules",
     "privacy_mode": "privacyMode",
@@ -8341,33 +8616,39 @@ var ObservabilityWeaveDestination$inboundSchema = z281.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/observabilitywebhookdestination.js
-var z282 = __toESM(require("zod/v4"), 1);
+var z290 = __toESM(require("zod/v4"), 1);
 var Method = {
   Post: "POST",
   Put: "PUT"
 };
 var Method$inboundSchema = inboundSchema(Method);
-var ObservabilityWebhookDestinationConfig$inboundSchema = z282.object({
-  headers: z282.record(z282.string(), z282.string()).optional(),
+var ObservabilityWebhookDestinationConfig$inboundSchema = z290.object({
+  headers: z290.record(z290.string(), z290.string()).optional(),
   method: Method$inboundSchema.default("POST"),
-  url: z282.string()
+  url: z290.string()
 });
-var ObservabilityWebhookDestination$inboundSchema = z282.object({
-  api_key_hashes: z282.nullable(z282.array(z282.string())),
-  config: z282.lazy(() => ObservabilityWebhookDestinationConfig$inboundSchema),
-  created_at: z282.string(),
-  enabled: z282.boolean(),
-  filter_rules: z282.nullable(ObservabilityFilterRulesConfig$inboundSchema),
-  id: z282.string(),
-  name: z282.nullable(z282.string()),
-  privacy_mode: z282.boolean(),
-  sampling_rate: z282.number(),
-  type: z282.literal("webhook"),
-  updated_at: z282.string(),
-  workspace_id: z282.string()
+var ObservabilityWebhookDestination$inboundSchema = z290.object({
+  api_key_hashes: z290.nullable(z290.array(z290.string())),
+  broadcast_generation_cost: z290.boolean(),
+  broadcast_generation_identity: z290.boolean(),
+  broadcast_generation_request_context: z290.boolean(),
+  config: z290.lazy(() => ObservabilityWebhookDestinationConfig$inboundSchema),
+  created_at: z290.string(),
+  enabled: z290.boolean(),
+  filter_rules: z290.nullable(ObservabilityFilterRulesConfig$inboundSchema),
+  id: z290.string(),
+  name: z290.nullable(z290.string()),
+  privacy_mode: z290.boolean(),
+  sampling_rate: z290.number(),
+  type: z290.literal("webhook"),
+  updated_at: z290.string(),
+  workspace_id: z290.string()
 }).transform((v) => {
   return remap(v, {
     "api_key_hashes": "apiKeyHashes",
+    "broadcast_generation_cost": "broadcastGenerationCost",
+    "broadcast_generation_identity": "broadcastGenerationIdentity",
+    "broadcast_generation_request_context": "broadcastGenerationRequestContext",
     "created_at": "createdAt",
     "filter_rules": "filterRules",
     "privacy_mode": "privacyMode",
@@ -8399,27 +8680,27 @@ var ObservabilityDestination$inboundSchema = discriminatedUnion("type", {
 });
 
 // node_modules/@openrouter/sdk/esm/models/createobservabilitydestinationresponse.js
-var CreateObservabilityDestinationResponse$inboundSchema = z283.object({
+var CreateObservabilityDestinationResponse$inboundSchema = z291.object({
   data: ObservabilityDestination$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/createpresetfrominferenceresponse.js
-var z286 = __toESM(require("zod/v4"), 1);
+var z294 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/presetwithdesignatedversion.js
-var z285 = __toESM(require("zod/v4"), 1);
+var z293 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/presetdesignatedversion.js
-var z284 = __toESM(require("zod/v4"), 1);
-var PresetDesignatedVersion$inboundSchema = z284.object({
-  config: z284.record(z284.string(), z284.any()),
-  created_at: z284.string(),
-  creator_id: z284.string(),
-  id: z284.string(),
-  preset_id: z284.string(),
-  system_prompt: z284.nullable(z284.string()),
-  updated_at: z284.string(),
-  version: z284.int()
+var z292 = __toESM(require("zod/v4"), 1);
+var PresetDesignatedVersion$inboundSchema = z292.object({
+  config: z292.record(z292.string(), z292.any()),
+  created_at: z292.string(),
+  creator_id: z292.string(),
+  id: z292.string(),
+  preset_id: z292.string(),
+  system_prompt: z292.nullable(z292.string()),
+  updated_at: z292.string(),
+  version: z292.int()
 }).transform((v) => {
   return remap(v, {
     "created_at": "createdAt",
@@ -8439,19 +8720,19 @@ var PresetStatus = {
 var PresetStatus$inboundSchema = inboundSchema(PresetStatus);
 
 // node_modules/@openrouter/sdk/esm/models/presetwithdesignatedversion.js
-var PresetWithDesignatedVersion$inboundSchema = z285.object({
-  created_at: z285.string(),
-  creator_user_id: z285.nullable(z285.string()),
-  description: z285.nullable(z285.string()),
-  designated_version_id: z285.nullable(z285.string()),
-  id: z285.string(),
-  name: z285.string(),
-  slug: z285.string(),
+var PresetWithDesignatedVersion$inboundSchema = z293.object({
+  created_at: z293.string(),
+  creator_user_id: z293.nullable(z293.string()),
+  description: z293.nullable(z293.string()),
+  designated_version_id: z293.nullable(z293.string()),
+  id: z293.string(),
+  name: z293.string(),
+  slug: z293.string(),
   status: PresetStatus$inboundSchema,
-  status_updated_at: z285.nullable(z285.string()),
-  updated_at: z285.string(),
-  workspace_id: z285.nullable(z285.string()),
-  designated_version: z285.nullable(PresetDesignatedVersion$inboundSchema)
+  status_updated_at: z293.nullable(z293.string()),
+  updated_at: z293.string(),
+  workspace_id: z293.nullable(z293.string()),
+  designated_version: z293.nullable(PresetDesignatedVersion$inboundSchema)
 }).transform((v) => {
   return remap(v, {
     "created_at": "createdAt",
@@ -8465,21 +8746,21 @@ var PresetWithDesignatedVersion$inboundSchema = z285.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/createpresetfrominferenceresponse.js
-var CreatePresetFromInferenceResponse$inboundSchema = z286.object({
+var CreatePresetFromInferenceResponse$inboundSchema = z294.object({
   data: PresetWithDesignatedVersion$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/createscimgroupmappingrequest.js
-var z287 = __toESM(require("zod/v4"), 1);
+var z295 = __toESM(require("zod/v4"), 1);
 var CreateScimGroupMappingRequestRole = {
   Admin: "admin",
   Member: "member"
 };
 var CreateScimGroupMappingRequestRole$outboundSchema = outboundSchema(CreateScimGroupMappingRequestRole);
-var CreateScimGroupMappingRequest$outboundSchema = z287.object({
+var CreateScimGroupMappingRequest$outboundSchema = z295.object({
   role: CreateScimGroupMappingRequestRole$outboundSchema,
-  scimGroupId: z287.string(),
-  workspaceId: z287.string()
+  scimGroupId: z295.string(),
+  workspaceId: z295.string()
 }).transform((v) => {
   return remap(v, {
     scimGroupId: "scim_group_id",
@@ -8488,23 +8769,23 @@ var CreateScimGroupMappingRequest$outboundSchema = z287.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/createscimgroupmappingresponse.js
-var z289 = __toESM(require("zod/v4"), 1);
+var z297 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/scimgroupmapping.js
-var z288 = __toESM(require("zod/v4"), 1);
+var z296 = __toESM(require("zod/v4"), 1);
 var ScimGroupMappingRole = {
   Admin: "admin",
   Member: "member"
 };
 var ScimGroupMappingRole$inboundSchema = inboundSchema(ScimGroupMappingRole);
-var ScimGroupMapping$inboundSchema = z288.object({
-  created_at: z288.string(),
-  id: z288.string(),
-  organization_id: z288.string(),
+var ScimGroupMapping$inboundSchema = z296.object({
+  created_at: z296.string(),
+  id: z296.string(),
+  organization_id: z296.string(),
   role: ScimGroupMappingRole$inboundSchema,
-  scim_group_id: z288.string(),
-  updated_at: z288.string(),
-  workspace_id: z288.string()
+  scim_group_id: z296.string(),
+  updated_at: z296.string(),
+  workspace_id: z296.string()
 }).transform((v) => {
   return remap(v, {
     "created_at": "createdAt",
@@ -8516,24 +8797,24 @@ var ScimGroupMapping$inboundSchema = z288.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/createscimgroupmappingresponse.js
-var CreateScimGroupMappingResponse$inboundSchema = z289.object({
+var CreateScimGroupMappingResponse$inboundSchema = z297.object({
   data: ScimGroupMapping$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/createworkspacerequest.js
-var z290 = __toESM(require("zod/v4"), 1);
-var CreateWorkspaceRequest$outboundSchema = z290.object({
-  defaultImageModel: z290.nullable(z290.string()).optional(),
-  defaultProviderSort: z290.nullable(z290.string()).optional(),
-  defaultTextModel: z290.nullable(z290.string()).optional(),
-  description: z290.nullable(z290.string()).optional(),
-  ioLoggingApiKeyIds: z290.nullable(z290.array(z290.int())).optional(),
-  ioLoggingSamplingRate: z290.number().optional(),
-  isDataDiscountLoggingEnabled: z290.boolean().optional(),
-  isObservabilityBroadcastEnabled: z290.boolean().optional(),
-  isObservabilityIoLoggingEnabled: z290.boolean().optional(),
-  name: z290.string(),
-  slug: z290.string()
+var z298 = __toESM(require("zod/v4"), 1);
+var CreateWorkspaceRequest$outboundSchema = z298.object({
+  defaultImageModel: z298.nullable(z298.string()).optional(),
+  defaultProviderSort: z298.nullable(z298.string()).optional(),
+  defaultTextModel: z298.nullable(z298.string()).optional(),
+  description: z298.nullable(z298.string()).optional(),
+  ioLoggingApiKeyIds: z298.nullable(z298.array(z298.int())).optional(),
+  ioLoggingSamplingRate: z298.number().optional(),
+  isDataDiscountLoggingEnabled: z298.boolean().optional(),
+  isObservabilityBroadcastEnabled: z298.boolean().optional(),
+  isObservabilityIoLoggingEnabled: z298.boolean().optional(),
+  name: z298.string(),
+  slug: z298.string()
 }).transform((v) => {
   return remap(v, {
     defaultImageModel: "default_image_model",
@@ -8548,28 +8829,28 @@ var CreateWorkspaceRequest$outboundSchema = z290.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/createworkspaceresponse.js
-var z292 = __toESM(require("zod/v4"), 1);
+var z300 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/workspace.js
-var z291 = __toESM(require("zod/v4"), 1);
-var Workspace$inboundSchema = z291.object({
-  created_at: z291.string(),
-  created_by: z291.nullable(z291.string()),
-  default_guardrail_id: z291.string(),
-  default_image_model: z291.nullable(z291.string()),
-  default_provider_sort: z291.nullable(z291.string()),
-  default_text_model: z291.nullable(z291.string()),
-  description: z291.nullable(z291.string()),
-  id: z291.string(),
-  include_byok_in_budgets: z291.boolean().optional(),
-  io_logging_api_key_ids: z291.nullable(z291.array(z291.int())),
-  io_logging_sampling_rate: z291.number(),
-  is_data_discount_logging_enabled: z291.boolean(),
-  is_observability_broadcast_enabled: z291.boolean(),
-  is_observability_io_logging_enabled: z291.boolean(),
-  name: z291.string(),
-  slug: z291.string(),
-  updated_at: z291.nullable(z291.string())
+var z299 = __toESM(require("zod/v4"), 1);
+var Workspace$inboundSchema = z299.object({
+  created_at: z299.string(),
+  created_by: z299.nullable(z299.string()),
+  default_guardrail_id: z299.string(),
+  default_image_model: z299.nullable(z299.string()),
+  default_provider_sort: z299.nullable(z299.string()),
+  default_text_model: z299.nullable(z299.string()),
+  description: z299.nullable(z299.string()),
+  id: z299.string(),
+  include_byok_in_budgets: z299.boolean().optional(),
+  io_logging_api_key_ids: z299.nullable(z299.array(z299.int())),
+  io_logging_sampling_rate: z299.number(),
+  is_data_discount_logging_enabled: z299.boolean(),
+  is_observability_broadcast_enabled: z299.boolean(),
+  is_observability_io_logging_enabled: z299.boolean(),
+  name: z299.string(),
+  slug: z299.string(),
+  updated_at: z299.nullable(z299.string())
 }).transform((v) => {
   return remap(v, {
     "created_at": "createdAt",
@@ -8589,18 +8870,18 @@ var Workspace$inboundSchema = z291.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/createworkspaceresponse.js
-var CreateWorkspaceResponse$inboundSchema = z292.object({
+var CreateWorkspaceResponse$inboundSchema = z300.object({
   data: Workspace$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/customtoolcallinputdeltaevent.js
-var z293 = __toESM(require("zod/v4"), 1);
-var CustomToolCallInputDeltaEvent$inboundSchema = z293.object({
-  delta: z293.string(),
-  item_id: z293.string(),
-  output_index: z293.int(),
-  sequence_number: z293.int(),
-  type: z293.literal("response.custom_tool_call_input.delta")
+var z301 = __toESM(require("zod/v4"), 1);
+var CustomToolCallInputDeltaEvent$inboundSchema = z301.object({
+  delta: z301.string(),
+  item_id: z301.string(),
+  output_index: z301.int(),
+  sequence_number: z301.int(),
+  type: z301.literal("response.custom_tool_call_input.delta")
 }).transform((v) => {
   return remap(v, {
     "item_id": "itemId",
@@ -8610,13 +8891,13 @@ var CustomToolCallInputDeltaEvent$inboundSchema = z293.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/customtoolcallinputdoneevent.js
-var z294 = __toESM(require("zod/v4"), 1);
-var CustomToolCallInputDoneEvent$inboundSchema = z294.object({
-  input: z294.string(),
-  item_id: z294.string(),
-  output_index: z294.int(),
-  sequence_number: z294.int(),
-  type: z294.literal("response.custom_tool_call_input.done")
+var z302 = __toESM(require("zod/v4"), 1);
+var CustomToolCallInputDoneEvent$inboundSchema = z302.object({
+  input: z302.string(),
+  item_id: z302.string(),
+  output_index: z302.int(),
+  sequence_number: z302.int(),
+  type: z302.literal("response.custom_tool_call_input.done")
 }).transform((v) => {
   return remap(v, {
     "item_id": "itemId",
@@ -8626,17 +8907,17 @@ var CustomToolCallInputDoneEvent$inboundSchema = z294.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/customtoolcallitem.js
-var z295 = __toESM(require("zod/v4"), 1);
+var z303 = __toESM(require("zod/v4"), 1);
 var CustomToolCallItemType = {
   CustomToolCall: "custom_tool_call"
 };
-var CustomToolCallItemType$outboundSchema = z295.enum(CustomToolCallItemType);
-var CustomToolCallItem$outboundSchema = z295.object({
-  callId: z295.string(),
-  id: z295.string().optional(),
-  input: z295.string(),
-  name: z295.string(),
-  namespace: z295.string().optional(),
+var CustomToolCallItemType$outboundSchema = z303.enum(CustomToolCallItemType);
+var CustomToolCallItem$outboundSchema = z303.object({
+  callId: z303.string(),
+  id: z303.string().optional(),
+  input: z303.string(),
+  name: z303.string(),
+  namespace: z303.string().optional(),
   type: CustomToolCallItemType$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -8645,7 +8926,7 @@ var CustomToolCallItem$outboundSchema = z295.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/customtoolcalloutputitem.js
-var z296 = __toESM(require("zod/v4"), 1);
+var z304 = __toESM(require("zod/v4"), 1);
 var CustomToolCallOutputItemDetail = {
   Auto: "auto",
   High: "high",
@@ -8656,37 +8937,37 @@ var CustomToolCallOutputItemTypeCustomToolCallOutput = {
   CustomToolCallOutput: "custom_tool_call_output"
 };
 var CustomToolCallOutputItemDetail$outboundSchema = outboundSchema(CustomToolCallOutputItemDetail);
-var CustomToolCallOutputItemOutputInputImage$outboundSchema = z296.object({
+var CustomToolCallOutputItemOutputInputImage$outboundSchema = z304.object({
   detail: CustomToolCallOutputItemDetail$outboundSchema,
-  imageUrl: z296.nullable(z296.string()).optional(),
-  type: z296.literal("input_image")
+  imageUrl: z304.nullable(z304.string()).optional(),
+  type: z304.literal("input_image")
 }).transform((v) => {
   return remap(v, {
     imageUrl: "image_url"
   });
 });
-var CustomToolCallOutputItemOutputUnion1$outboundSchema = z296.union([
+var CustomToolCallOutputItemOutputUnion1$outboundSchema = z304.union([
   InputText$outboundSchema,
-  z296.lazy(() => CustomToolCallOutputItemOutputInputImage$outboundSchema),
+  z304.lazy(() => CustomToolCallOutputItemOutputInputImage$outboundSchema),
   InputFile$outboundSchema
 ]);
-var CustomToolCallOutputItemOutputUnion2$outboundSchema = z296.union([
-  z296.string(),
-  z296.array(z296.union([
+var CustomToolCallOutputItemOutputUnion2$outboundSchema = z304.union([
+  z304.string(),
+  z304.array(z304.union([
     InputText$outboundSchema,
-    z296.lazy(() => CustomToolCallOutputItemOutputInputImage$outboundSchema),
+    z304.lazy(() => CustomToolCallOutputItemOutputInputImage$outboundSchema),
     InputFile$outboundSchema
   ]))
 ]);
-var CustomToolCallOutputItemTypeCustomToolCallOutput$outboundSchema = z296.enum(CustomToolCallOutputItemTypeCustomToolCallOutput);
-var CustomToolCallOutputItem$outboundSchema = z296.object({
-  callId: z296.string(),
-  id: z296.string().optional(),
-  output: z296.union([
-    z296.string(),
-    z296.array(z296.union([
+var CustomToolCallOutputItemTypeCustomToolCallOutput$outboundSchema = z304.enum(CustomToolCallOutputItemTypeCustomToolCallOutput);
+var CustomToolCallOutputItem$outboundSchema = z304.object({
+  callId: z304.string(),
+  id: z304.string().optional(),
+  output: z304.union([
+    z304.string(),
+    z304.array(z304.union([
       InputText$outboundSchema,
-      z296.lazy(() => CustomToolCallOutputItemOutputInputImage$outboundSchema),
+      z304.lazy(() => CustomToolCallOutputItemOutputInputImage$outboundSchema),
       InputFile$outboundSchema
     ]))
   ]),
@@ -8698,13 +8979,13 @@ var CustomToolCallOutputItem$outboundSchema = z296.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/dabenchmarkentry.js
-var z297 = __toESM(require("zod/v4"), 1);
-var DABenchmarkEntry$inboundSchema = z297.object({
-  arena: z297.string(),
-  category: z297.string(),
-  elo: z297.number(),
-  rank: z297.int(),
-  win_rate: z297.number()
+var z305 = __toESM(require("zod/v4"), 1);
+var DABenchmarkEntry$inboundSchema = z305.object({
+  arena: z305.string(),
+  category: z305.string(),
+  elo: z305.number(),
+  rank: z305.int(),
+  win_rate: z305.number()
 }).transform((v) => {
   return remap(v, {
     "win_rate": "winRate"
@@ -8712,7 +8993,7 @@ var DABenchmarkEntry$inboundSchema = z297.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/debugevent.js
-var z298 = __toESM(require("zod/v4"), 1);
+var z306 = __toESM(require("zod/v4"), 1);
 var Event = {
   AdapterRequest: "adapter_request",
   UpstreamHeadersReceived: "upstream_headers_received",
@@ -8720,28 +9001,28 @@ var Event = {
   UpstreamBodyEnded: "upstream_body_ended"
 };
 var Event$inboundSchema = inboundSchema(Event);
-var Timings$inboundSchema = z298.object({
-  epoch_ms: z298.int(),
+var Timings$inboundSchema = z306.object({
+  epoch_ms: z306.int(),
   event: Event$inboundSchema,
-  start_ms: z298.int()
+  start_ms: z306.int()
 }).transform((v) => {
   return remap(v, {
     "epoch_ms": "epochMs",
     "start_ms": "startMs"
   });
 });
-var Debug$inboundSchema = z298.object({
-  echo_upstream_body: z298.record(z298.string(), z298.any()).optional(),
-  timings: z298.lazy(() => Timings$inboundSchema).optional()
+var Debug$inboundSchema = z306.object({
+  echo_upstream_body: z306.record(z306.string(), z306.any()).optional(),
+  timings: z306.lazy(() => Timings$inboundSchema).optional()
 }).transform((v) => {
   return remap(v, {
     "echo_upstream_body": "echoUpstreamBody"
   });
 });
-var DebugEvent$inboundSchema = z298.object({
-  debug: z298.lazy(() => Debug$inboundSchema),
-  sequence_number: z298.int(),
-  type: z298.literal("response.debug")
+var DebugEvent$inboundSchema = z306.object({
+  debug: z306.lazy(() => Debug$inboundSchema),
+  sequence_number: z306.int(),
+  type: z306.literal("response.debug")
 }).transform((v) => {
   return remap(v, {
     "sequence_number": "sequenceNumber"
@@ -8749,14 +9030,14 @@ var DebugEvent$inboundSchema = z298.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/defaultparameters.js
-var z299 = __toESM(require("zod/v4"), 1);
-var DefaultParameters$inboundSchema = z299.object({
-  frequency_penalty: z299.nullable(z299.number()).optional(),
-  presence_penalty: z299.nullable(z299.number()).optional(),
-  repetition_penalty: z299.nullable(z299.number()).optional(),
-  temperature: z299.nullable(z299.number()).optional(),
-  top_k: z299.nullable(z299.int()).optional(),
-  top_p: z299.nullable(z299.number()).optional()
+var z307 = __toESM(require("zod/v4"), 1);
+var DefaultParameters$inboundSchema = z307.object({
+  frequency_penalty: z307.nullable(z307.number()).optional(),
+  presence_penalty: z307.nullable(z307.number()).optional(),
+  repetition_penalty: z307.nullable(z307.number()).optional(),
+  temperature: z307.nullable(z307.number()).optional(),
+  top_k: z307.nullable(z307.int()).optional(),
+  top_p: z307.nullable(z307.number()).optional()
 }).transform((v) => {
   return remap(v, {
     "frequency_penalty": "frequencyPenalty",
@@ -8768,49 +9049,49 @@ var DefaultParameters$inboundSchema = z299.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/deletebyokkeyresponse.js
-var z300 = __toESM(require("zod/v4"), 1);
-var DeleteBYOKKeyResponse$inboundSchema = z300.object({
-  deleted: z300.literal(true)
+var z308 = __toESM(require("zod/v4"), 1);
+var DeleteBYOKKeyResponse$inboundSchema = z308.object({
+  deleted: z308.literal(true)
 });
 
 // node_modules/@openrouter/sdk/esm/models/deleteguardrailresponse.js
-var z301 = __toESM(require("zod/v4"), 1);
-var DeleteGuardrailResponse$inboundSchema = z301.object({
-  deleted: z301.literal(true)
+var z309 = __toESM(require("zod/v4"), 1);
+var DeleteGuardrailResponse$inboundSchema = z309.object({
+  deleted: z309.literal(true)
 });
 
 // node_modules/@openrouter/sdk/esm/models/deleteobservabilitydestinationresponse.js
-var z302 = __toESM(require("zod/v4"), 1);
-var DeleteObservabilityDestinationResponse$inboundSchema = z302.object({
-  deleted: z302.literal(true)
+var z310 = __toESM(require("zod/v4"), 1);
+var DeleteObservabilityDestinationResponse$inboundSchema = z310.object({
+  deleted: z310.literal(true)
 });
 
 // node_modules/@openrouter/sdk/esm/models/deletescimgroupmappingresponse.js
-var z303 = __toESM(require("zod/v4"), 1);
-var DeleteScimGroupMappingResponse$inboundSchema = z303.object({
-  deleted: z303.literal(true)
+var z311 = __toESM(require("zod/v4"), 1);
+var DeleteScimGroupMappingResponse$inboundSchema = z311.object({
+  deleted: z311.literal(true)
 });
 
 // node_modules/@openrouter/sdk/esm/models/deleteworkspacebudgetresponse.js
-var z304 = __toESM(require("zod/v4"), 1);
-var DeleteWorkspaceBudgetResponse$inboundSchema = z304.object({
-  deleted: z304.literal(true)
+var z312 = __toESM(require("zod/v4"), 1);
+var DeleteWorkspaceBudgetResponse$inboundSchema = z312.object({
+  deleted: z312.literal(true)
 });
 
 // node_modules/@openrouter/sdk/esm/models/deleteworkspaceresponse.js
-var z305 = __toESM(require("zod/v4"), 1);
-var DeleteWorkspaceResponse$inboundSchema = z305.object({
-  deleted: z305.literal(true)
+var z313 = __toESM(require("zod/v4"), 1);
+var DeleteWorkspaceResponse$inboundSchema = z313.object({
+  deleted: z313.literal(true)
 });
 
 // node_modules/@openrouter/sdk/esm/models/easyinputmessage.js
-var z307 = __toESM(require("zod/v4"), 1);
+var z315 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/inputvideo.js
-var z306 = __toESM(require("zod/v4"), 1);
-var InputVideo$outboundSchema = z306.object({
-  type: z306.literal("input_video"),
-  videoUrl: z306.string()
+var z314 = __toESM(require("zod/v4"), 1);
+var InputVideo$outboundSchema = z314.object({
+  type: z314.literal("input_video"),
+  videoUrl: z314.string()
 }).transform((v) => {
   return remap(v, {
     videoUrl: "video_url"
@@ -8846,65 +9127,65 @@ var EasyInputMessageTypeMessage = {
   Message: "message"
 };
 var EasyInputMessageDetail$outboundSchema = outboundSchema(EasyInputMessageDetail);
-var EasyInputMessageContentInputImage$outboundSchema = z307.object({
+var EasyInputMessageContentInputImage$outboundSchema = z315.object({
   detail: EasyInputMessageDetail$outboundSchema,
-  imageUrl: z307.nullable(z307.string()).optional(),
-  type: z307.literal("input_image")
+  imageUrl: z315.nullable(z315.string()).optional(),
+  type: z315.literal("input_image")
 }).transform((v) => {
   return remap(v, {
     imageUrl: "image_url"
   });
 });
-var EasyInputMessageContentUnion1$outboundSchema = z307.union([
+var EasyInputMessageContentUnion1$outboundSchema = z315.union([
   InputText$outboundSchema,
-  z307.lazy(() => EasyInputMessageContentInputImage$outboundSchema),
+  z315.lazy(() => EasyInputMessageContentInputImage$outboundSchema),
   InputFile$outboundSchema,
   InputAudio$outboundSchema,
   InputVideo$outboundSchema
 ]);
-var EasyInputMessageContentUnion2$outboundSchema = z307.union([
-  z307.array(z307.union([
+var EasyInputMessageContentUnion2$outboundSchema = z315.union([
+  z315.array(z315.union([
     InputText$outboundSchema,
-    z307.lazy(() => EasyInputMessageContentInputImage$outboundSchema),
+    z315.lazy(() => EasyInputMessageContentInputImage$outboundSchema),
     InputFile$outboundSchema,
     InputAudio$outboundSchema,
     InputVideo$outboundSchema
   ])),
-  z307.string()
+  z315.string()
 ]);
-var EasyInputMessagePhaseFinalAnswer$outboundSchema = z307.enum(EasyInputMessagePhaseFinalAnswer);
-var EasyInputMessagePhaseCommentary$outboundSchema = z307.enum(EasyInputMessagePhaseCommentary);
-var EasyInputMessagePhaseUnion$outboundSchema = z307.union([
+var EasyInputMessagePhaseFinalAnswer$outboundSchema = z315.enum(EasyInputMessagePhaseFinalAnswer);
+var EasyInputMessagePhaseCommentary$outboundSchema = z315.enum(EasyInputMessagePhaseCommentary);
+var EasyInputMessagePhaseUnion$outboundSchema = z315.union([
   EasyInputMessagePhaseCommentary$outboundSchema,
   EasyInputMessagePhaseFinalAnswer$outboundSchema
 ]);
-var EasyInputMessageRoleDeveloper$outboundSchema = z307.enum(EasyInputMessageRoleDeveloper);
-var EasyInputMessageRoleAssistant$outboundSchema = z307.enum(EasyInputMessageRoleAssistant);
-var EasyInputMessageRoleSystem$outboundSchema = z307.enum(EasyInputMessageRoleSystem);
-var EasyInputMessageRoleUser$outboundSchema = z307.enum(EasyInputMessageRoleUser);
-var EasyInputMessageRoleUnion$outboundSchema = z307.union([
+var EasyInputMessageRoleDeveloper$outboundSchema = z315.enum(EasyInputMessageRoleDeveloper);
+var EasyInputMessageRoleAssistant$outboundSchema = z315.enum(EasyInputMessageRoleAssistant);
+var EasyInputMessageRoleSystem$outboundSchema = z315.enum(EasyInputMessageRoleSystem);
+var EasyInputMessageRoleUser$outboundSchema = z315.enum(EasyInputMessageRoleUser);
+var EasyInputMessageRoleUnion$outboundSchema = z315.union([
   EasyInputMessageRoleUser$outboundSchema,
   EasyInputMessageRoleSystem$outboundSchema,
   EasyInputMessageRoleAssistant$outboundSchema,
   EasyInputMessageRoleDeveloper$outboundSchema
 ]);
-var EasyInputMessageTypeMessage$outboundSchema = z307.enum(EasyInputMessageTypeMessage);
-var EasyInputMessage$outboundSchema = z307.object({
-  content: z307.nullable(z307.union([
-    z307.array(z307.union([
+var EasyInputMessageTypeMessage$outboundSchema = z315.enum(EasyInputMessageTypeMessage);
+var EasyInputMessage$outboundSchema = z315.object({
+  content: z315.nullable(z315.union([
+    z315.array(z315.union([
       InputText$outboundSchema,
-      z307.lazy(() => EasyInputMessageContentInputImage$outboundSchema),
+      z315.lazy(() => EasyInputMessageContentInputImage$outboundSchema),
       InputFile$outboundSchema,
       InputAudio$outboundSchema,
       InputVideo$outboundSchema
     ])),
-    z307.string()
+    z315.string()
   ])).optional(),
-  phase: z307.nullable(z307.union([
+  phase: z315.nullable(z315.union([
     EasyInputMessagePhaseCommentary$outboundSchema,
     EasyInputMessagePhaseFinalAnswer$outboundSchema
   ])).optional(),
-  role: z307.union([
+  role: z315.union([
     EasyInputMessageRoleUser$outboundSchema,
     EasyInputMessageRoleSystem$outboundSchema,
     EasyInputMessageRoleAssistant$outboundSchema,
@@ -8914,11 +9195,11 @@ var EasyInputMessage$outboundSchema = z307.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/edgenetworktimeoutresponseerrordata.js
-var z308 = __toESM(require("zod/v4"), 1);
-var EdgeNetworkTimeoutResponseErrorData$inboundSchema = z308.object({
-  code: z308.int(),
-  message: z308.string(),
-  metadata: z308.nullable(z308.record(z308.string(), z308.any())).optional()
+var z316 = __toESM(require("zod/v4"), 1);
+var EdgeNetworkTimeoutResponseErrorData$inboundSchema = z316.object({
+  code: z316.int(),
+  message: z316.string(),
+  metadata: z316.nullable(z316.record(z316.string(), z316.any())).optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/endpointstatus.js
@@ -8933,13 +9214,13 @@ var EndpointStatus = {
 var EndpointStatus$inboundSchema = inboundSchemaInt(EndpointStatus);
 
 // node_modules/@openrouter/sdk/esm/models/errorevent.js
-var z309 = __toESM(require("zod/v4"), 1);
-var ErrorEvent$inboundSchema = z309.object({
-  code: z309.nullable(z309.string()),
-  message: z309.string(),
-  param: z309.nullable(z309.string()),
-  sequence_number: z309.int(),
-  type: z309.literal("error")
+var z317 = __toESM(require("zod/v4"), 1);
+var ErrorEvent$inboundSchema = z317.object({
+  code: z317.nullable(z317.string()),
+  message: z317.string(),
+  param: z317.nullable(z317.string()),
+  sequence_number: z317.int(),
+  type: z317.literal("error")
 }).transform((v) => {
   return remap(v, {
     "sequence_number": "sequenceNumber"
@@ -8947,15 +9228,15 @@ var ErrorEvent$inboundSchema = z309.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/openaifiledeleted.js
-var z310 = __toESM(require("zod/v4"), 1);
+var z318 = __toESM(require("zod/v4"), 1);
 var OpenAIFileDeletedObject = {
   File: "file"
 };
-var OpenAIFileDeletedObject$inboundSchema = z310.enum(OpenAIFileDeletedObject);
-var OpenAIFileDeleted$inboundSchema = z310.object({
-  _shape: z310.literal("openai"),
-  deleted: z310.literal(true),
-  id: z310.string(),
+var OpenAIFileDeletedObject$inboundSchema = z318.enum(OpenAIFileDeletedObject);
+var OpenAIFileDeleted$inboundSchema = z318.object({
+  _shape: z318.literal("openai"),
+  deleted: z318.literal(true),
+  id: z318.string(),
   object: OpenAIFileDeletedObject$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -8964,14 +9245,14 @@ var OpenAIFileDeleted$inboundSchema = z310.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/openrouterfiledeleted.js
-var z311 = __toESM(require("zod/v4"), 1);
+var z319 = __toESM(require("zod/v4"), 1);
 var OpenRouterFileDeletedType = {
   FileDeleted: "file_deleted"
 };
-var OpenRouterFileDeletedType$inboundSchema = z311.enum(OpenRouterFileDeletedType);
-var OpenRouterFileDeleted$inboundSchema = z311.object({
-  _shape: z311.literal("openrouter"),
-  id: z311.string(),
+var OpenRouterFileDeletedType$inboundSchema = z319.enum(OpenRouterFileDeletedType);
+var OpenRouterFileDeleted$inboundSchema = z319.object({
+  _shape: z319.literal("openrouter"),
+  id: z319.string(),
   type: OpenRouterFileDeletedType$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -8987,10 +9268,10 @@ var FileDeleteResponse$inboundSchema = discriminatedUnion("_shape", {
 }, { outputPropertyName: "shape" });
 
 // node_modules/@openrouter/sdk/esm/models/openaifilelist.js
-var z313 = __toESM(require("zod/v4"), 1);
+var z321 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/openaifile.js
-var z312 = __toESM(require("zod/v4"), 1);
+var z320 = __toESM(require("zod/v4"), 1);
 var OpenAIFileShape = {
   Openai: "openai"
 };
@@ -9011,16 +9292,16 @@ var Purpose = {
 var OpenAIFileStatus = {
   Processed: "processed"
 };
-var OpenAIFileShape$inboundSchema = z312.enum(OpenAIFileShape);
-var OpenAIFileObject$inboundSchema = z312.enum(OpenAIFileObject);
+var OpenAIFileShape$inboundSchema = z320.enum(OpenAIFileShape);
+var OpenAIFileObject$inboundSchema = z320.enum(OpenAIFileObject);
 var Purpose$inboundSchema = inboundSchema(Purpose);
-var OpenAIFileStatus$inboundSchema = z312.enum(OpenAIFileStatus);
-var OpenAIFile$inboundSchema = z312.object({
+var OpenAIFileStatus$inboundSchema = z320.enum(OpenAIFileStatus);
+var OpenAIFile$inboundSchema = z320.object({
   _shape: OpenAIFileShape$inboundSchema,
-  bytes: z312.int(),
-  created_at: z312.int(),
-  filename: z312.string(),
-  id: z312.string(),
+  bytes: z320.int(),
+  created_at: z320.int(),
+  filename: z320.string(),
+  id: z320.string(),
   object: OpenAIFileObject$inboundSchema,
   purpose: Purpose$inboundSchema,
   status: OpenAIFileStatus$inboundSchema
@@ -9035,13 +9316,13 @@ var OpenAIFile$inboundSchema = z312.object({
 var OpenAIFileListObject = {
   List: "list"
 };
-var OpenAIFileListObject$inboundSchema = z313.enum(OpenAIFileListObject);
-var OpenAIFileList$inboundSchema = z313.object({
-  _shape: z313.literal("openai"),
-  data: z313.array(OpenAIFile$inboundSchema),
-  first_id: z313.nullable(z313.string()),
-  has_more: z313.boolean(),
-  last_id: z313.nullable(z313.string()),
+var OpenAIFileListObject$inboundSchema = z321.enum(OpenAIFileListObject);
+var OpenAIFileList$inboundSchema = z321.object({
+  _shape: z321.literal("openai"),
+  data: z321.array(OpenAIFile$inboundSchema),
+  first_id: z321.nullable(z321.string()),
+  has_more: z321.boolean(),
+  last_id: z321.nullable(z321.string()),
   object: OpenAIFileListObject$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -9053,26 +9334,26 @@ var OpenAIFileList$inboundSchema = z313.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/openrouterfilelist.js
-var z315 = __toESM(require("zod/v4"), 1);
+var z323 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/openrouterfile.js
-var z314 = __toESM(require("zod/v4"), 1);
+var z322 = __toESM(require("zod/v4"), 1);
 var OpenRouterFileShape = {
   Openrouter: "openrouter"
 };
 var OpenRouterFileType = {
   File: "file"
 };
-var OpenRouterFileShape$inboundSchema = z314.enum(OpenRouterFileShape);
-var OpenRouterFileType$inboundSchema = z314.enum(OpenRouterFileType);
-var OpenRouterFile$inboundSchema = z314.object({
+var OpenRouterFileShape$inboundSchema = z322.enum(OpenRouterFileShape);
+var OpenRouterFileType$inboundSchema = z322.enum(OpenRouterFileType);
+var OpenRouterFile$inboundSchema = z322.object({
   _shape: OpenRouterFileShape$inboundSchema,
-  created_at: z314.string(),
-  downloadable: z314.boolean(),
-  filename: z314.string(),
-  id: z314.string(),
-  mime_type: z314.string(),
-  size_bytes: z314.int(),
+  created_at: z322.string(),
+  downloadable: z322.boolean(),
+  filename: z322.string(),
+  id: z322.string(),
+  mime_type: z322.string(),
+  size_bytes: z322.int(),
   type: OpenRouterFileType$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -9084,13 +9365,13 @@ var OpenRouterFile$inboundSchema = z314.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/openrouterfilelist.js
-var OpenRouterFileList$inboundSchema = z315.object({
-  _shape: z315.literal("openrouter"),
-  cursor: z315.nullable(z315.string()),
-  data: z315.array(OpenRouterFile$inboundSchema),
-  first_id: z315.nullable(z315.string()),
-  has_more: z315.boolean(),
-  last_id: z315.nullable(z315.string())
+var OpenRouterFileList$inboundSchema = z323.object({
+  _shape: z323.literal("openrouter"),
+  cursor: z323.nullable(z323.string()),
+  data: z323.array(OpenRouterFile$inboundSchema),
+  first_id: z323.nullable(z323.string()),
+  has_more: z323.boolean(),
+  last_id: z323.nullable(z323.string())
 }).transform((v) => {
   return remap(v, {
     "_shape": "shape",
@@ -9115,63 +9396,63 @@ var FileProvider = {
 var FileProvider$outboundSchema = outboundSchema(FileProvider);
 
 // node_modules/@openrouter/sdk/esm/models/fileresponse.js
-var z316 = __toESM(require("zod/v4"), 1);
+var z324 = __toESM(require("zod/v4"), 1);
 var FileResponse$inboundSchema = discriminatedUnion("_shape", {
-  anthropic: AnthropicFile$inboundSchema.and(z316.object({ _shape: z316.literal("anthropic") }).transform((v) => ({
+  anthropic: AnthropicFile$inboundSchema.and(z324.object({ _shape: z324.literal("anthropic") }).transform((v) => ({
     shape: v._shape
   }))),
-  openai: OpenAIFile$inboundSchema.and(z316.object({ _shape: z316.literal("openai") }).transform((v) => ({
+  openai: OpenAIFile$inboundSchema.and(z324.object({ _shape: z324.literal("openai") }).transform((v) => ({
     shape: v._shape
   }))),
-  openrouter: OpenRouterFile$inboundSchema.and(z316.object({ _shape: z316.literal("openrouter") }).transform((v) => ({
+  openrouter: OpenRouterFile$inboundSchema.and(z324.object({ _shape: z324.literal("openrouter") }).transform((v) => ({
     shape: v._shape
   })))
 }, { outputPropertyName: "shape" });
 
 // node_modules/@openrouter/sdk/esm/models/forbiddenresponseerrordata.js
-var z317 = __toESM(require("zod/v4"), 1);
-var ForbiddenResponseErrorData$inboundSchema = z317.object({
-  code: z317.int(),
-  message: z317.string(),
-  metadata: z317.nullable(z317.record(z317.string(), z317.any())).optional()
+var z325 = __toESM(require("zod/v4"), 1);
+var ForbiddenResponseErrorData$inboundSchema = z325.object({
+  code: z325.int(),
+  message: z325.string(),
+  metadata: z325.nullable(z325.record(z325.string(), z325.any())).optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/formatjsonobjectconfig.js
-var z318 = __toESM(require("zod/v4"), 1);
-var FormatJsonObjectConfig$inboundSchema = z318.object({
-  type: z318.literal("json_object")
+var z326 = __toESM(require("zod/v4"), 1);
+var FormatJsonObjectConfig$inboundSchema = z326.object({
+  type: z326.literal("json_object")
 });
-var FormatJsonObjectConfig$outboundSchema = z318.object({
-  type: z318.literal("json_object")
+var FormatJsonObjectConfig$outboundSchema = z326.object({
+  type: z326.literal("json_object")
 });
 
 // node_modules/@openrouter/sdk/esm/models/formatjsonschemaconfig.js
-var z319 = __toESM(require("zod/v4"), 1);
-var FormatJsonSchemaConfig$inboundSchema = z319.object({
-  description: z319.string().optional(),
-  name: z319.string(),
-  schema: z319.record(z319.string(), z319.any()),
-  strict: z319.nullable(z319.boolean()).optional(),
-  type: z319.literal("json_schema")
+var z327 = __toESM(require("zod/v4"), 1);
+var FormatJsonSchemaConfig$inboundSchema = z327.object({
+  description: z327.string().optional(),
+  name: z327.string(),
+  schema: z327.record(z327.string(), z327.any()),
+  strict: z327.nullable(z327.boolean()).optional(),
+  type: z327.literal("json_schema")
 });
-var FormatJsonSchemaConfig$outboundSchema = z319.object({
-  description: z319.string().optional(),
-  name: z319.string(),
-  schema: z319.record(z319.string(), z319.any()),
-  strict: z319.nullable(z319.boolean()).optional(),
-  type: z319.literal("json_schema")
+var FormatJsonSchemaConfig$outboundSchema = z327.object({
+  description: z327.string().optional(),
+  name: z327.string(),
+  schema: z327.record(z327.string(), z327.any()),
+  strict: z327.nullable(z327.boolean()).optional(),
+  type: z327.literal("json_schema")
 });
 
 // node_modules/@openrouter/sdk/esm/models/formats.js
-var z321 = __toESM(require("zod/v4"), 1);
+var z329 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/formattextconfig.js
-var z320 = __toESM(require("zod/v4"), 1);
-var FormatTextConfig$inboundSchema = z320.object({
-  type: z320.literal("text")
+var z328 = __toESM(require("zod/v4"), 1);
+var FormatTextConfig$inboundSchema = z328.object({
+  type: z328.literal("text")
 });
-var FormatTextConfig$outboundSchema = z320.object({
-  type: z320.literal("text")
+var FormatTextConfig$outboundSchema = z328.object({
+  type: z328.literal("text")
 });
 
 // node_modules/@openrouter/sdk/esm/models/formats.js
@@ -9180,14 +9461,14 @@ var Formats$inboundSchema = discriminatedUnion("type", {
   json_object: FormatJsonObjectConfig$inboundSchema,
   json_schema: FormatJsonSchemaConfig$inboundSchema
 });
-var Formats$outboundSchema = z321.union([
+var Formats$outboundSchema = z329.union([
   FormatTextConfig$outboundSchema,
   FormatJsonObjectConfig$outboundSchema,
   FormatJsonSchemaConfig$outboundSchema
 ]);
 
 // node_modules/@openrouter/sdk/esm/models/frameimage.js
-var z322 = __toESM(require("zod/v4"), 1);
+var z330 = __toESM(require("zod/v4"), 1);
 var FrameImageType = {
   ImageUrl: "image_url"
 };
@@ -9195,13 +9476,13 @@ var FrameType = {
   FirstFrame: "first_frame",
   LastFrame: "last_frame"
 };
-var FrameImageImageUrl$outboundSchema = z322.object({
-  url: z322.string()
+var FrameImageImageUrl$outboundSchema = z330.object({
+  url: z330.string()
 });
-var FrameImageType$outboundSchema = z322.enum(FrameImageType);
+var FrameImageType$outboundSchema = z330.enum(FrameImageType);
 var FrameType$outboundSchema = outboundSchema(FrameType);
-var FrameImage$outboundSchema = z322.object({
-  imageUrl: z322.lazy(() => FrameImageImageUrl$outboundSchema),
+var FrameImage$outboundSchema = z330.object({
+  imageUrl: z330.lazy(() => FrameImageImageUrl$outboundSchema),
   type: FrameImageType$outboundSchema,
   frameType: FrameType$outboundSchema
 }).transform((v) => {
@@ -9212,13 +9493,13 @@ var FrameImage$outboundSchema = z322.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/functioncallargsdeltaevent.js
-var z323 = __toESM(require("zod/v4"), 1);
-var FunctionCallArgsDeltaEvent$inboundSchema = z323.object({
-  delta: z323.string(),
-  item_id: z323.string(),
-  output_index: z323.int(),
-  sequence_number: z323.int(),
-  type: z323.literal("response.function_call_arguments.delta")
+var z331 = __toESM(require("zod/v4"), 1);
+var FunctionCallArgsDeltaEvent$inboundSchema = z331.object({
+  delta: z331.string(),
+  item_id: z331.string(),
+  output_index: z331.int(),
+  sequence_number: z331.int(),
+  type: z331.literal("response.function_call_arguments.delta")
 }).transform((v) => {
   return remap(v, {
     "item_id": "itemId",
@@ -9228,14 +9509,14 @@ var FunctionCallArgsDeltaEvent$inboundSchema = z323.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/functioncallargsdoneevent.js
-var z324 = __toESM(require("zod/v4"), 1);
-var FunctionCallArgsDoneEvent$inboundSchema = z324.object({
-  arguments: z324.string(),
-  item_id: z324.string(),
-  name: z324.string(),
-  output_index: z324.int(),
-  sequence_number: z324.int(),
-  type: z324.literal("response.function_call_arguments.done")
+var z332 = __toESM(require("zod/v4"), 1);
+var FunctionCallArgsDoneEvent$inboundSchema = z332.object({
+  arguments: z332.string(),
+  item_id: z332.string(),
+  name: z332.string(),
+  output_index: z332.int(),
+  sequence_number: z332.int(),
+  type: z332.literal("response.function_call_arguments.done")
 }).transform((v) => {
   return remap(v, {
     "item_id": "itemId",
@@ -9245,17 +9526,17 @@ var FunctionCallArgsDoneEvent$inboundSchema = z324.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/functioncallitem.js
-var z325 = __toESM(require("zod/v4"), 1);
+var z333 = __toESM(require("zod/v4"), 1);
 var FunctionCallItemType = {
   FunctionCall: "function_call"
 };
-var FunctionCallItemType$outboundSchema = z325.enum(FunctionCallItemType);
-var FunctionCallItem$outboundSchema = z325.object({
-  arguments: z325.string(),
-  callId: z325.string(),
-  id: z325.string(),
-  name: z325.string(),
-  namespace: z325.string().optional(),
+var FunctionCallItemType$outboundSchema = z333.enum(FunctionCallItemType);
+var FunctionCallItem$outboundSchema = z333.object({
+  arguments: z333.string(),
+  callId: z333.string(),
+  id: z333.string(),
+  name: z333.string(),
+  namespace: z333.string().optional(),
   status: ToolCallStatus$outboundSchema.optional(),
   type: FunctionCallItemType$outboundSchema
 }).transform((v) => {
@@ -9265,7 +9546,7 @@ var FunctionCallItem$outboundSchema = z325.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/functioncalloutputitem.js
-var z326 = __toESM(require("zod/v4"), 1);
+var z334 = __toESM(require("zod/v4"), 1);
 var FunctionCallOutputItemDetail = {
   Auto: "auto",
   High: "high",
@@ -9276,41 +9557,41 @@ var FunctionCallOutputItemTypeFunctionCallOutput = {
   FunctionCallOutput: "function_call_output"
 };
 var FunctionCallOutputItemDetail$outboundSchema = outboundSchema(FunctionCallOutputItemDetail);
-var FunctionCallOutputItemOutputInputImage$outboundSchema = z326.object({
+var FunctionCallOutputItemOutputInputImage$outboundSchema = z334.object({
   detail: FunctionCallOutputItemDetail$outboundSchema,
-  imageUrl: z326.nullable(z326.string()).optional(),
-  type: z326.literal("input_image")
+  imageUrl: z334.nullable(z334.string()).optional(),
+  type: z334.literal("input_image")
 }).transform((v) => {
   return remap(v, {
     imageUrl: "image_url"
   });
 });
-var FunctionCallOutputItemOutputUnion1$outboundSchema = z326.union([
+var FunctionCallOutputItemOutputUnion1$outboundSchema = z334.union([
   InputText$outboundSchema,
-  z326.lazy(() => FunctionCallOutputItemOutputInputImage$outboundSchema),
+  z334.lazy(() => FunctionCallOutputItemOutputInputImage$outboundSchema),
   InputFile$outboundSchema
 ]);
-var FunctionCallOutputItemOutputUnion2$outboundSchema = z326.union([
-  z326.string(),
-  z326.array(z326.union([
+var FunctionCallOutputItemOutputUnion2$outboundSchema = z334.union([
+  z334.string(),
+  z334.array(z334.union([
     InputText$outboundSchema,
-    z326.lazy(() => FunctionCallOutputItemOutputInputImage$outboundSchema),
+    z334.lazy(() => FunctionCallOutputItemOutputInputImage$outboundSchema),
     InputFile$outboundSchema
   ]))
 ]);
-var FunctionCallOutputItemTypeFunctionCallOutput$outboundSchema = z326.enum(FunctionCallOutputItemTypeFunctionCallOutput);
-var FunctionCallOutputItem$outboundSchema = z326.object({
-  callId: z326.string(),
-  id: z326.nullable(z326.string()).optional(),
-  output: z326.union([
-    z326.string(),
-    z326.array(z326.union([
+var FunctionCallOutputItemTypeFunctionCallOutput$outboundSchema = z334.enum(FunctionCallOutputItemTypeFunctionCallOutput);
+var FunctionCallOutputItem$outboundSchema = z334.object({
+  callId: z334.string(),
+  id: z334.nullable(z334.string()).optional(),
+  output: z334.union([
+    z334.string(),
+    z334.array(z334.union([
       InputText$outboundSchema,
-      z326.lazy(() => FunctionCallOutputItemOutputInputImage$outboundSchema),
+      z334.lazy(() => FunctionCallOutputItemOutputInputImage$outboundSchema),
       InputFile$outboundSchema
     ]))
   ]),
-  status: z326.nullable(ToolCallStatus$outboundSchema).optional(),
+  status: z334.nullable(ToolCallStatus$outboundSchema).optional(),
   type: FunctionCallOutputItemTypeFunctionCallOutput$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -9319,45 +9600,45 @@ var FunctionCallOutputItem$outboundSchema = z326.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/fusionanalysisresult.js
-var z327 = __toESM(require("zod/v4"), 1);
-var Stance$inboundSchema = z327.object({
-  model: z327.string(),
-  stance: z327.string()
+var z335 = __toESM(require("zod/v4"), 1);
+var Stance$inboundSchema = z335.object({
+  model: z335.string(),
+  stance: z335.string()
 });
-var Stance$outboundSchema = z327.object({
-  model: z327.string(),
-  stance: z327.string()
+var Stance$outboundSchema = z335.object({
+  model: z335.string(),
+  stance: z335.string()
 });
-var Contradiction$inboundSchema = z327.object({
-  stances: z327.array(z327.lazy(() => Stance$inboundSchema)),
-  topic: z327.string()
+var Contradiction$inboundSchema = z335.object({
+  stances: z335.array(z335.lazy(() => Stance$inboundSchema)),
+  topic: z335.string()
 });
-var Contradiction$outboundSchema = z327.object({
-  stances: z327.array(z327.lazy(() => Stance$outboundSchema)),
-  topic: z327.string()
+var Contradiction$outboundSchema = z335.object({
+  stances: z335.array(z335.lazy(() => Stance$outboundSchema)),
+  topic: z335.string()
 });
-var PartialCoverage$inboundSchema = z327.object({
-  models: z327.array(z327.string()),
-  point: z327.string()
+var PartialCoverage$inboundSchema = z335.object({
+  models: z335.array(z335.string()),
+  point: z335.string()
 });
-var PartialCoverage$outboundSchema = z327.object({
-  models: z327.array(z327.string()),
-  point: z327.string()
+var PartialCoverage$outboundSchema = z335.object({
+  models: z335.array(z335.string()),
+  point: z335.string()
 });
-var UniqueInsight$inboundSchema = z327.object({
-  insight: z327.string(),
-  model: z327.string()
+var UniqueInsight$inboundSchema = z335.object({
+  insight: z335.string(),
+  model: z335.string()
 });
-var UniqueInsight$outboundSchema = z327.object({
-  insight: z327.string(),
-  model: z327.string()
+var UniqueInsight$outboundSchema = z335.object({
+  insight: z335.string(),
+  model: z335.string()
 });
-var FusionAnalysisResult$inboundSchema = z327.object({
-  blind_spots: z327.array(z327.string()),
-  consensus: z327.array(z327.string()),
-  contradictions: z327.array(z327.lazy(() => Contradiction$inboundSchema)),
-  partial_coverage: z327.array(z327.lazy(() => PartialCoverage$inboundSchema)),
-  unique_insights: z327.array(z327.lazy(() => UniqueInsight$inboundSchema))
+var FusionAnalysisResult$inboundSchema = z335.object({
+  blind_spots: z335.array(z335.string()),
+  consensus: z335.array(z335.string()),
+  contradictions: z335.array(z335.lazy(() => Contradiction$inboundSchema)),
+  partial_coverage: z335.array(z335.lazy(() => PartialCoverage$inboundSchema)),
+  unique_insights: z335.array(z335.lazy(() => UniqueInsight$inboundSchema))
 }).transform((v) => {
   return remap(v, {
     "blind_spots": "blindSpots",
@@ -9365,12 +9646,12 @@ var FusionAnalysisResult$inboundSchema = z327.object({
     "unique_insights": "uniqueInsights"
   });
 });
-var FusionAnalysisResult$outboundSchema = z327.object({
-  blindSpots: z327.array(z327.string()),
-  consensus: z327.array(z327.string()),
-  contradictions: z327.array(z327.lazy(() => Contradiction$outboundSchema)),
-  partialCoverage: z327.array(z327.lazy(() => PartialCoverage$outboundSchema)),
-  uniqueInsights: z327.array(z327.lazy(() => UniqueInsight$outboundSchema))
+var FusionAnalysisResult$outboundSchema = z335.object({
+  blindSpots: z335.array(z335.string()),
+  consensus: z335.array(z335.string()),
+  contradictions: z335.array(z335.lazy(() => Contradiction$outboundSchema)),
+  partialCoverage: z335.array(z335.lazy(() => PartialCoverage$outboundSchema)),
+  uniqueInsights: z335.array(z335.lazy(() => UniqueInsight$outboundSchema))
 }).transform((v) => {
   return remap(v, {
     blindSpots: "blind_spots",
@@ -9380,13 +9661,13 @@ var FusionAnalysisResult$outboundSchema = z327.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/fusioncallanalysiscompletedevent.js
-var z328 = __toESM(require("zod/v4"), 1);
-var FusionCallAnalysisCompletedEvent$inboundSchema = z328.object({
+var z336 = __toESM(require("zod/v4"), 1);
+var FusionCallAnalysisCompletedEvent$inboundSchema = z336.object({
   analysis: FusionAnalysisResult$inboundSchema,
-  item_id: z328.string(),
-  output_index: z328.int(),
-  sequence_number: z328.int(),
-  type: z328.literal("response.fusion_call.analysis.completed")
+  item_id: z336.string(),
+  output_index: z336.int(),
+  sequence_number: z336.int(),
+  type: z336.literal("response.fusion_call.analysis.completed")
 }).transform((v) => {
   return remap(v, {
     "item_id": "itemId",
@@ -9396,14 +9677,14 @@ var FusionCallAnalysisCompletedEvent$inboundSchema = z328.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/fusioncallanalysisinprogressevent.js
-var z329 = __toESM(require("zod/v4"), 1);
-var FusionCallAnalysisInProgressEvent$inboundSchema = z329.object({
-  analyst_model: z329.string(),
-  item_id: z329.string(),
-  judge_model: z329.string(),
-  output_index: z329.int(),
-  sequence_number: z329.int(),
-  type: z329.literal("response.fusion_call.analysis.in_progress")
+var z337 = __toESM(require("zod/v4"), 1);
+var FusionCallAnalysisInProgressEvent$inboundSchema = z337.object({
+  analyst_model: z337.string(),
+  item_id: z337.string(),
+  judge_model: z337.string(),
+  output_index: z337.int(),
+  sequence_number: z337.int(),
+  type: z337.literal("response.fusion_call.analysis.in_progress")
 }).transform((v) => {
   return remap(v, {
     "analyst_model": "analystModel",
@@ -9415,12 +9696,12 @@ var FusionCallAnalysisInProgressEvent$inboundSchema = z329.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/fusioncallcompletedevent.js
-var z330 = __toESM(require("zod/v4"), 1);
-var FusionCallCompletedEvent$inboundSchema = z330.object({
-  item_id: z330.string(),
-  output_index: z330.int(),
-  sequence_number: z330.int(),
-  type: z330.literal("response.fusion_call.completed")
+var z338 = __toESM(require("zod/v4"), 1);
+var FusionCallCompletedEvent$inboundSchema = z338.object({
+  item_id: z338.string(),
+  output_index: z338.int(),
+  sequence_number: z338.int(),
+  type: z338.literal("response.fusion_call.completed")
 }).transform((v) => {
   return remap(v, {
     "item_id": "itemId",
@@ -9430,12 +9711,12 @@ var FusionCallCompletedEvent$inboundSchema = z330.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/fusioncallinprogressevent.js
-var z331 = __toESM(require("zod/v4"), 1);
-var FusionCallInProgressEvent$inboundSchema = z331.object({
-  item_id: z331.string(),
-  output_index: z331.int(),
-  sequence_number: z331.int(),
-  type: z331.literal("response.fusion_call.in_progress")
+var z339 = __toESM(require("zod/v4"), 1);
+var FusionCallInProgressEvent$inboundSchema = z339.object({
+  item_id: z339.string(),
+  output_index: z339.int(),
+  sequence_number: z339.int(),
+  type: z339.literal("response.fusion_call.in_progress")
 }).transform((v) => {
   return remap(v, {
     "item_id": "itemId",
@@ -9445,13 +9726,13 @@ var FusionCallInProgressEvent$inboundSchema = z331.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/fusioncallpaneladdedevent.js
-var z332 = __toESM(require("zod/v4"), 1);
-var FusionCallPanelAddedEvent$inboundSchema = z332.object({
-  item_id: z332.string(),
-  model: z332.string(),
-  output_index: z332.int(),
-  sequence_number: z332.int(),
-  type: z332.literal("response.fusion_call.panel.added")
+var z340 = __toESM(require("zod/v4"), 1);
+var FusionCallPanelAddedEvent$inboundSchema = z340.object({
+  item_id: z340.string(),
+  model: z340.string(),
+  output_index: z340.int(),
+  sequence_number: z340.int(),
+  type: z340.literal("response.fusion_call.panel.added")
 }).transform((v) => {
   return remap(v, {
     "item_id": "itemId",
@@ -9461,14 +9742,14 @@ var FusionCallPanelAddedEvent$inboundSchema = z332.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/fusioncallpanelcompletedevent.js
-var z333 = __toESM(require("zod/v4"), 1);
-var FusionCallPanelCompletedEvent$inboundSchema = z333.object({
-  content: z333.string(),
-  item_id: z333.string(),
-  model: z333.string(),
-  output_index: z333.int(),
-  sequence_number: z333.int(),
-  type: z333.literal("response.fusion_call.panel.completed")
+var z341 = __toESM(require("zod/v4"), 1);
+var FusionCallPanelCompletedEvent$inboundSchema = z341.object({
+  content: z341.string(),
+  item_id: z341.string(),
+  model: z341.string(),
+  output_index: z341.int(),
+  sequence_number: z341.int(),
+  type: z341.literal("response.fusion_call.panel.completed")
 }).transform((v) => {
   return remap(v, {
     "item_id": "itemId",
@@ -9478,14 +9759,14 @@ var FusionCallPanelCompletedEvent$inboundSchema = z333.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/fusioncallpaneldeltaevent.js
-var z334 = __toESM(require("zod/v4"), 1);
-var FusionCallPanelDeltaEvent$inboundSchema = z334.object({
-  delta: z334.string(),
-  item_id: z334.string(),
-  model: z334.string(),
-  output_index: z334.int(),
-  sequence_number: z334.int(),
-  type: z334.literal("response.fusion_call.panel.delta")
+var z342 = __toESM(require("zod/v4"), 1);
+var FusionCallPanelDeltaEvent$inboundSchema = z342.object({
+  delta: z342.string(),
+  item_id: z342.string(),
+  model: z342.string(),
+  output_index: z342.int(),
+  sequence_number: z342.int(),
+  type: z342.literal("response.fusion_call.panel.delta")
 }).transform((v) => {
   return remap(v, {
     "item_id": "itemId",
@@ -9495,15 +9776,15 @@ var FusionCallPanelDeltaEvent$inboundSchema = z334.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/fusioncallpanelfailedevent.js
-var z335 = __toESM(require("zod/v4"), 1);
-var FusionCallPanelFailedEvent$inboundSchema = z335.object({
-  error: z335.string(),
-  item_id: z335.string(),
-  model: z335.string(),
-  output_index: z335.int(),
-  sequence_number: z335.int(),
-  status_code: z335.int().optional(),
-  type: z335.literal("response.fusion_call.panel.failed")
+var z343 = __toESM(require("zod/v4"), 1);
+var FusionCallPanelFailedEvent$inboundSchema = z343.object({
+  error: z343.string(),
+  item_id: z343.string(),
+  model: z343.string(),
+  output_index: z343.int(),
+  sequence_number: z343.int(),
+  status_code: z343.int().optional(),
+  type: z343.literal("response.fusion_call.panel.failed")
 }).transform((v) => {
   return remap(v, {
     "item_id": "itemId",
@@ -9514,14 +9795,14 @@ var FusionCallPanelFailedEvent$inboundSchema = z335.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/fusioncallpanelreasoningdeltaevent.js
-var z336 = __toESM(require("zod/v4"), 1);
-var FusionCallPanelReasoningDeltaEvent$inboundSchema = z336.object({
-  delta: z336.string(),
-  item_id: z336.string(),
-  model: z336.string(),
-  output_index: z336.int(),
-  sequence_number: z336.int(),
-  type: z336.literal("response.fusion_call.panel.reasoning.delta")
+var z344 = __toESM(require("zod/v4"), 1);
+var FusionCallPanelReasoningDeltaEvent$inboundSchema = z344.object({
+  delta: z344.string(),
+  item_id: z344.string(),
+  model: z344.string(),
+  output_index: z344.int(),
+  sequence_number: z344.int(),
+  type: z344.literal("response.fusion_call.panel.reasoning.delta")
 }).transform((v) => {
   return remap(v, {
     "item_id": "itemId",
@@ -9531,48 +9812,81 @@ var FusionCallPanelReasoningDeltaEvent$inboundSchema = z336.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/fusionsource.js
-var z337 = __toESM(require("zod/v4"), 1);
-var FusionSource$inboundSchema = z337.object({
-  title: z337.string(),
-  url: z337.string()
+var z345 = __toESM(require("zod/v4"), 1);
+var FusionSource$inboundSchema = z345.object({
+  title: z345.string(),
+  url: z345.string()
 });
-var FusionSource$outboundSchema = z337.object({
-  title: z337.string(),
-  url: z337.string()
+var FusionSource$outboundSchema = z345.object({
+  title: z345.string(),
+  url: z345.string()
 });
 
 // node_modules/@openrouter/sdk/esm/models/generationcontentdata.js
-var z338 = __toESM(require("zod/v4"), 1);
-var Input2$inboundSchema = z338.object({
-  messages: z338.array(z338.any())
+var z348 = __toESM(require("zod/v4"), 1);
+
+// node_modules/@openrouter/sdk/esm/models/generationcontenterror.js
+var z347 = __toESM(require("zod/v4"), 1);
+
+// node_modules/@openrouter/sdk/esm/models/generationcontenterrorattempt.js
+var z346 = __toESM(require("zod/v4"), 1);
+var GenerationContentErrorAttempt$inboundSchema = z346.object({
+  code: z346.int(),
+  message: z346.string(),
+  provider_name: z346.nullable(z346.string()),
+  raw: z346.nullable(z346.string())
+}).transform((v) => {
+  return remap(v, {
+    "provider_name": "providerName"
+  });
 });
-var Input1$inboundSchema = z338.object({
-  prompt: z338.string()
+
+// node_modules/@openrouter/sdk/esm/models/generationcontenterror.js
+var GenerationContentError$inboundSchema = z347.object({
+  message: z347.nullable(z347.string()),
+  previous_errors: z347.array(GenerationContentErrorAttempt$inboundSchema),
+  provider_name: z347.nullable(z347.string()),
+  raw: z347.nullable(z347.string()),
+  status: z347.nullable(z347.int())
+}).transform((v) => {
+  return remap(v, {
+    "previous_errors": "previousErrors",
+    "provider_name": "providerName"
+  });
 });
-var InputUnion$inboundSchema = z338.union([z338.lazy(() => Input1$inboundSchema), z338.lazy(() => Input2$inboundSchema)]);
-var GenerationContentDataOutput$inboundSchema = z338.object({
-  completion: z338.nullable(z338.string()),
-  reasoning: z338.nullable(z338.string())
+
+// node_modules/@openrouter/sdk/esm/models/generationcontentdata.js
+var Input2$inboundSchema = z348.object({
+  messages: z348.array(z348.any())
 });
-var GenerationContentData$inboundSchema = z338.object({
-  input: z338.union([
-    z338.lazy(() => Input1$inboundSchema),
-    z338.lazy(() => Input2$inboundSchema)
+var Input1$inboundSchema = z348.object({
+  prompt: z348.string()
+});
+var InputUnion$inboundSchema = z348.union([z348.lazy(() => Input1$inboundSchema), z348.lazy(() => Input2$inboundSchema)]);
+var GenerationContentDataOutput$inboundSchema = z348.object({
+  completion: z348.nullable(z348.string()),
+  reasoning: z348.nullable(z348.string())
+});
+var GenerationContentData$inboundSchema = z348.object({
+  error: z348.nullable(GenerationContentError$inboundSchema),
+  input: z348.union([
+    z348.lazy(() => Input1$inboundSchema),
+    z348.lazy(() => Input2$inboundSchema)
   ]),
-  output: z338.lazy(() => GenerationContentDataOutput$inboundSchema)
+  output: z348.lazy(() => GenerationContentDataOutput$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/generationcontentresponse.js
-var z339 = __toESM(require("zod/v4"), 1);
-var GenerationContentResponse$inboundSchema = z339.object({
+var z349 = __toESM(require("zod/v4"), 1);
+var GenerationContentResponse$inboundSchema = z349.object({
   data: GenerationContentData$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/generationresponse.js
-var z341 = __toESM(require("zod/v4"), 1);
+var z351 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/providerresponse.js
-var z340 = __toESM(require("zod/v4"), 1);
+var z350 = __toESM(require("zod/v4"), 1);
 var ProviderResponseProviderName = {
   AnyScale: "AnyScale",
   Atoma: "Atoma",
@@ -9629,6 +9943,7 @@ var ProviderResponseProviderName = {
   Crucible: "Crucible",
   Crusoe: "Crusoe",
   Darkbloom: "Darkbloom",
+  Databricks: "Databricks",
   Decart: "Decart",
   Deepgram: "Deepgram",
   DeepInfra: "DeepInfra",
@@ -9711,15 +10026,15 @@ var RoutedServiceTier = {
 };
 var ProviderResponseProviderName$inboundSchema = inboundSchema(ProviderResponseProviderName);
 var RoutedServiceTier$inboundSchema = inboundSchema(RoutedServiceTier);
-var ProviderResponse$inboundSchema = z340.object({
-  endpoint_id: z340.string().optional(),
-  id: z340.string().optional(),
-  is_byok: z340.boolean().optional(),
-  latency: z340.number().optional(),
-  model_permaslug: z340.string().optional(),
+var ProviderResponse$inboundSchema = z350.object({
+  endpoint_id: z350.string().optional(),
+  id: z350.string().optional(),
+  is_byok: z350.boolean().optional(),
+  latency: z350.number().optional(),
+  model_permaslug: z350.string().optional(),
   provider_name: ProviderResponseProviderName$inboundSchema.optional(),
   routed_service_tier: RoutedServiceTier$inboundSchema.optional(),
-  status: z340.nullable(z340.int())
+  status: z350.nullable(z350.int())
 }).transform((v) => {
   return remap(v, {
     "endpoint_id": "endpointId",
@@ -9747,51 +10062,52 @@ var DataRegion = {
 };
 var ApiType$inboundSchema = inboundSchema(ApiType);
 var DataRegion$inboundSchema = inboundSchema(DataRegion);
-var GenerationResponseData$inboundSchema = z341.object({
-  api_type: z341.nullable(ApiType$inboundSchema),
-  app_id: z341.nullable(z341.int()),
-  cache_discount: z341.nullable(z341.number()),
-  cancelled: z341.nullable(z341.boolean()),
-  created_at: z341.string(),
+var GenerationResponseData$inboundSchema = z351.object({
+  api_type: z351.nullable(ApiType$inboundSchema),
+  app_id: z351.nullable(z351.int()),
+  cache_discount: z351.nullable(z351.number()),
+  cancelled: z351.nullable(z351.boolean()),
+  created_at: z351.string(),
   data_region: DataRegion$inboundSchema,
-  external_user: z341.nullable(z341.string()),
-  finish_reason: z341.nullable(z341.string()),
-  generation_time: z341.nullable(z341.number()),
-  http_referer: z341.nullable(z341.string()),
-  id: z341.string(),
-  is_byok: z341.boolean(),
-  latency: z341.nullable(z341.number()),
-  model: z341.string(),
-  moderation_latency: z341.nullable(z341.number()),
-  native_finish_reason: z341.nullable(z341.string()),
-  native_tokens_cached: z341.nullable(z341.int()),
-  native_tokens_completion: z341.nullable(z341.int()),
-  native_tokens_completion_images: z341.nullable(z341.int()),
-  native_tokens_prompt: z341.nullable(z341.int()),
-  native_tokens_reasoning: z341.nullable(z341.int()),
-  num_fetches: z341.nullable(z341.int()),
-  num_input_audio_prompt: z341.nullable(z341.int()),
-  num_media_completion: z341.nullable(z341.int()),
-  num_media_prompt: z341.nullable(z341.int()),
-  num_search_results: z341.nullable(z341.int()),
-  origin: z341.string(),
-  preset_id: z341.nullable(z341.string()),
-  provider_name: z341.nullable(z341.string()),
-  provider_responses: z341.nullable(z341.array(ProviderResponse$inboundSchema)),
-  request_id: z341.nullable(z341.string()).optional(),
-  response_cache_source_id: z341.nullable(z341.string()).optional(),
-  router: z341.nullable(z341.string()),
-  service_tier: z341.nullable(z341.string()),
-  session_id: z341.nullable(z341.string()).optional(),
-  streamed: z341.nullable(z341.boolean()),
-  tokens_completion: z341.nullable(z341.int()),
-  tokens_prompt: z341.nullable(z341.int()),
-  total_cost: z341.number(),
-  upstream_id: z341.nullable(z341.string()),
-  upstream_inference_cost: z341.nullable(z341.number()),
-  usage: z341.number(),
-  user_agent: z341.nullable(z341.string()),
-  web_search_engine: z341.nullable(z341.string())
+  external_user: z351.nullable(z351.string()),
+  finish_reason: z351.nullable(z351.string()),
+  generation_time: z351.nullable(z351.number()),
+  http_referer: z351.nullable(z351.string()),
+  id: z351.string(),
+  is_byok: z351.boolean(),
+  latency: z351.nullable(z351.number()),
+  model: z351.string(),
+  moderation_latency: z351.nullable(z351.number()),
+  native_finish_reason: z351.nullable(z351.string()),
+  native_tokens_cached: z351.nullable(z351.int()),
+  native_tokens_completion: z351.nullable(z351.int()),
+  native_tokens_completion_images: z351.nullable(z351.int()),
+  native_tokens_prompt: z351.nullable(z351.int()),
+  native_tokens_reasoning: z351.nullable(z351.int()),
+  num_fetches: z351.nullable(z351.int()),
+  num_input_audio_prompt: z351.nullable(z351.int()),
+  num_media_completion: z351.nullable(z351.int()),
+  num_media_prompt: z351.nullable(z351.int()),
+  num_search_results: z351.nullable(z351.int()),
+  origin: z351.string(),
+  preset_id: z351.nullable(z351.string()),
+  provider_name: z351.nullable(z351.string()),
+  provider_responses: z351.nullable(z351.array(ProviderResponse$inboundSchema)),
+  request_id: z351.nullable(z351.string()).optional(),
+  response_cache_source_id: z351.nullable(z351.string()).optional(),
+  router: z351.nullable(z351.string()),
+  service_tier: z351.nullable(z351.string()),
+  session_id: z351.nullable(z351.string()).optional(),
+  streamed: z351.nullable(z351.boolean()),
+  tokens_completion: z351.nullable(z351.int()),
+  tokens_prompt: z351.nullable(z351.int()),
+  total_cost: z351.number(),
+  upstream_id: z351.nullable(z351.string()),
+  upstream_inference_cost: z351.nullable(z351.number()),
+  usage: z351.number(),
+  user_agent: z351.nullable(z351.string()),
+  web_search_engine: z351.nullable(z351.string()),
+  workspace_id: z351.nullable(z351.string())
 }).transform((v) => {
   return remap(v, {
     "api_type": "apiType",
@@ -9829,60 +10145,99 @@ var GenerationResponseData$inboundSchema = z341.object({
     "upstream_id": "upstreamId",
     "upstream_inference_cost": "upstreamInferenceCost",
     "user_agent": "userAgent",
-    "web_search_engine": "webSearchEngine"
+    "web_search_engine": "webSearchEngine",
+    "workspace_id": "workspaceId"
   });
 });
-var GenerationResponse$inboundSchema = z341.object({
-  data: z341.lazy(() => GenerationResponseData$inboundSchema)
+var GenerationResponse$inboundSchema = z351.object({
+  data: z351.lazy(() => GenerationResponseData$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/getbyokkeyresponse.js
-var z342 = __toESM(require("zod/v4"), 1);
-var GetBYOKKeyResponse$inboundSchema = z342.object({
+var z352 = __toESM(require("zod/v4"), 1);
+var GetBYOKKeyResponse$inboundSchema = z352.object({
   data: BYOKKey$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/getguardrailresponse.js
-var z343 = __toESM(require("zod/v4"), 1);
-var GetGuardrailResponse$inboundSchema = z343.object({
+var z353 = __toESM(require("zod/v4"), 1);
+var GetGuardrailResponse$inboundSchema = z353.object({
   data: Guardrail$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/getobservabilitydestinationresponse.js
-var z344 = __toESM(require("zod/v4"), 1);
-var GetObservabilityDestinationResponse$inboundSchema = z344.object({
+var z354 = __toESM(require("zod/v4"), 1);
+var GetObservabilityDestinationResponse$inboundSchema = z354.object({
   data: ObservabilityDestination$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/getpresetresponse.js
-var z345 = __toESM(require("zod/v4"), 1);
-var GetPresetResponse$inboundSchema = z345.object({
+var z355 = __toESM(require("zod/v4"), 1);
+var GetPresetResponse$inboundSchema = z355.object({
   data: PresetWithDesignatedVersion$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/getpresetversionresponse.js
-var z346 = __toESM(require("zod/v4"), 1);
-var GetPresetVersionResponse$inboundSchema = z346.object({
-  data: z346.nullable(PresetDesignatedVersion$inboundSchema)
+var z356 = __toESM(require("zod/v4"), 1);
+var GetPresetVersionResponse$inboundSchema = z356.object({
+  data: z356.nullable(PresetDesignatedVersion$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/getscimgroupmappingresponse.js
-var z347 = __toESM(require("zod/v4"), 1);
-var GetScimGroupMappingResponse$inboundSchema = z347.object({
+var z357 = __toESM(require("zod/v4"), 1);
+var GetScimGroupMappingResponse$inboundSchema = z357.object({
   data: ScimGroupMapping$inboundSchema
 });
 
+// node_modules/@openrouter/sdk/esm/models/getworkspacebudgetresponse.js
+var z359 = __toESM(require("zod/v4"), 1);
+
+// node_modules/@openrouter/sdk/esm/models/workspacebudget.js
+var z358 = __toESM(require("zod/v4"), 1);
+var ResetInterval = {
+  Daily: "daily",
+  Weekly: "weekly",
+  Monthly: "monthly"
+};
+var ResetInterval$inboundSchema = inboundSchema(ResetInterval);
+var WorkspaceBudget$inboundSchema = z358.object({
+  created_at: z358.string(),
+  id: z358.string(),
+  limit_usd: z358.number(),
+  reset_interval: z358.nullable(ResetInterval$inboundSchema),
+  updated_at: z358.string(),
+  workspace_id: z358.string()
+}).transform((v) => {
+  return remap(v, {
+    "created_at": "createdAt",
+    "limit_usd": "limitUsd",
+    "reset_interval": "resetInterval",
+    "updated_at": "updatedAt",
+    "workspace_id": "workspaceId"
+  });
+});
+
+// node_modules/@openrouter/sdk/esm/models/getworkspacebudgetresponse.js
+var GetWorkspaceBudgetResponse$inboundSchema = z359.object({
+  data: WorkspaceBudget$inboundSchema,
+  include_byok_in_budgets: z359.boolean().optional()
+}).transform((v) => {
+  return remap(v, {
+    "include_byok_in_budgets": "includeByokInBudgets"
+  });
+});
+
 // node_modules/@openrouter/sdk/esm/models/getworkspaceresponse.js
-var z348 = __toESM(require("zod/v4"), 1);
-var GetWorkspaceResponse$inboundSchema = z348.object({
+var z360 = __toESM(require("zod/v4"), 1);
+var GetWorkspaceResponse$inboundSchema = z360.object({
   data: Workspace$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/imageendpoint.js
-var z350 = __toESM(require("zod/v4"), 1);
+var z362 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/imagepricingentry.js
-var z349 = __toESM(require("zod/v4"), 1);
+var z361 = __toESM(require("zod/v4"), 1);
 var Billable = {
   OutputImage: "output_image",
   InputImage: "input_image",
@@ -9897,11 +10252,11 @@ var Unit = {
 };
 var Billable$inboundSchema = inboundSchema(Billable);
 var Unit$inboundSchema = inboundSchema(Unit);
-var ImagePricingEntry$inboundSchema = z349.object({
+var ImagePricingEntry$inboundSchema = z361.object({
   billable: Billable$inboundSchema,
-  cost_usd: z349.number(),
+  cost_usd: z361.number(),
   unit: Unit$inboundSchema,
-  variant: z349.string().optional()
+  variant: z361.string().optional()
 }).transform((v) => {
   return remap(v, {
     "cost_usd": "costUsd"
@@ -9909,14 +10264,14 @@ var ImagePricingEntry$inboundSchema = z349.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/imageendpoint.js
-var ImageEndpoint$inboundSchema = z350.object({
-  allowed_passthrough_parameters: z350.array(z350.string()),
-  pricing: z350.array(ImagePricingEntry$inboundSchema),
-  provider_name: z350.string(),
-  provider_slug: z350.string(),
-  provider_tag: z350.nullable(z350.string()),
-  supported_parameters: z350.record(z350.string(), CapabilityDescriptor$inboundSchema),
-  supports_streaming: z350.boolean()
+var ImageEndpoint$inboundSchema = z362.object({
+  allowed_passthrough_parameters: z362.array(z362.string()),
+  pricing: z362.array(ImagePricingEntry$inboundSchema),
+  provider_name: z362.string(),
+  provider_slug: z362.string(),
+  provider_tag: z362.nullable(z362.string()),
+  supported_parameters: z362.record(z362.string(), CapabilityDescriptor$inboundSchema),
+  supports_streaming: z362.boolean()
 }).transform((v) => {
   return remap(v, {
     "allowed_passthrough_parameters": "allowedPassthroughParameters",
@@ -9929,12 +10284,12 @@ var ImageEndpoint$inboundSchema = z350.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/imagegencallcompletedevent.js
-var z351 = __toESM(require("zod/v4"), 1);
-var ImageGenCallCompletedEvent$inboundSchema = z351.object({
-  item_id: z351.string(),
-  output_index: z351.int(),
-  sequence_number: z351.int(),
-  type: z351.literal("response.image_generation_call.completed")
+var z363 = __toESM(require("zod/v4"), 1);
+var ImageGenCallCompletedEvent$inboundSchema = z363.object({
+  item_id: z363.string(),
+  output_index: z363.int(),
+  sequence_number: z363.int(),
+  type: z363.literal("response.image_generation_call.completed")
 }).transform((v) => {
   return remap(v, {
     "item_id": "itemId",
@@ -9944,12 +10299,12 @@ var ImageGenCallCompletedEvent$inboundSchema = z351.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/imagegencallgeneratingevent.js
-var z352 = __toESM(require("zod/v4"), 1);
-var ImageGenCallGeneratingEvent$inboundSchema = z352.object({
-  item_id: z352.string(),
-  output_index: z352.int(),
-  sequence_number: z352.int(),
-  type: z352.literal("response.image_generation_call.generating")
+var z364 = __toESM(require("zod/v4"), 1);
+var ImageGenCallGeneratingEvent$inboundSchema = z364.object({
+  item_id: z364.string(),
+  output_index: z364.int(),
+  sequence_number: z364.int(),
+  type: z364.literal("response.image_generation_call.generating")
 }).transform((v) => {
   return remap(v, {
     "item_id": "itemId",
@@ -9959,12 +10314,12 @@ var ImageGenCallGeneratingEvent$inboundSchema = z352.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/imagegencallinprogressevent.js
-var z353 = __toESM(require("zod/v4"), 1);
-var ImageGenCallInProgressEvent$inboundSchema = z353.object({
-  item_id: z353.string(),
-  output_index: z353.int(),
-  sequence_number: z353.int(),
-  type: z353.literal("response.image_generation_call.in_progress")
+var z365 = __toESM(require("zod/v4"), 1);
+var ImageGenCallInProgressEvent$inboundSchema = z365.object({
+  item_id: z365.string(),
+  output_index: z365.int(),
+  sequence_number: z365.int(),
+  type: z365.literal("response.image_generation_call.in_progress")
 }).transform((v) => {
   return remap(v, {
     "item_id": "itemId",
@@ -9974,14 +10329,14 @@ var ImageGenCallInProgressEvent$inboundSchema = z353.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/imagegencallpartialimageevent.js
-var z354 = __toESM(require("zod/v4"), 1);
-var ImageGenCallPartialImageEvent$inboundSchema = z354.object({
-  item_id: z354.string(),
-  output_index: z354.int(),
-  partial_image_b64: z354.string(),
-  partial_image_index: z354.int(),
-  sequence_number: z354.int(),
-  type: z354.literal("response.image_generation_call.partial_image")
+var z366 = __toESM(require("zod/v4"), 1);
+var ImageGenCallPartialImageEvent$inboundSchema = z366.object({
+  item_id: z366.string(),
+  output_index: z366.int(),
+  partial_image_b64: z366.string(),
+  partial_image_index: z366.int(),
+  sequence_number: z366.int(),
+  type: z366.literal("response.image_generation_call.partial_image")
 }).transform((v) => {
   return remap(v, {
     "item_id": "itemId",
@@ -9993,14 +10348,14 @@ var ImageGenCallPartialImageEvent$inboundSchema = z354.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/imagegencompletedevent.js
-var z356 = __toESM(require("zod/v4"), 1);
+var z368 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/imagegenerationusage.js
-var z355 = __toESM(require("zod/v4"), 1);
-var ImageGenerationUsageCompletionTokensDetails$inboundSchema = z355.object({
-  audio_tokens: z355.nullable(z355.int()).optional(),
-  image_tokens: z355.nullable(z355.int()).optional(),
-  reasoning_tokens: z355.nullable(z355.int()).optional()
+var z367 = __toESM(require("zod/v4"), 1);
+var ImageGenerationUsageCompletionTokensDetails$inboundSchema = z367.object({
+  audio_tokens: z367.nullable(z367.int()).optional(),
+  image_tokens: z367.nullable(z367.int()).optional(),
+  reasoning_tokens: z367.nullable(z367.int()).optional()
 }).transform((v) => {
   return remap(v, {
     "audio_tokens": "audioTokens",
@@ -10008,12 +10363,12 @@ var ImageGenerationUsageCompletionTokensDetails$inboundSchema = z355.object({
     "reasoning_tokens": "reasoningTokens"
   });
 });
-var ImageGenerationUsagePromptTokensDetails$inboundSchema = z355.object({
-  audio_tokens: z355.nullable(z355.int()).optional(),
-  cache_write_tokens: z355.nullable(z355.int()).optional(),
-  cached_tokens: z355.nullable(z355.int()).optional(),
-  file_tokens: z355.nullable(z355.int()).optional(),
-  video_tokens: z355.nullable(z355.int()).optional()
+var ImageGenerationUsagePromptTokensDetails$inboundSchema = z367.object({
+  audio_tokens: z367.nullable(z367.int()).optional(),
+  cache_write_tokens: z367.nullable(z367.int()).optional(),
+  cached_tokens: z367.nullable(z367.int()).optional(),
+  file_tokens: z367.nullable(z367.int()).optional(),
+  video_tokens: z367.nullable(z367.int()).optional()
 }).transform((v) => {
   return remap(v, {
     "audio_tokens": "audioTokens",
@@ -10023,10 +10378,10 @@ var ImageGenerationUsagePromptTokensDetails$inboundSchema = z355.object({
     "video_tokens": "videoTokens"
   });
 });
-var ServerToolUse$inboundSchema = z355.object({
-  tool_calls_executed: z355.nullable(z355.int()).optional(),
-  tool_calls_requested: z355.nullable(z355.int()).optional(),
-  web_search_requests: z355.nullable(z355.int()).optional()
+var ServerToolUse$inboundSchema = z367.object({
+  tool_calls_executed: z367.nullable(z367.int()).optional(),
+  tool_calls_requested: z367.nullable(z367.int()).optional(),
+  web_search_requests: z367.nullable(z367.int()).optional()
 }).transform((v) => {
   return remap(v, {
     "tool_calls_executed": "toolCallsExecuted",
@@ -10034,20 +10389,20 @@ var ServerToolUse$inboundSchema = z355.object({
     "web_search_requests": "webSearchRequests"
   });
 });
-var ImageGenerationUsage$inboundSchema = z355.object({
-  cache_creation: z355.nullable(AnthropicCacheCreation$inboundSchema).optional(),
-  completion_tokens: z355.int(),
-  completion_tokens_details: z355.nullable(z355.lazy(() => ImageGenerationUsageCompletionTokensDetails$inboundSchema)).optional(),
-  cost: z355.nullable(z355.number()).optional(),
-  cost_details: z355.nullable(CostDetails$inboundSchema).optional(),
-  is_byok: z355.boolean().optional(),
-  iterations: z355.nullable(z355.array(AnthropicUsageIteration$inboundSchema)).optional(),
-  prompt_tokens: z355.int(),
-  prompt_tokens_details: z355.nullable(z355.lazy(() => ImageGenerationUsagePromptTokensDetails$inboundSchema)).optional(),
-  server_tool_use: z355.nullable(z355.lazy(() => ServerToolUse$inboundSchema)).optional(),
-  service_tier: z355.nullable(z355.string()).optional(),
-  speed: z355.nullable(AnthropicSpeed$inboundSchema).optional(),
-  total_tokens: z355.int()
+var ImageGenerationUsage$inboundSchema = z367.object({
+  cache_creation: z367.nullable(AnthropicCacheCreation$inboundSchema).optional(),
+  completion_tokens: z367.int(),
+  completion_tokens_details: z367.nullable(z367.lazy(() => ImageGenerationUsageCompletionTokensDetails$inboundSchema)).optional(),
+  cost: z367.nullable(z367.number()).optional(),
+  cost_details: z367.nullable(CostDetails$inboundSchema).optional(),
+  is_byok: z367.boolean().optional(),
+  iterations: z367.nullable(z367.array(AnthropicUsageIteration$inboundSchema)).optional(),
+  prompt_tokens: z367.int(),
+  prompt_tokens_details: z367.nullable(z367.lazy(() => ImageGenerationUsagePromptTokensDetails$inboundSchema)).optional(),
+  server_tool_use: z367.nullable(z367.lazy(() => ServerToolUse$inboundSchema)).optional(),
+  service_tier: z367.nullable(z367.string()).optional(),
+  speed: z367.nullable(AnthropicSpeed$inboundSchema).optional(),
+  total_tokens: z367.int()
 }).transform((v) => {
   return remap(v, {
     "cache_creation": "cacheCreation",
@@ -10064,11 +10419,11 @@ var ImageGenerationUsage$inboundSchema = z355.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/imagegencompletedevent.js
-var ImageGenCompletedEvent$inboundSchema = z356.object({
-  b64_json: z356.string(),
-  created: z356.int(),
-  media_type: z356.string().optional(),
-  type: z356.literal("image_generation.completed"),
+var ImageGenCompletedEvent$inboundSchema = z368.object({
+  b64_json: z368.string(),
+  created: z368.int(),
+  media_type: z368.string().optional(),
+  type: z368.literal("image_generation.completed"),
   usage: ImageGenerationUsage$inboundSchema.optional()
 }).transform((v) => {
   return remap(v, {
@@ -10078,142 +10433,143 @@ var ImageGenCompletedEvent$inboundSchema = z356.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/imagegenerationproviderpreferences.js
-var z357 = __toESM(require("zod/v4"), 1);
-var ImageGenerationProviderPreferencesIgnore$outboundSchema = z357.union([ProviderName$outboundSchema, z357.string()]);
-var ImageGenerationProviderPreferencesOnly$outboundSchema = z357.union([ProviderName$outboundSchema, z357.string()]);
-var ImageGenerationProviderPreferencesOptions$outboundSchema = z357.object({
-  oneai: z357.record(z357.string(), z357.any()).optional(),
-  ai21: z357.record(z357.string(), z357.any()).optional(),
-  aionLabs: z357.record(z357.string(), z357.any()).optional(),
-  akashml: z357.record(z357.string(), z357.any()).optional(),
-  alibaba: z357.record(z357.string(), z357.any()).optional(),
-  amazonBedrock: z357.record(z357.string(), z357.any()).optional(),
-  amazonNova: z357.record(z357.string(), z357.any()).optional(),
-  ambient: z357.record(z357.string(), z357.any()).optional(),
-  anthropic: z357.record(z357.string(), z357.any()).optional(),
-  anyscale: z357.record(z357.string(), z357.any()).optional(),
-  arceeAi: z357.record(z357.string(), z357.any()).optional(),
-  atlasCloud: z357.record(z357.string(), z357.any()).optional(),
-  atoma: z357.record(z357.string(), z357.any()).optional(),
-  avian: z357.record(z357.string(), z357.any()).optional(),
-  azure: z357.record(z357.string(), z357.any()).optional(),
-  baidu: z357.record(z357.string(), z357.any()).optional(),
-  baseten: z357.record(z357.string(), z357.any()).optional(),
-  blackForestLabs: z357.record(z357.string(), z357.any()).optional(),
-  byteplus: z357.record(z357.string(), z357.any()).optional(),
-  centml: z357.record(z357.string(), z357.any()).optional(),
-  cerebras: z357.record(z357.string(), z357.any()).optional(),
-  chutes: z357.record(z357.string(), z357.any()).optional(),
-  cirrascale: z357.record(z357.string(), z357.any()).optional(),
-  clarifai: z357.record(z357.string(), z357.any()).optional(),
-  claudeOnAws: z357.record(z357.string(), z357.any()).optional(),
-  cloudflare: z357.record(z357.string(), z357.any()).optional(),
-  cohere: z357.record(z357.string(), z357.any()).optional(),
-  coreweave: z357.record(z357.string(), z357.any()).optional(),
-  crofai: z357.record(z357.string(), z357.any()).optional(),
-  crucible: z357.record(z357.string(), z357.any()).optional(),
-  crusoe: z357.record(z357.string(), z357.any()).optional(),
-  darkbloom: z357.record(z357.string(), z357.any()).optional(),
-  decart: z357.record(z357.string(), z357.any()).optional(),
-  deepgram: z357.record(z357.string(), z357.any()).optional(),
-  deepinfra: z357.record(z357.string(), z357.any()).optional(),
-  deepseek: z357.record(z357.string(), z357.any()).optional(),
-  dekallm: z357.record(z357.string(), z357.any()).optional(),
-  digitalocean: z357.record(z357.string(), z357.any()).optional(),
-  enfer: z357.record(z357.string(), z357.any()).optional(),
-  fakeProvider: z357.record(z357.string(), z357.any()).optional(),
-  featherless: z357.record(z357.string(), z357.any()).optional(),
-  fireworks: z357.record(z357.string(), z357.any()).optional(),
-  fishAudio: z357.record(z357.string(), z357.any()).optional(),
-  friendli: z357.record(z357.string(), z357.any()).optional(),
-  gmicloud: z357.record(z357.string(), z357.any()).optional(),
-  googleAiStudio: z357.record(z357.string(), z357.any()).optional(),
-  googleVertex: z357.record(z357.string(), z357.any()).optional(),
-  gopomelo: z357.record(z357.string(), z357.any()).optional(),
-  groq: z357.record(z357.string(), z357.any()).optional(),
-  heygen: z357.record(z357.string(), z357.any()).optional(),
-  huggingface: z357.record(z357.string(), z357.any()).optional(),
-  hyperbolic: z357.record(z357.string(), z357.any()).optional(),
-  hyperbolicQuantized: z357.record(z357.string(), z357.any()).optional(),
-  inception: z357.record(z357.string(), z357.any()).optional(),
-  inceptron: z357.record(z357.string(), z357.any()).optional(),
-  inferactVllm: z357.record(z357.string(), z357.any()).optional(),
-  inferenceNet: z357.record(z357.string(), z357.any()).optional(),
-  infermatic: z357.record(z357.string(), z357.any()).optional(),
-  inflection: z357.record(z357.string(), z357.any()).optional(),
-  inocloud: z357.record(z357.string(), z357.any()).optional(),
-  ioNet: z357.record(z357.string(), z357.any()).optional(),
-  ionstream: z357.record(z357.string(), z357.any()).optional(),
-  klusterai: z357.record(z357.string(), z357.any()).optional(),
-  krea: z357.record(z357.string(), z357.any()).optional(),
-  lambda: z357.record(z357.string(), z357.any()).optional(),
-  lepton: z357.record(z357.string(), z357.any()).optional(),
-  liquid: z357.record(z357.string(), z357.any()).optional(),
-  lynn: z357.record(z357.string(), z357.any()).optional(),
-  lynnPrivate: z357.record(z357.string(), z357.any()).optional(),
-  mancer: z357.record(z357.string(), z357.any()).optional(),
-  mancerOld: z357.record(z357.string(), z357.any()).optional(),
-  mara: z357.record(z357.string(), z357.any()).optional(),
-  meta: z357.record(z357.string(), z357.any()).optional(),
-  minimax: z357.record(z357.string(), z357.any()).optional(),
-  mistral: z357.record(z357.string(), z357.any()).optional(),
-  modal: z357.record(z357.string(), z357.any()).optional(),
-  modelrun: z357.record(z357.string(), z357.any()).optional(),
-  modular: z357.record(z357.string(), z357.any()).optional(),
-  moonshotai: z357.record(z357.string(), z357.any()).optional(),
-  morph: z357.record(z357.string(), z357.any()).optional(),
-  ncompass: z357.record(z357.string(), z357.any()).optional(),
-  nebius: z357.record(z357.string(), z357.any()).optional(),
-  nexAgi: z357.record(z357.string(), z357.any()).optional(),
-  nextbit: z357.record(z357.string(), z357.any()).optional(),
-  nineteen: z357.record(z357.string(), z357.any()).optional(),
-  novita: z357.record(z357.string(), z357.any()).optional(),
-  nvidia: z357.record(z357.string(), z357.any()).optional(),
-  octoai: z357.record(z357.string(), z357.any()).optional(),
-  openInference: z357.record(z357.string(), z357.any()).optional(),
-  openai: z357.record(z357.string(), z357.any()).optional(),
-  parasail: z357.record(z357.string(), z357.any()).optional(),
-  perceptron: z357.record(z357.string(), z357.any()).optional(),
-  perplexity: z357.record(z357.string(), z357.any()).optional(),
-  phala: z357.record(z357.string(), z357.any()).optional(),
-  poolside: z357.record(z357.string(), z357.any()).optional(),
-  quiver: z357.record(z357.string(), z357.any()).optional(),
-  recraft: z357.record(z357.string(), z357.any()).optional(),
-  recursal: z357.record(z357.string(), z357.any()).optional(),
-  reflection: z357.record(z357.string(), z357.any()).optional(),
-  reka: z357.record(z357.string(), z357.any()).optional(),
-  relace: z357.record(z357.string(), z357.any()).optional(),
-  replicate: z357.record(z357.string(), z357.any()).optional(),
-  runway: z357.record(z357.string(), z357.any()).optional(),
-  sailResearch: z357.record(z357.string(), z357.any()).optional(),
-  sakana: z357.record(z357.string(), z357.any()).optional(),
-  sakanaAi: z357.record(z357.string(), z357.any()).optional(),
-  sambanova: z357.record(z357.string(), z357.any()).optional(),
-  sambanovaCloaked: z357.record(z357.string(), z357.any()).optional(),
-  seed: z357.record(z357.string(), z357.any()).optional(),
-  sfCompute: z357.record(z357.string(), z357.any()).optional(),
-  siliconflow: z357.record(z357.string(), z357.any()).optional(),
-  sourceful: z357.record(z357.string(), z357.any()).optional(),
-  stealth: z357.record(z357.string(), z357.any()).optional(),
-  stepfun: z357.record(z357.string(), z357.any()).optional(),
-  streamlake: z357.record(z357.string(), z357.any()).optional(),
-  switchpoint: z357.record(z357.string(), z357.any()).optional(),
-  targon: z357.record(z357.string(), z357.any()).optional(),
-  tencent: z357.record(z357.string(), z357.any()).optional(),
-  tenstorrent: z357.record(z357.string(), z357.any()).optional(),
-  thinkingmachines: z357.record(z357.string(), z357.any()).optional(),
-  together: z357.record(z357.string(), z357.any()).optional(),
-  togetherLite: z357.record(z357.string(), z357.any()).optional(),
-  ubicloud: z357.record(z357.string(), z357.any()).optional(),
-  upstage: z357.record(z357.string(), z357.any()).optional(),
-  venice: z357.record(z357.string(), z357.any()).optional(),
-  voyageai: z357.record(z357.string(), z357.any()).optional(),
-  wafer: z357.record(z357.string(), z357.any()).optional(),
-  wandb: z357.record(z357.string(), z357.any()).optional(),
-  wandbLegacy: z357.record(z357.string(), z357.any()).optional(),
-  xai: z357.record(z357.string(), z357.any()).optional(),
-  xiaomi: z357.record(z357.string(), z357.any()).optional(),
-  zAi: z357.record(z357.string(), z357.any()).optional()
+var z369 = __toESM(require("zod/v4"), 1);
+var ImageGenerationProviderPreferencesIgnore$outboundSchema = z369.union([ProviderName$outboundSchema, z369.string()]);
+var ImageGenerationProviderPreferencesOnly$outboundSchema = z369.union([ProviderName$outboundSchema, z369.string()]);
+var ImageGenerationProviderPreferencesOptions$outboundSchema = z369.object({
+  oneai: z369.record(z369.string(), z369.any()).optional(),
+  ai21: z369.record(z369.string(), z369.any()).optional(),
+  aionLabs: z369.record(z369.string(), z369.any()).optional(),
+  akashml: z369.record(z369.string(), z369.any()).optional(),
+  alibaba: z369.record(z369.string(), z369.any()).optional(),
+  amazonBedrock: z369.record(z369.string(), z369.any()).optional(),
+  amazonNova: z369.record(z369.string(), z369.any()).optional(),
+  ambient: z369.record(z369.string(), z369.any()).optional(),
+  anthropic: z369.record(z369.string(), z369.any()).optional(),
+  anyscale: z369.record(z369.string(), z369.any()).optional(),
+  arceeAi: z369.record(z369.string(), z369.any()).optional(),
+  atlasCloud: z369.record(z369.string(), z369.any()).optional(),
+  atoma: z369.record(z369.string(), z369.any()).optional(),
+  avian: z369.record(z369.string(), z369.any()).optional(),
+  azure: z369.record(z369.string(), z369.any()).optional(),
+  baidu: z369.record(z369.string(), z369.any()).optional(),
+  baseten: z369.record(z369.string(), z369.any()).optional(),
+  blackForestLabs: z369.record(z369.string(), z369.any()).optional(),
+  byteplus: z369.record(z369.string(), z369.any()).optional(),
+  centml: z369.record(z369.string(), z369.any()).optional(),
+  cerebras: z369.record(z369.string(), z369.any()).optional(),
+  chutes: z369.record(z369.string(), z369.any()).optional(),
+  cirrascale: z369.record(z369.string(), z369.any()).optional(),
+  clarifai: z369.record(z369.string(), z369.any()).optional(),
+  claudeOnAws: z369.record(z369.string(), z369.any()).optional(),
+  cloudflare: z369.record(z369.string(), z369.any()).optional(),
+  cohere: z369.record(z369.string(), z369.any()).optional(),
+  coreweave: z369.record(z369.string(), z369.any()).optional(),
+  crofai: z369.record(z369.string(), z369.any()).optional(),
+  crucible: z369.record(z369.string(), z369.any()).optional(),
+  crusoe: z369.record(z369.string(), z369.any()).optional(),
+  darkbloom: z369.record(z369.string(), z369.any()).optional(),
+  databricks: z369.record(z369.string(), z369.any()).optional(),
+  decart: z369.record(z369.string(), z369.any()).optional(),
+  deepgram: z369.record(z369.string(), z369.any()).optional(),
+  deepinfra: z369.record(z369.string(), z369.any()).optional(),
+  deepseek: z369.record(z369.string(), z369.any()).optional(),
+  dekallm: z369.record(z369.string(), z369.any()).optional(),
+  digitalocean: z369.record(z369.string(), z369.any()).optional(),
+  enfer: z369.record(z369.string(), z369.any()).optional(),
+  fakeProvider: z369.record(z369.string(), z369.any()).optional(),
+  featherless: z369.record(z369.string(), z369.any()).optional(),
+  fireworks: z369.record(z369.string(), z369.any()).optional(),
+  fishAudio: z369.record(z369.string(), z369.any()).optional(),
+  friendli: z369.record(z369.string(), z369.any()).optional(),
+  gmicloud: z369.record(z369.string(), z369.any()).optional(),
+  googleAiStudio: z369.record(z369.string(), z369.any()).optional(),
+  googleVertex: z369.record(z369.string(), z369.any()).optional(),
+  gopomelo: z369.record(z369.string(), z369.any()).optional(),
+  groq: z369.record(z369.string(), z369.any()).optional(),
+  heygen: z369.record(z369.string(), z369.any()).optional(),
+  huggingface: z369.record(z369.string(), z369.any()).optional(),
+  hyperbolic: z369.record(z369.string(), z369.any()).optional(),
+  hyperbolicQuantized: z369.record(z369.string(), z369.any()).optional(),
+  inception: z369.record(z369.string(), z369.any()).optional(),
+  inceptron: z369.record(z369.string(), z369.any()).optional(),
+  inferactVllm: z369.record(z369.string(), z369.any()).optional(),
+  inferenceNet: z369.record(z369.string(), z369.any()).optional(),
+  infermatic: z369.record(z369.string(), z369.any()).optional(),
+  inflection: z369.record(z369.string(), z369.any()).optional(),
+  inocloud: z369.record(z369.string(), z369.any()).optional(),
+  ioNet: z369.record(z369.string(), z369.any()).optional(),
+  ionstream: z369.record(z369.string(), z369.any()).optional(),
+  klusterai: z369.record(z369.string(), z369.any()).optional(),
+  krea: z369.record(z369.string(), z369.any()).optional(),
+  lambda: z369.record(z369.string(), z369.any()).optional(),
+  lepton: z369.record(z369.string(), z369.any()).optional(),
+  liquid: z369.record(z369.string(), z369.any()).optional(),
+  lynn: z369.record(z369.string(), z369.any()).optional(),
+  lynnPrivate: z369.record(z369.string(), z369.any()).optional(),
+  mancer: z369.record(z369.string(), z369.any()).optional(),
+  mancerOld: z369.record(z369.string(), z369.any()).optional(),
+  mara: z369.record(z369.string(), z369.any()).optional(),
+  meta: z369.record(z369.string(), z369.any()).optional(),
+  minimax: z369.record(z369.string(), z369.any()).optional(),
+  mistral: z369.record(z369.string(), z369.any()).optional(),
+  modal: z369.record(z369.string(), z369.any()).optional(),
+  modelrun: z369.record(z369.string(), z369.any()).optional(),
+  modular: z369.record(z369.string(), z369.any()).optional(),
+  moonshotai: z369.record(z369.string(), z369.any()).optional(),
+  morph: z369.record(z369.string(), z369.any()).optional(),
+  ncompass: z369.record(z369.string(), z369.any()).optional(),
+  nebius: z369.record(z369.string(), z369.any()).optional(),
+  nexAgi: z369.record(z369.string(), z369.any()).optional(),
+  nextbit: z369.record(z369.string(), z369.any()).optional(),
+  nineteen: z369.record(z369.string(), z369.any()).optional(),
+  novita: z369.record(z369.string(), z369.any()).optional(),
+  nvidia: z369.record(z369.string(), z369.any()).optional(),
+  octoai: z369.record(z369.string(), z369.any()).optional(),
+  openInference: z369.record(z369.string(), z369.any()).optional(),
+  openai: z369.record(z369.string(), z369.any()).optional(),
+  parasail: z369.record(z369.string(), z369.any()).optional(),
+  perceptron: z369.record(z369.string(), z369.any()).optional(),
+  perplexity: z369.record(z369.string(), z369.any()).optional(),
+  phala: z369.record(z369.string(), z369.any()).optional(),
+  poolside: z369.record(z369.string(), z369.any()).optional(),
+  quiver: z369.record(z369.string(), z369.any()).optional(),
+  recraft: z369.record(z369.string(), z369.any()).optional(),
+  recursal: z369.record(z369.string(), z369.any()).optional(),
+  reflection: z369.record(z369.string(), z369.any()).optional(),
+  reka: z369.record(z369.string(), z369.any()).optional(),
+  relace: z369.record(z369.string(), z369.any()).optional(),
+  replicate: z369.record(z369.string(), z369.any()).optional(),
+  runway: z369.record(z369.string(), z369.any()).optional(),
+  sailResearch: z369.record(z369.string(), z369.any()).optional(),
+  sakana: z369.record(z369.string(), z369.any()).optional(),
+  sakanaAi: z369.record(z369.string(), z369.any()).optional(),
+  sambanova: z369.record(z369.string(), z369.any()).optional(),
+  sambanovaCloaked: z369.record(z369.string(), z369.any()).optional(),
+  seed: z369.record(z369.string(), z369.any()).optional(),
+  sfCompute: z369.record(z369.string(), z369.any()).optional(),
+  siliconflow: z369.record(z369.string(), z369.any()).optional(),
+  sourceful: z369.record(z369.string(), z369.any()).optional(),
+  stealth: z369.record(z369.string(), z369.any()).optional(),
+  stepfun: z369.record(z369.string(), z369.any()).optional(),
+  streamlake: z369.record(z369.string(), z369.any()).optional(),
+  switchpoint: z369.record(z369.string(), z369.any()).optional(),
+  targon: z369.record(z369.string(), z369.any()).optional(),
+  tencent: z369.record(z369.string(), z369.any()).optional(),
+  tenstorrent: z369.record(z369.string(), z369.any()).optional(),
+  thinkingmachines: z369.record(z369.string(), z369.any()).optional(),
+  together: z369.record(z369.string(), z369.any()).optional(),
+  togetherLite: z369.record(z369.string(), z369.any()).optional(),
+  ubicloud: z369.record(z369.string(), z369.any()).optional(),
+  upstage: z369.record(z369.string(), z369.any()).optional(),
+  venice: z369.record(z369.string(), z369.any()).optional(),
+  voyageai: z369.record(z369.string(), z369.any()).optional(),
+  wafer: z369.record(z369.string(), z369.any()).optional(),
+  wandb: z369.record(z369.string(), z369.any()).optional(),
+  wandbLegacy: z369.record(z369.string(), z369.any()).optional(),
+  xai: z369.record(z369.string(), z369.any()).optional(),
+  xiaomi: z369.record(z369.string(), z369.any()).optional(),
+  zAi: z369.record(z369.string(), z369.any()).optional()
 }).transform((v) => {
   return remap(v, {
     oneai: "01ai",
@@ -10245,15 +10601,15 @@ var ImageGenerationProviderPreferencesOptions$outboundSchema = z357.object({
     zAi: "z-ai"
   });
 });
-var ImageGenerationProviderPreferencesOrder$outboundSchema = z357.union([ProviderName$outboundSchema, z357.string()]);
-var ImageGenerationProviderPreferencesSort$outboundSchema = z357.union([ProviderSort$outboundSchema, ProviderSortConfig$outboundSchema]);
-var ImageGenerationProviderPreferences$outboundSchema = z357.object({
-  allowFallbacks: z357.nullable(z357.boolean()).optional(),
-  ignore: z357.nullable(z357.array(z357.union([ProviderName$outboundSchema, z357.string()]))).optional(),
-  only: z357.nullable(z357.array(z357.union([ProviderName$outboundSchema, z357.string()]))).optional(),
-  options: z357.lazy(() => ImageGenerationProviderPreferencesOptions$outboundSchema).optional(),
-  order: z357.nullable(z357.array(z357.union([ProviderName$outboundSchema, z357.string()]))).optional(),
-  sort: z357.nullable(z357.union([ProviderSort$outboundSchema, ProviderSortConfig$outboundSchema])).optional()
+var ImageGenerationProviderPreferencesOrder$outboundSchema = z369.union([ProviderName$outboundSchema, z369.string()]);
+var ImageGenerationProviderPreferencesSort$outboundSchema = z369.union([ProviderSort$outboundSchema, ProviderSortConfig$outboundSchema]);
+var ImageGenerationProviderPreferences$outboundSchema = z369.object({
+  allowFallbacks: z369.nullable(z369.boolean()).optional(),
+  ignore: z369.nullable(z369.array(z369.union([ProviderName$outboundSchema, z369.string()]))).optional(),
+  only: z369.nullable(z369.array(z369.union([ProviderName$outboundSchema, z369.string()]))).optional(),
+  options: z369.lazy(() => ImageGenerationProviderPreferencesOptions$outboundSchema).optional(),
+  order: z369.nullable(z369.array(z369.union([ProviderName$outboundSchema, z369.string()]))).optional(),
+  sort: z369.nullable(z369.union([ProviderSort$outboundSchema, ProviderSortConfig$outboundSchema])).optional()
 }).transform((v) => {
   return remap(v, {
     allowFallbacks: "allow_fallbacks"
@@ -10261,7 +10617,7 @@ var ImageGenerationProviderPreferences$outboundSchema = z357.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/imagegenerationrequest.js
-var z358 = __toESM(require("zod/v4"), 1);
+var z370 = __toESM(require("zod/v4"), 1);
 var ImageGenerationRequestAspectRatio = {
   Eleven: "1:1",
   Twelve: "1:2",
@@ -10314,21 +10670,21 @@ var ImageGenerationRequestBackground$outboundSchema = outboundSchema(ImageGenera
 var ImageGenerationRequestOutputFormat$outboundSchema = outboundSchema(ImageGenerationRequestOutputFormat);
 var ImageGenerationRequestQuality$outboundSchema = outboundSchema(ImageGenerationRequestQuality);
 var ImageGenerationRequestResolution$outboundSchema = outboundSchema(ImageGenerationRequestResolution);
-var ImageGenerationRequest$outboundSchema = z358.object({
+var ImageGenerationRequest$outboundSchema = z370.object({
   aspectRatio: ImageGenerationRequestAspectRatio$outboundSchema.optional(),
   background: ImageGenerationRequestBackground$outboundSchema.optional(),
-  inputReferences: z358.array(ContentPartImage$outboundSchema).optional(),
-  model: z358.string(),
-  n: z358.int().optional(),
-  outputCompression: z358.int().optional(),
+  inputReferences: z370.array(ContentPartImage$outboundSchema).optional(),
+  model: z370.string(),
+  n: z370.int().optional(),
+  outputCompression: z370.int().optional(),
   outputFormat: ImageGenerationRequestOutputFormat$outboundSchema.optional(),
-  prompt: z358.string(),
+  prompt: z370.string(),
   provider: ImageGenerationProviderPreferences$outboundSchema.optional(),
   quality: ImageGenerationRequestQuality$outboundSchema.optional(),
   resolution: ImageGenerationRequestResolution$outboundSchema.optional(),
-  seed: z358.int().optional(),
-  size: z358.string().optional(),
-  stream: z358.boolean().optional()
+  seed: z370.int().optional(),
+  size: z370.string().optional(),
+  stream: z370.boolean().optional()
 }).transform((v) => {
   return remap(v, {
     aspectRatio: "aspect_ratio",
@@ -10339,28 +10695,28 @@ var ImageGenerationRequest$outboundSchema = z358.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/imagegenerationresponse.js
-var z359 = __toESM(require("zod/v4"), 1);
-var ImageGenerationResponseData$inboundSchema = z359.object({
-  b64_json: z359.string(),
-  media_type: z359.string().optional()
+var z371 = __toESM(require("zod/v4"), 1);
+var ImageGenerationResponseData$inboundSchema = z371.object({
+  b64_json: z371.string(),
+  media_type: z371.string().optional()
 }).transform((v) => {
   return remap(v, {
     "b64_json": "b64Json",
     "media_type": "mediaType"
   });
 });
-var ImageGenerationResponse$inboundSchema = z359.object({
-  created: z359.int(),
-  data: z359.array(z359.lazy(() => ImageGenerationResponseData$inboundSchema)),
+var ImageGenerationResponse$inboundSchema = z371.object({
+  created: z371.int(),
+  data: z371.array(z371.lazy(() => ImageGenerationResponseData$inboundSchema)),
   usage: ImageGenerationUsage$inboundSchema.optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/imagegenpartialimageevent.js
-var z360 = __toESM(require("zod/v4"), 1);
-var ImageGenPartialImageEvent$inboundSchema = z360.object({
-  b64_json: z360.string(),
-  partial_image_index: z360.int(),
-  type: z360.literal("image_generation.partial_image")
+var z372 = __toESM(require("zod/v4"), 1);
+var ImageGenPartialImageEvent$inboundSchema = z372.object({
+  b64_json: z372.string(),
+  partial_image_index: z372.int(),
+  type: z372.literal("image_generation.partial_image")
 }).transform((v) => {
   return remap(v, {
     "b64_json": "b64Json",
@@ -10369,30 +10725,30 @@ var ImageGenPartialImageEvent$inboundSchema = z360.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/imagegenstreamerrorevent.js
-var z361 = __toESM(require("zod/v4"), 1);
-var ImageGenStreamErrorEventError$inboundSchema = z361.object({
-  code: z361.nullable(z361.string()).optional(),
-  message: z361.string(),
-  param: z361.nullable(z361.string()).optional(),
-  type: z361.nullable(z361.string()).optional()
+var z373 = __toESM(require("zod/v4"), 1);
+var ImageGenStreamErrorEventError$inboundSchema = z373.object({
+  code: z373.nullable(z373.string()).optional(),
+  message: z373.string(),
+  param: z373.nullable(z373.string()).optional(),
+  type: z373.nullable(z373.string()).optional()
 });
-var ImageGenStreamErrorEvent$inboundSchema = z361.object({
-  error: z361.lazy(() => ImageGenStreamErrorEventError$inboundSchema),
-  type: z361.literal("error")
+var ImageGenStreamErrorEvent$inboundSchema = z373.object({
+  error: z373.lazy(() => ImageGenStreamErrorEventError$inboundSchema),
+  type: z373.literal("error")
 });
 
 // node_modules/@openrouter/sdk/esm/models/imagegentextchunkevent.js
-var z362 = __toESM(require("zod/v4"), 1);
+var z374 = __toESM(require("zod/v4"), 1);
 var ImageGenTextChunkEventPhase = {
   Content: "content",
   Reasoning: "reasoning",
   Draft: "draft"
 };
 var ImageGenTextChunkEventPhase$inboundSchema = inboundSchema(ImageGenTextChunkEventPhase);
-var ImageGenTextChunkEvent$inboundSchema = z362.object({
+var ImageGenTextChunkEvent$inboundSchema = z374.object({
   phase: ImageGenTextChunkEventPhase$inboundSchema,
-  text: z362.string(),
-  type: z362.literal("image_generation.text_chunk")
+  text: z374.string(),
+  type: z374.literal("image_generation.text_chunk")
 });
 
 // node_modules/@openrouter/sdk/esm/models/imageinputmodality.js
@@ -10406,7 +10762,7 @@ var ImageInputModality = {
 var ImageInputModality$inboundSchema = inboundSchema(ImageInputModality);
 
 // node_modules/@openrouter/sdk/esm/models/imagemodelarchitecture.js
-var z363 = __toESM(require("zod/v4"), 1);
+var z375 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/imageoutputmodality.js
 var ImageOutputModality = {
@@ -10422,9 +10778,9 @@ var ImageOutputModality = {
 var ImageOutputModality$inboundSchema = inboundSchema(ImageOutputModality);
 
 // node_modules/@openrouter/sdk/esm/models/imagemodelarchitecture.js
-var ImageModelArchitecture$inboundSchema = z363.object({
-  input_modalities: z363.array(ImageInputModality$inboundSchema),
-  output_modalities: z363.array(ImageOutputModality$inboundSchema)
+var ImageModelArchitecture$inboundSchema = z375.object({
+  input_modalities: z375.array(ImageInputModality$inboundSchema),
+  output_modalities: z375.array(ImageOutputModality$inboundSchema)
 }).transform((v) => {
   return remap(v, {
     "input_modalities": "inputModalities",
@@ -10433,23 +10789,23 @@ var ImageModelArchitecture$inboundSchema = z363.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/imagemodelendpointsresponse.js
-var z364 = __toESM(require("zod/v4"), 1);
-var ImageModelEndpointsResponse$inboundSchema = z364.object({
-  endpoints: z364.array(ImageEndpoint$inboundSchema),
-  id: z364.string()
+var z376 = __toESM(require("zod/v4"), 1);
+var ImageModelEndpointsResponse$inboundSchema = z376.object({
+  endpoints: z376.array(ImageEndpoint$inboundSchema),
+  id: z376.string()
 });
 
 // node_modules/@openrouter/sdk/esm/models/imagemodellistitem.js
-var z365 = __toESM(require("zod/v4"), 1);
-var ImageModelListItem$inboundSchema = z365.object({
+var z377 = __toESM(require("zod/v4"), 1);
+var ImageModelListItem$inboundSchema = z377.object({
   architecture: ImageModelArchitecture$inboundSchema,
-  created: z365.int(),
-  description: z365.string(),
-  endpoints: z365.string(),
-  id: z365.string(),
-  name: z365.string(),
-  supported_parameters: z365.record(z365.string(), CapabilityDescriptor$inboundSchema),
-  supports_streaming: z365.boolean()
+  created: z377.int(),
+  description: z377.string(),
+  endpoints: z377.string(),
+  id: z377.string(),
+  name: z377.string(),
+  supported_parameters: z377.record(z377.string(), CapabilityDescriptor$inboundSchema),
+  supports_streaming: z377.boolean()
 }).transform((v) => {
   return remap(v, {
     "supported_parameters": "supportedParameters",
@@ -10458,21 +10814,21 @@ var ImageModelListItem$inboundSchema = z365.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/imagemodelslistresponse.js
-var z366 = __toESM(require("zod/v4"), 1);
-var ImageModelsListResponse$inboundSchema = z366.object({
-  data: z366.array(ImageModelListItem$inboundSchema)
+var z378 = __toESM(require("zod/v4"), 1);
+var ImageModelsListResponse$inboundSchema = z378.object({
+  data: z378.array(ImageModelListItem$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/imagestreamingresponse.js
-var z367 = __toESM(require("zod/v4"), 1);
+var z379 = __toESM(require("zod/v4"), 1);
 var ImageStreamingResponseData$inboundSchema = discriminatedUnion("type", {
   ["image_generation.partial_image"]: ImageGenPartialImageEvent$inboundSchema,
   ["image_generation.text_chunk"]: ImageGenTextChunkEvent$inboundSchema,
   ["image_generation.completed"]: ImageGenCompletedEvent$inboundSchema,
   error: ImageGenStreamErrorEvent$inboundSchema
 });
-var ImageStreamingResponse$inboundSchema = z367.object({
-  data: z367.unknown().transform((v, ctx) => {
+var ImageStreamingResponse$inboundSchema = z379.object({
+  data: z379.unknown().transform((v, ctx) => {
     if (typeof v !== "string")
       return v;
     try {
@@ -10483,7 +10839,7 @@ var ImageStreamingResponse$inboundSchema = z367.object({
         code: "custom",
         message: `malformed json: ${err}`
       });
-      return z367.NEVER;
+      return z379.NEVER;
     }
   }).pipe(discriminatedUnion("type", {
     ["image_generation.partial_image"]: ImageGenPartialImageEvent$inboundSchema,
@@ -10494,18 +10850,18 @@ var ImageStreamingResponse$inboundSchema = z367.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/incompletedetails.js
-var z368 = __toESM(require("zod/v4"), 1);
+var z380 = __toESM(require("zod/v4"), 1);
 var Reason = {
   MaxOutputTokens: "max_output_tokens",
   ContentFilter: "content_filter"
 };
 var Reason$inboundSchema = inboundSchema(Reason);
-var IncompleteDetails$inboundSchema = z368.object({
+var IncompleteDetails$inboundSchema = z380.object({
   reason: Reason$inboundSchema.optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/inputmessageitem.js
-var z369 = __toESM(require("zod/v4"), 1);
+var z381 = __toESM(require("zod/v4"), 1);
 var InputMessageItemDetail = {
   Auto: "auto",
   High: "high",
@@ -10525,41 +10881,41 @@ var InputMessageItemTypeMessage = {
   Message: "message"
 };
 var InputMessageItemDetail$outboundSchema = outboundSchema(InputMessageItemDetail);
-var InputMessageItemContentInputImage$outboundSchema = z369.object({
+var InputMessageItemContentInputImage$outboundSchema = z381.object({
   detail: InputMessageItemDetail$outboundSchema,
-  imageUrl: z369.nullable(z369.string()).optional(),
-  type: z369.literal("input_image")
+  imageUrl: z381.nullable(z381.string()).optional(),
+  type: z381.literal("input_image")
 }).transform((v) => {
   return remap(v, {
     imageUrl: "image_url"
   });
 });
-var InputMessageItemContentUnion$outboundSchema = z369.union([
+var InputMessageItemContentUnion$outboundSchema = z381.union([
   InputText$outboundSchema,
-  z369.lazy(() => InputMessageItemContentInputImage$outboundSchema),
+  z381.lazy(() => InputMessageItemContentInputImage$outboundSchema),
   InputFile$outboundSchema,
   InputAudio$outboundSchema,
   InputVideo$outboundSchema
 ]);
-var InputMessageItemRoleDeveloper$outboundSchema = z369.enum(InputMessageItemRoleDeveloper);
-var InputMessageItemRoleSystem$outboundSchema = z369.enum(InputMessageItemRoleSystem);
-var InputMessageItemRoleUser$outboundSchema = z369.enum(InputMessageItemRoleUser);
-var InputMessageItemRoleUnion$outboundSchema = z369.union([
+var InputMessageItemRoleDeveloper$outboundSchema = z381.enum(InputMessageItemRoleDeveloper);
+var InputMessageItemRoleSystem$outboundSchema = z381.enum(InputMessageItemRoleSystem);
+var InputMessageItemRoleUser$outboundSchema = z381.enum(InputMessageItemRoleUser);
+var InputMessageItemRoleUnion$outboundSchema = z381.union([
   InputMessageItemRoleUser$outboundSchema,
   InputMessageItemRoleSystem$outboundSchema,
   InputMessageItemRoleDeveloper$outboundSchema
 ]);
-var InputMessageItemTypeMessage$outboundSchema = z369.enum(InputMessageItemTypeMessage);
-var InputMessageItem$outboundSchema = z369.object({
-  content: z369.nullable(z369.array(z369.union([
+var InputMessageItemTypeMessage$outboundSchema = z381.enum(InputMessageItemTypeMessage);
+var InputMessageItem$outboundSchema = z381.object({
+  content: z381.nullable(z381.array(z381.union([
     InputText$outboundSchema,
-    z369.lazy(() => InputMessageItemContentInputImage$outboundSchema),
+    z381.lazy(() => InputMessageItemContentInputImage$outboundSchema),
     InputFile$outboundSchema,
     InputAudio$outboundSchema,
     InputVideo$outboundSchema
   ]))).optional(),
-  id: z369.string().optional(),
-  role: z369.union([
+  id: z381.string().optional(),
+  role: z381.union([
     InputMessageItemRoleUser$outboundSchema,
     InputMessageItemRoleSystem$outboundSchema,
     InputMessageItemRoleDeveloper$outboundSchema
@@ -10578,54 +10934,54 @@ var InputModality = {
 var InputModality$inboundSchema = inboundSchema(InputModality);
 
 // node_modules/@openrouter/sdk/esm/models/inputreference.js
-var z370 = __toESM(require("zod/v4"), 1);
-var InputReference$outboundSchema = z370.union([
+var z382 = __toESM(require("zod/v4"), 1);
+var InputReference$outboundSchema = z382.union([
   ContentPartAudio$outboundSchema,
-  ContentPartImage$outboundSchema.and(z370.object({ type: z370.literal("image_url") })),
+  ContentPartImage$outboundSchema.and(z382.object({ type: z382.literal("image_url") })),
   ContentPartVideo$outboundSchema
 ]);
 
 // node_modules/@openrouter/sdk/esm/models/inputsunion.js
-var z408 = __toESM(require("zod/v4"), 1);
+var z420 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/itemreferenceitem.js
-var z371 = __toESM(require("zod/v4"), 1);
+var z383 = __toESM(require("zod/v4"), 1);
 var ItemReferenceItemType = {
   ItemReference: "item_reference"
 };
-var ItemReferenceItemType$outboundSchema = z371.enum(ItemReferenceItemType);
-var ItemReferenceItem$outboundSchema = z371.object({
-  id: z371.string(),
+var ItemReferenceItemType$outboundSchema = z383.enum(ItemReferenceItemType);
+var ItemReferenceItem$outboundSchema = z383.object({
+  id: z383.string(),
   type: ItemReferenceItemType$outboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/localshellcallitem.js
-var z372 = __toESM(require("zod/v4"), 1);
+var z384 = __toESM(require("zod/v4"), 1);
 var TypeExec = {
   Exec: "exec"
 };
 var TypeLocalShellCall = {
   LocalShellCall: "local_shell_call"
 };
-var TypeExec$outboundSchema = z372.enum(TypeExec);
-var LocalShellCallItemAction$outboundSchema = z372.object({
-  command: z372.array(z372.string()),
-  env: z372.record(z372.string(), z372.string()),
-  timeoutMs: z372.nullable(z372.int()).optional(),
+var TypeExec$outboundSchema = z384.enum(TypeExec);
+var LocalShellCallItemAction$outboundSchema = z384.object({
+  command: z384.array(z384.string()),
+  env: z384.record(z384.string(), z384.string()),
+  timeoutMs: z384.nullable(z384.int()).optional(),
   type: TypeExec$outboundSchema,
-  user: z372.nullable(z372.string()).optional(),
-  workingDirectory: z372.nullable(z372.string()).optional()
+  user: z384.nullable(z384.string()).optional(),
+  workingDirectory: z384.nullable(z384.string()).optional()
 }).transform((v) => {
   return remap(v, {
     timeoutMs: "timeout_ms",
     workingDirectory: "working_directory"
   });
 });
-var TypeLocalShellCall$outboundSchema = z372.enum(TypeLocalShellCall);
-var LocalShellCallItem$outboundSchema = z372.object({
-  action: z372.lazy(() => LocalShellCallItemAction$outboundSchema),
-  callId: z372.string(),
-  id: z372.string(),
+var TypeLocalShellCall$outboundSchema = z384.enum(TypeLocalShellCall);
+var LocalShellCallItem$outboundSchema = z384.object({
+  action: z384.lazy(() => LocalShellCallItemAction$outboundSchema),
+  callId: z384.string(),
+  id: z384.string(),
   status: ToolCallStatus$outboundSchema,
   type: TypeLocalShellCall$outboundSchema
 }).transform((v) => {
@@ -10635,29 +10991,29 @@ var LocalShellCallItem$outboundSchema = z372.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/localshellcalloutputitem.js
-var z373 = __toESM(require("zod/v4"), 1);
+var z385 = __toESM(require("zod/v4"), 1);
 var LocalShellCallOutputItemType = {
   LocalShellCallOutput: "local_shell_call_output"
 };
-var LocalShellCallOutputItemType$outboundSchema = z373.enum(LocalShellCallOutputItemType);
-var LocalShellCallOutputItem$outboundSchema = z373.object({
-  id: z373.string(),
-  output: z373.string(),
-  status: z373.nullable(ToolCallStatus$outboundSchema).optional(),
+var LocalShellCallOutputItemType$outboundSchema = z385.enum(LocalShellCallOutputItemType);
+var LocalShellCallOutputItem$outboundSchema = z385.object({
+  id: z385.string(),
+  output: z385.string(),
+  status: z385.nullable(ToolCallStatus$outboundSchema).optional(),
   type: LocalShellCallOutputItemType$outboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/mcpapprovalrequestitem.js
-var z374 = __toESM(require("zod/v4"), 1);
+var z386 = __toESM(require("zod/v4"), 1);
 var McpApprovalRequestItemType = {
   McpApprovalRequest: "mcp_approval_request"
 };
-var McpApprovalRequestItemType$outboundSchema = z374.enum(McpApprovalRequestItemType);
-var McpApprovalRequestItem$outboundSchema = z374.object({
-  arguments: z374.string(),
-  id: z374.string(),
-  name: z374.string(),
-  serverLabel: z374.string(),
+var McpApprovalRequestItemType$outboundSchema = z386.enum(McpApprovalRequestItemType);
+var McpApprovalRequestItem$outboundSchema = z386.object({
+  arguments: z386.string(),
+  id: z386.string(),
+  name: z386.string(),
+  serverLabel: z386.string(),
   type: McpApprovalRequestItemType$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -10666,16 +11022,16 @@ var McpApprovalRequestItem$outboundSchema = z374.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/mcpapprovalresponseitem.js
-var z375 = __toESM(require("zod/v4"), 1);
+var z387 = __toESM(require("zod/v4"), 1);
 var McpApprovalResponseItemType = {
   McpApprovalResponse: "mcp_approval_response"
 };
-var McpApprovalResponseItemType$outboundSchema = z375.enum(McpApprovalResponseItemType);
-var McpApprovalResponseItem$outboundSchema = z375.object({
-  approvalRequestId: z375.string(),
-  approve: z375.boolean(),
-  id: z375.nullable(z375.string()).optional(),
-  reason: z375.nullable(z375.string()).optional(),
+var McpApprovalResponseItemType$outboundSchema = z387.enum(McpApprovalResponseItemType);
+var McpApprovalResponseItem$outboundSchema = z387.object({
+  approvalRequestId: z387.string(),
+  approve: z387.boolean(),
+  id: z387.nullable(z387.string()).optional(),
+  reason: z387.nullable(z387.string()).optional(),
   type: McpApprovalResponseItemType$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -10684,18 +11040,18 @@ var McpApprovalResponseItem$outboundSchema = z375.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/mcpcallitem.js
-var z376 = __toESM(require("zod/v4"), 1);
+var z388 = __toESM(require("zod/v4"), 1);
 var McpCallItemType = {
   McpCall: "mcp_call"
 };
-var McpCallItemType$outboundSchema = z376.enum(McpCallItemType);
-var McpCallItem$outboundSchema = z376.object({
-  arguments: z376.string(),
-  error: z376.nullable(z376.string()).optional(),
-  id: z376.string(),
-  name: z376.string(),
-  output: z376.nullable(z376.string()).optional(),
-  serverLabel: z376.string(),
+var McpCallItemType$outboundSchema = z388.enum(McpCallItemType);
+var McpCallItem$outboundSchema = z388.object({
+  arguments: z388.string(),
+  error: z388.nullable(z388.string()).optional(),
+  id: z388.string(),
+  name: z388.string(),
+  output: z388.nullable(z388.string()).optional(),
+  serverLabel: z388.string(),
   type: McpCallItemType$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -10704,26 +11060,26 @@ var McpCallItem$outboundSchema = z376.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/mcplisttoolsitem.js
-var z377 = __toESM(require("zod/v4"), 1);
+var z389 = __toESM(require("zod/v4"), 1);
 var McpListToolsItemType = {
   McpListTools: "mcp_list_tools"
 };
-var McpListToolsItemTool$outboundSchema = z377.object({
-  annotations: z377.any().optional(),
-  description: z377.nullable(z377.string()).optional(),
-  inputSchema: z377.record(z377.string(), z377.any()),
-  name: z377.string()
+var McpListToolsItemTool$outboundSchema = z389.object({
+  annotations: z389.any().optional(),
+  description: z389.nullable(z389.string()).optional(),
+  inputSchema: z389.record(z389.string(), z389.any()),
+  name: z389.string()
 }).transform((v) => {
   return remap(v, {
     inputSchema: "input_schema"
   });
 });
-var McpListToolsItemType$outboundSchema = z377.enum(McpListToolsItemType);
-var McpListToolsItem$outboundSchema = z377.object({
-  error: z377.nullable(z377.string()).optional(),
-  id: z377.string(),
-  serverLabel: z377.string(),
-  tools: z377.array(z377.lazy(() => McpListToolsItemTool$outboundSchema)),
+var McpListToolsItemType$outboundSchema = z389.enum(McpListToolsItemType);
+var McpListToolsItem$outboundSchema = z389.object({
+  error: z389.nullable(z389.string()).optional(),
+  id: z389.string(),
+  serverLabel: z389.string(),
+  tools: z389.array(z389.lazy(() => McpListToolsItemTool$outboundSchema)),
   type: McpListToolsItemType$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -10732,19 +11088,19 @@ var McpListToolsItem$outboundSchema = z377.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputadvisorservertoolitem.js
-var z378 = __toESM(require("zod/v4"), 1);
+var z390 = __toESM(require("zod/v4"), 1);
 var OutputAdvisorServerToolItemType = {
   OpenrouterAdvisor: "openrouter:advisor"
 };
-var OutputAdvisorServerToolItemType$inboundSchema = z378.enum(OutputAdvisorServerToolItemType);
+var OutputAdvisorServerToolItemType$inboundSchema = z390.enum(OutputAdvisorServerToolItemType);
 var OutputAdvisorServerToolItemType$outboundSchema = OutputAdvisorServerToolItemType$inboundSchema;
-var OutputAdvisorServerToolItem$inboundSchema = z378.object({
-  advice: z378.string().optional(),
-  error: z378.string().optional(),
-  id: z378.string().optional(),
-  instance_name: z378.string().optional(),
-  model: z378.string().optional(),
-  prompt: z378.string().optional(),
+var OutputAdvisorServerToolItem$inboundSchema = z390.object({
+  advice: z390.string().optional(),
+  error: z390.string().optional(),
+  id: z390.string().optional(),
+  instance_name: z390.string().optional(),
+  model: z390.string().optional(),
+  prompt: z390.string().optional(),
   status: ToolCallStatus$inboundSchema,
   type: OutputAdvisorServerToolItemType$inboundSchema
 }).transform((v) => {
@@ -10752,13 +11108,13 @@ var OutputAdvisorServerToolItem$inboundSchema = z378.object({
     "instance_name": "instanceName"
   });
 });
-var OutputAdvisorServerToolItem$outboundSchema = z378.object({
-  advice: z378.string().optional(),
-  error: z378.string().optional(),
-  id: z378.string().optional(),
-  instanceName: z378.string().optional(),
-  model: z378.string().optional(),
-  prompt: z378.string().optional(),
+var OutputAdvisorServerToolItem$outboundSchema = z390.object({
+  advice: z390.string().optional(),
+  error: z390.string().optional(),
+  id: z390.string().optional(),
+  instanceName: z390.string().optional(),
+  model: z390.string().optional(),
+  prompt: z390.string().optional(),
   status: ToolCallStatus$outboundSchema,
   type: OutputAdvisorServerToolItemType$outboundSchema
 }).transform((v) => {
@@ -10768,15 +11124,15 @@ var OutputAdvisorServerToolItem$outboundSchema = z378.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputapplypatchservertoolitem.js
-var z379 = __toESM(require("zod/v4"), 1);
+var z391 = __toESM(require("zod/v4"), 1);
 var OutputApplyPatchServerToolItemType = {
   OpenrouterApplyPatch: "openrouter:apply_patch"
 };
-var OutputApplyPatchServerToolItemType$inboundSchema = z379.enum(OutputApplyPatchServerToolItemType);
+var OutputApplyPatchServerToolItemType$inboundSchema = z391.enum(OutputApplyPatchServerToolItemType);
 var OutputApplyPatchServerToolItemType$outboundSchema = OutputApplyPatchServerToolItemType$inboundSchema;
-var OutputApplyPatchServerToolItem$inboundSchema = z379.object({
-  call_id: z379.string().optional(),
-  id: z379.string().optional(),
+var OutputApplyPatchServerToolItem$inboundSchema = z391.object({
+  call_id: z391.string().optional(),
+  id: z391.string().optional(),
   operation: ApplyPatchCallOperation$inboundSchema.optional(),
   status: ToolCallStatus$inboundSchema,
   type: OutputApplyPatchServerToolItemType$inboundSchema
@@ -10785,9 +11141,9 @@ var OutputApplyPatchServerToolItem$inboundSchema = z379.object({
     "call_id": "callId"
   });
 });
-var OutputApplyPatchServerToolItem$outboundSchema = z379.object({
-  callId: z379.string().optional(),
-  id: z379.string().optional(),
+var OutputApplyPatchServerToolItem$outboundSchema = z391.object({
+  callId: z391.string().optional(),
+  id: z391.string().optional(),
   operation: ApplyPatchCallOperation$outboundSchema.optional(),
   status: ToolCallStatus$outboundSchema,
   type: OutputApplyPatchServerToolItemType$outboundSchema
@@ -10798,36 +11154,36 @@ var OutputApplyPatchServerToolItem$outboundSchema = z379.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputbashservertoolitem.js
-var z380 = __toESM(require("zod/v4"), 1);
+var z392 = __toESM(require("zod/v4"), 1);
 var OutputBashServerToolItemType = {
   OpenrouterBash: "openrouter:bash"
 };
-var OutputBashServerToolItemType$inboundSchema = z380.enum(OutputBashServerToolItemType);
+var OutputBashServerToolItemType$inboundSchema = z392.enum(OutputBashServerToolItemType);
 var OutputBashServerToolItemType$outboundSchema = OutputBashServerToolItemType$inboundSchema;
-var OutputBashServerToolItem$inboundSchema = z380.object({
-  arguments: z380.string().optional(),
-  call_id: z380.string().optional(),
-  command: z380.string().optional(),
-  exitCode: z380.int().optional(),
-  id: z380.string().optional(),
+var OutputBashServerToolItem$inboundSchema = z392.object({
+  arguments: z392.string().optional(),
+  call_id: z392.string().optional(),
+  command: z392.string().optional(),
+  exitCode: z392.int().optional(),
+  id: z392.string().optional(),
   status: ToolCallStatus$inboundSchema,
-  stderr: z380.string().optional(),
-  stdout: z380.string().optional(),
+  stderr: z392.string().optional(),
+  stdout: z392.string().optional(),
   type: OutputBashServerToolItemType$inboundSchema
 }).transform((v) => {
   return remap(v, {
     "call_id": "callId"
   });
 });
-var OutputBashServerToolItem$outboundSchema = z380.object({
-  arguments: z380.string().optional(),
-  callId: z380.string().optional(),
-  command: z380.string().optional(),
-  exitCode: z380.int().optional(),
-  id: z380.string().optional(),
+var OutputBashServerToolItem$outboundSchema = z392.object({
+  arguments: z392.string().optional(),
+  callId: z392.string().optional(),
+  command: z392.string().optional(),
+  exitCode: z392.int().optional(),
+  id: z392.string().optional(),
   status: ToolCallStatus$outboundSchema,
-  stderr: z380.string().optional(),
-  stdout: z380.string().optional(),
+  stderr: z392.string().optional(),
+  stdout: z392.string().optional(),
   type: OutputBashServerToolItemType$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -10836,119 +11192,121 @@ var OutputBashServerToolItem$outboundSchema = z380.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputbrowseruseservertoolitem.js
-var z381 = __toESM(require("zod/v4"), 1);
+var z393 = __toESM(require("zod/v4"), 1);
 var OutputBrowserUseServerToolItemType = {
   OpenrouterBrowserUse: "openrouter:browser_use"
 };
-var OutputBrowserUseServerToolItemType$inboundSchema = z381.enum(OutputBrowserUseServerToolItemType);
+var OutputBrowserUseServerToolItemType$inboundSchema = z393.enum(OutputBrowserUseServerToolItemType);
 var OutputBrowserUseServerToolItemType$outboundSchema = OutputBrowserUseServerToolItemType$inboundSchema;
-var OutputBrowserUseServerToolItem$inboundSchema = z381.object({
-  action: z381.string().optional(),
-  id: z381.string().optional(),
-  screenshotB64: z381.string().optional(),
+var OutputBrowserUseServerToolItem$inboundSchema = z393.object({
+  action: z393.string().optional(),
+  id: z393.string().optional(),
+  screenshotB64: z393.string().optional(),
   status: ToolCallStatus$inboundSchema,
   type: OutputBrowserUseServerToolItemType$inboundSchema
 });
-var OutputBrowserUseServerToolItem$outboundSchema = z381.object({
-  action: z381.string().optional(),
-  id: z381.string().optional(),
-  screenshotB64: z381.string().optional(),
+var OutputBrowserUseServerToolItem$outboundSchema = z393.object({
+  action: z393.string().optional(),
+  id: z393.string().optional(),
+  screenshotB64: z393.string().optional(),
   status: ToolCallStatus$outboundSchema,
   type: OutputBrowserUseServerToolItemType$outboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputcodeinterpretercallitem.js
-var z382 = __toESM(require("zod/v4"), 1);
-var TypeCodeInterpreterCall = {
+var z394 = __toESM(require("zod/v4"), 1);
+var OutputCodeInterpreterCallItemStatus = {
+  InProgress: "in_progress",
+  Completed: "completed",
+  Incomplete: "incomplete",
+  Interpreting: "interpreting",
+  Failed: "failed"
+};
+var OutputCodeInterpreterCallItemType = {
   CodeInterpreterCall: "code_interpreter_call"
 };
-var OutputLogs$inboundSchema = z382.object({
-  logs: z382.string(),
-  type: z382.literal("logs")
+var OutputCodeInterpreterCallItemOutput$inboundSchema = discriminatedUnion("type", {
+  file: CodeInterpreterFileOutput$inboundSchema,
+  image: CodeInterpreterImageOutput$inboundSchema,
+  logs: CodeInterpreterLogsOutput$inboundSchema
 });
-var OutputLogs$outboundSchema = z382.object({
-  logs: z382.string(),
-  type: z382.literal("logs")
-});
-var OutputImage$inboundSchema = z382.object({
-  type: z382.literal("image"),
-  url: z382.string()
-});
-var OutputImage$outboundSchema = z382.object({
-  type: z382.literal("image"),
-  url: z382.string()
-});
-var OutputCodeInterpreterCallItemOutputUnion$inboundSchema = discriminatedUnion("type", {
-  image: z382.lazy(() => OutputImage$inboundSchema),
-  logs: z382.lazy(() => OutputLogs$inboundSchema)
-});
-var OutputCodeInterpreterCallItemOutputUnion$outboundSchema = z382.union([
-  z382.lazy(() => OutputImage$outboundSchema),
-  z382.lazy(() => OutputLogs$outboundSchema)
+var OutputCodeInterpreterCallItemOutput$outboundSchema = z394.union([
+  CodeInterpreterFileOutput$outboundSchema,
+  CodeInterpreterImageOutput$outboundSchema,
+  CodeInterpreterLogsOutput$outboundSchema
 ]);
-var TypeCodeInterpreterCall$inboundSchema = z382.enum(TypeCodeInterpreterCall);
-var TypeCodeInterpreterCall$outboundSchema = TypeCodeInterpreterCall$inboundSchema;
-var OutputCodeInterpreterCallItem$inboundSchema = z382.object({
-  code: z382.nullable(z382.string()),
-  container_id: z382.string(),
-  id: z382.string(),
-  outputs: z382.nullable(z382.array(discriminatedUnion("type", {
-    image: z382.lazy(() => OutputImage$inboundSchema),
-    logs: z382.lazy(() => OutputLogs$inboundSchema)
-  }))),
-  status: ToolCallStatus$inboundSchema,
-  type: TypeCodeInterpreterCall$inboundSchema
-}).transform((v) => {
+var OutputCodeInterpreterCallItemStatus$inboundSchema = inboundSchema(OutputCodeInterpreterCallItemStatus);
+var OutputCodeInterpreterCallItemStatus$outboundSchema = outboundSchema(OutputCodeInterpreterCallItemStatus);
+var OutputCodeInterpreterCallItemType$inboundSchema = z394.enum(OutputCodeInterpreterCallItemType);
+var OutputCodeInterpreterCallItemType$outboundSchema = OutputCodeInterpreterCallItemType$inboundSchema;
+var OutputCodeInterpreterCallItem$inboundSchema = collectExtraKeys(z394.object({
+  code: z394.nullable(z394.string()).optional(),
+  container_id: z394.string().optional(),
+  id: z394.string(),
+  outputs: z394.nullable(z394.array(discriminatedUnion("type", {
+    file: CodeInterpreterFileOutput$inboundSchema,
+    image: CodeInterpreterImageOutput$inboundSchema,
+    logs: CodeInterpreterLogsOutput$inboundSchema
+  }))).optional(),
+  status: OutputCodeInterpreterCallItemStatus$inboundSchema,
+  type: OutputCodeInterpreterCallItemType$inboundSchema
+}).catchall(z394.any()), "additionalProperties", true).transform((v) => {
   return remap(v, {
     "container_id": "containerId"
   });
 });
-var OutputCodeInterpreterCallItem$outboundSchema = z382.object({
-  code: z382.nullable(z382.string()),
-  containerId: z382.string(),
-  id: z382.string(),
-  outputs: z382.nullable(z382.array(z382.union([
-    z382.lazy(() => OutputImage$outboundSchema),
-    z382.lazy(() => OutputLogs$outboundSchema)
-  ]))),
-  status: ToolCallStatus$outboundSchema,
-  type: TypeCodeInterpreterCall$outboundSchema
+var OutputCodeInterpreterCallItem$outboundSchema = z394.object({
+  code: z394.nullable(z394.string()).optional(),
+  containerId: z394.string().optional(),
+  id: z394.string(),
+  outputs: z394.nullable(z394.array(z394.union([
+    CodeInterpreterFileOutput$outboundSchema,
+    CodeInterpreterImageOutput$outboundSchema,
+    CodeInterpreterLogsOutput$outboundSchema
+  ]))).optional(),
+  status: OutputCodeInterpreterCallItemStatus$outboundSchema,
+  type: OutputCodeInterpreterCallItemType$outboundSchema,
+  additionalProperties: z394.record(z394.string(), z394.any()).optional()
 }).transform((v) => {
-  return remap(v, {
-    containerId: "container_id"
-  });
+  return {
+    ...v.additionalProperties,
+    ...remap(v, {
+      containerId: "container_id",
+      additionalProperties: null
+    })
+  };
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputcodeinterpreterservertoolitem.js
-var z383 = __toESM(require("zod/v4"), 1);
+var z395 = __toESM(require("zod/v4"), 1);
 var OutputCodeInterpreterServerToolItemType = {
   OpenrouterCodeInterpreter: "openrouter:code_interpreter"
 };
-var OutputCodeInterpreterServerToolItemType$inboundSchema = z383.enum(OutputCodeInterpreterServerToolItemType);
+var OutputCodeInterpreterServerToolItemType$inboundSchema = z395.enum(OutputCodeInterpreterServerToolItemType);
 var OutputCodeInterpreterServerToolItemType$outboundSchema = OutputCodeInterpreterServerToolItemType$inboundSchema;
-var OutputCodeInterpreterServerToolItem$inboundSchema = z383.object({
-  code: z383.string().optional(),
-  exitCode: z383.int().optional(),
-  id: z383.string().optional(),
-  language: z383.string().optional(),
+var OutputCodeInterpreterServerToolItem$inboundSchema = z395.object({
+  code: z395.string().optional(),
+  exitCode: z395.int().optional(),
+  id: z395.string().optional(),
+  language: z395.string().optional(),
   status: ToolCallStatus$inboundSchema,
-  stderr: z383.string().optional(),
-  stdout: z383.string().optional(),
+  stderr: z395.string().optional(),
+  stdout: z395.string().optional(),
   type: OutputCodeInterpreterServerToolItemType$inboundSchema
 });
-var OutputCodeInterpreterServerToolItem$outboundSchema = z383.object({
-  code: z383.string().optional(),
-  exitCode: z383.int().optional(),
-  id: z383.string().optional(),
-  language: z383.string().optional(),
+var OutputCodeInterpreterServerToolItem$outboundSchema = z395.object({
+  code: z395.string().optional(),
+  exitCode: z395.int().optional(),
+  id: z395.string().optional(),
+  language: z395.string().optional(),
   status: ToolCallStatus$outboundSchema,
-  stderr: z383.string().optional(),
-  stdout: z383.string().optional(),
+  stderr: z395.string().optional(),
+  stdout: z395.string().optional(),
   type: OutputCodeInterpreterServerToolItemType$outboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputcomputercallitem.js
-var z384 = __toESM(require("zod/v4"), 1);
+var z396 = __toESM(require("zod/v4"), 1);
 var OutputComputerCallItemStatus = {
   Completed: "completed",
   Incomplete: "incomplete",
@@ -10957,25 +11315,25 @@ var OutputComputerCallItemStatus = {
 var OutputComputerCallItemType = {
   ComputerCall: "computer_call"
 };
-var PendingSafetyCheck$inboundSchema = z384.object({
-  code: z384.string(),
-  id: z384.string(),
-  message: z384.string()
+var PendingSafetyCheck$inboundSchema = z396.object({
+  code: z396.string(),
+  id: z396.string(),
+  message: z396.string()
 });
-var PendingSafetyCheck$outboundSchema = z384.object({
-  code: z384.string(),
-  id: z384.string(),
-  message: z384.string()
+var PendingSafetyCheck$outboundSchema = z396.object({
+  code: z396.string(),
+  id: z396.string(),
+  message: z396.string()
 });
 var OutputComputerCallItemStatus$inboundSchema = inboundSchema(OutputComputerCallItemStatus);
 var OutputComputerCallItemStatus$outboundSchema = outboundSchema(OutputComputerCallItemStatus);
-var OutputComputerCallItemType$inboundSchema = z384.enum(OutputComputerCallItemType);
+var OutputComputerCallItemType$inboundSchema = z396.enum(OutputComputerCallItemType);
 var OutputComputerCallItemType$outboundSchema = OutputComputerCallItemType$inboundSchema;
-var OutputComputerCallItem$inboundSchema = z384.object({
-  action: z384.any().optional(),
-  call_id: z384.string(),
-  id: z384.string().optional(),
-  pending_safety_checks: z384.array(z384.lazy(() => PendingSafetyCheck$inboundSchema)),
+var OutputComputerCallItem$inboundSchema = z396.object({
+  action: z396.any().optional(),
+  call_id: z396.string(),
+  id: z396.string().optional(),
+  pending_safety_checks: z396.array(z396.lazy(() => PendingSafetyCheck$inboundSchema)),
   status: OutputComputerCallItemStatus$inboundSchema,
   type: OutputComputerCallItemType$inboundSchema
 }).transform((v) => {
@@ -10984,11 +11342,11 @@ var OutputComputerCallItem$inboundSchema = z384.object({
     "pending_safety_checks": "pendingSafetyChecks"
   });
 });
-var OutputComputerCallItem$outboundSchema = z384.object({
-  action: z384.any().optional(),
-  callId: z384.string(),
-  id: z384.string().optional(),
-  pendingSafetyChecks: z384.array(z384.lazy(() => PendingSafetyCheck$outboundSchema)),
+var OutputComputerCallItem$outboundSchema = z396.object({
+  action: z396.any().optional(),
+  callId: z396.string(),
+  id: z396.string().optional(),
+  pendingSafetyChecks: z396.array(z396.lazy(() => PendingSafetyCheck$outboundSchema)),
   status: OutputComputerCallItemStatus$outboundSchema,
   type: OutputComputerCallItemType$outboundSchema
 }).transform((v) => {
@@ -10999,30 +11357,30 @@ var OutputComputerCallItem$outboundSchema = z384.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputcustomtoolcallitem.js
-var z385 = __toESM(require("zod/v4"), 1);
+var z397 = __toESM(require("zod/v4"), 1);
 var OutputCustomToolCallItemType = {
   CustomToolCall: "custom_tool_call"
 };
-var OutputCustomToolCallItemType$inboundSchema = z385.enum(OutputCustomToolCallItemType);
+var OutputCustomToolCallItemType$inboundSchema = z397.enum(OutputCustomToolCallItemType);
 var OutputCustomToolCallItemType$outboundSchema = OutputCustomToolCallItemType$inboundSchema;
-var OutputCustomToolCallItem$inboundSchema = z385.object({
-  call_id: z385.string(),
-  id: z385.string().optional(),
-  input: z385.string(),
-  name: z385.string(),
-  namespace: z385.string().optional(),
+var OutputCustomToolCallItem$inboundSchema = z397.object({
+  call_id: z397.string(),
+  id: z397.string().optional(),
+  input: z397.string(),
+  name: z397.string(),
+  namespace: z397.string().optional(),
   type: OutputCustomToolCallItemType$inboundSchema
 }).transform((v) => {
   return remap(v, {
     "call_id": "callId"
   });
 });
-var OutputCustomToolCallItem$outboundSchema = z385.object({
-  callId: z385.string(),
-  id: z385.string().optional(),
-  input: z385.string(),
-  name: z385.string(),
-  namespace: z385.string().optional(),
+var OutputCustomToolCallItem$outboundSchema = z397.object({
+  callId: z397.string(),
+  id: z397.string().optional(),
+  input: z397.string(),
+  name: z397.string(),
+  namespace: z397.string().optional(),
   type: OutputCustomToolCallItemType$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -11031,29 +11389,29 @@ var OutputCustomToolCallItem$outboundSchema = z385.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputdatetimeitem.js
-var z386 = __toESM(require("zod/v4"), 1);
+var z398 = __toESM(require("zod/v4"), 1);
 var OutputDatetimeItemType = {
   OpenrouterDatetime: "openrouter:datetime"
 };
-var OutputDatetimeItemType$inboundSchema = z386.enum(OutputDatetimeItemType);
+var OutputDatetimeItemType$inboundSchema = z398.enum(OutputDatetimeItemType);
 var OutputDatetimeItemType$outboundSchema = OutputDatetimeItemType$inboundSchema;
-var OutputDatetimeItem$inboundSchema = z386.object({
-  datetime: z386.string(),
-  id: z386.string().optional(),
+var OutputDatetimeItem$inboundSchema = z398.object({
+  datetime: z398.string(),
+  id: z398.string().optional(),
   status: ToolCallStatus$inboundSchema,
-  timezone: z386.string(),
+  timezone: z398.string(),
   type: OutputDatetimeItemType$inboundSchema
 });
-var OutputDatetimeItem$outboundSchema = z386.object({
-  datetime: z386.string(),
-  id: z386.string().optional(),
+var OutputDatetimeItem$outboundSchema = z398.object({
+  datetime: z398.string(),
+  id: z398.string().optional(),
   status: ToolCallStatus$outboundSchema,
-  timezone: z386.string(),
+  timezone: z398.string(),
   type: OutputDatetimeItemType$outboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputfilesearchcallitem.js
-var z387 = __toESM(require("zod/v4"), 1);
+var z399 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/websearchstatus.js
 var WebSearchStatus = {
@@ -11069,55 +11427,55 @@ var WebSearchStatus$outboundSchema = outboundSchema(WebSearchStatus);
 var OutputFileSearchCallItemType = {
   FileSearchCall: "file_search_call"
 };
-var OutputFileSearchCallItemType$inboundSchema = z387.enum(OutputFileSearchCallItemType);
+var OutputFileSearchCallItemType$inboundSchema = z399.enum(OutputFileSearchCallItemType);
 var OutputFileSearchCallItemType$outboundSchema = OutputFileSearchCallItemType$inboundSchema;
-var OutputFileSearchCallItem$inboundSchema = z387.object({
-  id: z387.string(),
-  queries: z387.array(z387.string()),
+var OutputFileSearchCallItem$inboundSchema = z399.object({
+  id: z399.string(),
+  queries: z399.array(z399.string()),
   status: WebSearchStatus$inboundSchema,
   type: OutputFileSearchCallItemType$inboundSchema
 });
-var OutputFileSearchCallItem$outboundSchema = z387.object({
-  id: z387.string(),
-  queries: z387.array(z387.string()),
+var OutputFileSearchCallItem$outboundSchema = z399.object({
+  id: z399.string(),
+  queries: z399.array(z399.string()),
   status: WebSearchStatus$outboundSchema,
   type: OutputFileSearchCallItemType$outboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputfilesearchservertoolitem.js
-var z388 = __toESM(require("zod/v4"), 1);
+var z400 = __toESM(require("zod/v4"), 1);
 var OutputFileSearchServerToolItemType = {
   OpenrouterFileSearch: "openrouter:file_search"
 };
-var OutputFileSearchServerToolItemType$inboundSchema = z388.enum(OutputFileSearchServerToolItemType);
+var OutputFileSearchServerToolItemType$inboundSchema = z400.enum(OutputFileSearchServerToolItemType);
 var OutputFileSearchServerToolItemType$outboundSchema = OutputFileSearchServerToolItemType$inboundSchema;
-var OutputFileSearchServerToolItem$inboundSchema = z388.object({
-  id: z388.string().optional(),
-  queries: z388.array(z388.string()).optional(),
+var OutputFileSearchServerToolItem$inboundSchema = z400.object({
+  id: z400.string().optional(),
+  queries: z400.array(z400.string()).optional(),
   status: ToolCallStatus$inboundSchema,
   type: OutputFileSearchServerToolItemType$inboundSchema
 });
-var OutputFileSearchServerToolItem$outboundSchema = z388.object({
-  id: z388.string().optional(),
-  queries: z388.array(z388.string()).optional(),
+var OutputFileSearchServerToolItem$outboundSchema = z400.object({
+  id: z400.string().optional(),
+  queries: z400.array(z400.string()).optional(),
   status: ToolCallStatus$outboundSchema,
   type: OutputFileSearchServerToolItemType$outboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputfilesservertoolitem.js
-var z389 = __toESM(require("zod/v4"), 1);
+var z401 = __toESM(require("zod/v4"), 1);
 var OutputFilesServerToolItemType = {
   OpenrouterFiles: "openrouter:files"
 };
-var OutputFilesServerToolItemType$inboundSchema = z389.enum(OutputFilesServerToolItemType);
+var OutputFilesServerToolItemType$inboundSchema = z401.enum(OutputFilesServerToolItemType);
 var OutputFilesServerToolItemType$outboundSchema = OutputFilesServerToolItemType$inboundSchema;
-var OutputFilesServerToolItem$inboundSchema = z389.object({
-  error: z389.string().optional(),
-  file_id: z389.string().optional(),
-  filename: z389.string().optional(),
-  id: z389.string().optional(),
-  operation: z389.string().optional(),
-  result: z389.string().optional(),
+var OutputFilesServerToolItem$inboundSchema = z401.object({
+  error: z401.string().optional(),
+  file_id: z401.string().optional(),
+  filename: z401.string().optional(),
+  id: z401.string().optional(),
+  operation: z401.string().optional(),
+  result: z401.string().optional(),
   status: ToolCallStatus$inboundSchema,
   type: OutputFilesServerToolItemType$inboundSchema
 }).transform((v) => {
@@ -11125,13 +11483,13 @@ var OutputFilesServerToolItem$inboundSchema = z389.object({
     "file_id": "fileId"
   });
 });
-var OutputFilesServerToolItem$outboundSchema = z389.object({
-  error: z389.string().optional(),
-  fileId: z389.string().optional(),
-  filename: z389.string().optional(),
-  id: z389.string().optional(),
-  operation: z389.string().optional(),
-  result: z389.string().optional(),
+var OutputFilesServerToolItem$outboundSchema = z401.object({
+  error: z401.string().optional(),
+  fileId: z401.string().optional(),
+  filename: z401.string().optional(),
+  id: z401.string().optional(),
+  operation: z401.string().optional(),
+  result: z401.string().optional(),
   status: ToolCallStatus$outboundSchema,
   type: OutputFilesServerToolItemType$outboundSchema
 }).transform((v) => {
@@ -11141,7 +11499,7 @@ var OutputFilesServerToolItem$outboundSchema = z389.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputfunctioncallitem.js
-var z390 = __toESM(require("zod/v4"), 1);
+var z402 = __toESM(require("zod/v4"), 1);
 var OutputFunctionCallItemStatusInProgress = {
   InProgress: "in_progress"
 };
@@ -11154,31 +11512,31 @@ var OutputFunctionCallItemStatusCompleted = {
 var OutputFunctionCallItemType = {
   FunctionCall: "function_call"
 };
-var OutputFunctionCallItemStatusInProgress$inboundSchema = z390.enum(OutputFunctionCallItemStatusInProgress);
+var OutputFunctionCallItemStatusInProgress$inboundSchema = z402.enum(OutputFunctionCallItemStatusInProgress);
 var OutputFunctionCallItemStatusInProgress$outboundSchema = OutputFunctionCallItemStatusInProgress$inboundSchema;
-var OutputFunctionCallItemStatusIncomplete$inboundSchema = z390.enum(OutputFunctionCallItemStatusIncomplete);
+var OutputFunctionCallItemStatusIncomplete$inboundSchema = z402.enum(OutputFunctionCallItemStatusIncomplete);
 var OutputFunctionCallItemStatusIncomplete$outboundSchema = OutputFunctionCallItemStatusIncomplete$inboundSchema;
-var OutputFunctionCallItemStatusCompleted$inboundSchema = z390.enum(OutputFunctionCallItemStatusCompleted);
+var OutputFunctionCallItemStatusCompleted$inboundSchema = z402.enum(OutputFunctionCallItemStatusCompleted);
 var OutputFunctionCallItemStatusCompleted$outboundSchema = OutputFunctionCallItemStatusCompleted$inboundSchema;
-var OutputFunctionCallItemStatusUnion$inboundSchema = z390.union([
+var OutputFunctionCallItemStatusUnion$inboundSchema = z402.union([
   OutputFunctionCallItemStatusCompleted$inboundSchema,
   OutputFunctionCallItemStatusIncomplete$inboundSchema,
   OutputFunctionCallItemStatusInProgress$inboundSchema
 ]);
-var OutputFunctionCallItemStatusUnion$outboundSchema = z390.union([
+var OutputFunctionCallItemStatusUnion$outboundSchema = z402.union([
   OutputFunctionCallItemStatusCompleted$outboundSchema,
   OutputFunctionCallItemStatusIncomplete$outboundSchema,
   OutputFunctionCallItemStatusInProgress$outboundSchema
 ]);
-var OutputFunctionCallItemType$inboundSchema = z390.enum(OutputFunctionCallItemType);
+var OutputFunctionCallItemType$inboundSchema = z402.enum(OutputFunctionCallItemType);
 var OutputFunctionCallItemType$outboundSchema = OutputFunctionCallItemType$inboundSchema;
-var OutputFunctionCallItem$inboundSchema = z390.object({
-  arguments: z390.string(),
-  call_id: z390.string(),
-  id: z390.string().optional(),
-  name: z390.string(),
-  namespace: z390.string().optional(),
-  status: z390.union([
+var OutputFunctionCallItem$inboundSchema = z402.object({
+  arguments: z402.string(),
+  call_id: z402.string(),
+  id: z402.string().optional(),
+  name: z402.string(),
+  namespace: z402.string().optional(),
+  status: z402.union([
     OutputFunctionCallItemStatusCompleted$inboundSchema,
     OutputFunctionCallItemStatusIncomplete$inboundSchema,
     OutputFunctionCallItemStatusInProgress$inboundSchema
@@ -11189,13 +11547,13 @@ var OutputFunctionCallItem$inboundSchema = z390.object({
     "call_id": "callId"
   });
 });
-var OutputFunctionCallItem$outboundSchema = z390.object({
-  arguments: z390.string(),
-  callId: z390.string(),
-  id: z390.string().optional(),
-  name: z390.string(),
-  namespace: z390.string().optional(),
-  status: z390.union([
+var OutputFunctionCallItem$outboundSchema = z402.object({
+  arguments: z402.string(),
+  callId: z402.string(),
+  id: z402.string().optional(),
+  name: z402.string(),
+  namespace: z402.string().optional(),
+  status: z402.union([
     OutputFunctionCallItemStatusCompleted$outboundSchema,
     OutputFunctionCallItemStatusIncomplete$outboundSchema,
     OutputFunctionCallItemStatusInProgress$outboundSchema
@@ -11208,46 +11566,46 @@ var OutputFunctionCallItem$outboundSchema = z390.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputfusionservertoolitem.js
-var z391 = __toESM(require("zod/v4"), 1);
+var z403 = __toESM(require("zod/v4"), 1);
 var OutputFusionServerToolItemType = {
   OpenrouterFusion: "openrouter:fusion"
 };
-var FailedModel$inboundSchema = z391.object({
-  error: z391.string(),
-  model: z391.string(),
-  status_code: z391.int().optional()
+var FailedModel$inboundSchema = z403.object({
+  error: z403.string(),
+  model: z403.string(),
+  status_code: z403.int().optional()
 }).transform((v) => {
   return remap(v, {
     "status_code": "statusCode"
   });
 });
-var FailedModel$outboundSchema = z391.object({
-  error: z391.string(),
-  model: z391.string(),
-  statusCode: z391.int().optional()
+var FailedModel$outboundSchema = z403.object({
+  error: z403.string(),
+  model: z403.string(),
+  statusCode: z403.int().optional()
 }).transform((v) => {
   return remap(v, {
     statusCode: "status_code"
   });
 });
-var ResponseT$inboundSchema = z391.object({
-  content: z391.string().optional(),
-  model: z391.string()
+var ResponseT$inboundSchema = z403.object({
+  content: z403.string().optional(),
+  model: z403.string()
 });
-var ResponseT$outboundSchema = z391.object({
-  content: z391.string().optional(),
-  model: z391.string()
+var ResponseT$outboundSchema = z403.object({
+  content: z403.string().optional(),
+  model: z403.string()
 });
-var OutputFusionServerToolItemType$inboundSchema = z391.enum(OutputFusionServerToolItemType);
+var OutputFusionServerToolItemType$inboundSchema = z403.enum(OutputFusionServerToolItemType);
 var OutputFusionServerToolItemType$outboundSchema = OutputFusionServerToolItemType$inboundSchema;
-var OutputFusionServerToolItem$inboundSchema = z391.object({
+var OutputFusionServerToolItem$inboundSchema = z403.object({
   analysis: FusionAnalysisResult$inboundSchema.optional(),
-  error: z391.string().optional(),
-  failed_models: z391.array(z391.lazy(() => FailedModel$inboundSchema)).optional(),
-  failure_reason: z391.string().optional(),
-  id: z391.string().optional(),
-  responses: z391.array(z391.lazy(() => ResponseT$inboundSchema)).optional(),
-  sources: z391.array(FusionSource$inboundSchema).optional(),
+  error: z403.string().optional(),
+  failed_models: z403.array(z403.lazy(() => FailedModel$inboundSchema)).optional(),
+  failure_reason: z403.string().optional(),
+  id: z403.string().optional(),
+  responses: z403.array(z403.lazy(() => ResponseT$inboundSchema)).optional(),
+  sources: z403.array(FusionSource$inboundSchema).optional(),
   status: ToolCallStatus$inboundSchema,
   type: OutputFusionServerToolItemType$inboundSchema
 }).transform((v) => {
@@ -11256,14 +11614,14 @@ var OutputFusionServerToolItem$inboundSchema = z391.object({
     "failure_reason": "failureReason"
   });
 });
-var OutputFusionServerToolItem$outboundSchema = z391.object({
+var OutputFusionServerToolItem$outboundSchema = z403.object({
   analysis: FusionAnalysisResult$outboundSchema.optional(),
-  error: z391.string().optional(),
-  failedModels: z391.array(z391.lazy(() => FailedModel$outboundSchema)).optional(),
-  failureReason: z391.string().optional(),
-  id: z391.string().optional(),
-  responses: z391.array(z391.lazy(() => ResponseT$outboundSchema)).optional(),
-  sources: z391.array(FusionSource$outboundSchema).optional(),
+  error: z403.string().optional(),
+  failedModels: z403.array(z403.lazy(() => FailedModel$outboundSchema)).optional(),
+  failureReason: z403.string().optional(),
+  id: z403.string().optional(),
+  responses: z403.array(z403.lazy(() => ResponseT$outboundSchema)).optional(),
+  sources: z403.array(FusionSource$outboundSchema).optional(),
   status: ToolCallStatus$outboundSchema,
   type: OutputFusionServerToolItemType$outboundSchema
 }).transform((v) => {
@@ -11274,79 +11632,79 @@ var OutputFusionServerToolItem$outboundSchema = z391.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputimagegenerationcallitem.js
-var z392 = __toESM(require("zod/v4"), 1);
+var z404 = __toESM(require("zod/v4"), 1);
 var OutputImageGenerationCallItemType = {
   ImageGenerationCall: "image_generation_call"
 };
-var OutputImageGenerationCallItemType$inboundSchema = z392.enum(OutputImageGenerationCallItemType);
+var OutputImageGenerationCallItemType$inboundSchema = z404.enum(OutputImageGenerationCallItemType);
 var OutputImageGenerationCallItemType$outboundSchema = OutputImageGenerationCallItemType$inboundSchema;
-var OutputImageGenerationCallItem$inboundSchema = z392.object({
-  id: z392.string(),
-  result: z392.nullable(z392.string()).default(null),
+var OutputImageGenerationCallItem$inboundSchema = z404.object({
+  id: z404.string(),
+  result: z404.nullable(z404.string()).default(null),
   status: ImageGenerationStatus$inboundSchema,
   type: OutputImageGenerationCallItemType$inboundSchema,
-  prompt: z392.string().optional()
+  prompt: z404.string().optional()
 });
-var OutputImageGenerationCallItem$outboundSchema = z392.object({
-  id: z392.string(),
-  result: z392.nullable(z392.string()).default(null),
+var OutputImageGenerationCallItem$outboundSchema = z404.object({
+  id: z404.string(),
+  result: z404.nullable(z404.string()).default(null),
   status: ImageGenerationStatus$outboundSchema,
   type: OutputImageGenerationCallItemType$outboundSchema,
-  prompt: z392.string().optional()
+  prompt: z404.string().optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputimagegenerationservertoolitem.js
-var z393 = __toESM(require("zod/v4"), 1);
+var z405 = __toESM(require("zod/v4"), 1);
 var OutputImageGenerationServerToolItemType = {
   OpenrouterImageGeneration: "openrouter:image_generation"
 };
-var OutputImageGenerationServerToolItemType$inboundSchema = z393.enum(OutputImageGenerationServerToolItemType);
+var OutputImageGenerationServerToolItemType$inboundSchema = z405.enum(OutputImageGenerationServerToolItemType);
 var OutputImageGenerationServerToolItemType$outboundSchema = OutputImageGenerationServerToolItemType$inboundSchema;
-var OutputImageGenerationServerToolItem$inboundSchema = z393.object({
-  id: z393.string().optional(),
-  imageB64: z393.string().optional(),
-  imageUrl: z393.string().optional(),
-  prompt: z393.string().optional(),
-  result: z393.nullable(z393.string()).optional(),
-  revisedPrompt: z393.string().optional(),
+var OutputImageGenerationServerToolItem$inboundSchema = z405.object({
+  id: z405.string().optional(),
+  imageB64: z405.string().optional(),
+  imageUrl: z405.string().optional(),
+  prompt: z405.string().optional(),
+  result: z405.nullable(z405.string()).optional(),
+  revisedPrompt: z405.string().optional(),
   status: ToolCallStatus$inboundSchema,
   type: OutputImageGenerationServerToolItemType$inboundSchema
 });
-var OutputImageGenerationServerToolItem$outboundSchema = z393.object({
-  id: z393.string().optional(),
-  imageB64: z393.string().optional(),
-  imageUrl: z393.string().optional(),
-  prompt: z393.string().optional(),
-  result: z393.nullable(z393.string()).optional(),
-  revisedPrompt: z393.string().optional(),
+var OutputImageGenerationServerToolItem$outboundSchema = z405.object({
+  id: z405.string().optional(),
+  imageB64: z405.string().optional(),
+  imageUrl: z405.string().optional(),
+  prompt: z405.string().optional(),
+  result: z405.nullable(z405.string()).optional(),
+  revisedPrompt: z405.string().optional(),
   status: ToolCallStatus$outboundSchema,
   type: OutputImageGenerationServerToolItemType$outboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputmcpservertoolitem.js
-var z394 = __toESM(require("zod/v4"), 1);
+var z406 = __toESM(require("zod/v4"), 1);
 var OutputMcpServerToolItemType = {
   OpenrouterMcp: "openrouter:mcp"
 };
-var OutputMcpServerToolItemType$inboundSchema = z394.enum(OutputMcpServerToolItemType);
+var OutputMcpServerToolItemType$inboundSchema = z406.enum(OutputMcpServerToolItemType);
 var OutputMcpServerToolItemType$outboundSchema = OutputMcpServerToolItemType$inboundSchema;
-var OutputMcpServerToolItem$inboundSchema = z394.object({
-  id: z394.string().optional(),
-  serverLabel: z394.string().optional(),
+var OutputMcpServerToolItem$inboundSchema = z406.object({
+  id: z406.string().optional(),
+  serverLabel: z406.string().optional(),
   status: ToolCallStatus$inboundSchema,
-  toolName: z394.string().optional(),
+  toolName: z406.string().optional(),
   type: OutputMcpServerToolItemType$inboundSchema
 });
-var OutputMcpServerToolItem$outboundSchema = z394.object({
-  id: z394.string().optional(),
-  serverLabel: z394.string().optional(),
+var OutputMcpServerToolItem$outboundSchema = z406.object({
+  id: z406.string().optional(),
+  serverLabel: z406.string().optional(),
   status: ToolCallStatus$outboundSchema,
-  toolName: z394.string().optional(),
+  toolName: z406.string().optional(),
   type: OutputMcpServerToolItemType$outboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputmemoryservertoolitem.js
-var z395 = __toESM(require("zod/v4"), 1);
+var z407 = __toESM(require("zod/v4"), 1);
 var ActionEnum = {
   Read: "read",
   Write: "write",
@@ -11357,64 +11715,64 @@ var OutputMemoryServerToolItemType = {
 };
 var ActionEnum$inboundSchema = inboundSchema(ActionEnum);
 var ActionEnum$outboundSchema = outboundSchema(ActionEnum);
-var OutputMemoryServerToolItemType$inboundSchema = z395.enum(OutputMemoryServerToolItemType);
+var OutputMemoryServerToolItemType$inboundSchema = z407.enum(OutputMemoryServerToolItemType);
 var OutputMemoryServerToolItemType$outboundSchema = OutputMemoryServerToolItemType$inboundSchema;
-var OutputMemoryServerToolItem$inboundSchema = z395.object({
+var OutputMemoryServerToolItem$inboundSchema = z407.object({
   action: ActionEnum$inboundSchema.optional(),
-  id: z395.string().optional(),
-  key: z395.string().optional(),
+  id: z407.string().optional(),
+  key: z407.string().optional(),
   status: ToolCallStatus$inboundSchema,
   type: OutputMemoryServerToolItemType$inboundSchema,
-  value: z395.any().optional()
+  value: z407.any().optional()
 });
-var OutputMemoryServerToolItem$outboundSchema = z395.object({
+var OutputMemoryServerToolItem$outboundSchema = z407.object({
   action: ActionEnum$outboundSchema.optional(),
-  id: z395.string().optional(),
-  key: z395.string().optional(),
+  id: z407.string().optional(),
+  key: z407.string().optional(),
   status: ToolCallStatus$outboundSchema,
   type: OutputMemoryServerToolItemType$outboundSchema,
-  value: z395.any().optional()
+  value: z407.any().optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputsearchmodelsservertoolitem.js
-var z396 = __toESM(require("zod/v4"), 1);
+var z408 = __toESM(require("zod/v4"), 1);
 var OutputSearchModelsServerToolItemType = {
   OpenrouterExperimentalSearchModels: "openrouter:experimental__search_models"
 };
-var OutputSearchModelsServerToolItemType$inboundSchema = z396.enum(OutputSearchModelsServerToolItemType);
+var OutputSearchModelsServerToolItemType$inboundSchema = z408.enum(OutputSearchModelsServerToolItemType);
 var OutputSearchModelsServerToolItemType$outboundSchema = OutputSearchModelsServerToolItemType$inboundSchema;
-var OutputSearchModelsServerToolItem$inboundSchema = z396.object({
-  arguments: z396.string().optional(),
-  id: z396.string().optional(),
-  query: z396.string().optional(),
+var OutputSearchModelsServerToolItem$inboundSchema = z408.object({
+  arguments: z408.string().optional(),
+  id: z408.string().optional(),
+  query: z408.string().optional(),
   status: ToolCallStatus$inboundSchema,
   type: OutputSearchModelsServerToolItemType$inboundSchema
 });
-var OutputSearchModelsServerToolItem$outboundSchema = z396.object({
-  arguments: z396.string().optional(),
-  id: z396.string().optional(),
-  query: z396.string().optional(),
+var OutputSearchModelsServerToolItem$outboundSchema = z408.object({
+  arguments: z408.string().optional(),
+  id: z408.string().optional(),
+  query: z408.string().optional(),
   status: ToolCallStatus$outboundSchema,
   type: OutputSearchModelsServerToolItemType$outboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputsubagentservertoolitem.js
-var z397 = __toESM(require("zod/v4"), 1);
+var z409 = __toESM(require("zod/v4"), 1);
 var OutputSubagentServerToolItemType = {
   OpenrouterSubagent: "openrouter:subagent"
 };
-var OutputSubagentServerToolItemType$inboundSchema = z397.enum(OutputSubagentServerToolItemType);
+var OutputSubagentServerToolItemType$inboundSchema = z409.enum(OutputSubagentServerToolItemType);
 var OutputSubagentServerToolItemType$outboundSchema = OutputSubagentServerToolItemType$inboundSchema;
-var OutputSubagentServerToolItem$inboundSchema = z397.object({
-  error: z397.string().optional(),
-  id: z397.string().optional(),
-  instance_name: z397.string().optional(),
-  model: z397.string().optional(),
-  name: z397.string().optional(),
-  outcome: z397.string().optional(),
+var OutputSubagentServerToolItem$inboundSchema = z409.object({
+  error: z409.string().optional(),
+  id: z409.string().optional(),
+  instance_name: z409.string().optional(),
+  model: z409.string().optional(),
+  name: z409.string().optional(),
+  outcome: z409.string().optional(),
   status: ToolCallStatus$inboundSchema,
-  task_description: z397.string().optional(),
-  task_name: z397.string().optional(),
+  task_description: z409.string().optional(),
+  task_name: z409.string().optional(),
   type: OutputSubagentServerToolItemType$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -11423,16 +11781,16 @@ var OutputSubagentServerToolItem$inboundSchema = z397.object({
     "task_name": "taskName"
   });
 });
-var OutputSubagentServerToolItem$outboundSchema = z397.object({
-  error: z397.string().optional(),
-  id: z397.string().optional(),
-  instanceName: z397.string().optional(),
-  model: z397.string().optional(),
-  name: z397.string().optional(),
-  outcome: z397.string().optional(),
+var OutputSubagentServerToolItem$outboundSchema = z409.object({
+  error: z409.string().optional(),
+  id: z409.string().optional(),
+  instanceName: z409.string().optional(),
+  model: z409.string().optional(),
+  name: z409.string().optional(),
+  outcome: z409.string().optional(),
   status: ToolCallStatus$outboundSchema,
-  taskDescription: z397.string().optional(),
-  taskName: z397.string().optional(),
+  taskDescription: z409.string().optional(),
+  taskName: z409.string().optional(),
   type: OutputSubagentServerToolItemType$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -11443,7 +11801,7 @@ var OutputSubagentServerToolItem$outboundSchema = z397.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputtexteditorservertoolitem.js
-var z398 = __toESM(require("zod/v4"), 1);
+var z410 = __toESM(require("zod/v4"), 1);
 var Command = {
   View: "view",
   Create: "create",
@@ -11455,159 +11813,167 @@ var OutputTextEditorServerToolItemType = {
 };
 var Command$inboundSchema = inboundSchema(Command);
 var Command$outboundSchema = outboundSchema(Command);
-var OutputTextEditorServerToolItemType$inboundSchema = z398.enum(OutputTextEditorServerToolItemType);
+var OutputTextEditorServerToolItemType$inboundSchema = z410.enum(OutputTextEditorServerToolItemType);
 var OutputTextEditorServerToolItemType$outboundSchema = OutputTextEditorServerToolItemType$inboundSchema;
-var OutputTextEditorServerToolItem$inboundSchema = z398.object({
+var OutputTextEditorServerToolItem$inboundSchema = z410.object({
   command: Command$inboundSchema.optional(),
-  filePath: z398.string().optional(),
-  id: z398.string().optional(),
+  filePath: z410.string().optional(),
+  id: z410.string().optional(),
   status: ToolCallStatus$inboundSchema,
   type: OutputTextEditorServerToolItemType$inboundSchema
 });
-var OutputTextEditorServerToolItem$outboundSchema = z398.object({
+var OutputTextEditorServerToolItem$outboundSchema = z410.object({
   command: Command$outboundSchema.optional(),
-  filePath: z398.string().optional(),
-  id: z398.string().optional(),
+  filePath: z410.string().optional(),
+  id: z410.string().optional(),
   status: ToolCallStatus$outboundSchema,
   type: OutputTextEditorServerToolItemType$outboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputtoolsearchservertoolitem.js
-var z399 = __toESM(require("zod/v4"), 1);
+var z411 = __toESM(require("zod/v4"), 1);
 var OutputToolSearchServerToolItemType = {
   OpenrouterToolSearch: "openrouter:tool_search"
 };
-var OutputToolSearchServerToolItemType$inboundSchema = z399.enum(OutputToolSearchServerToolItemType);
+var OutputToolSearchServerToolItemType$inboundSchema = z411.enum(OutputToolSearchServerToolItemType);
 var OutputToolSearchServerToolItemType$outboundSchema = OutputToolSearchServerToolItemType$inboundSchema;
-var OutputToolSearchServerToolItem$inboundSchema = z399.object({
-  id: z399.string().optional(),
-  query: z399.string().optional(),
+var OutputToolSearchServerToolItem$inboundSchema = z411.object({
+  id: z411.string().optional(),
+  query: z411.string().optional(),
   status: ToolCallStatus$inboundSchema,
   type: OutputToolSearchServerToolItemType$inboundSchema
 });
-var OutputToolSearchServerToolItem$outboundSchema = z399.object({
-  id: z399.string().optional(),
-  query: z399.string().optional(),
+var OutputToolSearchServerToolItem$outboundSchema = z411.object({
+  id: z411.string().optional(),
+  query: z411.string().optional(),
   status: ToolCallStatus$outboundSchema,
   type: OutputToolSearchServerToolItemType$outboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputwebfetchservertoolitem.js
-var z400 = __toESM(require("zod/v4"), 1);
+var z412 = __toESM(require("zod/v4"), 1);
 var OutputWebFetchServerToolItemType = {
   OpenrouterWebFetch: "openrouter:web_fetch"
 };
-var OutputWebFetchServerToolItemType$inboundSchema = z400.enum(OutputWebFetchServerToolItemType);
+var OutputWebFetchServerToolItemType$inboundSchema = z412.enum(OutputWebFetchServerToolItemType);
 var OutputWebFetchServerToolItemType$outboundSchema = OutputWebFetchServerToolItemType$inboundSchema;
-var OutputWebFetchServerToolItem$inboundSchema = z400.object({
-  content: z400.string().optional(),
-  error: z400.string().optional(),
-  httpStatus: z400.int().optional(),
-  id: z400.string().optional(),
+var OutputWebFetchServerToolItem$inboundSchema = z412.object({
+  content: z412.string().optional(),
+  error: z412.string().optional(),
+  httpStatus: z412.int().optional(),
+  id: z412.string().optional(),
   status: ToolCallStatus$inboundSchema,
-  title: z400.string().optional(),
+  title: z412.string().optional(),
   type: OutputWebFetchServerToolItemType$inboundSchema,
-  url: z400.string().optional()
+  url: z412.string().optional()
 });
-var OutputWebFetchServerToolItem$outboundSchema = z400.object({
-  content: z400.string().optional(),
-  error: z400.string().optional(),
-  httpStatus: z400.int().optional(),
-  id: z400.string().optional(),
+var OutputWebFetchServerToolItem$outboundSchema = z412.object({
+  content: z412.string().optional(),
+  error: z412.string().optional(),
+  httpStatus: z412.int().optional(),
+  id: z412.string().optional(),
   status: ToolCallStatus$outboundSchema,
-  title: z400.string().optional(),
+  title: z412.string().optional(),
   type: OutputWebFetchServerToolItemType$outboundSchema,
-  url: z400.string().optional()
+  url: z412.string().optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputwebsearchcallitem.js
-var z402 = __toESM(require("zod/v4"), 1);
+var z414 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/websearchsource.js
-var z401 = __toESM(require("zod/v4"), 1);
+var z413 = __toESM(require("zod/v4"), 1);
 var WebSearchSourceType = {
   Url: "url"
 };
-var WebSearchSourceType$inboundSchema = z401.enum(WebSearchSourceType);
+var WebSearchSourceType$inboundSchema = z413.enum(WebSearchSourceType);
 var WebSearchSourceType$outboundSchema = WebSearchSourceType$inboundSchema;
-var WebSearchSource$inboundSchema = z401.object({
+var WebSearchSource$inboundSchema = z413.object({
   type: WebSearchSourceType$inboundSchema,
-  url: z401.string()
+  url: z413.string()
 });
-var WebSearchSource$outboundSchema = z401.object({
+var WebSearchSource$outboundSchema = z413.object({
   type: WebSearchSourceType$outboundSchema,
-  url: z401.string()
+  url: z413.string()
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputwebsearchcallitem.js
 var TypeWebSearchCall = {
   WebSearchCall: "web_search_call"
 };
-var ActionFindInPage$inboundSchema = z402.object({
-  pattern: z402.string(),
-  type: z402.literal("find_in_page"),
-  url: z402.string()
+var ActionFindInPage$inboundSchema = z414.object({
+  pattern: z414.string(),
+  type: z414.literal("find_in_page"),
+  url: z414.string()
 });
-var ActionFindInPage$outboundSchema = z402.object({
-  pattern: z402.string(),
-  type: z402.literal("find_in_page"),
-  url: z402.string()
+var ActionFindInPage$outboundSchema = z414.object({
+  pattern: z414.string(),
+  type: z414.literal("find_in_page"),
+  url: z414.string()
 });
-var ActionOpenPage$inboundSchema = z402.object({
-  type: z402.literal("open_page"),
-  url: z402.nullable(z402.string()).optional()
+var ActionOpenPage$inboundSchema = z414.object({
+  type: z414.literal("open_page"),
+  url: z414.nullable(z414.string()).optional()
 });
-var ActionOpenPage$outboundSchema = z402.object({
-  type: z402.literal("open_page"),
-  url: z402.nullable(z402.string()).optional()
+var ActionOpenPage$outboundSchema = z414.object({
+  type: z414.literal("open_page"),
+  url: z414.nullable(z414.string()).optional()
 });
-var OutputWebSearchCallItemActionSearch$inboundSchema = z402.object({
-  queries: z402.array(z402.string()).optional(),
-  query: z402.string(),
-  sources: z402.array(WebSearchSource$inboundSchema).optional(),
-  type: z402.literal("search")
+var OutputWebSearchCallItemActionSearch$inboundSchema = z414.object({
+  queries: z414.array(z414.string()).optional(),
+  query: z414.string(),
+  sources: z414.array(WebSearchSource$inboundSchema).optional(),
+  type: z414.literal("search")
 });
-var OutputWebSearchCallItemActionSearch$outboundSchema = z402.object({
-  queries: z402.array(z402.string()).optional(),
-  query: z402.string(),
-  sources: z402.array(WebSearchSource$outboundSchema).optional(),
-  type: z402.literal("search")
+var OutputWebSearchCallItemActionSearch$outboundSchema = z414.object({
+  queries: z414.array(z414.string()).optional(),
+  query: z414.string(),
+  sources: z414.array(WebSearchSource$outboundSchema).optional(),
+  type: z414.literal("search")
 });
 var Action$inboundSchema = discriminatedUnion("type", {
-  search: z402.lazy(() => OutputWebSearchCallItemActionSearch$inboundSchema),
-  open_page: z402.lazy(() => ActionOpenPage$inboundSchema),
-  find_in_page: z402.lazy(() => ActionFindInPage$inboundSchema)
+  search: z414.lazy(() => OutputWebSearchCallItemActionSearch$inboundSchema),
+  open_page: z414.lazy(() => ActionOpenPage$inboundSchema),
+  find_in_page: z414.lazy(() => ActionFindInPage$inboundSchema)
 });
-var Action$outboundSchema = z402.union([
-  z402.lazy(() => OutputWebSearchCallItemActionSearch$outboundSchema),
-  z402.lazy(() => ActionOpenPage$outboundSchema),
-  z402.lazy(() => ActionFindInPage$outboundSchema)
+var Action$outboundSchema = z414.union([
+  z414.lazy(() => OutputWebSearchCallItemActionSearch$outboundSchema),
+  z414.lazy(() => ActionOpenPage$outboundSchema),
+  z414.lazy(() => ActionFindInPage$outboundSchema)
 ]);
-var TypeWebSearchCall$inboundSchema = z402.enum(TypeWebSearchCall);
+var TypeWebSearchCall$inboundSchema = z414.enum(TypeWebSearchCall);
 var TypeWebSearchCall$outboundSchema = TypeWebSearchCall$inboundSchema;
-var OutputWebSearchCallItem$inboundSchema = z402.object({
+var OutputWebSearchCallItem$inboundSchema = collectExtraKeys(z414.object({
   action: discriminatedUnion("type", {
-    search: z402.lazy(() => OutputWebSearchCallItemActionSearch$inboundSchema),
-    open_page: z402.lazy(() => ActionOpenPage$inboundSchema),
-    find_in_page: z402.lazy(() => ActionFindInPage$inboundSchema)
+    search: z414.lazy(() => OutputWebSearchCallItemActionSearch$inboundSchema),
+    open_page: z414.lazy(() => ActionOpenPage$inboundSchema),
+    find_in_page: z414.lazy(() => ActionFindInPage$inboundSchema)
   }).optional(),
-  id: z402.string(),
+  id: z414.string(),
   status: WebSearchStatus$inboundSchema,
   type: TypeWebSearchCall$inboundSchema
-});
-var OutputWebSearchCallItem$outboundSchema = z402.object({
-  action: z402.union([
-    z402.lazy(() => OutputWebSearchCallItemActionSearch$outboundSchema),
-    z402.lazy(() => ActionOpenPage$outboundSchema),
-    z402.lazy(() => ActionFindInPage$outboundSchema)
+}).catchall(z414.any()), "additionalProperties", true);
+var OutputWebSearchCallItem$outboundSchema = z414.object({
+  action: z414.union([
+    z414.lazy(() => OutputWebSearchCallItemActionSearch$outboundSchema),
+    z414.lazy(() => ActionOpenPage$outboundSchema),
+    z414.lazy(() => ActionFindInPage$outboundSchema)
   ]).optional(),
-  id: z402.string(),
+  id: z414.string(),
   status: WebSearchStatus$outboundSchema,
-  type: TypeWebSearchCall$outboundSchema
+  type: TypeWebSearchCall$outboundSchema,
+  additionalProperties: z414.record(z414.string(), z414.any()).optional()
+}).transform((v) => {
+  return {
+    ...v.additionalProperties,
+    ...remap(v, {
+      additionalProperties: null
+    })
+  };
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputwebsearchservertoolitem.js
-var z403 = __toESM(require("zod/v4"), 1);
+var z415 = __toESM(require("zod/v4"), 1);
 var OutputWebSearchServerToolItemTypeURL = {
   Url: "url"
 };
@@ -11617,59 +11983,59 @@ var OutputWebSearchServerToolItemTypeSearch = {
 var OutputWebSearchServerToolItemTypeOpenrouterWebSearch = {
   OpenrouterWebSearch: "openrouter:web_search"
 };
-var OutputWebSearchServerToolItemTypeURL$inboundSchema = z403.enum(OutputWebSearchServerToolItemTypeURL);
+var OutputWebSearchServerToolItemTypeURL$inboundSchema = z415.enum(OutputWebSearchServerToolItemTypeURL);
 var OutputWebSearchServerToolItemTypeURL$outboundSchema = OutputWebSearchServerToolItemTypeURL$inboundSchema;
-var OutputWebSearchServerToolItemSource$inboundSchema = z403.object({
+var OutputWebSearchServerToolItemSource$inboundSchema = z415.object({
   type: OutputWebSearchServerToolItemTypeURL$inboundSchema,
-  url: z403.string()
+  url: z415.string()
 });
-var OutputWebSearchServerToolItemSource$outboundSchema = z403.object({
+var OutputWebSearchServerToolItemSource$outboundSchema = z415.object({
   type: OutputWebSearchServerToolItemTypeURL$outboundSchema,
-  url: z403.string()
+  url: z415.string()
 });
-var OutputWebSearchServerToolItemTypeSearch$inboundSchema = z403.enum(OutputWebSearchServerToolItemTypeSearch);
+var OutputWebSearchServerToolItemTypeSearch$inboundSchema = z415.enum(OutputWebSearchServerToolItemTypeSearch);
 var OutputWebSearchServerToolItemTypeSearch$outboundSchema = OutputWebSearchServerToolItemTypeSearch$inboundSchema;
-var OutputWebSearchServerToolItemAction$inboundSchema = z403.object({
-  query: z403.string(),
-  sources: z403.array(z403.lazy(() => OutputWebSearchServerToolItemSource$inboundSchema)).optional(),
+var OutputWebSearchServerToolItemAction$inboundSchema = z415.object({
+  query: z415.string(),
+  sources: z415.array(z415.lazy(() => OutputWebSearchServerToolItemSource$inboundSchema)).optional(),
   type: OutputWebSearchServerToolItemTypeSearch$inboundSchema
 });
-var OutputWebSearchServerToolItemAction$outboundSchema = z403.object({
-  query: z403.string(),
-  sources: z403.array(z403.lazy(() => OutputWebSearchServerToolItemSource$outboundSchema)).optional(),
+var OutputWebSearchServerToolItemAction$outboundSchema = z415.object({
+  query: z415.string(),
+  sources: z415.array(z415.lazy(() => OutputWebSearchServerToolItemSource$outboundSchema)).optional(),
   type: OutputWebSearchServerToolItemTypeSearch$outboundSchema
 });
-var OutputWebSearchServerToolItemTypeOpenrouterWebSearch$inboundSchema = z403.enum(OutputWebSearchServerToolItemTypeOpenrouterWebSearch);
+var OutputWebSearchServerToolItemTypeOpenrouterWebSearch$inboundSchema = z415.enum(OutputWebSearchServerToolItemTypeOpenrouterWebSearch);
 var OutputWebSearchServerToolItemTypeOpenrouterWebSearch$outboundSchema = OutputWebSearchServerToolItemTypeOpenrouterWebSearch$inboundSchema;
-var OutputWebSearchServerToolItem$inboundSchema = z403.object({
-  action: z403.lazy(() => OutputWebSearchServerToolItemAction$inboundSchema).optional(),
-  id: z403.string().optional(),
+var OutputWebSearchServerToolItem$inboundSchema = z415.object({
+  action: z415.lazy(() => OutputWebSearchServerToolItemAction$inboundSchema).optional(),
+  id: z415.string().optional(),
   status: ToolCallStatus$inboundSchema,
   type: OutputWebSearchServerToolItemTypeOpenrouterWebSearch$inboundSchema
 });
-var OutputWebSearchServerToolItem$outboundSchema = z403.object({
-  action: z403.lazy(() => OutputWebSearchServerToolItemAction$outboundSchema).optional(),
-  id: z403.string().optional(),
+var OutputWebSearchServerToolItem$outboundSchema = z415.object({
+  action: z415.lazy(() => OutputWebSearchServerToolItemAction$outboundSchema).optional(),
+  id: z415.string().optional(),
   status: ToolCallStatus$outboundSchema,
   type: OutputWebSearchServerToolItemTypeOpenrouterWebSearch$outboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/reasoningitem.js
-var z405 = __toESM(require("zod/v4"), 1);
+var z417 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/reasoningsummarytext.js
-var z404 = __toESM(require("zod/v4"), 1);
+var z416 = __toESM(require("zod/v4"), 1);
 var ReasoningSummaryTextType = {
   SummaryText: "summary_text"
 };
-var ReasoningSummaryTextType$inboundSchema = z404.enum(ReasoningSummaryTextType);
+var ReasoningSummaryTextType$inboundSchema = z416.enum(ReasoningSummaryTextType);
 var ReasoningSummaryTextType$outboundSchema = ReasoningSummaryTextType$inboundSchema;
-var ReasoningSummaryText$inboundSchema = z404.object({
-  text: z404.string(),
+var ReasoningSummaryText$inboundSchema = z416.object({
+  text: z416.string(),
   type: ReasoningSummaryTextType$inboundSchema
 });
-var ReasoningSummaryText$outboundSchema = z404.object({
-  text: z404.string(),
+var ReasoningSummaryText$outboundSchema = z416.object({
+  text: z416.string(),
   type: ReasoningSummaryTextType$outboundSchema
 });
 
@@ -11686,28 +12052,28 @@ var ReasoningItemStatusCompleted = {
 var ReasoningItemType = {
   Reasoning: "reasoning"
 };
-var ReasoningItemStatusInProgress$outboundSchema = z405.enum(ReasoningItemStatusInProgress);
-var ReasoningItemStatusIncomplete$outboundSchema = z405.enum(ReasoningItemStatusIncomplete);
-var ReasoningItemStatusCompleted$outboundSchema = z405.enum(ReasoningItemStatusCompleted);
-var ReasoningItemStatusUnion$outboundSchema = z405.union([
+var ReasoningItemStatusInProgress$outboundSchema = z417.enum(ReasoningItemStatusInProgress);
+var ReasoningItemStatusIncomplete$outboundSchema = z417.enum(ReasoningItemStatusIncomplete);
+var ReasoningItemStatusCompleted$outboundSchema = z417.enum(ReasoningItemStatusCompleted);
+var ReasoningItemStatusUnion$outboundSchema = z417.union([
   ReasoningItemStatusCompleted$outboundSchema,
   ReasoningItemStatusIncomplete$outboundSchema,
   ReasoningItemStatusInProgress$outboundSchema
 ]);
-var ReasoningItemType$outboundSchema = z405.enum(ReasoningItemType);
-var ReasoningItem$outboundSchema = z405.object({
-  content: z405.nullable(z405.array(ReasoningTextContent$outboundSchema)).optional(),
-  encryptedContent: z405.nullable(z405.string()).optional(),
-  id: z405.string(),
-  status: z405.union([
+var ReasoningItemType$outboundSchema = z417.enum(ReasoningItemType);
+var ReasoningItem$outboundSchema = z417.object({
+  content: z417.nullable(z417.array(ReasoningTextContent$outboundSchema)).optional(),
+  encryptedContent: z417.nullable(z417.string()).optional(),
+  id: z417.string(),
+  status: z417.union([
     ReasoningItemStatusCompleted$outboundSchema,
     ReasoningItemStatusIncomplete$outboundSchema,
     ReasoningItemStatusInProgress$outboundSchema
   ]).optional(),
-  summary: z405.array(ReasoningSummaryText$outboundSchema),
+  summary: z417.array(ReasoningSummaryText$outboundSchema),
   type: ReasoningItemType$outboundSchema,
-  format: z405.nullable(ReasoningFormat$outboundSchema).optional(),
-  signature: z405.nullable(z405.string()).optional()
+  format: z417.nullable(ReasoningFormat$outboundSchema).optional(),
+  signature: z417.nullable(z417.string()).optional()
 }).transform((v) => {
   return remap(v, {
     encryptedContent: "encrypted_content"
@@ -11715,27 +12081,27 @@ var ReasoningItem$outboundSchema = z405.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/shellcallitem.js
-var z406 = __toESM(require("zod/v4"), 1);
+var z418 = __toESM(require("zod/v4"), 1);
 var ShellCallItemType = {
   ShellCall: "shell_call"
 };
-var ShellCallItemAction$outboundSchema = z406.object({
-  commands: z406.array(z406.string()),
-  maxOutputLength: z406.nullable(z406.int()).optional(),
-  timeoutMs: z406.nullable(z406.int()).optional()
+var ShellCallItemAction$outboundSchema = z418.object({
+  commands: z418.array(z418.string()),
+  maxOutputLength: z418.nullable(z418.int()).optional(),
+  timeoutMs: z418.nullable(z418.int()).optional()
 }).transform((v) => {
   return remap(v, {
     maxOutputLength: "max_output_length",
     timeoutMs: "timeout_ms"
   });
 });
-var ShellCallItemType$outboundSchema = z406.enum(ShellCallItemType);
-var ShellCallItem$outboundSchema = z406.object({
-  action: z406.lazy(() => ShellCallItemAction$outboundSchema),
-  callId: z406.string(),
-  environment: z406.any().optional(),
-  id: z406.nullable(z406.string()).optional(),
-  status: z406.nullable(ToolCallStatus$outboundSchema).optional(),
+var ShellCallItemType$outboundSchema = z418.enum(ShellCallItemType);
+var ShellCallItem$outboundSchema = z418.object({
+  action: z418.lazy(() => ShellCallItemAction$outboundSchema),
+  callId: z418.string(),
+  environment: z418.any().optional(),
+  id: z418.nullable(z418.string()).optional(),
+  status: z418.nullable(ToolCallStatus$outboundSchema).optional(),
   type: ShellCallItemType$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -11744,15 +12110,15 @@ var ShellCallItem$outboundSchema = z406.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/shellcalloutputitem.js
-var z407 = __toESM(require("zod/v4"), 1);
+var z419 = __toESM(require("zod/v4"), 1);
 var ShellCallOutputItemType = {
   ShellCallOutput: "shell_call_output"
 };
-var ShellCallOutputItemOutput$outboundSchema = z407.object({
-  content: z407.nullable(z407.string()).optional(),
-  exitCode: z407.nullable(z407.int()).optional(),
-  type: z407.string(),
-  additionalProperties: z407.record(z407.string(), z407.any()).optional()
+var ShellCallOutputItemOutput$outboundSchema = z419.object({
+  content: z419.nullable(z419.string()).optional(),
+  exitCode: z419.nullable(z419.int()).optional(),
+  type: z419.string(),
+  additionalProperties: z419.record(z419.string(), z419.any()).optional()
 }).transform((v) => {
   return {
     ...v.additionalProperties,
@@ -11762,13 +12128,13 @@ var ShellCallOutputItemOutput$outboundSchema = z407.object({
     })
   };
 });
-var ShellCallOutputItemType$outboundSchema = z407.enum(ShellCallOutputItemType);
-var ShellCallOutputItem$outboundSchema = z407.object({
-  callId: z407.string(),
-  id: z407.nullable(z407.string()).optional(),
-  maxOutputLength: z407.nullable(z407.int()).optional(),
-  output: z407.array(z407.lazy(() => ShellCallOutputItemOutput$outboundSchema)),
-  status: z407.nullable(ToolCallStatus$outboundSchema).optional(),
+var ShellCallOutputItemType$outboundSchema = z419.enum(ShellCallOutputItemType);
+var ShellCallOutputItem$outboundSchema = z419.object({
+  callId: z419.string(),
+  id: z419.nullable(z419.string()).optional(),
+  maxOutputLength: z419.nullable(z419.int()).optional(),
+  output: z419.array(z419.lazy(() => ShellCallOutputItemOutput$outboundSchema)),
+  status: z419.nullable(ToolCallStatus$outboundSchema).optional(),
   type: ShellCallOutputItemType$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -11811,89 +12177,87 @@ var InputsStatusCompleted1 = {
 var InputsTypeMessage = {
   Message: "message"
 };
-var InputsStatusInProgress2$outboundSchema = z408.enum(InputsStatusInProgress2);
-var InputsStatusIncomplete2$outboundSchema = z408.enum(InputsStatusIncomplete2);
-var InputsStatusCompleted2$outboundSchema = z408.enum(InputsStatusCompleted2);
-var InputsStatusUnion2$outboundSchema = z408.union([
+var InputsStatusInProgress2$outboundSchema = z420.enum(InputsStatusInProgress2);
+var InputsStatusIncomplete2$outboundSchema = z420.enum(InputsStatusIncomplete2);
+var InputsStatusCompleted2$outboundSchema = z420.enum(InputsStatusCompleted2);
+var InputsStatusUnion2$outboundSchema = z420.union([
   InputsStatusCompleted2$outboundSchema,
   InputsStatusIncomplete2$outboundSchema,
   InputsStatusInProgress2$outboundSchema
 ]);
-var InputsTypeReasoning$outboundSchema = z408.enum(InputsTypeReasoning);
-var InputsReasoning$outboundSchema = z408.object({
-  content: z408.nullable(z408.array(ReasoningTextContent$outboundSchema)).optional(),
-  encryptedContent: z408.nullable(z408.string()).optional(),
-  id: z408.string(),
-  status: z408.union([
+var InputsTypeReasoning$outboundSchema = z420.enum(InputsTypeReasoning);
+var InputsReasoning$outboundSchema = z420.object({
+  content: z420.nullable(z420.array(ReasoningTextContent$outboundSchema)).optional(),
+  encryptedContent: z420.nullable(z420.string()).optional(),
+  id: z420.string(),
+  status: z420.union([
     InputsStatusCompleted2$outboundSchema,
     InputsStatusIncomplete2$outboundSchema,
     InputsStatusInProgress2$outboundSchema
   ]).optional(),
-  summary: z408.nullable(z408.array(ReasoningSummaryText$outboundSchema)),
+  summary: z420.nullable(z420.array(ReasoningSummaryText$outboundSchema)),
   type: InputsTypeReasoning$outboundSchema,
-  format: z408.nullable(ReasoningFormat$outboundSchema).optional(),
-  signature: z408.nullable(z408.string()).optional()
+  format: z420.nullable(ReasoningFormat$outboundSchema).optional(),
+  signature: z420.nullable(z420.string()).optional()
 }).transform((v) => {
   return remap(v, {
     encryptedContent: "encrypted_content"
   });
 });
-var InputsContent1$outboundSchema = z408.union([
+var InputsContent1$outboundSchema = z420.union([
   ResponseOutputText$outboundSchema,
   OpenAIResponsesRefusalContent$outboundSchema
 ]);
-var InputsContent2$outboundSchema = z408.union([
-  z408.array(z408.union([
+var InputsContent2$outboundSchema = z420.union([
+  z420.array(z420.union([
     ResponseOutputText$outboundSchema,
     OpenAIResponsesRefusalContent$outboundSchema
   ])),
-  z408.string()
+  z420.string()
 ]);
-var InputsPhaseFinalAnswer$outboundSchema = z408.enum(InputsPhaseFinalAnswer);
-var InputsPhaseCommentary$outboundSchema = z408.enum(InputsPhaseCommentary);
-var InputsPhaseUnion$outboundSchema = z408.union([
+var InputsPhaseFinalAnswer$outboundSchema = z420.enum(InputsPhaseFinalAnswer);
+var InputsPhaseCommentary$outboundSchema = z420.enum(InputsPhaseCommentary);
+var InputsPhaseUnion$outboundSchema = z420.union([
   InputsPhaseCommentary$outboundSchema,
   InputsPhaseFinalAnswer$outboundSchema
 ]);
-var InputsRole$outboundSchema = z408.enum(InputsRole);
-var InputsStatusInProgress1$outboundSchema = z408.enum(InputsStatusInProgress1);
-var InputsStatusIncomplete1$outboundSchema = z408.enum(InputsStatusIncomplete1);
-var InputsStatusCompleted1$outboundSchema = z408.enum(InputsStatusCompleted1);
-var InputsStatusUnion1$outboundSchema = z408.union([
+var InputsRole$outboundSchema = z420.enum(InputsRole);
+var InputsStatusInProgress1$outboundSchema = z420.enum(InputsStatusInProgress1);
+var InputsStatusIncomplete1$outboundSchema = z420.enum(InputsStatusIncomplete1);
+var InputsStatusCompleted1$outboundSchema = z420.enum(InputsStatusCompleted1);
+var InputsStatusUnion1$outboundSchema = z420.union([
   InputsStatusCompleted1$outboundSchema,
   InputsStatusIncomplete1$outboundSchema,
   InputsStatusInProgress1$outboundSchema
 ]);
-var InputsTypeMessage$outboundSchema = z408.enum(InputsTypeMessage);
-var InputsMessage$outboundSchema = z408.object({
-  content: z408.nullable(z408.union([
-    z408.array(z408.union([
+var InputsTypeMessage$outboundSchema = z420.enum(InputsTypeMessage);
+var InputsMessage$outboundSchema = z420.object({
+  content: z420.nullable(z420.union([
+    z420.array(z420.union([
       ResponseOutputText$outboundSchema,
       OpenAIResponsesRefusalContent$outboundSchema
     ])),
-    z408.string()
+    z420.string()
   ])),
-  id: z408.string(),
-  phase: z408.nullable(z408.union([
+  id: z420.string(),
+  phase: z420.nullable(z420.union([
     InputsPhaseCommentary$outboundSchema,
     InputsPhaseFinalAnswer$outboundSchema
   ])).optional(),
   role: InputsRole$outboundSchema,
-  status: z408.union([
+  status: z420.union([
     InputsStatusCompleted1$outboundSchema,
     InputsStatusIncomplete1$outboundSchema,
     InputsStatusInProgress1$outboundSchema
   ]).optional(),
-  type: InputsTypeMessage$outboundSchema
+  type: InputsTypeMessage$outboundSchema.default("message")
 });
-var InputsUnion1$outboundSchema = z408.union([
-  OutputCodeInterpreterCallItem$outboundSchema,
+var InputsUnion1$outboundSchema = z420.union([
   FunctionCallItem$outboundSchema,
   LocalShellCallItem$outboundSchema,
   McpApprovalRequestItem$outboundSchema,
   McpCallItem$outboundSchema,
   ApplyPatchCallItem$outboundSchema,
-  z408.lazy(() => InputsMessage$outboundSchema),
   OutputFunctionCallItem$outboundSchema,
   OutputCustomToolCallItem$outboundSchema,
   OutputFileSearchCallItem$outboundSchema,
@@ -11905,9 +12269,11 @@ var InputsUnion1$outboundSchema = z408.union([
   ReasoningItem$outboundSchema,
   FunctionCallOutputItem$outboundSchema,
   ApplyPatchCallOutputItem$outboundSchema,
-  z408.lazy(() => InputsReasoning$outboundSchema),
+  z420.lazy(() => InputsMessage$outboundSchema),
+  z420.lazy(() => InputsReasoning$outboundSchema),
   OutputWebSearchCallItem$outboundSchema,
   OutputImageGenerationCallItem$outboundSchema,
+  OutputCodeInterpreterCallItem$outboundSchema,
   LocalShellCallOutputItem$outboundSchema,
   ShellCallItem$outboundSchema,
   ShellCallOutputItem$outboundSchema,
@@ -11937,16 +12303,14 @@ var InputsUnion1$outboundSchema = z408.union([
   InputMessageItem$outboundSchema,
   ContextCompactionItem$outboundSchema
 ]);
-var InputsUnion$outboundSchema = z408.union([
-  z408.string(),
-  z408.array(z408.union([
-    OutputCodeInterpreterCallItem$outboundSchema,
+var InputsUnion$outboundSchema = z420.union([
+  z420.string(),
+  z420.array(z420.union([
     FunctionCallItem$outboundSchema,
     LocalShellCallItem$outboundSchema,
     McpApprovalRequestItem$outboundSchema,
     McpCallItem$outboundSchema,
     ApplyPatchCallItem$outboundSchema,
-    z408.lazy(() => InputsMessage$outboundSchema),
     OutputFunctionCallItem$outboundSchema,
     OutputCustomToolCallItem$outboundSchema,
     OutputFileSearchCallItem$outboundSchema,
@@ -11958,9 +12322,11 @@ var InputsUnion$outboundSchema = z408.union([
     ReasoningItem$outboundSchema,
     FunctionCallOutputItem$outboundSchema,
     ApplyPatchCallOutputItem$outboundSchema,
-    z408.lazy(() => InputsReasoning$outboundSchema),
+    z420.lazy(() => InputsMessage$outboundSchema),
+    z420.lazy(() => InputsReasoning$outboundSchema),
     OutputWebSearchCallItem$outboundSchema,
     OutputImageGenerationCallItem$outboundSchema,
+    OutputCodeInterpreterCallItem$outboundSchema,
     LocalShellCallOutputItem$outboundSchema,
     ShellCallItem$outboundSchema,
     ShellCallOutputItem$outboundSchema,
@@ -12020,23 +12386,23 @@ var InstructType = {
 var InstructType$inboundSchema = inboundSchema(InstructType);
 
 // node_modules/@openrouter/sdk/esm/models/internalserverresponseerrordata.js
-var z409 = __toESM(require("zod/v4"), 1);
-var InternalServerResponseErrorData$inboundSchema = z409.object({
-  code: z409.int(),
-  message: z409.string(),
-  metadata: z409.nullable(z409.record(z409.string(), z409.any())).optional()
+var z421 = __toESM(require("zod/v4"), 1);
+var InternalServerResponseErrorData$inboundSchema = z421.object({
+  code: z421.int(),
+  message: z421.string(),
+  metadata: z421.nullable(z421.record(z421.string(), z421.any())).optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/keyassignment.js
-var z410 = __toESM(require("zod/v4"), 1);
-var KeyAssignment$inboundSchema = z410.object({
-  assigned_by: z410.nullable(z410.string()),
-  created_at: z410.string(),
-  guardrail_id: z410.string(),
-  id: z410.string(),
-  key_hash: z410.string(),
-  key_label: z410.string(),
-  key_name: z410.string()
+var z422 = __toESM(require("zod/v4"), 1);
+var KeyAssignment$inboundSchema = z422.object({
+  assigned_by: z422.nullable(z422.string()),
+  created_at: z422.string(),
+  guardrail_id: z422.string(),
+  id: z422.string(),
+  key_hash: z422.string(),
+  key_label: z422.string(),
+  key_name: z422.string()
 }).transform((v) => {
   return remap(v, {
     "assigned_by": "assignedBy",
@@ -12049,10 +12415,10 @@ var KeyAssignment$inboundSchema = z410.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/listbyokkeysresponse.js
-var z411 = __toESM(require("zod/v4"), 1);
-var ListBYOKKeysResponse$inboundSchema = z411.object({
-  data: z411.array(BYOKKey$inboundSchema),
-  total_count: z411.int()
+var z423 = __toESM(require("zod/v4"), 1);
+var ListBYOKKeysResponse$inboundSchema = z423.object({
+  data: z423.array(BYOKKey$inboundSchema),
+  total_count: z423.int()
 }).transform((v) => {
   return remap(v, {
     "total_count": "totalCount"
@@ -12060,7 +12426,7 @@ var ListBYOKKeysResponse$inboundSchema = z411.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/listendpointsresponse.js
-var z415 = __toESM(require("zod/v4"), 1);
+var z427 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/modelgroup.js
 var ModelGroup = {
@@ -12101,7 +12467,7 @@ var OutputModality = {
 var OutputModality$inboundSchema = inboundSchema(OutputModality);
 
 // node_modules/@openrouter/sdk/esm/models/publicendpoint.js
-var z414 = __toESM(require("zod/v4"), 1);
+var z426 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/parameter.js
 var Parameter = {
@@ -12135,27 +12501,27 @@ var Parameter = {
 var Parameter$inboundSchema = inboundSchema(Parameter);
 
 // node_modules/@openrouter/sdk/esm/models/percentilestats.js
-var z412 = __toESM(require("zod/v4"), 1);
-var PercentileStats$inboundSchema = z412.object({
-  p50: z412.number(),
-  p75: z412.number(),
-  p90: z412.number(),
-  p99: z412.number()
+var z424 = __toESM(require("zod/v4"), 1);
+var PercentileStats$inboundSchema = z424.object({
+  p50: z424.number(),
+  p75: z424.number(),
+  p90: z424.number(),
+  p99: z424.number()
 });
 
 // node_modules/@openrouter/sdk/esm/models/pricingoverride.js
-var z413 = __toESM(require("zod/v4"), 1);
-var PricingOverride$inboundSchema = z413.object({
-  audio: z413.string().optional(),
-  completion: z413.string().optional(),
-  input_audio_cache: z413.string().optional(),
-  input_cache_read: z413.string().optional(),
-  input_cache_write: z413.string().optional(),
-  input_cache_write_1h: z413.string().optional(),
-  min_prompt_tokens: z413.number().optional(),
-  prompt: z413.string().optional(),
-  utc_end: z413.number().optional(),
-  utc_start: z413.number().optional()
+var z425 = __toESM(require("zod/v4"), 1);
+var PricingOverride$inboundSchema = z425.object({
+  audio: z425.string().optional(),
+  completion: z425.string().optional(),
+  input_audio_cache: z425.string().optional(),
+  input_cache_read: z425.string().optional(),
+  input_cache_write: z425.string().optional(),
+  input_cache_write_1h: z425.string().optional(),
+  min_prompt_tokens: z425.number().optional(),
+  prompt: z425.string().optional(),
+  utc_end: z425.number().optional(),
+  utc_start: z425.number().optional()
 }).transform((v) => {
   return remap(v, {
     "input_audio_cache": "inputAudioCache",
@@ -12169,23 +12535,23 @@ var PricingOverride$inboundSchema = z413.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/publicendpoint.js
-var Pricing$inboundSchema = z414.object({
-  audio: z414.string().optional(),
-  audio_output: z414.string().optional(),
-  completion: z414.string(),
-  discount: z414.number().optional(),
-  image: z414.string().optional(),
-  image_output: z414.string().optional(),
-  image_token: z414.string().optional(),
-  input_audio_cache: z414.string().optional(),
-  input_cache_read: z414.string().optional(),
-  input_cache_write: z414.string().optional(),
-  input_cache_write_1h: z414.string().optional(),
-  internal_reasoning: z414.string().optional(),
-  overrides: z414.array(PricingOverride$inboundSchema).optional(),
-  prompt: z414.string(),
-  request: z414.string().optional(),
-  web_search: z414.string().optional()
+var Pricing$inboundSchema = z426.object({
+  audio: z426.string().optional(),
+  audio_output: z426.string().optional(),
+  completion: z426.string(),
+  discount: z426.number().optional(),
+  image: z426.string().optional(),
+  image_output: z426.string().optional(),
+  image_token: z426.string().optional(),
+  input_audio_cache: z426.string().optional(),
+  input_cache_read: z426.string().optional(),
+  input_cache_write: z426.string().optional(),
+  input_cache_write_1h: z426.string().optional(),
+  internal_reasoning: z426.string().optional(),
+  overrides: z426.array(PricingOverride$inboundSchema).optional(),
+  prompt: z426.string(),
+  request: z426.string().optional(),
+  web_search: z426.string().optional()
 }).transform((v) => {
   return remap(v, {
     "audio_output": "audioOutput",
@@ -12199,25 +12565,26 @@ var Pricing$inboundSchema = z414.object({
     "web_search": "webSearch"
   });
 });
-var PublicEndpoint$inboundSchema = z414.object({
-  context_length: z414.int(),
-  latency_last_30m: z414.nullable(PercentileStats$inboundSchema),
-  max_completion_tokens: z414.nullable(z414.int()),
-  max_prompt_tokens: z414.nullable(z414.int()),
-  model_id: z414.string(),
-  model_name: z414.string(),
-  name: z414.string(),
-  pricing: z414.lazy(() => Pricing$inboundSchema),
+var PublicEndpoint$inboundSchema = z426.object({
+  context_length: z426.int(),
+  latency_last_30m: z426.nullable(PercentileStats$inboundSchema),
+  max_completion_tokens: z426.nullable(z426.int()),
+  max_prompt_tokens: z426.nullable(z426.int()),
+  model_id: z426.string(),
+  model_name: z426.string(),
+  name: z426.string(),
+  pricing: z426.lazy(() => Pricing$inboundSchema),
   provider_name: ProviderName$inboundSchema,
-  quantization: z414.nullable(Quantization$inboundSchema),
+  quantization: z426.nullable(Quantization$inboundSchema),
   status: EndpointStatus$inboundSchema.optional(),
-  supported_parameters: z414.array(Parameter$inboundSchema),
-  supports_implicit_caching: z414.boolean(),
-  tag: z414.string(),
-  throughput_last_30m: z414.nullable(PercentileStats$inboundSchema),
-  uptime_last_1d: z414.nullable(z414.number()),
-  uptime_last_30m: z414.nullable(z414.number()),
-  uptime_last_5m: z414.nullable(z414.number())
+  supported_parameters: z426.array(Parameter$inboundSchema),
+  supports_implicit_caching: z426.boolean(),
+  supports_voice_cloning: z426.boolean().default(false),
+  tag: z426.string(),
+  throughput_last_30m: z426.nullable(PercentileStats$inboundSchema),
+  uptime_last_1d: z426.nullable(z426.number()),
+  uptime_last_30m: z426.nullable(z426.number()),
+  uptime_last_5m: z426.nullable(z426.number())
 }).transform((v) => {
   return remap(v, {
     "context_length": "contextLength",
@@ -12229,6 +12596,7 @@ var PublicEndpoint$inboundSchema = z414.object({
     "provider_name": "providerName",
     "supported_parameters": "supportedParameters",
     "supports_implicit_caching": "supportsImplicitCaching",
+    "supports_voice_cloning": "supportsVoiceCloning",
     "throughput_last_30m": "throughputLast30m",
     "uptime_last_1d": "uptimeLast1d",
     "uptime_last_30m": "uptimeLast30m",
@@ -12237,12 +12605,12 @@ var PublicEndpoint$inboundSchema = z414.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/listendpointsresponse.js
-var Architecture$inboundSchema = z415.object({
-  input_modalities: z415.array(InputModality$inboundSchema),
-  instruct_type: z415.nullable(InstructType$inboundSchema),
-  modality: z415.nullable(z415.string()),
-  output_modalities: z415.array(OutputModality$inboundSchema),
-  tokenizer: z415.nullable(ModelGroup$inboundSchema)
+var Architecture$inboundSchema = z427.object({
+  input_modalities: z427.array(InputModality$inboundSchema),
+  instruct_type: z427.nullable(InstructType$inboundSchema),
+  modality: z427.nullable(z427.string()),
+  output_modalities: z427.array(OutputModality$inboundSchema),
+  tokenizer: z427.nullable(ModelGroup$inboundSchema)
 }).transform((v) => {
   return remap(v, {
     "input_modalities": "inputModalities",
@@ -12250,20 +12618,20 @@ var Architecture$inboundSchema = z415.object({
     "output_modalities": "outputModalities"
   });
 });
-var ListEndpointsResponse$inboundSchema = z415.object({
-  architecture: z415.lazy(() => Architecture$inboundSchema),
-  created: z415.int(),
-  description: z415.string(),
-  endpoints: z415.array(PublicEndpoint$inboundSchema),
-  id: z415.string(),
-  name: z415.string()
+var ListEndpointsResponse$inboundSchema = z427.object({
+  architecture: z427.lazy(() => Architecture$inboundSchema),
+  created: z427.int(),
+  description: z427.string(),
+  endpoints: z427.array(PublicEndpoint$inboundSchema),
+  id: z427.string(),
+  name: z427.string()
 });
 
 // node_modules/@openrouter/sdk/esm/models/listguardrailsresponse.js
-var z416 = __toESM(require("zod/v4"), 1);
-var ListGuardrailsResponse$inboundSchema = z416.object({
-  data: z416.array(Guardrail$inboundSchema),
-  total_count: z416.int()
+var z428 = __toESM(require("zod/v4"), 1);
+var ListGuardrailsResponse$inboundSchema = z428.object({
+  data: z428.array(Guardrail$inboundSchema),
+  total_count: z428.int()
 }).transform((v) => {
   return remap(v, {
     "total_count": "totalCount"
@@ -12271,10 +12639,10 @@ var ListGuardrailsResponse$inboundSchema = z416.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/listkeyassignmentsresponse.js
-var z417 = __toESM(require("zod/v4"), 1);
-var ListKeyAssignmentsResponse$inboundSchema = z417.object({
-  data: z417.array(KeyAssignment$inboundSchema),
-  total_count: z417.int()
+var z429 = __toESM(require("zod/v4"), 1);
+var ListKeyAssignmentsResponse$inboundSchema = z429.object({
+  data: z429.array(KeyAssignment$inboundSchema),
+  total_count: z429.int()
 }).transform((v) => {
   return remap(v, {
     "total_count": "totalCount"
@@ -12282,17 +12650,17 @@ var ListKeyAssignmentsResponse$inboundSchema = z417.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/listmemberassignmentsresponse.js
-var z419 = __toESM(require("zod/v4"), 1);
+var z431 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/memberassignment.js
-var z418 = __toESM(require("zod/v4"), 1);
-var MemberAssignment$inboundSchema = z418.object({
-  assigned_by: z418.nullable(z418.string()),
-  created_at: z418.string(),
-  guardrail_id: z418.string(),
-  id: z418.string(),
-  organization_id: z418.string(),
-  user_id: z418.string()
+var z430 = __toESM(require("zod/v4"), 1);
+var MemberAssignment$inboundSchema = z430.object({
+  assigned_by: z430.nullable(z430.string()),
+  created_at: z430.string(),
+  guardrail_id: z430.string(),
+  id: z430.string(),
+  organization_id: z430.string(),
+  user_id: z430.string()
 }).transform((v) => {
   return remap(v, {
     "assigned_by": "assignedBy",
@@ -12304,9 +12672,9 @@ var MemberAssignment$inboundSchema = z418.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/listmemberassignmentsresponse.js
-var ListMemberAssignmentsResponse$inboundSchema = z419.object({
-  data: z419.array(MemberAssignment$inboundSchema),
-  total_count: z419.int()
+var ListMemberAssignmentsResponse$inboundSchema = z431.object({
+  data: z431.array(MemberAssignment$inboundSchema),
+  total_count: z431.int()
 }).transform((v) => {
   return remap(v, {
     "total_count": "totalCount"
@@ -12314,10 +12682,10 @@ var ListMemberAssignmentsResponse$inboundSchema = z419.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/listobservabilitydestinationsresponse.js
-var z420 = __toESM(require("zod/v4"), 1);
-var ListObservabilityDestinationsResponse$inboundSchema = z420.object({
-  data: z420.array(ObservabilityDestination$inboundSchema),
-  total_count: z420.int()
+var z432 = __toESM(require("zod/v4"), 1);
+var ListObservabilityDestinationsResponse$inboundSchema = z432.object({
+  data: z432.array(ObservabilityDestination$inboundSchema),
+  total_count: z432.int()
 }).transform((v) => {
   return remap(v, {
     "total_count": "totalCount"
@@ -12325,22 +12693,22 @@ var ListObservabilityDestinationsResponse$inboundSchema = z420.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/listpresetsresponse.js
-var z422 = __toESM(require("zod/v4"), 1);
+var z434 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/preset.js
-var z421 = __toESM(require("zod/v4"), 1);
-var Preset$inboundSchema = z421.object({
-  created_at: z421.string(),
-  creator_user_id: z421.nullable(z421.string()),
-  description: z421.nullable(z421.string()),
-  designated_version_id: z421.nullable(z421.string()),
-  id: z421.string(),
-  name: z421.string(),
-  slug: z421.string(),
+var z433 = __toESM(require("zod/v4"), 1);
+var Preset$inboundSchema = z433.object({
+  created_at: z433.string(),
+  creator_user_id: z433.nullable(z433.string()),
+  description: z433.nullable(z433.string()),
+  designated_version_id: z433.nullable(z433.string()),
+  id: z433.string(),
+  name: z433.string(),
+  slug: z433.string(),
   status: PresetStatus$inboundSchema,
-  status_updated_at: z421.nullable(z421.string()),
-  updated_at: z421.string(),
-  workspace_id: z421.nullable(z421.string())
+  status_updated_at: z433.nullable(z433.string()),
+  updated_at: z433.string(),
+  workspace_id: z433.nullable(z433.string())
 }).transform((v) => {
   return remap(v, {
     "created_at": "createdAt",
@@ -12353,9 +12721,9 @@ var Preset$inboundSchema = z421.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/listpresetsresponse.js
-var ListPresetsResponse$inboundSchema = z422.object({
-  data: z422.array(Preset$inboundSchema),
-  total_count: z422.int()
+var ListPresetsResponse$inboundSchema = z434.object({
+  data: z434.array(Preset$inboundSchema),
+  total_count: z434.int()
 }).transform((v) => {
   return remap(v, {
     "total_count": "totalCount"
@@ -12363,10 +12731,10 @@ var ListPresetsResponse$inboundSchema = z422.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/listpresetversionsresponse.js
-var z423 = __toESM(require("zod/v4"), 1);
-var ListPresetVersionsResponse$inboundSchema = z423.object({
-  data: z423.array(z423.nullable(PresetDesignatedVersion$inboundSchema)),
-  total_count: z423.int()
+var z435 = __toESM(require("zod/v4"), 1);
+var ListPresetVersionsResponse$inboundSchema = z435.object({
+  data: z435.array(z435.nullable(PresetDesignatedVersion$inboundSchema)),
+  total_count: z435.int()
 }).transform((v) => {
   return remap(v, {
     "total_count": "totalCount"
@@ -12374,10 +12742,10 @@ var ListPresetVersionsResponse$inboundSchema = z423.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/listscimgroupmappingsresponse.js
-var z424 = __toESM(require("zod/v4"), 1);
-var ListScimGroupMappingsResponse$inboundSchema = z424.object({
-  data: z424.array(ScimGroupMapping$inboundSchema),
-  total_count: z424.int()
+var z436 = __toESM(require("zod/v4"), 1);
+var ListScimGroupMappingsResponse$inboundSchema = z436.object({
+  data: z436.array(ScimGroupMapping$inboundSchema),
+  total_count: z436.int()
 }).transform((v) => {
   return remap(v, {
     "total_count": "totalCount"
@@ -12385,17 +12753,17 @@ var ListScimGroupMappingsResponse$inboundSchema = z424.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/listscimgroupsresponse.js
-var z426 = __toESM(require("zod/v4"), 1);
+var z438 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/scimgroup.js
-var z425 = __toESM(require("zod/v4"), 1);
-var ScimGroup$inboundSchema = z425.object({
-  created_at: z425.string(),
-  display_name: z425.string(),
-  external_id: z425.nullable(z425.string()),
-  id: z425.string(),
-  organization_id: z425.string(),
-  updated_at: z425.string()
+var z437 = __toESM(require("zod/v4"), 1);
+var ScimGroup$inboundSchema = z437.object({
+  created_at: z437.string(),
+  display_name: z437.string(),
+  external_id: z437.nullable(z437.string()),
+  id: z437.string(),
+  organization_id: z437.string(),
+  updated_at: z437.string()
 }).transform((v) => {
   return remap(v, {
     "created_at": "createdAt",
@@ -12407,9 +12775,9 @@ var ScimGroup$inboundSchema = z425.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/listscimgroupsresponse.js
-var ListScimGroupsResponse$inboundSchema = z426.object({
-  data: z426.array(ScimGroup$inboundSchema),
-  total_count: z426.int()
+var ListScimGroupsResponse$inboundSchema = z438.object({
+  data: z438.array(ScimGroup$inboundSchema),
+  total_count: z438.int()
 }).transform((v) => {
   return remap(v, {
     "total_count": "totalCount"
@@ -12417,37 +12785,10 @@ var ListScimGroupsResponse$inboundSchema = z426.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/listworkspacebudgetsresponse.js
-var z428 = __toESM(require("zod/v4"), 1);
-
-// node_modules/@openrouter/sdk/esm/models/workspacebudget.js
-var z427 = __toESM(require("zod/v4"), 1);
-var ResetInterval = {
-  Daily: "daily",
-  Weekly: "weekly",
-  Monthly: "monthly"
-};
-var ResetInterval$inboundSchema = inboundSchema(ResetInterval);
-var WorkspaceBudget$inboundSchema = z427.object({
-  created_at: z427.string(),
-  id: z427.string(),
-  limit_usd: z427.number(),
-  reset_interval: z427.nullable(ResetInterval$inboundSchema),
-  updated_at: z427.string(),
-  workspace_id: z427.string()
-}).transform((v) => {
-  return remap(v, {
-    "created_at": "createdAt",
-    "limit_usd": "limitUsd",
-    "reset_interval": "resetInterval",
-    "updated_at": "updatedAt",
-    "workspace_id": "workspaceId"
-  });
-});
-
-// node_modules/@openrouter/sdk/esm/models/listworkspacebudgetsresponse.js
-var ListWorkspaceBudgetsResponse$inboundSchema = z428.object({
-  data: z428.array(WorkspaceBudget$inboundSchema),
-  include_byok_in_budgets: z428.boolean().optional()
+var z439 = __toESM(require("zod/v4"), 1);
+var ListWorkspaceBudgetsResponse$inboundSchema = z439.object({
+  data: z439.array(WorkspaceBudget$inboundSchema),
+  include_byok_in_budgets: z439.boolean().optional()
 }).transform((v) => {
   return remap(v, {
     "include_byok_in_budgets": "includeByokInBudgets"
@@ -12455,10 +12796,10 @@ var ListWorkspaceBudgetsResponse$inboundSchema = z428.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/listworkspacemembersresponse.js
-var z429 = __toESM(require("zod/v4"), 1);
-var ListWorkspaceMembersResponse$inboundSchema = z429.object({
-  data: z429.array(WorkspaceMember$inboundSchema),
-  total_count: z429.int()
+var z440 = __toESM(require("zod/v4"), 1);
+var ListWorkspaceMembersResponse$inboundSchema = z440.object({
+  data: z440.array(WorkspaceMember$inboundSchema),
+  total_count: z440.int()
 }).transform((v) => {
   return remap(v, {
     "total_count": "totalCount"
@@ -12466,10 +12807,10 @@ var ListWorkspaceMembersResponse$inboundSchema = z429.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/listworkspacesresponse.js
-var z430 = __toESM(require("zod/v4"), 1);
-var ListWorkspacesResponse$inboundSchema = z430.object({
-  data: z430.array(Workspace$inboundSchema),
-  total_count: z430.int()
+var z441 = __toESM(require("zod/v4"), 1);
+var ListWorkspacesResponse$inboundSchema = z441.object({
+  data: z441.array(Workspace$inboundSchema),
+  total_count: z441.int()
 }).transform((v) => {
   return remap(v, {
     "total_count": "totalCount"
@@ -12477,11 +12818,23 @@ var ListWorkspacesResponse$inboundSchema = z430.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/messagesadvisortoolresultblock.js
-var z431 = __toESM(require("zod/v4"), 1);
-var MessagesAdvisorToolResultBlock$outboundSchema = z431.object({
-  content: z431.record(z431.string(), z431.any()),
-  toolUseId: z431.string(),
-  type: z431.literal("advisor_tool_result")
+var z442 = __toESM(require("zod/v4"), 1);
+var MessagesAdvisorToolResultBlock$outboundSchema = z442.object({
+  content: z442.record(z442.string(), z442.any()),
+  toolUseId: z442.string(),
+  type: z442.literal("advisor_tool_result")
+}).transform((v) => {
+  return remap(v, {
+    toolUseId: "tool_use_id"
+  });
+});
+
+// node_modules/@openrouter/sdk/esm/models/messagesbashtoolresultblock.js
+var z443 = __toESM(require("zod/v4"), 1);
+var MessagesBashToolResultBlock$outboundSchema = z443.object({
+  content: z443.record(z443.string(), z443.any()),
+  toolUseId: z443.string(),
+  type: z443.literal("openrouter_bash_tool_result")
 }).transform((v) => {
   return remap(v, {
     toolUseId: "tool_use_id"
@@ -12489,10 +12842,10 @@ var MessagesAdvisorToolResultBlock$outboundSchema = z431.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/messagesfallbackparam.js
-var z432 = __toESM(require("zod/v4"), 1);
-var MessagesFallbackParam$outboundSchema = z432.object({
-  model: z432.string(),
-  additionalProperties: z432.record(z432.string(), z432.any()).optional()
+var z444 = __toESM(require("zod/v4"), 1);
+var MessagesFallbackParam$outboundSchema = z444.object({
+  model: z444.string(),
+  additionalProperties: z444.record(z444.string(), z444.any()).optional()
 }).transform((v) => {
   return {
     ...v.additionalProperties,
@@ -12503,44 +12856,56 @@ var MessagesFallbackParam$outboundSchema = z432.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/messagesmessageparam.js
-var z435 = __toESM(require("zod/v4"), 1);
+var z448 = __toESM(require("zod/v4"), 1);
+
+// node_modules/@openrouter/sdk/esm/models/messagesshelltoolresultblock.js
+var z445 = __toESM(require("zod/v4"), 1);
+var MessagesShellToolResultBlock$outboundSchema = z445.object({
+  content: z445.record(z445.string(), z445.any()),
+  toolUseId: z445.string(),
+  type: z445.literal("openrouter_shell_tool_result")
+}).transform((v) => {
+  return remap(v, {
+    toolUseId: "tool_use_id"
+  });
+});
 
 // node_modules/@openrouter/sdk/esm/models/messagestooladditionblock.js
-var z433 = __toESM(require("zod/v4"), 1);
-var MessagesToolAdditionBlockToolMcpToolsetReference$outboundSchema = z433.object({
-  serverName: z433.string(),
-  type: z433.literal("mcp_toolset_reference")
+var z446 = __toESM(require("zod/v4"), 1);
+var MessagesToolAdditionBlockToolMcpToolsetReference$outboundSchema = z446.object({
+  serverName: z446.string(),
+  type: z446.literal("mcp_toolset_reference")
 }).transform((v) => {
   return remap(v, {
     serverName: "server_name"
   });
 });
-var MessagesToolAdditionBlockToolMcpToolReference$outboundSchema = z433.object({
-  name: z433.string(),
-  serverName: z433.string(),
-  type: z433.literal("mcp_tool_reference")
+var MessagesToolAdditionBlockToolMcpToolReference$outboundSchema = z446.object({
+  name: z446.string(),
+  serverName: z446.string(),
+  type: z446.literal("mcp_tool_reference")
 }).transform((v) => {
   return remap(v, {
     serverName: "server_name"
   });
 });
-var MessagesToolAdditionBlockToolToolReference$outboundSchema = z433.object({
-  name: z433.string(),
-  type: z433.literal("tool_reference")
+var MessagesToolAdditionBlockToolToolReference$outboundSchema = z446.object({
+  name: z446.string(),
+  type: z446.literal("tool_reference")
 });
-var MessagesToolAdditionBlockToolUnion$outboundSchema = z433.union([
-  z433.lazy(() => MessagesToolAdditionBlockToolToolReference$outboundSchema),
-  z433.lazy(() => MessagesToolAdditionBlockToolMcpToolReference$outboundSchema),
-  z433.lazy(() => MessagesToolAdditionBlockToolMcpToolsetReference$outboundSchema)
+var MessagesToolAdditionBlockToolUnion$outboundSchema = z446.union([
+  z446.lazy(() => MessagesToolAdditionBlockToolToolReference$outboundSchema),
+  z446.lazy(() => MessagesToolAdditionBlockToolMcpToolReference$outboundSchema),
+  z446.lazy(() => MessagesToolAdditionBlockToolMcpToolsetReference$outboundSchema)
 ]);
-var MessagesToolAdditionBlock$outboundSchema = z433.object({
+var MessagesToolAdditionBlock$outboundSchema = z446.object({
   cacheControl: AnthropicCacheControlDirective$outboundSchema.optional(),
-  tool: z433.union([
-    z433.lazy(() => MessagesToolAdditionBlockToolToolReference$outboundSchema),
-    z433.lazy(() => MessagesToolAdditionBlockToolMcpToolReference$outboundSchema),
-    z433.lazy(() => MessagesToolAdditionBlockToolMcpToolsetReference$outboundSchema)
+  tool: z446.union([
+    z446.lazy(() => MessagesToolAdditionBlockToolToolReference$outboundSchema),
+    z446.lazy(() => MessagesToolAdditionBlockToolMcpToolReference$outboundSchema),
+    z446.lazy(() => MessagesToolAdditionBlockToolMcpToolsetReference$outboundSchema)
   ]),
-  type: z433.literal("tool_addition")
+  type: z446.literal("tool_addition")
 }).transform((v) => {
   return remap(v, {
     cacheControl: "cache_control"
@@ -12548,41 +12913,41 @@ var MessagesToolAdditionBlock$outboundSchema = z433.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/messagestoolremovalblock.js
-var z434 = __toESM(require("zod/v4"), 1);
-var MessagesToolRemovalBlockToolMcpToolsetReference$outboundSchema = z434.object({
-  serverName: z434.string(),
-  type: z434.literal("mcp_toolset_reference")
+var z447 = __toESM(require("zod/v4"), 1);
+var MessagesToolRemovalBlockToolMcpToolsetReference$outboundSchema = z447.object({
+  serverName: z447.string(),
+  type: z447.literal("mcp_toolset_reference")
 }).transform((v) => {
   return remap(v, {
     serverName: "server_name"
   });
 });
-var MessagesToolRemovalBlockToolMcpToolReference$outboundSchema = z434.object({
-  name: z434.string(),
-  serverName: z434.string(),
-  type: z434.literal("mcp_tool_reference")
+var MessagesToolRemovalBlockToolMcpToolReference$outboundSchema = z447.object({
+  name: z447.string(),
+  serverName: z447.string(),
+  type: z447.literal("mcp_tool_reference")
 }).transform((v) => {
   return remap(v, {
     serverName: "server_name"
   });
 });
-var MessagesToolRemovalBlockToolToolReference$outboundSchema = z434.object({
-  name: z434.string(),
-  type: z434.literal("tool_reference")
+var MessagesToolRemovalBlockToolToolReference$outboundSchema = z447.object({
+  name: z447.string(),
+  type: z447.literal("tool_reference")
 });
-var MessagesToolRemovalBlockToolUnion$outboundSchema = z434.union([
-  z434.lazy(() => MessagesToolRemovalBlockToolToolReference$outboundSchema),
-  z434.lazy(() => MessagesToolRemovalBlockToolMcpToolReference$outboundSchema),
-  z434.lazy(() => MessagesToolRemovalBlockToolMcpToolsetReference$outboundSchema)
+var MessagesToolRemovalBlockToolUnion$outboundSchema = z447.union([
+  z447.lazy(() => MessagesToolRemovalBlockToolToolReference$outboundSchema),
+  z447.lazy(() => MessagesToolRemovalBlockToolMcpToolReference$outboundSchema),
+  z447.lazy(() => MessagesToolRemovalBlockToolMcpToolsetReference$outboundSchema)
 ]);
-var MessagesToolRemovalBlock$outboundSchema = z434.object({
+var MessagesToolRemovalBlock$outboundSchema = z447.object({
   cacheControl: AnthropicCacheControlDirective$outboundSchema.optional(),
-  tool: z434.union([
-    z434.lazy(() => MessagesToolRemovalBlockToolToolReference$outboundSchema),
-    z434.lazy(() => MessagesToolRemovalBlockToolMcpToolReference$outboundSchema),
-    z434.lazy(() => MessagesToolRemovalBlockToolMcpToolsetReference$outboundSchema)
+  tool: z447.union([
+    z447.lazy(() => MessagesToolRemovalBlockToolToolReference$outboundSchema),
+    z447.lazy(() => MessagesToolRemovalBlockToolMcpToolReference$outboundSchema),
+    z447.lazy(() => MessagesToolRemovalBlockToolMcpToolsetReference$outboundSchema)
   ]),
-  type: z434.literal("tool_removal")
+  type: z447.literal("tool_removal")
 }).transform((v) => {
   return remap(v, {
     cacheControl: "cache_control"
@@ -12605,11 +12970,11 @@ var MessagesMessageParamRole = {
   Assistant: "assistant",
   System: "system"
 };
-var ContentCompaction$outboundSchema = z435.object({
+var ContentCompaction$outboundSchema = z448.object({
   cacheControl: AnthropicCacheControlDirective$outboundSchema.optional(),
-  content: z435.nullable(z435.string()),
-  encryptedContent: z435.nullable(z435.string()).optional(),
-  type: z435.literal("compaction")
+  content: z448.nullable(z448.string()),
+  encryptedContent: z448.nullable(z448.string()).optional(),
+  type: z448.literal("compaction")
 }).transform((v) => {
   return remap(v, {
     cacheControl: "cache_control",
@@ -12617,8 +12982,8 @@ var ContentCompaction$outboundSchema = z435.object({
   });
 });
 var ErrorCode$outboundSchema = outboundSchema(ErrorCode);
-var TypeWebSearchToolResultError$outboundSchema = z435.enum(TypeWebSearchToolResultError);
-var ContentWebSearchToolResultError$outboundSchema = z435.object({
+var TypeWebSearchToolResultError$outboundSchema = z448.enum(TypeWebSearchToolResultError);
+var ContentWebSearchToolResultError$outboundSchema = z448.object({
   errorCode: ErrorCode$outboundSchema,
   type: TypeWebSearchToolResultError$outboundSchema
 }).transform((v) => {
@@ -12626,84 +12991,84 @@ var ContentWebSearchToolResultError$outboundSchema = z435.object({
     errorCode: "error_code"
   });
 });
-var MessagesMessageParamContentUnion3$outboundSchema = z435.union([
-  z435.lazy(() => ContentWebSearchToolResultError$outboundSchema),
-  z435.array(AnthropicWebSearchResultBlockParam$outboundSchema)
+var MessagesMessageParamContentUnion3$outboundSchema = z448.union([
+  z448.lazy(() => ContentWebSearchToolResultError$outboundSchema),
+  z448.array(AnthropicWebSearchResultBlockParam$outboundSchema)
 ]);
-var ContentWebSearchToolResult$outboundSchema = z435.object({
+var ContentWebSearchToolResult$outboundSchema = z448.object({
   cacheControl: AnthropicCacheControlDirective$outboundSchema.optional(),
-  content: z435.union([
-    z435.lazy(() => ContentWebSearchToolResultError$outboundSchema),
-    z435.array(AnthropicWebSearchResultBlockParam$outboundSchema)
+  content: z448.union([
+    z448.lazy(() => ContentWebSearchToolResultError$outboundSchema),
+    z448.array(AnthropicWebSearchResultBlockParam$outboundSchema)
   ]),
-  toolUseId: z435.string(),
-  type: z435.literal("web_search_tool_result")
+  toolUseId: z448.string(),
+  type: z448.literal("web_search_tool_result")
 }).transform((v) => {
   return remap(v, {
     cacheControl: "cache_control",
     toolUseId: "tool_use_id"
   });
 });
-var ContentServerToolUse$outboundSchema = z435.object({
+var ContentServerToolUse$outboundSchema = z448.object({
   cacheControl: AnthropicCacheControlDirective$outboundSchema.optional(),
-  id: z435.string(),
-  input: z435.any().optional(),
-  name: z435.string(),
-  type: z435.literal("server_tool_use")
+  id: z448.string(),
+  input: z448.any().optional(),
+  name: z448.string(),
+  type: z448.literal("server_tool_use")
 }).transform((v) => {
   return remap(v, {
     cacheControl: "cache_control"
   });
 });
-var ContentRedactedThinking$outboundSchema = z435.object({
-  data: z435.string(),
-  type: z435.literal("redacted_thinking")
+var ContentRedactedThinking$outboundSchema = z448.object({
+  data: z448.string(),
+  type: z448.literal("redacted_thinking")
 });
-var ContentThinking$outboundSchema = z435.object({
-  signature: z435.string(),
-  thinking: z435.string(),
-  type: z435.literal("thinking")
+var ContentThinking$outboundSchema = z448.object({
+  signature: z448.string(),
+  thinking: z448.string(),
+  type: z448.literal("thinking")
 });
-var ContentToolReference$outboundSchema = z435.object({
-  toolName: z435.string(),
-  type: z435.literal("tool_reference")
+var ContentToolReference$outboundSchema = z448.object({
+  toolName: z448.string(),
+  type: z448.literal("tool_reference")
 }).transform((v) => {
   return remap(v, {
     toolName: "tool_name"
   });
 });
-var MessagesMessageParamContentUnion1$outboundSchema = z435.union([
+var MessagesMessageParamContentUnion1$outboundSchema = z448.union([
   AnthropicTextBlockParam$outboundSchema,
   AnthropicImageBlockParam$outboundSchema,
-  z435.lazy(() => ContentToolReference$outboundSchema),
+  z448.lazy(() => ContentToolReference$outboundSchema),
   AnthropicSearchResultBlockParam$outboundSchema,
   AnthropicDocumentBlockParam$outboundSchema
 ]);
-var MessagesMessageParamContentUnion2$outboundSchema = z435.union([
-  z435.string(),
-  z435.array(z435.union([
+var MessagesMessageParamContentUnion2$outboundSchema = z448.union([
+  z448.string(),
+  z448.array(z448.union([
     AnthropicTextBlockParam$outboundSchema,
     AnthropicImageBlockParam$outboundSchema,
-    z435.lazy(() => ContentToolReference$outboundSchema),
+    z448.lazy(() => ContentToolReference$outboundSchema),
     AnthropicSearchResultBlockParam$outboundSchema,
     AnthropicDocumentBlockParam$outboundSchema
   ]))
 ]);
-var ContentToolResult$outboundSchema = z435.object({
+var ContentToolResult$outboundSchema = z448.object({
   cacheControl: AnthropicCacheControlDirective$outboundSchema.optional(),
-  content: z435.union([
-    z435.string(),
-    z435.array(z435.union([
+  content: z448.union([
+    z448.string(),
+    z448.array(z448.union([
       AnthropicTextBlockParam$outboundSchema,
       AnthropicImageBlockParam$outboundSchema,
-      z435.lazy(() => ContentToolReference$outboundSchema),
+      z448.lazy(() => ContentToolReference$outboundSchema),
       AnthropicSearchResultBlockParam$outboundSchema,
       AnthropicDocumentBlockParam$outboundSchema
     ]))
   ]).optional(),
-  isError: z435.boolean().optional(),
-  toolUseId: z435.string(),
-  type: z435.literal("tool_result")
+  isError: z448.boolean().optional(),
+  toolUseId: z448.string(),
+  type: z448.literal("tool_result")
 }).transform((v) => {
   return remap(v, {
     cacheControl: "cache_control",
@@ -12711,78 +13076,84 @@ var ContentToolResult$outboundSchema = z435.object({
     toolUseId: "tool_use_id"
   });
 });
-var ContentToolUse$outboundSchema = z435.object({
+var ContentToolUse$outboundSchema = z448.object({
   cacheControl: AnthropicCacheControlDirective$outboundSchema.optional(),
-  id: z435.string(),
-  input: z435.any().optional(),
-  name: z435.string(),
-  type: z435.literal("tool_use")
+  id: z448.string(),
+  input: z448.any().optional(),
+  name: z448.string(),
+  type: z448.literal("tool_use")
 }).transform((v) => {
   return remap(v, {
     cacheControl: "cache_control"
   });
 });
-var MessagesMessageParamContentUnion4$outboundSchema = z435.union([
+var MessagesMessageParamContentUnion4$outboundSchema = z448.union([
   AnthropicTextBlockParam$outboundSchema,
   AnthropicImageBlockParam$outboundSchema,
   AnthropicDocumentBlockParam$outboundSchema,
-  z435.lazy(() => ContentToolUse$outboundSchema),
-  z435.lazy(() => ContentToolResult$outboundSchema),
-  z435.lazy(() => ContentThinking$outboundSchema),
-  z435.lazy(() => ContentRedactedThinking$outboundSchema),
-  z435.lazy(() => ContentServerToolUse$outboundSchema),
-  z435.lazy(() => ContentWebSearchToolResult$outboundSchema),
+  z448.lazy(() => ContentToolUse$outboundSchema),
+  z448.lazy(() => ContentToolResult$outboundSchema),
+  z448.lazy(() => ContentThinking$outboundSchema),
+  z448.lazy(() => ContentRedactedThinking$outboundSchema),
+  z448.lazy(() => ContentServerToolUse$outboundSchema),
+  z448.lazy(() => ContentWebSearchToolResult$outboundSchema),
   AnthropicSearchResultBlockParam$outboundSchema,
-  z435.lazy(() => ContentCompaction$outboundSchema),
+  z448.lazy(() => ContentCompaction$outboundSchema),
   MessagesAdvisorToolResultBlock$outboundSchema,
   MessagesToolAdditionBlock$outboundSchema,
-  MessagesToolRemovalBlock$outboundSchema
+  MessagesToolRemovalBlock$outboundSchema,
+  MessagesShellToolResultBlock$outboundSchema,
+  MessagesBashToolResultBlock$outboundSchema
 ]);
-var MessagesMessageParamContentUnion5$outboundSchema = z435.union([
-  z435.string(),
-  z435.array(z435.union([
+var MessagesMessageParamContentUnion5$outboundSchema = z448.union([
+  z448.string(),
+  z448.array(z448.union([
     AnthropicTextBlockParam$outboundSchema,
     AnthropicImageBlockParam$outboundSchema,
     AnthropicDocumentBlockParam$outboundSchema,
-    z435.lazy(() => ContentToolUse$outboundSchema),
-    z435.lazy(() => ContentToolResult$outboundSchema),
-    z435.lazy(() => ContentThinking$outboundSchema),
-    z435.lazy(() => ContentRedactedThinking$outboundSchema),
-    z435.lazy(() => ContentServerToolUse$outboundSchema),
-    z435.lazy(() => ContentWebSearchToolResult$outboundSchema),
+    z448.lazy(() => ContentToolUse$outboundSchema),
+    z448.lazy(() => ContentToolResult$outboundSchema),
+    z448.lazy(() => ContentThinking$outboundSchema),
+    z448.lazy(() => ContentRedactedThinking$outboundSchema),
+    z448.lazy(() => ContentServerToolUse$outboundSchema),
+    z448.lazy(() => ContentWebSearchToolResult$outboundSchema),
     AnthropicSearchResultBlockParam$outboundSchema,
-    z435.lazy(() => ContentCompaction$outboundSchema),
+    z448.lazy(() => ContentCompaction$outboundSchema),
     MessagesAdvisorToolResultBlock$outboundSchema,
     MessagesToolAdditionBlock$outboundSchema,
-    MessagesToolRemovalBlock$outboundSchema
+    MessagesToolRemovalBlock$outboundSchema,
+    MessagesShellToolResultBlock$outboundSchema,
+    MessagesBashToolResultBlock$outboundSchema
   ]))
 ]);
 var MessagesMessageParamRole$outboundSchema = outboundSchema(MessagesMessageParamRole);
-var MessagesMessageParam$outboundSchema = z435.object({
-  content: z435.union([
-    z435.string(),
-    z435.array(z435.union([
+var MessagesMessageParam$outboundSchema = z448.object({
+  content: z448.union([
+    z448.string(),
+    z448.array(z448.union([
       AnthropicTextBlockParam$outboundSchema,
       AnthropicImageBlockParam$outboundSchema,
       AnthropicDocumentBlockParam$outboundSchema,
-      z435.lazy(() => ContentToolUse$outboundSchema),
-      z435.lazy(() => ContentToolResult$outboundSchema),
-      z435.lazy(() => ContentThinking$outboundSchema),
-      z435.lazy(() => ContentRedactedThinking$outboundSchema),
-      z435.lazy(() => ContentServerToolUse$outboundSchema),
-      z435.lazy(() => ContentWebSearchToolResult$outboundSchema),
+      z448.lazy(() => ContentToolUse$outboundSchema),
+      z448.lazy(() => ContentToolResult$outboundSchema),
+      z448.lazy(() => ContentThinking$outboundSchema),
+      z448.lazy(() => ContentRedactedThinking$outboundSchema),
+      z448.lazy(() => ContentServerToolUse$outboundSchema),
+      z448.lazy(() => ContentWebSearchToolResult$outboundSchema),
       AnthropicSearchResultBlockParam$outboundSchema,
-      z435.lazy(() => ContentCompaction$outboundSchema),
+      z448.lazy(() => ContentCompaction$outboundSchema),
       MessagesAdvisorToolResultBlock$outboundSchema,
       MessagesToolAdditionBlock$outboundSchema,
-      MessagesToolRemovalBlock$outboundSchema
+      MessagesToolRemovalBlock$outboundSchema,
+      MessagesShellToolResultBlock$outboundSchema,
+      MessagesBashToolResultBlock$outboundSchema
     ]))
   ]),
   role: MessagesMessageParamRole$outboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/messagesoutputconfig.js
-var z436 = __toESM(require("zod/v4"), 1);
+var z449 = __toESM(require("zod/v4"), 1);
 var MessagesOutputConfigEffort = {
   Low: "low",
   Medium: "medium",
@@ -12797,21 +13168,21 @@ var TypeTokens = {
   Tokens: "tokens"
 };
 var MessagesOutputConfigEffort$outboundSchema = outboundSchema(MessagesOutputConfigEffort);
-var MessagesOutputConfigTypeJSONSchema$outboundSchema = z436.enum(MessagesOutputConfigTypeJSONSchema);
-var MessagesOutputConfigFormat$outboundSchema = z436.object({
-  schema: z436.record(z436.string(), z436.any()),
+var MessagesOutputConfigTypeJSONSchema$outboundSchema = z449.enum(MessagesOutputConfigTypeJSONSchema);
+var MessagesOutputConfigFormat$outboundSchema = z449.object({
+  schema: z449.record(z449.string(), z449.any()),
   type: MessagesOutputConfigTypeJSONSchema$outboundSchema
 });
-var TypeTokens$outboundSchema = z436.enum(TypeTokens);
-var TaskBudget$outboundSchema = z436.object({
-  remaining: z436.nullable(z436.int()).optional(),
-  total: z436.int(),
+var TypeTokens$outboundSchema = z449.enum(TypeTokens);
+var TaskBudget$outboundSchema = z449.object({
+  remaining: z449.nullable(z449.int()).optional(),
+  total: z449.int(),
   type: TypeTokens$outboundSchema
 });
-var MessagesOutputConfig$outboundSchema = z436.object({
-  effort: z436.nullable(MessagesOutputConfigEffort$outboundSchema).optional(),
-  format: z436.nullable(z436.lazy(() => MessagesOutputConfigFormat$outboundSchema)).optional(),
-  taskBudget: z436.nullable(z436.lazy(() => TaskBudget$outboundSchema)).optional()
+var MessagesOutputConfig$outboundSchema = z449.object({
+  effort: z449.nullable(MessagesOutputConfigEffort$outboundSchema).optional(),
+  format: z449.nullable(z449.lazy(() => MessagesOutputConfigFormat$outboundSchema)).optional(),
+  taskBudget: z449.nullable(z449.lazy(() => TaskBudget$outboundSchema)).optional()
 }).transform((v) => {
   return remap(v, {
     taskBudget: "task_budget"
@@ -12819,15 +13190,15 @@ var MessagesOutputConfig$outboundSchema = z436.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/messagesrequest.js
-var z438 = __toESM(require("zod/v4"), 1);
+var z451 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/messagessearchmodelsservertool.js
-var z437 = __toESM(require("zod/v4"), 1);
+var z450 = __toESM(require("zod/v4"), 1);
 var MessagesSearchModelsServerToolType = {
   OpenrouterExperimentalSearchModels: "openrouter:experimental__search_models"
 };
-var MessagesSearchModelsServerToolType$outboundSchema = z437.enum(MessagesSearchModelsServerToolType);
-var MessagesSearchModelsServerTool$outboundSchema = z437.object({
+var MessagesSearchModelsServerToolType$outboundSchema = z450.enum(MessagesSearchModelsServerToolType);
+var MessagesSearchModelsServerTool$outboundSchema = z450.object({
   parameters: SearchModelsServerToolConfig$outboundSchema.optional(),
   type: MessagesSearchModelsServerToolType$outboundSchema
 });
@@ -12879,54 +13250,54 @@ var TypeBash20250124 = {
 var ToolTypeCustom = {
   Custom: "custom"
 };
-var EditTypeInputTokens$outboundSchema = z438.enum(EditTypeInputTokens);
-var TriggerInputTokens$outboundSchema = z438.object({
+var EditTypeInputTokens$outboundSchema = z451.enum(EditTypeInputTokens);
+var TriggerInputTokens$outboundSchema = z451.object({
   type: EditTypeInputTokens$outboundSchema,
-  value: z438.int()
+  value: z451.int()
 });
-var EditCompact20260112$outboundSchema = z438.object({
-  instructions: z438.nullable(z438.string()).optional(),
-  pauseAfterCompaction: z438.boolean().optional(),
-  trigger: z438.nullable(z438.lazy(() => TriggerInputTokens$outboundSchema)).optional(),
-  type: z438.literal("compact_20260112")
+var EditCompact20260112$outboundSchema = z451.object({
+  instructions: z451.nullable(z451.string()).optional(),
+  pauseAfterCompaction: z451.boolean().optional(),
+  trigger: z451.nullable(z451.lazy(() => TriggerInputTokens$outboundSchema)).optional(),
+  type: z451.literal("compact_20260112")
 }).transform((v) => {
   return remap(v, {
     pauseAfterCompaction: "pause_after_compaction"
   });
 });
-var KeepEnum$outboundSchema = z438.enum(KeepEnum);
-var KeepType$outboundSchema = z438.enum(KeepType);
-var KeepAll$outboundSchema = z438.object({
+var KeepEnum$outboundSchema = z451.enum(KeepEnum);
+var KeepType$outboundSchema = z451.enum(KeepType);
+var KeepAll$outboundSchema = z451.object({
   type: KeepType$outboundSchema
 });
-var Keep$outboundSchema = z438.union([
+var Keep$outboundSchema = z451.union([
   AnthropicThinkingTurns$outboundSchema,
-  z438.lazy(() => KeepAll$outboundSchema),
+  z451.lazy(() => KeepAll$outboundSchema),
   KeepEnum$outboundSchema
 ]);
-var EditClearThinking20251015$outboundSchema = z438.object({
-  keep: z438.union([
+var EditClearThinking20251015$outboundSchema = z451.object({
+  keep: z451.union([
     AnthropicThinkingTurns$outboundSchema,
-    z438.lazy(() => KeepAll$outboundSchema),
+    z451.lazy(() => KeepAll$outboundSchema),
     KeepEnum$outboundSchema
   ]).optional(),
-  type: z438.literal("clear_thinking_20251015")
+  type: z451.literal("clear_thinking_20251015")
 });
-var ClearToolInputs$outboundSchema = z438.union([z438.boolean(), z438.array(z438.string())]);
-var Trigger$outboundSchema = z438.union([
+var ClearToolInputs$outboundSchema = z451.union([z451.boolean(), z451.array(z451.string())]);
+var Trigger$outboundSchema = z451.union([
   AnthropicInputTokensTrigger$outboundSchema,
   AnthropicToolUsesTrigger$outboundSchema
 ]);
-var EditClearToolUses20250919$outboundSchema = z438.object({
-  clearAtLeast: z438.nullable(AnthropicInputTokensClearAtLeast$outboundSchema).optional(),
-  clearToolInputs: z438.nullable(z438.union([z438.boolean(), z438.array(z438.string())])).optional(),
-  excludeTools: z438.nullable(z438.array(z438.string())).optional(),
+var EditClearToolUses20250919$outboundSchema = z451.object({
+  clearAtLeast: z451.nullable(AnthropicInputTokensClearAtLeast$outboundSchema).optional(),
+  clearToolInputs: z451.nullable(z451.union([z451.boolean(), z451.array(z451.string())])).optional(),
+  excludeTools: z451.nullable(z451.array(z451.string())).optional(),
   keep: AnthropicToolUsesKeep$outboundSchema.optional(),
-  trigger: z438.union([
+  trigger: z451.union([
     AnthropicInputTokensTrigger$outboundSchema,
     AnthropicToolUsesTrigger$outboundSchema
   ]).optional(),
-  type: z438.literal("clear_tool_uses_20250919")
+  type: z451.literal("clear_tool_uses_20250919")
 }).transform((v) => {
   return remap(v, {
     clearAtLeast: "clear_at_least",
@@ -12934,26 +13305,26 @@ var EditClearToolUses20250919$outboundSchema = z438.object({
     excludeTools: "exclude_tools"
   });
 });
-var Edit$outboundSchema = z438.union([
-  z438.lazy(() => EditClearToolUses20250919$outboundSchema),
-  z438.lazy(() => EditClearThinking20251015$outboundSchema),
-  z438.lazy(() => EditCompact20260112$outboundSchema)
+var Edit$outboundSchema = z451.union([
+  z451.lazy(() => EditClearToolUses20250919$outboundSchema),
+  z451.lazy(() => EditClearThinking20251015$outboundSchema),
+  z451.lazy(() => EditCompact20260112$outboundSchema)
 ]);
-var ContextManagement$outboundSchema = z438.object({
-  edits: z438.array(z438.union([
-    z438.lazy(() => EditClearToolUses20250919$outboundSchema),
-    z438.lazy(() => EditClearThinking20251015$outboundSchema),
-    z438.lazy(() => EditCompact20260112$outboundSchema)
+var ContextManagement$outboundSchema = z451.object({
+  edits: z451.array(z451.union([
+    z451.lazy(() => EditClearToolUses20250919$outboundSchema),
+    z451.lazy(() => EditClearThinking20251015$outboundSchema),
+    z451.lazy(() => EditCompact20260112$outboundSchema)
   ])).optional()
 });
-var MessagesRequestMetadata$outboundSchema = z438.object({
-  userId: z438.nullable(z438.string()).optional()
+var MessagesRequestMetadata$outboundSchema = z451.object({
+  userId: z451.nullable(z451.string()).optional()
 }).transform((v) => {
   return remap(v, {
     userId: "user_id"
   });
 });
-var MessagesRequestPlugin$outboundSchema = z438.union([
+var MessagesRequestPlugin$outboundSchema = z451.union([
   AutoBetaRouterPlugin$outboundSchema,
   AutoRouterPlugin$outboundSchema,
   ContextCompressionPlugin$outboundSchema,
@@ -12966,65 +13337,65 @@ var MessagesRequestPlugin$outboundSchema = z438.union([
   WebFetchPlugin$outboundSchema
 ]);
 var Speed$outboundSchema = outboundSchema(Speed);
-var System$outboundSchema = z438.union([z438.string(), z438.array(AnthropicTextBlockParam$outboundSchema)]);
-var ThinkingAdaptive$outboundSchema = z438.object({
-  display: z438.nullable(AnthropicThinkingDisplay$outboundSchema).optional(),
-  type: z438.literal("adaptive")
+var System$outboundSchema = z451.union([z451.string(), z451.array(AnthropicTextBlockParam$outboundSchema)]);
+var ThinkingAdaptive$outboundSchema = z451.object({
+  display: z451.nullable(AnthropicThinkingDisplay$outboundSchema).optional(),
+  type: z451.literal("adaptive")
 });
-var ThinkingDisabled$outboundSchema = z438.object({
-  type: z438.literal("disabled")
+var ThinkingDisabled$outboundSchema = z451.object({
+  type: z451.literal("disabled")
 });
-var ThinkingEnabled$outboundSchema = z438.object({
-  budgetTokens: z438.int(),
-  display: z438.nullable(AnthropicThinkingDisplay$outboundSchema).optional(),
-  type: z438.literal("enabled")
+var ThinkingEnabled$outboundSchema = z451.object({
+  budgetTokens: z451.int(),
+  display: z451.nullable(AnthropicThinkingDisplay$outboundSchema).optional(),
+  type: z451.literal("enabled")
 }).transform((v) => {
   return remap(v, {
     budgetTokens: "budget_tokens"
   });
 });
-var Thinking$outboundSchema = z438.union([
-  z438.lazy(() => ThinkingEnabled$outboundSchema),
-  z438.lazy(() => ThinkingDisabled$outboundSchema),
-  z438.lazy(() => ThinkingAdaptive$outboundSchema)
+var Thinking$outboundSchema = z451.union([
+  z451.lazy(() => ThinkingEnabled$outboundSchema),
+  z451.lazy(() => ThinkingDisabled$outboundSchema),
+  z451.lazy(() => ThinkingAdaptive$outboundSchema)
 ]);
-var ToolChoiceTool$outboundSchema = z438.object({
-  disableParallelToolUse: z438.boolean().optional(),
-  name: z438.string(),
-  type: z438.literal("tool")
+var ToolChoiceTool$outboundSchema = z451.object({
+  disableParallelToolUse: z451.boolean().optional(),
+  name: z451.string(),
+  type: z451.literal("tool")
 }).transform((v) => {
   return remap(v, {
     disableParallelToolUse: "disable_parallel_tool_use"
   });
 });
-var ToolChoiceNone$outboundSchema = z438.object({
-  type: z438.literal("none")
+var ToolChoiceNone$outboundSchema = z451.object({
+  type: z451.literal("none")
 });
-var ToolChoiceAny$outboundSchema = z438.object({
-  disableParallelToolUse: z438.boolean().optional(),
-  type: z438.literal("any")
+var ToolChoiceAny$outboundSchema = z451.object({
+  disableParallelToolUse: z451.boolean().optional(),
+  type: z451.literal("any")
 }).transform((v) => {
   return remap(v, {
     disableParallelToolUse: "disable_parallel_tool_use"
   });
 });
-var ToolChoiceAuto$outboundSchema = z438.object({
-  disableParallelToolUse: z438.boolean().optional(),
-  type: z438.literal("auto")
+var ToolChoiceAuto$outboundSchema = z451.object({
+  disableParallelToolUse: z451.boolean().optional(),
+  type: z451.literal("auto")
 }).transform((v) => {
   return remap(v, {
     disableParallelToolUse: "disable_parallel_tool_use"
   });
 });
-var ToolChoice$outboundSchema = z438.union([
-  z438.lazy(() => ToolChoiceAuto$outboundSchema),
-  z438.lazy(() => ToolChoiceAny$outboundSchema),
-  z438.lazy(() => ToolChoiceNone$outboundSchema),
-  z438.lazy(() => ToolChoiceTool$outboundSchema)
+var ToolChoice$outboundSchema = z451.union([
+  z451.lazy(() => ToolChoiceAuto$outboundSchema),
+  z451.lazy(() => ToolChoiceAny$outboundSchema),
+  z451.lazy(() => ToolChoiceNone$outboundSchema),
+  z451.lazy(() => ToolChoiceTool$outboundSchema)
 ]);
-var MessagesRequestTool$outboundSchema = z438.object({
-  type: z438.string(),
-  additionalProperties: z438.record(z438.string(), z438.any()).optional()
+var MessagesRequestTool$outboundSchema = z451.object({
+  type: z451.string(),
+  additionalProperties: z451.record(z451.string(), z451.any()).optional()
 }).transform((v) => {
   return {
     ...v.additionalProperties,
@@ -13033,15 +13404,15 @@ var MessagesRequestTool$outboundSchema = z438.object({
     })
   };
 });
-var NameAdvisor$outboundSchema = z438.enum(NameAdvisor);
-var TypeAdvisor20260301$outboundSchema = z438.enum(TypeAdvisor20260301);
-var ToolAdvisor20260301$outboundSchema = z438.object({
-  allowedCallers: z438.array(AnthropicAllowedCallers$outboundSchema).optional(),
+var NameAdvisor$outboundSchema = z451.enum(NameAdvisor);
+var TypeAdvisor20260301$outboundSchema = z451.enum(TypeAdvisor20260301);
+var ToolAdvisor20260301$outboundSchema = z451.object({
+  allowedCallers: z451.array(AnthropicAllowedCallers$outboundSchema).optional(),
   cacheControl: AnthropicCacheControlDirective$outboundSchema.optional(),
-  caching: z438.nullable(AnthropicCacheControlDirective$outboundSchema).optional(),
-  deferLoading: z438.boolean().optional(),
-  maxUses: z438.int().optional(),
-  model: z438.string(),
+  caching: z451.nullable(AnthropicCacheControlDirective$outboundSchema).optional(),
+  deferLoading: z451.boolean().optional(),
+  maxUses: z451.int().optional(),
+  model: z451.string(),
   name: NameAdvisor$outboundSchema,
   type: TypeAdvisor20260301$outboundSchema
 }).transform((v) => {
@@ -13052,17 +13423,17 @@ var ToolAdvisor20260301$outboundSchema = z438.object({
     maxUses: "max_uses"
   });
 });
-var NameWebSearch2$outboundSchema = z438.enum(NameWebSearch2);
-var TypeWebSearch20260209$outboundSchema = z438.enum(TypeWebSearch20260209);
-var ToolWebSearch20260209$outboundSchema = z438.object({
-  allowedCallers: z438.array(AnthropicAllowedCallers$outboundSchema).optional(),
-  allowedDomains: z438.nullable(z438.array(z438.string())).optional(),
-  blockedDomains: z438.nullable(z438.array(z438.string())).optional(),
+var NameWebSearch2$outboundSchema = z451.enum(NameWebSearch2);
+var TypeWebSearch20260209$outboundSchema = z451.enum(TypeWebSearch20260209);
+var ToolWebSearch20260209$outboundSchema = z451.object({
+  allowedCallers: z451.array(AnthropicAllowedCallers$outboundSchema).optional(),
+  allowedDomains: z451.nullable(z451.array(z451.string())).optional(),
+  blockedDomains: z451.nullable(z451.array(z451.string())).optional(),
   cacheControl: AnthropicCacheControlDirective$outboundSchema.optional(),
-  maxUses: z438.nullable(z438.int()).optional(),
+  maxUses: z451.nullable(z451.int()).optional(),
   name: NameWebSearch2$outboundSchema,
   type: TypeWebSearch20260209$outboundSchema,
-  userLocation: z438.nullable(AnthropicWebSearchToolUserLocation$outboundSchema).optional()
+  userLocation: z451.nullable(AnthropicWebSearchToolUserLocation$outboundSchema).optional()
 }).transform((v) => {
   return remap(v, {
     allowedCallers: "allowed_callers",
@@ -13073,16 +13444,16 @@ var ToolWebSearch20260209$outboundSchema = z438.object({
     userLocation: "user_location"
   });
 });
-var NameWebSearch1$outboundSchema = z438.enum(NameWebSearch1);
-var TypeWebSearch20250305$outboundSchema = z438.enum(TypeWebSearch20250305);
-var ToolWebSearch20250305$outboundSchema = z438.object({
-  allowedDomains: z438.nullable(z438.array(z438.string())).optional(),
-  blockedDomains: z438.nullable(z438.array(z438.string())).optional(),
+var NameWebSearch1$outboundSchema = z451.enum(NameWebSearch1);
+var TypeWebSearch20250305$outboundSchema = z451.enum(TypeWebSearch20250305);
+var ToolWebSearch20250305$outboundSchema = z451.object({
+  allowedDomains: z451.nullable(z451.array(z451.string())).optional(),
+  blockedDomains: z451.nullable(z451.array(z451.string())).optional(),
   cacheControl: AnthropicCacheControlDirective$outboundSchema.optional(),
-  maxUses: z438.nullable(z438.int()).optional(),
+  maxUses: z451.nullable(z451.int()).optional(),
   name: NameWebSearch1$outboundSchema,
   type: TypeWebSearch20250305$outboundSchema,
-  userLocation: z438.nullable(AnthropicWebSearchToolUserLocation$outboundSchema).optional()
+  userLocation: z451.nullable(AnthropicWebSearchToolUserLocation$outboundSchema).optional()
 }).transform((v) => {
   return remap(v, {
     allowedDomains: "allowed_domains",
@@ -13092,9 +13463,9 @@ var ToolWebSearch20250305$outboundSchema = z438.object({
     userLocation: "user_location"
   });
 });
-var NameStrReplaceEditor$outboundSchema = z438.enum(NameStrReplaceEditor);
-var TypeTextEditor20250124$outboundSchema = z438.enum(TypeTextEditor20250124);
-var ToolTextEditor20250124$outboundSchema = z438.object({
+var NameStrReplaceEditor$outboundSchema = z451.enum(NameStrReplaceEditor);
+var TypeTextEditor20250124$outboundSchema = z451.enum(TypeTextEditor20250124);
+var ToolTextEditor20250124$outboundSchema = z451.object({
   cacheControl: AnthropicCacheControlDirective$outboundSchema.optional(),
   name: NameStrReplaceEditor$outboundSchema,
   type: TypeTextEditor20250124$outboundSchema
@@ -13103,9 +13474,9 @@ var ToolTextEditor20250124$outboundSchema = z438.object({
     cacheControl: "cache_control"
   });
 });
-var NameBash$outboundSchema = z438.enum(NameBash);
-var TypeBash20250124$outboundSchema = z438.enum(TypeBash20250124);
-var ToolBash20250124$outboundSchema = z438.object({
+var NameBash$outboundSchema = z451.enum(NameBash);
+var TypeBash20250124$outboundSchema = z451.enum(TypeBash20250124);
+var ToolBash20250124$outboundSchema = z451.object({
   cacheControl: AnthropicCacheControlDirective$outboundSchema.optional(),
   name: NameBash$outboundSchema,
   type: TypeBash20250124$outboundSchema
@@ -13114,11 +13485,11 @@ var ToolBash20250124$outboundSchema = z438.object({
     cacheControl: "cache_control"
   });
 });
-var InputSchema$outboundSchema = z438.object({
-  properties: z438.any().optional(),
-  required: z438.nullable(z438.array(z438.string())).optional(),
-  type: z438.string().default("object"),
-  additionalProperties: z438.record(z438.string(), z438.any()).optional()
+var InputSchema$outboundSchema = z451.object({
+  properties: z451.any().optional(),
+  required: z451.nullable(z451.array(z451.string())).optional(),
+  type: z451.string().default("object"),
+  additionalProperties: z451.record(z451.string(), z451.any()).optional()
 }).transform((v) => {
   return {
     ...v.additionalProperties,
@@ -13127,13 +13498,13 @@ var InputSchema$outboundSchema = z438.object({
     })
   };
 });
-var ToolTypeCustom$outboundSchema = z438.enum(ToolTypeCustom);
-var ToolCustom$outboundSchema = z438.object({
+var ToolTypeCustom$outboundSchema = z451.enum(ToolTypeCustom);
+var ToolCustom$outboundSchema = z451.object({
   cacheControl: AnthropicCacheControlDirective$outboundSchema.optional(),
-  deferLoading: z438.boolean().optional(),
-  description: z438.string().optional(),
-  inputSchema: z438.lazy(() => InputSchema$outboundSchema),
-  name: z438.string(),
+  deferLoading: z451.boolean().optional(),
+  description: z451.string().optional(),
+  inputSchema: z451.lazy(() => InputSchema$outboundSchema),
+  name: z451.string(),
   type: ToolTypeCustom$outboundSchema.optional()
 }).transform((v) => {
   return remap(v, {
@@ -13142,13 +13513,13 @@ var ToolCustom$outboundSchema = z438.object({
     inputSchema: "input_schema"
   });
 });
-var MessagesRequestToolUnion$outboundSchema = z438.union([
-  z438.lazy(() => ToolAdvisor20260301$outboundSchema),
-  z438.lazy(() => ToolCustom$outboundSchema),
-  z438.lazy(() => ToolBash20250124$outboundSchema),
-  z438.lazy(() => ToolTextEditor20250124$outboundSchema),
-  z438.lazy(() => ToolWebSearch20250305$outboundSchema),
-  z438.lazy(() => ToolWebSearch20260209$outboundSchema),
+var MessagesRequestToolUnion$outboundSchema = z451.union([
+  z451.lazy(() => ToolAdvisor20260301$outboundSchema),
+  z451.lazy(() => ToolCustom$outboundSchema),
+  z451.lazy(() => ToolBash20250124$outboundSchema),
+  z451.lazy(() => ToolTextEditor20250124$outboundSchema),
+  z451.lazy(() => ToolWebSearch20250305$outboundSchema),
+  z451.lazy(() => ToolWebSearch20260209$outboundSchema),
   AnthropicToolSearchToolBm25$outboundSchema,
   AnthropicToolSearchToolRegex$outboundSchema,
   BashServerTool$outboundSchema,
@@ -13157,19 +13528,20 @@ var MessagesRequestToolUnion$outboundSchema = z438.union([
   MessagesSearchModelsServerTool$outboundSchema,
   WebFetchServerTool$outboundSchema,
   OpenRouterWebSearchServerTool$outboundSchema,
-  z438.lazy(() => MessagesRequestTool$outboundSchema)
+  z451.lazy(() => MessagesRequestTool$outboundSchema),
+  ShellServerToolOpenRouter$outboundSchema
 ]);
-var MessagesRequest$outboundSchema = z438.object({
+var MessagesRequest$outboundSchema = z451.object({
   cacheControl: AnthropicCacheControlDirective$outboundSchema.optional(),
-  contextManagement: z438.nullable(z438.lazy(() => ContextManagement$outboundSchema)).optional(),
-  fallbacks: z438.nullable(z438.array(MessagesFallbackParam$outboundSchema)).optional(),
-  maxTokens: z438.int().optional(),
-  messages: z438.nullable(z438.array(MessagesMessageParam$outboundSchema)),
-  metadata: z438.lazy(() => MessagesRequestMetadata$outboundSchema).optional(),
-  model: z438.string(),
-  models: z438.array(z438.string()).optional(),
+  contextManagement: z451.nullable(z451.lazy(() => ContextManagement$outboundSchema)).optional(),
+  fallbacks: z451.nullable(z451.array(MessagesFallbackParam$outboundSchema)).optional(),
+  maxTokens: z451.int().optional(),
+  messages: z451.nullable(z451.array(MessagesMessageParam$outboundSchema)),
+  metadata: z451.lazy(() => MessagesRequestMetadata$outboundSchema).optional(),
+  model: z451.string(),
+  models: z451.array(z451.string()).optional(),
   outputConfig: MessagesOutputConfig$outboundSchema.optional(),
-  plugins: z438.array(z438.union([
+  plugins: z451.array(z451.union([
     AutoBetaRouterPlugin$outboundSchema,
     AutoRouterPlugin$outboundSchema,
     ContextCompressionPlugin$outboundSchema,
@@ -13181,33 +13553,33 @@ var MessagesRequest$outboundSchema = z438.object({
     WebSearchPlugin$outboundSchema,
     WebFetchPlugin$outboundSchema
   ])).optional(),
-  provider: z438.nullable(ProviderPreferences$outboundSchema).optional(),
-  serviceTier: z438.string().optional(),
-  sessionId: z438.string().optional(),
-  speed: z438.nullable(Speed$outboundSchema).optional(),
-  stopSequences: z438.array(z438.string()).optional(),
-  stopServerToolsWhen: z438.array(StopServerToolsWhenCondition$outboundSchema).optional(),
-  stream: z438.boolean().optional(),
-  system: z438.union([z438.string(), z438.array(AnthropicTextBlockParam$outboundSchema)]).optional(),
-  temperature: z438.number().optional(),
-  thinking: z438.union([
-    z438.lazy(() => ThinkingEnabled$outboundSchema),
-    z438.lazy(() => ThinkingDisabled$outboundSchema),
-    z438.lazy(() => ThinkingAdaptive$outboundSchema)
+  provider: z451.nullable(ProviderPreferences$outboundSchema).optional(),
+  serviceTier: z451.string().optional(),
+  sessionId: z451.string().optional(),
+  speed: z451.nullable(Speed$outboundSchema).optional(),
+  stopSequences: z451.array(z451.string()).optional(),
+  stopServerToolsWhen: z451.array(StopServerToolsWhenCondition$outboundSchema).optional(),
+  stream: z451.boolean().optional(),
+  system: z451.union([z451.string(), z451.array(AnthropicTextBlockParam$outboundSchema)]).optional(),
+  temperature: z451.number().optional(),
+  thinking: z451.union([
+    z451.lazy(() => ThinkingEnabled$outboundSchema),
+    z451.lazy(() => ThinkingDisabled$outboundSchema),
+    z451.lazy(() => ThinkingAdaptive$outboundSchema)
   ]).optional(),
-  toolChoice: z438.union([
-    z438.lazy(() => ToolChoiceAuto$outboundSchema),
-    z438.lazy(() => ToolChoiceAny$outboundSchema),
-    z438.lazy(() => ToolChoiceNone$outboundSchema),
-    z438.lazy(() => ToolChoiceTool$outboundSchema)
+  toolChoice: z451.union([
+    z451.lazy(() => ToolChoiceAuto$outboundSchema),
+    z451.lazy(() => ToolChoiceAny$outboundSchema),
+    z451.lazy(() => ToolChoiceNone$outboundSchema),
+    z451.lazy(() => ToolChoiceTool$outboundSchema)
   ]).optional(),
-  tools: z438.array(z438.union([
-    z438.lazy(() => ToolAdvisor20260301$outboundSchema),
-    z438.lazy(() => ToolCustom$outboundSchema),
-    z438.lazy(() => ToolBash20250124$outboundSchema),
-    z438.lazy(() => ToolTextEditor20250124$outboundSchema),
-    z438.lazy(() => ToolWebSearch20250305$outboundSchema),
-    z438.lazy(() => ToolWebSearch20260209$outboundSchema),
+  tools: z451.array(z451.union([
+    z451.lazy(() => ToolAdvisor20260301$outboundSchema),
+    z451.lazy(() => ToolCustom$outboundSchema),
+    z451.lazy(() => ToolBash20250124$outboundSchema),
+    z451.lazy(() => ToolTextEditor20250124$outboundSchema),
+    z451.lazy(() => ToolWebSearch20250305$outboundSchema),
+    z451.lazy(() => ToolWebSearch20260209$outboundSchema),
     AnthropicToolSearchToolBm25$outboundSchema,
     AnthropicToolSearchToolRegex$outboundSchema,
     BashServerTool$outboundSchema,
@@ -13216,12 +13588,13 @@ var MessagesRequest$outboundSchema = z438.object({
     MessagesSearchModelsServerTool$outboundSchema,
     WebFetchServerTool$outboundSchema,
     OpenRouterWebSearchServerTool$outboundSchema,
-    z438.lazy(() => MessagesRequestTool$outboundSchema)
+    z451.lazy(() => MessagesRequestTool$outboundSchema),
+    ShellServerToolOpenRouter$outboundSchema
   ])).optional(),
-  topK: z438.int().optional(),
-  topP: z438.number().optional(),
+  topK: z451.int().optional(),
+  topP: z451.number().optional(),
   trace: TraceConfig$outboundSchema.optional(),
-  user: z438.string().optional()
+  user: z451.string().optional()
 }).transform((v) => {
   return remap(v, {
     cacheControl: "cache_control",
@@ -13246,22 +13619,22 @@ var MetadataLevel = {
 var MetadataLevel$outboundSchema = outboundSchema(MetadataLevel);
 
 // node_modules/@openrouter/sdk/esm/models/model.js
-var z447 = __toESM(require("zod/v4"), 1);
+var z460 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/modelaliastarget.js
-var z439 = __toESM(require("zod/v4"), 1);
-var ModelAliasTarget$inboundSchema = z439.object({
-  name: z439.string(),
-  slug: z439.string()
+var z452 = __toESM(require("zod/v4"), 1);
+var ModelAliasTarget$inboundSchema = z452.object({
+  name: z452.string(),
+  slug: z452.string()
 });
 
 // node_modules/@openrouter/sdk/esm/models/modelarchitecture.js
-var z440 = __toESM(require("zod/v4"), 1);
-var ModelArchitecture$inboundSchema = z440.object({
-  input_modalities: z440.array(InputModality$inboundSchema),
-  instruct_type: z440.nullable(InstructType$inboundSchema).optional(),
-  modality: z440.nullable(z440.string()),
-  output_modalities: z440.array(OutputModality$inboundSchema),
+var z453 = __toESM(require("zod/v4"), 1);
+var ModelArchitecture$inboundSchema = z453.object({
+  input_modalities: z453.array(InputModality$inboundSchema),
+  instruct_type: z453.nullable(InstructType$inboundSchema).optional(),
+  modality: z453.nullable(z453.string()),
+  output_modalities: z453.array(OutputModality$inboundSchema),
   tokenizer: ModelGroup$inboundSchema.optional()
 }).transform((v) => {
   return remap(v, {
@@ -13272,10 +13645,10 @@ var ModelArchitecture$inboundSchema = z440.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/modelbenchmarks.js
-var z441 = __toESM(require("zod/v4"), 1);
-var ModelBenchmarks$inboundSchema = z441.object({
+var z454 = __toESM(require("zod/v4"), 1);
+var ModelBenchmarks$inboundSchema = z454.object({
   artificial_analysis: AABenchmarkEntry$inboundSchema.optional(),
-  design_arena: z441.array(DABenchmarkEntry$inboundSchema)
+  design_arena: z454.array(DABenchmarkEntry$inboundSchema)
 }).transform((v) => {
   return remap(v, {
     "artificial_analysis": "artificialAnalysis",
@@ -13284,13 +13657,13 @@ var ModelBenchmarks$inboundSchema = z441.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/modellinks.js
-var z442 = __toESM(require("zod/v4"), 1);
-var ModelLinks$inboundSchema = z442.object({
-  details: z442.string()
+var z455 = __toESM(require("zod/v4"), 1);
+var ModelLinks$inboundSchema = z455.object({
+  details: z455.string()
 });
 
 // node_modules/@openrouter/sdk/esm/models/modelreasoning.js
-var z443 = __toESM(require("zod/v4"), 1);
+var z456 = __toESM(require("zod/v4"), 1);
 var DefaultEffort = {
   Max: "max",
   Xhigh: "xhigh",
@@ -13301,12 +13674,12 @@ var DefaultEffort = {
   None: "none"
 };
 var DefaultEffort$inboundSchema = inboundSchema(DefaultEffort);
-var ModelReasoning$inboundSchema = z443.object({
-  default_effort: z443.nullable(DefaultEffort$inboundSchema).optional(),
-  default_enabled: z443.boolean().optional(),
-  mandatory: z443.boolean(),
-  supported_efforts: z443.nullable(z443.array(z443.nullable(ReasoningEffort$inboundSchema))).optional(),
-  supports_max_tokens: z443.boolean().optional()
+var ModelReasoning$inboundSchema = z456.object({
+  default_effort: z456.nullable(DefaultEffort$inboundSchema).optional(),
+  default_enabled: z456.boolean().optional(),
+  mandatory: z456.boolean(),
+  supported_efforts: z456.nullable(z456.array(z456.nullable(ReasoningEffort$inboundSchema))).optional(),
+  supports_max_tokens: z456.boolean().optional()
 }).transform((v) => {
   return remap(v, {
     "default_effort": "defaultEffort",
@@ -13317,10 +13690,10 @@ var ModelReasoning$inboundSchema = z443.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/perrequestlimits.js
-var z444 = __toESM(require("zod/v4"), 1);
-var PerRequestLimits$inboundSchema = z444.object({
-  completion_tokens: z444.number(),
-  prompt_tokens: z444.number()
+var z457 = __toESM(require("zod/v4"), 1);
+var PerRequestLimits$inboundSchema = z457.object({
+  completion_tokens: z457.number(),
+  prompt_tokens: z457.number()
 }).transform((v) => {
   return remap(v, {
     "completion_tokens": "completionTokens",
@@ -13329,24 +13702,24 @@ var PerRequestLimits$inboundSchema = z444.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/publicpricing.js
-var z445 = __toESM(require("zod/v4"), 1);
-var PublicPricing$inboundSchema = z445.object({
-  audio: z445.string().optional(),
-  audio_output: z445.string().optional(),
-  completion: z445.string(),
-  discount: z445.number().optional(),
-  image: z445.string().optional(),
-  image_output: z445.string().optional(),
-  image_token: z445.string().optional(),
-  input_audio_cache: z445.string().optional(),
-  input_cache_read: z445.string().optional(),
-  input_cache_write: z445.string().optional(),
-  input_cache_write_1h: z445.string().optional(),
-  internal_reasoning: z445.string().optional(),
-  overrides: z445.array(PricingOverride$inboundSchema).optional(),
-  prompt: z445.string(),
-  request: z445.string().optional(),
-  web_search: z445.string().optional()
+var z458 = __toESM(require("zod/v4"), 1);
+var PublicPricing$inboundSchema = z458.object({
+  audio: z458.string().optional(),
+  audio_output: z458.string().optional(),
+  completion: z458.string(),
+  discount: z458.number().optional(),
+  image: z458.string().optional(),
+  image_output: z458.string().optional(),
+  image_token: z458.string().optional(),
+  input_audio_cache: z458.string().optional(),
+  input_cache_read: z458.string().optional(),
+  input_cache_write: z458.string().optional(),
+  input_cache_write_1h: z458.string().optional(),
+  internal_reasoning: z458.string().optional(),
+  overrides: z458.array(PricingOverride$inboundSchema).optional(),
+  prompt: z458.string(),
+  request: z458.string().optional(),
+  web_search: z458.string().optional()
 }).transform((v) => {
   return remap(v, {
     "audio_output": "audioOutput",
@@ -13362,11 +13735,11 @@ var PublicPricing$inboundSchema = z445.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/topproviderinfo.js
-var z446 = __toESM(require("zod/v4"), 1);
-var TopProviderInfo$inboundSchema = z446.object({
-  context_length: z446.nullable(z446.int()).optional(),
-  is_moderated: z446.boolean(),
-  max_completion_tokens: z446.nullable(z446.int()).optional()
+var z459 = __toESM(require("zod/v4"), 1);
+var TopProviderInfo$inboundSchema = z459.object({
+  context_length: z459.nullable(z459.int()).optional(),
+  is_moderated: z459.boolean(),
+  max_completion_tokens: z459.nullable(z459.int()).optional()
 }).transform((v) => {
   return remap(v, {
     "context_length": "contextLength",
@@ -13376,26 +13749,26 @@ var TopProviderInfo$inboundSchema = z446.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/model.js
-var Model$inboundSchema = z447.object({
+var Model$inboundSchema = z460.object({
   alias_target: ModelAliasTarget$inboundSchema.optional(),
   architecture: ModelArchitecture$inboundSchema,
   benchmarks: ModelBenchmarks$inboundSchema.optional(),
-  canonical_slug: z447.string(),
-  context_length: z447.nullable(z447.int()),
-  created: z447.int(),
-  default_parameters: z447.nullable(DefaultParameters$inboundSchema),
-  description: z447.string().optional(),
-  expiration_date: z447.nullable(z447.string()).optional(),
-  hugging_face_id: z447.nullable(z447.string()).optional(),
-  id: z447.string(),
-  knowledge_cutoff: z447.nullable(z447.string()).optional(),
+  canonical_slug: z460.string(),
+  context_length: z460.nullable(z460.int()),
+  created: z460.int(),
+  default_parameters: z460.nullable(DefaultParameters$inboundSchema),
+  description: z460.string().optional(),
+  expiration_date: z460.nullable(z460.string()).optional(),
+  hugging_face_id: z460.nullable(z460.string()).optional(),
+  id: z460.string(),
+  knowledge_cutoff: z460.nullable(z460.string()).optional(),
   links: ModelLinks$inboundSchema,
-  name: z447.string(),
-  per_request_limits: z447.nullable(PerRequestLimits$inboundSchema),
+  name: z460.string(),
+  per_request_limits: z460.nullable(PerRequestLimits$inboundSchema),
   pricing: PublicPricing$inboundSchema,
   reasoning: ModelReasoning$inboundSchema.optional(),
-  supported_parameters: z447.array(Parameter$inboundSchema),
-  supported_voices: z447.nullable(z447.array(z447.string())),
+  supported_parameters: z460.array(Parameter$inboundSchema),
+  supported_voices: z460.nullable(z460.array(z460.string())),
   top_provider: TopProviderInfo$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -13414,29 +13787,29 @@ var Model$inboundSchema = z447.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/modelresponse.js
-var z448 = __toESM(require("zod/v4"), 1);
-var ModelResponse$inboundSchema = z448.object({
+var z461 = __toESM(require("zod/v4"), 1);
+var ModelResponse$inboundSchema = z461.object({
   data: Model$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/modelscountresponse.js
-var z449 = __toESM(require("zod/v4"), 1);
-var ModelsCountResponseData$inboundSchema = z449.object({
-  count: z449.int()
+var z462 = __toESM(require("zod/v4"), 1);
+var ModelsCountResponseData$inboundSchema = z462.object({
+  count: z462.int()
 });
-var ModelsCountResponse$inboundSchema = z449.object({
-  data: z449.lazy(() => ModelsCountResponseData$inboundSchema)
+var ModelsCountResponse$inboundSchema = z462.object({
+  data: z462.lazy(() => ModelsCountResponseData$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/modelslistresponse.js
-var z450 = __toESM(require("zod/v4"), 1);
-var Links$inboundSchema = z450.object({
-  next: z450.nullable(z450.string())
+var z463 = __toESM(require("zod/v4"), 1);
+var Links$inboundSchema = z463.object({
+  next: z463.nullable(z463.string())
 });
-var ModelsListResponse$inboundSchema = z450.object({
-  data: z450.array(Model$inboundSchema),
-  links: z450.lazy(() => Links$inboundSchema),
-  total_count: z450.int()
+var ModelsListResponse$inboundSchema = z463.object({
+  data: z463.array(Model$inboundSchema),
+  links: z463.lazy(() => Links$inboundSchema),
+  total_count: z463.int()
 }).transform((v) => {
   return remap(v, {
     "total_count": "totalCount"
@@ -13444,11 +13817,11 @@ var ModelsListResponse$inboundSchema = z450.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/notfoundresponseerrordata.js
-var z451 = __toESM(require("zod/v4"), 1);
-var NotFoundResponseErrorData$inboundSchema = z451.object({
-  code: z451.int(),
-  message: z451.string(),
-  metadata: z451.nullable(z451.record(z451.string(), z451.any())).optional()
+var z464 = __toESM(require("zod/v4"), 1);
+var NotFoundResponseErrorData$inboundSchema = z464.object({
+  code: z464.int(),
+  message: z464.string(),
+  metadata: z464.nullable(z464.record(z464.string(), z464.any())).optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/openairesponsesresponsestatus.js
@@ -13463,10 +13836,10 @@ var OpenAIResponsesResponseStatus = {
 var OpenAIResponsesResponseStatus$inboundSchema = inboundSchema(OpenAIResponsesResponseStatus);
 
 // node_modules/@openrouter/sdk/esm/models/openairesponsestoolchoiceunion.js
-var z453 = __toESM(require("zod/v4"), 1);
+var z466 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/toolchoiceallowed.js
-var z452 = __toESM(require("zod/v4"), 1);
+var z465 = __toESM(require("zod/v4"), 1);
 var ModeRequired = {
   Required: "required"
 };
@@ -13476,28 +13849,28 @@ var ModeAuto = {
 var ToolChoiceAllowedType = {
   AllowedTools: "allowed_tools"
 };
-var ModeRequired$inboundSchema = z452.enum(ModeRequired);
+var ModeRequired$inboundSchema = z465.enum(ModeRequired);
 var ModeRequired$outboundSchema = ModeRequired$inboundSchema;
-var ModeAuto$inboundSchema = z452.enum(ModeAuto);
+var ModeAuto$inboundSchema = z465.enum(ModeAuto);
 var ModeAuto$outboundSchema = ModeAuto$inboundSchema;
-var Mode$inboundSchema = z452.union([
+var Mode$inboundSchema = z465.union([
   ModeAuto$inboundSchema,
   ModeRequired$inboundSchema
 ]);
-var Mode$outboundSchema = z452.union([
+var Mode$outboundSchema = z465.union([
   ModeAuto$outboundSchema,
   ModeRequired$outboundSchema
 ]);
-var ToolChoiceAllowedType$inboundSchema = z452.enum(ToolChoiceAllowedType);
+var ToolChoiceAllowedType$inboundSchema = z465.enum(ToolChoiceAllowedType);
 var ToolChoiceAllowedType$outboundSchema = ToolChoiceAllowedType$inboundSchema;
-var ToolChoiceAllowed$inboundSchema = z452.object({
-  mode: z452.union([ModeAuto$inboundSchema, ModeRequired$inboundSchema]),
-  tools: z452.array(z452.record(z452.string(), z452.any())),
+var ToolChoiceAllowed$inboundSchema = z465.object({
+  mode: z465.union([ModeAuto$inboundSchema, ModeRequired$inboundSchema]),
+  tools: z465.array(z465.record(z465.string(), z465.any())),
   type: ToolChoiceAllowedType$inboundSchema
 });
-var ToolChoiceAllowed$outboundSchema = z452.object({
-  mode: z452.union([ModeAuto$outboundSchema, ModeRequired$outboundSchema]),
-  tools: z452.array(z452.record(z452.string(), z452.any())),
+var ToolChoiceAllowed$outboundSchema = z465.object({
+  mode: z465.union([ModeAuto$outboundSchema, ModeRequired$outboundSchema]),
+  tools: z465.array(z465.record(z465.string(), z465.any())),
   type: ToolChoiceAllowedType$outboundSchema
 });
 
@@ -13526,78 +13899,78 @@ var OpenAIResponsesToolChoiceNone = {
 var OpenAIResponsesToolChoiceAuto = {
   Auto: "auto"
 };
-var OpenAIResponsesToolChoiceTypeShell$inboundSchema = z453.enum(OpenAIResponsesToolChoiceTypeShell);
+var OpenAIResponsesToolChoiceTypeShell$inboundSchema = z466.enum(OpenAIResponsesToolChoiceTypeShell);
 var OpenAIResponsesToolChoiceTypeShell$outboundSchema = OpenAIResponsesToolChoiceTypeShell$inboundSchema;
-var OpenAIResponsesToolChoiceShell$inboundSchema = z453.object({
+var OpenAIResponsesToolChoiceShell$inboundSchema = z466.object({
   type: OpenAIResponsesToolChoiceTypeShell$inboundSchema
 });
-var OpenAIResponsesToolChoiceShell$outboundSchema = z453.object({
+var OpenAIResponsesToolChoiceShell$outboundSchema = z466.object({
   type: OpenAIResponsesToolChoiceTypeShell$outboundSchema
 });
-var OpenAIResponsesToolChoiceTypeApplyPatch$inboundSchema = z453.enum(OpenAIResponsesToolChoiceTypeApplyPatch);
+var OpenAIResponsesToolChoiceTypeApplyPatch$inboundSchema = z466.enum(OpenAIResponsesToolChoiceTypeApplyPatch);
 var OpenAIResponsesToolChoiceTypeApplyPatch$outboundSchema = OpenAIResponsesToolChoiceTypeApplyPatch$inboundSchema;
-var OpenAIResponsesToolChoiceApplyPatch$inboundSchema = z453.object({
+var OpenAIResponsesToolChoiceApplyPatch$inboundSchema = z466.object({
   type: OpenAIResponsesToolChoiceTypeApplyPatch$inboundSchema
 });
-var OpenAIResponsesToolChoiceApplyPatch$outboundSchema = z453.object({
+var OpenAIResponsesToolChoiceApplyPatch$outboundSchema = z466.object({
   type: OpenAIResponsesToolChoiceTypeApplyPatch$outboundSchema
 });
-var OpenAIResponsesToolChoiceTypeWebSearchPreview$inboundSchema = z453.enum(OpenAIResponsesToolChoiceTypeWebSearchPreview);
+var OpenAIResponsesToolChoiceTypeWebSearchPreview$inboundSchema = z466.enum(OpenAIResponsesToolChoiceTypeWebSearchPreview);
 var OpenAIResponsesToolChoiceTypeWebSearchPreview$outboundSchema = OpenAIResponsesToolChoiceTypeWebSearchPreview$inboundSchema;
-var OpenAIResponsesToolChoiceTypeWebSearchPreview20250311$inboundSchema = z453.enum(OpenAIResponsesToolChoiceTypeWebSearchPreview20250311);
+var OpenAIResponsesToolChoiceTypeWebSearchPreview20250311$inboundSchema = z466.enum(OpenAIResponsesToolChoiceTypeWebSearchPreview20250311);
 var OpenAIResponsesToolChoiceTypeWebSearchPreview20250311$outboundSchema = OpenAIResponsesToolChoiceTypeWebSearchPreview20250311$inboundSchema;
-var Type$inboundSchema = z453.union([
+var Type$inboundSchema = z466.union([
   OpenAIResponsesToolChoiceTypeWebSearchPreview20250311$inboundSchema,
   OpenAIResponsesToolChoiceTypeWebSearchPreview$inboundSchema
 ]);
-var Type$outboundSchema = z453.union([
+var Type$outboundSchema = z466.union([
   OpenAIResponsesToolChoiceTypeWebSearchPreview20250311$outboundSchema,
   OpenAIResponsesToolChoiceTypeWebSearchPreview$outboundSchema
 ]);
-var OpenAIResponsesToolChoice$inboundSchema = z453.object({
-  type: z453.union([
+var OpenAIResponsesToolChoice$inboundSchema = z466.object({
+  type: z466.union([
     OpenAIResponsesToolChoiceTypeWebSearchPreview20250311$inboundSchema,
     OpenAIResponsesToolChoiceTypeWebSearchPreview$inboundSchema
   ])
 });
-var OpenAIResponsesToolChoice$outboundSchema = z453.object({
-  type: z453.union([
+var OpenAIResponsesToolChoice$outboundSchema = z466.object({
+  type: z466.union([
     OpenAIResponsesToolChoiceTypeWebSearchPreview20250311$outboundSchema,
     OpenAIResponsesToolChoiceTypeWebSearchPreview$outboundSchema
   ])
 });
-var OpenAIResponsesToolChoiceTypeFunction$inboundSchema = z453.enum(OpenAIResponsesToolChoiceTypeFunction);
+var OpenAIResponsesToolChoiceTypeFunction$inboundSchema = z466.enum(OpenAIResponsesToolChoiceTypeFunction);
 var OpenAIResponsesToolChoiceTypeFunction$outboundSchema = OpenAIResponsesToolChoiceTypeFunction$inboundSchema;
-var OpenAIResponsesToolChoiceFunction$inboundSchema = z453.object({
-  name: z453.string(),
+var OpenAIResponsesToolChoiceFunction$inboundSchema = z466.object({
+  name: z466.string(),
   type: OpenAIResponsesToolChoiceTypeFunction$inboundSchema
 });
-var OpenAIResponsesToolChoiceFunction$outboundSchema = z453.object({
-  name: z453.string(),
+var OpenAIResponsesToolChoiceFunction$outboundSchema = z466.object({
+  name: z466.string(),
   type: OpenAIResponsesToolChoiceTypeFunction$outboundSchema
 });
-var OpenAIResponsesToolChoiceRequired$inboundSchema = z453.enum(OpenAIResponsesToolChoiceRequired);
+var OpenAIResponsesToolChoiceRequired$inboundSchema = z466.enum(OpenAIResponsesToolChoiceRequired);
 var OpenAIResponsesToolChoiceRequired$outboundSchema = OpenAIResponsesToolChoiceRequired$inboundSchema;
-var OpenAIResponsesToolChoiceNone$inboundSchema = z453.enum(OpenAIResponsesToolChoiceNone);
+var OpenAIResponsesToolChoiceNone$inboundSchema = z466.enum(OpenAIResponsesToolChoiceNone);
 var OpenAIResponsesToolChoiceNone$outboundSchema = OpenAIResponsesToolChoiceNone$inboundSchema;
-var OpenAIResponsesToolChoiceAuto$inboundSchema = z453.enum(OpenAIResponsesToolChoiceAuto);
+var OpenAIResponsesToolChoiceAuto$inboundSchema = z466.enum(OpenAIResponsesToolChoiceAuto);
 var OpenAIResponsesToolChoiceAuto$outboundSchema = OpenAIResponsesToolChoiceAuto$inboundSchema;
-var OpenAIResponsesToolChoiceUnion$inboundSchema = z453.union([
+var OpenAIResponsesToolChoiceUnion$inboundSchema = z466.union([
   ToolChoiceAllowed$inboundSchema,
-  z453.lazy(() => OpenAIResponsesToolChoiceFunction$inboundSchema),
-  z453.lazy(() => OpenAIResponsesToolChoice$inboundSchema),
-  z453.lazy(() => OpenAIResponsesToolChoiceApplyPatch$inboundSchema),
-  z453.lazy(() => OpenAIResponsesToolChoiceShell$inboundSchema),
+  z466.lazy(() => OpenAIResponsesToolChoiceFunction$inboundSchema),
+  z466.lazy(() => OpenAIResponsesToolChoice$inboundSchema),
+  z466.lazy(() => OpenAIResponsesToolChoiceApplyPatch$inboundSchema),
+  z466.lazy(() => OpenAIResponsesToolChoiceShell$inboundSchema),
   OpenAIResponsesToolChoiceAuto$inboundSchema,
   OpenAIResponsesToolChoiceNone$inboundSchema,
   OpenAIResponsesToolChoiceRequired$inboundSchema
 ]);
-var OpenAIResponsesToolChoiceUnion$outboundSchema = z453.union([
+var OpenAIResponsesToolChoiceUnion$outboundSchema = z466.union([
   ToolChoiceAllowed$outboundSchema,
-  z453.lazy(() => OpenAIResponsesToolChoiceFunction$outboundSchema),
-  z453.lazy(() => OpenAIResponsesToolChoice$outboundSchema),
-  z453.lazy(() => OpenAIResponsesToolChoiceApplyPatch$outboundSchema),
-  z453.lazy(() => OpenAIResponsesToolChoiceShell$outboundSchema),
+  z466.lazy(() => OpenAIResponsesToolChoiceFunction$outboundSchema),
+  z466.lazy(() => OpenAIResponsesToolChoice$outboundSchema),
+  z466.lazy(() => OpenAIResponsesToolChoiceApplyPatch$outboundSchema),
+  z466.lazy(() => OpenAIResponsesToolChoiceShell$outboundSchema),
   OpenAIResponsesToolChoiceAuto$outboundSchema,
   OpenAIResponsesToolChoiceNone$outboundSchema,
   OpenAIResponsesToolChoiceRequired$outboundSchema
@@ -13611,22 +13984,22 @@ var OpenAIResponsesTruncation = {
 var OpenAIResponsesTruncation$outboundSchema = outboundSchema(OpenAIResponsesTruncation);
 
 // node_modules/@openrouter/sdk/esm/models/openresponsescreatedevent.js
-var z464 = __toESM(require("zod/v4"), 1);
+var z477 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/openresponsesresult.js
-var z463 = __toESM(require("zod/v4"), 1);
+var z476 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/outputitems.js
-var z459 = __toESM(require("zod/v4"), 1);
+var z472 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/outputapplypatchcallitem.js
-var z454 = __toESM(require("zod/v4"), 1);
-var OutputApplyPatchCallItem$inboundSchema = z454.object({
-  call_id: z454.string(),
-  id: z454.string(),
+var z467 = __toESM(require("zod/v4"), 1);
+var OutputApplyPatchCallItem$inboundSchema = z467.object({
+  call_id: z467.string(),
+  id: z467.string(),
   operation: ApplyPatchCallOperation$inboundSchema,
   status: ApplyPatchCallStatus$inboundSchema,
-  type: z454.literal("apply_patch_call")
+  type: z467.literal("apply_patch_call")
 }).transform((v) => {
   return remap(v, {
     "call_id": "callId"
@@ -13634,7 +14007,7 @@ var OutputApplyPatchCallItem$inboundSchema = z454.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputmessageitem.js
-var z455 = __toESM(require("zod/v4"), 1);
+var z468 = __toESM(require("zod/v4"), 1);
 var OutputMessageItemPhaseFinalAnswer = {
   FinalAnswer: "final_answer"
 };
@@ -13657,42 +14030,42 @@ var OutputMessageItemContent$inboundSchema = discriminatedUnion("type", {
   output_text: ResponseOutputText$inboundSchema,
   refusal: OpenAIResponsesRefusalContent$inboundSchema
 });
-var OutputMessageItemPhaseFinalAnswer$inboundSchema = z455.enum(OutputMessageItemPhaseFinalAnswer);
-var OutputMessageItemPhaseCommentary$inboundSchema = z455.enum(OutputMessageItemPhaseCommentary);
-var OutputMessageItemPhaseUnion$inboundSchema = z455.union([
+var OutputMessageItemPhaseFinalAnswer$inboundSchema = z468.enum(OutputMessageItemPhaseFinalAnswer);
+var OutputMessageItemPhaseCommentary$inboundSchema = z468.enum(OutputMessageItemPhaseCommentary);
+var OutputMessageItemPhaseUnion$inboundSchema = z468.union([
   OutputMessageItemPhaseCommentary$inboundSchema,
   OutputMessageItemPhaseFinalAnswer$inboundSchema
 ]);
-var OutputMessageItemRole$inboundSchema = z455.enum(OutputMessageItemRole);
-var OutputMessageItemStatusInProgress$inboundSchema = z455.enum(OutputMessageItemStatusInProgress);
-var OutputMessageItemStatusIncomplete$inboundSchema = z455.enum(OutputMessageItemStatusIncomplete);
-var OutputMessageItemStatusCompleted$inboundSchema = z455.enum(OutputMessageItemStatusCompleted);
-var OutputMessageItemStatusUnion$inboundSchema = z455.union([
+var OutputMessageItemRole$inboundSchema = z468.enum(OutputMessageItemRole);
+var OutputMessageItemStatusInProgress$inboundSchema = z468.enum(OutputMessageItemStatusInProgress);
+var OutputMessageItemStatusIncomplete$inboundSchema = z468.enum(OutputMessageItemStatusIncomplete);
+var OutputMessageItemStatusCompleted$inboundSchema = z468.enum(OutputMessageItemStatusCompleted);
+var OutputMessageItemStatusUnion$inboundSchema = z468.union([
   OutputMessageItemStatusCompleted$inboundSchema,
   OutputMessageItemStatusIncomplete$inboundSchema,
   OutputMessageItemStatusInProgress$inboundSchema
 ]);
-var OutputMessageItem$inboundSchema = z455.object({
-  content: z455.array(discriminatedUnion("type", {
+var OutputMessageItem$inboundSchema = z468.object({
+  content: z468.array(discriminatedUnion("type", {
     output_text: ResponseOutputText$inboundSchema,
     refusal: OpenAIResponsesRefusalContent$inboundSchema
   })),
-  id: z455.string(),
-  phase: z455.nullable(z455.union([
+  id: z468.string(),
+  phase: z468.nullable(z468.union([
     OutputMessageItemPhaseCommentary$inboundSchema,
     OutputMessageItemPhaseFinalAnswer$inboundSchema
   ])).optional(),
   role: OutputMessageItemRole$inboundSchema,
-  status: z455.union([
+  status: z468.union([
     OutputMessageItemStatusCompleted$inboundSchema,
     OutputMessageItemStatusIncomplete$inboundSchema,
     OutputMessageItemStatusInProgress$inboundSchema
   ]).optional(),
-  type: z455.literal("message")
+  type: z468.literal("message")
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputreasoningitem.js
-var z456 = __toESM(require("zod/v4"), 1);
+var z469 = __toESM(require("zod/v4"), 1);
 var OutputReasoningItemStatusInProgress = {
   InProgress: "in_progress"
 };
@@ -13702,27 +14075,27 @@ var OutputReasoningItemStatusIncomplete = {
 var OutputReasoningItemStatusCompleted = {
   Completed: "completed"
 };
-var OutputReasoningItemStatusInProgress$inboundSchema = z456.enum(OutputReasoningItemStatusInProgress);
-var OutputReasoningItemStatusIncomplete$inboundSchema = z456.enum(OutputReasoningItemStatusIncomplete);
-var OutputReasoningItemStatusCompleted$inboundSchema = z456.enum(OutputReasoningItemStatusCompleted);
-var OutputReasoningItemStatusUnion$inboundSchema = z456.union([
+var OutputReasoningItemStatusInProgress$inboundSchema = z469.enum(OutputReasoningItemStatusInProgress);
+var OutputReasoningItemStatusIncomplete$inboundSchema = z469.enum(OutputReasoningItemStatusIncomplete);
+var OutputReasoningItemStatusCompleted$inboundSchema = z469.enum(OutputReasoningItemStatusCompleted);
+var OutputReasoningItemStatusUnion$inboundSchema = z469.union([
   OutputReasoningItemStatusCompleted$inboundSchema,
   OutputReasoningItemStatusIncomplete$inboundSchema,
   OutputReasoningItemStatusInProgress$inboundSchema
 ]);
-var OutputReasoningItem$inboundSchema = z456.object({
-  content: z456.nullable(z456.array(ReasoningTextContent$inboundSchema)).optional(),
-  encrypted_content: z456.nullable(z456.string()).optional(),
-  id: z456.string(),
-  status: z456.union([
+var OutputReasoningItem$inboundSchema = z469.object({
+  content: z469.nullable(z469.array(ReasoningTextContent$inboundSchema)).optional(),
+  encrypted_content: z469.nullable(z469.string()).optional(),
+  id: z469.string(),
+  status: z469.union([
     OutputReasoningItemStatusCompleted$inboundSchema,
     OutputReasoningItemStatusIncomplete$inboundSchema,
     OutputReasoningItemStatusInProgress$inboundSchema
   ]).optional(),
-  summary: z456.array(ReasoningSummaryText$inboundSchema),
-  type: z456.literal("reasoning"),
-  format: z456.nullable(ReasoningFormat$inboundSchema).optional(),
-  signature: z456.nullable(z456.string()).optional()
+  summary: z469.array(ReasoningSummaryText$inboundSchema),
+  type: z469.literal("reasoning"),
+  format: z469.nullable(ReasoningFormat$inboundSchema).optional(),
+  signature: z469.nullable(z469.string()).optional()
 }).transform((v) => {
   return remap(v, {
     "encrypted_content": "encryptedContent"
@@ -13730,7 +14103,7 @@ var OutputReasoningItem$inboundSchema = z456.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputshellcallitem.js
-var z457 = __toESM(require("zod/v4"), 1);
+var z470 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/shellcallstatus.js
 var ShellCallStatus = {
@@ -13741,22 +14114,22 @@ var ShellCallStatus = {
 var ShellCallStatus$inboundSchema = inboundSchema(ShellCallStatus);
 
 // node_modules/@openrouter/sdk/esm/models/outputshellcallitem.js
-var OutputShellCallItemAction$inboundSchema = z457.object({
-  commands: z457.array(z457.string()),
-  max_output_length: z457.nullable(z457.int()),
-  timeout_ms: z457.nullable(z457.int())
+var OutputShellCallItemAction$inboundSchema = z470.object({
+  commands: z470.array(z470.string()),
+  max_output_length: z470.nullable(z470.int()),
+  timeout_ms: z470.nullable(z470.int())
 }).transform((v) => {
   return remap(v, {
     "max_output_length": "maxOutputLength",
     "timeout_ms": "timeoutMs"
   });
 });
-var OutputShellCallItem$inboundSchema = z457.object({
-  action: z457.lazy(() => OutputShellCallItemAction$inboundSchema).optional(),
-  call_id: z457.string(),
-  id: z457.string(),
+var OutputShellCallItem$inboundSchema = z470.object({
+  action: z470.lazy(() => OutputShellCallItemAction$inboundSchema).optional(),
+  call_id: z470.string(),
+  id: z470.string(),
   status: ShellCallStatus$inboundSchema,
-  type: z457.literal("shell_call")
+  type: z470.literal("shell_call")
 }).transform((v) => {
   return remap(v, {
     "call_id": "callId"
@@ -13764,37 +14137,37 @@ var OutputShellCallItem$inboundSchema = z457.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputshellcalloutputitem.js
-var z458 = __toESM(require("zod/v4"), 1);
-var OutcomeTimeout$inboundSchema = z458.object({
-  type: z458.literal("timeout")
+var z471 = __toESM(require("zod/v4"), 1);
+var OutcomeTimeout$inboundSchema = z471.object({
+  type: z471.literal("timeout")
 });
-var OutcomeExit$inboundSchema = z458.object({
-  exit_code: z458.int(),
-  type: z458.literal("exit")
+var OutcomeExit$inboundSchema = z471.object({
+  exit_code: z471.int(),
+  type: z471.literal("exit")
 }).transform((v) => {
   return remap(v, {
     "exit_code": "exitCode"
   });
 });
 var Outcome$inboundSchema = discriminatedUnion("type", {
-  exit: z458.lazy(() => OutcomeExit$inboundSchema),
-  timeout: z458.lazy(() => OutcomeTimeout$inboundSchema)
+  exit: z471.lazy(() => OutcomeExit$inboundSchema),
+  timeout: z471.lazy(() => OutcomeTimeout$inboundSchema)
 });
-var OutputShellCallOutputItemOutput$inboundSchema = z458.object({
+var OutputShellCallOutputItemOutput$inboundSchema = z471.object({
   outcome: discriminatedUnion("type", {
-    exit: z458.lazy(() => OutcomeExit$inboundSchema),
-    timeout: z458.lazy(() => OutcomeTimeout$inboundSchema)
+    exit: z471.lazy(() => OutcomeExit$inboundSchema),
+    timeout: z471.lazy(() => OutcomeTimeout$inboundSchema)
   }),
-  stderr: z458.string(),
-  stdout: z458.string()
+  stderr: z471.string(),
+  stdout: z471.string()
 });
-var OutputShellCallOutputItem$inboundSchema = z458.object({
-  call_id: z458.string(),
-  id: z458.string(),
-  max_output_length: z458.nullable(z458.int()).optional(),
-  output: z458.array(z458.lazy(() => OutputShellCallOutputItemOutput$inboundSchema)),
+var OutputShellCallOutputItem$inboundSchema = z471.object({
+  call_id: z471.string(),
+  id: z471.string(),
+  max_output_length: z471.nullable(z471.int()).optional(),
+  output: z471.array(z471.lazy(() => OutputShellCallOutputItemOutput$inboundSchema)),
   status: ShellCallStatus$inboundSchema,
-  type: z458.literal("shell_call_output")
+  type: z471.literal("shell_call_output")
 }).transform((v) => {
   return remap(v, {
     "call_id": "callId",
@@ -13805,39 +14178,39 @@ var OutputShellCallOutputItem$inboundSchema = z458.object({
 // node_modules/@openrouter/sdk/esm/models/outputitems.js
 var OutputItems$inboundSchema = discriminatedUnion("type", {
   apply_patch_call: OutputApplyPatchCallItem$inboundSchema,
-  code_interpreter_call: OutputCodeInterpreterCallItem$inboundSchema.and(z459.object({ type: z459.literal("code_interpreter_call") })),
-  computer_call: OutputComputerCallItem$inboundSchema.and(z459.object({ type: z459.literal("computer_call") })),
-  custom_tool_call: OutputCustomToolCallItem$inboundSchema.and(z459.object({ type: z459.literal("custom_tool_call") })),
-  file_search_call: OutputFileSearchCallItem$inboundSchema.and(z459.object({ type: z459.literal("file_search_call") })),
-  function_call: OutputFunctionCallItem$inboundSchema.and(z459.object({ type: z459.literal("function_call") })),
-  image_generation_call: OutputImageGenerationCallItem$inboundSchema.and(z459.object({ type: z459.literal("image_generation_call") })),
+  code_interpreter_call: OutputCodeInterpreterCallItem$inboundSchema.and(z472.object({ type: z472.literal("code_interpreter_call") })),
+  computer_call: OutputComputerCallItem$inboundSchema.and(z472.object({ type: z472.literal("computer_call") })),
+  custom_tool_call: OutputCustomToolCallItem$inboundSchema.and(z472.object({ type: z472.literal("custom_tool_call") })),
+  file_search_call: OutputFileSearchCallItem$inboundSchema.and(z472.object({ type: z472.literal("file_search_call") })),
+  function_call: OutputFunctionCallItem$inboundSchema.and(z472.object({ type: z472.literal("function_call") })),
+  image_generation_call: OutputImageGenerationCallItem$inboundSchema.and(z472.object({ type: z472.literal("image_generation_call") })),
   message: OutputMessageItem$inboundSchema,
-  ["openrouter:advisor"]: OutputAdvisorServerToolItem$inboundSchema.and(z459.object({ type: z459.literal("openrouter:advisor") })),
-  ["openrouter:apply_patch"]: OutputApplyPatchServerToolItem$inboundSchema.and(z459.object({ type: z459.literal("openrouter:apply_patch") })),
-  ["openrouter:bash"]: OutputBashServerToolItem$inboundSchema.and(z459.object({ type: z459.literal("openrouter:bash") })),
-  ["openrouter:browser_use"]: OutputBrowserUseServerToolItem$inboundSchema.and(z459.object({ type: z459.literal("openrouter:browser_use") })),
-  ["openrouter:code_interpreter"]: OutputCodeInterpreterServerToolItem$inboundSchema.and(z459.object({ type: z459.literal("openrouter:code_interpreter") })),
-  ["openrouter:datetime"]: OutputDatetimeItem$inboundSchema.and(z459.object({ type: z459.literal("openrouter:datetime") })),
-  ["openrouter:experimental__search_models"]: OutputSearchModelsServerToolItem$inboundSchema.and(z459.object({ type: z459.literal("openrouter:experimental__search_models") })),
-  ["openrouter:file_search"]: OutputFileSearchServerToolItem$inboundSchema.and(z459.object({ type: z459.literal("openrouter:file_search") })),
-  ["openrouter:files"]: OutputFilesServerToolItem$inboundSchema.and(z459.object({ type: z459.literal("openrouter:files") })),
-  ["openrouter:fusion"]: OutputFusionServerToolItem$inboundSchema.and(z459.object({ type: z459.literal("openrouter:fusion") })),
-  ["openrouter:image_generation"]: OutputImageGenerationServerToolItem$inboundSchema.and(z459.object({ type: z459.literal("openrouter:image_generation") })),
-  ["openrouter:mcp"]: OutputMcpServerToolItem$inboundSchema.and(z459.object({ type: z459.literal("openrouter:mcp") })),
-  ["openrouter:memory"]: OutputMemoryServerToolItem$inboundSchema.and(z459.object({ type: z459.literal("openrouter:memory") })),
-  ["openrouter:subagent"]: OutputSubagentServerToolItem$inboundSchema.and(z459.object({ type: z459.literal("openrouter:subagent") })),
-  ["openrouter:text_editor"]: OutputTextEditorServerToolItem$inboundSchema.and(z459.object({ type: z459.literal("openrouter:text_editor") })),
-  ["openrouter:tool_search"]: OutputToolSearchServerToolItem$inboundSchema.and(z459.object({ type: z459.literal("openrouter:tool_search") })),
-  ["openrouter:web_fetch"]: OutputWebFetchServerToolItem$inboundSchema.and(z459.object({ type: z459.literal("openrouter:web_fetch") })),
-  ["openrouter:web_search"]: OutputWebSearchServerToolItem$inboundSchema.and(z459.object({ type: z459.literal("openrouter:web_search") })),
+  ["openrouter:advisor"]: OutputAdvisorServerToolItem$inboundSchema.and(z472.object({ type: z472.literal("openrouter:advisor") })),
+  ["openrouter:apply_patch"]: OutputApplyPatchServerToolItem$inboundSchema.and(z472.object({ type: z472.literal("openrouter:apply_patch") })),
+  ["openrouter:bash"]: OutputBashServerToolItem$inboundSchema.and(z472.object({ type: z472.literal("openrouter:bash") })),
+  ["openrouter:browser_use"]: OutputBrowserUseServerToolItem$inboundSchema.and(z472.object({ type: z472.literal("openrouter:browser_use") })),
+  ["openrouter:code_interpreter"]: OutputCodeInterpreterServerToolItem$inboundSchema.and(z472.object({ type: z472.literal("openrouter:code_interpreter") })),
+  ["openrouter:datetime"]: OutputDatetimeItem$inboundSchema.and(z472.object({ type: z472.literal("openrouter:datetime") })),
+  ["openrouter:experimental__search_models"]: OutputSearchModelsServerToolItem$inboundSchema.and(z472.object({ type: z472.literal("openrouter:experimental__search_models") })),
+  ["openrouter:file_search"]: OutputFileSearchServerToolItem$inboundSchema.and(z472.object({ type: z472.literal("openrouter:file_search") })),
+  ["openrouter:files"]: OutputFilesServerToolItem$inboundSchema.and(z472.object({ type: z472.literal("openrouter:files") })),
+  ["openrouter:fusion"]: OutputFusionServerToolItem$inboundSchema.and(z472.object({ type: z472.literal("openrouter:fusion") })),
+  ["openrouter:image_generation"]: OutputImageGenerationServerToolItem$inboundSchema.and(z472.object({ type: z472.literal("openrouter:image_generation") })),
+  ["openrouter:mcp"]: OutputMcpServerToolItem$inboundSchema.and(z472.object({ type: z472.literal("openrouter:mcp") })),
+  ["openrouter:memory"]: OutputMemoryServerToolItem$inboundSchema.and(z472.object({ type: z472.literal("openrouter:memory") })),
+  ["openrouter:subagent"]: OutputSubagentServerToolItem$inboundSchema.and(z472.object({ type: z472.literal("openrouter:subagent") })),
+  ["openrouter:text_editor"]: OutputTextEditorServerToolItem$inboundSchema.and(z472.object({ type: z472.literal("openrouter:text_editor") })),
+  ["openrouter:tool_search"]: OutputToolSearchServerToolItem$inboundSchema.and(z472.object({ type: z472.literal("openrouter:tool_search") })),
+  ["openrouter:web_fetch"]: OutputWebFetchServerToolItem$inboundSchema.and(z472.object({ type: z472.literal("openrouter:web_fetch") })),
+  ["openrouter:web_search"]: OutputWebSearchServerToolItem$inboundSchema.and(z472.object({ type: z472.literal("openrouter:web_search") })),
   reasoning: OutputReasoningItem$inboundSchema,
   shell_call: OutputShellCallItem$inboundSchema,
   shell_call_output: OutputShellCallOutputItem$inboundSchema,
-  web_search_call: OutputWebSearchCallItem$inboundSchema.and(z459.object({ type: z459.literal("web_search_call") }))
+  web_search_call: OutputWebSearchCallItem$inboundSchema.and(z472.object({ type: z472.literal("web_search_call") }))
 });
 
 // node_modules/@openrouter/sdk/esm/models/responseserrorfield.js
-var z460 = __toESM(require("zod/v4"), 1);
+var z473 = __toESM(require("zod/v4"), 1);
 var Code = {
   ServerError: "server_error",
   RateLimitExceeded: "rate_limit_exceeded",
@@ -13861,46 +14234,46 @@ var Code = {
   DataResidencyMismatch: "data_residency_mismatch"
 };
 var Code$inboundSchema = inboundSchema(Code);
-var ResponsesErrorField$inboundSchema = z460.object({
+var ResponsesErrorField$inboundSchema = z473.object({
   code: Code$inboundSchema,
-  message: z460.string()
+  message: z473.string()
 });
 
 // node_modules/@openrouter/sdk/esm/models/storedprompttemplate.js
-var z461 = __toESM(require("zod/v4"), 1);
-var Variables$inboundSchema = z461.union([
+var z474 = __toESM(require("zod/v4"), 1);
+var Variables$inboundSchema = z474.union([
   InputText$inboundSchema,
   InputImage$inboundSchema,
   InputFile$inboundSchema,
-  z461.string()
+  z474.string()
 ]);
-var Variables$outboundSchema = z461.union([
+var Variables$outboundSchema = z474.union([
   InputText$outboundSchema,
   InputImage$outboundSchema,
   InputFile$outboundSchema,
-  z461.string()
+  z474.string()
 ]);
-var StoredPromptTemplate$inboundSchema = z461.object({
-  id: z461.string(),
-  variables: z461.nullable(z461.record(z461.string(), z461.union([
+var StoredPromptTemplate$inboundSchema = z474.object({
+  id: z474.string(),
+  variables: z474.nullable(z474.record(z474.string(), z474.union([
     InputText$inboundSchema,
     InputImage$inboundSchema,
     InputFile$inboundSchema,
-    z461.string()
+    z474.string()
   ]))).optional()
 });
-var StoredPromptTemplate$outboundSchema = z461.object({
-  id: z461.string(),
-  variables: z461.nullable(z461.record(z461.string(), z461.union([
+var StoredPromptTemplate$outboundSchema = z474.object({
+  id: z474.string(),
+  variables: z474.nullable(z474.record(z474.string(), z474.union([
     InputText$outboundSchema,
     InputImage$outboundSchema,
     InputFile$outboundSchema,
-    z461.string()
+    z474.string()
   ]))).optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/textextendedconfig.js
-var z462 = __toESM(require("zod/v4"), 1);
+var z475 = __toESM(require("zod/v4"), 1);
 var Verbosity = {
   Low: "low",
   Medium: "medium",
@@ -13910,13 +14283,13 @@ var Verbosity = {
 };
 var Verbosity$inboundSchema = inboundSchema(Verbosity);
 var Verbosity$outboundSchema = outboundSchema(Verbosity);
-var TextExtendedConfig$inboundSchema = z462.object({
+var TextExtendedConfig$inboundSchema = z475.object({
   format: Formats$inboundSchema.optional(),
-  verbosity: z462.nullable(Verbosity$inboundSchema).optional()
+  verbosity: z475.nullable(Verbosity$inboundSchema).optional()
 });
-var TextExtendedConfig$outboundSchema = z462.object({
+var TextExtendedConfig$outboundSchema = z475.object({
   format: Formats$outboundSchema.optional(),
-  verbosity: z462.nullable(Verbosity$outboundSchema).optional()
+  verbosity: z475.nullable(Verbosity$outboundSchema).optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/truncation.js
@@ -13930,51 +14303,51 @@ var Truncation$inboundSchema = inboundSchema(Truncation);
 var OpenResponsesResultObject = {
   Response: "response"
 };
-var OpenResponsesResultObject$inboundSchema = z463.enum(OpenResponsesResultObject);
-var OpenResponsesResultToolFunction$inboundSchema = z463.object({
-  description: z463.nullable(z463.string()).optional(),
-  name: z463.string(),
-  parameters: z463.nullable(z463.record(z463.string(), z463.any())),
-  strict: z463.nullable(z463.boolean()).optional(),
-  type: z463.literal("function")
+var OpenResponsesResultObject$inboundSchema = z476.enum(OpenResponsesResultObject);
+var OpenResponsesResultToolFunction$inboundSchema = z476.object({
+  description: z476.nullable(z476.string()).optional(),
+  name: z476.string(),
+  parameters: z476.nullable(z476.record(z476.string(), z476.any())),
+  strict: z476.nullable(z476.boolean()).optional(),
+  type: z476.literal("function")
 });
 var OpenResponsesResultToolUnion$inboundSchema = discriminatedUnion("type", {
-  function: z463.lazy(() => OpenResponsesResultToolFunction$inboundSchema),
-  web_search_preview: PreviewWebSearchServerTool$inboundSchema.and(z463.object({ type: z463.literal("web_search_preview") })),
-  web_search_preview_2025_03_11: Preview20250311WebSearchServerTool$inboundSchema.and(z463.object({ type: z463.literal("web_search_preview_2025_03_11") })),
-  web_search: LegacyWebSearchServerTool$inboundSchema.and(z463.object({ type: z463.literal("web_search") })),
-  web_search_2025_08_26: WebSearchServerTool$inboundSchema.and(z463.object({ type: z463.literal("web_search_2025_08_26") })),
-  file_search: FileSearchServerTool$inboundSchema.and(z463.object({ type: z463.literal("file_search") })),
-  computer_use_preview: ComputerUseServerTool$inboundSchema.and(z463.object({ type: z463.literal("computer_use_preview") })),
-  code_interpreter: CodeInterpreterServerTool$inboundSchema.and(z463.object({ type: z463.literal("code_interpreter") })),
-  mcp: McpServerTool$inboundSchema.and(z463.object({ type: z463.literal("mcp") })),
-  image_generation: ImageGenerationServerTool$inboundSchema.and(z463.object({ type: z463.literal("image_generation") })),
-  local_shell: CodexLocalShellTool$inboundSchema.and(z463.object({ type: z463.literal("local_shell") })),
-  shell: ShellServerTool$inboundSchema.and(z463.object({ type: z463.literal("shell") })),
-  apply_patch: ApplyPatchServerTool$inboundSchema.and(z463.object({ type: z463.literal("apply_patch") })),
-  custom: CustomTool$inboundSchema.and(z463.object({ type: z463.literal("custom") })),
-  namespace: NamespaceTool$inboundSchema.and(z463.object({ type: z463.literal("namespace") }))
+  function: z476.lazy(() => OpenResponsesResultToolFunction$inboundSchema),
+  web_search_preview: PreviewWebSearchServerTool$inboundSchema.and(z476.object({ type: z476.literal("web_search_preview") })),
+  web_search_preview_2025_03_11: Preview20250311WebSearchServerTool$inboundSchema.and(z476.object({ type: z476.literal("web_search_preview_2025_03_11") })),
+  web_search: LegacyWebSearchServerTool$inboundSchema.and(z476.object({ type: z476.literal("web_search") })),
+  web_search_2025_08_26: WebSearchServerTool$inboundSchema.and(z476.object({ type: z476.literal("web_search_2025_08_26") })),
+  file_search: FileSearchServerTool$inboundSchema.and(z476.object({ type: z476.literal("file_search") })),
+  computer_use_preview: ComputerUseServerTool$inboundSchema.and(z476.object({ type: z476.literal("computer_use_preview") })),
+  code_interpreter: CodeInterpreterServerTool$inboundSchema.and(z476.object({ type: z476.literal("code_interpreter") })),
+  mcp: McpServerTool$inboundSchema.and(z476.object({ type: z476.literal("mcp") })),
+  image_generation: ImageGenerationServerTool$inboundSchema.and(z476.object({ type: z476.literal("image_generation") })),
+  local_shell: CodexLocalShellTool$inboundSchema.and(z476.object({ type: z476.literal("local_shell") })),
+  shell: ShellServerTool$inboundSchema.and(z476.object({ type: z476.literal("shell") })),
+  apply_patch: ApplyPatchServerTool$inboundSchema.and(z476.object({ type: z476.literal("apply_patch") })),
+  custom: CustomTool$inboundSchema.and(z476.object({ type: z476.literal("custom") })),
+  namespace: NamespaceTool$inboundSchema.and(z476.object({ type: z476.literal("namespace") }))
 });
-var InputTokensDetails$inboundSchema = z463.object({
-  cache_write_tokens: z463.nullable(z463.int()).optional(),
-  cached_tokens: z463.int()
+var InputTokensDetails$inboundSchema = z476.object({
+  cache_write_tokens: z476.nullable(z476.int()).optional(),
+  cached_tokens: z476.int()
 }).transform((v) => {
   return remap(v, {
     "cache_write_tokens": "cacheWriteTokens",
     "cached_tokens": "cachedTokens"
   });
 });
-var OutputTokensDetails$inboundSchema = z463.object({
-  reasoning_tokens: z463.int()
+var OutputTokensDetails$inboundSchema = z476.object({
+  reasoning_tokens: z476.int()
 }).transform((v) => {
   return remap(v, {
     "reasoning_tokens": "reasoningTokens"
   });
 });
-var UsageCostDetails$inboundSchema = z463.object({
-  upstream_inference_cost: z463.nullable(z463.number()).optional(),
-  upstream_inference_input_cost: z463.number(),
-  upstream_inference_output_cost: z463.number()
+var UsageCostDetails$inboundSchema = z476.object({
+  upstream_inference_cost: z476.nullable(z476.number()).optional(),
+  upstream_inference_input_cost: z476.number(),
+  upstream_inference_output_cost: z476.number()
 }).transform((v) => {
   return remap(v, {
     "upstream_inference_cost": "upstreamInferenceCost",
@@ -13982,16 +14355,16 @@ var UsageCostDetails$inboundSchema = z463.object({
     "upstream_inference_output_cost": "upstreamInferenceOutputCost"
   });
 });
-var Usage$inboundSchema = z463.object({
-  input_tokens: z463.int(),
-  input_tokens_details: z463.lazy(() => InputTokensDetails$inboundSchema),
-  output_tokens: z463.int(),
-  output_tokens_details: z463.lazy(() => OutputTokensDetails$inboundSchema),
-  total_tokens: z463.int(),
-  cost: z463.nullable(z463.number()).optional(),
-  cost_details: z463.lazy(() => UsageCostDetails$inboundSchema).optional(),
-  is_byok: z463.boolean().optional(),
-  server_tool_use_details: z463.nullable(ServerToolUseDetails$inboundSchema).optional()
+var Usage$inboundSchema = z476.object({
+  input_tokens: z476.int(),
+  input_tokens_details: z476.lazy(() => InputTokensDetails$inboundSchema),
+  output_tokens: z476.int(),
+  output_tokens_details: z476.lazy(() => OutputTokensDetails$inboundSchema),
+  total_tokens: z476.int(),
+  cost: z476.nullable(z476.number()).optional(),
+  cost_details: z476.lazy(() => UsageCostDetails$inboundSchema).optional(),
+  is_byok: z476.boolean().optional(),
+  server_tool_use_details: z476.nullable(ServerToolUseDetails$inboundSchema).optional()
 }).transform((v) => {
   return remap(v, {
     "input_tokens": "inputTokens",
@@ -14004,58 +14377,58 @@ var Usage$inboundSchema = z463.object({
     "server_tool_use_details": "serverToolUseDetails"
   });
 });
-var OpenResponsesResult$inboundSchema = z463.object({
-  background: z463.nullable(z463.boolean()).optional(),
-  completed_at: z463.nullable(z463.int()),
-  created_at: z463.int(),
-  error: z463.nullable(ResponsesErrorField$inboundSchema),
-  frequency_penalty: z463.nullable(z463.number()),
-  id: z463.string(),
-  incomplete_details: z463.nullable(IncompleteDetails$inboundSchema),
-  instructions: z463.nullable(BaseInputsUnion$inboundSchema),
-  max_output_tokens: z463.nullable(z463.int()).optional(),
-  max_tool_calls: z463.nullable(z463.int()).optional(),
-  metadata: z463.nullable(z463.record(z463.string(), z463.string())),
-  model: z463.string(),
+var OpenResponsesResult$inboundSchema = z476.object({
+  background: z476.nullable(z476.boolean()).optional(),
+  completed_at: z476.nullable(z476.int()),
+  created_at: z476.int(),
+  error: z476.nullable(ResponsesErrorField$inboundSchema),
+  frequency_penalty: z476.nullable(z476.number()),
+  id: z476.string(),
+  incomplete_details: z476.nullable(IncompleteDetails$inboundSchema),
+  instructions: z476.nullable(BaseInputsUnion$inboundSchema),
+  max_output_tokens: z476.nullable(z476.int()).optional(),
+  max_tool_calls: z476.nullable(z476.int()).optional(),
+  metadata: z476.nullable(z476.record(z476.string(), z476.string())),
+  model: z476.string(),
   object: OpenResponsesResultObject$inboundSchema,
-  output: z463.array(OutputItems$inboundSchema),
-  output_text: z463.string().optional(),
-  parallel_tool_calls: z463.boolean(),
-  presence_penalty: z463.nullable(z463.number()),
-  previous_response_id: z463.nullable(z463.string()).optional(),
-  prompt: z463.nullable(StoredPromptTemplate$inboundSchema).optional(),
-  prompt_cache_key: z463.nullable(z463.string()).optional(),
-  prompt_cache_options: z463.nullable(PromptCacheOptions$inboundSchema).optional(),
-  reasoning: z463.nullable(BaseReasoningConfig$inboundSchema).optional(),
-  safety_identifier: z463.nullable(z463.string()).optional(),
-  service_tier: z463.nullable(z463.string()).optional(),
+  output: z476.array(OutputItems$inboundSchema),
+  output_text: z476.string().optional(),
+  parallel_tool_calls: z476.boolean(),
+  presence_penalty: z476.nullable(z476.number()),
+  previous_response_id: z476.nullable(z476.string()).optional(),
+  prompt: z476.nullable(StoredPromptTemplate$inboundSchema).optional(),
+  prompt_cache_key: z476.nullable(z476.string()).optional(),
+  prompt_cache_options: z476.nullable(PromptCacheOptions$inboundSchema).optional(),
+  reasoning: z476.nullable(BaseReasoningConfig$inboundSchema).optional(),
+  safety_identifier: z476.nullable(z476.string()).optional(),
+  service_tier: z476.nullable(z476.string()).optional(),
   status: OpenAIResponsesResponseStatus$inboundSchema,
-  store: z463.boolean().optional(),
-  temperature: z463.nullable(z463.number()),
+  store: z476.boolean().optional(),
+  temperature: z476.nullable(z476.number()),
   text: TextExtendedConfig$inboundSchema.optional(),
   tool_choice: OpenAIResponsesToolChoiceUnion$inboundSchema,
-  tools: z463.array(discriminatedUnion("type", {
-    function: z463.lazy(() => OpenResponsesResultToolFunction$inboundSchema),
-    web_search_preview: PreviewWebSearchServerTool$inboundSchema.and(z463.object({ type: z463.literal("web_search_preview") })),
-    web_search_preview_2025_03_11: Preview20250311WebSearchServerTool$inboundSchema.and(z463.object({ type: z463.literal("web_search_preview_2025_03_11") })),
-    web_search: LegacyWebSearchServerTool$inboundSchema.and(z463.object({ type: z463.literal("web_search") })),
-    web_search_2025_08_26: WebSearchServerTool$inboundSchema.and(z463.object({ type: z463.literal("web_search_2025_08_26") })),
-    file_search: FileSearchServerTool$inboundSchema.and(z463.object({ type: z463.literal("file_search") })),
-    computer_use_preview: ComputerUseServerTool$inboundSchema.and(z463.object({ type: z463.literal("computer_use_preview") })),
-    code_interpreter: CodeInterpreterServerTool$inboundSchema.and(z463.object({ type: z463.literal("code_interpreter") })),
-    mcp: McpServerTool$inboundSchema.and(z463.object({ type: z463.literal("mcp") })),
-    image_generation: ImageGenerationServerTool$inboundSchema.and(z463.object({ type: z463.literal("image_generation") })),
-    local_shell: CodexLocalShellTool$inboundSchema.and(z463.object({ type: z463.literal("local_shell") })),
-    shell: ShellServerTool$inboundSchema.and(z463.object({ type: z463.literal("shell") })),
-    apply_patch: ApplyPatchServerTool$inboundSchema.and(z463.object({ type: z463.literal("apply_patch") })),
-    custom: CustomTool$inboundSchema.and(z463.object({ type: z463.literal("custom") })),
-    namespace: NamespaceTool$inboundSchema.and(z463.object({ type: z463.literal("namespace") }))
+  tools: z476.array(discriminatedUnion("type", {
+    function: z476.lazy(() => OpenResponsesResultToolFunction$inboundSchema),
+    web_search_preview: PreviewWebSearchServerTool$inboundSchema.and(z476.object({ type: z476.literal("web_search_preview") })),
+    web_search_preview_2025_03_11: Preview20250311WebSearchServerTool$inboundSchema.and(z476.object({ type: z476.literal("web_search_preview_2025_03_11") })),
+    web_search: LegacyWebSearchServerTool$inboundSchema.and(z476.object({ type: z476.literal("web_search") })),
+    web_search_2025_08_26: WebSearchServerTool$inboundSchema.and(z476.object({ type: z476.literal("web_search_2025_08_26") })),
+    file_search: FileSearchServerTool$inboundSchema.and(z476.object({ type: z476.literal("file_search") })),
+    computer_use_preview: ComputerUseServerTool$inboundSchema.and(z476.object({ type: z476.literal("computer_use_preview") })),
+    code_interpreter: CodeInterpreterServerTool$inboundSchema.and(z476.object({ type: z476.literal("code_interpreter") })),
+    mcp: McpServerTool$inboundSchema.and(z476.object({ type: z476.literal("mcp") })),
+    image_generation: ImageGenerationServerTool$inboundSchema.and(z476.object({ type: z476.literal("image_generation") })),
+    local_shell: CodexLocalShellTool$inboundSchema.and(z476.object({ type: z476.literal("local_shell") })),
+    shell: ShellServerTool$inboundSchema.and(z476.object({ type: z476.literal("shell") })),
+    apply_patch: ApplyPatchServerTool$inboundSchema.and(z476.object({ type: z476.literal("apply_patch") })),
+    custom: CustomTool$inboundSchema.and(z476.object({ type: z476.literal("custom") })),
+    namespace: NamespaceTool$inboundSchema.and(z476.object({ type: z476.literal("namespace") }))
   })),
-  top_logprobs: z463.nullable(z463.int()).optional(),
-  top_p: z463.nullable(z463.number()),
-  truncation: z463.nullable(Truncation$inboundSchema).optional(),
-  usage: z463.nullable(z463.lazy(() => Usage$inboundSchema)).optional(),
-  user: z463.nullable(z463.string()).optional(),
+  top_logprobs: z476.nullable(z476.int()).optional(),
+  top_p: z476.nullable(z476.number()),
+  truncation: z476.nullable(Truncation$inboundSchema).optional(),
+  usage: z476.nullable(z476.lazy(() => Usage$inboundSchema)).optional(),
+  user: z476.nullable(z476.string()).optional(),
   error_type: ApiErrorType$inboundSchema.optional(),
   openrouter_metadata: OpenRouterMetadata$inboundSchema.optional()
 }).transform((v) => {
@@ -14083,10 +14456,10 @@ var OpenResponsesResult$inboundSchema = z463.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/openresponsescreatedevent.js
-var OpenResponsesCreatedEvent$inboundSchema = z464.object({
+var OpenResponsesCreatedEvent$inboundSchema = z477.object({
   response: OpenResponsesResult$inboundSchema,
-  sequence_number: z464.int(),
-  type: z464.literal("response.created")
+  sequence_number: z477.int(),
+  type: z477.literal("response.created")
 }).transform((v) => {
   return remap(v, {
     "sequence_number": "sequenceNumber"
@@ -14094,11 +14467,11 @@ var OpenResponsesCreatedEvent$inboundSchema = z464.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/openresponsesinprogressevent.js
-var z465 = __toESM(require("zod/v4"), 1);
-var OpenResponsesInProgressEvent$inboundSchema = z465.object({
+var z478 = __toESM(require("zod/v4"), 1);
+var OpenResponsesInProgressEvent$inboundSchema = z478.object({
   response: OpenResponsesResult$inboundSchema,
-  sequence_number: z465.int(),
-  type: z465.literal("response.in_progress")
+  sequence_number: z478.int(),
+  type: z478.literal("response.in_progress")
 }).transform((v) => {
   return remap(v, {
     "sequence_number": "sequenceNumber"
@@ -14113,156 +14486,157 @@ var OutputModalityEnum = {
 var OutputModalityEnum$outboundSchema = outboundSchema(OutputModalityEnum);
 
 // node_modules/@openrouter/sdk/esm/models/payloadtoolargeresponseerrordata.js
-var z466 = __toESM(require("zod/v4"), 1);
-var PayloadTooLargeResponseErrorData$inboundSchema = z466.object({
-  code: z466.int(),
-  message: z466.string(),
-  metadata: z466.nullable(z466.record(z466.string(), z466.any())).optional()
+var z479 = __toESM(require("zod/v4"), 1);
+var PayloadTooLargeResponseErrorData$inboundSchema = z479.object({
+  code: z479.int(),
+  message: z479.string(),
+  metadata: z479.nullable(z479.record(z479.string(), z479.any())).optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/paymentrequiredresponseerrordata.js
-var z467 = __toESM(require("zod/v4"), 1);
-var PaymentRequiredResponseErrorData$inboundSchema = z467.object({
-  code: z467.int(),
-  message: z467.string(),
-  metadata: z467.nullable(z467.record(z467.string(), z467.any())).optional()
+var z480 = __toESM(require("zod/v4"), 1);
+var PaymentRequiredResponseErrorData$inboundSchema = z480.object({
+  code: z480.int(),
+  message: z480.string(),
+  metadata: z480.nullable(z480.record(z480.string(), z480.any())).optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/provideroptions.js
-var z468 = __toESM(require("zod/v4"), 1);
-var ProviderOptions$outboundSchema = z468.object({
-  oneai: z468.record(z468.string(), z468.any()).optional(),
-  ai21: z468.record(z468.string(), z468.any()).optional(),
-  aionLabs: z468.record(z468.string(), z468.any()).optional(),
-  akashml: z468.record(z468.string(), z468.any()).optional(),
-  alibaba: z468.record(z468.string(), z468.any()).optional(),
-  amazonBedrock: z468.record(z468.string(), z468.any()).optional(),
-  amazonNova: z468.record(z468.string(), z468.any()).optional(),
-  ambient: z468.record(z468.string(), z468.any()).optional(),
-  anthropic: z468.record(z468.string(), z468.any()).optional(),
-  anyscale: z468.record(z468.string(), z468.any()).optional(),
-  arceeAi: z468.record(z468.string(), z468.any()).optional(),
-  atlasCloud: z468.record(z468.string(), z468.any()).optional(),
-  atoma: z468.record(z468.string(), z468.any()).optional(),
-  avian: z468.record(z468.string(), z468.any()).optional(),
-  azure: z468.record(z468.string(), z468.any()).optional(),
-  baidu: z468.record(z468.string(), z468.any()).optional(),
-  baseten: z468.record(z468.string(), z468.any()).optional(),
-  blackForestLabs: z468.record(z468.string(), z468.any()).optional(),
-  byteplus: z468.record(z468.string(), z468.any()).optional(),
-  centml: z468.record(z468.string(), z468.any()).optional(),
-  cerebras: z468.record(z468.string(), z468.any()).optional(),
-  chutes: z468.record(z468.string(), z468.any()).optional(),
-  cirrascale: z468.record(z468.string(), z468.any()).optional(),
-  clarifai: z468.record(z468.string(), z468.any()).optional(),
-  claudeOnAws: z468.record(z468.string(), z468.any()).optional(),
-  cloudflare: z468.record(z468.string(), z468.any()).optional(),
-  cohere: z468.record(z468.string(), z468.any()).optional(),
-  coreweave: z468.record(z468.string(), z468.any()).optional(),
-  crofai: z468.record(z468.string(), z468.any()).optional(),
-  crucible: z468.record(z468.string(), z468.any()).optional(),
-  crusoe: z468.record(z468.string(), z468.any()).optional(),
-  darkbloom: z468.record(z468.string(), z468.any()).optional(),
-  decart: z468.record(z468.string(), z468.any()).optional(),
-  deepgram: z468.record(z468.string(), z468.any()).optional(),
-  deepinfra: z468.record(z468.string(), z468.any()).optional(),
-  deepseek: z468.record(z468.string(), z468.any()).optional(),
-  dekallm: z468.record(z468.string(), z468.any()).optional(),
-  digitalocean: z468.record(z468.string(), z468.any()).optional(),
-  enfer: z468.record(z468.string(), z468.any()).optional(),
-  fakeProvider: z468.record(z468.string(), z468.any()).optional(),
-  featherless: z468.record(z468.string(), z468.any()).optional(),
-  fireworks: z468.record(z468.string(), z468.any()).optional(),
-  fishAudio: z468.record(z468.string(), z468.any()).optional(),
-  friendli: z468.record(z468.string(), z468.any()).optional(),
-  gmicloud: z468.record(z468.string(), z468.any()).optional(),
-  googleAiStudio: z468.record(z468.string(), z468.any()).optional(),
-  googleVertex: z468.record(z468.string(), z468.any()).optional(),
-  gopomelo: z468.record(z468.string(), z468.any()).optional(),
-  groq: z468.record(z468.string(), z468.any()).optional(),
-  heygen: z468.record(z468.string(), z468.any()).optional(),
-  huggingface: z468.record(z468.string(), z468.any()).optional(),
-  hyperbolic: z468.record(z468.string(), z468.any()).optional(),
-  hyperbolicQuantized: z468.record(z468.string(), z468.any()).optional(),
-  inception: z468.record(z468.string(), z468.any()).optional(),
-  inceptron: z468.record(z468.string(), z468.any()).optional(),
-  inferactVllm: z468.record(z468.string(), z468.any()).optional(),
-  inferenceNet: z468.record(z468.string(), z468.any()).optional(),
-  infermatic: z468.record(z468.string(), z468.any()).optional(),
-  inflection: z468.record(z468.string(), z468.any()).optional(),
-  inocloud: z468.record(z468.string(), z468.any()).optional(),
-  ioNet: z468.record(z468.string(), z468.any()).optional(),
-  ionstream: z468.record(z468.string(), z468.any()).optional(),
-  klusterai: z468.record(z468.string(), z468.any()).optional(),
-  krea: z468.record(z468.string(), z468.any()).optional(),
-  lambda: z468.record(z468.string(), z468.any()).optional(),
-  lepton: z468.record(z468.string(), z468.any()).optional(),
-  liquid: z468.record(z468.string(), z468.any()).optional(),
-  lynn: z468.record(z468.string(), z468.any()).optional(),
-  lynnPrivate: z468.record(z468.string(), z468.any()).optional(),
-  mancer: z468.record(z468.string(), z468.any()).optional(),
-  mancerOld: z468.record(z468.string(), z468.any()).optional(),
-  mara: z468.record(z468.string(), z468.any()).optional(),
-  meta: z468.record(z468.string(), z468.any()).optional(),
-  minimax: z468.record(z468.string(), z468.any()).optional(),
-  mistral: z468.record(z468.string(), z468.any()).optional(),
-  modal: z468.record(z468.string(), z468.any()).optional(),
-  modelrun: z468.record(z468.string(), z468.any()).optional(),
-  modular: z468.record(z468.string(), z468.any()).optional(),
-  moonshotai: z468.record(z468.string(), z468.any()).optional(),
-  morph: z468.record(z468.string(), z468.any()).optional(),
-  ncompass: z468.record(z468.string(), z468.any()).optional(),
-  nebius: z468.record(z468.string(), z468.any()).optional(),
-  nexAgi: z468.record(z468.string(), z468.any()).optional(),
-  nextbit: z468.record(z468.string(), z468.any()).optional(),
-  nineteen: z468.record(z468.string(), z468.any()).optional(),
-  novita: z468.record(z468.string(), z468.any()).optional(),
-  nvidia: z468.record(z468.string(), z468.any()).optional(),
-  octoai: z468.record(z468.string(), z468.any()).optional(),
-  openInference: z468.record(z468.string(), z468.any()).optional(),
-  openai: z468.record(z468.string(), z468.any()).optional(),
-  parasail: z468.record(z468.string(), z468.any()).optional(),
-  perceptron: z468.record(z468.string(), z468.any()).optional(),
-  perplexity: z468.record(z468.string(), z468.any()).optional(),
-  phala: z468.record(z468.string(), z468.any()).optional(),
-  poolside: z468.record(z468.string(), z468.any()).optional(),
-  quiver: z468.record(z468.string(), z468.any()).optional(),
-  recraft: z468.record(z468.string(), z468.any()).optional(),
-  recursal: z468.record(z468.string(), z468.any()).optional(),
-  reflection: z468.record(z468.string(), z468.any()).optional(),
-  reka: z468.record(z468.string(), z468.any()).optional(),
-  relace: z468.record(z468.string(), z468.any()).optional(),
-  replicate: z468.record(z468.string(), z468.any()).optional(),
-  runway: z468.record(z468.string(), z468.any()).optional(),
-  sailResearch: z468.record(z468.string(), z468.any()).optional(),
-  sakana: z468.record(z468.string(), z468.any()).optional(),
-  sakanaAi: z468.record(z468.string(), z468.any()).optional(),
-  sambanova: z468.record(z468.string(), z468.any()).optional(),
-  sambanovaCloaked: z468.record(z468.string(), z468.any()).optional(),
-  seed: z468.record(z468.string(), z468.any()).optional(),
-  sfCompute: z468.record(z468.string(), z468.any()).optional(),
-  siliconflow: z468.record(z468.string(), z468.any()).optional(),
-  sourceful: z468.record(z468.string(), z468.any()).optional(),
-  stealth: z468.record(z468.string(), z468.any()).optional(),
-  stepfun: z468.record(z468.string(), z468.any()).optional(),
-  streamlake: z468.record(z468.string(), z468.any()).optional(),
-  switchpoint: z468.record(z468.string(), z468.any()).optional(),
-  targon: z468.record(z468.string(), z468.any()).optional(),
-  tencent: z468.record(z468.string(), z468.any()).optional(),
-  tenstorrent: z468.record(z468.string(), z468.any()).optional(),
-  thinkingmachines: z468.record(z468.string(), z468.any()).optional(),
-  together: z468.record(z468.string(), z468.any()).optional(),
-  togetherLite: z468.record(z468.string(), z468.any()).optional(),
-  ubicloud: z468.record(z468.string(), z468.any()).optional(),
-  upstage: z468.record(z468.string(), z468.any()).optional(),
-  venice: z468.record(z468.string(), z468.any()).optional(),
-  voyageai: z468.record(z468.string(), z468.any()).optional(),
-  wafer: z468.record(z468.string(), z468.any()).optional(),
-  wandb: z468.record(z468.string(), z468.any()).optional(),
-  wandbLegacy: z468.record(z468.string(), z468.any()).optional(),
-  xai: z468.record(z468.string(), z468.any()).optional(),
-  xiaomi: z468.record(z468.string(), z468.any()).optional(),
-  zAi: z468.record(z468.string(), z468.any()).optional()
+var z481 = __toESM(require("zod/v4"), 1);
+var ProviderOptions$outboundSchema = z481.object({
+  oneai: z481.record(z481.string(), z481.any()).optional(),
+  ai21: z481.record(z481.string(), z481.any()).optional(),
+  aionLabs: z481.record(z481.string(), z481.any()).optional(),
+  akashml: z481.record(z481.string(), z481.any()).optional(),
+  alibaba: z481.record(z481.string(), z481.any()).optional(),
+  amazonBedrock: z481.record(z481.string(), z481.any()).optional(),
+  amazonNova: z481.record(z481.string(), z481.any()).optional(),
+  ambient: z481.record(z481.string(), z481.any()).optional(),
+  anthropic: z481.record(z481.string(), z481.any()).optional(),
+  anyscale: z481.record(z481.string(), z481.any()).optional(),
+  arceeAi: z481.record(z481.string(), z481.any()).optional(),
+  atlasCloud: z481.record(z481.string(), z481.any()).optional(),
+  atoma: z481.record(z481.string(), z481.any()).optional(),
+  avian: z481.record(z481.string(), z481.any()).optional(),
+  azure: z481.record(z481.string(), z481.any()).optional(),
+  baidu: z481.record(z481.string(), z481.any()).optional(),
+  baseten: z481.record(z481.string(), z481.any()).optional(),
+  blackForestLabs: z481.record(z481.string(), z481.any()).optional(),
+  byteplus: z481.record(z481.string(), z481.any()).optional(),
+  centml: z481.record(z481.string(), z481.any()).optional(),
+  cerebras: z481.record(z481.string(), z481.any()).optional(),
+  chutes: z481.record(z481.string(), z481.any()).optional(),
+  cirrascale: z481.record(z481.string(), z481.any()).optional(),
+  clarifai: z481.record(z481.string(), z481.any()).optional(),
+  claudeOnAws: z481.record(z481.string(), z481.any()).optional(),
+  cloudflare: z481.record(z481.string(), z481.any()).optional(),
+  cohere: z481.record(z481.string(), z481.any()).optional(),
+  coreweave: z481.record(z481.string(), z481.any()).optional(),
+  crofai: z481.record(z481.string(), z481.any()).optional(),
+  crucible: z481.record(z481.string(), z481.any()).optional(),
+  crusoe: z481.record(z481.string(), z481.any()).optional(),
+  darkbloom: z481.record(z481.string(), z481.any()).optional(),
+  databricks: z481.record(z481.string(), z481.any()).optional(),
+  decart: z481.record(z481.string(), z481.any()).optional(),
+  deepgram: z481.record(z481.string(), z481.any()).optional(),
+  deepinfra: z481.record(z481.string(), z481.any()).optional(),
+  deepseek: z481.record(z481.string(), z481.any()).optional(),
+  dekallm: z481.record(z481.string(), z481.any()).optional(),
+  digitalocean: z481.record(z481.string(), z481.any()).optional(),
+  enfer: z481.record(z481.string(), z481.any()).optional(),
+  fakeProvider: z481.record(z481.string(), z481.any()).optional(),
+  featherless: z481.record(z481.string(), z481.any()).optional(),
+  fireworks: z481.record(z481.string(), z481.any()).optional(),
+  fishAudio: z481.record(z481.string(), z481.any()).optional(),
+  friendli: z481.record(z481.string(), z481.any()).optional(),
+  gmicloud: z481.record(z481.string(), z481.any()).optional(),
+  googleAiStudio: z481.record(z481.string(), z481.any()).optional(),
+  googleVertex: z481.record(z481.string(), z481.any()).optional(),
+  gopomelo: z481.record(z481.string(), z481.any()).optional(),
+  groq: z481.record(z481.string(), z481.any()).optional(),
+  heygen: z481.record(z481.string(), z481.any()).optional(),
+  huggingface: z481.record(z481.string(), z481.any()).optional(),
+  hyperbolic: z481.record(z481.string(), z481.any()).optional(),
+  hyperbolicQuantized: z481.record(z481.string(), z481.any()).optional(),
+  inception: z481.record(z481.string(), z481.any()).optional(),
+  inceptron: z481.record(z481.string(), z481.any()).optional(),
+  inferactVllm: z481.record(z481.string(), z481.any()).optional(),
+  inferenceNet: z481.record(z481.string(), z481.any()).optional(),
+  infermatic: z481.record(z481.string(), z481.any()).optional(),
+  inflection: z481.record(z481.string(), z481.any()).optional(),
+  inocloud: z481.record(z481.string(), z481.any()).optional(),
+  ioNet: z481.record(z481.string(), z481.any()).optional(),
+  ionstream: z481.record(z481.string(), z481.any()).optional(),
+  klusterai: z481.record(z481.string(), z481.any()).optional(),
+  krea: z481.record(z481.string(), z481.any()).optional(),
+  lambda: z481.record(z481.string(), z481.any()).optional(),
+  lepton: z481.record(z481.string(), z481.any()).optional(),
+  liquid: z481.record(z481.string(), z481.any()).optional(),
+  lynn: z481.record(z481.string(), z481.any()).optional(),
+  lynnPrivate: z481.record(z481.string(), z481.any()).optional(),
+  mancer: z481.record(z481.string(), z481.any()).optional(),
+  mancerOld: z481.record(z481.string(), z481.any()).optional(),
+  mara: z481.record(z481.string(), z481.any()).optional(),
+  meta: z481.record(z481.string(), z481.any()).optional(),
+  minimax: z481.record(z481.string(), z481.any()).optional(),
+  mistral: z481.record(z481.string(), z481.any()).optional(),
+  modal: z481.record(z481.string(), z481.any()).optional(),
+  modelrun: z481.record(z481.string(), z481.any()).optional(),
+  modular: z481.record(z481.string(), z481.any()).optional(),
+  moonshotai: z481.record(z481.string(), z481.any()).optional(),
+  morph: z481.record(z481.string(), z481.any()).optional(),
+  ncompass: z481.record(z481.string(), z481.any()).optional(),
+  nebius: z481.record(z481.string(), z481.any()).optional(),
+  nexAgi: z481.record(z481.string(), z481.any()).optional(),
+  nextbit: z481.record(z481.string(), z481.any()).optional(),
+  nineteen: z481.record(z481.string(), z481.any()).optional(),
+  novita: z481.record(z481.string(), z481.any()).optional(),
+  nvidia: z481.record(z481.string(), z481.any()).optional(),
+  octoai: z481.record(z481.string(), z481.any()).optional(),
+  openInference: z481.record(z481.string(), z481.any()).optional(),
+  openai: z481.record(z481.string(), z481.any()).optional(),
+  parasail: z481.record(z481.string(), z481.any()).optional(),
+  perceptron: z481.record(z481.string(), z481.any()).optional(),
+  perplexity: z481.record(z481.string(), z481.any()).optional(),
+  phala: z481.record(z481.string(), z481.any()).optional(),
+  poolside: z481.record(z481.string(), z481.any()).optional(),
+  quiver: z481.record(z481.string(), z481.any()).optional(),
+  recraft: z481.record(z481.string(), z481.any()).optional(),
+  recursal: z481.record(z481.string(), z481.any()).optional(),
+  reflection: z481.record(z481.string(), z481.any()).optional(),
+  reka: z481.record(z481.string(), z481.any()).optional(),
+  relace: z481.record(z481.string(), z481.any()).optional(),
+  replicate: z481.record(z481.string(), z481.any()).optional(),
+  runway: z481.record(z481.string(), z481.any()).optional(),
+  sailResearch: z481.record(z481.string(), z481.any()).optional(),
+  sakana: z481.record(z481.string(), z481.any()).optional(),
+  sakanaAi: z481.record(z481.string(), z481.any()).optional(),
+  sambanova: z481.record(z481.string(), z481.any()).optional(),
+  sambanovaCloaked: z481.record(z481.string(), z481.any()).optional(),
+  seed: z481.record(z481.string(), z481.any()).optional(),
+  sfCompute: z481.record(z481.string(), z481.any()).optional(),
+  siliconflow: z481.record(z481.string(), z481.any()).optional(),
+  sourceful: z481.record(z481.string(), z481.any()).optional(),
+  stealth: z481.record(z481.string(), z481.any()).optional(),
+  stepfun: z481.record(z481.string(), z481.any()).optional(),
+  streamlake: z481.record(z481.string(), z481.any()).optional(),
+  switchpoint: z481.record(z481.string(), z481.any()).optional(),
+  targon: z481.record(z481.string(), z481.any()).optional(),
+  tencent: z481.record(z481.string(), z481.any()).optional(),
+  tenstorrent: z481.record(z481.string(), z481.any()).optional(),
+  thinkingmachines: z481.record(z481.string(), z481.any()).optional(),
+  together: z481.record(z481.string(), z481.any()).optional(),
+  togetherLite: z481.record(z481.string(), z481.any()).optional(),
+  ubicloud: z481.record(z481.string(), z481.any()).optional(),
+  upstage: z481.record(z481.string(), z481.any()).optional(),
+  venice: z481.record(z481.string(), z481.any()).optional(),
+  voyageai: z481.record(z481.string(), z481.any()).optional(),
+  wafer: z481.record(z481.string(), z481.any()).optional(),
+  wandb: z481.record(z481.string(), z481.any()).optional(),
+  wandbLegacy: z481.record(z481.string(), z481.any()).optional(),
+  xai: z481.record(z481.string(), z481.any()).optional(),
+  xiaomi: z481.record(z481.string(), z481.any()).optional(),
+  zAi: z481.record(z481.string(), z481.any()).optional()
 }).transform((v) => {
   return remap(v, {
     oneai: "01ai",
@@ -14296,19 +14670,19 @@ var ProviderOptions$outboundSchema = z468.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/provideroverloadedresponseerrordata.js
-var z469 = __toESM(require("zod/v4"), 1);
-var ProviderOverloadedResponseErrorData$inboundSchema = z469.object({
-  code: z469.int(),
-  message: z469.string(),
-  metadata: z469.nullable(z469.record(z469.string(), z469.any())).optional()
+var z482 = __toESM(require("zod/v4"), 1);
+var ProviderOverloadedResponseErrorData$inboundSchema = z482.object({
+  code: z482.int(),
+  message: z482.string(),
+  metadata: z482.nullable(z482.record(z482.string(), z482.any())).optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/rankingsdailyitem.js
-var z470 = __toESM(require("zod/v4"), 1);
-var RankingsDailyItem$inboundSchema = z470.object({
-  date: z470.string(),
-  model_permaslug: z470.string(),
-  total_tokens: z470.string()
+var z483 = __toESM(require("zod/v4"), 1);
+var RankingsDailyItem$inboundSchema = z483.object({
+  date: z483.string(),
+  model_permaslug: z483.string(),
+  total_tokens: z483.string()
 }).transform((v) => {
   return remap(v, {
     "model_permaslug": "modelPermaslug",
@@ -14317,21 +14691,21 @@ var RankingsDailyItem$inboundSchema = z470.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/rankingsdailyresponse.js
-var z471 = __toESM(require("zod/v4"), 1);
-var RankingsDailyResponse$inboundSchema = z471.object({
-  data: z471.array(RankingsDailyItem$inboundSchema),
+var z484 = __toESM(require("zod/v4"), 1);
+var RankingsDailyResponse$inboundSchema = z484.object({
+  data: z484.array(RankingsDailyItem$inboundSchema),
   meta: RankingsDailyMeta$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/reasoningdeltaevent.js
-var z472 = __toESM(require("zod/v4"), 1);
-var ReasoningDeltaEvent$inboundSchema = z472.object({
-  content_index: z472.int(),
-  delta: z472.string(),
-  item_id: z472.string(),
-  output_index: z472.int(),
-  sequence_number: z472.int(),
-  type: z472.literal("response.reasoning_text.delta")
+var z485 = __toESM(require("zod/v4"), 1);
+var ReasoningDeltaEvent$inboundSchema = z485.object({
+  content_index: z485.int(),
+  delta: z485.string(),
+  item_id: z485.string(),
+  output_index: z485.int(),
+  sequence_number: z485.int(),
+  type: z485.literal("response.reasoning_text.delta")
 }).transform((v) => {
   return remap(v, {
     "content_index": "contentIndex",
@@ -14342,14 +14716,14 @@ var ReasoningDeltaEvent$inboundSchema = z472.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/reasoningdoneevent.js
-var z473 = __toESM(require("zod/v4"), 1);
-var ReasoningDoneEvent$inboundSchema = z473.object({
-  content_index: z473.int(),
-  item_id: z473.string(),
-  output_index: z473.int(),
-  sequence_number: z473.int(),
-  text: z473.string(),
-  type: z473.literal("response.reasoning_text.done")
+var z486 = __toESM(require("zod/v4"), 1);
+var ReasoningDoneEvent$inboundSchema = z486.object({
+  content_index: z486.int(),
+  item_id: z486.string(),
+  output_index: z486.int(),
+  sequence_number: z486.int(),
+  text: z486.string(),
+  type: z486.literal("response.reasoning_text.done")
 }).transform((v) => {
   return remap(v, {
     "content_index": "contentIndex",
@@ -14360,14 +14734,14 @@ var ReasoningDoneEvent$inboundSchema = z473.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/reasoningsummarypartaddedevent.js
-var z474 = __toESM(require("zod/v4"), 1);
-var ReasoningSummaryPartAddedEvent$inboundSchema = z474.object({
-  item_id: z474.string(),
-  output_index: z474.int(),
+var z487 = __toESM(require("zod/v4"), 1);
+var ReasoningSummaryPartAddedEvent$inboundSchema = z487.object({
+  item_id: z487.string(),
+  output_index: z487.int(),
   part: ReasoningSummaryText$inboundSchema,
-  sequence_number: z474.int(),
-  summary_index: z474.int(),
-  type: z474.literal("response.reasoning_summary_part.added")
+  sequence_number: z487.int(),
+  summary_index: z487.int(),
+  type: z487.literal("response.reasoning_summary_part.added")
 }).transform((v) => {
   return remap(v, {
     "item_id": "itemId",
@@ -14378,14 +14752,14 @@ var ReasoningSummaryPartAddedEvent$inboundSchema = z474.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/reasoningsummarypartdoneevent.js
-var z475 = __toESM(require("zod/v4"), 1);
-var ReasoningSummaryPartDoneEvent$inboundSchema = z475.object({
-  item_id: z475.string(),
-  output_index: z475.int(),
+var z488 = __toESM(require("zod/v4"), 1);
+var ReasoningSummaryPartDoneEvent$inboundSchema = z488.object({
+  item_id: z488.string(),
+  output_index: z488.int(),
   part: ReasoningSummaryText$inboundSchema,
-  sequence_number: z475.int(),
-  summary_index: z475.int(),
-  type: z475.literal("response.reasoning_summary_part.done")
+  sequence_number: z488.int(),
+  summary_index: z488.int(),
+  type: z488.literal("response.reasoning_summary_part.done")
 }).transform((v) => {
   return remap(v, {
     "item_id": "itemId",
@@ -14396,14 +14770,14 @@ var ReasoningSummaryPartDoneEvent$inboundSchema = z475.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/reasoningsummarytextdeltaevent.js
-var z476 = __toESM(require("zod/v4"), 1);
-var ReasoningSummaryTextDeltaEvent$inboundSchema = z476.object({
-  delta: z476.string(),
-  item_id: z476.string(),
-  output_index: z476.int(),
-  sequence_number: z476.int(),
-  summary_index: z476.int(),
-  type: z476.literal("response.reasoning_summary_text.delta")
+var z489 = __toESM(require("zod/v4"), 1);
+var ReasoningSummaryTextDeltaEvent$inboundSchema = z489.object({
+  delta: z489.string(),
+  item_id: z489.string(),
+  output_index: z489.int(),
+  sequence_number: z489.int(),
+  summary_index: z489.int(),
+  type: z489.literal("response.reasoning_summary_text.delta")
 }).transform((v) => {
   return remap(v, {
     "item_id": "itemId",
@@ -14414,14 +14788,14 @@ var ReasoningSummaryTextDeltaEvent$inboundSchema = z476.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/reasoningsummarytextdoneevent.js
-var z477 = __toESM(require("zod/v4"), 1);
-var ReasoningSummaryTextDoneEvent$inboundSchema = z477.object({
-  item_id: z477.string(),
-  output_index: z477.int(),
-  sequence_number: z477.int(),
-  summary_index: z477.int(),
-  text: z477.string(),
-  type: z477.literal("response.reasoning_summary_text.done")
+var z490 = __toESM(require("zod/v4"), 1);
+var ReasoningSummaryTextDoneEvent$inboundSchema = z490.object({
+  item_id: z490.string(),
+  output_index: z490.int(),
+  sequence_number: z490.int(),
+  summary_index: z490.int(),
+  text: z490.string(),
+  type: z490.literal("response.reasoning_summary_text.done")
 }).transform((v) => {
   return remap(v, {
     "item_id": "itemId",
@@ -14432,14 +14806,14 @@ var ReasoningSummaryTextDoneEvent$inboundSchema = z477.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/refusaldeltaevent.js
-var z478 = __toESM(require("zod/v4"), 1);
-var RefusalDeltaEvent$inboundSchema = z478.object({
-  content_index: z478.int(),
-  delta: z478.string(),
-  item_id: z478.string(),
-  output_index: z478.int(),
-  sequence_number: z478.int(),
-  type: z478.literal("response.refusal.delta")
+var z491 = __toESM(require("zod/v4"), 1);
+var RefusalDeltaEvent$inboundSchema = z491.object({
+  content_index: z491.int(),
+  delta: z491.string(),
+  item_id: z491.string(),
+  output_index: z491.int(),
+  sequence_number: z491.int(),
+  type: z491.literal("response.refusal.delta")
 }).transform((v) => {
   return remap(v, {
     "content_index": "contentIndex",
@@ -14450,14 +14824,14 @@ var RefusalDeltaEvent$inboundSchema = z478.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/refusaldoneevent.js
-var z479 = __toESM(require("zod/v4"), 1);
-var RefusalDoneEvent$inboundSchema = z479.object({
-  content_index: z479.int(),
-  item_id: z479.string(),
-  output_index: z479.int(),
-  refusal: z479.string(),
-  sequence_number: z479.int(),
-  type: z479.literal("response.refusal.done")
+var z492 = __toESM(require("zod/v4"), 1);
+var RefusalDoneEvent$inboundSchema = z492.object({
+  content_index: z492.int(),
+  item_id: z492.string(),
+  output_index: z492.int(),
+  refusal: z492.string(),
+  sequence_number: z492.int(),
+  type: z492.literal("response.refusal.done")
 }).transform((v) => {
   return remap(v, {
     "content_index": "contentIndex",
@@ -14468,11 +14842,11 @@ var RefusalDoneEvent$inboundSchema = z479.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/requesttimeoutresponseerrordata.js
-var z480 = __toESM(require("zod/v4"), 1);
-var RequestTimeoutResponseErrorData$inboundSchema = z480.object({
-  code: z480.int(),
-  message: z480.string(),
-  metadata: z480.nullable(z480.record(z480.string(), z480.any())).optional()
+var z493 = __toESM(require("zod/v4"), 1);
+var RequestTimeoutResponseErrorData$inboundSchema = z493.object({
+  code: z493.int(),
+  message: z493.string(),
+  metadata: z493.nullable(z493.record(z493.string(), z493.any())).optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/responseincludesenum.js
@@ -14486,7 +14860,7 @@ var ResponseIncludesEnum = {
 var ResponseIncludesEnum$outboundSchema = outboundSchema(ResponseIncludesEnum);
 
 // node_modules/@openrouter/sdk/esm/models/responsesrequest.js
-var z481 = __toESM(require("zod/v4"), 1);
+var z494 = __toESM(require("zod/v4"), 1);
 var ResponsesRequestServiceTier = {
   Auto: "auto",
   Default: "default",
@@ -14495,7 +14869,7 @@ var ResponsesRequestServiceTier = {
   Priority: "priority",
   Scale: "scale"
 };
-var ResponsesRequestPlugin$outboundSchema = z481.union([
+var ResponsesRequestPlugin$outboundSchema = z494.union([
   AutoBetaRouterPlugin$outboundSchema,
   AutoRouterPlugin$outboundSchema,
   ContextCompressionPlugin$outboundSchema,
@@ -14507,72 +14881,72 @@ var ResponsesRequestPlugin$outboundSchema = z481.union([
   WebSearchPlugin$outboundSchema,
   WebFetchPlugin$outboundSchema
 ]);
-var ReasoningConfig$outboundSchema = z481.object({
-  context: z481.nullable(ReasoningContext$outboundSchema).optional(),
-  effort: z481.nullable(ReasoningEffort$outboundSchema).optional(),
-  mode: z481.nullable(ReasoningMode$outboundSchema).optional(),
-  summary: z481.nullable(ReasoningSummaryVerbosity$outboundSchema).optional(),
-  enabled: z481.nullable(z481.boolean()).optional(),
-  maxTokens: z481.nullable(z481.int()).optional()
+var ReasoningConfig$outboundSchema = z494.object({
+  context: z494.nullable(ReasoningContext$outboundSchema).optional(),
+  effort: z494.nullable(ReasoningEffort$outboundSchema).optional(),
+  mode: z494.nullable(ReasoningMode$outboundSchema).optional(),
+  summary: z494.nullable(ReasoningSummaryVerbosity$outboundSchema).optional(),
+  enabled: z494.nullable(z494.boolean()).optional(),
+  maxTokens: z494.nullable(z494.int()).optional()
 }).transform((v) => {
   return remap(v, {
     maxTokens: "max_tokens"
   });
 });
 var ResponsesRequestServiceTier$outboundSchema = outboundSchema(ResponsesRequestServiceTier);
-var ResponsesRequestToolFunction$outboundSchema = z481.object({
-  description: z481.nullable(z481.string()).optional(),
-  name: z481.string(),
-  parameters: z481.nullable(z481.record(z481.string(), z481.any())),
-  strict: z481.nullable(z481.boolean()).optional(),
-  type: z481.literal("function")
+var ResponsesRequestToolFunction$outboundSchema = z494.object({
+  description: z494.nullable(z494.string()).optional(),
+  name: z494.string(),
+  parameters: z494.nullable(z494.record(z494.string(), z494.any())),
+  strict: z494.nullable(z494.boolean()).optional(),
+  type: z494.literal("function")
 });
-var ResponsesRequestToolUnion$outboundSchema = z481.union([
-  z481.lazy(() => ResponsesRequestToolFunction$outboundSchema),
-  PreviewWebSearchServerTool$outboundSchema.and(z481.object({ type: z481.literal("web_search_preview") })),
-  Preview20250311WebSearchServerTool$outboundSchema.and(z481.object({ type: z481.literal("web_search_preview_2025_03_11") })),
-  LegacyWebSearchServerTool$outboundSchema.and(z481.object({ type: z481.literal("web_search") })),
-  WebSearchServerTool$outboundSchema.and(z481.object({ type: z481.literal("web_search_2025_08_26") })),
-  FileSearchServerTool$outboundSchema.and(z481.object({ type: z481.literal("file_search") })),
-  ComputerUseServerTool$outboundSchema.and(z481.object({ type: z481.literal("computer_use_preview") })),
-  CodeInterpreterServerTool$outboundSchema.and(z481.object({ type: z481.literal("code_interpreter") })),
-  McpServerTool$outboundSchema.and(z481.object({ type: z481.literal("mcp") })),
-  ImageGenerationServerTool$outboundSchema.and(z481.object({ type: z481.literal("image_generation") })),
-  CodexLocalShellTool$outboundSchema.and(z481.object({ type: z481.literal("local_shell") })),
-  ShellServerTool$outboundSchema.and(z481.object({ type: z481.literal("shell") })),
-  ApplyPatchServerTool$outboundSchema.and(z481.object({ type: z481.literal("apply_patch") })),
-  CustomTool$outboundSchema.and(z481.object({ type: z481.literal("custom") })),
-  NamespaceTool$outboundSchema.and(z481.object({ type: z481.literal("namespace") })),
-  AdvisorServerToolOpenRouter$outboundSchema.and(z481.object({ type: z481.literal("openrouter:advisor") })),
-  SubagentServerToolOpenRouter$outboundSchema.and(z481.object({ type: z481.literal("openrouter:subagent") })),
-  DatetimeServerTool$outboundSchema.and(z481.object({ type: z481.literal("openrouter:datetime") })),
-  FilesServerTool$outboundSchema.and(z481.object({ type: z481.literal("openrouter:files") })),
-  FusionServerToolOpenRouter$outboundSchema.and(z481.object({ type: z481.literal("openrouter:fusion") })),
-  ImageGenerationServerToolOpenRouter$outboundSchema.and(z481.object({ type: z481.literal("openrouter:image_generation") })),
-  SearchModelsServerToolOpenRouter$outboundSchema.and(z481.object({ type: z481.literal("openrouter:experimental__search_models") })),
-  WebFetchServerTool$outboundSchema.and(z481.object({ type: z481.literal("openrouter:web_fetch") })),
-  WebSearchServerToolOpenRouter$outboundSchema.and(z481.object({ type: z481.literal("openrouter:web_search") })),
-  ApplyPatchServerToolOpenRouter$outboundSchema.and(z481.object({ type: z481.literal("openrouter:apply_patch") })),
-  BashServerTool$outboundSchema.and(z481.object({ type: z481.literal("openrouter:bash") })),
-  ShellServerToolOpenRouter$outboundSchema.and(z481.object({ type: z481.literal("openrouter:shell") }))
+var ResponsesRequestToolUnion$outboundSchema = z494.union([
+  z494.lazy(() => ResponsesRequestToolFunction$outboundSchema),
+  PreviewWebSearchServerTool$outboundSchema.and(z494.object({ type: z494.literal("web_search_preview") })),
+  Preview20250311WebSearchServerTool$outboundSchema.and(z494.object({ type: z494.literal("web_search_preview_2025_03_11") })),
+  LegacyWebSearchServerTool$outboundSchema.and(z494.object({ type: z494.literal("web_search") })),
+  WebSearchServerTool$outboundSchema.and(z494.object({ type: z494.literal("web_search_2025_08_26") })),
+  FileSearchServerTool$outboundSchema.and(z494.object({ type: z494.literal("file_search") })),
+  ComputerUseServerTool$outboundSchema.and(z494.object({ type: z494.literal("computer_use_preview") })),
+  CodeInterpreterServerTool$outboundSchema.and(z494.object({ type: z494.literal("code_interpreter") })),
+  McpServerTool$outboundSchema.and(z494.object({ type: z494.literal("mcp") })),
+  ImageGenerationServerTool$outboundSchema.and(z494.object({ type: z494.literal("image_generation") })),
+  CodexLocalShellTool$outboundSchema.and(z494.object({ type: z494.literal("local_shell") })),
+  ShellServerTool$outboundSchema.and(z494.object({ type: z494.literal("shell") })),
+  ApplyPatchServerTool$outboundSchema.and(z494.object({ type: z494.literal("apply_patch") })),
+  CustomTool$outboundSchema.and(z494.object({ type: z494.literal("custom") })),
+  NamespaceTool$outboundSchema.and(z494.object({ type: z494.literal("namespace") })),
+  AdvisorServerToolOpenRouter$outboundSchema.and(z494.object({ type: z494.literal("openrouter:advisor") })),
+  SubagentServerToolOpenRouter$outboundSchema.and(z494.object({ type: z494.literal("openrouter:subagent") })),
+  DatetimeServerTool$outboundSchema.and(z494.object({ type: z494.literal("openrouter:datetime") })),
+  FilesServerTool$outboundSchema.and(z494.object({ type: z494.literal("openrouter:files") })),
+  FusionServerToolOpenRouter$outboundSchema.and(z494.object({ type: z494.literal("openrouter:fusion") })),
+  ImageGenerationServerToolOpenRouter$outboundSchema.and(z494.object({ type: z494.literal("openrouter:image_generation") })),
+  SearchModelsServerToolOpenRouter$outboundSchema.and(z494.object({ type: z494.literal("openrouter:experimental__search_models") })),
+  WebFetchServerTool$outboundSchema.and(z494.object({ type: z494.literal("openrouter:web_fetch") })),
+  WebSearchServerToolOpenRouter$outboundSchema.and(z494.object({ type: z494.literal("openrouter:web_search") })),
+  ApplyPatchServerToolOpenRouter$outboundSchema.and(z494.object({ type: z494.literal("openrouter:apply_patch") })),
+  BashServerTool$outboundSchema.and(z494.object({ type: z494.literal("openrouter:bash") })),
+  ShellServerToolOpenRouter$outboundSchema.and(z494.object({ type: z494.literal("openrouter:shell") }))
 ]);
-var ResponsesRequest$outboundSchema = z481.object({
-  background: z481.nullable(z481.boolean()).optional(),
+var ResponsesRequest$outboundSchema = z494.object({
+  background: z494.nullable(z494.boolean()).optional(),
   cacheControl: AnthropicCacheControlDirective$outboundSchema.optional(),
   debug: ChatDebugOptions$outboundSchema.optional(),
-  frequencyPenalty: z481.nullable(z481.number()).optional(),
-  imageConfig: z481.record(z481.string(), ImageConfig$outboundSchema).optional(),
-  include: z481.nullable(z481.array(ResponseIncludesEnum$outboundSchema)).optional(),
+  frequencyPenalty: z494.nullable(z494.number()).optional(),
+  imageConfig: z494.record(z494.string(), ImageConfig$outboundSchema).optional(),
+  include: z494.nullable(z494.array(ResponseIncludesEnum$outboundSchema)).optional(),
   input: InputsUnion$outboundSchema.optional(),
-  instructions: z481.nullable(z481.string()).optional(),
-  maxOutputTokens: z481.nullable(z481.int()).optional(),
-  maxToolCalls: z481.nullable(z481.int()).optional(),
-  metadata: z481.nullable(z481.record(z481.string(), z481.string())).optional(),
-  modalities: z481.array(OutputModalityEnum$outboundSchema).optional(),
-  model: z481.string().optional(),
-  models: z481.array(z481.string()).optional(),
-  parallelToolCalls: z481.nullable(z481.boolean()).optional(),
-  plugins: z481.array(z481.union([
+  instructions: z494.nullable(z494.string()).optional(),
+  maxOutputTokens: z494.nullable(z494.int()).optional(),
+  maxToolCalls: z494.nullable(z494.int()).optional(),
+  metadata: z494.nullable(z494.record(z494.string(), z494.string())).optional(),
+  modalities: z494.array(OutputModalityEnum$outboundSchema).optional(),
+  model: z494.string().optional(),
+  models: z494.array(z494.string()).optional(),
+  parallelToolCalls: z494.nullable(z494.boolean()).optional(),
+  plugins: z494.array(z494.union([
     AutoBetaRouterPlugin$outboundSchema,
     AutoRouterPlugin$outboundSchema,
     ContextCompressionPlugin$outboundSchema,
@@ -14584,57 +14958,57 @@ var ResponsesRequest$outboundSchema = z481.object({
     WebSearchPlugin$outboundSchema,
     WebFetchPlugin$outboundSchema
   ])).optional(),
-  presencePenalty: z481.nullable(z481.number()).optional(),
-  previousResponseId: z481.any().optional(),
-  prompt: z481.nullable(StoredPromptTemplate$outboundSchema).optional(),
-  promptCacheKey: z481.nullable(z481.string()).optional(),
-  promptCacheOptions: z481.nullable(PromptCacheOptions$outboundSchema).optional(),
-  provider: z481.nullable(ProviderPreferences$outboundSchema).optional(),
-  reasoning: z481.nullable(z481.lazy(() => ReasoningConfig$outboundSchema)).optional(),
-  safetyIdentifier: z481.nullable(z481.string()).optional(),
-  serviceTier: z481.nullable(ResponsesRequestServiceTier$outboundSchema.default("auto")),
-  sessionId: z481.string().optional(),
-  stopServerToolsWhen: z481.array(StopServerToolsWhenCondition$outboundSchema).optional(),
-  store: z481.literal(false).default(false),
-  stream: z481.boolean().default(false),
-  temperature: z481.nullable(z481.number()).optional(),
+  presencePenalty: z494.nullable(z494.number()).optional(),
+  previousResponseId: z494.any().optional(),
+  prompt: z494.nullable(StoredPromptTemplate$outboundSchema).optional(),
+  promptCacheKey: z494.nullable(z494.string()).optional(),
+  promptCacheOptions: z494.nullable(PromptCacheOptions$outboundSchema).optional(),
+  provider: z494.nullable(ProviderPreferences$outboundSchema).optional(),
+  reasoning: z494.nullable(z494.lazy(() => ReasoningConfig$outboundSchema)).optional(),
+  safetyIdentifier: z494.nullable(z494.string()).optional(),
+  serviceTier: z494.nullable(ResponsesRequestServiceTier$outboundSchema.default("auto")),
+  sessionId: z494.string().optional(),
+  stopServerToolsWhen: z494.array(StopServerToolsWhenCondition$outboundSchema).optional(),
+  store: z494.literal(false).default(false),
+  stream: z494.boolean().default(false),
+  temperature: z494.nullable(z494.number()).optional(),
   text: TextExtendedConfig$outboundSchema.optional(),
   toolChoice: OpenAIResponsesToolChoiceUnion$outboundSchema.optional(),
-  tools: z481.array(z481.union([
-    z481.lazy(() => ResponsesRequestToolFunction$outboundSchema),
-    PreviewWebSearchServerTool$outboundSchema.and(z481.object({ type: z481.literal("web_search_preview") })),
-    Preview20250311WebSearchServerTool$outboundSchema.and(z481.object({ type: z481.literal("web_search_preview_2025_03_11") })),
-    LegacyWebSearchServerTool$outboundSchema.and(z481.object({ type: z481.literal("web_search") })),
-    WebSearchServerTool$outboundSchema.and(z481.object({ type: z481.literal("web_search_2025_08_26") })),
-    FileSearchServerTool$outboundSchema.and(z481.object({ type: z481.literal("file_search") })),
-    ComputerUseServerTool$outboundSchema.and(z481.object({ type: z481.literal("computer_use_preview") })),
-    CodeInterpreterServerTool$outboundSchema.and(z481.object({ type: z481.literal("code_interpreter") })),
-    McpServerTool$outboundSchema.and(z481.object({ type: z481.literal("mcp") })),
-    ImageGenerationServerTool$outboundSchema.and(z481.object({ type: z481.literal("image_generation") })),
-    CodexLocalShellTool$outboundSchema.and(z481.object({ type: z481.literal("local_shell") })),
-    ShellServerTool$outboundSchema.and(z481.object({ type: z481.literal("shell") })),
-    ApplyPatchServerTool$outboundSchema.and(z481.object({ type: z481.literal("apply_patch") })),
-    CustomTool$outboundSchema.and(z481.object({ type: z481.literal("custom") })),
-    NamespaceTool$outboundSchema.and(z481.object({ type: z481.literal("namespace") })),
-    AdvisorServerToolOpenRouter$outboundSchema.and(z481.object({ type: z481.literal("openrouter:advisor") })),
-    SubagentServerToolOpenRouter$outboundSchema.and(z481.object({ type: z481.literal("openrouter:subagent") })),
-    DatetimeServerTool$outboundSchema.and(z481.object({ type: z481.literal("openrouter:datetime") })),
-    FilesServerTool$outboundSchema.and(z481.object({ type: z481.literal("openrouter:files") })),
-    FusionServerToolOpenRouter$outboundSchema.and(z481.object({ type: z481.literal("openrouter:fusion") })),
-    ImageGenerationServerToolOpenRouter$outboundSchema.and(z481.object({ type: z481.literal("openrouter:image_generation") })),
-    SearchModelsServerToolOpenRouter$outboundSchema.and(z481.object({ type: z481.literal("openrouter:experimental__search_models") })),
-    WebFetchServerTool$outboundSchema.and(z481.object({ type: z481.literal("openrouter:web_fetch") })),
-    WebSearchServerToolOpenRouter$outboundSchema.and(z481.object({ type: z481.literal("openrouter:web_search") })),
-    ApplyPatchServerToolOpenRouter$outboundSchema.and(z481.object({ type: z481.literal("openrouter:apply_patch") })),
-    BashServerTool$outboundSchema.and(z481.object({ type: z481.literal("openrouter:bash") })),
-    ShellServerToolOpenRouter$outboundSchema.and(z481.object({ type: z481.literal("openrouter:shell") }))
+  tools: z494.array(z494.union([
+    z494.lazy(() => ResponsesRequestToolFunction$outboundSchema),
+    PreviewWebSearchServerTool$outboundSchema.and(z494.object({ type: z494.literal("web_search_preview") })),
+    Preview20250311WebSearchServerTool$outboundSchema.and(z494.object({ type: z494.literal("web_search_preview_2025_03_11") })),
+    LegacyWebSearchServerTool$outboundSchema.and(z494.object({ type: z494.literal("web_search") })),
+    WebSearchServerTool$outboundSchema.and(z494.object({ type: z494.literal("web_search_2025_08_26") })),
+    FileSearchServerTool$outboundSchema.and(z494.object({ type: z494.literal("file_search") })),
+    ComputerUseServerTool$outboundSchema.and(z494.object({ type: z494.literal("computer_use_preview") })),
+    CodeInterpreterServerTool$outboundSchema.and(z494.object({ type: z494.literal("code_interpreter") })),
+    McpServerTool$outboundSchema.and(z494.object({ type: z494.literal("mcp") })),
+    ImageGenerationServerTool$outboundSchema.and(z494.object({ type: z494.literal("image_generation") })),
+    CodexLocalShellTool$outboundSchema.and(z494.object({ type: z494.literal("local_shell") })),
+    ShellServerTool$outboundSchema.and(z494.object({ type: z494.literal("shell") })),
+    ApplyPatchServerTool$outboundSchema.and(z494.object({ type: z494.literal("apply_patch") })),
+    CustomTool$outboundSchema.and(z494.object({ type: z494.literal("custom") })),
+    NamespaceTool$outboundSchema.and(z494.object({ type: z494.literal("namespace") })),
+    AdvisorServerToolOpenRouter$outboundSchema.and(z494.object({ type: z494.literal("openrouter:advisor") })),
+    SubagentServerToolOpenRouter$outboundSchema.and(z494.object({ type: z494.literal("openrouter:subagent") })),
+    DatetimeServerTool$outboundSchema.and(z494.object({ type: z494.literal("openrouter:datetime") })),
+    FilesServerTool$outboundSchema.and(z494.object({ type: z494.literal("openrouter:files") })),
+    FusionServerToolOpenRouter$outboundSchema.and(z494.object({ type: z494.literal("openrouter:fusion") })),
+    ImageGenerationServerToolOpenRouter$outboundSchema.and(z494.object({ type: z494.literal("openrouter:image_generation") })),
+    SearchModelsServerToolOpenRouter$outboundSchema.and(z494.object({ type: z494.literal("openrouter:experimental__search_models") })),
+    WebFetchServerTool$outboundSchema.and(z494.object({ type: z494.literal("openrouter:web_fetch") })),
+    WebSearchServerToolOpenRouter$outboundSchema.and(z494.object({ type: z494.literal("openrouter:web_search") })),
+    ApplyPatchServerToolOpenRouter$outboundSchema.and(z494.object({ type: z494.literal("openrouter:apply_patch") })),
+    BashServerTool$outboundSchema.and(z494.object({ type: z494.literal("openrouter:bash") })),
+    ShellServerToolOpenRouter$outboundSchema.and(z494.object({ type: z494.literal("openrouter:shell") }))
   ])).optional(),
-  topK: z481.int().optional(),
-  topLogprobs: z481.nullable(z481.int()).optional(),
-  topP: z481.nullable(z481.number()).optional(),
+  topK: z494.int().optional(),
+  topLogprobs: z494.nullable(z494.int()).optional(),
+  topP: z494.nullable(z494.number()).optional(),
   trace: TraceConfig$outboundSchema.optional(),
-  truncation: z481.nullable(OpenAIResponsesTruncation$outboundSchema).optional(),
-  user: z481.string().optional()
+  truncation: z494.nullable(OpenAIResponsesTruncation$outboundSchema).optional(),
+  user: z494.string().optional()
 }).transform((v) => {
   return remap(v, {
     cacheControl: "cache_control",
@@ -14659,14 +15033,14 @@ var ResponsesRequest$outboundSchema = z481.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/responsesstreamingresponse.js
-var z494 = __toESM(require("zod/v4"), 1);
+var z507 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/streameventsresponsecompleted.js
-var z482 = __toESM(require("zod/v4"), 1);
-var StreamEventsResponseCompleted$inboundSchema = z482.object({
+var z495 = __toESM(require("zod/v4"), 1);
+var StreamEventsResponseCompleted$inboundSchema = z495.object({
   response: OpenResponsesResult$inboundSchema,
-  sequence_number: z482.int(),
-  type: z482.literal("response.completed")
+  sequence_number: z495.int(),
+  type: z495.literal("response.completed")
 }).transform((v) => {
   return remap(v, {
     "sequence_number": "sequenceNumber"
@@ -14674,11 +15048,11 @@ var StreamEventsResponseCompleted$inboundSchema = z482.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/streameventsresponsefailed.js
-var z483 = __toESM(require("zod/v4"), 1);
-var StreamEventsResponseFailed$inboundSchema = z483.object({
+var z496 = __toESM(require("zod/v4"), 1);
+var StreamEventsResponseFailed$inboundSchema = z496.object({
   response: OpenResponsesResult$inboundSchema,
-  sequence_number: z483.int(),
-  type: z483.literal("response.failed")
+  sequence_number: z496.int(),
+  type: z496.literal("response.failed")
 }).transform((v) => {
   return remap(v, {
     "sequence_number": "sequenceNumber"
@@ -14686,11 +15060,11 @@ var StreamEventsResponseFailed$inboundSchema = z483.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/streameventsresponseincomplete.js
-var z484 = __toESM(require("zod/v4"), 1);
-var StreamEventsResponseIncomplete$inboundSchema = z484.object({
+var z497 = __toESM(require("zod/v4"), 1);
+var StreamEventsResponseIncomplete$inboundSchema = z497.object({
   response: OpenResponsesResult$inboundSchema,
-  sequence_number: z484.int(),
-  type: z484.literal("response.incomplete")
+  sequence_number: z497.int(),
+  type: z497.literal("response.incomplete")
 }).transform((v) => {
   return remap(v, {
     "sequence_number": "sequenceNumber"
@@ -14698,12 +15072,12 @@ var StreamEventsResponseIncomplete$inboundSchema = z484.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/streameventsresponseoutputitemadded.js
-var z485 = __toESM(require("zod/v4"), 1);
-var StreamEventsResponseOutputItemAdded$inboundSchema = z485.object({
+var z498 = __toESM(require("zod/v4"), 1);
+var StreamEventsResponseOutputItemAdded$inboundSchema = z498.object({
   item: OutputItems$inboundSchema,
-  output_index: z485.int(),
-  sequence_number: z485.int(),
-  type: z485.literal("response.output_item.added")
+  output_index: z498.int(),
+  sequence_number: z498.int(),
+  type: z498.literal("response.output_item.added")
 }).transform((v) => {
   return remap(v, {
     "output_index": "outputIndex",
@@ -14712,12 +15086,12 @@ var StreamEventsResponseOutputItemAdded$inboundSchema = z485.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/streameventsresponseoutputitemdone.js
-var z486 = __toESM(require("zod/v4"), 1);
-var StreamEventsResponseOutputItemDone$inboundSchema = z486.object({
+var z499 = __toESM(require("zod/v4"), 1);
+var StreamEventsResponseOutputItemDone$inboundSchema = z499.object({
   item: OutputItems$inboundSchema,
-  output_index: z486.int(),
-  sequence_number: z486.int(),
-  type: z486.literal("response.output_item.done")
+  output_index: z499.int(),
+  sequence_number: z499.int(),
+  type: z499.literal("response.output_item.done")
 }).transform((v) => {
   return remap(v, {
     "output_index": "outputIndex",
@@ -14726,25 +15100,25 @@ var StreamEventsResponseOutputItemDone$inboundSchema = z486.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/textdeltaevent.js
-var z489 = __toESM(require("zod/v4"), 1);
+var z502 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/streamlogprob.js
-var z488 = __toESM(require("zod/v4"), 1);
+var z501 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/streamlogprobtoplogprob.js
-var z487 = __toESM(require("zod/v4"), 1);
-var StreamLogprobTopLogprob$inboundSchema = z487.object({
-  bytes: z487.array(z487.int()).optional(),
-  logprob: z487.number().optional(),
-  token: z487.string().optional()
+var z500 = __toESM(require("zod/v4"), 1);
+var StreamLogprobTopLogprob$inboundSchema = z500.object({
+  bytes: z500.array(z500.int()).optional(),
+  logprob: z500.number().optional(),
+  token: z500.string().optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/streamlogprob.js
-var StreamLogprob$inboundSchema = z488.object({
-  bytes: z488.array(z488.int()).optional(),
-  logprob: z488.number(),
-  token: z488.string(),
-  top_logprobs: z488.array(StreamLogprobTopLogprob$inboundSchema).optional()
+var StreamLogprob$inboundSchema = z501.object({
+  bytes: z501.array(z501.int()).optional(),
+  logprob: z501.number(),
+  token: z501.string(),
+  top_logprobs: z501.array(StreamLogprobTopLogprob$inboundSchema).optional()
 }).transform((v) => {
   return remap(v, {
     "top_logprobs": "topLogprobs"
@@ -14752,14 +15126,14 @@ var StreamLogprob$inboundSchema = z488.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/textdeltaevent.js
-var TextDeltaEvent$inboundSchema = z489.object({
-  content_index: z489.int(),
-  delta: z489.string(),
-  item_id: z489.string(),
-  logprobs: z489.array(StreamLogprob$inboundSchema),
-  output_index: z489.int(),
-  sequence_number: z489.int(),
-  type: z489.literal("response.output_text.delta")
+var TextDeltaEvent$inboundSchema = z502.object({
+  content_index: z502.int(),
+  delta: z502.string(),
+  item_id: z502.string(),
+  logprobs: z502.array(StreamLogprob$inboundSchema),
+  output_index: z502.int(),
+  sequence_number: z502.int(),
+  type: z502.literal("response.output_text.delta")
 }).transform((v) => {
   return remap(v, {
     "content_index": "contentIndex",
@@ -14770,15 +15144,15 @@ var TextDeltaEvent$inboundSchema = z489.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/textdoneevent.js
-var z490 = __toESM(require("zod/v4"), 1);
-var TextDoneEvent$inboundSchema = z490.object({
-  content_index: z490.int(),
-  item_id: z490.string(),
-  logprobs: z490.array(StreamLogprob$inboundSchema),
-  output_index: z490.int(),
-  sequence_number: z490.int(),
-  text: z490.string(),
-  type: z490.literal("response.output_text.done")
+var z503 = __toESM(require("zod/v4"), 1);
+var TextDoneEvent$inboundSchema = z503.object({
+  content_index: z503.int(),
+  item_id: z503.string(),
+  logprobs: z503.array(StreamLogprob$inboundSchema),
+  output_index: z503.int(),
+  sequence_number: z503.int(),
+  text: z503.string(),
+  type: z503.literal("response.output_text.done")
 }).transform((v) => {
   return remap(v, {
     "content_index": "contentIndex",
@@ -14789,12 +15163,12 @@ var TextDoneEvent$inboundSchema = z490.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/websearchcallcompletedevent.js
-var z491 = __toESM(require("zod/v4"), 1);
-var WebSearchCallCompletedEvent$inboundSchema = z491.object({
-  item_id: z491.string(),
-  output_index: z491.int(),
-  sequence_number: z491.int(),
-  type: z491.literal("response.web_search_call.completed")
+var z504 = __toESM(require("zod/v4"), 1);
+var WebSearchCallCompletedEvent$inboundSchema = z504.object({
+  item_id: z504.string(),
+  output_index: z504.int(),
+  sequence_number: z504.int(),
+  type: z504.literal("response.web_search_call.completed")
 }).transform((v) => {
   return remap(v, {
     "item_id": "itemId",
@@ -14804,12 +15178,12 @@ var WebSearchCallCompletedEvent$inboundSchema = z491.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/websearchcallinprogressevent.js
-var z492 = __toESM(require("zod/v4"), 1);
-var WebSearchCallInProgressEvent$inboundSchema = z492.object({
-  item_id: z492.string(),
-  output_index: z492.int(),
-  sequence_number: z492.int(),
-  type: z492.literal("response.web_search_call.in_progress")
+var z505 = __toESM(require("zod/v4"), 1);
+var WebSearchCallInProgressEvent$inboundSchema = z505.object({
+  item_id: z505.string(),
+  output_index: z505.int(),
+  sequence_number: z505.int(),
+  type: z505.literal("response.web_search_call.in_progress")
 }).transform((v) => {
   return remap(v, {
     "item_id": "itemId",
@@ -14819,12 +15193,12 @@ var WebSearchCallInProgressEvent$inboundSchema = z492.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/websearchcallsearchingevent.js
-var z493 = __toESM(require("zod/v4"), 1);
-var WebSearchCallSearchingEvent$inboundSchema = z493.object({
-  item_id: z493.string(),
-  output_index: z493.int(),
-  sequence_number: z493.int(),
-  type: z493.literal("response.web_search_call.searching")
+var z506 = __toESM(require("zod/v4"), 1);
+var WebSearchCallSearchingEvent$inboundSchema = z506.object({
+  item_id: z506.string(),
+  output_index: z506.int(),
+  sequence_number: z506.int(),
+  type: z506.literal("response.web_search_call.searching")
 }).transform((v) => {
   return remap(v, {
     "item_id": "itemId",
@@ -14838,6 +15212,11 @@ var StreamEvents$inboundSchema = discriminatedUnion("type", {
   error: ErrorEvent$inboundSchema,
   ["response.apply_patch_call_operation_diff.delta"]: ApplyPatchCallOperationDiffDeltaEvent$inboundSchema,
   ["response.apply_patch_call_operation_diff.done"]: ApplyPatchCallOperationDiffDoneEvent$inboundSchema,
+  ["response.code_interpreter_call_code.delta"]: CodeInterpreterCallCodeDeltaEvent$inboundSchema,
+  ["response.code_interpreter_call_code.done"]: CodeInterpreterCallCodeDoneEvent$inboundSchema,
+  ["response.code_interpreter_call.completed"]: CodeInterpreterCallCompletedEvent$inboundSchema,
+  ["response.code_interpreter_call.in_progress"]: CodeInterpreterCallInProgressEvent$inboundSchema,
+  ["response.code_interpreter_call.interpreting"]: CodeInterpreterCallInterpretingEvent$inboundSchema,
   ["response.completed"]: StreamEventsResponseCompleted$inboundSchema,
   ["response.content_part.added"]: ContentPartAddedEvent$inboundSchema,
   ["response.content_part.done"]: ContentPartDoneEvent$inboundSchema,
@@ -14882,8 +15261,8 @@ var StreamEvents$inboundSchema = discriminatedUnion("type", {
 });
 
 // node_modules/@openrouter/sdk/esm/models/responsesstreamingresponse.js
-var ResponsesStreamingResponse$inboundSchema = z494.object({
-  data: z494.unknown().transform((v, ctx) => {
+var ResponsesStreamingResponse$inboundSchema = z507.object({
+  data: z507.unknown().transform((v, ctx) => {
     if (typeof v !== "string")
       return v;
     try {
@@ -14894,51 +15273,140 @@ var ResponsesStreamingResponse$inboundSchema = z494.object({
         code: "custom",
         message: `malformed json: ${err}`
       });
-      return z494.NEVER;
+      return z507.NEVER;
     }
   }).pipe(StreamEvents$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/serviceunavailableresponseerrordata.js
-var z495 = __toESM(require("zod/v4"), 1);
-var ServiceUnavailableResponseErrorData$inboundSchema = z495.object({
-  code: z495.int(),
-  message: z495.string(),
-  metadata: z495.nullable(z495.record(z495.string(), z495.any())).optional()
+var z508 = __toESM(require("zod/v4"), 1);
+var ServiceUnavailableResponseErrorData$inboundSchema = z508.object({
+  code: z508.int(),
+  message: z508.string(),
+  metadata: z508.nullable(z508.record(z508.string(), z508.any())).optional()
 });
 
+// node_modules/@openrouter/sdk/esm/models/sessioncostitem.js
+var z509 = __toESM(require("zod/v4"), 1);
+var TurnRange = {
+  OneMinusTurn: "1-turn",
+  TwoMinus9MinusTurns: "2-9-turns",
+  TenMinus49MinusTurns: "10-49-turns",
+  FiftyMinusPlusTurns: "50-plus-turns"
+};
+var TurnRange$inboundSchema = inboundSchema(TurnRange);
+var SessionCostItem$inboundSchema = z509.object({
+  app_name: z509.string(),
+  app_slug: z509.string(),
+  median_session_cost_usd: z509.number(),
+  model_permaslug: z509.string(),
+  turn_range: TurnRange$inboundSchema
+}).transform((v) => {
+  return remap(v, {
+    "app_name": "appName",
+    "app_slug": "appSlug",
+    "median_session_cost_usd": "medianSessionCostUsd",
+    "model_permaslug": "modelPermaslug",
+    "turn_range": "turnRange"
+  });
+});
+
+// node_modules/@openrouter/sdk/esm/models/sessioncostmeta.js
+var z510 = __toESM(require("zod/v4"), 1);
+var SessionCostMetaVersion = {
+  V1: "v1"
+};
+var SessionCostMetaVersion$inboundSchema = z510.enum(SessionCostMetaVersion);
+var SessionCostMeta$inboundSchema = z510.object({
+  as_of: z510.string(),
+  version: SessionCostMetaVersion$inboundSchema,
+  window_days: z510.nullable(z510.int()),
+  window_end_date: z510.nullable(z510.string())
+}).transform((v) => {
+  return remap(v, {
+    "as_of": "asOf",
+    "window_days": "windowDays",
+    "window_end_date": "windowEndDate"
+  });
+});
+
+// node_modules/@openrouter/sdk/esm/models/sessioncostresponse.js
+var z511 = __toESM(require("zod/v4"), 1);
+var SessionCostResponse$inboundSchema = z511.object({
+  data: z511.array(SessionCostItem$inboundSchema),
+  meta: SessionCostMeta$inboundSchema
+});
+
+// node_modules/@openrouter/sdk/esm/models/speechinputreference.js
+var z515 = __toESM(require("zod/v4"), 1);
+
+// node_modules/@openrouter/sdk/esm/models/speechinputreferenceaudio.js
+var z513 = __toESM(require("zod/v4"), 1);
+
+// node_modules/@openrouter/sdk/esm/models/speechinputreferenceaudioinput.js
+var z512 = __toESM(require("zod/v4"), 1);
+var SpeechInputReferenceAudioInput$outboundSchema = z512.object({
+  data: z512.string(),
+  format: z512.string().optional()
+});
+
+// node_modules/@openrouter/sdk/esm/models/speechinputreferenceaudio.js
+var SpeechInputReferenceAudio$outboundSchema = z513.object({
+  inputAudio: SpeechInputReferenceAudioInput$outboundSchema,
+  type: z513.literal("input_audio")
+}).transform((v) => {
+  return remap(v, {
+    inputAudio: "input_audio"
+  });
+});
+
+// node_modules/@openrouter/sdk/esm/models/speechinputreferencetext.js
+var z514 = __toESM(require("zod/v4"), 1);
+var SpeechInputReferenceText$outboundSchema = z514.object({
+  text: z514.string(),
+  type: z514.literal("text")
+});
+
+// node_modules/@openrouter/sdk/esm/models/speechinputreference.js
+var SpeechInputReference$outboundSchema = z515.union([
+  SpeechInputReferenceAudio$outboundSchema,
+  SpeechInputReferenceText$outboundSchema
+]);
+
 // node_modules/@openrouter/sdk/esm/models/speechrequest.js
-var z496 = __toESM(require("zod/v4"), 1);
+var z516 = __toESM(require("zod/v4"), 1);
 var SpeechRequestResponseFormat = {
   Mp3: "mp3",
   Pcm: "pcm"
 };
-var SpeechRequestProvider$outboundSchema = z496.object({
+var SpeechRequestProvider$outboundSchema = z516.object({
   options: ProviderOptions$outboundSchema.optional()
 });
 var SpeechRequestResponseFormat$outboundSchema = outboundSchema(SpeechRequestResponseFormat);
-var SpeechRequest$outboundSchema = z496.object({
-  input: z496.string(),
-  model: z496.string(),
-  provider: z496.lazy(() => SpeechRequestProvider$outboundSchema).optional(),
+var SpeechRequest$outboundSchema = z516.object({
+  input: z516.string(),
+  inputReferences: z516.array(SpeechInputReference$outboundSchema).optional(),
+  model: z516.string(),
+  provider: z516.lazy(() => SpeechRequestProvider$outboundSchema).optional(),
   responseFormat: SpeechRequestResponseFormat$outboundSchema.default("pcm"),
-  speed: z496.number().optional(),
-  voice: z496.string().optional()
+  speed: z516.number().optional(),
+  voice: z516.string().optional()
 }).transform((v) => {
   return remap(v, {
+    inputReferences: "input_references",
     responseFormat: "response_format"
   });
 });
 
 // node_modules/@openrouter/sdk/esm/models/sttinputaudio.js
-var z497 = __toESM(require("zod/v4"), 1);
-var STTInputAudio$outboundSchema = z497.object({
-  data: z497.string(),
-  format: z497.string()
+var z517 = __toESM(require("zod/v4"), 1);
+var STTInputAudio$outboundSchema = z517.object({
+  data: z517.string(),
+  format: z517.string()
 });
 
 // node_modules/@openrouter/sdk/esm/models/sttrequest.js
-var z498 = __toESM(require("zod/v4"), 1);
+var z518 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/stttimestampgranularity.js
 var STTTimestampGranularity = {
@@ -14952,18 +15420,18 @@ var STTRequestResponseFormat = {
   Json: "json",
   VerboseJson: "verbose_json"
 };
-var STTRequestProvider$outboundSchema = z498.object({
+var STTRequestProvider$outboundSchema = z518.object({
   options: ProviderOptions$outboundSchema.optional()
 });
 var STTRequestResponseFormat$outboundSchema = outboundSchema(STTRequestResponseFormat);
-var STTRequest$outboundSchema = z498.object({
+var STTRequest$outboundSchema = z518.object({
   inputAudio: STTInputAudio$outboundSchema,
-  language: z498.string().optional(),
-  model: z498.string(),
-  provider: z498.lazy(() => STTRequestProvider$outboundSchema).optional(),
+  language: z518.string().optional(),
+  model: z518.string(),
+  provider: z518.lazy(() => STTRequestProvider$outboundSchema).optional(),
   responseFormat: STTRequestResponseFormat$outboundSchema.optional(),
-  temperature: z498.number().optional(),
-  timestampGranularities: z498.array(STTTimestampGranularity$outboundSchema).optional()
+  temperature: z518.number().optional(),
+  timestampGranularities: z518.array(STTTimestampGranularity$outboundSchema).optional()
 }).transform((v) => {
   return remap(v, {
     inputAudio: "input_audio",
@@ -14973,22 +15441,22 @@ var STTRequest$outboundSchema = z498.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/sttresponse.js
-var z502 = __toESM(require("zod/v4"), 1);
+var z522 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/sttsegment.js
-var z499 = __toESM(require("zod/v4"), 1);
-var STTSegment$inboundSchema = z499.object({
-  avg_logprob: z499.number().optional(),
-  compression_ratio: z499.number().optional(),
-  end: z499.number(),
-  id: z499.int(),
-  no_speech_prob: z499.number().optional(),
-  seek: z499.int().optional(),
-  speaker: z499.int().optional(),
-  start: z499.number(),
-  temperature: z499.number().optional(),
-  text: z499.string(),
-  tokens: z499.array(z499.int()).optional()
+var z519 = __toESM(require("zod/v4"), 1);
+var STTSegment$inboundSchema = z519.object({
+  avg_logprob: z519.number().optional(),
+  compression_ratio: z519.number().optional(),
+  end: z519.number(),
+  id: z519.int(),
+  no_speech_prob: z519.number().optional(),
+  seek: z519.int().optional(),
+  speaker: z519.int().optional(),
+  start: z519.number(),
+  temperature: z519.number().optional(),
+  text: z519.string(),
+  tokens: z519.array(z519.int()).optional()
 }).transform((v) => {
   return remap(v, {
     "avg_logprob": "avgLogprob",
@@ -14998,13 +15466,13 @@ var STTSegment$inboundSchema = z499.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/sttusage.js
-var z500 = __toESM(require("zod/v4"), 1);
-var STTUsage$inboundSchema = z500.object({
-  cost: z500.number().optional(),
-  input_tokens: z500.int().optional(),
-  output_tokens: z500.int().optional(),
-  seconds: z500.number().optional(),
-  total_tokens: z500.int().optional()
+var z520 = __toESM(require("zod/v4"), 1);
+var STTUsage$inboundSchema = z520.object({
+  cost: z520.number().optional(),
+  input_tokens: z520.int().optional(),
+  output_tokens: z520.int().optional(),
+  seconds: z520.number().optional(),
+  total_tokens: z520.int().optional()
 }).transform((v) => {
   return remap(v, {
     "input_tokens": "inputTokens",
@@ -15014,27 +15482,27 @@ var STTUsage$inboundSchema = z500.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/sttword.js
-var z501 = __toESM(require("zod/v4"), 1);
-var STTWord$inboundSchema = z501.object({
-  end: z501.number(),
-  speaker: z501.int().optional(),
-  start: z501.number(),
-  word: z501.string()
+var z521 = __toESM(require("zod/v4"), 1);
+var STTWord$inboundSchema = z521.object({
+  end: z521.number(),
+  speaker: z521.int().optional(),
+  start: z521.number(),
+  word: z521.string()
 });
 
 // node_modules/@openrouter/sdk/esm/models/sttresponse.js
-var STTResponse$inboundSchema = z502.object({
-  duration: z502.number().optional(),
-  language: z502.string().optional(),
-  segments: z502.array(STTSegment$inboundSchema).optional(),
-  task: z502.string().optional(),
-  text: z502.string(),
+var STTResponse$inboundSchema = z522.object({
+  duration: z522.number().optional(),
+  language: z522.string().optional(),
+  segments: z522.array(STTSegment$inboundSchema).optional(),
+  task: z522.string().optional(),
+  text: z522.string(),
   usage: STTUsage$inboundSchema.optional(),
-  words: z502.array(STTWord$inboundSchema).optional()
+  words: z522.array(STTWord$inboundSchema).optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/submitgenerationfeedbackrequest.js
-var z503 = __toESM(require("zod/v4"), 1);
+var z523 = __toESM(require("zod/v4"), 1);
 var Category = {
   Latency: "latency",
   Incoherence: "incoherence",
@@ -15045,10 +15513,10 @@ var Category = {
   Other: "other"
 };
 var Category$outboundSchema = outboundSchema(Category);
-var SubmitGenerationFeedbackRequest$outboundSchema = z503.object({
+var SubmitGenerationFeedbackRequest$outboundSchema = z523.object({
   category: Category$outboundSchema,
-  comment: z503.string().optional(),
-  generationId: z503.string()
+  comment: z523.string().optional(),
+  generationId: z523.string()
 }).transform((v) => {
   return remap(v, {
     generationId: "generation_id"
@@ -15056,23 +15524,23 @@ var SubmitGenerationFeedbackRequest$outboundSchema = z503.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/submitgenerationfeedbackresponse.js
-var z504 = __toESM(require("zod/v4"), 1);
-var SubmitGenerationFeedbackResponseData$inboundSchema = z504.object({
-  success: z504.literal(true)
+var z524 = __toESM(require("zod/v4"), 1);
+var SubmitGenerationFeedbackResponseData$inboundSchema = z524.object({
+  success: z524.literal(true)
 });
-var SubmitGenerationFeedbackResponse$inboundSchema = z504.object({
-  data: z504.lazy(() => SubmitGenerationFeedbackResponseData$inboundSchema)
+var SubmitGenerationFeedbackResponse$inboundSchema = z524.object({
+  data: z524.lazy(() => SubmitGenerationFeedbackResponseData$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/taskclassificationitem.js
-var z506 = __toESM(require("zod/v4"), 1);
+var z526 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/taskclassificationmodel.js
-var z505 = __toESM(require("zod/v4"), 1);
-var TaskClassificationModel$inboundSchema = z505.object({
-  id: z505.string(),
-  tag_token_share: z505.number(),
-  tag_usage_share: z505.number()
+var z525 = __toESM(require("zod/v4"), 1);
+var TaskClassificationModel$inboundSchema = z525.object({
+  id: z525.string(),
+  tag_token_share: z525.number(),
+  tag_usage_share: z525.number()
 }).transform((v) => {
   return remap(v, {
     "tag_token_share": "tagTokenShare",
@@ -15081,15 +15549,15 @@ var TaskClassificationModel$inboundSchema = z505.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/taskclassificationitem.js
-var TaskClassificationItem$inboundSchema = z506.object({
-  category_token_share: z506.number(),
-  category_usage_share: z506.number(),
-  display_name: z506.string(),
-  macro_category: z506.string(),
-  models: z506.array(TaskClassificationModel$inboundSchema),
-  tag: z506.string(),
-  token_share: z506.number(),
-  usage_share: z506.number()
+var TaskClassificationItem$inboundSchema = z526.object({
+  category_token_share: z526.number(),
+  category_usage_share: z526.number(),
+  display_name: z526.string(),
+  macro_category: z526.string(),
+  models: z526.array(TaskClassificationModel$inboundSchema),
+  tag: z526.string(),
+  token_share: z526.number(),
+  usage_share: z526.number()
 }).transform((v) => {
   return remap(v, {
     "category_token_share": "categoryTokenShare",
@@ -15102,12 +15570,12 @@ var TaskClassificationItem$inboundSchema = z506.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/taskclassificationmacrocategory.js
-var z507 = __toESM(require("zod/v4"), 1);
-var TaskClassificationMacroCategory$inboundSchema = z507.object({
-  key: z507.string(),
-  label: z507.string(),
-  token_share: z507.number(),
-  usage_share: z507.number()
+var z527 = __toESM(require("zod/v4"), 1);
+var TaskClassificationMacroCategory$inboundSchema = z527.object({
+  key: z527.string(),
+  label: z527.string(),
+  token_share: z527.number(),
+  usage_share: z527.number()
 }).transform((v) => {
   return remap(v, {
     "token_share": "tokenShare",
@@ -15116,12 +15584,12 @@ var TaskClassificationMacroCategory$inboundSchema = z507.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/taskclassificationresponse.js
-var z508 = __toESM(require("zod/v4"), 1);
-var TaskClassificationResponseData$inboundSchema = z508.object({
-  as_of: z508.string(),
-  classifications: z508.array(TaskClassificationItem$inboundSchema),
-  macro_categories: z508.array(TaskClassificationMacroCategory$inboundSchema),
-  window_days: z508.int()
+var z528 = __toESM(require("zod/v4"), 1);
+var TaskClassificationResponseData$inboundSchema = z528.object({
+  as_of: z528.string(),
+  classifications: z528.array(TaskClassificationItem$inboundSchema),
+  macro_categories: z528.array(TaskClassificationMacroCategory$inboundSchema),
+  window_days: z528.int()
 }).transform((v) => {
   return remap(v, {
     "as_of": "asOf",
@@ -15129,43 +15597,47 @@ var TaskClassificationResponseData$inboundSchema = z508.object({
     "window_days": "windowDays"
   });
 });
-var TaskClassificationResponse$inboundSchema = z508.object({
-  data: z508.lazy(() => TaskClassificationResponseData$inboundSchema)
+var TaskClassificationResponse$inboundSchema = z528.object({
+  data: z528.lazy(() => TaskClassificationResponseData$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/toomanyrequestsresponseerrordata.js
-var z509 = __toESM(require("zod/v4"), 1);
-var TooManyRequestsResponseErrorData$inboundSchema = z509.object({
-  code: z509.int(),
-  message: z509.string(),
-  metadata: z509.nullable(z509.record(z509.string(), z509.any())).optional()
+var z529 = __toESM(require("zod/v4"), 1);
+var TooManyRequestsResponseErrorData$inboundSchema = z529.object({
+  code: z529.int(),
+  message: z529.string(),
+  metadata: z529.nullable(z529.record(z529.string(), z529.any())).optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/unauthorizedresponseerrordata.js
-var z510 = __toESM(require("zod/v4"), 1);
-var UnauthorizedResponseErrorData$inboundSchema = z510.object({
-  code: z510.int(),
-  message: z510.string(),
-  metadata: z510.nullable(z510.record(z510.string(), z510.any())).optional()
+var z530 = __toESM(require("zod/v4"), 1);
+var UnauthorizedResponseErrorData$inboundSchema = z530.object({
+  code: z530.int(),
+  message: z530.string(),
+  metadata: z530.nullable(z530.record(z530.string(), z530.any())).optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/unifiedbenchmarkpricing.js
-var z511 = __toESM(require("zod/v4"), 1);
-var UnifiedBenchmarkPricing$inboundSchema = z511.object({
-  completion: z511.string(),
-  prompt: z511.string()
+var z531 = __toESM(require("zod/v4"), 1);
+var UnifiedBenchmarkPricing$inboundSchema = z531.object({
+  completion: z531.string(),
+  prompt: z531.string()
 });
 
 // node_modules/@openrouter/sdk/esm/models/unifiedbenchmarksaaitem.js
-var z512 = __toESM(require("zod/v4"), 1);
-var UnifiedBenchmarksAAItem$inboundSchema = z512.object({
-  agentic_index: z512.nullable(z512.number()),
-  coding_index: z512.nullable(z512.number()),
-  display_name: z512.string(),
-  intelligence_index: z512.nullable(z512.number()),
-  model_permaslug: z512.string(),
-  pricing: z512.nullable(UnifiedBenchmarkPricing$inboundSchema),
-  source: z512.literal("artificial-analysis")
+var z532 = __toESM(require("zod/v4"), 1);
+var UnifiedBenchmarksAAItemSource = {
+  ArtificialAnalysis: "artificial-analysis"
+};
+var UnifiedBenchmarksAAItemSource$inboundSchema = z532.enum(UnifiedBenchmarksAAItemSource);
+var UnifiedBenchmarksAAItem$inboundSchema = z532.object({
+  agentic_index: z532.nullable(z532.number()),
+  coding_index: z532.nullable(z532.number()),
+  display_name: z532.string(),
+  intelligence_index: z532.nullable(z532.number()),
+  model_permaslug: z532.string(),
+  pricing: z532.nullable(UnifiedBenchmarkPricing$inboundSchema),
+  source: UnifiedBenchmarksAAItemSource$inboundSchema
 }).transform((v) => {
   return remap(v, {
     "agentic_index": "agenticIndex",
@@ -15177,13 +15649,17 @@ var UnifiedBenchmarksAAItem$inboundSchema = z512.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/unifiedbenchmarksdaitem.js
-var z513 = __toESM(require("zod/v4"), 1);
-var TournamentStats$inboundSchema = z513.object({
-  first_place: z513.nullable(z513.int()),
-  fourth_place: z513.nullable(z513.int()),
-  second_place: z513.nullable(z513.int()),
-  third_place: z513.nullable(z513.int()),
-  total: z513.nullable(z513.int())
+var z533 = __toESM(require("zod/v4"), 1);
+var UnifiedBenchmarksDAItemSource = {
+  DesignArena: "design-arena"
+};
+var UnifiedBenchmarksDAItemSource$inboundSchema = z533.enum(UnifiedBenchmarksDAItemSource);
+var TournamentStats$inboundSchema = z533.object({
+  first_place: z533.nullable(z533.int()),
+  fourth_place: z533.nullable(z533.int()),
+  second_place: z533.nullable(z533.int()),
+  third_place: z533.nullable(z533.int()),
+  total: z533.nullable(z533.int())
 }).transform((v) => {
   return remap(v, {
     "first_place": "firstPlace",
@@ -15192,17 +15668,17 @@ var TournamentStats$inboundSchema = z513.object({
     "third_place": "thirdPlace"
   });
 });
-var UnifiedBenchmarksDAItem$inboundSchema = z513.object({
-  arena: z513.string(),
-  avg_generation_time_ms: z513.nullable(z513.number()),
-  category: z513.string(),
-  display_name: z513.string(),
-  elo: z513.number(),
-  model_permaslug: z513.string(),
-  pricing: z513.nullable(UnifiedBenchmarkPricing$inboundSchema),
-  source: z513.literal("design-arena"),
-  tournament_stats: z513.lazy(() => TournamentStats$inboundSchema),
-  win_rate: z513.number()
+var UnifiedBenchmarksDAItem$inboundSchema = z533.object({
+  arena: z533.string(),
+  avg_generation_time_ms: z533.nullable(z533.number()),
+  category: z533.string(),
+  display_name: z533.string(),
+  elo: z533.number(),
+  model_permaslug: z533.string(),
+  pricing: z533.nullable(UnifiedBenchmarkPricing$inboundSchema),
+  source: UnifiedBenchmarksDAItemSource$inboundSchema,
+  tournament_stats: z533.lazy(() => TournamentStats$inboundSchema),
+  win_rate: z533.number()
 }).transform((v) => {
   return remap(v, {
     "avg_generation_time_ms": "avgGenerationTimeMs",
@@ -15214,8 +15690,8 @@ var UnifiedBenchmarksDAItem$inboundSchema = z513.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/unifiedbenchmarksmeta.js
-var z514 = __toESM(require("zod/v4"), 1);
-var SourceEnum = {
+var z534 = __toESM(require("zod/v4"), 1);
+var UnifiedBenchmarksMetaSource = {
   ArtificialAnalysis: "artificial-analysis",
   DesignArena: "design-arena",
   Openrouter: "openrouter"
@@ -15223,15 +15699,15 @@ var SourceEnum = {
 var UnifiedBenchmarksMetaVersion = {
   V1: "v1"
 };
-var SourceEnum$inboundSchema = inboundSchema(SourceEnum);
-var UnifiedBenchmarksMetaVersion$inboundSchema = z514.enum(UnifiedBenchmarksMetaVersion);
-var UnifiedBenchmarksMeta$inboundSchema = z514.object({
-  as_of: z514.string(),
-  citation: z514.nullable(z514.string()),
-  model_count: z514.int(),
-  source: z514.nullable(SourceEnum$inboundSchema),
-  source_url: z514.nullable(z514.string()),
-  task_type: z514.nullable(z514.string()),
+var UnifiedBenchmarksMetaSource$inboundSchema = inboundSchema(UnifiedBenchmarksMetaSource);
+var UnifiedBenchmarksMetaVersion$inboundSchema = z534.enum(UnifiedBenchmarksMetaVersion);
+var UnifiedBenchmarksMeta$inboundSchema = z534.object({
+  as_of: z534.string(),
+  citation: z534.nullable(z534.string()),
+  model_count: z534.int(),
+  source: z534.nullable(UnifiedBenchmarksMetaSource$inboundSchema),
+  source_url: z534.nullable(z534.string()),
+  task_type: z534.nullable(z534.string()),
   version: UnifiedBenchmarksMetaVersion$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -15243,22 +15719,26 @@ var UnifiedBenchmarksMeta$inboundSchema = z514.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/unifiedbenchmarksoritem.js
-var z515 = __toESM(require("zod/v4"), 1);
-var BenchmarkType = {
+var z535 = __toESM(require("zod/v4"), 1);
+var UnifiedBenchmarksORItemBenchmarkType = {
   GpqaDiamond: "gpqa_diamond",
   TauBenchVerifiedAirline: "tau_bench_verified_airline"
 };
-var BenchmarkType$inboundSchema = inboundSchema(BenchmarkType);
-var UnifiedBenchmarksORItem$inboundSchema = z515.object({
-  accuracy: z515.number(),
-  accuracy_stddev: z515.nullable(z515.number()),
-  avg_cost_per_task: z515.nullable(z515.number()),
-  benchmark_type: BenchmarkType$inboundSchema,
-  display_name: z515.string(),
-  last_run_timestamp: z515.string(),
-  model_permaslug: z515.string(),
-  source: z515.literal("openrouter"),
-  total_tasks: z515.int()
+var UnifiedBenchmarksORItemSource = {
+  Openrouter: "openrouter"
+};
+var UnifiedBenchmarksORItemBenchmarkType$inboundSchema = inboundSchema(UnifiedBenchmarksORItemBenchmarkType);
+var UnifiedBenchmarksORItemSource$inboundSchema = z535.enum(UnifiedBenchmarksORItemSource);
+var UnifiedBenchmarksORItem$inboundSchema = z535.object({
+  accuracy: z535.number(),
+  accuracy_stddev: z535.nullable(z535.number()),
+  avg_cost_per_task: z535.nullable(z535.number()),
+  benchmark_type: UnifiedBenchmarksORItemBenchmarkType$inboundSchema,
+  display_name: z535.string(),
+  last_run_timestamp: z535.string(),
+  model_permaslug: z535.string(),
+  source: UnifiedBenchmarksORItemSource$inboundSchema,
+  total_tasks: z535.int()
 }).transform((v) => {
   return remap(v, {
     "accuracy_stddev": "accuracyStddev",
@@ -15272,38 +15752,111 @@ var UnifiedBenchmarksORItem$inboundSchema = z515.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/unifiedbenchmarksresponse.js
-var z516 = __toESM(require("zod/v4"), 1);
-var UnifiedBenchmarksResponseData$inboundSchema = discriminatedUnion("source", {
-  ["artificial-analysis"]: UnifiedBenchmarksAAItem$inboundSchema,
-  ["design-arena"]: UnifiedBenchmarksDAItem$inboundSchema,
-  openrouter: UnifiedBenchmarksORItem$inboundSchema
+var z538 = __toESM(require("zod/v4"), 1);
+
+// node_modules/@openrouter/sdk/esm/models/unifiedbenchmarkssearchitem.js
+var z537 = __toESM(require("zod/v4"), 1);
+
+// node_modules/@openrouter/sdk/esm/models/unifiedbenchmarkssearchrunconfig.js
+var z536 = __toESM(require("zod/v4"), 1);
+var UnifiedBenchmarksSearchRunConfig$inboundSchema = z536.object({
+  max_agent_turns: z536.nullable(z536.int()),
+  reasoning_effort: z536.nullable(z536.string()),
+  temperature: z536.nullable(z536.number())
+}).transform((v) => {
+  return remap(v, {
+    "max_agent_turns": "maxAgentTurns",
+    "reasoning_effort": "reasoningEffort"
+  });
 });
-var UnifiedBenchmarksResponse$inboundSchema = z516.object({
-  data: z516.array(discriminatedUnion("source", {
-    ["artificial-analysis"]: UnifiedBenchmarksAAItem$inboundSchema,
-    ["design-arena"]: UnifiedBenchmarksDAItem$inboundSchema,
-    openrouter: UnifiedBenchmarksORItem$inboundSchema
-  })),
+
+// node_modules/@openrouter/sdk/esm/models/unifiedbenchmarkssearchitem.js
+var UnifiedBenchmarksSearchItemBenchmarkType = {
+  SearchBrowsecomp: "search_browsecomp",
+  SearchHle: "search_hle",
+  SearchDsqa: "search_dsqa",
+  SearchWidesearch: "search_widesearch"
+};
+var PrimaryMetric = {
+  Accuracy: "accuracy",
+  F1ByItem: "f1_by_item"
+};
+var SearchSurface = {
+  ServerTool: "server-tool",
+  Plugin: "plugin"
+};
+var UnifiedBenchmarksSearchItemSource = {
+  Openrouter: "openrouter"
+};
+var UnifiedBenchmarksSearchItemBenchmarkType$inboundSchema = inboundSchema(UnifiedBenchmarksSearchItemBenchmarkType);
+var PrimaryMetric$inboundSchema = inboundSchema(PrimaryMetric);
+var SearchSurface$inboundSchema = inboundSchema(SearchSurface);
+var UnifiedBenchmarksSearchItemSource$inboundSchema = z537.enum(UnifiedBenchmarksSearchItemSource);
+var UnifiedBenchmarksSearchItem$inboundSchema = z537.object({
+  avg_cost_per_task: z537.nullable(z537.number()),
+  avg_latency_per_task_ms: z537.nullable(z537.number()),
+  benchmark_type: UnifiedBenchmarksSearchItemBenchmarkType$inboundSchema,
+  display_name: z537.string(),
+  last_run_timestamp: z537.string(),
+  model_permaslug: z537.string(),
+  primary_metric: PrimaryMetric$inboundSchema,
+  primary_score: z537.number(),
+  run_config: UnifiedBenchmarksSearchRunConfig$inboundSchema.optional(),
+  search_engine: z537.string(),
+  search_surface: SearchSurface$inboundSchema,
+  source: UnifiedBenchmarksSearchItemSource$inboundSchema,
+  total_tasks: z537.int()
+}).transform((v) => {
+  return remap(v, {
+    "avg_cost_per_task": "avgCostPerTask",
+    "avg_latency_per_task_ms": "avgLatencyPerTaskMs",
+    "benchmark_type": "benchmarkType",
+    "display_name": "displayName",
+    "last_run_timestamp": "lastRunTimestamp",
+    "model_permaslug": "modelPermaslug",
+    "primary_metric": "primaryMetric",
+    "primary_score": "primaryScore",
+    "run_config": "runConfig",
+    "search_engine": "searchEngine",
+    "search_surface": "searchSurface",
+    "total_tasks": "totalTasks"
+  });
+});
+
+// node_modules/@openrouter/sdk/esm/models/unifiedbenchmarksresponse.js
+var UnifiedBenchmarksResponseData$inboundSchema = z538.union([
+  UnifiedBenchmarksSearchItem$inboundSchema,
+  UnifiedBenchmarksDAItem$inboundSchema,
+  UnifiedBenchmarksORItem$inboundSchema,
+  UnifiedBenchmarksAAItem$inboundSchema
+]);
+var UnifiedBenchmarksResponse$inboundSchema = z538.object({
+  data: z538.array(z538.union([
+    UnifiedBenchmarksSearchItem$inboundSchema,
+    UnifiedBenchmarksDAItem$inboundSchema,
+    UnifiedBenchmarksORItem$inboundSchema,
+    UnifiedBenchmarksAAItem$inboundSchema
+  ])),
   meta: UnifiedBenchmarksMeta$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/unprocessableentityresponseerrordata.js
-var z517 = __toESM(require("zod/v4"), 1);
-var UnprocessableEntityResponseErrorData$inboundSchema = z517.object({
-  code: z517.int(),
-  message: z517.string(),
-  metadata: z517.nullable(z517.record(z517.string(), z517.any())).optional()
+var z539 = __toESM(require("zod/v4"), 1);
+var UnprocessableEntityResponseErrorData$inboundSchema = z539.object({
+  code: z539.int(),
+  message: z539.string(),
+  metadata: z539.nullable(z539.record(z539.string(), z539.any())).optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/updatebyokkeyrequest.js
-var z518 = __toESM(require("zod/v4"), 1);
-var UpdateBYOKKeyRequest$outboundSchema = z518.object({
-  allowedModels: z518.nullable(z518.array(z518.string())).optional(),
-  allowedUserIds: z518.nullable(z518.array(z518.string())).optional(),
-  disabled: z518.boolean().optional(),
-  isFallback: z518.boolean().optional(),
-  key: z518.string().optional(),
-  name: z518.nullable(z518.string()).optional()
+var z540 = __toESM(require("zod/v4"), 1);
+var UpdateBYOKKeyRequest$outboundSchema = z540.object({
+  allowedModels: z540.nullable(z540.array(z540.string())).optional(),
+  allowedUserIds: z540.nullable(z540.array(z540.string())).optional(),
+  disabled: z540.boolean().optional(),
+  isFallback: z540.boolean().optional(),
+  key: z540.string().optional(),
+  name: z540.nullable(z540.string()).optional()
 }).transform((v) => {
   return remap(v, {
     allowedModels: "allowed_models",
@@ -15313,34 +15866,34 @@ var UpdateBYOKKeyRequest$outboundSchema = z518.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/updatebyokkeyresponse.js
-var z519 = __toESM(require("zod/v4"), 1);
-var UpdateBYOKKeyResponse$inboundSchema = z519.object({
+var z541 = __toESM(require("zod/v4"), 1);
+var UpdateBYOKKeyResponse$inboundSchema = z541.object({
   data: BYOKKey$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/updateguardrailrequest.js
-var z520 = __toESM(require("zod/v4"), 1);
-var UpdateGuardrailRequest$outboundSchema = z520.object({
-  allowedModels: z520.nullable(z520.array(z520.string())).optional(),
-  allowedProviders: z520.nullable(z520.array(z520.string())).optional(),
-  contentFilterBuiltins: z520.nullable(z520.array(ContentFilterBuiltinEntryInput$outboundSchema)).optional(),
-  contentFilters: z520.nullable(z520.array(ContentFilterEntry$outboundSchema)).optional(),
-  description: z520.nullable(z520.string()).optional(),
-  enableFreeModelPublication: z520.nullable(z520.boolean()).optional(),
-  enableFreeModelTraining: z520.nullable(z520.boolean()).optional(),
-  enablePaidModelTraining: z520.nullable(z520.boolean()).optional(),
-  enforceZdr: z520.nullable(z520.boolean()).optional(),
-  enforceZdrAnthropic: z520.nullable(z520.boolean()).optional(),
-  enforceZdrGoogle: z520.nullable(z520.boolean()).optional(),
-  enforceZdrOpenai: z520.nullable(z520.boolean()).optional(),
-  enforceZdrOther: z520.nullable(z520.boolean()).optional(),
-  enforceZdrXai: z520.nullable(z520.boolean()).optional(),
-  ignoredModels: z520.nullable(z520.array(z520.string())).optional(),
-  ignoredProviders: z520.nullable(z520.array(z520.string())).optional(),
-  includeByokInBudgets: z520.boolean().optional(),
-  limitUsd: z520.nullable(z520.number()).optional(),
-  name: z520.string().optional(),
-  resetInterval: z520.nullable(GuardrailInterval$outboundSchema).optional()
+var z542 = __toESM(require("zod/v4"), 1);
+var UpdateGuardrailRequest$outboundSchema = z542.object({
+  allowedModels: z542.nullable(z542.array(z542.string())).optional(),
+  allowedProviders: z542.nullable(z542.array(z542.string())).optional(),
+  contentFilterBuiltins: z542.nullable(z542.array(ContentFilterBuiltinEntryInput$outboundSchema)).optional(),
+  contentFilters: z542.nullable(z542.array(ContentFilterEntry$outboundSchema)).optional(),
+  description: z542.nullable(z542.string()).optional(),
+  enableFreeModelPublication: z542.nullable(z542.boolean()).optional(),
+  enableFreeModelTraining: z542.nullable(z542.boolean()).optional(),
+  enablePaidModelTraining: z542.nullable(z542.boolean()).optional(),
+  enforceZdr: z542.nullable(z542.boolean()).optional(),
+  enforceZdrAnthropic: z542.nullable(z542.boolean()).optional(),
+  enforceZdrGoogle: z542.nullable(z542.boolean()).optional(),
+  enforceZdrOpenai: z542.nullable(z542.boolean()).optional(),
+  enforceZdrOther: z542.nullable(z542.boolean()).optional(),
+  enforceZdrXai: z542.nullable(z542.boolean()).optional(),
+  ignoredModels: z542.nullable(z542.array(z542.string())).optional(),
+  ignoredProviders: z542.nullable(z542.array(z542.string())).optional(),
+  includeByokInBudgets: z542.boolean().optional(),
+  limitUsd: z542.nullable(z542.number()).optional(),
+  name: z542.string().optional(),
+  resetInterval: z542.nullable(GuardrailInterval$outboundSchema).optional()
 }).transform((v) => {
   return remap(v, {
     allowedModels: "allowed_models",
@@ -15365,24 +15918,30 @@ var UpdateGuardrailRequest$outboundSchema = z520.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/updateguardrailresponse.js
-var z521 = __toESM(require("zod/v4"), 1);
-var UpdateGuardrailResponse$inboundSchema = z521.object({
+var z543 = __toESM(require("zod/v4"), 1);
+var UpdateGuardrailResponse$inboundSchema = z543.object({
   data: Guardrail$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/updateobservabilitydestinationrequest.js
-var z522 = __toESM(require("zod/v4"), 1);
-var UpdateObservabilityDestinationRequest$outboundSchema = z522.object({
-  apiKeyHashes: z522.nullable(z522.array(z522.string())).optional(),
-  config: z522.record(z522.string(), z522.any()).optional(),
-  enabled: z522.boolean().optional(),
-  filterRules: z522.nullable(ObservabilityFilterRulesConfigNullable$outboundSchema).optional(),
-  name: z522.string().optional(),
-  privacyMode: z522.boolean().optional(),
-  samplingRate: z522.number().optional()
+var z544 = __toESM(require("zod/v4"), 1);
+var UpdateObservabilityDestinationRequest$outboundSchema = z544.object({
+  apiKeyHashes: z544.nullable(z544.array(z544.string())).optional(),
+  broadcastGenerationCost: z544.boolean().optional(),
+  broadcastGenerationIdentity: z544.boolean().optional(),
+  broadcastGenerationRequestContext: z544.boolean().optional(),
+  config: z544.record(z544.string(), z544.any()).optional(),
+  enabled: z544.boolean().optional(),
+  filterRules: z544.nullable(ObservabilityFilterRulesConfigNullable$outboundSchema).optional(),
+  name: z544.string().optional(),
+  privacyMode: z544.boolean().optional(),
+  samplingRate: z544.number().optional()
 }).transform((v) => {
   return remap(v, {
     apiKeyHashes: "api_key_hashes",
+    broadcastGenerationCost: "broadcast_generation_cost",
+    broadcastGenerationIdentity: "broadcast_generation_identity",
+    broadcastGenerationRequestContext: "broadcast_generation_request_context",
     filterRules: "filter_rules",
     privacyMode: "privacy_mode",
     samplingRate: "sampling_rate"
@@ -15390,42 +15949,42 @@ var UpdateObservabilityDestinationRequest$outboundSchema = z522.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/updateobservabilitydestinationresponse.js
-var z523 = __toESM(require("zod/v4"), 1);
-var UpdateObservabilityDestinationResponse$inboundSchema = z523.object({
+var z545 = __toESM(require("zod/v4"), 1);
+var UpdateObservabilityDestinationResponse$inboundSchema = z545.object({
   data: ObservabilityDestination$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/updatescimgroupmappingrequest.js
-var z524 = __toESM(require("zod/v4"), 1);
+var z546 = __toESM(require("zod/v4"), 1);
 var UpdateScimGroupMappingRequestRole = {
   Admin: "admin",
   Member: "member"
 };
 var UpdateScimGroupMappingRequestRole$outboundSchema = outboundSchema(UpdateScimGroupMappingRequestRole);
-var UpdateScimGroupMappingRequest$outboundSchema = z524.object({
+var UpdateScimGroupMappingRequest$outboundSchema = z546.object({
   role: UpdateScimGroupMappingRequestRole$outboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/updatescimgroupmappingresponse.js
-var z525 = __toESM(require("zod/v4"), 1);
-var UpdateScimGroupMappingResponse$inboundSchema = z525.object({
+var z547 = __toESM(require("zod/v4"), 1);
+var UpdateScimGroupMappingResponse$inboundSchema = z547.object({
   data: ScimGroupMapping$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/updateworkspacerequest.js
-var z526 = __toESM(require("zod/v4"), 1);
-var UpdateWorkspaceRequest$outboundSchema = z526.object({
-  defaultImageModel: z526.nullable(z526.string()).optional(),
-  defaultProviderSort: z526.nullable(z526.string()).optional(),
-  defaultTextModel: z526.nullable(z526.string()).optional(),
-  description: z526.nullable(z526.string()).optional(),
-  ioLoggingApiKeyIds: z526.nullable(z526.array(z526.int())).optional(),
-  ioLoggingSamplingRate: z526.number().optional(),
-  isDataDiscountLoggingEnabled: z526.boolean().optional(),
-  isObservabilityBroadcastEnabled: z526.boolean().optional(),
-  isObservabilityIoLoggingEnabled: z526.boolean().optional(),
-  name: z526.string().optional(),
-  slug: z526.string().optional()
+var z548 = __toESM(require("zod/v4"), 1);
+var UpdateWorkspaceRequest$outboundSchema = z548.object({
+  defaultImageModel: z548.nullable(z548.string()).optional(),
+  defaultProviderSort: z548.nullable(z548.string()).optional(),
+  defaultTextModel: z548.nullable(z548.string()).optional(),
+  description: z548.nullable(z548.string()).optional(),
+  ioLoggingApiKeyIds: z548.nullable(z548.array(z548.int())).optional(),
+  ioLoggingSamplingRate: z548.number().optional(),
+  isDataDiscountLoggingEnabled: z548.boolean().optional(),
+  isObservabilityBroadcastEnabled: z548.boolean().optional(),
+  isObservabilityIoLoggingEnabled: z548.boolean().optional(),
+  name: z548.string().optional(),
+  slug: z548.string().optional()
 }).transform((v) => {
   return remap(v, {
     defaultImageModel: "default_image_model",
@@ -15440,16 +15999,16 @@ var UpdateWorkspaceRequest$outboundSchema = z526.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/updateworkspaceresponse.js
-var z527 = __toESM(require("zod/v4"), 1);
-var UpdateWorkspaceResponse$inboundSchema = z527.object({
+var z549 = __toESM(require("zod/v4"), 1);
+var UpdateWorkspaceResponse$inboundSchema = z549.object({
   data: Workspace$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/upsertworkspacebudgetrequest.js
-var z528 = __toESM(require("zod/v4"), 1);
-var UpsertWorkspaceBudgetRequest$outboundSchema = z528.object({
-  includeByokInBudgets: z528.boolean().optional(),
-  limitUsd: z528.number()
+var z550 = __toESM(require("zod/v4"), 1);
+var UpsertWorkspaceBudgetRequest$outboundSchema = z550.object({
+  includeByokInBudgets: z550.boolean().optional(),
+  limitUsd: z550.number()
 }).transform((v) => {
   return remap(v, {
     includeByokInBudgets: "include_byok_in_budgets",
@@ -15458,10 +16017,10 @@ var UpsertWorkspaceBudgetRequest$outboundSchema = z528.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/upsertworkspacebudgetresponse.js
-var z529 = __toESM(require("zod/v4"), 1);
-var UpsertWorkspaceBudgetResponse$inboundSchema = z529.object({
+var z551 = __toESM(require("zod/v4"), 1);
+var UpsertWorkspaceBudgetResponse$inboundSchema = z551.object({
   data: WorkspaceBudget$inboundSchema,
-  include_byok_in_budgets: z529.boolean().optional()
+  include_byok_in_budgets: z551.boolean().optional()
 }).transform((v) => {
   return remap(v, {
     "include_byok_in_budgets": "includeByokInBudgets"
@@ -15469,7 +16028,7 @@ var UpsertWorkspaceBudgetResponse$inboundSchema = z529.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/videogenerationrequest.js
-var z530 = __toESM(require("zod/v4"), 1);
+var z552 = __toESM(require("zod/v4"), 1);
 var VideoGenerationRequestAspectRatio = {
   OneHundredAndSixtyNine: "16:9",
   NineHundredAndSixteen: "9:16",
@@ -15491,139 +16050,140 @@ var VideoGenerationRequestResolution = {
   FourK: "4K"
 };
 var VideoGenerationRequestAspectRatio$outboundSchema = outboundSchema(VideoGenerationRequestAspectRatio);
-var VideoGenerationRequestOptions$outboundSchema = z530.object({
-  oneai: z530.record(z530.string(), z530.any()).optional(),
-  ai21: z530.record(z530.string(), z530.any()).optional(),
-  aionLabs: z530.record(z530.string(), z530.any()).optional(),
-  akashml: z530.record(z530.string(), z530.any()).optional(),
-  alibaba: z530.record(z530.string(), z530.any()).optional(),
-  amazonBedrock: z530.record(z530.string(), z530.any()).optional(),
-  amazonNova: z530.record(z530.string(), z530.any()).optional(),
-  ambient: z530.record(z530.string(), z530.any()).optional(),
-  anthropic: z530.record(z530.string(), z530.any()).optional(),
-  anyscale: z530.record(z530.string(), z530.any()).optional(),
-  arceeAi: z530.record(z530.string(), z530.any()).optional(),
-  atlasCloud: z530.record(z530.string(), z530.any()).optional(),
-  atoma: z530.record(z530.string(), z530.any()).optional(),
-  avian: z530.record(z530.string(), z530.any()).optional(),
-  azure: z530.record(z530.string(), z530.any()).optional(),
-  baidu: z530.record(z530.string(), z530.any()).optional(),
-  baseten: z530.record(z530.string(), z530.any()).optional(),
-  blackForestLabs: z530.record(z530.string(), z530.any()).optional(),
-  byteplus: z530.record(z530.string(), z530.any()).optional(),
-  centml: z530.record(z530.string(), z530.any()).optional(),
-  cerebras: z530.record(z530.string(), z530.any()).optional(),
-  chutes: z530.record(z530.string(), z530.any()).optional(),
-  cirrascale: z530.record(z530.string(), z530.any()).optional(),
-  clarifai: z530.record(z530.string(), z530.any()).optional(),
-  claudeOnAws: z530.record(z530.string(), z530.any()).optional(),
-  cloudflare: z530.record(z530.string(), z530.any()).optional(),
-  cohere: z530.record(z530.string(), z530.any()).optional(),
-  coreweave: z530.record(z530.string(), z530.any()).optional(),
-  crofai: z530.record(z530.string(), z530.any()).optional(),
-  crucible: z530.record(z530.string(), z530.any()).optional(),
-  crusoe: z530.record(z530.string(), z530.any()).optional(),
-  darkbloom: z530.record(z530.string(), z530.any()).optional(),
-  decart: z530.record(z530.string(), z530.any()).optional(),
-  deepgram: z530.record(z530.string(), z530.any()).optional(),
-  deepinfra: z530.record(z530.string(), z530.any()).optional(),
-  deepseek: z530.record(z530.string(), z530.any()).optional(),
-  dekallm: z530.record(z530.string(), z530.any()).optional(),
-  digitalocean: z530.record(z530.string(), z530.any()).optional(),
-  enfer: z530.record(z530.string(), z530.any()).optional(),
-  fakeProvider: z530.record(z530.string(), z530.any()).optional(),
-  featherless: z530.record(z530.string(), z530.any()).optional(),
-  fireworks: z530.record(z530.string(), z530.any()).optional(),
-  fishAudio: z530.record(z530.string(), z530.any()).optional(),
-  friendli: z530.record(z530.string(), z530.any()).optional(),
-  gmicloud: z530.record(z530.string(), z530.any()).optional(),
-  googleAiStudio: z530.record(z530.string(), z530.any()).optional(),
-  googleVertex: z530.record(z530.string(), z530.any()).optional(),
-  gopomelo: z530.record(z530.string(), z530.any()).optional(),
-  groq: z530.record(z530.string(), z530.any()).optional(),
-  heygen: z530.record(z530.string(), z530.any()).optional(),
-  huggingface: z530.record(z530.string(), z530.any()).optional(),
-  hyperbolic: z530.record(z530.string(), z530.any()).optional(),
-  hyperbolicQuantized: z530.record(z530.string(), z530.any()).optional(),
-  inception: z530.record(z530.string(), z530.any()).optional(),
-  inceptron: z530.record(z530.string(), z530.any()).optional(),
-  inferactVllm: z530.record(z530.string(), z530.any()).optional(),
-  inferenceNet: z530.record(z530.string(), z530.any()).optional(),
-  infermatic: z530.record(z530.string(), z530.any()).optional(),
-  inflection: z530.record(z530.string(), z530.any()).optional(),
-  inocloud: z530.record(z530.string(), z530.any()).optional(),
-  ioNet: z530.record(z530.string(), z530.any()).optional(),
-  ionstream: z530.record(z530.string(), z530.any()).optional(),
-  klusterai: z530.record(z530.string(), z530.any()).optional(),
-  krea: z530.record(z530.string(), z530.any()).optional(),
-  lambda: z530.record(z530.string(), z530.any()).optional(),
-  lepton: z530.record(z530.string(), z530.any()).optional(),
-  liquid: z530.record(z530.string(), z530.any()).optional(),
-  lynn: z530.record(z530.string(), z530.any()).optional(),
-  lynnPrivate: z530.record(z530.string(), z530.any()).optional(),
-  mancer: z530.record(z530.string(), z530.any()).optional(),
-  mancerOld: z530.record(z530.string(), z530.any()).optional(),
-  mara: z530.record(z530.string(), z530.any()).optional(),
-  meta: z530.record(z530.string(), z530.any()).optional(),
-  minimax: z530.record(z530.string(), z530.any()).optional(),
-  mistral: z530.record(z530.string(), z530.any()).optional(),
-  modal: z530.record(z530.string(), z530.any()).optional(),
-  modelrun: z530.record(z530.string(), z530.any()).optional(),
-  modular: z530.record(z530.string(), z530.any()).optional(),
-  moonshotai: z530.record(z530.string(), z530.any()).optional(),
-  morph: z530.record(z530.string(), z530.any()).optional(),
-  ncompass: z530.record(z530.string(), z530.any()).optional(),
-  nebius: z530.record(z530.string(), z530.any()).optional(),
-  nexAgi: z530.record(z530.string(), z530.any()).optional(),
-  nextbit: z530.record(z530.string(), z530.any()).optional(),
-  nineteen: z530.record(z530.string(), z530.any()).optional(),
-  novita: z530.record(z530.string(), z530.any()).optional(),
-  nvidia: z530.record(z530.string(), z530.any()).optional(),
-  octoai: z530.record(z530.string(), z530.any()).optional(),
-  openInference: z530.record(z530.string(), z530.any()).optional(),
-  openai: z530.record(z530.string(), z530.any()).optional(),
-  parasail: z530.record(z530.string(), z530.any()).optional(),
-  perceptron: z530.record(z530.string(), z530.any()).optional(),
-  perplexity: z530.record(z530.string(), z530.any()).optional(),
-  phala: z530.record(z530.string(), z530.any()).optional(),
-  poolside: z530.record(z530.string(), z530.any()).optional(),
-  quiver: z530.record(z530.string(), z530.any()).optional(),
-  recraft: z530.record(z530.string(), z530.any()).optional(),
-  recursal: z530.record(z530.string(), z530.any()).optional(),
-  reflection: z530.record(z530.string(), z530.any()).optional(),
-  reka: z530.record(z530.string(), z530.any()).optional(),
-  relace: z530.record(z530.string(), z530.any()).optional(),
-  replicate: z530.record(z530.string(), z530.any()).optional(),
-  runway: z530.record(z530.string(), z530.any()).optional(),
-  sailResearch: z530.record(z530.string(), z530.any()).optional(),
-  sakana: z530.record(z530.string(), z530.any()).optional(),
-  sakanaAi: z530.record(z530.string(), z530.any()).optional(),
-  sambanova: z530.record(z530.string(), z530.any()).optional(),
-  sambanovaCloaked: z530.record(z530.string(), z530.any()).optional(),
-  seed: z530.record(z530.string(), z530.any()).optional(),
-  sfCompute: z530.record(z530.string(), z530.any()).optional(),
-  siliconflow: z530.record(z530.string(), z530.any()).optional(),
-  sourceful: z530.record(z530.string(), z530.any()).optional(),
-  stealth: z530.record(z530.string(), z530.any()).optional(),
-  stepfun: z530.record(z530.string(), z530.any()).optional(),
-  streamlake: z530.record(z530.string(), z530.any()).optional(),
-  switchpoint: z530.record(z530.string(), z530.any()).optional(),
-  targon: z530.record(z530.string(), z530.any()).optional(),
-  tencent: z530.record(z530.string(), z530.any()).optional(),
-  tenstorrent: z530.record(z530.string(), z530.any()).optional(),
-  thinkingmachines: z530.record(z530.string(), z530.any()).optional(),
-  together: z530.record(z530.string(), z530.any()).optional(),
-  togetherLite: z530.record(z530.string(), z530.any()).optional(),
-  ubicloud: z530.record(z530.string(), z530.any()).optional(),
-  upstage: z530.record(z530.string(), z530.any()).optional(),
-  venice: z530.record(z530.string(), z530.any()).optional(),
-  voyageai: z530.record(z530.string(), z530.any()).optional(),
-  wafer: z530.record(z530.string(), z530.any()).optional(),
-  wandb: z530.record(z530.string(), z530.any()).optional(),
-  wandbLegacy: z530.record(z530.string(), z530.any()).optional(),
-  xai: z530.record(z530.string(), z530.any()).optional(),
-  xiaomi: z530.record(z530.string(), z530.any()).optional(),
-  zAi: z530.record(z530.string(), z530.any()).optional()
+var VideoGenerationRequestOptions$outboundSchema = z552.object({
+  oneai: z552.record(z552.string(), z552.any()).optional(),
+  ai21: z552.record(z552.string(), z552.any()).optional(),
+  aionLabs: z552.record(z552.string(), z552.any()).optional(),
+  akashml: z552.record(z552.string(), z552.any()).optional(),
+  alibaba: z552.record(z552.string(), z552.any()).optional(),
+  amazonBedrock: z552.record(z552.string(), z552.any()).optional(),
+  amazonNova: z552.record(z552.string(), z552.any()).optional(),
+  ambient: z552.record(z552.string(), z552.any()).optional(),
+  anthropic: z552.record(z552.string(), z552.any()).optional(),
+  anyscale: z552.record(z552.string(), z552.any()).optional(),
+  arceeAi: z552.record(z552.string(), z552.any()).optional(),
+  atlasCloud: z552.record(z552.string(), z552.any()).optional(),
+  atoma: z552.record(z552.string(), z552.any()).optional(),
+  avian: z552.record(z552.string(), z552.any()).optional(),
+  azure: z552.record(z552.string(), z552.any()).optional(),
+  baidu: z552.record(z552.string(), z552.any()).optional(),
+  baseten: z552.record(z552.string(), z552.any()).optional(),
+  blackForestLabs: z552.record(z552.string(), z552.any()).optional(),
+  byteplus: z552.record(z552.string(), z552.any()).optional(),
+  centml: z552.record(z552.string(), z552.any()).optional(),
+  cerebras: z552.record(z552.string(), z552.any()).optional(),
+  chutes: z552.record(z552.string(), z552.any()).optional(),
+  cirrascale: z552.record(z552.string(), z552.any()).optional(),
+  clarifai: z552.record(z552.string(), z552.any()).optional(),
+  claudeOnAws: z552.record(z552.string(), z552.any()).optional(),
+  cloudflare: z552.record(z552.string(), z552.any()).optional(),
+  cohere: z552.record(z552.string(), z552.any()).optional(),
+  coreweave: z552.record(z552.string(), z552.any()).optional(),
+  crofai: z552.record(z552.string(), z552.any()).optional(),
+  crucible: z552.record(z552.string(), z552.any()).optional(),
+  crusoe: z552.record(z552.string(), z552.any()).optional(),
+  darkbloom: z552.record(z552.string(), z552.any()).optional(),
+  databricks: z552.record(z552.string(), z552.any()).optional(),
+  decart: z552.record(z552.string(), z552.any()).optional(),
+  deepgram: z552.record(z552.string(), z552.any()).optional(),
+  deepinfra: z552.record(z552.string(), z552.any()).optional(),
+  deepseek: z552.record(z552.string(), z552.any()).optional(),
+  dekallm: z552.record(z552.string(), z552.any()).optional(),
+  digitalocean: z552.record(z552.string(), z552.any()).optional(),
+  enfer: z552.record(z552.string(), z552.any()).optional(),
+  fakeProvider: z552.record(z552.string(), z552.any()).optional(),
+  featherless: z552.record(z552.string(), z552.any()).optional(),
+  fireworks: z552.record(z552.string(), z552.any()).optional(),
+  fishAudio: z552.record(z552.string(), z552.any()).optional(),
+  friendli: z552.record(z552.string(), z552.any()).optional(),
+  gmicloud: z552.record(z552.string(), z552.any()).optional(),
+  googleAiStudio: z552.record(z552.string(), z552.any()).optional(),
+  googleVertex: z552.record(z552.string(), z552.any()).optional(),
+  gopomelo: z552.record(z552.string(), z552.any()).optional(),
+  groq: z552.record(z552.string(), z552.any()).optional(),
+  heygen: z552.record(z552.string(), z552.any()).optional(),
+  huggingface: z552.record(z552.string(), z552.any()).optional(),
+  hyperbolic: z552.record(z552.string(), z552.any()).optional(),
+  hyperbolicQuantized: z552.record(z552.string(), z552.any()).optional(),
+  inception: z552.record(z552.string(), z552.any()).optional(),
+  inceptron: z552.record(z552.string(), z552.any()).optional(),
+  inferactVllm: z552.record(z552.string(), z552.any()).optional(),
+  inferenceNet: z552.record(z552.string(), z552.any()).optional(),
+  infermatic: z552.record(z552.string(), z552.any()).optional(),
+  inflection: z552.record(z552.string(), z552.any()).optional(),
+  inocloud: z552.record(z552.string(), z552.any()).optional(),
+  ioNet: z552.record(z552.string(), z552.any()).optional(),
+  ionstream: z552.record(z552.string(), z552.any()).optional(),
+  klusterai: z552.record(z552.string(), z552.any()).optional(),
+  krea: z552.record(z552.string(), z552.any()).optional(),
+  lambda: z552.record(z552.string(), z552.any()).optional(),
+  lepton: z552.record(z552.string(), z552.any()).optional(),
+  liquid: z552.record(z552.string(), z552.any()).optional(),
+  lynn: z552.record(z552.string(), z552.any()).optional(),
+  lynnPrivate: z552.record(z552.string(), z552.any()).optional(),
+  mancer: z552.record(z552.string(), z552.any()).optional(),
+  mancerOld: z552.record(z552.string(), z552.any()).optional(),
+  mara: z552.record(z552.string(), z552.any()).optional(),
+  meta: z552.record(z552.string(), z552.any()).optional(),
+  minimax: z552.record(z552.string(), z552.any()).optional(),
+  mistral: z552.record(z552.string(), z552.any()).optional(),
+  modal: z552.record(z552.string(), z552.any()).optional(),
+  modelrun: z552.record(z552.string(), z552.any()).optional(),
+  modular: z552.record(z552.string(), z552.any()).optional(),
+  moonshotai: z552.record(z552.string(), z552.any()).optional(),
+  morph: z552.record(z552.string(), z552.any()).optional(),
+  ncompass: z552.record(z552.string(), z552.any()).optional(),
+  nebius: z552.record(z552.string(), z552.any()).optional(),
+  nexAgi: z552.record(z552.string(), z552.any()).optional(),
+  nextbit: z552.record(z552.string(), z552.any()).optional(),
+  nineteen: z552.record(z552.string(), z552.any()).optional(),
+  novita: z552.record(z552.string(), z552.any()).optional(),
+  nvidia: z552.record(z552.string(), z552.any()).optional(),
+  octoai: z552.record(z552.string(), z552.any()).optional(),
+  openInference: z552.record(z552.string(), z552.any()).optional(),
+  openai: z552.record(z552.string(), z552.any()).optional(),
+  parasail: z552.record(z552.string(), z552.any()).optional(),
+  perceptron: z552.record(z552.string(), z552.any()).optional(),
+  perplexity: z552.record(z552.string(), z552.any()).optional(),
+  phala: z552.record(z552.string(), z552.any()).optional(),
+  poolside: z552.record(z552.string(), z552.any()).optional(),
+  quiver: z552.record(z552.string(), z552.any()).optional(),
+  recraft: z552.record(z552.string(), z552.any()).optional(),
+  recursal: z552.record(z552.string(), z552.any()).optional(),
+  reflection: z552.record(z552.string(), z552.any()).optional(),
+  reka: z552.record(z552.string(), z552.any()).optional(),
+  relace: z552.record(z552.string(), z552.any()).optional(),
+  replicate: z552.record(z552.string(), z552.any()).optional(),
+  runway: z552.record(z552.string(), z552.any()).optional(),
+  sailResearch: z552.record(z552.string(), z552.any()).optional(),
+  sakana: z552.record(z552.string(), z552.any()).optional(),
+  sakanaAi: z552.record(z552.string(), z552.any()).optional(),
+  sambanova: z552.record(z552.string(), z552.any()).optional(),
+  sambanovaCloaked: z552.record(z552.string(), z552.any()).optional(),
+  seed: z552.record(z552.string(), z552.any()).optional(),
+  sfCompute: z552.record(z552.string(), z552.any()).optional(),
+  siliconflow: z552.record(z552.string(), z552.any()).optional(),
+  sourceful: z552.record(z552.string(), z552.any()).optional(),
+  stealth: z552.record(z552.string(), z552.any()).optional(),
+  stepfun: z552.record(z552.string(), z552.any()).optional(),
+  streamlake: z552.record(z552.string(), z552.any()).optional(),
+  switchpoint: z552.record(z552.string(), z552.any()).optional(),
+  targon: z552.record(z552.string(), z552.any()).optional(),
+  tencent: z552.record(z552.string(), z552.any()).optional(),
+  tenstorrent: z552.record(z552.string(), z552.any()).optional(),
+  thinkingmachines: z552.record(z552.string(), z552.any()).optional(),
+  together: z552.record(z552.string(), z552.any()).optional(),
+  togetherLite: z552.record(z552.string(), z552.any()).optional(),
+  ubicloud: z552.record(z552.string(), z552.any()).optional(),
+  upstage: z552.record(z552.string(), z552.any()).optional(),
+  venice: z552.record(z552.string(), z552.any()).optional(),
+  voyageai: z552.record(z552.string(), z552.any()).optional(),
+  wafer: z552.record(z552.string(), z552.any()).optional(),
+  wandb: z552.record(z552.string(), z552.any()).optional(),
+  wandbLegacy: z552.record(z552.string(), z552.any()).optional(),
+  xai: z552.record(z552.string(), z552.any()).optional(),
+  xiaomi: z552.record(z552.string(), z552.any()).optional(),
+  zAi: z552.record(z552.string(), z552.any()).optional()
 }).transform((v) => {
   return remap(v, {
     oneai: "01ai",
@@ -15655,23 +16215,23 @@ var VideoGenerationRequestOptions$outboundSchema = z530.object({
     zAi: "z-ai"
   });
 });
-var VideoGenerationRequestProvider$outboundSchema = z530.object({
-  options: z530.lazy(() => VideoGenerationRequestOptions$outboundSchema).optional()
+var VideoGenerationRequestProvider$outboundSchema = z552.object({
+  options: z552.lazy(() => VideoGenerationRequestOptions$outboundSchema).optional()
 });
 var VideoGenerationRequestResolution$outboundSchema = outboundSchema(VideoGenerationRequestResolution);
-var VideoGenerationRequest$outboundSchema = z530.object({
+var VideoGenerationRequest$outboundSchema = z552.object({
   aspectRatio: VideoGenerationRequestAspectRatio$outboundSchema.optional(),
-  callbackUrl: z530.string().optional(),
-  duration: z530.int().optional(),
-  frameImages: z530.array(FrameImage$outboundSchema).optional(),
-  generateAudio: z530.boolean().optional(),
-  inputReferences: z530.array(InputReference$outboundSchema).optional(),
-  model: z530.string(),
-  prompt: z530.string().optional(),
-  provider: z530.lazy(() => VideoGenerationRequestProvider$outboundSchema).optional(),
+  callbackUrl: z552.string().optional(),
+  duration: z552.int().optional(),
+  frameImages: z552.array(FrameImage$outboundSchema).optional(),
+  generateAudio: z552.boolean().optional(),
+  inputReferences: z552.array(InputReference$outboundSchema).optional(),
+  model: z552.string(),
+  prompt: z552.string().optional(),
+  provider: z552.lazy(() => VideoGenerationRequestProvider$outboundSchema).optional(),
   resolution: VideoGenerationRequestResolution$outboundSchema.optional(),
-  seed: z530.int().optional(),
-  size: z530.string().optional()
+  seed: z552.int().optional(),
+  size: z552.string().optional()
 }).transform((v) => {
   return remap(v, {
     aspectRatio: "aspect_ratio",
@@ -15683,13 +16243,13 @@ var VideoGenerationRequest$outboundSchema = z530.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/videogenerationresponse.js
-var z532 = __toESM(require("zod/v4"), 1);
+var z554 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/videogenerationusage.js
-var z531 = __toESM(require("zod/v4"), 1);
-var VideoGenerationUsage$inboundSchema = z531.object({
-  cost: z531.nullable(z531.number()).optional(),
-  is_byok: z531.boolean().optional()
+var z553 = __toESM(require("zod/v4"), 1);
+var VideoGenerationUsage$inboundSchema = z553.object({
+  cost: z553.nullable(z553.number()).optional(),
+  is_byok: z553.boolean().optional()
 }).transform((v) => {
   return remap(v, {
     "is_byok": "isByok"
@@ -15706,13 +16266,13 @@ var VideoGenerationResponseStatus = {
   Expired: "expired"
 };
 var VideoGenerationResponseStatus$inboundSchema = inboundSchema(VideoGenerationResponseStatus);
-var VideoGenerationResponse$inboundSchema = z532.object({
-  error: z532.string().optional(),
-  generation_id: z532.string().optional(),
-  id: z532.string(),
-  polling_url: z532.string(),
+var VideoGenerationResponse$inboundSchema = z554.object({
+  error: z554.string().optional(),
+  generation_id: z554.string().optional(),
+  id: z554.string(),
+  polling_url: z554.string(),
   status: VideoGenerationResponseStatus$inboundSchema,
-  unsigned_urls: z532.array(z532.string()).optional(),
+  unsigned_urls: z554.array(z554.string()).optional(),
   usage: VideoGenerationUsage$inboundSchema.optional()
 }).transform((v) => {
   return remap(v, {
@@ -15723,7 +16283,7 @@ var VideoGenerationResponse$inboundSchema = z532.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/videomodel.js
-var z533 = __toESM(require("zod/v4"), 1);
+var z555 = __toESM(require("zod/v4"), 1);
 var SupportedAspectRatio = {
   OneHundredAndSixtyNine: "16:9",
   NineHundredAndSixteen: "9:16",
@@ -15754,20 +16314,26 @@ var SupportedSize = {
   FourHundredAndEightyx720: "480x720",
   FourHundredAndEightyx854: "480x854",
   FourHundredAndEightyx1120: "480x1120",
+  FiveHundredAndSixtyx752: "560x752",
   SixHundredAndFortyx480: "640x480",
+  SixHundredAndFortyx640: "640x640",
   SevenHundredAndTwentyx480: "720x480",
   SevenHundredAndTwentyx720: "720x720",
   SevenHundredAndTwentyx960: "720x960",
   SevenHundredAndTwentyx1080: "720x1080",
   SevenHundredAndTwentyx1280: "720x1280",
   SevenHundredAndTwentyx1680: "720x1680",
+  SevenHundredAndFiftyTwox560: "752x560",
   SevenHundredAndSixtyEightx768: "768x768",
   SevenHundredAndSixtyEightx1024: "768x1024",
   SevenHundredAndSixtyEightx1152: "768x1152",
   SevenHundredAndSixtyEightx1366: "768x1366",
   SevenHundredAndSixtyEightx1792: "768x1792",
+  EightHundredAndThirtyFourx1112: "834x1112",
   EightHundredAndFiftyFourx480: "854x480",
   NineHundredAndSixtyx720: "960x720",
+  NineHundredAndSixtyx960: "960x960",
+  NineHundredAndNinetyTwox432: "992x432",
   OneThousandAndTwentyFourx768: "1024x768",
   OneThousandAndEightyx720: "1080x720",
   OneThousandAndEightyx1080: "1080x1080",
@@ -15775,6 +16341,7 @@ var SupportedSize = {
   OneThousandAndEightyx1620: "1080x1620",
   OneThousandAndEightyx1920: "1080x1920",
   OneThousandAndEightyx2520: "1080x2520",
+  OneThousandOneHundredAndTwelvex834: "1112x834",
   OneThousandOneHundredAndTwentyx480: "1120x480",
   OneThousandOneHundredAndFiftyTwox768: "1152x768",
   OneThousandTwoHundredAndEightyx720: "1280x720",
@@ -15785,6 +16352,7 @@ var SupportedSize = {
   OneThousandFourHundredAndFortyx2160: "1440x2160",
   OneThousandFourHundredAndFortyx2560: "1440x2560",
   OneThousandFourHundredAndFortyx3360: "1440x3360",
+  OneThousandFourHundredAndSeventyx630: "1470x630",
   OneThousandSixHundredAndTwentyx1080: "1620x1080",
   OneThousandSixHundredAndEightyx720: "1680x720",
   OneThousandSevenHundredAndNinetyTwox768: "1792x768",
@@ -15808,22 +16376,22 @@ var SupportedAspectRatio$inboundSchema = inboundSchema(SupportedAspectRatio);
 var SupportedFrameImage$inboundSchema = inboundSchema(SupportedFrameImage);
 var SupportedResolution$inboundSchema = inboundSchema(SupportedResolution);
 var SupportedSize$inboundSchema = inboundSchema(SupportedSize);
-var VideoModel$inboundSchema = z533.object({
-  allowed_passthrough_parameters: z533.array(z533.string()),
-  canonical_slug: z533.string(),
-  created: z533.int(),
-  description: z533.string().optional(),
-  generate_audio: z533.nullable(z533.boolean()),
-  hugging_face_id: z533.nullable(z533.string()).optional(),
-  id: z533.string(),
-  name: z533.string(),
-  pricing_skus: z533.nullable(z533.record(z533.string(), z533.string())).optional(),
-  seed: z533.nullable(z533.boolean()),
-  supported_aspect_ratios: z533.nullable(z533.array(SupportedAspectRatio$inboundSchema)),
-  supported_durations: z533.nullable(z533.array(z533.int())),
-  supported_frame_images: z533.nullable(z533.array(SupportedFrameImage$inboundSchema)),
-  supported_resolutions: z533.nullable(z533.array(SupportedResolution$inboundSchema)),
-  supported_sizes: z533.nullable(z533.array(SupportedSize$inboundSchema))
+var VideoModel$inboundSchema = z555.object({
+  allowed_passthrough_parameters: z555.array(z555.string()),
+  canonical_slug: z555.string(),
+  created: z555.int(),
+  description: z555.string().optional(),
+  generate_audio: z555.nullable(z555.boolean()),
+  hugging_face_id: z555.nullable(z555.string()).optional(),
+  id: z555.string(),
+  name: z555.string(),
+  pricing_skus: z555.nullable(z555.record(z555.string(), z555.string())).optional(),
+  seed: z555.nullable(z555.boolean()),
+  supported_aspect_ratios: z555.nullable(z555.array(SupportedAspectRatio$inboundSchema)),
+  supported_durations: z555.nullable(z555.array(z555.int())),
+  supported_frame_images: z555.nullable(z555.array(SupportedFrameImage$inboundSchema)),
+  supported_resolutions: z555.nullable(z555.array(SupportedResolution$inboundSchema)),
+  supported_sizes: z555.nullable(z555.array(SupportedSize$inboundSchema))
 }).transform((v) => {
   return remap(v, {
     "allowed_passthrough_parameters": "allowedPassthroughParameters",
@@ -15840,9 +16408,9 @@ var VideoModel$inboundSchema = z533.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/videomodelslistresponse.js
-var z534 = __toESM(require("zod/v4"), 1);
-var VideoModelsListResponse$inboundSchema = z534.object({
-  data: z534.array(VideoModel$inboundSchema)
+var z556 = __toESM(require("zod/v4"), 1);
+var VideoModelsListResponse$inboundSchema = z556.object({
+  data: z556.array(VideoModel$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/workspacebudgetinterval.js
@@ -15869,13 +16437,13 @@ var BadGatewayResponseError = class extends OpenRouterError {
     this.name = "BadGatewayResponseError";
   }
 };
-var BadGatewayResponseError$inboundSchema = z535.object({
+var BadGatewayResponseError$inboundSchema = z557.object({
   error: BadGatewayResponseErrorData$inboundSchema,
-  openrouter_metadata: z535.nullable(z535.record(z535.string(), z535.any())).optional(),
-  user_id: z535.nullable(z535.string()).optional(),
-  request$: z535.custom((x) => x instanceof Request),
-  response$: z535.custom((x) => x instanceof Response),
-  body$: z535.string()
+  openrouter_metadata: z557.nullable(z557.record(z557.string(), z557.any())).optional(),
+  user_id: z557.nullable(z557.string()).optional(),
+  request$: z557.custom((x) => x instanceof Request),
+  response$: z557.custom((x) => x instanceof Response),
+  body$: z557.string()
 }).transform((v) => {
   const remapped = remap(v, {
     "openrouter_metadata": "openrouterMetadata",
@@ -15889,7 +16457,7 @@ var BadGatewayResponseError$inboundSchema = z535.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/errors/badrequestresponseerror.js
-var z536 = __toESM(require("zod/v4"), 1);
+var z558 = __toESM(require("zod/v4"), 1);
 var BadRequestResponseError = class extends OpenRouterError {
   constructor(err, httpMeta) {
     const message = err.error?.message || `API error occurred: ${JSON.stringify(err)}`;
@@ -15904,13 +16472,13 @@ var BadRequestResponseError = class extends OpenRouterError {
     this.name = "BadRequestResponseError";
   }
 };
-var BadRequestResponseError$inboundSchema = z536.object({
+var BadRequestResponseError$inboundSchema = z558.object({
   error: BadRequestResponseErrorData$inboundSchema,
-  openrouter_metadata: z536.nullable(z536.record(z536.string(), z536.any())).optional(),
-  user_id: z536.nullable(z536.string()).optional(),
-  request$: z536.custom((x) => x instanceof Request),
-  response$: z536.custom((x) => x instanceof Response),
-  body$: z536.string()
+  openrouter_metadata: z558.nullable(z558.record(z558.string(), z558.any())).optional(),
+  user_id: z558.nullable(z558.string()).optional(),
+  request$: z558.custom((x) => x instanceof Request),
+  response$: z558.custom((x) => x instanceof Response),
+  body$: z558.string()
 }).transform((v) => {
   const remapped = remap(v, {
     "openrouter_metadata": "openrouterMetadata",
@@ -15924,7 +16492,7 @@ var BadRequestResponseError$inboundSchema = z536.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/errors/conflictresponseerror.js
-var z537 = __toESM(require("zod/v4"), 1);
+var z559 = __toESM(require("zod/v4"), 1);
 var ConflictResponseError = class extends OpenRouterError {
   constructor(err, httpMeta) {
     const message = err.error?.message || `API error occurred: ${JSON.stringify(err)}`;
@@ -15939,13 +16507,13 @@ var ConflictResponseError = class extends OpenRouterError {
     this.name = "ConflictResponseError";
   }
 };
-var ConflictResponseError$inboundSchema = z537.object({
+var ConflictResponseError$inboundSchema = z559.object({
   error: ConflictResponseErrorData$inboundSchema,
-  openrouter_metadata: z537.nullable(z537.record(z537.string(), z537.any())).optional(),
-  user_id: z537.nullable(z537.string()).optional(),
-  request$: z537.custom((x) => x instanceof Request),
-  response$: z537.custom((x) => x instanceof Response),
-  body$: z537.string()
+  openrouter_metadata: z559.nullable(z559.record(z559.string(), z559.any())).optional(),
+  user_id: z559.nullable(z559.string()).optional(),
+  request$: z559.custom((x) => x instanceof Request),
+  response$: z559.custom((x) => x instanceof Response),
+  body$: z559.string()
 }).transform((v) => {
   const remapped = remap(v, {
     "openrouter_metadata": "openrouterMetadata",
@@ -15959,7 +16527,7 @@ var ConflictResponseError$inboundSchema = z537.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/errors/edgenetworktimeoutresponseerror.js
-var z538 = __toESM(require("zod/v4"), 1);
+var z560 = __toESM(require("zod/v4"), 1);
 var EdgeNetworkTimeoutResponseError = class extends OpenRouterError {
   constructor(err, httpMeta) {
     const message = err.error?.message || `API error occurred: ${JSON.stringify(err)}`;
@@ -15974,13 +16542,13 @@ var EdgeNetworkTimeoutResponseError = class extends OpenRouterError {
     this.name = "EdgeNetworkTimeoutResponseError";
   }
 };
-var EdgeNetworkTimeoutResponseError$inboundSchema = z538.object({
+var EdgeNetworkTimeoutResponseError$inboundSchema = z560.object({
   error: EdgeNetworkTimeoutResponseErrorData$inboundSchema,
-  openrouter_metadata: z538.nullable(z538.record(z538.string(), z538.any())).optional(),
-  user_id: z538.nullable(z538.string()).optional(),
-  request$: z538.custom((x) => x instanceof Request),
-  response$: z538.custom((x) => x instanceof Response),
-  body$: z538.string()
+  openrouter_metadata: z560.nullable(z560.record(z560.string(), z560.any())).optional(),
+  user_id: z560.nullable(z560.string()).optional(),
+  request$: z560.custom((x) => x instanceof Request),
+  response$: z560.custom((x) => x instanceof Response),
+  body$: z560.string()
 }).transform((v) => {
   const remapped = remap(v, {
     "openrouter_metadata": "openrouterMetadata",
@@ -15994,7 +16562,7 @@ var EdgeNetworkTimeoutResponseError$inboundSchema = z538.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/errors/forbiddenresponseerror.js
-var z539 = __toESM(require("zod/v4"), 1);
+var z561 = __toESM(require("zod/v4"), 1);
 var ForbiddenResponseError = class extends OpenRouterError {
   constructor(err, httpMeta) {
     const message = err.error?.message || `API error occurred: ${JSON.stringify(err)}`;
@@ -16009,13 +16577,13 @@ var ForbiddenResponseError = class extends OpenRouterError {
     this.name = "ForbiddenResponseError";
   }
 };
-var ForbiddenResponseError$inboundSchema = z539.object({
+var ForbiddenResponseError$inboundSchema = z561.object({
   error: ForbiddenResponseErrorData$inboundSchema,
-  openrouter_metadata: z539.nullable(z539.record(z539.string(), z539.any())).optional(),
-  user_id: z539.nullable(z539.string()).optional(),
-  request$: z539.custom((x) => x instanceof Request),
-  response$: z539.custom((x) => x instanceof Response),
-  body$: z539.string()
+  openrouter_metadata: z561.nullable(z561.record(z561.string(), z561.any())).optional(),
+  user_id: z561.nullable(z561.string()).optional(),
+  request$: z561.custom((x) => x instanceof Request),
+  response$: z561.custom((x) => x instanceof Response),
+  body$: z561.string()
 }).transform((v) => {
   const remapped = remap(v, {
     "openrouter_metadata": "openrouterMetadata",
@@ -16029,7 +16597,7 @@ var ForbiddenResponseError$inboundSchema = z539.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/errors/internalserverresponseerror.js
-var z540 = __toESM(require("zod/v4"), 1);
+var z562 = __toESM(require("zod/v4"), 1);
 var InternalServerResponseError = class extends OpenRouterError {
   constructor(err, httpMeta) {
     const message = err.error?.message || `API error occurred: ${JSON.stringify(err)}`;
@@ -16044,13 +16612,13 @@ var InternalServerResponseError = class extends OpenRouterError {
     this.name = "InternalServerResponseError";
   }
 };
-var InternalServerResponseError$inboundSchema = z540.object({
+var InternalServerResponseError$inboundSchema = z562.object({
   error: InternalServerResponseErrorData$inboundSchema,
-  openrouter_metadata: z540.nullable(z540.record(z540.string(), z540.any())).optional(),
-  user_id: z540.nullable(z540.string()).optional(),
-  request$: z540.custom((x) => x instanceof Request),
-  response$: z540.custom((x) => x instanceof Response),
-  body$: z540.string()
+  openrouter_metadata: z562.nullable(z562.record(z562.string(), z562.any())).optional(),
+  user_id: z562.nullable(z562.string()).optional(),
+  request$: z562.custom((x) => x instanceof Request),
+  response$: z562.custom((x) => x instanceof Response),
+  body$: z562.string()
 }).transform((v) => {
   const remapped = remap(v, {
     "openrouter_metadata": "openrouterMetadata",
@@ -16064,7 +16632,7 @@ var InternalServerResponseError$inboundSchema = z540.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/errors/notfoundresponseerror.js
-var z541 = __toESM(require("zod/v4"), 1);
+var z563 = __toESM(require("zod/v4"), 1);
 var NotFoundResponseError = class extends OpenRouterError {
   constructor(err, httpMeta) {
     const message = err.error?.message || `API error occurred: ${JSON.stringify(err)}`;
@@ -16079,13 +16647,13 @@ var NotFoundResponseError = class extends OpenRouterError {
     this.name = "NotFoundResponseError";
   }
 };
-var NotFoundResponseError$inboundSchema = z541.object({
+var NotFoundResponseError$inboundSchema = z563.object({
   error: NotFoundResponseErrorData$inboundSchema,
-  openrouter_metadata: z541.nullable(z541.record(z541.string(), z541.any())).optional(),
-  user_id: z541.nullable(z541.string()).optional(),
-  request$: z541.custom((x) => x instanceof Request),
-  response$: z541.custom((x) => x instanceof Response),
-  body$: z541.string()
+  openrouter_metadata: z563.nullable(z563.record(z563.string(), z563.any())).optional(),
+  user_id: z563.nullable(z563.string()).optional(),
+  request$: z563.custom((x) => x instanceof Request),
+  response$: z563.custom((x) => x instanceof Response),
+  body$: z563.string()
 }).transform((v) => {
   const remapped = remap(v, {
     "openrouter_metadata": "openrouterMetadata",
@@ -16099,7 +16667,7 @@ var NotFoundResponseError$inboundSchema = z541.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/errors/payloadtoolargeresponseerror.js
-var z542 = __toESM(require("zod/v4"), 1);
+var z564 = __toESM(require("zod/v4"), 1);
 var PayloadTooLargeResponseError = class extends OpenRouterError {
   constructor(err, httpMeta) {
     const message = err.error?.message || `API error occurred: ${JSON.stringify(err)}`;
@@ -16114,13 +16682,13 @@ var PayloadTooLargeResponseError = class extends OpenRouterError {
     this.name = "PayloadTooLargeResponseError";
   }
 };
-var PayloadTooLargeResponseError$inboundSchema = z542.object({
+var PayloadTooLargeResponseError$inboundSchema = z564.object({
   error: PayloadTooLargeResponseErrorData$inboundSchema,
-  openrouter_metadata: z542.nullable(z542.record(z542.string(), z542.any())).optional(),
-  user_id: z542.nullable(z542.string()).optional(),
-  request$: z542.custom((x) => x instanceof Request),
-  response$: z542.custom((x) => x instanceof Response),
-  body$: z542.string()
+  openrouter_metadata: z564.nullable(z564.record(z564.string(), z564.any())).optional(),
+  user_id: z564.nullable(z564.string()).optional(),
+  request$: z564.custom((x) => x instanceof Request),
+  response$: z564.custom((x) => x instanceof Response),
+  body$: z564.string()
 }).transform((v) => {
   const remapped = remap(v, {
     "openrouter_metadata": "openrouterMetadata",
@@ -16134,7 +16702,7 @@ var PayloadTooLargeResponseError$inboundSchema = z542.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/errors/paymentrequiredresponseerror.js
-var z543 = __toESM(require("zod/v4"), 1);
+var z565 = __toESM(require("zod/v4"), 1);
 var PaymentRequiredResponseError = class extends OpenRouterError {
   constructor(err, httpMeta) {
     const message = err.error?.message || `API error occurred: ${JSON.stringify(err)}`;
@@ -16149,13 +16717,13 @@ var PaymentRequiredResponseError = class extends OpenRouterError {
     this.name = "PaymentRequiredResponseError";
   }
 };
-var PaymentRequiredResponseError$inboundSchema = z543.object({
+var PaymentRequiredResponseError$inboundSchema = z565.object({
   error: PaymentRequiredResponseErrorData$inboundSchema,
-  openrouter_metadata: z543.nullable(z543.record(z543.string(), z543.any())).optional(),
-  user_id: z543.nullable(z543.string()).optional(),
-  request$: z543.custom((x) => x instanceof Request),
-  response$: z543.custom((x) => x instanceof Response),
-  body$: z543.string()
+  openrouter_metadata: z565.nullable(z565.record(z565.string(), z565.any())).optional(),
+  user_id: z565.nullable(z565.string()).optional(),
+  request$: z565.custom((x) => x instanceof Request),
+  response$: z565.custom((x) => x instanceof Response),
+  body$: z565.string()
 }).transform((v) => {
   const remapped = remap(v, {
     "openrouter_metadata": "openrouterMetadata",
@@ -16169,7 +16737,7 @@ var PaymentRequiredResponseError$inboundSchema = z543.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/errors/provideroverloadedresponseerror.js
-var z544 = __toESM(require("zod/v4"), 1);
+var z566 = __toESM(require("zod/v4"), 1);
 var ProviderOverloadedResponseError = class extends OpenRouterError {
   constructor(err, httpMeta) {
     const message = err.error?.message || `API error occurred: ${JSON.stringify(err)}`;
@@ -16184,13 +16752,13 @@ var ProviderOverloadedResponseError = class extends OpenRouterError {
     this.name = "ProviderOverloadedResponseError";
   }
 };
-var ProviderOverloadedResponseError$inboundSchema = z544.object({
+var ProviderOverloadedResponseError$inboundSchema = z566.object({
   error: ProviderOverloadedResponseErrorData$inboundSchema,
-  openrouter_metadata: z544.nullable(z544.record(z544.string(), z544.any())).optional(),
-  user_id: z544.nullable(z544.string()).optional(),
-  request$: z544.custom((x) => x instanceof Request),
-  response$: z544.custom((x) => x instanceof Response),
-  body$: z544.string()
+  openrouter_metadata: z566.nullable(z566.record(z566.string(), z566.any())).optional(),
+  user_id: z566.nullable(z566.string()).optional(),
+  request$: z566.custom((x) => x instanceof Request),
+  response$: z566.custom((x) => x instanceof Response),
+  body$: z566.string()
 }).transform((v) => {
   const remapped = remap(v, {
     "openrouter_metadata": "openrouterMetadata",
@@ -16204,7 +16772,7 @@ var ProviderOverloadedResponseError$inboundSchema = z544.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/errors/requesttimeoutresponseerror.js
-var z545 = __toESM(require("zod/v4"), 1);
+var z567 = __toESM(require("zod/v4"), 1);
 var RequestTimeoutResponseError = class extends OpenRouterError {
   constructor(err, httpMeta) {
     const message = err.error?.message || `API error occurred: ${JSON.stringify(err)}`;
@@ -16219,13 +16787,13 @@ var RequestTimeoutResponseError = class extends OpenRouterError {
     this.name = "RequestTimeoutResponseError";
   }
 };
-var RequestTimeoutResponseError$inboundSchema = z545.object({
+var RequestTimeoutResponseError$inboundSchema = z567.object({
   error: RequestTimeoutResponseErrorData$inboundSchema,
-  openrouter_metadata: z545.nullable(z545.record(z545.string(), z545.any())).optional(),
-  user_id: z545.nullable(z545.string()).optional(),
-  request$: z545.custom((x) => x instanceof Request),
-  response$: z545.custom((x) => x instanceof Response),
-  body$: z545.string()
+  openrouter_metadata: z567.nullable(z567.record(z567.string(), z567.any())).optional(),
+  user_id: z567.nullable(z567.string()).optional(),
+  request$: z567.custom((x) => x instanceof Request),
+  response$: z567.custom((x) => x instanceof Response),
+  body$: z567.string()
 }).transform((v) => {
   const remapped = remap(v, {
     "openrouter_metadata": "openrouterMetadata",
@@ -16239,7 +16807,7 @@ var RequestTimeoutResponseError$inboundSchema = z545.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/errors/serviceunavailableresponseerror.js
-var z546 = __toESM(require("zod/v4"), 1);
+var z568 = __toESM(require("zod/v4"), 1);
 var ServiceUnavailableResponseError = class extends OpenRouterError {
   constructor(err, httpMeta) {
     const message = err.error?.message || `API error occurred: ${JSON.stringify(err)}`;
@@ -16254,13 +16822,13 @@ var ServiceUnavailableResponseError = class extends OpenRouterError {
     this.name = "ServiceUnavailableResponseError";
   }
 };
-var ServiceUnavailableResponseError$inboundSchema = z546.object({
+var ServiceUnavailableResponseError$inboundSchema = z568.object({
   error: ServiceUnavailableResponseErrorData$inboundSchema,
-  openrouter_metadata: z546.nullable(z546.record(z546.string(), z546.any())).optional(),
-  user_id: z546.nullable(z546.string()).optional(),
-  request$: z546.custom((x) => x instanceof Request),
-  response$: z546.custom((x) => x instanceof Response),
-  body$: z546.string()
+  openrouter_metadata: z568.nullable(z568.record(z568.string(), z568.any())).optional(),
+  user_id: z568.nullable(z568.string()).optional(),
+  request$: z568.custom((x) => x instanceof Request),
+  response$: z568.custom((x) => x instanceof Response),
+  body$: z568.string()
 }).transform((v) => {
   const remapped = remap(v, {
     "openrouter_metadata": "openrouterMetadata",
@@ -16274,7 +16842,7 @@ var ServiceUnavailableResponseError$inboundSchema = z546.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/errors/toomanyrequestsresponseerror.js
-var z547 = __toESM(require("zod/v4"), 1);
+var z569 = __toESM(require("zod/v4"), 1);
 var TooManyRequestsResponseError = class extends OpenRouterError {
   constructor(err, httpMeta) {
     const message = err.error?.message || `API error occurred: ${JSON.stringify(err)}`;
@@ -16289,13 +16857,13 @@ var TooManyRequestsResponseError = class extends OpenRouterError {
     this.name = "TooManyRequestsResponseError";
   }
 };
-var TooManyRequestsResponseError$inboundSchema = z547.object({
+var TooManyRequestsResponseError$inboundSchema = z569.object({
   error: TooManyRequestsResponseErrorData$inboundSchema,
-  openrouter_metadata: z547.nullable(z547.record(z547.string(), z547.any())).optional(),
-  user_id: z547.nullable(z547.string()).optional(),
-  request$: z547.custom((x) => x instanceof Request),
-  response$: z547.custom((x) => x instanceof Response),
-  body$: z547.string()
+  openrouter_metadata: z569.nullable(z569.record(z569.string(), z569.any())).optional(),
+  user_id: z569.nullable(z569.string()).optional(),
+  request$: z569.custom((x) => x instanceof Request),
+  response$: z569.custom((x) => x instanceof Response),
+  body$: z569.string()
 }).transform((v) => {
   const remapped = remap(v, {
     "openrouter_metadata": "openrouterMetadata",
@@ -16309,7 +16877,7 @@ var TooManyRequestsResponseError$inboundSchema = z547.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/errors/unauthorizedresponseerror.js
-var z548 = __toESM(require("zod/v4"), 1);
+var z570 = __toESM(require("zod/v4"), 1);
 var UnauthorizedResponseError = class extends OpenRouterError {
   constructor(err, httpMeta) {
     const message = err.error?.message || `API error occurred: ${JSON.stringify(err)}`;
@@ -16324,13 +16892,13 @@ var UnauthorizedResponseError = class extends OpenRouterError {
     this.name = "UnauthorizedResponseError";
   }
 };
-var UnauthorizedResponseError$inboundSchema = z548.object({
+var UnauthorizedResponseError$inboundSchema = z570.object({
   error: UnauthorizedResponseErrorData$inboundSchema,
-  openrouter_metadata: z548.nullable(z548.record(z548.string(), z548.any())).optional(),
-  user_id: z548.nullable(z548.string()).optional(),
-  request$: z548.custom((x) => x instanceof Request),
-  response$: z548.custom((x) => x instanceof Response),
-  body$: z548.string()
+  openrouter_metadata: z570.nullable(z570.record(z570.string(), z570.any())).optional(),
+  user_id: z570.nullable(z570.string()).optional(),
+  request$: z570.custom((x) => x instanceof Request),
+  response$: z570.custom((x) => x instanceof Response),
+  body$: z570.string()
 }).transform((v) => {
   const remapped = remap(v, {
     "openrouter_metadata": "openrouterMetadata",
@@ -16344,7 +16912,7 @@ var UnauthorizedResponseError$inboundSchema = z548.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/errors/unprocessableentityresponseerror.js
-var z549 = __toESM(require("zod/v4"), 1);
+var z571 = __toESM(require("zod/v4"), 1);
 var UnprocessableEntityResponseError = class extends OpenRouterError {
   constructor(err, httpMeta) {
     const message = err.error?.message || `API error occurred: ${JSON.stringify(err)}`;
@@ -16359,13 +16927,13 @@ var UnprocessableEntityResponseError = class extends OpenRouterError {
     this.name = "UnprocessableEntityResponseError";
   }
 };
-var UnprocessableEntityResponseError$inboundSchema = z549.object({
+var UnprocessableEntityResponseError$inboundSchema = z571.object({
   error: UnprocessableEntityResponseErrorData$inboundSchema,
-  openrouter_metadata: z549.nullable(z549.record(z549.string(), z549.any())).optional(),
-  user_id: z549.nullable(z549.string()).optional(),
-  request$: z549.custom((x) => x instanceof Request),
-  response$: z549.custom((x) => x instanceof Response),
-  body$: z549.string()
+  openrouter_metadata: z571.nullable(z571.record(z571.string(), z571.any())).optional(),
+  user_id: z571.nullable(z571.string()).optional(),
+  request$: z571.custom((x) => x instanceof Request),
+  response$: z571.custom((x) => x instanceof Response),
+  body$: z571.string()
 }).transform((v) => {
   const remapped = remap(v, {
     "openrouter_metadata": "openrouterMetadata",
@@ -16379,12 +16947,12 @@ var UnprocessableEntityResponseError$inboundSchema = z549.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/bulkaddworkspacemembers.js
-var z550 = __toESM(require("zod/v4"), 1);
-var BulkAddWorkspaceMembersRequest$outboundSchema2 = z550.object({
-  httpReferer: z550.string().optional(),
-  appTitle: z550.string().optional(),
-  appCategories: z550.string().optional(),
-  id: z550.string(),
+var z572 = __toESM(require("zod/v4"), 1);
+var BulkAddWorkspaceMembersRequest$outboundSchema2 = z572.object({
+  httpReferer: z572.string().optional(),
+  appTitle: z572.string().optional(),
+  appCategories: z572.string().optional(),
+  id: z572.string(),
   bulkAddWorkspaceMembersRequest: BulkAddWorkspaceMembersRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -16394,12 +16962,12 @@ var BulkAddWorkspaceMembersRequest$outboundSchema2 = z550.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/bulkassignkeystoguardrail.js
-var z551 = __toESM(require("zod/v4"), 1);
-var BulkAssignKeysToGuardrailRequest$outboundSchema = z551.object({
-  httpReferer: z551.string().optional(),
-  appTitle: z551.string().optional(),
-  appCategories: z551.string().optional(),
-  id: z551.string(),
+var z573 = __toESM(require("zod/v4"), 1);
+var BulkAssignKeysToGuardrailRequest$outboundSchema = z573.object({
+  httpReferer: z573.string().optional(),
+  appTitle: z573.string().optional(),
+  appCategories: z573.string().optional(),
+  id: z573.string(),
   bulkAssignKeysRequest: BulkAssignKeysRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -16409,12 +16977,12 @@ var BulkAssignKeysToGuardrailRequest$outboundSchema = z551.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/bulkassignmemberstoguardrail.js
-var z552 = __toESM(require("zod/v4"), 1);
-var BulkAssignMembersToGuardrailRequest$outboundSchema = z552.object({
-  httpReferer: z552.string().optional(),
-  appTitle: z552.string().optional(),
-  appCategories: z552.string().optional(),
-  id: z552.string(),
+var z574 = __toESM(require("zod/v4"), 1);
+var BulkAssignMembersToGuardrailRequest$outboundSchema = z574.object({
+  httpReferer: z574.string().optional(),
+  appTitle: z574.string().optional(),
+  appCategories: z574.string().optional(),
+  id: z574.string(),
   bulkAssignMembersRequest: BulkAssignMembersRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -16424,12 +16992,12 @@ var BulkAssignMembersToGuardrailRequest$outboundSchema = z552.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/bulkremoveworkspacemembers.js
-var z553 = __toESM(require("zod/v4"), 1);
-var BulkRemoveWorkspaceMembersRequest$outboundSchema2 = z553.object({
-  httpReferer: z553.string().optional(),
-  appTitle: z553.string().optional(),
-  appCategories: z553.string().optional(),
-  id: z553.string(),
+var z575 = __toESM(require("zod/v4"), 1);
+var BulkRemoveWorkspaceMembersRequest$outboundSchema2 = z575.object({
+  httpReferer: z575.string().optional(),
+  appTitle: z575.string().optional(),
+  appCategories: z575.string().optional(),
+  id: z575.string(),
   bulkRemoveWorkspaceMembersRequest: BulkRemoveWorkspaceMembersRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -16439,12 +17007,12 @@ var BulkRemoveWorkspaceMembersRequest$outboundSchema2 = z553.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/bulkunassignkeysfromguardrail.js
-var z554 = __toESM(require("zod/v4"), 1);
-var BulkUnassignKeysFromGuardrailRequest$outboundSchema = z554.object({
-  httpReferer: z554.string().optional(),
-  appTitle: z554.string().optional(),
-  appCategories: z554.string().optional(),
-  id: z554.string(),
+var z576 = __toESM(require("zod/v4"), 1);
+var BulkUnassignKeysFromGuardrailRequest$outboundSchema = z576.object({
+  httpReferer: z576.string().optional(),
+  appTitle: z576.string().optional(),
+  appCategories: z576.string().optional(),
+  id: z576.string(),
   bulkUnassignKeysRequest: BulkUnassignKeysRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -16454,12 +17022,12 @@ var BulkUnassignKeysFromGuardrailRequest$outboundSchema = z554.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/bulkunassignmembersfromguardrail.js
-var z555 = __toESM(require("zod/v4"), 1);
-var BulkUnassignMembersFromGuardrailRequest$outboundSchema = z555.object({
-  httpReferer: z555.string().optional(),
-  appTitle: z555.string().optional(),
-  appCategories: z555.string().optional(),
-  id: z555.string(),
+var z577 = __toESM(require("zod/v4"), 1);
+var BulkUnassignMembersFromGuardrailRequest$outboundSchema = z577.object({
+  httpReferer: z577.string().optional(),
+  appTitle: z577.string().optional(),
+  appCategories: z577.string().optional(),
+  id: z577.string(),
   bulkUnassignMembersRequest: BulkUnassignMembersRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -16469,11 +17037,11 @@ var BulkUnassignMembersFromGuardrailRequest$outboundSchema = z555.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createaudiospeech.js
-var z556 = __toESM(require("zod/v4"), 1);
-var CreateAudioSpeechRequest$outboundSchema = z556.object({
-  httpReferer: z556.string().optional(),
-  appTitle: z556.string().optional(),
-  appCategories: z556.string().optional(),
+var z578 = __toESM(require("zod/v4"), 1);
+var CreateAudioSpeechRequest$outboundSchema = z578.object({
+  httpReferer: z578.string().optional(),
+  appTitle: z578.string().optional(),
+  appCategories: z578.string().optional(),
   speechRequest: SpeechRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -16483,11 +17051,11 @@ var CreateAudioSpeechRequest$outboundSchema = z556.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createaudiotranscriptions.js
-var z557 = __toESM(require("zod/v4"), 1);
-var CreateAudioTranscriptionsRequest$outboundSchema = z557.object({
-  httpReferer: z557.string().optional(),
-  appTitle: z557.string().optional(),
-  appCategories: z557.string().optional(),
+var z579 = __toESM(require("zod/v4"), 1);
+var CreateAudioTranscriptionsRequest$outboundSchema = z579.object({
+  httpReferer: z579.string().optional(),
+  appTitle: z579.string().optional(),
+  appCategories: z579.string().optional(),
   sttRequest: STTRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -16497,11 +17065,11 @@ var CreateAudioTranscriptionsRequest$outboundSchema = z557.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createaudiotranscriptionsmultipart.js
-var z559 = __toESM(require("zod/v4"), 1);
+var z581 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/types/blobs.js
-var z558 = __toESM(require("zod/v4"), 1);
-var blobLikeSchema = z558.custom(isBlobLike2, {
+var z580 = __toESM(require("zod/v4"), 1);
+var blobLikeSchema = z580.custom(isBlobLike2, {
   message: "expected a Blob, File or Blob-like object",
   abort: true
 });
@@ -16531,35 +17099,35 @@ var TimestampGranularities = {
   Word: "word",
   Segment: "segment"
 };
-var CreateAudioTranscriptionsMultipartFile$outboundSchema = z559.object({
-  fileName: z559.string(),
-  content: z559.union([
-    z559.custom((x) => x instanceof ReadableStream),
-    z559.custom((x) => x instanceof Blob),
-    z559.custom((x) => x instanceof ArrayBuffer),
-    z559.custom((x) => x instanceof Uint8Array)
+var CreateAudioTranscriptionsMultipartFile$outboundSchema = z581.object({
+  fileName: z581.string(),
+  content: z581.union([
+    z581.custom((x) => x instanceof ReadableStream),
+    z581.custom((x) => x instanceof Blob),
+    z581.custom((x) => x instanceof ArrayBuffer),
+    z581.custom((x) => x instanceof Uint8Array)
   ])
 });
 var ResponseFormat$outboundSchema2 = outboundSchema(ResponseFormat);
 var TimestampGranularities$outboundSchema = outboundSchema(TimestampGranularities);
-var CreateAudioTranscriptionsMultipartRequestBody$outboundSchema = z559.object({
-  file: z559.lazy(() => CreateAudioTranscriptionsMultipartFile$outboundSchema).or(blobLikeSchema),
-  language: z559.string().optional(),
-  model: z559.string(),
+var CreateAudioTranscriptionsMultipartRequestBody$outboundSchema = z581.object({
+  file: z581.lazy(() => CreateAudioTranscriptionsMultipartFile$outboundSchema).or(blobLikeSchema),
+  language: z581.string().optional(),
+  model: z581.string(),
   responseFormat: ResponseFormat$outboundSchema2.optional(),
-  temperature: z559.number().optional(),
-  timestampGranularities: z559.array(TimestampGranularities$outboundSchema).optional()
+  temperature: z581.number().optional(),
+  timestampGranularities: z581.array(TimestampGranularities$outboundSchema).optional()
 }).transform((v) => {
   return remap(v, {
     responseFormat: "response_format",
     timestampGranularities: "timestamp_granularities[]"
   });
 });
-var CreateAudioTranscriptionsMultipartRequest$outboundSchema = z559.object({
-  httpReferer: z559.string().optional(),
-  appTitle: z559.string().optional(),
-  appCategories: z559.string().optional(),
-  requestBody: z559.lazy(() => CreateAudioTranscriptionsMultipartRequestBody$outboundSchema)
+var CreateAudioTranscriptionsMultipartRequest$outboundSchema = z581.object({
+  httpReferer: z581.string().optional(),
+  appTitle: z581.string().optional(),
+  appCategories: z581.string().optional(),
+  requestBody: z581.lazy(() => CreateAudioTranscriptionsMultipartRequestBody$outboundSchema)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
@@ -16568,7 +17136,7 @@ var CreateAudioTranscriptionsMultipartRequest$outboundSchema = z559.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createauthkeyscode.js
-var z560 = __toESM(require("zod/v4"), 1);
+var z582 = __toESM(require("zod/v4"), 1);
 var CreateAuthKeysCodeCodeChallengeMethod = {
   S256: "S256",
   Plain: "plain"
@@ -16580,15 +17148,15 @@ var UsageLimitType = {
 };
 var CreateAuthKeysCodeCodeChallengeMethod$outboundSchema = outboundSchema(CreateAuthKeysCodeCodeChallengeMethod);
 var UsageLimitType$outboundSchema = outboundSchema(UsageLimitType);
-var CreateAuthKeysCodeRequestBody$outboundSchema = z560.object({
-  callbackUrl: z560.string(),
-  codeChallenge: z560.string().optional(),
+var CreateAuthKeysCodeRequestBody$outboundSchema = z582.object({
+  callbackUrl: z582.string(),
+  codeChallenge: z582.string().optional(),
   codeChallengeMethod: CreateAuthKeysCodeCodeChallengeMethod$outboundSchema.optional(),
-  expiresAt: z560.nullable(z560.date().transform((v) => v.toISOString())).optional(),
-  keyLabel: z560.string().optional(),
-  limit: z560.number().optional(),
+  expiresAt: z582.nullable(z582.date().transform((v) => v.toISOString())).optional(),
+  keyLabel: z582.string().optional(),
+  limit: z582.number().optional(),
   usageLimitType: UsageLimitType$outboundSchema.optional(),
-  workspaceId: z560.string().optional()
+  workspaceId: z582.string().optional()
 }).transform((v) => {
   return remap(v, {
     callbackUrl: "callback_url",
@@ -16600,37 +17168,37 @@ var CreateAuthKeysCodeRequestBody$outboundSchema = z560.object({
     workspaceId: "workspace_id"
   });
 });
-var CreateAuthKeysCodeRequest$outboundSchema = z560.object({
-  httpReferer: z560.string().optional(),
-  appTitle: z560.string().optional(),
-  appCategories: z560.string().optional(),
-  requestBody: z560.lazy(() => CreateAuthKeysCodeRequestBody$outboundSchema)
+var CreateAuthKeysCodeRequest$outboundSchema = z582.object({
+  httpReferer: z582.string().optional(),
+  appTitle: z582.string().optional(),
+  appCategories: z582.string().optional(),
+  requestBody: z582.lazy(() => CreateAuthKeysCodeRequestBody$outboundSchema)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
     requestBody: "RequestBody"
   });
 });
-var CreateAuthKeysCodeData$inboundSchema = z560.object({
-  app_id: z560.int(),
-  created_at: z560.string(),
-  id: z560.string()
+var CreateAuthKeysCodeData$inboundSchema = z582.object({
+  app_id: z582.int(),
+  created_at: z582.string(),
+  id: z582.string()
 }).transform((v) => {
   return remap(v, {
     "app_id": "appId",
     "created_at": "createdAt"
   });
 });
-var CreateAuthKeysCodeResponse$inboundSchema = z560.object({
-  data: z560.lazy(() => CreateAuthKeysCodeData$inboundSchema)
+var CreateAuthKeysCodeResponse$inboundSchema = z582.object({
+  data: z582.lazy(() => CreateAuthKeysCodeData$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createbyokkey.js
-var z561 = __toESM(require("zod/v4"), 1);
-var CreateBYOKKeyRequest$outboundSchema2 = z561.object({
-  httpReferer: z561.string().optional(),
-  appTitle: z561.string().optional(),
-  appCategories: z561.string().optional(),
+var z583 = __toESM(require("zod/v4"), 1);
+var CreateBYOKKeyRequest$outboundSchema2 = z583.object({
+  httpReferer: z583.string().optional(),
+  appTitle: z583.string().optional(),
+  appCategories: z583.string().optional(),
   createBYOKKeyRequest: CreateBYOKKeyRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -16640,7 +17208,7 @@ var CreateBYOKKeyRequest$outboundSchema2 = z561.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createembeddings.js
-var z562 = __toESM(require("zod/v4"), 1);
+var z584 = __toESM(require("zod/v4"), 1);
 var EncodingFormat = {
   Float: "float",
   Base64: "base64"
@@ -16652,92 +17220,92 @@ var ObjectT = {
   List: "list"
 };
 var EncodingFormat$outboundSchema = outboundSchema(EncodingFormat);
-var ImageUrl$outboundSchema = z562.object({
-  url: z562.string()
+var ImageUrl$outboundSchema = z584.object({
+  url: z584.string()
 });
-var ContentImageURL$outboundSchema = z562.object({
-  imageUrl: z562.lazy(() => ImageUrl$outboundSchema),
-  type: z562.literal("image_url")
+var ContentImageURL$outboundSchema = z584.object({
+  imageUrl: z584.lazy(() => ImageUrl$outboundSchema),
+  type: z584.literal("image_url")
 }).transform((v) => {
   return remap(v, {
     imageUrl: "image_url"
   });
 });
-var ContentText$outboundSchema = z562.object({
-  text: z562.string(),
-  type: z562.literal("text")
+var ContentText$outboundSchema = z584.object({
+  text: z584.string(),
+  type: z584.literal("text")
 });
-var Content$outboundSchema = z562.union([
-  z562.lazy(() => ContentText$outboundSchema),
-  z562.lazy(() => ContentImageURL$outboundSchema),
+var Content$outboundSchema = z584.union([
+  z584.lazy(() => ContentText$outboundSchema),
+  z584.lazy(() => ContentImageURL$outboundSchema),
   ContentPartInputAudio$outboundSchema,
   ContentPartInputVideo$outboundSchema,
   ContentPartInputFile$outboundSchema
 ]);
-var Input$outboundSchema = z562.object({
-  content: z562.array(z562.union([
-    z562.lazy(() => ContentText$outboundSchema),
-    z562.lazy(() => ContentImageURL$outboundSchema),
+var Input$outboundSchema = z584.object({
+  content: z584.array(z584.union([
+    z584.lazy(() => ContentText$outboundSchema),
+    z584.lazy(() => ContentImageURL$outboundSchema),
     ContentPartInputAudio$outboundSchema,
     ContentPartInputVideo$outboundSchema,
     ContentPartInputFile$outboundSchema
   ]))
 });
-var InputUnion$outboundSchema = z562.union([
-  z562.string(),
-  z562.array(z562.string()),
-  z562.array(z562.number()),
-  z562.array(z562.array(z562.number())),
-  z562.array(z562.lazy(() => Input$outboundSchema))
+var InputUnion$outboundSchema = z584.union([
+  z584.string(),
+  z584.array(z584.string()),
+  z584.array(z584.number()),
+  z584.array(z584.array(z584.number())),
+  z584.array(z584.lazy(() => Input$outboundSchema))
 ]);
-var CreateEmbeddingsRequestBody$outboundSchema = z562.object({
-  dimensions: z562.int().optional(),
+var CreateEmbeddingsRequestBody$outboundSchema = z584.object({
+  dimensions: z584.int().optional(),
   encodingFormat: EncodingFormat$outboundSchema.optional(),
-  input: z562.union([
-    z562.string(),
-    z562.array(z562.string()),
-    z562.array(z562.number()),
-    z562.array(z562.array(z562.number())),
-    z562.array(z562.lazy(() => Input$outboundSchema))
+  input: z584.union([
+    z584.string(),
+    z584.array(z584.string()),
+    z584.array(z584.number()),
+    z584.array(z584.array(z584.number())),
+    z584.array(z584.lazy(() => Input$outboundSchema))
   ]),
-  inputType: z562.string().optional(),
-  model: z562.string(),
-  provider: z562.nullable(ProviderPreferences$outboundSchema).optional(),
-  user: z562.string().optional()
+  inputType: z584.string().optional(),
+  model: z584.string(),
+  provider: z584.nullable(ProviderPreferences$outboundSchema).optional(),
+  user: z584.string().optional()
 }).transform((v) => {
   return remap(v, {
     encodingFormat: "encoding_format",
     inputType: "input_type"
   });
 });
-var CreateEmbeddingsRequest$outboundSchema = z562.object({
-  httpReferer: z562.string().optional(),
-  appTitle: z562.string().optional(),
-  appCategories: z562.string().optional(),
-  requestBody: z562.lazy(() => CreateEmbeddingsRequestBody$outboundSchema)
+var CreateEmbeddingsRequest$outboundSchema = z584.object({
+  httpReferer: z584.string().optional(),
+  appTitle: z584.string().optional(),
+  appCategories: z584.string().optional(),
+  requestBody: z584.lazy(() => CreateEmbeddingsRequestBody$outboundSchema)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
     requestBody: "RequestBody"
   });
 });
-var Embedding$inboundSchema = z562.union([
-  z562.array(z562.number()),
-  z562.string()
+var Embedding$inboundSchema = z584.union([
+  z584.array(z584.number()),
+  z584.string()
 ]);
-var ObjectEmbedding$inboundSchema = z562.enum(ObjectEmbedding);
-var CreateEmbeddingsData$inboundSchema = z562.object({
-  embedding: z562.union([z562.array(z562.number()), z562.string()]),
-  index: z562.int().optional(),
+var ObjectEmbedding$inboundSchema = z584.enum(ObjectEmbedding);
+var CreateEmbeddingsData$inboundSchema = z584.object({
+  embedding: z584.union([z584.array(z584.number()), z584.string()]),
+  index: z584.int().optional(),
   object: ObjectEmbedding$inboundSchema
 });
-var ObjectT$inboundSchema = z562.enum(ObjectT);
-var PromptTokensDetails$inboundSchema = z562.object({
-  audio_tokens: z562.int().optional(),
-  file_tokens: z562.int().optional(),
-  image_tokens: z562.int().optional(),
-  text_tokens: z562.int().optional(),
-  video_tokens: z562.int().optional()
+var ObjectT$inboundSchema = z584.enum(ObjectT);
+var PromptTokensDetails$inboundSchema = z584.object({
+  audio_tokens: z584.int().optional(),
+  file_tokens: z584.int().optional(),
+  image_tokens: z584.int().optional(),
+  text_tokens: z584.int().optional(),
+  video_tokens: z584.int().optional()
 }).transform((v) => {
   return remap(v, {
     "audio_tokens": "audioTokens",
@@ -16747,13 +17315,13 @@ var PromptTokensDetails$inboundSchema = z562.object({
     "video_tokens": "videoTokens"
   });
 });
-var CreateEmbeddingsUsage$inboundSchema = z562.object({
-  cost: z562.number().optional(),
-  cost_details: z562.nullable(CostDetails$inboundSchema).optional(),
-  is_byok: z562.boolean().optional(),
-  prompt_tokens: z562.int(),
-  prompt_tokens_details: z562.lazy(() => PromptTokensDetails$inboundSchema).optional(),
-  total_tokens: z562.int()
+var CreateEmbeddingsUsage$inboundSchema = z584.object({
+  cost: z584.number().optional(),
+  cost_details: z584.nullable(CostDetails$inboundSchema).optional(),
+  is_byok: z584.boolean().optional(),
+  prompt_tokens: z584.int(),
+  prompt_tokens_details: z584.lazy(() => PromptTokensDetails$inboundSchema).optional(),
+  total_tokens: z584.int()
 }).transform((v) => {
   return remap(v, {
     "cost_details": "costDetails",
@@ -16763,24 +17331,24 @@ var CreateEmbeddingsUsage$inboundSchema = z562.object({
     "total_tokens": "totalTokens"
   });
 });
-var CreateEmbeddingsResponseBody$inboundSchema = z562.object({
-  data: z562.array(z562.lazy(() => CreateEmbeddingsData$inboundSchema)),
-  id: z562.string().optional(),
-  model: z562.string(),
+var CreateEmbeddingsResponseBody$inboundSchema = z584.object({
+  data: z584.array(z584.lazy(() => CreateEmbeddingsData$inboundSchema)),
+  id: z584.string().optional(),
+  model: z584.string(),
   object: ObjectT$inboundSchema,
-  usage: z562.lazy(() => CreateEmbeddingsUsage$inboundSchema).optional()
+  usage: z584.lazy(() => CreateEmbeddingsUsage$inboundSchema).optional()
 });
-var CreateEmbeddingsResponse$inboundSchema = z562.union([
-  z562.lazy(() => CreateEmbeddingsResponseBody$inboundSchema),
-  z562.string()
+var CreateEmbeddingsResponse$inboundSchema = z584.union([
+  z584.lazy(() => CreateEmbeddingsResponseBody$inboundSchema),
+  z584.string()
 ]);
 
 // node_modules/@openrouter/sdk/esm/models/operations/createguardrail.js
-var z563 = __toESM(require("zod/v4"), 1);
-var CreateGuardrailRequest$outboundSchema2 = z563.object({
-  httpReferer: z563.string().optional(),
-  appTitle: z563.string().optional(),
-  appCategories: z563.string().optional(),
+var z585 = __toESM(require("zod/v4"), 1);
+var CreateGuardrailRequest$outboundSchema2 = z585.object({
+  httpReferer: z585.string().optional(),
+  appTitle: z585.string().optional(),
+  appCategories: z585.string().optional(),
   createGuardrailRequest: CreateGuardrailRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -16790,7 +17358,7 @@ var CreateGuardrailRequest$outboundSchema2 = z563.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createimages.js
-var z564 = __toESM(require("zod/v4"), 1);
+var z586 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/lib/event-streams.js
 var EventStream = class extends ReadableStream {
@@ -16956,10 +17524,10 @@ function parseMessage(chunk, parse3, state, dataRequired) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/operations/createimages.js
-var CreateImagesRequest$outboundSchema = z564.object({
-  httpReferer: z564.string().optional(),
-  appTitle: z564.string().optional(),
-  appCategories: z564.string().optional(),
+var CreateImagesRequest$outboundSchema = z586.object({
+  httpReferer: z586.string().optional(),
+  appTitle: z586.string().optional(),
+  appCategories: z586.string().optional(),
   imageGenerationRequest: ImageGenerationRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -16967,9 +17535,9 @@ var CreateImagesRequest$outboundSchema = z564.object({
     imageGenerationRequest: "ImageGenerationRequest"
   });
 });
-var CreateImagesResponse$inboundSchema = z564.union([
+var CreateImagesResponse$inboundSchema = z586.union([
   ImageGenerationResponse$inboundSchema,
-  z564.custom((x) => x instanceof ReadableStream).transform((stream2) => {
+  z586.custom((x) => x instanceof ReadableStream).transform((stream2) => {
     return new EventStream(stream2, (rawEvent) => {
       if (rawEvent.data === "[DONE]")
         return { done: true, value: void 0 };
@@ -16982,21 +17550,21 @@ var CreateImagesResponse$inboundSchema = z564.union([
 ]);
 
 // node_modules/@openrouter/sdk/esm/models/operations/createkeys.js
-var z565 = __toESM(require("zod/v4"), 1);
+var z587 = __toESM(require("zod/v4"), 1);
 var CreateKeysLimitReset = {
   Daily: "daily",
   Weekly: "weekly",
   Monthly: "monthly"
 };
 var CreateKeysLimitReset$outboundSchema = outboundSchema(CreateKeysLimitReset);
-var CreateKeysRequestBody$outboundSchema = z565.object({
-  creatorUserId: z565.nullable(z565.string()).optional(),
-  expiresAt: z565.nullable(z565.date().transform((v) => v.toISOString())).optional(),
-  includeByokInLimit: z565.boolean().optional(),
-  limit: z565.nullable(z565.number()).optional(),
-  limitReset: z565.nullable(CreateKeysLimitReset$outboundSchema).optional(),
-  name: z565.string(),
-  workspaceId: z565.string().optional()
+var CreateKeysRequestBody$outboundSchema = z587.object({
+  creatorUserId: z587.nullable(z587.string()).optional(),
+  expiresAt: z587.nullable(z587.date().transform((v) => v.toISOString())).optional(),
+  includeByokInLimit: z587.boolean().optional(),
+  limit: z587.nullable(z587.number()).optional(),
+  limitReset: z587.nullable(CreateKeysLimitReset$outboundSchema).optional(),
+  name: z587.string(),
+  workspaceId: z587.string().optional()
 }).transform((v) => {
   return remap(v, {
     creatorUserId: "creator_user_id",
@@ -17006,39 +17574,39 @@ var CreateKeysRequestBody$outboundSchema = z565.object({
     workspaceId: "workspace_id"
   });
 });
-var CreateKeysRequest$outboundSchema = z565.object({
-  httpReferer: z565.string().optional(),
-  appTitle: z565.string().optional(),
-  appCategories: z565.string().optional(),
-  requestBody: z565.lazy(() => CreateKeysRequestBody$outboundSchema)
+var CreateKeysRequest$outboundSchema = z587.object({
+  httpReferer: z587.string().optional(),
+  appTitle: z587.string().optional(),
+  appCategories: z587.string().optional(),
+  requestBody: z587.lazy(() => CreateKeysRequestBody$outboundSchema)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
     requestBody: "RequestBody"
   });
 });
-var CreateKeysData$inboundSchema = z565.object({
-  byok_usage: z565.number(),
-  byok_usage_daily: z565.number(),
-  byok_usage_monthly: z565.number(),
-  byok_usage_weekly: z565.number(),
-  created_at: z565.string(),
-  creator_user_id: z565.nullable(z565.string()),
-  disabled: z565.boolean(),
-  expires_at: z565.nullable(z565.iso.datetime({ offset: true }).transform((v) => new Date(v))).optional(),
-  hash: z565.string(),
-  include_byok_in_limit: z565.boolean(),
-  label: z565.string(),
-  limit: z565.nullable(z565.number()),
-  limit_remaining: z565.nullable(z565.number()),
-  limit_reset: z565.nullable(z565.string()),
-  name: z565.string(),
-  updated_at: z565.nullable(z565.string()),
-  usage: z565.number(),
-  usage_daily: z565.number(),
-  usage_monthly: z565.number(),
-  usage_weekly: z565.number(),
-  workspace_id: z565.string()
+var CreateKeysData$inboundSchema = z587.object({
+  byok_usage: z587.number(),
+  byok_usage_daily: z587.number(),
+  byok_usage_monthly: z587.number(),
+  byok_usage_weekly: z587.number(),
+  created_at: z587.string(),
+  creator_user_id: z587.nullable(z587.string()),
+  disabled: z587.boolean(),
+  expires_at: z587.nullable(z587.iso.datetime({ offset: true }).transform((v) => new Date(v))).optional(),
+  hash: z587.string(),
+  include_byok_in_limit: z587.boolean(),
+  label: z587.string(),
+  limit: z587.nullable(z587.number()),
+  limit_remaining: z587.nullable(z587.number()),
+  limit_reset: z587.nullable(z587.string()),
+  name: z587.string(),
+  updated_at: z587.nullable(z587.string()),
+  usage: z587.number(),
+  usage_daily: z587.number(),
+  usage_monthly: z587.number(),
+  usage_weekly: z587.number(),
+  workspace_id: z587.string()
 }).transform((v) => {
   return remap(v, {
     "byok_usage": "byokUsage",
@@ -17058,17 +17626,17 @@ var CreateKeysData$inboundSchema = z565.object({
     "workspace_id": "workspaceId"
   });
 });
-var CreateKeysResponse$inboundSchema = z565.object({
-  data: z565.lazy(() => CreateKeysData$inboundSchema),
-  key: z565.string()
+var CreateKeysResponse$inboundSchema = z587.object({
+  data: z587.lazy(() => CreateKeysData$inboundSchema),
+  key: z587.string()
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createobservabilitydestination.js
-var z566 = __toESM(require("zod/v4"), 1);
-var CreateObservabilityDestinationRequest$outboundSchema2 = z566.object({
-  httpReferer: z566.string().optional(),
-  appTitle: z566.string().optional(),
-  appCategories: z566.string().optional(),
+var z588 = __toESM(require("zod/v4"), 1);
+var CreateObservabilityDestinationRequest$outboundSchema2 = z588.object({
+  httpReferer: z588.string().optional(),
+  appTitle: z588.string().optional(),
+  appCategories: z588.string().optional(),
   createObservabilityDestinationRequest: CreateObservabilityDestinationRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -17078,12 +17646,12 @@ var CreateObservabilityDestinationRequest$outboundSchema2 = z566.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createpresetschatcompletions.js
-var z567 = __toESM(require("zod/v4"), 1);
-var CreatePresetsChatCompletionsRequest$outboundSchema = z567.object({
-  httpReferer: z567.string().optional(),
-  appTitle: z567.string().optional(),
-  appCategories: z567.string().optional(),
-  slug: z567.string(),
+var z589 = __toESM(require("zod/v4"), 1);
+var CreatePresetsChatCompletionsRequest$outboundSchema = z589.object({
+  httpReferer: z589.string().optional(),
+  appTitle: z589.string().optional(),
+  appCategories: z589.string().optional(),
+  slug: z589.string(),
   chatRequest: ChatRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -17093,12 +17661,12 @@ var CreatePresetsChatCompletionsRequest$outboundSchema = z567.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createpresetsmessages.js
-var z568 = __toESM(require("zod/v4"), 1);
-var CreatePresetsMessagesRequest$outboundSchema = z568.object({
-  httpReferer: z568.string().optional(),
-  appTitle: z568.string().optional(),
-  appCategories: z568.string().optional(),
-  slug: z568.string(),
+var z590 = __toESM(require("zod/v4"), 1);
+var CreatePresetsMessagesRequest$outboundSchema = z590.object({
+  httpReferer: z590.string().optional(),
+  appTitle: z590.string().optional(),
+  appCategories: z590.string().optional(),
+  slug: z590.string(),
   messagesRequest: MessagesRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -17108,12 +17676,12 @@ var CreatePresetsMessagesRequest$outboundSchema = z568.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createpresetsresponses.js
-var z569 = __toESM(require("zod/v4"), 1);
-var CreatePresetsResponsesRequest$outboundSchema = z569.object({
-  httpReferer: z569.string().optional(),
-  appTitle: z569.string().optional(),
-  appCategories: z569.string().optional(),
-  slug: z569.string(),
+var z591 = __toESM(require("zod/v4"), 1);
+var CreatePresetsResponsesRequest$outboundSchema = z591.object({
+  httpReferer: z591.string().optional(),
+  appTitle: z591.string().optional(),
+  appCategories: z591.string().optional(),
+  slug: z591.string(),
   responsesRequest: ResponsesRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -17123,72 +17691,72 @@ var CreatePresetsResponsesRequest$outboundSchema = z569.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/creatererank.js
-var z570 = __toESM(require("zod/v4"), 1);
-var DocumentRequest$outboundSchema = z570.object({
-  image: z570.string().optional(),
-  text: z570.string().optional()
+var z592 = __toESM(require("zod/v4"), 1);
+var DocumentRequest$outboundSchema = z592.object({
+  image: z592.string().optional(),
+  text: z592.string().optional()
 });
-var Document$outboundSchema = z570.union([z570.string(), z570.lazy(() => DocumentRequest$outboundSchema)]);
-var CreateRerankRequestBody$outboundSchema = z570.object({
-  documents: z570.array(z570.union([z570.string(), z570.lazy(() => DocumentRequest$outboundSchema)])),
-  model: z570.string(),
-  provider: z570.nullable(ProviderPreferences$outboundSchema).optional(),
-  query: z570.string(),
-  topN: z570.int().optional()
+var Document$outboundSchema = z592.union([z592.string(), z592.lazy(() => DocumentRequest$outboundSchema)]);
+var CreateRerankRequestBody$outboundSchema = z592.object({
+  documents: z592.array(z592.union([z592.string(), z592.lazy(() => DocumentRequest$outboundSchema)])),
+  model: z592.string(),
+  provider: z592.nullable(ProviderPreferences$outboundSchema).optional(),
+  query: z592.string(),
+  topN: z592.int().optional()
 }).transform((v) => {
   return remap(v, {
     topN: "top_n"
   });
 });
-var CreateRerankRequest$outboundSchema = z570.object({
-  httpReferer: z570.string().optional(),
-  appTitle: z570.string().optional(),
-  appCategories: z570.string().optional(),
-  requestBody: z570.lazy(() => CreateRerankRequestBody$outboundSchema)
+var CreateRerankRequest$outboundSchema = z592.object({
+  httpReferer: z592.string().optional(),
+  appTitle: z592.string().optional(),
+  appCategories: z592.string().optional(),
+  requestBody: z592.lazy(() => CreateRerankRequestBody$outboundSchema)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
     requestBody: "RequestBody"
   });
 });
-var DocumentResponse$inboundSchema = z570.object({
-  image: z570.string().optional(),
-  text: z570.string().optional()
+var DocumentResponse$inboundSchema = z592.object({
+  image: z592.string().optional(),
+  text: z592.string().optional()
 });
-var Result$inboundSchema = z570.object({
-  document: z570.lazy(() => DocumentResponse$inboundSchema),
-  index: z570.int(),
-  relevance_score: z570.number()
+var Result$inboundSchema = z592.object({
+  document: z592.lazy(() => DocumentResponse$inboundSchema),
+  index: z592.int(),
+  relevance_score: z592.number()
 }).transform((v) => {
   return remap(v, {
     "relevance_score": "relevanceScore"
   });
 });
-var CreateRerankUsage$inboundSchema = z570.object({
-  cost: z570.number().optional(),
-  search_units: z570.int().optional(),
-  total_tokens: z570.int().optional()
+var CreateRerankUsage$inboundSchema = z592.object({
+  cost: z592.number().optional(),
+  search_units: z592.int().optional(),
+  total_tokens: z592.int().optional()
 }).transform((v) => {
   return remap(v, {
     "search_units": "searchUnits",
     "total_tokens": "totalTokens"
   });
 });
-var CreateRerankResponseBody$inboundSchema = z570.object({
-  id: z570.string().optional(),
-  model: z570.string(),
-  provider: z570.string().optional(),
-  results: z570.array(z570.lazy(() => Result$inboundSchema)),
-  usage: z570.lazy(() => CreateRerankUsage$inboundSchema).optional()
+var CreateRerankResponseBody$inboundSchema = z592.object({
+  id: z592.string().optional(),
+  model: z592.string(),
+  provider: z592.string().optional(),
+  results: z592.array(z592.lazy(() => Result$inboundSchema)),
+  usage: z592.lazy(() => CreateRerankUsage$inboundSchema).optional()
 });
-var CreateRerankResponse$inboundSchema = z570.union([z570.lazy(() => CreateRerankResponseBody$inboundSchema), z570.string()]);
+var CreateRerankResponse$inboundSchema = z592.union([z592.lazy(() => CreateRerankResponseBody$inboundSchema), z592.string()]);
 
 // node_modules/@openrouter/sdk/esm/models/operations/createresponses.js
-var z571 = __toESM(require("zod/v4"), 1);
-var CreateResponsesRequest$outboundSchema = z571.object({
-  httpReferer: z571.string().optional(),
-  appTitle: z571.string().optional(),
-  appCategories: z571.string().optional(),
+var z593 = __toESM(require("zod/v4"), 1);
+var CreateResponsesRequest$outboundSchema = z593.object({
+  httpReferer: z593.string().optional(),
+  appTitle: z593.string().optional(),
+  appCategories: z593.string().optional(),
   xOpenRouterMetadata: MetadataLevel$outboundSchema.optional(),
   responsesRequest: ResponsesRequest$outboundSchema
 }).transform((v) => {
@@ -17198,9 +17766,9 @@ var CreateResponsesRequest$outboundSchema = z571.object({
     responsesRequest: "ResponsesRequest"
   });
 });
-var CreateResponsesResponse$inboundSchema = z571.union([
+var CreateResponsesResponse$inboundSchema = z593.union([
   OpenResponsesResult$inboundSchema,
-  z571.custom((x) => x instanceof ReadableStream).transform((stream2) => {
+  z593.custom((x) => x instanceof ReadableStream).transform((stream2) => {
     return new EventStream(stream2, (rawEvent) => {
       if (rawEvent.data === "[DONE]")
         return { done: true, value: void 0 };
@@ -17213,11 +17781,11 @@ var CreateResponsesResponse$inboundSchema = z571.union([
 ]);
 
 // node_modules/@openrouter/sdk/esm/models/operations/createscimgroupmapping.js
-var z572 = __toESM(require("zod/v4"), 1);
-var CreateScimGroupMappingRequest$outboundSchema2 = z572.object({
-  httpReferer: z572.string().optional(),
-  appTitle: z572.string().optional(),
-  appCategories: z572.string().optional(),
+var z594 = __toESM(require("zod/v4"), 1);
+var CreateScimGroupMappingRequest$outboundSchema2 = z594.object({
+  httpReferer: z594.string().optional(),
+  appTitle: z594.string().optional(),
+  appCategories: z594.string().optional(),
   createScimGroupMappingRequest: CreateScimGroupMappingRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -17227,11 +17795,11 @@ var CreateScimGroupMappingRequest$outboundSchema2 = z572.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createvideos.js
-var z573 = __toESM(require("zod/v4"), 1);
-var CreateVideosRequest$outboundSchema = z573.object({
-  httpReferer: z573.string().optional(),
-  appTitle: z573.string().optional(),
-  appCategories: z573.string().optional(),
+var z595 = __toESM(require("zod/v4"), 1);
+var CreateVideosRequest$outboundSchema = z595.object({
+  httpReferer: z595.string().optional(),
+  appTitle: z595.string().optional(),
+  appCategories: z595.string().optional(),
   videoGenerationRequest: VideoGenerationRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -17241,11 +17809,11 @@ var CreateVideosRequest$outboundSchema = z573.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createworkspace.js
-var z574 = __toESM(require("zod/v4"), 1);
-var CreateWorkspaceRequest$outboundSchema2 = z574.object({
-  httpReferer: z574.string().optional(),
-  appTitle: z574.string().optional(),
-  appCategories: z574.string().optional(),
+var z596 = __toESM(require("zod/v4"), 1);
+var CreateWorkspaceRequest$outboundSchema2 = z596.object({
+  httpReferer: z596.string().optional(),
+  appTitle: z596.string().optional(),
+  appCategories: z596.string().optional(),
   createWorkspaceRequest: CreateWorkspaceRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -17255,12 +17823,12 @@ var CreateWorkspaceRequest$outboundSchema2 = z574.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/deletebyokkey.js
-var z575 = __toESM(require("zod/v4"), 1);
-var DeleteBYOKKeyRequest$outboundSchema = z575.object({
-  httpReferer: z575.string().optional(),
-  appTitle: z575.string().optional(),
-  appCategories: z575.string().optional(),
-  id: z575.string()
+var z597 = __toESM(require("zod/v4"), 1);
+var DeleteBYOKKeyRequest$outboundSchema = z597.object({
+  httpReferer: z597.string().optional(),
+  appTitle: z597.string().optional(),
+  appCategories: z597.string().optional(),
+  id: z597.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -17268,13 +17836,13 @@ var DeleteBYOKKeyRequest$outboundSchema = z575.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/deletefile.js
-var z576 = __toESM(require("zod/v4"), 1);
-var DeleteFileRequest$outboundSchema = z576.object({
-  httpReferer: z576.string().optional(),
-  appTitle: z576.string().optional(),
-  appCategories: z576.string().optional(),
-  fileId: z576.string(),
-  workspaceId: z576.string().optional(),
+var z598 = __toESM(require("zod/v4"), 1);
+var DeleteFileRequest$outboundSchema = z598.object({
+  httpReferer: z598.string().optional(),
+  appTitle: z598.string().optional(),
+  appCategories: z598.string().optional(),
+  fileId: z598.string(),
+  workspaceId: z598.string().optional(),
   provider: FileProvider$outboundSchema.optional()
 }).transform((v) => {
   return remap(v, {
@@ -17285,12 +17853,12 @@ var DeleteFileRequest$outboundSchema = z576.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/deleteguardrail.js
-var z577 = __toESM(require("zod/v4"), 1);
-var DeleteGuardrailRequest$outboundSchema = z577.object({
-  httpReferer: z577.string().optional(),
-  appTitle: z577.string().optional(),
-  appCategories: z577.string().optional(),
-  id: z577.string()
+var z599 = __toESM(require("zod/v4"), 1);
+var DeleteGuardrailRequest$outboundSchema = z599.object({
+  httpReferer: z599.string().optional(),
+  appTitle: z599.string().optional(),
+  appCategories: z599.string().optional(),
+  id: z599.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -17298,28 +17866,28 @@ var DeleteGuardrailRequest$outboundSchema = z577.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/deletekeys.js
-var z578 = __toESM(require("zod/v4"), 1);
-var DeleteKeysRequest$outboundSchema = z578.object({
-  httpReferer: z578.string().optional(),
-  appTitle: z578.string().optional(),
-  appCategories: z578.string().optional(),
-  hash: z578.string()
+var z600 = __toESM(require("zod/v4"), 1);
+var DeleteKeysRequest$outboundSchema = z600.object({
+  httpReferer: z600.string().optional(),
+  appTitle: z600.string().optional(),
+  appCategories: z600.string().optional(),
+  hash: z600.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var DeleteKeysResponse$inboundSchema = z578.object({
-  deleted: z578.literal(true)
+var DeleteKeysResponse$inboundSchema = z600.object({
+  deleted: z600.literal(true)
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/deleteobservabilitydestination.js
-var z579 = __toESM(require("zod/v4"), 1);
-var DeleteObservabilityDestinationRequest$outboundSchema = z579.object({
-  httpReferer: z579.string().optional(),
-  appTitle: z579.string().optional(),
-  appCategories: z579.string().optional(),
-  id: z579.string()
+var z601 = __toESM(require("zod/v4"), 1);
+var DeleteObservabilityDestinationRequest$outboundSchema = z601.object({
+  httpReferer: z601.string().optional(),
+  appTitle: z601.string().optional(),
+  appCategories: z601.string().optional(),
+  id: z601.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -17327,19 +17895,19 @@ var DeleteObservabilityDestinationRequest$outboundSchema = z579.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/deletescimgroupmapping.js
-var z580 = __toESM(require("zod/v4"), 1);
+var z602 = __toESM(require("zod/v4"), 1);
 var KeepMembersEnum = {
   True: "true",
   False: "false"
 };
 var KeepMembersEnum$outboundSchema = outboundSchema(KeepMembersEnum);
-var KeepMembers$outboundSchema = z580.union([KeepMembersEnum$outboundSchema, z580.boolean()]);
-var DeleteScimGroupMappingRequest$outboundSchema = z580.object({
-  httpReferer: z580.string().optional(),
-  appTitle: z580.string().optional(),
-  appCategories: z580.string().optional(),
-  id: z580.string(),
-  keepMembers: z580.union([KeepMembersEnum$outboundSchema, z580.boolean()])
+var KeepMembers$outboundSchema = z602.union([KeepMembersEnum$outboundSchema, z602.boolean()]);
+var DeleteScimGroupMappingRequest$outboundSchema = z602.object({
+  httpReferer: z602.string().optional(),
+  appTitle: z602.string().optional(),
+  appCategories: z602.string().optional(),
+  id: z602.string(),
+  keepMembers: z602.union([KeepMembersEnum$outboundSchema, z602.boolean()])
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
@@ -17348,25 +17916,27 @@ var DeleteScimGroupMappingRequest$outboundSchema = z580.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/deleteworkspace.js
-var z581 = __toESM(require("zod/v4"), 1);
-var DeleteWorkspaceRequest$outboundSchema = z581.object({
-  httpReferer: z581.string().optional(),
-  appTitle: z581.string().optional(),
-  appCategories: z581.string().optional(),
-  id: z581.string()
+var z603 = __toESM(require("zod/v4"), 1);
+var DeleteWorkspaceRequest$outboundSchema = z603.object({
+  httpReferer: z603.string().optional(),
+  appTitle: z603.string().optional(),
+  appCategories: z603.string().optional(),
+  id: z603.string(),
+  confirmDefaultSettingsDeletion: z603.boolean().optional()
 }).transform((v) => {
   return remap(v, {
-    httpReferer: "HTTP-Referer"
+    httpReferer: "HTTP-Referer",
+    confirmDefaultSettingsDeletion: "confirm_default_settings_deletion"
   });
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/deleteworkspacebudget.js
-var z582 = __toESM(require("zod/v4"), 1);
-var DeleteWorkspaceBudgetRequest$outboundSchema = z582.object({
-  httpReferer: z582.string().optional(),
-  appTitle: z582.string().optional(),
-  appCategories: z582.string().optional(),
-  id: z582.string(),
+var z604 = __toESM(require("zod/v4"), 1);
+var DeleteWorkspaceBudgetRequest$outboundSchema = z604.object({
+  httpReferer: z604.string().optional(),
+  appTitle: z604.string().optional(),
+  appCategories: z604.string().optional(),
+  id: z604.string(),
   interval: WorkspaceBudgetInterval$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -17375,13 +17945,13 @@ var DeleteWorkspaceBudgetRequest$outboundSchema = z582.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/downloadfilecontent.js
-var z583 = __toESM(require("zod/v4"), 1);
-var DownloadFileContentRequest$outboundSchema = z583.object({
-  httpReferer: z583.string().optional(),
-  appTitle: z583.string().optional(),
-  appCategories: z583.string().optional(),
-  fileId: z583.string(),
-  workspaceId: z583.string().optional(),
+var z605 = __toESM(require("zod/v4"), 1);
+var DownloadFileContentRequest$outboundSchema = z605.object({
+  httpReferer: z605.string().optional(),
+  appTitle: z605.string().optional(),
+  appCategories: z605.string().optional(),
+  fileId: z605.string(),
+  workspaceId: z605.string().optional(),
   provider: FileProvider$outboundSchema.optional()
 }).transform((v) => {
   return remap(v, {
@@ -17392,36 +17962,36 @@ var DownloadFileContentRequest$outboundSchema = z583.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/exchangeauthcodeforapikey.js
-var z584 = __toESM(require("zod/v4"), 1);
+var z606 = __toESM(require("zod/v4"), 1);
 var ExchangeAuthCodeForAPIKeyCodeChallengeMethod = {
   S256: "S256",
   Plain: "plain"
 };
 var ExchangeAuthCodeForAPIKeyCodeChallengeMethod$outboundSchema = outboundSchema(ExchangeAuthCodeForAPIKeyCodeChallengeMethod);
-var ExchangeAuthCodeForAPIKeyRequestBody$outboundSchema = z584.object({
-  code: z584.string(),
-  codeChallengeMethod: z584.nullable(ExchangeAuthCodeForAPIKeyCodeChallengeMethod$outboundSchema).optional(),
-  codeVerifier: z584.string().optional()
+var ExchangeAuthCodeForAPIKeyRequestBody$outboundSchema = z606.object({
+  code: z606.string(),
+  codeChallengeMethod: z606.nullable(ExchangeAuthCodeForAPIKeyCodeChallengeMethod$outboundSchema).optional(),
+  codeVerifier: z606.string().optional()
 }).transform((v) => {
   return remap(v, {
     codeChallengeMethod: "code_challenge_method",
     codeVerifier: "code_verifier"
   });
 });
-var ExchangeAuthCodeForAPIKeyRequest$outboundSchema = z584.object({
-  httpReferer: z584.string().optional(),
-  appTitle: z584.string().optional(),
-  appCategories: z584.string().optional(),
-  requestBody: z584.lazy(() => ExchangeAuthCodeForAPIKeyRequestBody$outboundSchema)
+var ExchangeAuthCodeForAPIKeyRequest$outboundSchema = z606.object({
+  httpReferer: z606.string().optional(),
+  appTitle: z606.string().optional(),
+  appCategories: z606.string().optional(),
+  requestBody: z606.lazy(() => ExchangeAuthCodeForAPIKeyRequestBody$outboundSchema)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
     requestBody: "RequestBody"
   });
 });
-var ExchangeAuthCodeForAPIKeyResponse$inboundSchema = z584.object({
-  key: z584.string(),
-  user_id: z584.nullable(z584.string())
+var ExchangeAuthCodeForAPIKeyResponse$inboundSchema = z606.object({
+  key: z606.string(),
+  user_id: z606.nullable(z606.string())
 }).transform((v) => {
   return remap(v, {
     "user_id": "userId"
@@ -17429,7 +17999,7 @@ var ExchangeAuthCodeForAPIKeyResponse$inboundSchema = z584.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getanalyticsmeta.js
-var z585 = __toESM(require("zod/v4"), 1);
+var z607 = __toESM(require("zod/v4"), 1);
 var GranularityName = {
   Minute: "minute",
   Hour: "hour",
@@ -17458,26 +18028,26 @@ var ValueType = {
   Scalar: "scalar",
   Array: "array"
 };
-var GetAnalyticsMetaRequest$outboundSchema = z585.object({
-  httpReferer: z585.string().optional(),
-  appTitle: z585.string().optional(),
-  appCategories: z585.string().optional()
+var GetAnalyticsMetaRequest$outboundSchema = z607.object({
+  httpReferer: z607.string().optional(),
+  appTitle: z607.string().optional(),
+  appCategories: z607.string().optional()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var Dimension$inboundSchema = z585.object({
-  display_label: z585.string(),
-  name: z585.string()
+var Dimension$inboundSchema = z607.object({
+  display_label: z607.string(),
+  name: z607.string()
 }).transform((v) => {
   return remap(v, {
     "display_label": "displayLabel"
   });
 });
 var GranularityName$inboundSchema = inboundSchema(GranularityName);
-var Granularity$inboundSchema = z585.object({
-  display_label: z585.string(),
+var Granularity$inboundSchema = z607.object({
+  display_label: z607.string(),
   name: GranularityName$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -17485,11 +18055,11 @@ var Granularity$inboundSchema = z585.object({
   });
 });
 var DisplayFormat$inboundSchema = inboundSchema(DisplayFormat);
-var Metric$inboundSchema = z585.object({
+var Metric$inboundSchema = z607.object({
   display_format: DisplayFormat$inboundSchema,
-  display_label: z585.string(),
-  is_rate: z585.boolean(),
-  name: z585.string()
+  display_label: z607.string(),
+  is_rate: z607.boolean(),
+  name: z607.string()
 }).transform((v) => {
   return remap(v, {
     "display_format": "displayFormat",
@@ -17499,7 +18069,7 @@ var Metric$inboundSchema = z585.object({
 });
 var OperatorName$inboundSchema = inboundSchema(OperatorName);
 var ValueType$inboundSchema = inboundSchema(ValueType);
-var Operator$inboundSchema2 = z585.object({
+var Operator$inboundSchema2 = z607.object({
   name: OperatorName$inboundSchema,
   value_type: ValueType$inboundSchema
 }).transform((v) => {
@@ -17507,18 +18077,18 @@ var Operator$inboundSchema2 = z585.object({
     "value_type": "valueType"
   });
 });
-var GetAnalyticsMetaData$inboundSchema = z585.object({
-  dimensions: z585.array(z585.lazy(() => Dimension$inboundSchema)),
-  granularities: z585.array(z585.lazy(() => Granularity$inboundSchema)),
-  metrics: z585.array(z585.lazy(() => Metric$inboundSchema)),
-  operators: z585.array(z585.lazy(() => Operator$inboundSchema2))
+var GetAnalyticsMetaData$inboundSchema = z607.object({
+  dimensions: z607.array(z607.lazy(() => Dimension$inboundSchema)),
+  granularities: z607.array(z607.lazy(() => Granularity$inboundSchema)),
+  metrics: z607.array(z607.lazy(() => Metric$inboundSchema)),
+  operators: z607.array(z607.lazy(() => Operator$inboundSchema2))
 });
-var GetAnalyticsMetaResponse$inboundSchema = z585.object({
-  data: z585.lazy(() => GetAnalyticsMetaData$inboundSchema)
+var GetAnalyticsMetaResponse$inboundSchema = z607.object({
+  data: z607.lazy(() => GetAnalyticsMetaData$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getapprankings.js
-var z586 = __toESM(require("zod/v4"), 1);
+var z608 = __toESM(require("zod/v4"), 1);
 var GetAppRankingsCategory = {
   Coding: "coding",
   Creative: "creative",
@@ -17549,17 +18119,17 @@ var GetAppRankingsSort = {
 var GetAppRankingsCategory$outboundSchema = outboundSchema(GetAppRankingsCategory);
 var Subcategory$outboundSchema = outboundSchema(Subcategory);
 var GetAppRankingsSort$outboundSchema = outboundSchema(GetAppRankingsSort);
-var GetAppRankingsRequest$outboundSchema = z586.object({
-  httpReferer: z586.string().optional(),
-  appTitle: z586.string().optional(),
-  appCategories: z586.string().optional(),
+var GetAppRankingsRequest$outboundSchema = z608.object({
+  httpReferer: z608.string().optional(),
+  appTitle: z608.string().optional(),
+  appCategories: z608.string().optional(),
   category: GetAppRankingsCategory$outboundSchema.optional(),
   subcategory: Subcategory$outboundSchema.optional(),
   sort: GetAppRankingsSort$outboundSchema.default("popular"),
-  startDate: z586.string().optional(),
-  endDate: z586.string().optional(),
-  limit: z586.int().default(50),
-  offset: z586.nullable(z586.int().default(0))
+  startDate: z608.string().optional(),
+  endDate: z608.string().optional(),
+  limit: z608.int().default(50),
+  offset: z608.nullable(z608.int().default(0))
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
@@ -17567,7 +18137,7 @@ var GetAppRankingsRequest$outboundSchema = z586.object({
     endDate: "end_date"
   });
 });
-var GetAppRankingsResponse$inboundSchema = z586.object({
+var GetAppRankingsResponse$inboundSchema = z608.object({
   Result: AppRankingsResponse$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -17576,7 +18146,7 @@ var GetAppRankingsResponse$inboundSchema = z586.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getbenchmarks.js
-var z587 = __toESM(require("zod/v4"), 1);
+var z609 = __toESM(require("zod/v4"), 1);
 var Source = {
   ArtificialAnalysis: "artificial-analysis",
   DesignArena: "design-arena",
@@ -17585,7 +18155,20 @@ var Source = {
 var TaskType = {
   Coding: "coding",
   Intelligence: "intelligence",
-  Agentic: "agentic"
+  Agentic: "agentic",
+  Search: "search"
+};
+var BenchmarkType = {
+  GpqaDiamond: "gpqa_diamond",
+  TauBenchVerifiedAirline: "tau_bench_verified_airline",
+  SearchBrowsecomp: "search_browsecomp",
+  SearchHle: "search_hle",
+  SearchDsqa: "search_dsqa",
+  SearchWidesearch: "search_widesearch"
+};
+var SearchSurface2 = {
+  ServerTool: "server-tool",
+  Plugin: "plugin"
 };
 var Arena = {
   Models: "models",
@@ -17594,31 +18177,41 @@ var Arena = {
 };
 var Source$outboundSchema = outboundSchema(Source);
 var TaskType$outboundSchema = outboundSchema(TaskType);
+var BenchmarkType$outboundSchema = outboundSchema(BenchmarkType);
+var SearchSurface$outboundSchema = outboundSchema(SearchSurface2);
 var Arena$outboundSchema = outboundSchema(Arena);
-var GetBenchmarksRequest$outboundSchema = z587.object({
-  httpReferer: z587.string().optional(),
-  appTitle: z587.string().optional(),
-  appCategories: z587.string().optional(),
+var GetBenchmarksRequest$outboundSchema = z609.object({
+  httpReferer: z609.string().optional(),
+  appTitle: z609.string().optional(),
+  appCategories: z609.string().optional(),
   source: Source$outboundSchema.optional(),
   taskType: TaskType$outboundSchema.optional(),
+  benchmarkType: BenchmarkType$outboundSchema.optional(),
+  includeRunConfig: z609.boolean().default(false),
+  searchEngine: z609.string().optional(),
+  searchSurface: SearchSurface$outboundSchema.optional(),
   arena: Arena$outboundSchema.optional(),
-  category: z587.string().optional(),
-  maxResults: z587.int().optional()
+  category: z609.string().optional(),
+  maxResults: z609.int().optional()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
     taskType: "task_type",
+    benchmarkType: "benchmark_type",
+    includeRunConfig: "include_run_config",
+    searchEngine: "search_engine",
+    searchSurface: "search_surface",
     maxResults: "max_results"
   });
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getbyokkey.js
-var z588 = __toESM(require("zod/v4"), 1);
-var GetBYOKKeyRequest$outboundSchema = z588.object({
-  httpReferer: z588.string().optional(),
-  appTitle: z588.string().optional(),
-  appCategories: z588.string().optional(),
-  id: z588.string()
+var z610 = __toESM(require("zod/v4"), 1);
+var GetBYOKKeyRequest$outboundSchema = z610.object({
+  httpReferer: z610.string().optional(),
+  appTitle: z610.string().optional(),
+  appCategories: z610.string().optional(),
+  id: z610.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -17626,65 +18219,65 @@ var GetBYOKKeyRequest$outboundSchema = z588.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getcredits.js
-var z589 = __toESM(require("zod/v4"), 1);
-var GetCreditsRequest$outboundSchema = z589.object({
-  httpReferer: z589.string().optional(),
-  appTitle: z589.string().optional(),
-  appCategories: z589.string().optional()
+var z611 = __toESM(require("zod/v4"), 1);
+var GetCreditsRequest$outboundSchema = z611.object({
+  httpReferer: z611.string().optional(),
+  appTitle: z611.string().optional(),
+  appCategories: z611.string().optional()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var GetCreditsData$inboundSchema = z589.object({
-  total_credits: z589.number(),
-  total_usage: z589.number()
+var GetCreditsData$inboundSchema = z611.object({
+  total_credits: z611.number(),
+  total_usage: z611.number()
 }).transform((v) => {
   return remap(v, {
     "total_credits": "totalCredits",
     "total_usage": "totalUsage"
   });
 });
-var GetCreditsResponse$inboundSchema = z589.object({
-  data: z589.lazy(() => GetCreditsData$inboundSchema)
+var GetCreditsResponse$inboundSchema = z611.object({
+  data: z611.lazy(() => GetCreditsData$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getcurrentkey.js
-var z590 = __toESM(require("zod/v4"), 1);
-var GetCurrentKeyRequest$outboundSchema = z590.object({
-  httpReferer: z590.string().optional(),
-  appTitle: z590.string().optional(),
-  appCategories: z590.string().optional()
+var z612 = __toESM(require("zod/v4"), 1);
+var GetCurrentKeyRequest$outboundSchema = z612.object({
+  httpReferer: z612.string().optional(),
+  appTitle: z612.string().optional(),
+  appCategories: z612.string().optional()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var RateLimit$inboundSchema = z590.object({
-  interval: z590.string(),
-  note: z590.string(),
-  requests: z590.int()
+var RateLimit$inboundSchema = z612.object({
+  interval: z612.string(),
+  note: z612.string(),
+  requests: z612.int()
 });
-var GetCurrentKeyData$inboundSchema = z590.object({
-  byok_usage: z590.number(),
-  byok_usage_daily: z590.number(),
-  byok_usage_monthly: z590.number(),
-  byok_usage_weekly: z590.number(),
-  creator_user_id: z590.nullable(z590.string()),
-  expires_at: z590.nullable(z590.iso.datetime({ offset: true }).transform((v) => new Date(v))).optional(),
-  include_byok_in_limit: z590.boolean(),
-  is_free_tier: z590.boolean(),
-  is_management_key: z590.boolean(),
-  is_provisioning_key: z590.boolean(),
-  label: z590.string(),
-  limit: z590.nullable(z590.number()),
-  limit_remaining: z590.nullable(z590.number()),
-  limit_reset: z590.nullable(z590.string()),
-  rate_limit: z590.lazy(() => RateLimit$inboundSchema),
-  usage: z590.number(),
-  usage_daily: z590.number(),
-  usage_monthly: z590.number(),
-  usage_weekly: z590.number()
+var GetCurrentKeyData$inboundSchema = z612.object({
+  byok_usage: z612.number(),
+  byok_usage_daily: z612.number(),
+  byok_usage_monthly: z612.number(),
+  byok_usage_weekly: z612.number(),
+  creator_user_id: z612.nullable(z612.string()),
+  expires_at: z612.nullable(z612.iso.datetime({ offset: true }).transform((v) => new Date(v))).optional(),
+  include_byok_in_limit: z612.boolean(),
+  is_free_tier: z612.boolean(),
+  is_management_key: z612.boolean(),
+  is_provisioning_key: z612.boolean(),
+  label: z612.string(),
+  limit: z612.nullable(z612.number()),
+  limit_remaining: z612.nullable(z612.number()),
+  limit_reset: z612.nullable(z612.string()),
+  rate_limit: z612.lazy(() => RateLimit$inboundSchema),
+  usage: z612.number(),
+  usage_daily: z612.number(),
+  usage_monthly: z612.number(),
+  usage_weekly: z612.number()
 }).transform((v) => {
   return remap(v, {
     "byok_usage": "byokUsage",
@@ -17705,18 +18298,18 @@ var GetCurrentKeyData$inboundSchema = z590.object({
     "usage_weekly": "usageWeekly"
   });
 });
-var GetCurrentKeyResponse$inboundSchema = z590.object({
-  data: z590.lazy(() => GetCurrentKeyData$inboundSchema)
+var GetCurrentKeyResponse$inboundSchema = z612.object({
+  data: z612.lazy(() => GetCurrentKeyData$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getfilemetadata.js
-var z591 = __toESM(require("zod/v4"), 1);
-var GetFileMetadataRequest$outboundSchema = z591.object({
-  httpReferer: z591.string().optional(),
-  appTitle: z591.string().optional(),
-  appCategories: z591.string().optional(),
-  fileId: z591.string(),
-  workspaceId: z591.string().optional(),
+var z613 = __toESM(require("zod/v4"), 1);
+var GetFileMetadataRequest$outboundSchema = z613.object({
+  httpReferer: z613.string().optional(),
+  appTitle: z613.string().optional(),
+  appCategories: z613.string().optional(),
+  fileId: z613.string(),
+  workspaceId: z613.string().optional(),
   provider: FileProvider$outboundSchema.optional()
 }).transform((v) => {
   return remap(v, {
@@ -17727,12 +18320,12 @@ var GetFileMetadataRequest$outboundSchema = z591.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getgeneration.js
-var z592 = __toESM(require("zod/v4"), 1);
-var GetGenerationRequest$outboundSchema = z592.object({
-  httpReferer: z592.string().optional(),
-  appTitle: z592.string().optional(),
-  appCategories: z592.string().optional(),
-  id: z592.string()
+var z614 = __toESM(require("zod/v4"), 1);
+var GetGenerationRequest$outboundSchema = z614.object({
+  httpReferer: z614.string().optional(),
+  appTitle: z614.string().optional(),
+  appCategories: z614.string().optional(),
+  id: z614.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -17740,12 +18333,12 @@ var GetGenerationRequest$outboundSchema = z592.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getguardrail.js
-var z593 = __toESM(require("zod/v4"), 1);
-var GetGuardrailRequest$outboundSchema = z593.object({
-  httpReferer: z593.string().optional(),
-  appTitle: z593.string().optional(),
-  appCategories: z593.string().optional(),
-  id: z593.string()
+var z615 = __toESM(require("zod/v4"), 1);
+var GetGuardrailRequest$outboundSchema = z615.object({
+  httpReferer: z615.string().optional(),
+  appTitle: z615.string().optional(),
+  appCategories: z615.string().optional(),
+  id: z615.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -17753,39 +18346,39 @@ var GetGuardrailRequest$outboundSchema = z593.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getkey.js
-var z594 = __toESM(require("zod/v4"), 1);
-var GetKeyRequest$outboundSchema = z594.object({
-  httpReferer: z594.string().optional(),
-  appTitle: z594.string().optional(),
-  appCategories: z594.string().optional(),
-  hash: z594.string()
+var z616 = __toESM(require("zod/v4"), 1);
+var GetKeyRequest$outboundSchema = z616.object({
+  httpReferer: z616.string().optional(),
+  appTitle: z616.string().optional(),
+  appCategories: z616.string().optional(),
+  hash: z616.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var GetKeyData$inboundSchema = z594.object({
-  byok_usage: z594.number(),
-  byok_usage_daily: z594.number(),
-  byok_usage_monthly: z594.number(),
-  byok_usage_weekly: z594.number(),
-  created_at: z594.string(),
-  creator_user_id: z594.nullable(z594.string()),
-  disabled: z594.boolean(),
-  expires_at: z594.nullable(z594.iso.datetime({ offset: true }).transform((v) => new Date(v))).optional(),
-  hash: z594.string(),
-  include_byok_in_limit: z594.boolean(),
-  label: z594.string(),
-  limit: z594.nullable(z594.number()),
-  limit_remaining: z594.nullable(z594.number()),
-  limit_reset: z594.nullable(z594.string()),
-  name: z594.string(),
-  updated_at: z594.nullable(z594.string()),
-  usage: z594.number(),
-  usage_daily: z594.number(),
-  usage_monthly: z594.number(),
-  usage_weekly: z594.number(),
-  workspace_id: z594.string()
+var GetKeyData$inboundSchema = z616.object({
+  byok_usage: z616.number(),
+  byok_usage_daily: z616.number(),
+  byok_usage_monthly: z616.number(),
+  byok_usage_weekly: z616.number(),
+  created_at: z616.string(),
+  creator_user_id: z616.nullable(z616.string()),
+  disabled: z616.boolean(),
+  expires_at: z616.nullable(z616.iso.datetime({ offset: true }).transform((v) => new Date(v))).optional(),
+  hash: z616.string(),
+  include_byok_in_limit: z616.boolean(),
+  label: z616.string(),
+  limit: z616.nullable(z616.number()),
+  limit_remaining: z616.nullable(z616.number()),
+  limit_reset: z616.nullable(z616.string()),
+  name: z616.string(),
+  updated_at: z616.nullable(z616.string()),
+  usage: z616.number(),
+  usage_daily: z616.number(),
+  usage_monthly: z616.number(),
+  usage_weekly: z616.number(),
+  workspace_id: z616.string()
 }).transform((v) => {
   return remap(v, {
     "byok_usage": "byokUsage",
@@ -17805,18 +18398,18 @@ var GetKeyData$inboundSchema = z594.object({
     "workspace_id": "workspaceId"
   });
 });
-var GetKeyResponse$inboundSchema = z594.object({
-  data: z594.lazy(() => GetKeyData$inboundSchema)
+var GetKeyResponse$inboundSchema = z616.object({
+  data: z616.lazy(() => GetKeyData$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getmodel.js
-var z595 = __toESM(require("zod/v4"), 1);
-var GetModelRequest$outboundSchema = z595.object({
-  httpReferer: z595.string().optional(),
-  appTitle: z595.string().optional(),
-  appCategories: z595.string().optional(),
-  author: z595.string(),
-  slug: z595.string()
+var z617 = __toESM(require("zod/v4"), 1);
+var GetModelRequest$outboundSchema = z617.object({
+  httpReferer: z617.string().optional(),
+  appTitle: z617.string().optional(),
+  appCategories: z617.string().optional(),
+  author: z617.string(),
+  slug: z617.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -17824,7 +18417,7 @@ var GetModelRequest$outboundSchema = z595.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getmodels.js
-var z596 = __toESM(require("zod/v4"), 1);
+var z618 = __toESM(require("zod/v4"), 1);
 var GetModelsCategory = {
   Programming: "programming",
   Roleplay: "roleplay",
@@ -17861,46 +18454,47 @@ var Zdr = {
   True: "true"
 };
 var Region2 = {
-  Eu: "eu"
+  Eu: "eu",
+  Us: "us"
 };
 var GetModelsCategory$outboundSchema = outboundSchema(GetModelsCategory);
 var GetModelsSort$outboundSchema = outboundSchema(GetModelsSort);
 var Distillable$outboundSchema = outboundSchema(Distillable);
-var Zdr$outboundSchema = z596.enum(Zdr);
-var Region$outboundSchema = z596.enum(Region2);
-var GetModelsRequest$outboundSchema = z596.object({
-  httpReferer: z596.string().optional(),
-  appTitle: z596.string().optional(),
-  appCategories: z596.string().optional(),
-  offset: z596.nullable(z596.int().default(0)),
-  limit: z596.int().default(500),
+var Zdr$outboundSchema = z618.enum(Zdr);
+var Region$outboundSchema = outboundSchema(Region2);
+var GetModelsRequest$outboundSchema = z618.object({
+  httpReferer: z618.string().optional(),
+  appTitle: z618.string().optional(),
+  appCategories: z618.string().optional(),
+  offset: z618.nullable(z618.int().default(0)),
+  limit: z618.int().default(500),
   category: GetModelsCategory$outboundSchema.optional(),
-  supportedParameters: z596.string().optional(),
-  outputModalities: z596.string().optional(),
+  supportedParameters: z618.string().optional(),
+  outputModalities: z618.string().optional(),
   sort: GetModelsSort$outboundSchema.optional(),
-  q: z596.string().optional(),
-  inputModalities: z596.string().optional(),
-  context: z596.int().optional(),
-  minPrice: z596.nullable(z596.number()).optional(),
-  maxPrice: z596.nullable(z596.number()).optional(),
-  arch: z596.string().optional(),
-  modelAuthors: z596.string().optional(),
-  providers: z596.string().optional(),
+  q: z618.string().optional(),
+  inputModalities: z618.string().optional(),
+  context: z618.int().optional(),
+  minPrice: z618.nullable(z618.number()).optional(),
+  maxPrice: z618.nullable(z618.number()).optional(),
+  arch: z618.string().optional(),
+  modelAuthors: z618.string().optional(),
+  providers: z618.string().optional(),
   distillable: Distillable$outboundSchema.optional(),
   zdr: Zdr$outboundSchema.optional(),
   region: Region$outboundSchema.optional(),
-  minOutputPrice: z596.nullable(z596.number()).optional(),
-  maxOutputPrice: z596.nullable(z596.number()).optional(),
-  minAgeDays: z596.nullable(z596.int()).optional(),
-  maxAgeDays: z596.nullable(z596.int()).optional(),
-  minIntelligenceIndex: z596.nullable(z596.number()).optional(),
-  maxIntelligenceIndex: z596.nullable(z596.number()).optional(),
-  minCodingIndex: z596.nullable(z596.number()).optional(),
-  maxCodingIndex: z596.nullable(z596.number()).optional(),
-  minAgenticIndex: z596.nullable(z596.number()).optional(),
-  maxAgenticIndex: z596.nullable(z596.number()).optional(),
-  minToolSuccessRate: z596.nullable(z596.number()).optional(),
-  maxToolSuccessRate: z596.nullable(z596.number()).optional()
+  minOutputPrice: z618.nullable(z618.number()).optional(),
+  maxOutputPrice: z618.nullable(z618.number()).optional(),
+  minAgeDays: z618.nullable(z618.int()).optional(),
+  maxAgeDays: z618.nullable(z618.int()).optional(),
+  minIntelligenceIndex: z618.nullable(z618.number()).optional(),
+  maxIntelligenceIndex: z618.nullable(z618.number()).optional(),
+  minCodingIndex: z618.nullable(z618.number()).optional(),
+  maxCodingIndex: z618.nullable(z618.number()).optional(),
+  minAgenticIndex: z618.nullable(z618.number()).optional(),
+  maxAgenticIndex: z618.nullable(z618.number()).optional(),
+  minToolSuccessRate: z618.nullable(z618.number()).optional(),
+  maxToolSuccessRate: z618.nullable(z618.number()).optional()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
@@ -17924,7 +18518,7 @@ var GetModelsRequest$outboundSchema = z596.object({
     maxToolSuccessRate: "max_tool_success_rate"
   });
 });
-var GetModelsResponse$inboundSchema = z596.object({
+var GetModelsResponse$inboundSchema = z618.object({
   Result: ModelsListResponse$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -17933,12 +18527,12 @@ var GetModelsResponse$inboundSchema = z596.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getobservabilitydestination.js
-var z597 = __toESM(require("zod/v4"), 1);
-var GetObservabilityDestinationRequest$outboundSchema = z597.object({
-  httpReferer: z597.string().optional(),
-  appTitle: z597.string().optional(),
-  appCategories: z597.string().optional(),
-  id: z597.string()
+var z619 = __toESM(require("zod/v4"), 1);
+var GetObservabilityDestinationRequest$outboundSchema = z619.object({
+  httpReferer: z619.string().optional(),
+  appTitle: z619.string().optional(),
+  appCategories: z619.string().optional(),
+  id: z619.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -17946,12 +18540,12 @@ var GetObservabilityDestinationRequest$outboundSchema = z597.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getpreset.js
-var z598 = __toESM(require("zod/v4"), 1);
-var GetPresetRequest$outboundSchema = z598.object({
-  httpReferer: z598.string().optional(),
-  appTitle: z598.string().optional(),
-  appCategories: z598.string().optional(),
-  slug: z598.string()
+var z620 = __toESM(require("zod/v4"), 1);
+var GetPresetRequest$outboundSchema = z620.object({
+  httpReferer: z620.string().optional(),
+  appTitle: z620.string().optional(),
+  appCategories: z620.string().optional(),
+  slug: z620.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -17959,13 +18553,13 @@ var GetPresetRequest$outboundSchema = z598.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getpresetversion.js
-var z599 = __toESM(require("zod/v4"), 1);
-var GetPresetVersionRequest$outboundSchema = z599.object({
-  httpReferer: z599.string().optional(),
-  appTitle: z599.string().optional(),
-  appCategories: z599.string().optional(),
-  slug: z599.string(),
-  version: z599.string()
+var z621 = __toESM(require("zod/v4"), 1);
+var GetPresetVersionRequest$outboundSchema = z621.object({
+  httpReferer: z621.string().optional(),
+  appTitle: z621.string().optional(),
+  appCategories: z621.string().optional(),
+  slug: z621.string(),
+  version: z621.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -17973,7 +18567,7 @@ var GetPresetVersionRequest$outboundSchema = z599.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getrankingsdaily.js
-var z600 = __toESM(require("zod/v4"), 1);
+var z622 = __toESM(require("zod/v4"), 1);
 var Period = {
   Day: "day",
   Week: "week",
@@ -18016,12 +18610,12 @@ var Modality$outboundSchema2 = outboundSchema(Modality2);
 var ContextBucket$outboundSchema = outboundSchema(ContextBucket);
 var GetRankingsDailyCategory$outboundSchema = outboundSchema(GetRankingsDailyCategory);
 var LanguageType$outboundSchema = outboundSchema(LanguageType);
-var GetRankingsDailyRequest$outboundSchema = z600.object({
-  httpReferer: z600.string().optional(),
-  appTitle: z600.string().optional(),
-  appCategories: z600.string().optional(),
-  startDate: z600.string().optional(),
-  endDate: z600.string().optional(),
+var GetRankingsDailyRequest$outboundSchema = z622.object({
+  httpReferer: z622.string().optional(),
+  appTitle: z622.string().optional(),
+  appCategories: z622.string().optional(),
+  startDate: z622.string().optional(),
+  endDate: z622.string().optional(),
   period: Period$outboundSchema.optional(),
   modality: Modality$outboundSchema2.optional(),
   contextBucket: ContextBucket$outboundSchema.optional(),
@@ -18038,28 +18632,61 @@ var GetRankingsDailyRequest$outboundSchema = z600.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getscimgroupmapping.js
-var z601 = __toESM(require("zod/v4"), 1);
-var GetScimGroupMappingRequest$outboundSchema = z601.object({
-  httpReferer: z601.string().optional(),
-  appTitle: z601.string().optional(),
-  appCategories: z601.string().optional(),
-  id: z601.string()
+var z623 = __toESM(require("zod/v4"), 1);
+var GetScimGroupMappingRequest$outboundSchema = z623.object({
+  httpReferer: z623.string().optional(),
+  appTitle: z623.string().optional(),
+  appCategories: z623.string().optional(),
+  id: z623.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
 
+// node_modules/@openrouter/sdk/esm/models/operations/getsessioncost.js
+var z624 = __toESM(require("zod/v4"), 1);
+var TurnRange2 = {
+  OneMinusTurn: "1-turn",
+  TwoMinus9MinusTurns: "2-9-turns",
+  TenMinus49MinusTurns: "10-49-turns",
+  FiftyMinusPlusTurns: "50-plus-turns"
+};
+var TurnRange$outboundSchema = outboundSchema(TurnRange2);
+var GetSessionCostRequest$outboundSchema = z624.object({
+  httpReferer: z624.string().optional(),
+  appTitle: z624.string().optional(),
+  appCategories: z624.string().optional(),
+  appSlug: z624.string().optional(),
+  model: z624.string().optional(),
+  turnRange: TurnRange$outboundSchema.optional(),
+  limit: z624.int().default(100),
+  offset: z624.nullable(z624.int().default(0))
+}).transform((v) => {
+  return remap(v, {
+    httpReferer: "HTTP-Referer",
+    appSlug: "app_slug",
+    turnRange: "turn_range"
+  });
+});
+var GetSessionCostResponse$inboundSchema = z624.object({
+  Result: SessionCostResponse$inboundSchema
+}).transform((v) => {
+  return remap(v, {
+    "Result": "result"
+  });
+});
+
 // node_modules/@openrouter/sdk/esm/models/operations/gettaskclassifications.js
-var z602 = __toESM(require("zod/v4"), 1);
+var z625 = __toESM(require("zod/v4"), 1);
 var Window = {
   Sevend: "7d"
 };
-var Window$outboundSchema = z602.enum(Window);
-var GetTaskClassificationsRequest$outboundSchema = z602.object({
-  httpReferer: z602.string().optional(),
-  appTitle: z602.string().optional(),
-  appCategories: z602.string().optional(),
+var Window$outboundSchema = z625.enum(Window);
+var GetTaskClassificationsRequest$outboundSchema = z625.object({
+  httpReferer: z625.string().optional(),
+  appTitle: z625.string().optional(),
+  appCategories: z625.string().optional(),
   window: Window$outboundSchema.default("7d")
 }).transform((v) => {
   return remap(v, {
@@ -18068,29 +18695,37 @@ var GetTaskClassificationsRequest$outboundSchema = z602.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getuseractivity.js
-var z603 = __toESM(require("zod/v4"), 1);
-var GetUserActivityRequest$outboundSchema = z603.object({
-  httpReferer: z603.string().optional(),
-  appTitle: z603.string().optional(),
-  appCategories: z603.string().optional(),
-  date: z603.string().optional(),
-  apiKeyHash: z603.string().optional(),
-  userId: z603.string().optional()
+var z626 = __toESM(require("zod/v4"), 1);
+var GroupBy = {
+  Workspace: "workspace"
+};
+var GroupBy$outboundSchema = z626.enum(GroupBy);
+var GetUserActivityRequest$outboundSchema = z626.object({
+  httpReferer: z626.string().optional(),
+  appTitle: z626.string().optional(),
+  appCategories: z626.string().optional(),
+  date: z626.string().optional(),
+  apiKeyHash: z626.string().optional(),
+  userId: z626.string().optional(),
+  groupBy: GroupBy$outboundSchema.optional(),
+  workspaceId: z626.string().optional()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
     apiKeyHash: "api_key_hash",
-    userId: "user_id"
+    userId: "user_id",
+    groupBy: "group_by",
+    workspaceId: "workspace_id"
   });
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getvideos.js
-var z604 = __toESM(require("zod/v4"), 1);
-var GetVideosRequest$outboundSchema = z604.object({
-  httpReferer: z604.string().optional(),
-  appTitle: z604.string().optional(),
-  appCategories: z604.string().optional(),
-  jobId: z604.string()
+var z627 = __toESM(require("zod/v4"), 1);
+var GetVideosRequest$outboundSchema = z627.object({
+  httpReferer: z627.string().optional(),
+  appTitle: z627.string().optional(),
+  appCategories: z627.string().optional(),
+  jobId: z627.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -18098,12 +18733,26 @@ var GetVideosRequest$outboundSchema = z604.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getworkspace.js
-var z605 = __toESM(require("zod/v4"), 1);
-var GetWorkspaceRequest$outboundSchema = z605.object({
-  httpReferer: z605.string().optional(),
-  appTitle: z605.string().optional(),
-  appCategories: z605.string().optional(),
-  id: z605.string()
+var z628 = __toESM(require("zod/v4"), 1);
+var GetWorkspaceRequest$outboundSchema = z628.object({
+  httpReferer: z628.string().optional(),
+  appTitle: z628.string().optional(),
+  appCategories: z628.string().optional(),
+  id: z628.string()
+}).transform((v) => {
+  return remap(v, {
+    httpReferer: "HTTP-Referer"
+  });
+});
+
+// node_modules/@openrouter/sdk/esm/models/operations/getworkspacebudget.js
+var z629 = __toESM(require("zod/v4"), 1);
+var GetWorkspaceBudgetRequest$outboundSchema = z629.object({
+  httpReferer: z629.string().optional(),
+  appTitle: z629.string().optional(),
+  appCategories: z629.string().optional(),
+  id: z629.string(),
+  interval: WorkspaceBudgetInterval$outboundSchema
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -18111,14 +18760,14 @@ var GetWorkspaceRequest$outboundSchema = z605.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/list.js
-var z606 = __toESM(require("zod/v4"), 1);
-var ListRequest$outboundSchema = z606.object({
-  httpReferer: z606.string().optional(),
-  appTitle: z606.string().optional(),
-  appCategories: z606.string().optional(),
-  includeDisabled: z606.boolean().optional(),
-  offset: z606.nullable(z606.int()).optional(),
-  workspaceId: z606.string().optional()
+var z630 = __toESM(require("zod/v4"), 1);
+var ListRequest$outboundSchema = z630.object({
+  httpReferer: z630.string().optional(),
+  appTitle: z630.string().optional(),
+  appCategories: z630.string().optional(),
+  includeDisabled: z630.boolean().optional(),
+  offset: z630.nullable(z630.int()).optional(),
+  workspaceId: z630.string().optional()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
@@ -18126,28 +18775,28 @@ var ListRequest$outboundSchema = z606.object({
     workspaceId: "workspace_id"
   });
 });
-var ListData$inboundSchema = z606.object({
-  byok_usage: z606.number(),
-  byok_usage_daily: z606.number(),
-  byok_usage_monthly: z606.number(),
-  byok_usage_weekly: z606.number(),
-  created_at: z606.string(),
-  creator_user_id: z606.nullable(z606.string()),
-  disabled: z606.boolean(),
-  expires_at: z606.nullable(z606.iso.datetime({ offset: true }).transform((v) => new Date(v))).optional(),
-  hash: z606.string(),
-  include_byok_in_limit: z606.boolean(),
-  label: z606.string(),
-  limit: z606.nullable(z606.number()),
-  limit_remaining: z606.nullable(z606.number()),
-  limit_reset: z606.nullable(z606.string()),
-  name: z606.string(),
-  updated_at: z606.nullable(z606.string()),
-  usage: z606.number(),
-  usage_daily: z606.number(),
-  usage_monthly: z606.number(),
-  usage_weekly: z606.number(),
-  workspace_id: z606.string()
+var ListData$inboundSchema = z630.object({
+  byok_usage: z630.number(),
+  byok_usage_daily: z630.number(),
+  byok_usage_monthly: z630.number(),
+  byok_usage_weekly: z630.number(),
+  created_at: z630.string(),
+  creator_user_id: z630.nullable(z630.string()),
+  disabled: z630.boolean(),
+  expires_at: z630.nullable(z630.iso.datetime({ offset: true }).transform((v) => new Date(v))).optional(),
+  hash: z630.string(),
+  include_byok_in_limit: z630.boolean(),
+  label: z630.string(),
+  limit: z630.nullable(z630.number()),
+  limit_remaining: z630.nullable(z630.number()),
+  limit_reset: z630.nullable(z630.string()),
+  name: z630.string(),
+  updated_at: z630.nullable(z630.string()),
+  usage: z630.number(),
+  usage_daily: z630.number(),
+  usage_monthly: z630.number(),
+  usage_weekly: z630.number(),
+  workspace_id: z630.string()
 }).transform((v) => {
   return remap(v, {
     "byok_usage": "byokUsage",
@@ -18167,12 +18816,12 @@ var ListData$inboundSchema = z606.object({
     "workspace_id": "workspaceId"
   });
 });
-var ListResponse$inboundSchema = z606.object({
-  data: z606.array(z606.lazy(() => ListData$inboundSchema))
+var ListResponse$inboundSchema = z630.object({
+  data: z630.array(z630.lazy(() => ListData$inboundSchema))
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listbyokkeys.js
-var z607 = __toESM(require("zod/v4"), 1);
+var z631 = __toESM(require("zod/v4"), 1);
 var Provider = {
   Ai21: "ai21",
   AionLabs: "aion-labs",
@@ -18199,6 +18848,7 @@ var Provider = {
   Coreweave: "coreweave",
   Crusoe: "crusoe",
   Darkbloom: "darkbloom",
+  Databricks: "databricks",
   Decart: "decart",
   Deepgram: "deepgram",
   Deepinfra: "deepinfra",
@@ -18276,13 +18926,13 @@ var Provider = {
   ZAi: "z-ai"
 };
 var Provider$outboundSchema = outboundSchema(Provider);
-var ListBYOKKeysRequest$outboundSchema = z607.object({
-  httpReferer: z607.string().optional(),
-  appTitle: z607.string().optional(),
-  appCategories: z607.string().optional(),
-  offset: z607.nullable(z607.int().default(0)),
-  limit: z607.int().default(50),
-  workspaceId: z607.string().optional(),
+var ListBYOKKeysRequest$outboundSchema = z631.object({
+  httpReferer: z631.string().optional(),
+  appTitle: z631.string().optional(),
+  appCategories: z631.string().optional(),
+  offset: z631.nullable(z631.int().default(0)),
+  limit: z631.int().default(50),
+  workspaceId: z631.string().optional(),
   provider: Provider$outboundSchema.optional()
 }).transform((v) => {
   return remap(v, {
@@ -18290,7 +18940,7 @@ var ListBYOKKeysRequest$outboundSchema = z607.object({
     workspaceId: "workspace_id"
   });
 });
-var ListBYOKKeysResponse$inboundSchema2 = z607.object({
+var ListBYOKKeysResponse$inboundSchema2 = z631.object({
   Result: ListBYOKKeysResponse$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -18299,19 +18949,19 @@ var ListBYOKKeysResponse$inboundSchema2 = z607.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listembeddingsmodels.js
-var z608 = __toESM(require("zod/v4"), 1);
-var ListEmbeddingsModelsRequest$outboundSchema = z608.object({
-  httpReferer: z608.string().optional(),
-  appTitle: z608.string().optional(),
-  appCategories: z608.string().optional(),
-  offset: z608.nullable(z608.int().default(0)),
-  limit: z608.int().default(500)
+var z632 = __toESM(require("zod/v4"), 1);
+var ListEmbeddingsModelsRequest$outboundSchema = z632.object({
+  httpReferer: z632.string().optional(),
+  appTitle: z632.string().optional(),
+  appCategories: z632.string().optional(),
+  offset: z632.nullable(z632.int().default(0)),
+  limit: z632.int().default(500)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var ListEmbeddingsModelsResponse$inboundSchema = z608.object({
+var ListEmbeddingsModelsResponse$inboundSchema = z632.object({
   Result: ModelsListResponse$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -18320,55 +18970,55 @@ var ListEmbeddingsModelsResponse$inboundSchema = z608.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listendpoints.js
-var z609 = __toESM(require("zod/v4"), 1);
-var ListEndpointsRequest$outboundSchema = z609.object({
-  httpReferer: z609.string().optional(),
-  appTitle: z609.string().optional(),
-  appCategories: z609.string().optional(),
-  author: z609.string(),
-  slug: z609.string()
+var z633 = __toESM(require("zod/v4"), 1);
+var ListEndpointsRequest$outboundSchema = z633.object({
+  httpReferer: z633.string().optional(),
+  appTitle: z633.string().optional(),
+  appCategories: z633.string().optional(),
+  author: z633.string(),
+  slug: z633.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var ListEndpointsResponse$inboundSchema2 = z609.object({
+var ListEndpointsResponse$inboundSchema2 = z633.object({
   data: ListEndpointsResponse$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listendpointszdr.js
-var z610 = __toESM(require("zod/v4"), 1);
-var ListEndpointsZdrRequest$outboundSchema = z610.object({
-  httpReferer: z610.string().optional(),
-  appTitle: z610.string().optional(),
-  appCategories: z610.string().optional()
+var z634 = __toESM(require("zod/v4"), 1);
+var ListEndpointsZdrRequest$outboundSchema = z634.object({
+  httpReferer: z634.string().optional(),
+  appTitle: z634.string().optional(),
+  appCategories: z634.string().optional()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var ListEndpointsZdrResponse$inboundSchema = z610.object({
-  data: z610.array(PublicEndpoint$inboundSchema)
+var ListEndpointsZdrResponse$inboundSchema = z634.object({
+  data: z634.array(PublicEndpoint$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listfiles.js
-var z611 = __toESM(require("zod/v4"), 1);
+var z635 = __toESM(require("zod/v4"), 1);
 var Order = {
   Asc: "asc",
   Desc: "desc"
 };
 var Order$outboundSchema = outboundSchema(Order);
-var ListFilesRequest$outboundSchema = z611.object({
-  httpReferer: z611.string().optional(),
-  appTitle: z611.string().optional(),
-  appCategories: z611.string().optional(),
-  limit: z611.int().optional(),
-  cursor: z611.string().optional(),
-  workspaceId: z611.string().optional(),
+var ListFilesRequest$outboundSchema = z635.object({
+  httpReferer: z635.string().optional(),
+  appTitle: z635.string().optional(),
+  appCategories: z635.string().optional(),
+  limit: z635.int().optional(),
+  cursor: z635.string().optional(),
+  workspaceId: z635.string().optional(),
   provider: FileProvider$outboundSchema.optional(),
-  after: z611.string().optional(),
-  afterId: z611.string().optional(),
-  beforeId: z611.string().optional(),
+  after: z635.string().optional(),
+  afterId: z635.string().optional(),
+  beforeId: z635.string().optional(),
   order: Order$outboundSchema.optional()
 }).transform((v) => {
   return remap(v, {
@@ -18378,7 +19028,7 @@ var ListFilesRequest$outboundSchema = z611.object({
     beforeId: "before_id"
   });
 });
-var ListFilesResponse$inboundSchema = z611.object({
+var ListFilesResponse$inboundSchema = z635.object({
   Result: FileListResponse$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -18387,12 +19037,12 @@ var ListFilesResponse$inboundSchema = z611.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listgenerationcontent.js
-var z612 = __toESM(require("zod/v4"), 1);
-var ListGenerationContentRequest$outboundSchema = z612.object({
-  httpReferer: z612.string().optional(),
-  appTitle: z612.string().optional(),
-  appCategories: z612.string().optional(),
-  id: z612.string()
+var z636 = __toESM(require("zod/v4"), 1);
+var ListGenerationContentRequest$outboundSchema = z636.object({
+  httpReferer: z636.string().optional(),
+  appTitle: z636.string().optional(),
+  appCategories: z636.string().optional(),
+  id: z636.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -18400,20 +19050,20 @@ var ListGenerationContentRequest$outboundSchema = z612.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listguardrailkeyassignments.js
-var z613 = __toESM(require("zod/v4"), 1);
-var ListGuardrailKeyAssignmentsRequest$outboundSchema = z613.object({
-  httpReferer: z613.string().optional(),
-  appTitle: z613.string().optional(),
-  appCategories: z613.string().optional(),
-  id: z613.string(),
-  offset: z613.nullable(z613.int().default(0)),
-  limit: z613.int().default(50)
+var z637 = __toESM(require("zod/v4"), 1);
+var ListGuardrailKeyAssignmentsRequest$outboundSchema = z637.object({
+  httpReferer: z637.string().optional(),
+  appTitle: z637.string().optional(),
+  appCategories: z637.string().optional(),
+  id: z637.string(),
+  offset: z637.nullable(z637.int().default(0)),
+  limit: z637.int().default(50)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var ListGuardrailKeyAssignmentsResponse$inboundSchema = z613.object({
+var ListGuardrailKeyAssignmentsResponse$inboundSchema = z637.object({
   Result: ListKeyAssignmentsResponse$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -18422,20 +19072,20 @@ var ListGuardrailKeyAssignmentsResponse$inboundSchema = z613.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listguardrailmemberassignments.js
-var z614 = __toESM(require("zod/v4"), 1);
-var ListGuardrailMemberAssignmentsRequest$outboundSchema = z614.object({
-  httpReferer: z614.string().optional(),
-  appTitle: z614.string().optional(),
-  appCategories: z614.string().optional(),
-  id: z614.string(),
-  offset: z614.nullable(z614.int().default(0)),
-  limit: z614.int().default(50)
+var z638 = __toESM(require("zod/v4"), 1);
+var ListGuardrailMemberAssignmentsRequest$outboundSchema = z638.object({
+  httpReferer: z638.string().optional(),
+  appTitle: z638.string().optional(),
+  appCategories: z638.string().optional(),
+  id: z638.string(),
+  offset: z638.nullable(z638.int().default(0)),
+  limit: z638.int().default(50)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var ListGuardrailMemberAssignmentsResponse$inboundSchema = z614.object({
+var ListGuardrailMemberAssignmentsResponse$inboundSchema = z638.object({
   Result: ListMemberAssignmentsResponse$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -18444,21 +19094,21 @@ var ListGuardrailMemberAssignmentsResponse$inboundSchema = z614.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listguardrails.js
-var z615 = __toESM(require("zod/v4"), 1);
-var ListGuardrailsRequest$outboundSchema = z615.object({
-  httpReferer: z615.string().optional(),
-  appTitle: z615.string().optional(),
-  appCategories: z615.string().optional(),
-  offset: z615.nullable(z615.int().default(0)),
-  limit: z615.int().default(50),
-  workspaceId: z615.string().optional()
+var z639 = __toESM(require("zod/v4"), 1);
+var ListGuardrailsRequest$outboundSchema = z639.object({
+  httpReferer: z639.string().optional(),
+  appTitle: z639.string().optional(),
+  appCategories: z639.string().optional(),
+  offset: z639.nullable(z639.int().default(0)),
+  limit: z639.int().default(50),
+  workspaceId: z639.string().optional()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
     workspaceId: "workspace_id"
   });
 });
-var ListGuardrailsResponse$inboundSchema2 = z615.object({
+var ListGuardrailsResponse$inboundSchema2 = z639.object({
   Result: ListGuardrailsResponse$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -18467,13 +19117,13 @@ var ListGuardrailsResponse$inboundSchema2 = z615.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listimagemodelendpoints.js
-var z616 = __toESM(require("zod/v4"), 1);
-var ListImageModelEndpointsRequest$outboundSchema = z616.object({
-  httpReferer: z616.string().optional(),
-  appTitle: z616.string().optional(),
-  appCategories: z616.string().optional(),
-  author: z616.string(),
-  slug: z616.string()
+var z640 = __toESM(require("zod/v4"), 1);
+var ListImageModelEndpointsRequest$outboundSchema = z640.object({
+  httpReferer: z640.string().optional(),
+  appTitle: z640.string().optional(),
+  appCategories: z640.string().optional(),
+  author: z640.string(),
+  slug: z640.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -18481,11 +19131,11 @@ var ListImageModelEndpointsRequest$outboundSchema = z616.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listimagemodels.js
-var z617 = __toESM(require("zod/v4"), 1);
-var ListImageModelsRequest$outboundSchema = z617.object({
-  httpReferer: z617.string().optional(),
-  appTitle: z617.string().optional(),
-  appCategories: z617.string().optional()
+var z641 = __toESM(require("zod/v4"), 1);
+var ListImageModelsRequest$outboundSchema = z641.object({
+  httpReferer: z641.string().optional(),
+  appTitle: z641.string().optional(),
+  appCategories: z641.string().optional()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -18493,19 +19143,19 @@ var ListImageModelsRequest$outboundSchema = z617.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listkeyassignments.js
-var z618 = __toESM(require("zod/v4"), 1);
-var ListKeyAssignmentsRequest$outboundSchema = z618.object({
-  httpReferer: z618.string().optional(),
-  appTitle: z618.string().optional(),
-  appCategories: z618.string().optional(),
-  offset: z618.nullable(z618.int().default(0)),
-  limit: z618.int().default(50)
+var z642 = __toESM(require("zod/v4"), 1);
+var ListKeyAssignmentsRequest$outboundSchema = z642.object({
+  httpReferer: z642.string().optional(),
+  appTitle: z642.string().optional(),
+  appCategories: z642.string().optional(),
+  offset: z642.nullable(z642.int().default(0)),
+  limit: z642.int().default(50)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var ListKeyAssignmentsResponse$inboundSchema2 = z618.object({
+var ListKeyAssignmentsResponse$inboundSchema2 = z642.object({
   Result: ListKeyAssignmentsResponse$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -18514,19 +19164,19 @@ var ListKeyAssignmentsResponse$inboundSchema2 = z618.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listmemberassignments.js
-var z619 = __toESM(require("zod/v4"), 1);
-var ListMemberAssignmentsRequest$outboundSchema = z619.object({
-  httpReferer: z619.string().optional(),
-  appTitle: z619.string().optional(),
-  appCategories: z619.string().optional(),
-  offset: z619.nullable(z619.int().default(0)),
-  limit: z619.int().default(50)
+var z643 = __toESM(require("zod/v4"), 1);
+var ListMemberAssignmentsRequest$outboundSchema = z643.object({
+  httpReferer: z643.string().optional(),
+  appTitle: z643.string().optional(),
+  appCategories: z643.string().optional(),
+  offset: z643.nullable(z643.int().default(0)),
+  limit: z643.int().default(50)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var ListMemberAssignmentsResponse$inboundSchema2 = z619.object({
+var ListMemberAssignmentsResponse$inboundSchema2 = z643.object({
   Result: ListMemberAssignmentsResponse$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -18535,12 +19185,12 @@ var ListMemberAssignmentsResponse$inboundSchema2 = z619.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listmodelscount.js
-var z620 = __toESM(require("zod/v4"), 1);
-var ListModelsCountRequest$outboundSchema = z620.object({
-  httpReferer: z620.string().optional(),
-  appTitle: z620.string().optional(),
-  appCategories: z620.string().optional(),
-  outputModalities: z620.string().optional()
+var z644 = __toESM(require("zod/v4"), 1);
+var ListModelsCountRequest$outboundSchema = z644.object({
+  httpReferer: z644.string().optional(),
+  appTitle: z644.string().optional(),
+  appCategories: z644.string().optional(),
+  outputModalities: z644.string().optional()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
@@ -18549,22 +19199,22 @@ var ListModelsCountRequest$outboundSchema = z620.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listmodelsuser.js
-var z621 = __toESM(require("zod/v4"), 1);
-var ListModelsUserSecurity$outboundSchema = z621.object({
-  bearer: z621.string()
+var z645 = __toESM(require("zod/v4"), 1);
+var ListModelsUserSecurity$outboundSchema = z645.object({
+  bearer: z645.string()
 });
-var ListModelsUserRequest$outboundSchema = z621.object({
-  httpReferer: z621.string().optional(),
-  appTitle: z621.string().optional(),
-  appCategories: z621.string().optional(),
-  offset: z621.nullable(z621.int().default(0)),
-  limit: z621.int().default(500)
+var ListModelsUserRequest$outboundSchema = z645.object({
+  httpReferer: z645.string().optional(),
+  appTitle: z645.string().optional(),
+  appCategories: z645.string().optional(),
+  offset: z645.nullable(z645.int().default(0)),
+  limit: z645.int().default(500)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var ListModelsUserResponse$inboundSchema = z621.object({
+var ListModelsUserResponse$inboundSchema = z645.object({
   Result: ModelsListResponse$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -18573,21 +19223,21 @@ var ListModelsUserResponse$inboundSchema = z621.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listobservabilitydestinations.js
-var z622 = __toESM(require("zod/v4"), 1);
-var ListObservabilityDestinationsRequest$outboundSchema = z622.object({
-  httpReferer: z622.string().optional(),
-  appTitle: z622.string().optional(),
-  appCategories: z622.string().optional(),
-  offset: z622.nullable(z622.int().default(0)),
-  limit: z622.int().default(50),
-  workspaceId: z622.string().optional()
+var z646 = __toESM(require("zod/v4"), 1);
+var ListObservabilityDestinationsRequest$outboundSchema = z646.object({
+  httpReferer: z646.string().optional(),
+  appTitle: z646.string().optional(),
+  appCategories: z646.string().optional(),
+  offset: z646.nullable(z646.int().default(0)),
+  limit: z646.int().default(50),
+  workspaceId: z646.string().optional()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
     workspaceId: "workspace_id"
   });
 });
-var ListObservabilityDestinationsResponse$inboundSchema2 = z622.object({
+var ListObservabilityDestinationsResponse$inboundSchema2 = z646.object({
   Result: ListObservabilityDestinationsResponse$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -18596,28 +19246,28 @@ var ListObservabilityDestinationsResponse$inboundSchema2 = z622.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listorganizationmembers.js
-var z623 = __toESM(require("zod/v4"), 1);
+var z647 = __toESM(require("zod/v4"), 1);
 var Role = {
   OrgAdmin: "org:admin",
   OrgMember: "org:member"
 };
-var ListOrganizationMembersRequest$outboundSchema = z623.object({
-  httpReferer: z623.string().optional(),
-  appTitle: z623.string().optional(),
-  appCategories: z623.string().optional(),
-  offset: z623.nullable(z623.int().default(0)),
-  limit: z623.int().default(50)
+var ListOrganizationMembersRequest$outboundSchema = z647.object({
+  httpReferer: z647.string().optional(),
+  appTitle: z647.string().optional(),
+  appCategories: z647.string().optional(),
+  offset: z647.nullable(z647.int().default(0)),
+  limit: z647.int().default(50)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
 var Role$inboundSchema = inboundSchema(Role);
-var ListOrganizationMembersData$inboundSchema = z623.object({
-  email: z623.string(),
-  first_name: z623.nullable(z623.string()),
-  id: z623.string(),
-  last_name: z623.nullable(z623.string()),
+var ListOrganizationMembersData$inboundSchema = z647.object({
+  email: z647.string(),
+  first_name: z647.nullable(z647.string()),
+  id: z647.string(),
+  last_name: z647.nullable(z647.string()),
   role: Role$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -18625,16 +19275,16 @@ var ListOrganizationMembersData$inboundSchema = z623.object({
     "last_name": "lastName"
   });
 });
-var ListOrganizationMembersResponseBody$inboundSchema = z623.object({
-  data: z623.array(z623.lazy(() => ListOrganizationMembersData$inboundSchema)),
-  total_count: z623.int()
+var ListOrganizationMembersResponseBody$inboundSchema = z647.object({
+  data: z647.array(z647.lazy(() => ListOrganizationMembersData$inboundSchema)),
+  total_count: z647.int()
 }).transform((v) => {
   return remap(v, {
     "total_count": "totalCount"
   });
 });
-var ListOrganizationMembersResponse$inboundSchema = z623.object({
-  Result: z623.lazy(() => ListOrganizationMembersResponseBody$inboundSchema)
+var ListOrganizationMembersResponse$inboundSchema = z647.object({
+  Result: z647.lazy(() => ListOrganizationMembersResponseBody$inboundSchema)
 }).transform((v) => {
   return remap(v, {
     "Result": "result"
@@ -18642,19 +19292,19 @@ var ListOrganizationMembersResponse$inboundSchema = z623.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listpresets.js
-var z624 = __toESM(require("zod/v4"), 1);
-var ListPresetsRequest$outboundSchema = z624.object({
-  httpReferer: z624.string().optional(),
-  appTitle: z624.string().optional(),
-  appCategories: z624.string().optional(),
-  offset: z624.nullable(z624.int().default(0)),
-  limit: z624.int().default(50)
+var z648 = __toESM(require("zod/v4"), 1);
+var ListPresetsRequest$outboundSchema = z648.object({
+  httpReferer: z648.string().optional(),
+  appTitle: z648.string().optional(),
+  appCategories: z648.string().optional(),
+  offset: z648.nullable(z648.int().default(0)),
+  limit: z648.int().default(50)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var ListPresetsResponse$inboundSchema2 = z624.object({
+var ListPresetsResponse$inboundSchema2 = z648.object({
   Result: ListPresetsResponse$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -18663,20 +19313,20 @@ var ListPresetsResponse$inboundSchema2 = z624.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listpresetversions.js
-var z625 = __toESM(require("zod/v4"), 1);
-var ListPresetVersionsRequest$outboundSchema = z625.object({
-  httpReferer: z625.string().optional(),
-  appTitle: z625.string().optional(),
-  appCategories: z625.string().optional(),
-  slug: z625.string(),
-  offset: z625.nullable(z625.int().default(0)),
-  limit: z625.int().default(50)
+var z649 = __toESM(require("zod/v4"), 1);
+var ListPresetVersionsRequest$outboundSchema = z649.object({
+  httpReferer: z649.string().optional(),
+  appTitle: z649.string().optional(),
+  appCategories: z649.string().optional(),
+  slug: z649.string(),
+  offset: z649.nullable(z649.int().default(0)),
+  limit: z649.int().default(50)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var ListPresetVersionsResponse$inboundSchema2 = z625.object({
+var ListPresetVersionsResponse$inboundSchema2 = z649.object({
   Result: ListPresetVersionsResponse$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -18685,7 +19335,7 @@ var ListPresetVersionsResponse$inboundSchema2 = z625.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listproviders.js
-var z626 = __toESM(require("zod/v4"), 1);
+var z650 = __toESM(require("zod/v4"), 1);
 var Datacenter = {
   Ad: "AD",
   Ae: "AE",
@@ -19188,10 +19838,10 @@ var Headquarters = {
   Zm: "ZM",
   Zw: "ZW"
 };
-var ListProvidersRequest$outboundSchema = z626.object({
-  httpReferer: z626.string().optional(),
-  appTitle: z626.string().optional(),
-  appCategories: z626.string().optional()
+var ListProvidersRequest$outboundSchema = z650.object({
+  httpReferer: z650.string().optional(),
+  appTitle: z650.string().optional(),
+  appCategories: z650.string().optional()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -19199,14 +19849,14 @@ var ListProvidersRequest$outboundSchema = z626.object({
 });
 var Datacenter$inboundSchema = inboundSchema(Datacenter);
 var Headquarters$inboundSchema = inboundSchema(Headquarters);
-var ListProvidersData$inboundSchema = z626.object({
-  datacenters: z626.nullable(z626.array(Datacenter$inboundSchema)).optional(),
-  headquarters: z626.nullable(Headquarters$inboundSchema).optional(),
-  name: z626.string(),
-  privacy_policy_url: z626.nullable(z626.string()),
-  slug: z626.string(),
-  status_page_url: z626.nullable(z626.string()).optional(),
-  terms_of_service_url: z626.nullable(z626.string()).optional()
+var ListProvidersData$inboundSchema = z650.object({
+  datacenters: z650.nullable(z650.array(Datacenter$inboundSchema)).optional(),
+  headquarters: z650.nullable(Headquarters$inboundSchema).optional(),
+  name: z650.string(),
+  privacy_policy_url: z650.nullable(z650.string()),
+  slug: z650.string(),
+  status_page_url: z650.nullable(z650.string()).optional(),
+  terms_of_service_url: z650.nullable(z650.string()).optional()
 }).transform((v) => {
   return remap(v, {
     "privacy_policy_url": "privacyPolicyUrl",
@@ -19214,24 +19864,24 @@ var ListProvidersData$inboundSchema = z626.object({
     "terms_of_service_url": "termsOfServiceUrl"
   });
 });
-var ListProvidersResponse$inboundSchema = z626.object({
-  data: z626.array(z626.lazy(() => ListProvidersData$inboundSchema))
+var ListProvidersResponse$inboundSchema = z650.object({
+  data: z650.array(z650.lazy(() => ListProvidersData$inboundSchema))
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listscimgroupmappings.js
-var z627 = __toESM(require("zod/v4"), 1);
-var ListScimGroupMappingsRequest$outboundSchema = z627.object({
-  httpReferer: z627.string().optional(),
-  appTitle: z627.string().optional(),
-  appCategories: z627.string().optional(),
-  offset: z627.nullable(z627.int().default(0)),
-  limit: z627.int().default(50)
+var z651 = __toESM(require("zod/v4"), 1);
+var ListScimGroupMappingsRequest$outboundSchema = z651.object({
+  httpReferer: z651.string().optional(),
+  appTitle: z651.string().optional(),
+  appCategories: z651.string().optional(),
+  offset: z651.nullable(z651.int().default(0)),
+  limit: z651.int().default(50)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var ListScimGroupMappingsResponse$inboundSchema2 = z627.object({
+var ListScimGroupMappingsResponse$inboundSchema2 = z651.object({
   Result: ListScimGroupMappingsResponse$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -19240,19 +19890,19 @@ var ListScimGroupMappingsResponse$inboundSchema2 = z627.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listscimgroups.js
-var z628 = __toESM(require("zod/v4"), 1);
-var ListScimGroupsRequest$outboundSchema = z628.object({
-  httpReferer: z628.string().optional(),
-  appTitle: z628.string().optional(),
-  appCategories: z628.string().optional(),
-  offset: z628.nullable(z628.int().default(0)),
-  limit: z628.int().default(50)
+var z652 = __toESM(require("zod/v4"), 1);
+var ListScimGroupsRequest$outboundSchema = z652.object({
+  httpReferer: z652.string().optional(),
+  appTitle: z652.string().optional(),
+  appCategories: z652.string().optional(),
+  offset: z652.nullable(z652.int().default(0)),
+  limit: z652.int().default(50)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var ListScimGroupsResponse$inboundSchema2 = z628.object({
+var ListScimGroupsResponse$inboundSchema2 = z652.object({
   Result: ListScimGroupsResponse$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -19261,13 +19911,13 @@ var ListScimGroupsResponse$inboundSchema2 = z628.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listvideoscontent.js
-var z629 = __toESM(require("zod/v4"), 1);
-var ListVideosContentRequest$outboundSchema = z629.object({
-  httpReferer: z629.string().optional(),
-  appTitle: z629.string().optional(),
-  appCategories: z629.string().optional(),
-  jobId: z629.string(),
-  index: z629.nullable(z629.int().default(0))
+var z653 = __toESM(require("zod/v4"), 1);
+var ListVideosContentRequest$outboundSchema = z653.object({
+  httpReferer: z653.string().optional(),
+  appTitle: z653.string().optional(),
+  appCategories: z653.string().optional(),
+  jobId: z653.string(),
+  index: z653.nullable(z653.int().default(0))
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -19275,11 +19925,11 @@ var ListVideosContentRequest$outboundSchema = z629.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listvideosmodels.js
-var z630 = __toESM(require("zod/v4"), 1);
-var ListVideosModelsRequest$outboundSchema = z630.object({
-  httpReferer: z630.string().optional(),
-  appTitle: z630.string().optional(),
-  appCategories: z630.string().optional()
+var z654 = __toESM(require("zod/v4"), 1);
+var ListVideosModelsRequest$outboundSchema = z654.object({
+  httpReferer: z654.string().optional(),
+  appTitle: z654.string().optional(),
+  appCategories: z654.string().optional()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -19287,12 +19937,12 @@ var ListVideosModelsRequest$outboundSchema = z630.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listworkspacebudgets.js
-var z631 = __toESM(require("zod/v4"), 1);
-var ListWorkspaceBudgetsRequest$outboundSchema = z631.object({
-  httpReferer: z631.string().optional(),
-  appTitle: z631.string().optional(),
-  appCategories: z631.string().optional(),
-  id: z631.string()
+var z655 = __toESM(require("zod/v4"), 1);
+var ListWorkspaceBudgetsRequest$outboundSchema = z655.object({
+  httpReferer: z655.string().optional(),
+  appTitle: z655.string().optional(),
+  appCategories: z655.string().optional(),
+  id: z655.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -19300,20 +19950,20 @@ var ListWorkspaceBudgetsRequest$outboundSchema = z631.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listworkspacemembers.js
-var z632 = __toESM(require("zod/v4"), 1);
-var ListWorkspaceMembersRequest$outboundSchema = z632.object({
-  httpReferer: z632.string().optional(),
-  appTitle: z632.string().optional(),
-  appCategories: z632.string().optional(),
-  id: z632.string(),
-  offset: z632.nullable(z632.int().default(0)),
-  limit: z632.int().default(50)
+var z656 = __toESM(require("zod/v4"), 1);
+var ListWorkspaceMembersRequest$outboundSchema = z656.object({
+  httpReferer: z656.string().optional(),
+  appTitle: z656.string().optional(),
+  appCategories: z656.string().optional(),
+  id: z656.string(),
+  offset: z656.nullable(z656.int().default(0)),
+  limit: z656.int().default(50)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var ListWorkspaceMembersResponse$inboundSchema2 = z632.object({
+var ListWorkspaceMembersResponse$inboundSchema2 = z656.object({
   Result: ListWorkspaceMembersResponse$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -19322,19 +19972,19 @@ var ListWorkspaceMembersResponse$inboundSchema2 = z632.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listworkspaces.js
-var z633 = __toESM(require("zod/v4"), 1);
-var ListWorkspacesRequest$outboundSchema = z633.object({
-  httpReferer: z633.string().optional(),
-  appTitle: z633.string().optional(),
-  appCategories: z633.string().optional(),
-  offset: z633.nullable(z633.int().default(0)),
-  limit: z633.int().default(50)
+var z657 = __toESM(require("zod/v4"), 1);
+var ListWorkspacesRequest$outboundSchema = z657.object({
+  httpReferer: z657.string().optional(),
+  appTitle: z657.string().optional(),
+  appCategories: z657.string().optional(),
+  offset: z657.nullable(z657.int().default(0)),
+  limit: z657.int().default(50)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var ListWorkspacesResponse$inboundSchema2 = z633.object({
+var ListWorkspacesResponse$inboundSchema2 = z657.object({
   Result: ListWorkspacesResponse$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -19343,15 +19993,15 @@ var ListWorkspacesResponse$inboundSchema2 = z633.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/queryanalytics.js
-var z634 = __toESM(require("zod/v4"), 1);
+var z658 = __toESM(require("zod/v4"), 1);
 var Direction = {
   Asc: "asc",
   Desc: "desc"
 };
-var ClassifierDimensions$outboundSchema = z634.object({
-  classifierId: z634.string(),
-  dimensionNames: z634.array(z634.string()).optional(),
-  includeNulls: z634.boolean().optional()
+var ClassifierDimensions$outboundSchema = z658.object({
+  classifierId: z658.string(),
+  dimensionNames: z658.array(z658.string()).optional(),
+  includeNulls: z658.boolean().optional()
 }).transform((v) => {
   return remap(v, {
     classifierId: "classifier_id",
@@ -19359,60 +20009,65 @@ var ClassifierDimensions$outboundSchema = z634.object({
     includeNulls: "include_nulls"
   });
 });
-var ValueClassifierFilters$outboundSchema = z634.union([z634.string(), z634.number()]);
-var ClassifierFiltersValue$outboundSchema = z634.union([
-  z634.string(),
-  z634.number(),
-  z634.array(z634.union([z634.string(), z634.number()]))
+var ValueClassifierFilters$outboundSchema = z658.union([z658.string(), z658.number()]);
+var ClassifierFiltersValue$outboundSchema = z658.union([
+  z658.string(),
+  z658.number(),
+  z658.array(z658.union([z658.string(), z658.number()]))
 ]);
-var ClassifierFiltersFilter$outboundSchema = z634.object({
-  field: z634.string(),
-  operator: z634.string(),
-  value: z634.union([
-    z634.string(),
-    z634.number(),
-    z634.array(z634.union([z634.string(), z634.number()]))
+var ClassifierFiltersFilter$outboundSchema = z658.object({
+  field: z658.string(),
+  operator: z658.string(),
+  value: z658.union([
+    z658.string(),
+    z658.number(),
+    z658.array(z658.union([z658.string(), z658.number()]))
   ])
 });
-var ClassifierFilters$outboundSchema = z634.object({
-  classifierId: z634.string(),
-  filters: z634.array(z634.lazy(() => ClassifierFiltersFilter$outboundSchema))
+var ClassifierFilters$outboundSchema = z658.object({
+  classifierId: z658.string(),
+  filters: z658.array(z658.lazy(() => ClassifierFiltersFilter$outboundSchema))
 }).transform((v) => {
   return remap(v, {
     classifierId: "classifier_id"
   });
 });
-var Value2$outboundSchema = z634.union([z634.string(), z634.number()]);
-var Value1$outboundSchema = z634.union([z634.string(), z634.number(), z634.array(z634.union([z634.string(), z634.number()]))]);
-var Filter$outboundSchema = z634.object({
-  field: z634.string(),
-  operator: z634.string(),
-  value: z634.union([
-    z634.string(),
-    z634.number(),
-    z634.array(z634.union([z634.string(), z634.number()]))
+var Value2$outboundSchema = z658.union([z658.string(), z658.number()]);
+var Value1$outboundSchema = z658.union([z658.string(), z658.number(), z658.array(z658.union([z658.string(), z658.number()]))]);
+var Filter$outboundSchema = z658.object({
+  field: z658.string(),
+  includeUnset: z658.boolean().optional(),
+  operator: z658.string(),
+  value: z658.union([
+    z658.string(),
+    z658.number(),
+    z658.array(z658.union([z658.string(), z658.number()]))
   ])
+}).transform((v) => {
+  return remap(v, {
+    includeUnset: "include_unset"
+  });
 });
 var Direction$outboundSchema = outboundSchema(Direction);
-var OrderBy$outboundSchema = z634.object({
+var OrderBy$outboundSchema = z658.object({
   direction: Direction$outboundSchema,
-  field: z634.string()
+  field: z658.string()
 });
-var TimeRange$outboundSchema = z634.object({
-  end: z634.date().transform((v) => v.toISOString()),
-  start: z634.date().transform((v) => v.toISOString())
+var TimeRange$outboundSchema = z658.object({
+  end: z658.date().transform((v) => v.toISOString()),
+  start: z658.date().transform((v) => v.toISOString())
 });
-var QueryAnalyticsRequestBody$outboundSchema = z634.object({
-  classifierDimensions: z634.lazy(() => ClassifierDimensions$outboundSchema).optional(),
-  classifierFilters: z634.lazy(() => ClassifierFilters$outboundSchema).optional(),
-  dimensions: z634.array(z634.string()).optional(),
-  filters: z634.array(z634.lazy(() => Filter$outboundSchema)).optional(),
-  granularity: z634.string().optional(),
-  groupLimit: z634.int().optional(),
-  limit: z634.int().optional(),
-  metrics: z634.array(z634.string()),
-  orderBy: z634.lazy(() => OrderBy$outboundSchema).optional(),
-  timeRange: z634.lazy(() => TimeRange$outboundSchema).optional()
+var QueryAnalyticsRequestBody$outboundSchema = z658.object({
+  classifierDimensions: z658.lazy(() => ClassifierDimensions$outboundSchema).optional(),
+  classifierFilters: z658.lazy(() => ClassifierFilters$outboundSchema).optional(),
+  dimensions: z658.array(z658.string()).optional(),
+  filters: z658.array(z658.lazy(() => Filter$outboundSchema)).optional(),
+  granularity: z658.string().optional(),
+  groupLimit: z658.int().optional(),
+  limit: z658.int().optional(),
+  metrics: z658.array(z658.string()),
+  orderBy: z658.lazy(() => OrderBy$outboundSchema).optional(),
+  timeRange: z658.lazy(() => TimeRange$outboundSchema).optional()
 }).transform((v) => {
   return remap(v, {
     classifierDimensions: "classifier_dimensions",
@@ -19422,44 +20077,44 @@ var QueryAnalyticsRequestBody$outboundSchema = z634.object({
     timeRange: "time_range"
   });
 });
-var QueryAnalyticsRequest$outboundSchema = z634.object({
-  httpReferer: z634.string().optional(),
-  appTitle: z634.string().optional(),
-  appCategories: z634.string().optional(),
-  requestBody: z634.lazy(() => QueryAnalyticsRequestBody$outboundSchema)
+var QueryAnalyticsRequest$outboundSchema = z658.object({
+  httpReferer: z658.string().optional(),
+  appTitle: z658.string().optional(),
+  appCategories: z658.string().optional(),
+  requestBody: z658.lazy(() => QueryAnalyticsRequestBody$outboundSchema)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
     requestBody: "RequestBody"
   });
 });
-var QueryAnalyticsData1$inboundSchema = z634.object({});
-var Metadata$inboundSchema = z634.object({
-  query_time_ms: z634.number(),
-  row_count: z634.int(),
-  truncated: z634.boolean()
+var QueryAnalyticsData1$inboundSchema = z658.object({});
+var Metadata$inboundSchema = z658.object({
+  query_time_ms: z658.number(),
+  row_count: z658.int(),
+  truncated: z658.boolean()
 }).transform((v) => {
   return remap(v, {
     "query_time_ms": "queryTimeMs",
     "row_count": "rowCount"
   });
 });
-var QueryAnalyticsData2$inboundSchema = z634.object({
-  cachedAt: z634.number().optional(),
-  data: z634.array(z634.lazy(() => QueryAnalyticsData1$inboundSchema)),
-  metadata: z634.lazy(() => Metadata$inboundSchema),
-  warnings: z634.array(z634.string()).optional()
+var QueryAnalyticsData2$inboundSchema = z658.object({
+  cachedAt: z658.number().optional(),
+  data: z658.array(z658.lazy(() => QueryAnalyticsData1$inboundSchema)),
+  metadata: z658.lazy(() => Metadata$inboundSchema),
+  warnings: z658.array(z658.string()).optional()
 });
-var QueryAnalyticsResponse$inboundSchema = z634.object({
-  data: z634.lazy(() => QueryAnalyticsData2$inboundSchema)
+var QueryAnalyticsResponse$inboundSchema = z658.object({
+  data: z658.lazy(() => QueryAnalyticsData2$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/sendchatcompletionrequest.js
-var z635 = __toESM(require("zod/v4"), 1);
-var SendChatCompletionRequestRequest$outboundSchema = z635.object({
-  httpReferer: z635.string().optional(),
-  appTitle: z635.string().optional(),
-  appCategories: z635.string().optional(),
+var z659 = __toESM(require("zod/v4"), 1);
+var SendChatCompletionRequestRequest$outboundSchema = z659.object({
+  httpReferer: z659.string().optional(),
+  appTitle: z659.string().optional(),
+  appCategories: z659.string().optional(),
   xOpenRouterMetadata: MetadataLevel$outboundSchema.optional(),
   chatRequest: ChatRequest$outboundSchema
 }).transform((v) => {
@@ -19469,9 +20124,9 @@ var SendChatCompletionRequestRequest$outboundSchema = z635.object({
     chatRequest: "ChatRequest"
   });
 });
-var SendChatCompletionRequestResponse$inboundSchema = z635.union([
+var SendChatCompletionRequestResponse$inboundSchema = z659.union([
   ChatResult$inboundSchema,
-  z635.custom((x) => x instanceof ReadableStream).transform((stream2) => {
+  z659.custom((x) => x instanceof ReadableStream).transform((stream2) => {
     return new EventStream(stream2, (rawEvent) => {
       if (rawEvent.data === "[DONE]")
         return { done: true, value: void 0 };
@@ -19484,11 +20139,11 @@ var SendChatCompletionRequestResponse$inboundSchema = z635.union([
 ]);
 
 // node_modules/@openrouter/sdk/esm/models/operations/submitgenerationfeedback.js
-var z636 = __toESM(require("zod/v4"), 1);
-var SubmitGenerationFeedbackRequest$outboundSchema2 = z636.object({
-  httpReferer: z636.string().optional(),
-  appTitle: z636.string().optional(),
-  appCategories: z636.string().optional(),
+var z660 = __toESM(require("zod/v4"), 1);
+var SubmitGenerationFeedbackRequest$outboundSchema2 = z660.object({
+  httpReferer: z660.string().optional(),
+  appTitle: z660.string().optional(),
+  appCategories: z660.string().optional(),
   submitGenerationFeedbackRequest: SubmitGenerationFeedbackRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -19498,12 +20153,12 @@ var SubmitGenerationFeedbackRequest$outboundSchema2 = z636.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/updatebyokkey.js
-var z637 = __toESM(require("zod/v4"), 1);
-var UpdateBYOKKeyRequest$outboundSchema2 = z637.object({
-  httpReferer: z637.string().optional(),
-  appTitle: z637.string().optional(),
-  appCategories: z637.string().optional(),
-  id: z637.string(),
+var z661 = __toESM(require("zod/v4"), 1);
+var UpdateBYOKKeyRequest$outboundSchema2 = z661.object({
+  httpReferer: z661.string().optional(),
+  appTitle: z661.string().optional(),
+  appCategories: z661.string().optional(),
+  id: z661.string(),
   updateBYOKKeyRequest: UpdateBYOKKeyRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -19513,12 +20168,12 @@ var UpdateBYOKKeyRequest$outboundSchema2 = z637.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/updateguardrail.js
-var z638 = __toESM(require("zod/v4"), 1);
-var UpdateGuardrailRequest$outboundSchema2 = z638.object({
-  httpReferer: z638.string().optional(),
-  appTitle: z638.string().optional(),
-  appCategories: z638.string().optional(),
-  id: z638.string(),
+var z662 = __toESM(require("zod/v4"), 1);
+var UpdateGuardrailRequest$outboundSchema2 = z662.object({
+  httpReferer: z662.string().optional(),
+  appTitle: z662.string().optional(),
+  appCategories: z662.string().optional(),
+  id: z662.string(),
   updateGuardrailRequest: UpdateGuardrailRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -19528,59 +20183,59 @@ var UpdateGuardrailRequest$outboundSchema2 = z638.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/updatekeys.js
-var z639 = __toESM(require("zod/v4"), 1);
+var z663 = __toESM(require("zod/v4"), 1);
 var UpdateKeysLimitReset = {
   Daily: "daily",
   Weekly: "weekly",
   Monthly: "monthly"
 };
 var UpdateKeysLimitReset$outboundSchema = outboundSchema(UpdateKeysLimitReset);
-var UpdateKeysRequestBody$outboundSchema = z639.object({
-  disabled: z639.boolean().optional(),
-  includeByokInLimit: z639.boolean().optional(),
-  limit: z639.nullable(z639.number()).optional(),
-  limitReset: z639.nullable(UpdateKeysLimitReset$outboundSchema).optional(),
-  name: z639.string().optional()
+var UpdateKeysRequestBody$outboundSchema = z663.object({
+  disabled: z663.boolean().optional(),
+  includeByokInLimit: z663.boolean().optional(),
+  limit: z663.nullable(z663.number()).optional(),
+  limitReset: z663.nullable(UpdateKeysLimitReset$outboundSchema).optional(),
+  name: z663.string().optional()
 }).transform((v) => {
   return remap(v, {
     includeByokInLimit: "include_byok_in_limit",
     limitReset: "limit_reset"
   });
 });
-var UpdateKeysRequest$outboundSchema = z639.object({
-  httpReferer: z639.string().optional(),
-  appTitle: z639.string().optional(),
-  appCategories: z639.string().optional(),
-  hash: z639.string(),
-  requestBody: z639.lazy(() => UpdateKeysRequestBody$outboundSchema)
+var UpdateKeysRequest$outboundSchema = z663.object({
+  httpReferer: z663.string().optional(),
+  appTitle: z663.string().optional(),
+  appCategories: z663.string().optional(),
+  hash: z663.string(),
+  requestBody: z663.lazy(() => UpdateKeysRequestBody$outboundSchema)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
     requestBody: "RequestBody"
   });
 });
-var UpdateKeysData$inboundSchema = z639.object({
-  byok_usage: z639.number(),
-  byok_usage_daily: z639.number(),
-  byok_usage_monthly: z639.number(),
-  byok_usage_weekly: z639.number(),
-  created_at: z639.string(),
-  creator_user_id: z639.nullable(z639.string()),
-  disabled: z639.boolean(),
-  expires_at: z639.nullable(z639.iso.datetime({ offset: true }).transform((v) => new Date(v))).optional(),
-  hash: z639.string(),
-  include_byok_in_limit: z639.boolean(),
-  label: z639.string(),
-  limit: z639.nullable(z639.number()),
-  limit_remaining: z639.nullable(z639.number()),
-  limit_reset: z639.nullable(z639.string()),
-  name: z639.string(),
-  updated_at: z639.nullable(z639.string()),
-  usage: z639.number(),
-  usage_daily: z639.number(),
-  usage_monthly: z639.number(),
-  usage_weekly: z639.number(),
-  workspace_id: z639.string()
+var UpdateKeysData$inboundSchema = z663.object({
+  byok_usage: z663.number(),
+  byok_usage_daily: z663.number(),
+  byok_usage_monthly: z663.number(),
+  byok_usage_weekly: z663.number(),
+  created_at: z663.string(),
+  creator_user_id: z663.nullable(z663.string()),
+  disabled: z663.boolean(),
+  expires_at: z663.nullable(z663.iso.datetime({ offset: true }).transform((v) => new Date(v))).optional(),
+  hash: z663.string(),
+  include_byok_in_limit: z663.boolean(),
+  label: z663.string(),
+  limit: z663.nullable(z663.number()),
+  limit_remaining: z663.nullable(z663.number()),
+  limit_reset: z663.nullable(z663.string()),
+  name: z663.string(),
+  updated_at: z663.nullable(z663.string()),
+  usage: z663.number(),
+  usage_daily: z663.number(),
+  usage_monthly: z663.number(),
+  usage_weekly: z663.number(),
+  workspace_id: z663.string()
 }).transform((v) => {
   return remap(v, {
     "byok_usage": "byokUsage",
@@ -19600,17 +20255,17 @@ var UpdateKeysData$inboundSchema = z639.object({
     "workspace_id": "workspaceId"
   });
 });
-var UpdateKeysResponse$inboundSchema = z639.object({
-  data: z639.lazy(() => UpdateKeysData$inboundSchema)
+var UpdateKeysResponse$inboundSchema = z663.object({
+  data: z663.lazy(() => UpdateKeysData$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/updateobservabilitydestination.js
-var z640 = __toESM(require("zod/v4"), 1);
-var UpdateObservabilityDestinationRequest$outboundSchema2 = z640.object({
-  httpReferer: z640.string().optional(),
-  appTitle: z640.string().optional(),
-  appCategories: z640.string().optional(),
-  id: z640.string(),
+var z664 = __toESM(require("zod/v4"), 1);
+var UpdateObservabilityDestinationRequest$outboundSchema2 = z664.object({
+  httpReferer: z664.string().optional(),
+  appTitle: z664.string().optional(),
+  appCategories: z664.string().optional(),
+  id: z664.string(),
   updateObservabilityDestinationRequest: UpdateObservabilityDestinationRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -19620,12 +20275,12 @@ var UpdateObservabilityDestinationRequest$outboundSchema2 = z640.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/updatescimgroupmapping.js
-var z641 = __toESM(require("zod/v4"), 1);
-var UpdateScimGroupMappingRequest$outboundSchema2 = z641.object({
-  httpReferer: z641.string().optional(),
-  appTitle: z641.string().optional(),
-  appCategories: z641.string().optional(),
-  id: z641.string(),
+var z665 = __toESM(require("zod/v4"), 1);
+var UpdateScimGroupMappingRequest$outboundSchema2 = z665.object({
+  httpReferer: z665.string().optional(),
+  appTitle: z665.string().optional(),
+  appCategories: z665.string().optional(),
+  id: z665.string(),
   updateScimGroupMappingRequest: UpdateScimGroupMappingRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -19635,12 +20290,12 @@ var UpdateScimGroupMappingRequest$outboundSchema2 = z641.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/updateworkspace.js
-var z642 = __toESM(require("zod/v4"), 1);
-var UpdateWorkspaceRequest$outboundSchema2 = z642.object({
-  httpReferer: z642.string().optional(),
-  appTitle: z642.string().optional(),
-  appCategories: z642.string().optional(),
-  id: z642.string(),
+var z666 = __toESM(require("zod/v4"), 1);
+var UpdateWorkspaceRequest$outboundSchema2 = z666.object({
+  httpReferer: z666.string().optional(),
+  appTitle: z666.string().optional(),
+  appCategories: z666.string().optional(),
+  id: z666.string(),
   updateWorkspaceRequest: UpdateWorkspaceRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -19650,26 +20305,26 @@ var UpdateWorkspaceRequest$outboundSchema2 = z642.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/uploadfile.js
-var z643 = __toESM(require("zod/v4"), 1);
-var UploadFileFile$outboundSchema = z643.object({
-  fileName: z643.string(),
-  content: z643.union([
-    z643.custom((x) => x instanceof ReadableStream),
-    z643.custom((x) => x instanceof Blob),
-    z643.custom((x) => x instanceof ArrayBuffer),
-    z643.custom((x) => x instanceof Uint8Array)
+var z667 = __toESM(require("zod/v4"), 1);
+var UploadFileFile$outboundSchema = z667.object({
+  fileName: z667.string(),
+  content: z667.union([
+    z667.custom((x) => x instanceof ReadableStream),
+    z667.custom((x) => x instanceof Blob),
+    z667.custom((x) => x instanceof ArrayBuffer),
+    z667.custom((x) => x instanceof Uint8Array)
   ])
 });
-var UploadFileRequestBody$outboundSchema = z643.object({
-  file: z643.lazy(() => UploadFileFile$outboundSchema).or(blobLikeSchema)
+var UploadFileRequestBody$outboundSchema = z667.object({
+  file: z667.lazy(() => UploadFileFile$outboundSchema).or(blobLikeSchema)
 });
-var UploadFileRequest$outboundSchema = z643.object({
-  httpReferer: z643.string().optional(),
-  appTitle: z643.string().optional(),
-  appCategories: z643.string().optional(),
-  workspaceId: z643.string().optional(),
+var UploadFileRequest$outboundSchema = z667.object({
+  httpReferer: z667.string().optional(),
+  appTitle: z667.string().optional(),
+  appCategories: z667.string().optional(),
+  workspaceId: z667.string().optional(),
   provider: FileProvider$outboundSchema.optional(),
-  requestBody: z643.lazy(() => UploadFileRequestBody$outboundSchema)
+  requestBody: z667.lazy(() => UploadFileRequestBody$outboundSchema)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
@@ -19679,12 +20334,12 @@ var UploadFileRequest$outboundSchema = z643.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/upsertworkspacebudget.js
-var z644 = __toESM(require("zod/v4"), 1);
-var UpsertWorkspaceBudgetRequest$outboundSchema2 = z644.object({
-  httpReferer: z644.string().optional(),
-  appTitle: z644.string().optional(),
-  appCategories: z644.string().optional(),
-  id: z644.string(),
+var z668 = __toESM(require("zod/v4"), 1);
+var UpsertWorkspaceBudgetRequest$outboundSchema2 = z668.object({
+  httpReferer: z668.string().optional(),
+  appTitle: z668.string().optional(),
+  appCategories: z668.string().optional(),
+  id: z668.string(),
   interval: WorkspaceBudgetInterval$outboundSchema,
   upsertWorkspaceBudgetRequest: UpsertWorkspaceBudgetRequest$outboundSchema
 }).transform((v) => {
@@ -19752,7 +20407,9 @@ async function $do(client, request, options) {
   const query = encodeFormQuery({
     "api_key_hash": payload?.api_key_hash,
     "date": payload?.date,
-    "user_id": payload?.user_id
+    "group_by": payload?.group_by,
+    "user_id": payload?.user_id,
+    "workspace_id": payload?.workspace_id
   });
   const headers = new Headers(compactMap({
     Accept: "application/json",
@@ -19823,7 +20480,7 @@ var Analytics = class extends ClientSDK {
    * Get user activity grouped by endpoint
    *
    * @remarks
-   * Returns user activity data grouped by endpoint for the last 30 (completed) UTC days. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Returns user activity data grouped by endpoint for the last 30 (completed) UTC days. Pass `workspace_id` to scope the response to a single workspace. Pass `group_by=workspace` to split each row per workspace and include `workspace_id` on every item; by default rows are aggregated across workspaces and `workspace_id` is not returned. Activity recorded before workspace resolution existed is permanently attributed to the account default workspace (no backfill is possible). [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async getUserActivity(request, options) {
     return unwrapAsync(analyticsGetUserActivity(this, request, options));
@@ -20372,8 +21029,12 @@ async function $do8(client, request, options) {
   const path2 = pathToFunc("/benchmarks")();
   const query = encodeFormQuery({
     "arena": payload?.arena,
+    "benchmark_type": payload?.benchmark_type,
     "category": payload?.category,
+    "include_run_config": payload?.include_run_config,
     "max_results": payload?.max_results,
+    "search_engine": payload?.search_engine,
+    "search_surface": payload?.search_surface,
     "source": payload?.source,
     "task_type": payload?.task_type
   });
@@ -20446,7 +21107,7 @@ var Benchmarks = class extends ClientSDK {
    * List Benchmarks
    *
    * @remarks
-   * Unified benchmark endpoint that aggregates scores from multiple benchmark sources (Artificial Analysis, Design Arena, and OpenRouter's own tau-bench and GPQA evals). Filter by source to reproduce the exact shapes from the legacy per-source endpoints, or use task_type to find models suited for specific workloads. Authenticate with any valid OpenRouter API key. Rate-limited to 30 requests/minute per key and 500 requests/day per account.
+   * Unified benchmark endpoint that aggregates scores from multiple benchmark sources (Artificial Analysis, Design Arena, and OpenRouter's own tau-bench, GPQA, and web-search evals). Filter by source to reproduce the exact shapes from the legacy per-source endpoints, or use task_type to find models suited for specific workloads. Use task_type=search (or a search_* benchmark_type) for OpenRouter's search benchmarks, which publish each model's highest-scoring eligible evaluation configuration with same-configuration runs combined by task-weighted mean. Authenticate with any valid OpenRouter API key. Rate-limited to 30 requests/minute per key and 500 requests/day per account.
    */
   async getBenchmarks(request, options) {
     return unwrapAsync(benchmarksGetBenchmarks(this, request, options));
@@ -21229,7 +21890,7 @@ var BYOK = class extends ClientSDK {
    * Create a BYOK provider credential
    *
    * @remarks
-   * Create a new bring-your-own-key (BYOK) provider credential. The raw key is encrypted at rest and never returned in API responses. Defaults to the authenticated entity's default workspace; use the `workspace_id` body field to scope to a different workspace. Treat the raw key as write-only; it is never returned after creation. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Create a new bring-your-own-key (BYOK) provider credential. The raw key is encrypted at rest and never returned in API responses. When `workspace_id` is omitted, the credential is created in the default workspace; if that default has been deleted, the request returns a 400 and you must pass `workspace_id` explicitly. Treat the raw key as write-only; it is never returned after creation. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async create(request, options) {
     return unwrapAsync(byokCreate(this, request, options));
@@ -21741,6 +22402,119 @@ async function $do21(client, request, options) {
   return [result, { status: "complete", request: req, response }];
 }
 
+// node_modules/@openrouter/sdk/esm/funcs/datasetsGetSessionCost.js
+function datasetsGetSessionCost(client, request, options) {
+  return new APIPromise($do22(client, request, options));
+}
+async function $do22(client, request, options) {
+  const parsed = safeParse(request, (value) => GetSessionCostRequest$outboundSchema.optional().parse(value), "Input validation failed");
+  if (!parsed.ok) {
+    return [haltIterator(parsed), { status: "invalid" }];
+  }
+  const payload = parsed.value;
+  const body = null;
+  const path2 = pathToFunc("/datasets/session-cost")();
+  const query = encodeFormQuery({
+    "app_slug": payload?.app_slug,
+    "limit": payload?.limit,
+    "model": payload?.model,
+    "offset": payload?.offset,
+    "turn_range": payload?.turn_range
+  });
+  const headers = new Headers(compactMap({
+    Accept: "application/json",
+    "HTTP-Referer": encodeSimple("HTTP-Referer", payload?.["HTTP-Referer"] ?? client._options.httpReferer, { explode: false, charEncoding: "none" }),
+    "X-OpenRouter-Categories": encodeSimple("X-OpenRouter-Categories", payload?.appCategories ?? client._options.appCategories, { explode: false, charEncoding: "none" }),
+    "X-OpenRouter-Title": encodeSimple("X-OpenRouter-Title", payload?.appTitle ?? client._options.appTitle, { explode: false, charEncoding: "none" })
+  }));
+  const secConfig = await extractSecurity(client._options.apiKey);
+  const securityInput = secConfig == null ? {} : { apiKey: secConfig };
+  const requestSecurity = resolveGlobalSecurity(securityInput);
+  const context = {
+    options: client._options,
+    baseURL: options?.serverURL ?? client._baseURL ?? "",
+    operationID: "getSessionCost",
+    oAuth2Scopes: null,
+    resolvedSecurity: requestSecurity,
+    securitySource: client._options.apiKey,
+    retryConfig: options?.retries || client._options.retryConfig || {
+      strategy: "backoff",
+      backoff: {
+        initialInterval: 500,
+        maxInterval: 6e4,
+        exponent: 1.5,
+        maxElapsedTime: 36e5
+      },
+      retryConnectionErrors: true
+    },
+    retryCodes: options?.retryCodes || ["5XX"]
+  };
+  const requestRes = client._createRequest(context, {
+    security: requestSecurity,
+    method: "GET",
+    baseURL: options?.serverURL,
+    path: path2,
+    headers,
+    query,
+    body,
+    userAgent: client._options.userAgent,
+    timeoutMs: options?.timeoutMs || client._options.timeoutMs || -1
+  }, options);
+  if (!requestRes.ok) {
+    return [haltIterator(requestRes), { status: "invalid" }];
+  }
+  const req = requestRes.value;
+  const doResult = await client._do(req, {
+    context,
+    isErrorStatusCode: (statusCode) => matchStatusCode({ status: statusCode }, ["4XX", "5XX"]),
+    retryConfig: context.retryConfig,
+    retryCodes: context.retryCodes
+  });
+  if (!doResult.ok) {
+    return [haltIterator(doResult), { status: "request-error", request: req }];
+  }
+  const response = doResult.value;
+  const responseFields = {
+    HttpMeta: { Response: response, Request: req }
+  };
+  const [result, raw] = await match(json(200, GetSessionCostResponse$inboundSchema, {
+    key: "Result"
+  }), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(429, TooManyRequestsResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  if (!result.ok) {
+    return [haltIterator(result), {
+      status: "complete",
+      request: req,
+      response
+    }];
+  }
+  const nextFunc = (responseData) => {
+    const offset = request?.offset ?? 0;
+    if (!responseData) {
+      return { next: () => null };
+    }
+    const results = responseData.data;
+    if (!Array.isArray(results) || !results.length) {
+      return { next: () => null };
+    }
+    const limit2 = request?.limit ?? 100;
+    if (results.length < limit2) {
+      return { next: () => null };
+    }
+    const nextOffset = offset + results.length;
+    const nextVal = () => datasetsGetSessionCost(client, {
+      ...request,
+      offset: nextOffset
+    }, options);
+    return { next: nextVal, "~next": { offset: nextOffset } };
+  };
+  const page = { ...result, ...nextFunc(raw) };
+  return [{ ...page, ...createPageIterator(page, (v) => !v.ok) }, {
+    status: "complete",
+    request: req,
+    response
+  }];
+}
+
 // node_modules/@openrouter/sdk/esm/sdk/datasets.js
 var Datasets = class extends ClientSDK {
   /**
@@ -21808,13 +22582,28 @@ var Datasets = class extends ClientSDK {
   async getRankingsDaily(request, options) {
     return unwrapAsync(datasetsGetRankingsDaily(this, request, options));
   }
+  /**
+   * Cost per session by harness and model
+   *
+   * @remarks
+   * Returns weekly refreshed, aggregated cost-per-session cells for the published harnesses.
+   * Sessions are never pooled across apps. Medians are of per-session USD spend, and
+   * privacy-preserving aggregation never exposes clerk_user_id values or per-session rows.
+   *
+   * Filter by `app_slug`, `model`, or `turn_range`. Filtering by `model` alone works across apps
+   * for harness-vs-harness comparison at a fixed model. Results refresh weekly and include the source snapshot
+   * window in `meta`.
+   */
+  async getSessionCost(request, options) {
+    return unwrapResultIterator(datasetsGetSessionCost(this, request, options));
+  }
 };
 
 // node_modules/@openrouter/sdk/esm/funcs/embeddingsGenerate.js
 function embeddingsGenerate(client, request, options) {
-  return new APIPromise($do22(client, request, options));
+  return new APIPromise($do23(client, request, options));
 }
-async function $do22(client, request, options) {
+async function $do23(client, request, options) {
   const parsed = safeParse(request, (value) => CreateEmbeddingsRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -21889,9 +22678,9 @@ async function $do22(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/embeddingsListModels.js
 function embeddingsListModels(client, request, options) {
-  return new APIPromise($do23(client, request, options));
+  return new APIPromise($do24(client, request, options));
 }
-async function $do23(client, request, options) {
+async function $do24(client, request, options) {
   const parsed = safeParse(request, (value) => ListEmbeddingsModelsRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [haltIterator(parsed), { status: "invalid" }];
@@ -22021,9 +22810,9 @@ var Embeddings = class extends ClientSDK {
 
 // node_modules/@openrouter/sdk/esm/funcs/endpointsList.js
 function endpointsList(client, request, options) {
-  return new APIPromise($do24(client, request, options));
+  return new APIPromise($do25(client, request, options));
 }
-async function $do24(client, request, options) {
+async function $do25(client, request, options) {
   const parsed = safeParse(request, (value) => ListEndpointsRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -22105,9 +22894,9 @@ async function $do24(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/endpointsListZdrEndpoints.js
 function endpointsListZdrEndpoints(client, request, options) {
-  return new APIPromise($do25(client, request, options));
+  return new APIPromise($do26(client, request, options));
 }
-async function $do25(client, request, options) {
+async function $do26(client, request, options) {
   const parsed = safeParse(request, (value) => ListEndpointsZdrRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -22195,9 +22984,9 @@ var Endpoints = class extends ClientSDK {
 
 // node_modules/@openrouter/sdk/esm/funcs/filesDelete.js
 function filesDelete(client, request, options) {
-  return new APIPromise($do26(client, request, options));
+  return new APIPromise($do27(client, request, options));
 }
-async function $do26(client, request, options) {
+async function $do27(client, request, options) {
   const parsed = safeParse(request, (value) => DeleteFileRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -22279,11 +23068,11 @@ async function $do26(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/funcs/filesDownload.js
-var z645 = __toESM(require("zod/v4"), 1);
+var z669 = __toESM(require("zod/v4"), 1);
 function filesDownload(client, request, options) {
-  return new APIPromise($do27(client, request, options));
+  return new APIPromise($do28(client, request, options));
 }
-async function $do27(client, request, options) {
+async function $do28(client, request, options) {
   const parsed = safeParse(request, (value) => DownloadFileContentRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -22357,7 +23146,7 @@ async function $do27(client, request, options) {
   const responseFields = {
     HttpMeta: { Response: response, Request: req }
   };
-  const [result] = await match(stream(200, z645.custom((x) => x instanceof ReadableStream)), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(403, ForbiddenResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(429, TooManyRequestsResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), jsonErr(502, BadGatewayResponseError$inboundSchema), jsonErr(503, ServiceUnavailableResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  const [result] = await match(stream(200, z669.custom((x) => x instanceof ReadableStream)), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(403, ForbiddenResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(429, TooManyRequestsResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), jsonErr(502, BadGatewayResponseError$inboundSchema), jsonErr(503, ServiceUnavailableResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
   if (!result.ok) {
     return [result, { status: "complete", request: req, response }];
   }
@@ -22366,9 +23155,9 @@ async function $do27(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/filesList.js
 function filesList(client, request, options) {
-  return new APIPromise($do28(client, request, options));
+  return new APIPromise($do29(client, request, options));
 }
-async function $do28(client, request, options) {
+async function $do29(client, request, options) {
   const parsed = safeParse(request, (value) => ListFilesRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [haltIterator(parsed), { status: "invalid" }];
@@ -22478,9 +23267,9 @@ async function $do28(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/filesRetrieve.js
 function filesRetrieve(client, request, options) {
-  return new APIPromise($do29(client, request, options));
+  return new APIPromise($do30(client, request, options));
 }
-async function $do29(client, request, options) {
+async function $do30(client, request, options) {
   const parsed = safeParse(request, (value) => GetFileMetadataRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -22572,9 +23361,9 @@ function isReadableStream(val) {
 
 // node_modules/@openrouter/sdk/esm/funcs/filesUpload.js
 function filesUpload(client, request, options) {
-  return new APIPromise($do30(client, request, options));
+  return new APIPromise($do31(client, request, options));
 }
-async function $do30(client, request, options) {
+async function $do31(client, request, options) {
   const parsed = safeParse(request, (value) => UploadFileRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -22677,7 +23466,7 @@ var Files = class extends ClientSDK {
    * Upload a file
    *
    * @remarks
-   * Uploads a file to be referenced in future API calls. The file is stored under the workspace of the authenticating API key. Maximum file size: 100 MB.
+   * Uploads a file to be referenced in future API calls. The file is stored under the workspace of the authenticating API key. Maximum file size: 100 MB; empty files are rejected. The file type is determined from the file contents — not the filename or the declared content type — and must be a PDF, a PNG/JPEG/GIF/WebP image, a DOCX/XLSX/PPTX document, an MP3/WAV/FLAC/OGG audio file, or UTF-8 text. Text is reported by its structure as `application/json`, `application/x-ndjson`, `text/csv`, `text/markdown`, or `text/plain`.
    */
   async upload(request, options) {
     return unwrapAsync(filesUpload(this, request, options));
@@ -22713,9 +23502,9 @@ var Files = class extends ClientSDK {
 
 // node_modules/@openrouter/sdk/esm/funcs/generationsGetGeneration.js
 function generationsGetGeneration(client, request, options) {
-  return new APIPromise($do31(client, request, options));
+  return new APIPromise($do32(client, request, options));
 }
-async function $do31(client, request, options) {
+async function $do32(client, request, options) {
   const parsed = safeParse(request, (value) => GetGenerationRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -22791,9 +23580,9 @@ async function $do31(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/generationsListGenerationContent.js
 function generationsListGenerationContent(client, request, options) {
-  return new APIPromise($do32(client, request, options));
+  return new APIPromise($do33(client, request, options));
 }
-async function $do32(client, request, options) {
+async function $do33(client, request, options) {
   const parsed = safeParse(request, (value) => ListGenerationContentRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -22869,9 +23658,9 @@ async function $do32(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/generationsSubmitFeedback.js
 function generationsSubmitFeedback(client, request, options) {
-  return new APIPromise($do33(client, request, options));
+  return new APIPromise($do34(client, request, options));
 }
-async function $do33(client, request, options) {
+async function $do34(client, request, options) {
   const parsed = safeParse(request, (value) => SubmitGenerationFeedbackRequest$outboundSchema2.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -22953,7 +23742,7 @@ var Generations = class extends ClientSDK {
     return unwrapAsync(generationsGetGeneration(this, request, options));
   }
   /**
-   * Get stored prompt and completion content for a generation
+   * Get stored prompt, completion, and error content for a generation
    */
   async listGenerationContent(request, options) {
     return unwrapAsync(generationsListGenerationContent(this, request, options));
@@ -22971,9 +23760,9 @@ var Generations = class extends ClientSDK {
 
 // node_modules/@openrouter/sdk/esm/funcs/guardrailsBulkAssignKeys.js
 function guardrailsBulkAssignKeys(client, request, options) {
-  return new APIPromise($do34(client, request, options));
+  return new APIPromise($do35(client, request, options));
 }
-async function $do34(client, request, options) {
+async function $do35(client, request, options) {
   const parsed = safeParse(request, (value) => BulkAssignKeysToGuardrailRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -23054,9 +23843,9 @@ async function $do34(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/guardrailsBulkAssignMembers.js
 function guardrailsBulkAssignMembers(client, request, options) {
-  return new APIPromise($do35(client, request, options));
+  return new APIPromise($do36(client, request, options));
 }
-async function $do35(client, request, options) {
+async function $do36(client, request, options) {
   const parsed = safeParse(request, (value) => BulkAssignMembersToGuardrailRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -23137,9 +23926,9 @@ async function $do35(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/guardrailsBulkUnassignKeys.js
 function guardrailsBulkUnassignKeys(client, request, options) {
-  return new APIPromise($do36(client, request, options));
+  return new APIPromise($do37(client, request, options));
 }
-async function $do36(client, request, options) {
+async function $do37(client, request, options) {
   const parsed = safeParse(request, (value) => BulkUnassignKeysFromGuardrailRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -23220,9 +24009,9 @@ async function $do36(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/guardrailsBulkUnassignMembers.js
 function guardrailsBulkUnassignMembers(client, request, options) {
-  return new APIPromise($do37(client, request, options));
+  return new APIPromise($do38(client, request, options));
 }
-async function $do37(client, request, options) {
+async function $do38(client, request, options) {
   const parsed = safeParse(request, (value) => BulkUnassignMembersFromGuardrailRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -23303,9 +24092,9 @@ async function $do37(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/guardrailsCreate.js
 function guardrailsCreate(client, request, options) {
-  return new APIPromise($do38(client, request, options));
+  return new APIPromise($do39(client, request, options));
 }
-async function $do38(client, request, options) {
+async function $do39(client, request, options) {
   const parsed = safeParse(request, (value) => CreateGuardrailRequest$outboundSchema2.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -23380,9 +24169,9 @@ async function $do38(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/guardrailsDelete.js
 function guardrailsDelete(client, request, options) {
-  return new APIPromise($do39(client, request, options));
+  return new APIPromise($do40(client, request, options));
 }
-async function $do39(client, request, options) {
+async function $do40(client, request, options) {
   const parsed = safeParse(request, (value) => DeleteGuardrailRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -23460,9 +24249,9 @@ async function $do39(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/guardrailsGet.js
 function guardrailsGet(client, request, options) {
-  return new APIPromise($do40(client, request, options));
+  return new APIPromise($do41(client, request, options));
 }
-async function $do40(client, request, options) {
+async function $do41(client, request, options) {
   const parsed = safeParse(request, (value) => GetGuardrailRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -23540,9 +24329,9 @@ async function $do40(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/guardrailsList.js
 function guardrailsList(client, request, options) {
-  return new APIPromise($do41(client, request, options));
+  return new APIPromise($do42(client, request, options));
 }
-async function $do41(client, request, options) {
+async function $do42(client, request, options) {
   const parsed = safeParse(request, (value) => ListGuardrailsRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [haltIterator(parsed), { status: "invalid" }];
@@ -23651,9 +24440,9 @@ async function $do41(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/guardrailsListGuardrailKeyAssignments.js
 function guardrailsListGuardrailKeyAssignments(client, request, options) {
-  return new APIPromise($do42(client, request, options));
+  return new APIPromise($do43(client, request, options));
 }
-async function $do42(client, request, options) {
+async function $do43(client, request, options) {
   const parsed = safeParse(request, (value) => ListGuardrailKeyAssignmentsRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [haltIterator(parsed), { status: "invalid" }];
@@ -23767,9 +24556,9 @@ async function $do42(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/guardrailsListGuardrailMemberAssignments.js
 function guardrailsListGuardrailMemberAssignments(client, request, options) {
-  return new APIPromise($do43(client, request, options));
+  return new APIPromise($do44(client, request, options));
 }
-async function $do43(client, request, options) {
+async function $do44(client, request, options) {
   const parsed = safeParse(request, (value) => ListGuardrailMemberAssignmentsRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [haltIterator(parsed), { status: "invalid" }];
@@ -23881,9 +24670,9 @@ async function $do43(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/guardrailsListKeyAssignments.js
 function guardrailsListKeyAssignments(client, request, options) {
-  return new APIPromise($do44(client, request, options));
+  return new APIPromise($do45(client, request, options));
 }
-async function $do44(client, request, options) {
+async function $do45(client, request, options) {
   const parsed = safeParse(request, (value) => ListKeyAssignmentsRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [haltIterator(parsed), { status: "invalid" }];
@@ -23991,9 +24780,9 @@ async function $do44(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/guardrailsListMemberAssignments.js
 function guardrailsListMemberAssignments(client, request, options) {
-  return new APIPromise($do45(client, request, options));
+  return new APIPromise($do46(client, request, options));
 }
-async function $do45(client, request, options) {
+async function $do46(client, request, options) {
   const parsed = safeParse(request, (value) => ListMemberAssignmentsRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [haltIterator(parsed), { status: "invalid" }];
@@ -24101,9 +24890,9 @@ async function $do45(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/guardrailsUpdate.js
 function guardrailsUpdate(client, request, options) {
-  return new APIPromise($do46(client, request, options));
+  return new APIPromise($do47(client, request, options));
 }
-async function $do46(client, request, options) {
+async function $do47(client, request, options) {
   const parsed = safeParse(request, (value) => UpdateGuardrailRequest$outboundSchema2.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -24224,7 +25013,7 @@ var Guardrails = class extends ClientSDK {
    * Update a guardrail
    *
    * @remarks
-   * Update an existing guardrail. Collection fields use replace semantics: send the full desired set on every update. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Update an existing guardrail, or materialize an unconfigured workspace default guardrail. Collection fields use replace semantics: send the full desired set on every update. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async update(request, options) {
     return unwrapAsync(guardrailsUpdate(this, request, options));
@@ -24305,9 +25094,9 @@ var Guardrails = class extends ClientSDK {
 
 // node_modules/@openrouter/sdk/esm/funcs/imagesGenerate.js
 function imagesGenerate(client, request, options) {
-  return new APIPromise($do47(client, request, options));
+  return new APIPromise($do48(client, request, options));
 }
-async function $do47(client, request, options) {
+async function $do48(client, request, options) {
   const parsed = safeParse(request, (value) => CreateImagesRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -24382,9 +25171,9 @@ async function $do47(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/imagesListModelEndpoints.js
 function imagesListModelEndpoints(client, request, options) {
-  return new APIPromise($do48(client, request, options));
+  return new APIPromise($do49(client, request, options));
 }
-async function $do48(client, request, options) {
+async function $do49(client, request, options) {
   const parsed = safeParse(request, (value) => ListImageModelEndpointsRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -24466,9 +25255,9 @@ async function $do48(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/imagesListModels.js
 function imagesListModels(client, request, options) {
-  return new APIPromise($do49(client, request, options));
+  return new APIPromise($do50(client, request, options));
 }
-async function $do49(client, request, options) {
+async function $do50(client, request, options) {
   const parsed = safeParse(request, (value) => ListImageModelsRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -24565,9 +25354,9 @@ var Images = class extends ClientSDK {
 
 // node_modules/@openrouter/sdk/esm/funcs/modelsCount.js
 function modelsCount(client, request, options) {
-  return new APIPromise($do50(client, request, options));
+  return new APIPromise($do51(client, request, options));
 }
-async function $do50(client, request, options) {
+async function $do51(client, request, options) {
   const parsed = safeParse(request, (value) => ListModelsCountRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -24643,9 +25432,9 @@ async function $do50(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/modelsGet.js
 function modelsGet(client, request, options) {
-  return new APIPromise($do51(client, request, options));
+  return new APIPromise($do52(client, request, options));
 }
-async function $do51(client, request, options) {
+async function $do52(client, request, options) {
   const parsed = safeParse(request, (value) => GetModelRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -24727,9 +25516,9 @@ async function $do51(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/modelsList.js
 function modelsList(client, request, options) {
-  return new APIPromise($do52(client, request, options));
+  return new APIPromise($do53(client, request, options));
 }
-async function $do52(client, request, options) {
+async function $do53(client, request, options) {
   const parsed = safeParse(request, (value) => GetModelsRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [haltIterator(parsed), { status: "invalid" }];
@@ -24862,9 +25651,9 @@ async function $do52(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/modelsListForUser.js
 function modelsListForUser(client, security, request, options) {
-  return new APIPromise($do53(client, security, request, options));
+  return new APIPromise($do54(client, security, request, options));
 }
-async function $do53(client, security, request, options) {
+async function $do54(client, security, request, options) {
   const parsed = safeParse(request, (value) => ListModelsUserRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [haltIterator(parsed), { status: "invalid" }];
@@ -25001,7 +25790,7 @@ var Models = class extends ClientSDK {
    * List models filtered by user provider preferences, privacy settings, and guardrails
    *
    * @remarks
-   * List models filtered by user provider preferences, [privacy settings](https://openrouter.ai/docs/guides/privacy/provider-logging), and [guardrails](https://openrouter.ai/docs/guides/features/guardrails). If requesting through `eu.openrouter.ai/api/v1/...` the results will be filtered to models that satisfy [EU in-region routing](https://openrouter.ai/docs/guides/privacy/provider-logging#enterprise-eu-in-region-routing).
+   * List models filtered by user provider preferences, [privacy settings](https://openrouter.ai/docs/guides/privacy/provider-logging), and [guardrails](https://openrouter.ai/docs/guides/features/guardrails). If requesting through a regional hostname, the results will be filtered to models that satisfy in-region routing for that region.
    */
   async listForUser(security, request, options) {
     return unwrapResultIterator(modelsListForUser(this, security, request, options));
@@ -25010,9 +25799,9 @@ var Models = class extends ClientSDK {
 
 // node_modules/@openrouter/sdk/esm/funcs/oAuthCreateAuthCode.js
 function oAuthCreateAuthCode(client, request, options) {
-  return new APIPromise($do54(client, request, options));
+  return new APIPromise($do55(client, request, options));
 }
-async function $do54(client, request, options) {
+async function $do55(client, request, options) {
   const parsed = safeParse(request, (value) => CreateAuthKeysCodeRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -25085,9 +25874,9 @@ async function $do54(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/oAuthExchangeAuthCodeForAPIKey.js
 function oAuthExchangeAuthCodeForAPIKey(client, request, options) {
-  return new APIPromise($do55(client, request, options));
+  return new APIPromise($do56(client, request, options));
 }
-async function $do55(client, request, options) {
+async function $do56(client, request, options) {
   const parsed = safeParse(request, (value) => ExchangeAuthCodeForAPIKeyRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -25310,9 +26099,9 @@ var OAuth = class extends ClientSDK {
 
 // node_modules/@openrouter/sdk/esm/funcs/observabilityCreate.js
 function observabilityCreate(client, request, options) {
-  return new APIPromise($do56(client, request, options));
+  return new APIPromise($do57(client, request, options));
 }
-async function $do56(client, request, options) {
+async function $do57(client, request, options) {
   const parsed = safeParse(request, (value) => CreateObservabilityDestinationRequest$outboundSchema2.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -25385,9 +26174,9 @@ async function $do56(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/observabilityDelete.js
 function observabilityDelete(client, request, options) {
-  return new APIPromise($do57(client, request, options));
+  return new APIPromise($do58(client, request, options));
 }
-async function $do57(client, request, options) {
+async function $do58(client, request, options) {
   const parsed = safeParse(request, (value) => DeleteObservabilityDestinationRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -25465,9 +26254,9 @@ async function $do57(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/observabilityGet.js
 function observabilityGet(client, request, options) {
-  return new APIPromise($do58(client, request, options));
+  return new APIPromise($do59(client, request, options));
 }
-async function $do58(client, request, options) {
+async function $do59(client, request, options) {
   const parsed = safeParse(request, (value) => GetObservabilityDestinationRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -25545,9 +26334,9 @@ async function $do58(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/observabilityList.js
 function observabilityList(client, request, options) {
-  return new APIPromise($do59(client, request, options));
+  return new APIPromise($do60(client, request, options));
 }
-async function $do59(client, request, options) {
+async function $do60(client, request, options) {
   const parsed = safeParse(request, (value) => ListObservabilityDestinationsRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [haltIterator(parsed), { status: "invalid" }];
@@ -25654,9 +26443,9 @@ async function $do59(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/observabilityUpdate.js
 function observabilityUpdate(client, request, options) {
-  return new APIPromise($do60(client, request, options));
+  return new APIPromise($do61(client, request, options));
 }
-async function $do60(client, request, options) {
+async function $do61(client, request, options) {
   const parsed = safeParse(request, (value) => UpdateObservabilityDestinationRequest$outboundSchema2.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -25726,7 +26515,7 @@ async function $do60(client, request, options) {
   const responseFields = {
     HttpMeta: { Response: response, Request: req }
   };
-  const [result] = await match(json(200, UpdateObservabilityDestinationResponse$inboundSchema), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(409, ConflictResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  const [result] = await match(json(200, UpdateObservabilityDestinationResponse$inboundSchema), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(403, ForbiddenResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(409, ConflictResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
   if (!result.ok) {
     return [result, { status: "complete", request: req, response }];
   }
@@ -25784,9 +26573,9 @@ var Observability = class extends ClientSDK {
 
 // node_modules/@openrouter/sdk/esm/funcs/organizationListMembers.js
 function organizationListMembers(client, request, options) {
-  return new APIPromise($do61(client, request, options));
+  return new APIPromise($do62(client, request, options));
 }
-async function $do61(client, request, options) {
+async function $do62(client, request, options) {
   const parsed = safeParse(request, (value) => ListOrganizationMembersRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [haltIterator(parsed), { status: "invalid" }];
@@ -25907,9 +26696,9 @@ var Organization = class extends ClientSDK {
 
 // node_modules/@openrouter/sdk/esm/funcs/presetsCreatePresetsChatCompletions.js
 function presetsCreatePresetsChatCompletions(client, request, options) {
-  return new APIPromise($do62(client, request, options));
+  return new APIPromise($do63(client, request, options));
 }
-async function $do62(client, request, options) {
+async function $do63(client, request, options) {
   const parsed = safeParse(request, (value) => CreatePresetsChatCompletionsRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -25988,9 +26777,9 @@ async function $do62(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/presetsCreatePresetsMessages.js
 function presetsCreatePresetsMessages(client, request, options) {
-  return new APIPromise($do63(client, request, options));
+  return new APIPromise($do64(client, request, options));
 }
-async function $do63(client, request, options) {
+async function $do64(client, request, options) {
   const parsed = safeParse(request, (value) => CreatePresetsMessagesRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -26069,9 +26858,9 @@ async function $do63(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/presetsCreatePresetsResponses.js
 function presetsCreatePresetsResponses(client, request, options) {
-  return new APIPromise($do64(client, request, options));
+  return new APIPromise($do65(client, request, options));
 }
-async function $do64(client, request, options) {
+async function $do65(client, request, options) {
   const parsed = safeParse(request, (value) => CreatePresetsResponsesRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -26150,9 +26939,9 @@ async function $do64(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/presetsGet.js
 function presetsGet(client, request, options) {
-  return new APIPromise($do65(client, request, options));
+  return new APIPromise($do66(client, request, options));
 }
-async function $do65(client, request, options) {
+async function $do66(client, request, options) {
   const parsed = safeParse(request, (value) => GetPresetRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -26230,9 +27019,9 @@ async function $do65(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/presetsGetVersion.js
 function presetsGetVersion(client, request, options) {
-  return new APIPromise($do66(client, request, options));
+  return new APIPromise($do67(client, request, options));
 }
-async function $do66(client, request, options) {
+async function $do67(client, request, options) {
   const parsed = safeParse(request, (value) => GetPresetVersionRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -26314,9 +27103,9 @@ async function $do66(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/presetsList.js
 function presetsList(client, request, options) {
-  return new APIPromise($do67(client, request, options));
+  return new APIPromise($do68(client, request, options));
 }
-async function $do67(client, request, options) {
+async function $do68(client, request, options) {
   const parsed = safeParse(request, (value) => ListPresetsRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [haltIterator(parsed), { status: "invalid" }];
@@ -26424,9 +27213,9 @@ async function $do67(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/presetsListVersions.js
 function presetsListVersions(client, request, options) {
-  return new APIPromise($do68(client, request, options));
+  return new APIPromise($do69(client, request, options));
 }
-async function $do68(client, request, options) {
+async function $do69(client, request, options) {
   const parsed = safeParse(request, (value) => ListPresetVersionsRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [haltIterator(parsed), { status: "invalid" }];
@@ -26607,9 +27396,9 @@ var Presets = class extends ClientSDK {
 
 // node_modules/@openrouter/sdk/esm/funcs/providersList.js
 function providersList(client, request, options) {
-  return new APIPromise($do69(client, request, options));
+  return new APIPromise($do70(client, request, options));
 }
-async function $do69(client, request, options) {
+async function $do70(client, request, options) {
   const parsed = safeParse(request, (value) => ListProvidersRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -26691,9 +27480,9 @@ var Providers = class extends ClientSDK {
 
 // node_modules/@openrouter/sdk/esm/funcs/rerankRerank.js
 function rerankRerank(client, request, options) {
-  return new APIPromise($do70(client, request, options));
+  return new APIPromise($do71(client, request, options));
 }
-async function $do70(client, request, options) {
+async function $do71(client, request, options) {
   const parsed = safeParse(request, (value) => CreateRerankRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -26788,9 +27577,9 @@ var Responses = class extends ClientSDK {
 
 // node_modules/@openrouter/sdk/esm/funcs/scimCreate.js
 function scimCreate(client, request, options) {
-  return new APIPromise($do71(client, request, options));
+  return new APIPromise($do72(client, request, options));
 }
-async function $do71(client, request, options) {
+async function $do72(client, request, options) {
   const parsed = safeParse(request, (value) => CreateScimGroupMappingRequest$outboundSchema2.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -26865,9 +27654,9 @@ async function $do71(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/scimDelete.js
 function scimDelete(client, request, options) {
-  return new APIPromise($do72(client, request, options));
+  return new APIPromise($do73(client, request, options));
 }
-async function $do72(client, request, options) {
+async function $do73(client, request, options) {
   const parsed = safeParse(request, (value) => DeleteScimGroupMappingRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -26949,9 +27738,9 @@ async function $do72(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/scimListGroups.js
 function scimListGroups(client, request, options) {
-  return new APIPromise($do73(client, request, options));
+  return new APIPromise($do74(client, request, options));
 }
-async function $do73(client, request, options) {
+async function $do74(client, request, options) {
   const parsed = safeParse(request, (value) => ListScimGroupsRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [haltIterator(parsed), { status: "invalid" }];
@@ -27059,9 +27848,9 @@ async function $do73(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/scimListMappings.js
 function scimListMappings(client, request, options) {
-  return new APIPromise($do74(client, request, options));
+  return new APIPromise($do75(client, request, options));
 }
-async function $do74(client, request, options) {
+async function $do75(client, request, options) {
   const parsed = safeParse(request, (value) => ListScimGroupMappingsRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [haltIterator(parsed), { status: "invalid" }];
@@ -27169,9 +27958,9 @@ async function $do74(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/scimRead.js
 function scimRead(client, request, options) {
-  return new APIPromise($do75(client, request, options));
+  return new APIPromise($do76(client, request, options));
 }
-async function $do75(client, request, options) {
+async function $do76(client, request, options) {
   const parsed = safeParse(request, (value) => GetScimGroupMappingRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -27249,9 +28038,9 @@ async function $do75(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/scimUpdate.js
 function scimUpdate(client, request, options) {
-  return new APIPromise($do76(client, request, options));
+  return new APIPromise($do77(client, request, options));
 }
-async function $do76(client, request, options) {
+async function $do77(client, request, options) {
   const parsed = safeParse(request, (value) => UpdateScimGroupMappingRequest$outboundSchema2.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -27390,9 +28179,9 @@ var Scim = class extends ClientSDK {
 
 // node_modules/@openrouter/sdk/esm/funcs/sttCreateTranscription.js
 function sttCreateTranscription(client, request, options) {
-  return new APIPromise($do77(client, request, options));
+  return new APIPromise($do78(client, request, options));
 }
-async function $do77(client, request, options) {
+async function $do78(client, request, options) {
   const parsed = safeParse(request, (value) => CreateAudioTranscriptionsRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -27465,9 +28254,9 @@ async function $do77(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/sttCreateTranscriptionMultipart.js
 function sttCreateTranscriptionMultipart(client, request, options) {
-  return new APIPromise($do78(client, request, options));
+  return new APIPromise($do79(client, request, options));
 }
-async function $do78(client, request, options) {
+async function $do79(client, request, options) {
   const parsed = safeParse(request, (value) => CreateAudioTranscriptionsMultipartRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -27586,11 +28375,11 @@ var STT = class extends ClientSDK {
 };
 
 // node_modules/@openrouter/sdk/esm/funcs/ttsCreateSpeech.js
-var z648 = __toESM(require("zod/v4"), 1);
+var z672 = __toESM(require("zod/v4"), 1);
 function ttsCreateSpeech(client, request, options) {
-  return new APIPromise($do79(client, request, options));
+  return new APIPromise($do80(client, request, options));
 }
-async function $do79(client, request, options) {
+async function $do80(client, request, options) {
   const parsed = safeParse(request, (value) => CreateAudioSpeechRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -27654,7 +28443,7 @@ async function $do79(client, request, options) {
   const responseFields = {
     HttpMeta: { Response: response, Request: req }
   };
-  const [result] = await match(stream(200, z648.custom((x) => x instanceof ReadableStream), { ctype: "audio/*" }), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(402, PaymentRequiredResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(429, TooManyRequestsResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), jsonErr(502, BadGatewayResponseError$inboundSchema), jsonErr(503, ServiceUnavailableResponseError$inboundSchema), jsonErr(524, EdgeNetworkTimeoutResponseError$inboundSchema), jsonErr(529, ProviderOverloadedResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  const [result] = await match(stream(200, z672.custom((x) => x instanceof ReadableStream), { ctype: "audio/*" }), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(402, PaymentRequiredResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(429, TooManyRequestsResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), jsonErr(502, BadGatewayResponseError$inboundSchema), jsonErr(503, ServiceUnavailableResponseError$inboundSchema), jsonErr(524, EdgeNetworkTimeoutResponseError$inboundSchema), jsonErr(529, ProviderOverloadedResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
   if (!result.ok) {
     return [result, { status: "complete", request: req, response }];
   }
@@ -27676,9 +28465,9 @@ var TTS = class extends ClientSDK {
 
 // node_modules/@openrouter/sdk/esm/funcs/videoGenerationGenerate.js
 function videoGenerationGenerate(client, request, options) {
-  return new APIPromise($do80(client, request, options));
+  return new APIPromise($do81(client, request, options));
 }
-async function $do80(client, request, options) {
+async function $do81(client, request, options) {
   const parsed = safeParse(request, (value) => CreateVideosRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -27753,9 +28542,9 @@ async function $do80(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/videoGenerationGetGeneration.js
 function videoGenerationGetGeneration(client, request, options) {
-  return new APIPromise($do81(client, request, options));
+  return new APIPromise($do82(client, request, options));
 }
-async function $do81(client, request, options) {
+async function $do82(client, request, options) {
   const parsed = safeParse(request, (value) => GetVideosRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -27832,11 +28621,11 @@ async function $do81(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/funcs/videoGenerationGetVideoContent.js
-var z649 = __toESM(require("zod/v4"), 1);
+var z673 = __toESM(require("zod/v4"), 1);
 function videoGenerationGetVideoContent(client, request, options) {
-  return new APIPromise($do82(client, request, options));
+  return new APIPromise($do83(client, request, options));
 }
-async function $do82(client, request, options) {
+async function $do83(client, request, options) {
   const parsed = safeParse(request, (value) => ListVideosContentRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -27909,7 +28698,7 @@ async function $do82(client, request, options) {
   const responseFields = {
     HttpMeta: { Response: response, Request: req }
   };
-  const [result] = await match(stream(200, z649.custom((x) => x instanceof ReadableStream), { ctype: "video/mp4" }), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), jsonErr(502, BadGatewayResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  const [result] = await match(stream(200, z673.custom((x) => x instanceof ReadableStream), { ctype: "video/mp4" }), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), jsonErr(502, BadGatewayResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
   if (!result.ok) {
     return [result, { status: "complete", request: req, response }];
   }
@@ -27918,9 +28707,9 @@ async function $do82(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/videoGenerationListVideosModels.js
 function videoGenerationListVideosModels(client, request, options) {
-  return new APIPromise($do83(client, request, options));
+  return new APIPromise($do84(client, request, options));
 }
-async function $do83(client, request, options) {
+async function $do84(client, request, options) {
   const parsed = safeParse(request, (value) => ListVideosModelsRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -28032,9 +28821,9 @@ var VideoGeneration = class extends ClientSDK {
 
 // node_modules/@openrouter/sdk/esm/funcs/workspacesBulkAddMembers.js
 function workspacesBulkAddMembers(client, request, options) {
-  return new APIPromise($do84(client, request, options));
+  return new APIPromise($do85(client, request, options));
 }
-async function $do84(client, request, options) {
+async function $do85(client, request, options) {
   const parsed = safeParse(request, (value) => BulkAddWorkspaceMembersRequest$outboundSchema2.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -28115,9 +28904,9 @@ async function $do84(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/workspacesBulkRemoveMembers.js
 function workspacesBulkRemoveMembers(client, request, options) {
-  return new APIPromise($do85(client, request, options));
+  return new APIPromise($do86(client, request, options));
 }
-async function $do85(client, request, options) {
+async function $do86(client, request, options) {
   const parsed = safeParse(request, (value) => BulkRemoveWorkspaceMembersRequest$outboundSchema2.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -28198,9 +28987,9 @@ async function $do85(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/workspacesCreate.js
 function workspacesCreate(client, request, options) {
-  return new APIPromise($do86(client, request, options));
+  return new APIPromise($do87(client, request, options));
 }
-async function $do86(client, request, options) {
+async function $do87(client, request, options) {
   const parsed = safeParse(request, (value) => CreateWorkspaceRequest$outboundSchema2.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -28275,9 +29064,9 @@ async function $do86(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/workspacesDelete.js
 function workspacesDelete(client, request, options) {
-  return new APIPromise($do87(client, request, options));
+  return new APIPromise($do88(client, request, options));
 }
-async function $do87(client, request, options) {
+async function $do88(client, request, options) {
   const parsed = safeParse(request, (value) => DeleteWorkspaceRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -28291,6 +29080,9 @@ async function $do87(client, request, options) {
     })
   };
   const path2 = pathToFunc("/workspaces/{id}")(pathParams);
+  const query = encodeFormQuery({
+    "confirm_default_settings_deletion": payload.confirm_default_settings_deletion
+  });
   const headers = new Headers(compactMap({
     Accept: "application/json",
     "HTTP-Referer": encodeSimple("HTTP-Referer", payload["HTTP-Referer"] ?? client._options.httpReferer, { explode: false, charEncoding: "none" }),
@@ -28325,6 +29117,7 @@ async function $do87(client, request, options) {
     baseURL: options?.serverURL,
     path: path2,
     headers,
+    query,
     body,
     userAgent: client._options.userAgent,
     timeoutMs: options?.timeoutMs || client._options.timeoutMs || -1
@@ -28355,9 +29148,9 @@ async function $do87(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/workspacesDeleteBudget.js
 function workspacesDeleteBudget(client, request, options) {
-  return new APIPromise($do88(client, request, options));
+  return new APIPromise($do89(client, request, options));
 }
-async function $do88(client, request, options) {
+async function $do89(client, request, options) {
   const parsed = safeParse(request, (value) => DeleteWorkspaceBudgetRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -28430,7 +29223,7 @@ async function $do88(client, request, options) {
   const responseFields = {
     HttpMeta: { Response: response, Request: req }
   };
-  const [result] = await match(json(200, DeleteWorkspaceBudgetResponse$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  const [result] = await match(json(200, DeleteWorkspaceBudgetResponse$inboundSchema), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
   if (!result.ok) {
     return [result, { status: "complete", request: req, response }];
   }
@@ -28439,9 +29232,9 @@ async function $do88(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/workspacesGet.js
 function workspacesGet(client, request, options) {
-  return new APIPromise($do89(client, request, options));
+  return new APIPromise($do90(client, request, options));
 }
-async function $do89(client, request, options) {
+async function $do90(client, request, options) {
   const parsed = safeParse(request, (value) => GetWorkspaceRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -28517,11 +29310,95 @@ async function $do89(client, request, options) {
   return [result, { status: "complete", request: req, response }];
 }
 
+// node_modules/@openrouter/sdk/esm/funcs/workspacesGetBudget.js
+function workspacesGetBudget(client, request, options) {
+  return new APIPromise($do91(client, request, options));
+}
+async function $do91(client, request, options) {
+  const parsed = safeParse(request, (value) => GetWorkspaceBudgetRequest$outboundSchema.parse(value), "Input validation failed");
+  if (!parsed.ok) {
+    return [parsed, { status: "invalid" }];
+  }
+  const payload = parsed.value;
+  const body = null;
+  const pathParams = {
+    id: encodeSimple("id", payload.id, {
+      explode: false,
+      charEncoding: "percent"
+    }),
+    interval: encodeSimple("interval", payload.interval, {
+      explode: false,
+      charEncoding: "percent"
+    })
+  };
+  const path2 = pathToFunc("/workspaces/{id}/budgets/{interval}")(pathParams);
+  const headers = new Headers(compactMap({
+    Accept: "application/json",
+    "HTTP-Referer": encodeSimple("HTTP-Referer", payload["HTTP-Referer"] ?? client._options.httpReferer, { explode: false, charEncoding: "none" }),
+    "X-OpenRouter-Categories": encodeSimple("X-OpenRouter-Categories", payload.appCategories ?? client._options.appCategories, { explode: false, charEncoding: "none" }),
+    "X-OpenRouter-Title": encodeSimple("X-OpenRouter-Title", payload.appTitle ?? client._options.appTitle, { explode: false, charEncoding: "none" })
+  }));
+  const secConfig = await extractSecurity(client._options.apiKey);
+  const securityInput = secConfig == null ? {} : { apiKey: secConfig };
+  const requestSecurity = resolveGlobalSecurity(securityInput);
+  const context = {
+    options: client._options,
+    baseURL: options?.serverURL ?? client._baseURL ?? "",
+    operationID: "getWorkspaceBudget",
+    oAuth2Scopes: null,
+    resolvedSecurity: requestSecurity,
+    securitySource: client._options.apiKey,
+    retryConfig: options?.retries || client._options.retryConfig || {
+      strategy: "backoff",
+      backoff: {
+        initialInterval: 500,
+        maxInterval: 6e4,
+        exponent: 1.5,
+        maxElapsedTime: 36e5
+      },
+      retryConnectionErrors: true
+    },
+    retryCodes: options?.retryCodes || ["5XX"]
+  };
+  const requestRes = client._createRequest(context, {
+    security: requestSecurity,
+    method: "GET",
+    baseURL: options?.serverURL,
+    path: path2,
+    headers,
+    body,
+    userAgent: client._options.userAgent,
+    timeoutMs: options?.timeoutMs || client._options.timeoutMs || -1
+  }, options);
+  if (!requestRes.ok) {
+    return [requestRes, { status: "invalid" }];
+  }
+  const req = requestRes.value;
+  const doResult = await client._do(req, {
+    context,
+    isErrorStatusCode: (statusCode) => matchStatusCode({ status: statusCode }, ["4XX", "5XX"]),
+    retryConfig: context.retryConfig,
+    retryCodes: context.retryCodes
+  });
+  if (!doResult.ok) {
+    return [doResult, { status: "request-error", request: req }];
+  }
+  const response = doResult.value;
+  const responseFields = {
+    HttpMeta: { Response: response, Request: req }
+  };
+  const [result] = await match(json(200, GetWorkspaceBudgetResponse$inboundSchema), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  if (!result.ok) {
+    return [result, { status: "complete", request: req, response }];
+  }
+  return [result, { status: "complete", request: req, response }];
+}
+
 // node_modules/@openrouter/sdk/esm/funcs/workspacesList.js
 function workspacesList(client, request, options) {
-  return new APIPromise($do90(client, request, options));
+  return new APIPromise($do92(client, request, options));
 }
-async function $do90(client, request, options) {
+async function $do92(client, request, options) {
   const parsed = safeParse(request, (value) => ListWorkspacesRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [haltIterator(parsed), { status: "invalid" }];
@@ -28629,9 +29506,9 @@ async function $do90(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/workspacesListBudgets.js
 function workspacesListBudgets(client, request, options) {
-  return new APIPromise($do91(client, request, options));
+  return new APIPromise($do93(client, request, options));
 }
-async function $do91(client, request, options) {
+async function $do93(client, request, options) {
   const parsed = safeParse(request, (value) => ListWorkspaceBudgetsRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -28709,9 +29586,9 @@ async function $do91(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/workspacesListMembers.js
 function workspacesListMembers(client, request, options) {
-  return new APIPromise($do92(client, request, options));
+  return new APIPromise($do94(client, request, options));
 }
-async function $do92(client, request, options) {
+async function $do94(client, request, options) {
   const parsed = safeParse(request, (value) => ListWorkspaceMembersRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [haltIterator(parsed), { status: "invalid" }];
@@ -28825,9 +29702,9 @@ async function $do92(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/workspacesSetBudget.js
 function workspacesSetBudget(client, request, options) {
-  return new APIPromise($do93(client, request, options));
+  return new APIPromise($do95(client, request, options));
 }
-async function $do93(client, request, options) {
+async function $do95(client, request, options) {
   const parsed = safeParse(request, (value) => UpsertWorkspaceBudgetRequest$outboundSchema2.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -28912,9 +29789,9 @@ async function $do93(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/workspacesUpdate.js
 function workspacesUpdate(client, request, options) {
-  return new APIPromise($do94(client, request, options));
+  return new APIPromise($do96(client, request, options));
 }
-async function $do94(client, request, options) {
+async function $do96(client, request, options) {
   const parsed = safeParse(request, (value) => UpdateWorkspaceRequest$outboundSchema2.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -29017,7 +29894,7 @@ var Workspaces = class extends ClientSDK {
    * Delete a workspace
    *
    * @remarks
-   * Delete an existing workspace. The default workspace cannot be deleted. Workspaces with active API keys cannot be deleted; remove the keys first. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Delete an existing workspace. Workspaces with active API keys cannot be deleted; remove the keys first. Deleting the default workspace is currently limited to internal OpenRouter administrators while the capability rolls out; other callers receive a 403. When permitted, it requires `confirm_default_settings_deletion=true` and additionally disables the account’s unscoped inference API keys; management (provisioning) keys are retained. Deleting any workspace permanently deletes its budgets and guardrails and disables its classifiers and broadcast destinations. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async delete(request, options) {
     return unwrapAsync(workspacesDelete(this, request, options));
@@ -29057,6 +29934,15 @@ var Workspaces = class extends ClientSDK {
    */
   async deleteBudget(request, options) {
     return unwrapAsync(workspacesDeleteBudget(this, request, options));
+  }
+  /**
+   * Get a workspace budget
+   *
+   * @remarks
+   * Retrieve the budget for a given interval. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   */
+  async getBudget(request, options) {
+    return unwrapAsync(workspacesGetBudget(this, request, options));
   }
   /**
    * Create or update a workspace budget
@@ -32106,7 +32992,7 @@ var safeJSON = (text2) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION = "7.2.0";
+var VERSION = "7.4.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -32336,31 +33222,31 @@ var RFC1738 = "RFC1738";
 // ../../../node_modules/openai/internal/qs/utils.mjs
 var has = (obj, key) => (has = Object.hasOwn ?? Function.prototype.call.bind(Object.prototype.hasOwnProperty), has(obj, key));
 var hex_table = /* @__PURE__ */ (() => {
-  const array175 = [];
+  const array178 = [];
   for (let i = 0; i < 256; ++i) {
-    array175.push("%" + ((i < 16 ? "0" : "") + i.toString(16)).toUpperCase());
+    array178.push("%" + ((i < 16 ? "0" : "") + i.toString(16)).toUpperCase());
   }
-  return array175;
+  return array178;
 })();
 var limit = 1024;
 var encode = (str2, _defaultEncoder, charset, _kind, format) => {
   if (str2.length === 0) {
     return str2;
   }
-  let string463 = str2;
+  let string483 = str2;
   if (typeof str2 === "symbol") {
-    string463 = Symbol.prototype.toString.call(str2);
+    string483 = Symbol.prototype.toString.call(str2);
   } else if (typeof str2 !== "string") {
-    string463 = String(str2);
+    string483 = String(str2);
   }
   if (charset === "iso-8859-1") {
-    return escape(string463).replace(/%u[0-9a-f]{4}/gi, function($0) {
+    return escape(string483).replace(/%u[0-9a-f]{4}/gi, function($0) {
       return "%26%23" + parseInt($0.slice(2), 16) + "%3B";
     });
   }
   let out = "";
-  for (let j = 0; j < string463.length; j += limit) {
-    const segment = string463.length >= limit ? string463.slice(j, j + limit) : string463;
+  for (let j = 0; j < string483.length; j += limit) {
+    const segment = string483.length >= limit ? string483.slice(j, j + limit) : string483;
     const arr = [];
     for (let i = 0; i < segment.length; ++i) {
       let c = segment.charCodeAt(i);
@@ -32455,13 +33341,13 @@ function is_non_nullish_primitive(v) {
   return typeof v === "string" || typeof v === "number" || typeof v === "boolean" || typeof v === "symbol" || typeof v === "bigint";
 }
 var sentinel = {};
-function inner_stringify(object623, prefix, generateArrayPrefix, commaRoundTrip, allowEmptyArrays, strictNullHandling, skipNulls, encodeDotInKeys, encoder, filter, sort, allowDots, serializeDate, format, formatter, encodeValuesOnly, charset, sideChannel) {
-  let obj = object623;
+function inner_stringify(object646, prefix, generateArrayPrefix, commaRoundTrip, allowEmptyArrays, strictNullHandling, skipNulls, encodeDotInKeys, encoder, filter, sort, allowDots, serializeDate, format, formatter, encodeValuesOnly, charset, sideChannel) {
+  let obj = object646;
   let tmp_sc = sideChannel;
   let step = 0;
   let find_flag = false;
   while ((tmp_sc = tmp_sc.get(sentinel)) !== void 0 && !find_flag) {
-    const pos = tmp_sc.get(object623);
+    const pos = tmp_sc.get(object646);
     step += 1;
     if (typeof pos !== "undefined") {
       if (pos === step) {
@@ -32537,7 +33423,7 @@ function inner_stringify(object623, prefix, generateArrayPrefix, commaRoundTrip,
     }
     const encoded_key = allowDots && encodeDotInKeys ? key.replace(/\./g, "%2E") : key;
     const key_prefix = isArray(obj) ? typeof generateArrayPrefix === "function" ? generateArrayPrefix(adjusted_prefix, encoded_key) : adjusted_prefix : adjusted_prefix + (allowDots ? "." + encoded_key : "[" + encoded_key + "]");
-    sideChannel.set(object623, step);
+    sideChannel.set(object646, step);
     const valueSideChannel = /* @__PURE__ */ new WeakMap();
     valueSideChannel.set(sentinel, sideChannel);
     push_to_array(values, inner_stringify(
@@ -32626,8 +33512,8 @@ function normalize_stringify_options(opts = defaults) {
     strictNullHandling: typeof opts.strictNullHandling === "boolean" ? opts.strictNullHandling : defaults.strictNullHandling
   };
 }
-function stringify(object623, opts = {}) {
-  let obj = object623;
+function stringify(object646, opts = {}) {
+  let obj = object646;
   const options = normalize_stringify_options(opts);
   let obj_keys;
   let filter;
@@ -33643,7 +34529,14 @@ function supportsFormData(fetchObject) {
     return cached;
   const promise = (async () => {
     try {
-      const FetchResponse = "Response" in fetch2 ? fetch2.Response : (await fetch2("data:,")).constructor;
+      let FetchResponse;
+      if ("Response" in fetch2) {
+        FetchResponse = fetch2.Response;
+      } else {
+        const response = await fetch2("data:,");
+        await response.arrayBuffer();
+        FetchResponse = response.constructor;
+      }
       const data = new FormData();
       if (data.toString() === await new FetchResponse(data).text()) {
         return false;
@@ -39696,6 +40589,24 @@ var Containers = class extends APIResource {
 };
 Containers.Files = Files2;
 
+// ../../../node_modules/openai/resources/content-provenance-checks.mjs
+var ContentProvenanceChecks = class extends APIResource {
+  /**
+   * Check whether an image or audio file contains known OpenAI provenance signals.
+   * [Learn more about content provenance](/api/docs/guides/content-provenance).
+   *
+   * If `not_detected`, it means the tool did not find supported signals in the
+   * uploaded file. The content could still have been generated by OpenAI if the
+   * metadata was stripped or has evidence of tampering, the watermark was degraded,
+   * it comes from a legacy generation model, or it was created before provenance
+   * signals were available. Content could also still be AI-generated by another
+   * company's model, which the tool currently does not detect.
+   */
+  create(body, options) {
+    return this._client.post("/content_provenance_checks", multipartFormRequestOptions({ body, ...options, __security: { bearerAuth: true } }, this._client));
+  }
+};
+
 // ../../../node_modules/openai/resources/conversations/items.mjs
 var Items = class extends APIResource {
   /**
@@ -42190,6 +43101,7 @@ var OpenAI = class {
     this.embeddings = new Embeddings2(this);
     this.files = new Files3(this);
     this.images = new Images2(this);
+    this.contentProvenanceChecks = new ContentProvenanceChecks(this);
     this.audio = new Audio(this);
     this.moderations = new Moderations(this);
     this.models = new Models2(this);
@@ -42775,6 +43687,7 @@ OpenAI.Chat = Chat2;
 OpenAI.Embeddings = Embeddings2;
 OpenAI.Files = Files3;
 OpenAI.Images = Images2;
+OpenAI.ContentProvenanceChecks = ContentProvenanceChecks;
 OpenAI.Audio = Audio;
 OpenAI.Moderations = Moderations;
 OpenAI.Models = Models2;

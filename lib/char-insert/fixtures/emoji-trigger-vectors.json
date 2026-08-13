@@ -1,0 +1,95 @@
+{
+  "$comment": "Shared corpus — quilltap-v5 copies this file verbatim and asserts the same outputs. `expect` is the WHOLE match object, or null. Fix the port, not the vectors.",
+  "cases": [
+    {
+      "text": "hello :smi",
+      "expect": { "start": 6, "end": 10, "query": "smi", "closed": false },
+      "invariant": "The ordinary case: a colon after whitespace opens on the second query character."
+    },
+    {
+      "text": "hello :smile:",
+      "expect": { "start": 6, "end": 12, "query": "smile", "closed": true },
+      "invariant": "The closing colon sets `closed` and is NOT part of `end` — the caller deletes it separately."
+    },
+    {
+      "text": ":smi",
+      "expect": { "start": 0, "end": 4, "query": "smi", "closed": false },
+      "invariant": "A colon at the very start of the block needs no preceding character."
+    },
+    {
+      "text": "(:smi",
+      "expect": { "start": 1, "end": 5, "query": "smi", "closed": false },
+      "invariant": "An opening bracket counts as word-opening context, like whitespace."
+    },
+    {
+      "text": ":SMI",
+      "expect": { "start": 0, "end": 4, "query": "smi", "closed": false },
+      "invariant": "The query is lowercased so the match is deterministic regardless of typing case."
+    },
+    {
+      "text": "http://",
+      "expect": null,
+      "invariant": "A URL scheme must never open a menu. This is the row that will actually save someone."
+    },
+    {
+      "text": "meet at 10:30",
+      "expect": null,
+      "invariant": "A clock time must never open a menu — the colon is preceded by a digit, not a word opening."
+    },
+    {
+      "text": "C:\\Users",
+      "expect": null,
+      "invariant": "A Windows path must never open a menu."
+    },
+    {
+      "text": "a:bc",
+      "expect": null,
+      "invariant": "A colon glued to the end of a word is punctuation, not a trigger."
+    },
+    {
+      "text": ":)",
+      "expect": null,
+      "invariant": "An emoticon must never open a menu. This is why the minimum query length is 2."
+    },
+    {
+      "text": ":a",
+      "expect": null,
+      "invariant": "A one-character query is inert — it would match half the set."
+    },
+    {
+      "text": ": smi",
+      "expect": null,
+      "invariant": "Space is not in the query alphabet, so `: ` cancels the trigger outright."
+    },
+    {
+      "text": "::",
+      "expect": null,
+      "invariant": "A bare closing colon with an empty query commits nothing."
+    },
+    {
+      "text": "hello :",
+      "expect": null,
+      "invariant": "The opening colon alone is inert until two query characters follow."
+    },
+    {
+      "text": "",
+      "expect": null,
+      "invariant": "Empty text is handled without an out-of-range read."
+    },
+    {
+      "text": ":xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "expect": {
+        "start": 0,
+        "end": 33,
+        "query": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "closed": false
+      },
+      "invariant": "A 32-character query is the longest still accepted (MAX_QUERY_LENGTH boundary)."
+    },
+    {
+      "text": ":xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "expect": null,
+      "invariant": "A 33-character query is abandoned — a runaway trigger from pasted text must not hold a menu open."
+    }
+  ]
+}

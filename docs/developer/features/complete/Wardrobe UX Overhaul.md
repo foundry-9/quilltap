@@ -77,6 +77,7 @@ A bundle card shows:
 - Slot-coverage chips (the slots it occupies in this snapshot, color-coded to match `qt-badge-wardrobe-*`).
 - **Take off bundle** — removes the composite UUID from every slot it occupies. In Live outfit, this is `mode: 'set_all'` with a snapshot that has the composite filtered out of every covered slot; in Outfit Builder, it mutates the staged `fittingSlots` directly.
 - **Break apart** — replaces the composite UUID in each occupied slot with the resolved leaf component IDs that cover that slot. Visually identical state, but no longer bundle-locked. In Live outfit, `mode: 'set_all'` with the substituted snapshot.
+  > **Superseded in 4.8.2.** Wearing a bundle now dissolves it in the same gesture (`lib/wardrobe/dissolve-bundles.ts`), so a composite id no longer reaches equipped state and no bundle card is produced. The card and this button survive only for outfits equipped before that change.
 
 A composite that covers exactly one slot still renders inside the slot row (as a chip with `· bundle` indicator), not as a separate card — bundle cards only appear when the bundle is doing real work across slots.
 

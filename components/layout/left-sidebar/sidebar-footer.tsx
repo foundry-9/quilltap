@@ -11,7 +11,7 @@
 
 import { useState, useRef, useCallback } from 'react'
 import { useEffect } from 'react'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { useHasDangerousChats } from '@/components/hooks/use-has-dangerous-chats'
@@ -110,6 +110,7 @@ export function SidebarFooter() {
   const brahmaConsole = useBrahmaConsoleOptional()
   const wardrobeDialog = useWardrobeDialogOptional()
   const pathname = usePathname()
+  const router = useRouter()
   // Inside the workspace, the Brahma Console and the rail Wardrobe open as
   // their own tabs (per spec) rather than dialogs. Elsewhere they stay dialogs.
   const workspace = useWorkspaceOptional()
@@ -193,8 +194,8 @@ export function SidebarFooter() {
     if (params.mountPoint) sp.set('mountPoint', params.mountPoint)
     if (params.filePath) sp.set('filePath', params.filePath)
     if (params.targetFolder) sp.set('targetFolder', params.targetFolder)
-    window.location.href = `/workspace?${sp.toString()}`
-  }, [inWorkspace, workspace])
+    router.push(`/workspace?${sp.toString()}`)
+  }, [inWorkspace, workspace, router])
 
   return (
     <div className="qt-left-sidebar-footer">

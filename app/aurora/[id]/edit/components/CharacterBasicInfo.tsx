@@ -169,35 +169,31 @@ export function CharacterBasicInfo({
 
       {/* Aurora's Core Whisper — per-character override */}
       <div className="qt-card">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1">
-            <label htmlFor="coreWhisperEnabled" className="block qt-text-label">
-              Aurora&apos;s Core whisper
-            </label>
-            <p className="text-xs qt-text-secondary mt-1">
-              Whether Aurora periodically re-offers this character their own <code>Core/</code> vault folder before they next take the floor. <em>Inherit</em> defers to the per-chat and global settings; explicit values override both.
-            </p>
-          </div>
-          <select
-            id="coreWhisperEnabled"
-            value={
-              formData.coreWhisperEnabled === true
-                ? 'on'
-                : formData.coreWhisperEnabled === false
-                  ? 'off'
-                  : 'inherit'
-            }
-            onChange={(e) => {
-              const v = e.target.value
-              onCoreWhisperEnabledChange(v === 'on' ? true : v === 'off' ? false : null)
-            }}
-            className="qt-select"
-          >
-            <option value="inherit">Inherit (default)</option>
-            <option value="on">Always offered</option>
-            <option value="off">Never offered</option>
-          </select>
-        </div>
+        <label htmlFor="coreWhisperEnabled" className="block qt-text-label">
+          Aurora&apos;s Core whisper
+        </label>
+        <p className="text-xs qt-text-secondary mt-1 mb-3">
+          Whether Aurora periodically re-offers this character their own <code>Core/</code> vault folder before they next take the floor. <em>Inherit</em> defers to the per-chat and global settings; explicit values override both.
+        </p>
+        <select
+          id="coreWhisperEnabled"
+          value={
+            formData.coreWhisperEnabled === true
+              ? 'on'
+              : formData.coreWhisperEnabled === false
+                ? 'off'
+                : 'inherit'
+          }
+          onChange={(e) => {
+            const v = e.target.value
+            onCoreWhisperEnabledChange(v === 'on' ? true : v === 'off' ? false : null)
+          }}
+          className="qt-select"
+        >
+          <option value="inherit">Inherit (default)</option>
+          <option value="on">Always offered</option>
+          <option value="off">Never offered</option>
+        </select>
       </div>
 
       {/* Name Field */}

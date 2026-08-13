@@ -318,6 +318,7 @@ export function useOutfit(chatId: string | null, characterIds: string[] = []) {
               componentItemIds: item.componentItemIds,
               replace: item.replace,
             },
+            itemsById: new Map(items.map(i => [i.id, i])),
           })
         })
       } catch (err) {
@@ -352,7 +353,12 @@ export function useOutfit(chatId: string | null, characterIds: string[] = []) {
           if (!item) return slots
           return computeDisplacedSlots(slots, {
             mode: 'replace',
-            item: { id: item.id, types: item.types },
+            item: {
+              id: item.id,
+              types: item.types,
+              componentItemIds: item.componentItemIds,
+            },
+            itemsById: new Map(items.map(i => [i.id, i])),
           })
         })
       } catch (err) {
@@ -390,7 +396,12 @@ export function useOutfit(chatId: string | null, characterIds: string[] = []) {
           return computeDisplacedSlots(slots, {
             mode: 'add_to_slot',
             slot,
-            item: { id: item.id, types: item.types },
+            item: {
+              id: item.id,
+              types: item.types,
+              componentItemIds: item.componentItemIds,
+            },
+            itemsById: new Map(items.map(i => [i.id, i])),
           })
         })
       } catch (err) {

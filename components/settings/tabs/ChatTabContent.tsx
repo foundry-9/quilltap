@@ -5,6 +5,8 @@ import { useChatSettingsContext } from '@/components/settings/chat-settings/Chat
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import { CompositionModeDefaultSettings } from '@/components/settings/chat-settings/CompositionModeDefaultSettings'
 import { ComposerSpellcheckSettings } from '@/components/settings/chat-settings/ComposerSpellcheckSettings'
+import { ComposerEmojiSettings } from '@/components/settings/chat-settings/ComposerEmojiSettings'
+import { ComposerUnicodeSettings } from '@/components/settings/chat-settings/ComposerUnicodeSettings'
 import { AutoScrollSettings } from '@/components/settings/chat-settings/AutoScrollSettings'
 import { TextReplacementSettings } from '@/components/settings/chat-settings/TextReplacementSettings'
 import { TokenDisplaySettingsComponent } from '@/components/settings/chat-settings/TokenDisplaySettings'
@@ -17,6 +19,7 @@ import { GeneralStateSettings } from '@/components/settings/chat-settings/Genera
 import { AgentModeSettings } from '@/components/settings/chat-settings/AgentModeSettings'
 import { ThinkingDisplaySettings } from '@/components/settings/chat-settings/ThinkingDisplaySettings'
 import { AnswerConfirmationSettings } from '@/components/settings/chat-settings/AnswerConfirmationSettings'
+import { SmartTypographySettings } from '@/components/settings/chat-settings/SmartTypographySettings'
 import { DangerousContentSettings } from '@/components/settings/chat-settings/DangerousContentSettings'
 import { DataRetentionSettings } from '@/components/settings/chat-settings/DataRetentionSettings'
 import { BrahmaConsoleSettings } from '@/components/settings/chat-settings/BrahmaConsoleSettings'
@@ -38,6 +41,8 @@ export function ChatTabContent() {
     handleTokenDisplayChange,
     handleCompositionModeDefaultChange,
     handleComposerSpellcheckChange,
+    handleComposerEmojiChange,
+    handleComposerUnicodeChange,
     handleAutoScrollOnResponseCompleteChange,
     handleTextReplacementsEnabledChange,
     handleContextCompressionUpdate,
@@ -53,6 +58,7 @@ export function ChatTabContent() {
     handleAutonomousRoomSettingsUpdate,
     handleThinkingDisplayUpdate,
     handleAnswerConfirmationUpdate,
+    handleSmartTypographyUpdate,
   } = useChatSettingsContext()
 
   if (loading) {
@@ -86,6 +92,16 @@ export function ChatTabContent() {
             saving={saving}
             onChange={handleComposerSpellcheckChange}
           />
+          <ComposerEmojiSettings
+            settings={settings}
+            saving={saving}
+            onChange={handleComposerEmojiChange}
+          />
+          <ComposerUnicodeSettings
+            settings={settings}
+            saving={saving}
+            onChange={handleComposerUnicodeChange}
+          />
         </CollapsibleCard>
 
         <CollapsibleCard title="Auto-Scroll" description="Whether the Salon follows new messages to the bottom" sectionId="auto-scroll" forceOpen={activeSection === 'auto-scroll'}>
@@ -101,6 +117,14 @@ export function ChatTabContent() {
             settings={settings}
             saving={saving}
             onMasterToggleChange={handleTextReplacementsEnabledChange}
+          />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Smart Typography" description="Curly quotes when displaying messages; real dashes and ellipsis as you type" sectionId="smart-typography" forceOpen={activeSection === 'smart-typography'}>
+          <SmartTypographySettings
+            settings={settings}
+            saving={saving}
+            onUpdate={handleSmartTypographyUpdate}
           />
         </CollapsibleCard>
 

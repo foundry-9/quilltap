@@ -208,9 +208,9 @@ export type RenderingPattern = z.infer<typeof RenderingPatternSchema>;
  * This detects paragraphs that start/end with quote characters.
  */
 export const DialogueDetectionSchema = z.object({
-  /** Opening quote characters to detect (e.g., ['"', '"']) */
+  /** Opening quote characters to detect (e.g., ['"', '\u201c']) */
   openingChars: z.array(z.string()),
-  /** Closing quote characters to detect (e.g., ['"', '"']) */
+  /** Closing quote characters to detect (e.g., ['"', '\u201d']) */
   closingChars: z.array(z.string()),
   /** CSS class to apply to dialogue paragraphs */
   className: z.string().min(1),

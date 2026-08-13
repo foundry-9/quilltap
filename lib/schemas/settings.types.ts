@@ -472,6 +472,32 @@ export const AnswerConfirmationSettingsSchema = z.object({
 
 export type AnswerConfirmationSettings = z.infer<typeof AnswerConfirmationSettingsSchema>;
 
+/**
+ * Smart typography — two mechanisms, deliberately split by confidence.
+ *
+ * `displayQuotes` is a *rendering* opinion: the message renderer curls quotes on
+ * the way to the screen and the stored bytes are never touched, so the model,
+ * the embeddings and every export still see exactly what the writer typed, and
+ * flipping the toggle off puts all of history back.
+ *
+ * `dashes` and `ellipsis` are *content*: a writer typing `--` means a dash, so
+ * the real character is written into the text at the keystroke, one Backspace
+ * (or one Cmd/Ctrl+Z) away from being undone.
+ *
+ * Dashes are deliberately absent from the render-time half and always will be —
+ * `run it with --verbose` must survive being written in prose.
+ */
+export const SmartTypographySettingsSchema = z.object({
+  /** Part A — curl quotes when rendering messages. Stored text is never modified. Default: false. */
+  displayQuotes: z.boolean().default(false),
+  /** Part B — `--` and `---` become real dashes as you type. Default: true. */
+  dashes: z.boolean().default(true),
+  /** Part B — `...` becomes an ellipsis as you type. Default: true. */
+  ellipsis: z.boolean().default(true),
+});
+
+export type SmartTypographySettings = z.infer<typeof SmartTypographySettingsSchema>;
+
 // ============================================================================
 // STORY BACKGROUNDS SETTINGS
 // ============================================================================
@@ -583,6 +609,10 @@ export const ChatSettingsSchema = z.object({
   compositionModeDefault: z.boolean().default(false),
   /** Whether browser spellcheck is enabled in the Salon composer and Document Mode rich editor (default: true) */
   composerSpellcheck: z.boolean().default(true),
+  /** Whether the `:` emoji typeahead fires in the Salon composer and Document Mode editor (default: true). The formatting toolbar's emoji picker is NOT gated by this — an explicit button press is never a surprise. */
+  composerEmoji: z.boolean().default(true),
+  /** Whether the `\` Unicode typeahead fires in the Salon composer and Document Mode editor (default: true). The formatting toolbar's symbol picker is NOT gated by this — an explicit button press is never a surprise. */
+  composerUnicode: z.boolean().default(true),
   /** Master switch for user-defined word-boundary text replacements in the Salon composer and Document Mode rich editor (default: true). Rule list lives in the text_replacement_rules table. */
   textReplacementsEnabled: z.boolean().default(true),
   /** Whether the Salon scrolls to the newest message when an assistant reply finishes streaming or a new message arrives. Only scrolls when the reader is already near the bottom. Default off so long replies don't yank the reader away from where they're reading. */
@@ -608,6 +638,12 @@ export const ChatSettingsSchema = z.object({
   /** Answer confirmation — global default for the Salon consistency check (off by default) */
   answerConfirmationSettings: AnswerConfirmationSettingsSchema.default({
     enabled: false,
+  }),
+  /** Smart typography — render-time curly quotes, plus type-time dashes and ellipsis. */
+  smartTypographySettings: SmartTypographySettingsSchema.default({
+    displayQuotes: false,
+    dashes: true,
+    ellipsis: true,
   }),
   /** Story backgrounds settings for AI-generated chat backgrounds */
   storyBackgroundsSettings: StoryBackgroundsSettingsSchema.default({

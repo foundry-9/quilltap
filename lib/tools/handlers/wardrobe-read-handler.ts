@@ -1,8 +1,8 @@
 /**
  * Read Wardrobe Item Tool Handler
  *
- * Resolves ONE wardrobe item across all (non-group) tiers — the character's own
- * wardrobe, the project, and Quilltap General — and returns its full detail,
+ * Resolves ONE wardrobe item across every tier — the character's own wardrobe,
+ * their groups, the project, and Quilltap General — and returns its full detail,
  * including the Portrait Cue, default/replace flags, component list, archived
  * status, ownership, and which slots it's currently equipped in.
  *
@@ -15,7 +15,8 @@ import { getRepositories } from '@/lib/repositories/factory';
 import type { WardrobeReadToolInput, WardrobeReadToolOutput } from '../wardrobe-read-tool';
 import { validateWardrobeReadInput } from '../wardrobe-read-tool';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
-import { resolveProjectMountPointIdsForChat } from '@/lib/mount-index/tiered-mount-pool';
+import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
+import type { SharedWardrobeTiers } from '@/lib/wardrobe/shared-tiers';
 import {
   findEquippedSlots,
   isOwnWardrobeItem,
@@ -41,15 +42,13 @@ export async function buildWardrobeReadOutput(
   characterId: string,
   chatId: string,
   item: WardrobeItem,
-  projectMountPointIds: string[],
+  tiers: SharedWardrobeTiers,
 ): Promise<WardrobeReadToolOutput> {
   const isComposite = (item.componentItemIds?.length ?? 0) > 0;
 
   let componentTitles: string[] = [];
   if (isComposite) {
-    const components = await repos.wardrobe.findByIdsForCharacter(characterId, item.componentItemIds, {
-      projectMountPointIds,
-    });
+    const components = await repos.wardrobe.findByIdsForCharacter(characterId, item.componentItemIds, tiers);
     const titleById = new Map(components.map((c) => [c.id, c.title]));
     componentTitles = item.componentItemIds
       .map((cid) => titleById.get(cid))
@@ -122,20 +121,20 @@ export async function executeWardrobeReadTool(
 
   try {
     const { item_id, item_title } = parsed;
-    const projectMountPointIds = await resolveProjectMountPointIdsForChat(context.chatId);
+    const tiers = await resolveSharedWardrobeTiersForChat(context.chatId, context.characterId);
 
     const item = await resolveWardrobeItemAcrossTiers(
       repos,
       context.characterId,
       normalizeNoItemSentinel(item_id),
       normalizeNoItemSentinel(item_title),
-      projectMountPointIds,
+      tiers,
     );
     if (!item) {
       return buildWardrobeReadFailure(wardrobeItemNotFoundMessage(item_id, item_title));
     }
 
-    return await buildWardrobeReadOutput(repos, context.characterId, context.chatId, item, projectMountPointIds);
+    return await buildWardrobeReadOutput(repos, context.characterId, context.chatId, item, tiers);
   } catch (error) {
     logger.error('Wardrobe read tool execution failed', {
       context: 'wardrobe-read-handler',

@@ -88,6 +88,21 @@ describe('buildDefaultOutfit', () => {
     expect(result.accessories).toContain('11111111-0000-0000-0000-000000000004')
   })
 
+  it('dissolves a default bundle into its parts', () => {
+    const shirt = makeItem('11111111-0000-0000-0000-0000000000a1', ['top'], false)
+    const trousers = makeItem('11111111-0000-0000-0000-0000000000a2', ['bottom'], false)
+    const bundle: WardrobeItem = {
+      ...makeItem('11111111-0000-0000-0000-0000000000b1', ['top', 'bottom'], true),
+      componentItemIds: [shirt.id, trousers.id],
+    }
+
+    const result = buildDefaultOutfit([shirt, trousers, bundle])
+
+    expect(result.top).toEqual([shirt.id])
+    expect(result.bottom).toEqual([trousers.id])
+    expect(JSON.stringify(result)).not.toContain(bundle.id)
+  })
+
   it('returns all four slot arrays in output regardless of whether they are populated', () => {
     const result = buildDefaultOutfit([])
     expect(result).toHaveProperty('top')

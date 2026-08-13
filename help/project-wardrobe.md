@@ -10,13 +10,14 @@ A garment, in the ordinary run of things, belongs to a single character — her 
 
 ## Where Wardrobe Items Come From
 
-Quilltap draws a character's wearable garments from three tiers, nearest to farthest:
+Quilltap draws a character's wearable garments from four tiers, nearest to farthest:
 
 1. **The character's own vault** — her personal armoire, hers alone.
-2. **The project's wardrobe** — shared attire belonging to the project, wearable by every character in its chats. *(This page.)*
-3. **Quilltap General** — the household-wide collection of [Shared Items (archetypes)](wardrobe.md), available to every character in every chat regardless of project.
+2. **Her groups' wardrobes** — shared attire belonging to the [groups](groups.md) she is a member of, which she carries with her into any chat.
+3. **The project's wardrobe** — shared attire belonging to the project, wearable by every character in its chats. *(This page.)*
+4. **Quilltap General** — the household-wide collection of [Shared Items (archetypes)](wardrobe.md), available to every character in every chat regardless of project.
 
-When the same item appears in more than one tier, the nearer tier prevails — a project may quietly shadow a household archetype with its own version, and a character's personal garment always outranks both. A project garment becomes wearable the moment a chat belongs to that project; outside the project, it is simply not on offer.
+When the same item appears in more than one tier, the nearer tier prevails — a project may quietly shadow a household archetype with its own version, a group shadows the project, and a character's personal garment outranks the lot. A project garment becomes wearable the moment a chat belongs to that project; outside the project, it is simply not on offer.
 
 ## Garments Worn Without Being Asked
 

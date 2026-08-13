@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
@@ -64,6 +65,7 @@ export function NewChatModal({
   initialTimestampConfig,
   autonomous,
 }: NewChatModalProps) {
+  const router = useRouter()
   const isContinuation = Boolean(continuationFromChatId)
 
   // Default the character picker open in continuation mode (so the carried-over
@@ -149,8 +151,8 @@ export function NewChatModal({
   if (!isOpen) return null
 
   const handleCancel = () => {
-    if (openedFromQuery && typeof window !== 'undefined') {
-      window.location.href = '/aurora'
+    if (openedFromQuery) {
+      router.push('/aurora')
       return
     }
     onClose()

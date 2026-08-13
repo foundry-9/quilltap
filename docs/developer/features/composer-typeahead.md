@@ -127,6 +127,49 @@ Add one boolean to the Chat-tab settings module: `composerSuggestions` (default 
 
 ## Phase 1 — Typeahead foundation
 
+> ### ✅ SHIPPED (2026-08-13) — built by Layer 2.0e
+>
+> [composer-emoji](complete/composer-emoji.md) built this shell, because emoji was
+> its cheapest possible consumer. Everything in this phase exists; the `@` / `#` /
+> `/` plugins consume it unchanged. **Two deltas from what is written below**,
+> recorded here as that spec promised:
+>
+> 1. **`insertWithTrailingSpace()` gained a sibling.** The shell exports
+>    `$insertWithTrailingSpace()` (chips — a chip is a word) *and*
+>    `$insertWithoutTrailingSpace()` (emoji — punctuation-adjacent; writers want
+>    `word😄` and `😄😄`). Both delegate to `$insertTypeaheadText(node, text,
+>    { trailingSpace })`. Layer 2 wants the **trailing-space** one.
+> 2. **The shell does NOT own trigger detection.** A consumer passes a
+>    *precomputed* match and `toMenuTextMatch(textBefore, match)` converts it to
+>    Lexical's `MenuTextMatch`. That keeps the "where does the trigger start and
+>    end" decision in framework-free logic a v5 port can copy. `triggerFn` is a
+>    thin adapter — for emoji, `(text) => findTrigger(text, EMOJI_PROFILE.trigger)`.
+>
+> Also landed beyond the description below: the shell owns the
+> `aria-activedescendant` / `aria-controls` / `aria-expanded` wiring on the
+> composer's contenteditable (focus never leaves the editor, so the menu must
+> announce itself), and `qt-typeahead-option-glyph` / `-label` / `-detail` exist
+> alongside the four classes listed.
+>
+> **Three traps, all paid for already — do not rediscover them.**
+>
+> - **Pass `commandPriority={COMMAND_PRIORITY_CRITICAL}` to
+>   `LexicalTypeaheadMenuPlugin`.** `KeyboardPlugin` owns `KEY_ENTER_COMMAND` at
+>   `COMMAND_PRIORITY_HIGH` to send the message, so a menu at `NORMAL` never sees
+>   Enter — picking with the keyboard silently **sends the draft** instead. Safe
+>   because the menu's key handlers are mounted only while it is open.
+> - **Register your own `KEY_DOWN` handler above `TextReplacementPlugin`**
+>   (`COMMAND_PRIORITY_NORMAL` vs its `LOW`) and return `true` only when you
+>   actually commit — see the emoji spec's *Interaction with Layer 1.5*.
+> - **Use the shared `$isInCodeContext(selection)` guard**
+>   (`components/chat/lexical/utils/code-context.ts`) rather than writing a fresh
+>   bail list. That helper exists because two plugins keeping separate lists *was*
+>   bug 63.
+>
+> `MenuPortal` already flips itself above the caret when the viewport has no room
+> below — which in the Salon, whose composer sits at the bottom of the window, is
+> essentially always. You inherit that for free; don't re-solve it.
+
 ### Files
 
 **New:**
