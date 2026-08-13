@@ -2,18 +2,50 @@
 
 | | |
 |---|---|
-| **Status** | **Open** |
+| **Status** | **Fixed in v4** |
 | **Found** | 2026-08-13 |
-| **Fixed** | — |
+| **Fixed** | 2026-08-13 |
 | **Severity** | Medium-High (a safety gate that reports success while doing nothing. Nothing is corrupted *by* the bug, but the one guard standing between an older binary and a newer database has been off since 2026-08-12, and the failure is logged at `error` in a place nobody reads on a healthy boot) |
 | **Who it bites** | anyone who runs an older Quilltap against a database a newer Quilltap has already migrated — the exact accident the guard exists to refuse. Electron users additionally lose the pre-launch check, since `minServerVersion` is never written into `.dbkey`. On a fresh instance the stored version is never recorded at all, so *every* instance created since 2026-08-12 has no version floor whatsoever |
 | **Provenance** | Noticed 2026-08-13 while verifying the [bug 64](fixed/bug-64-setup-stale-db-handle.md) fix on a fresh instance — two `error` lines at the top of every boot log, `isSQLiteBackend is not a function`, present identically on unmodified `HEAD` |
 | **Defect site** | `lib/startup/version-guard.ts:50-54` and `:141-145` — both do `require('@/migrations/lib/database-utils')` synchronously. Since `migrations/lib/database-utils.ts:34-37` gained a static import of `lib/database/backends/sqlite/instance-lock` (commit `02821db6`, 2026-08-12, the bug 58 fix), that module is an **async module** in Turbopack's server graph, and a sync `require()` against one returns an exports object that is never populated |
-| **Fix site (proposed)** | `lib/startup/version-guard.ts` — make both functions `async` and use `await import(...)`, as every other app-side reach into `migrations/` already does; `instrumentation.ts` awaits `checkVersionGuard()`. Plus a regression test that fails when the guard silently no-ops. See [The fix](#the-fix-spec) |
-| **v5 status** | Design note for the native port: the version floor is a real requirement and its v4 implementation has never been exercised. Port the *behaviour* from this spec, not from the v4 code, and give it a test that asserts a blocked launch rather than asserting "no exception" |
-| **Index** | [bugs.md](../bugs.md) |
+| **Fix site** | `lib/startup/version-guard.ts` (both functions `async` + `await import`, failures announced through the migration-warnings channel), `instrumentation.ts` (both call sites awaited), `eslint.config.mjs` (a `no-restricted-syntax` rule that fails the build on a sync `require` of `migrations/` from app code), `__tests__/unit/lib/startup/version-guard.test.ts` (effect assertions + a source-level pin) |
+| **v5 status** | Design note for the native port: the version floor is a real requirement and its v4 implementation had never been exercised before this fix. Port the *behaviour* from this spec, and give it a test that asserts a blocked launch rather than asserting "no exception" |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
+
+**FIXED in v4 (2026-08-13).** Both guard functions are now `async` and reach
+`migrations/lib/database-utils` with `await import(...)`, matching every other
+app-side reach into `migrations/`; `instrumentation.ts` awaits both. The import
+edge in `database-utils.ts` was deliberately left alone — unwinding it would
+have left the next static import free to break the guard again, silently.
+
+Three things beyond the one-line mechanism:
+
+- **The guard can now say it is broken.** Both catch arms still allow startup,
+  but they also push a warning into the migration-warnings channel
+  (`startupState.addMigrationWarning`), which surfaces to the user rather than
+  dying at `error` level in a log nobody reads on a healthy boot. The announcer
+  is itself wrapped, so a broken warning path cannot turn a non-fatal guard
+  failure into a fatal startup failure.
+- **A lint rule replaces the tribal knowledge.** `no-restricted-syntax` in
+  `eslint.config.mjs` fails the build on `require('@/migrations/…')` — and on
+  the relative form — anywhere in `lib/`, `app/`, `components/`, or `hooks/`.
+  The next occurrence is a build failure instead of a silent no-op.
+- **The tests assert the effect.** The suite now asserts that
+  `storeCurrentVersion()` writes `highest_app_version` with the running
+  version, that a failed guard announces a warning, and — since Jest resolves
+  modules synchronously and cannot reproduce Turbopack's async-module
+  classification — a source-level pin that the file contains no sync `require`
+  of the migration utilities.
+
+Verified end to end on a fresh instance (all five steps below): no
+`isSQLiteBackend is not a function` in the log, `Stored current version in
+instance_settings` at `info`, the row present and rewritten on the next boot,
+`minServerVersion` written into `.dbkey` once one exists, and a stored value of
+`99.0.0` producing the block screen ("A Most Regrettable Anachronism") instead
+of a normal startup.
 
 ## Symptom
 

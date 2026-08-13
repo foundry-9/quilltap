@@ -164,6 +164,14 @@ npx quilltap db --lock-clean
 
 `--lock-status` reports the holder's last heartbeat, which is the useful tell: a live instance updates it continuously, while a stale one's grows steadily older. Should you find yourself reaching for `--lock-override`, pause — it seizes the lock regardless of who holds it, and if that party is in fact alive, you have arranged precisely the collision the lock was built to prevent.
 
+### The Version Floor
+
+A newer Quilltap may alter the shape of your data; an older one, meeting that altered shape, will not recognize it and may make matters considerably worse. Quilltap therefore keeps a note of the highest version that has ever opened your database, and stamps the same figure into the key file so the desktop shell can consult it before the server is even started.
+
+Should an older edition come calling, it declines the appointment and shows you a screen saying so — naming both versions and pointing out that installing the newer one is by far the most civilized course. Nothing is touched in the meantime; the server stays up only far enough to explain itself.
+
+The note is rewritten on every startup, so ordinary upgrading requires nothing of you. Should the guard ever be unable to complete its inspection, it now says so in a startup notice rather than passing over the matter in silence: startup proceeds, but you are told that the floor could not be verified this time.
+
 ### The Empty-House Rule
 
 On a genuinely new instance, Quilltap furnishes the place: a starter character or two, a default embedding profile, the built-in roleplay templates. It only does this for a house it can see is empty — and, crucially, it distinguishes an empty house from a house it simply cannot get into. If the database cannot be read at that moment (a lock held elsewhere, a file the operating system has not finished fetching from the cloud), Quilltap declines to furnish anything and says so in the log. An unanswered question is not a yes.

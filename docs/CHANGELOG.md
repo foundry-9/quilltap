@@ -4,6 +4,22 @@
 
 ### 4.8.3
 
+#### Fix: the version guard was silently inert since 2026-08-12 (bug 65)
+
+The guard that stops an older Quilltap from opening a database a newer Quilltap has already migrated had been doing nothing since 2026-08-12, while reporting success. Two `error` lines at the top of every boot log — `isSQLiteBackend is not a function` — were the only evidence.
+
+`lib/startup/version-guard.ts` reached into `migrations/lib/database-utils` with a synchronous `require()`. That module became an async module in the bundler's server graph when the bug 58 fix added a static `instance-lock` import to it, and a sync `require()` of an async module returns an exports object whose body has never run: every property `undefined`, every call a TypeError, straight into a catch that allows startup anyway. So `instance_settings.highest_app_version` was never written (instances created since 2026-08-12 have no row at all), `minServerVersion` never reached the `.dbkey` where the Electron shell looks for it, and an older binary would open a newer database without complaint.
+
+Both guard functions are now `async` and use `await import(...)`, matching every other app-side reach into `migrations/`; `instrumentation.ts` awaits them. The import edge in `database-utils.ts` was deliberately left alone — unwinding it would have left the next static import free to break the guard again, silently.
+
+Three changes beyond the mechanism:
+
+- The guard can now report that it is broken. Both catch arms still allow startup, but they also push a warning through the migration-warnings channel, so a failure reaches the user instead of dying at `error` level in a log nobody reads on a healthy boot.
+- An ESLint `no-restricted-syntax` rule fails the build on `require('@/migrations/…')` — and on the relative form — anywhere in `lib/`, `app/`, `components/`, or `hooks/`.
+- The tests assert the effect rather than the absence of a throw: that `storeCurrentVersion()` writes `highest_app_version` with the running version, that a failed guard announces a warning, and — since Jest cannot reproduce the bundler's async-module classification — a source-level check that the file contains no sync `require` of the migration utilities.
+
+No repair is needed for existing instances: the correct value is written on the next boot. An instance with no row gets one; an instance frozen at an old value is corrected upward.
+
 #### Bug 65 filed: the version guard has been silently inert since 2026-08-12
 
 Docs only; no code change. `lib/startup/version-guard.ts` reaches into `migrations/lib/database-utils` with a synchronous `require()`. That module became an async module in Turbopack's graph when the bug 58 fix added a static `instance-lock` import to it, and a sync `require()` of an async module returns an exports object that is never populated — measured empty even a microtask later, while `await import()` of the same specifier returns all twelve exports. Every call throws `isSQLiteBackend is not a function` into a catch that allows startup anyway.
