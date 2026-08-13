@@ -2,6 +2,12 @@
 
 ## Recent Changes
 
+### 4.8.2
+
+#### Fix: the Core whisper dropdown squeezed its own label into a sliver
+
+On the first tab of the character editor, the "Aurora's Core whisper" card put its label and description in one flex column and the dropdown in another. The dropdown is full-width by default, so it took nearly the whole card and wrapped the label text down a column a few characters wide. The card now stacks: label and description across the full width, dropdown beneath them. The two checkbox cards above it are unchanged — a checkbox is narrow enough for the side-by-side layout.
+
 ### 4.8.1
 
 #### Fix: the spelling lint rule never looked at documentation
