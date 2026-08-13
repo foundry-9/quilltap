@@ -4,6 +4,20 @@
 
 ### 4.8.2
 
+#### Smart typography
+
+Two parts, split by how confident the rule is.
+
+Quotes: the conversation now displays curly quotes while storing and sending exactly what you typed, so nothing about your text or the model's input changes. Off by default; toggle on the Chat settings tab under Smart Typography. Code, math, and link addresses are skipped structurally — they are separate node types in the markdown tree, not text. A roleplay template that claims a quote character as one of its own delimiters suppresses the curling for that chat, as does dialogue-detection config that names a straight quote without its curly counterpart. Applies everywhere the message renderer runs: the Salon, streaming replies, thinking blocks, the help chat, the Brahma console.
+
+Dashes: typing `--` gives an en dash, `---` an em dash, and `...` an ellipsis, in the Salon composer and Document Mode. On by default. These write real characters into your text. One Backspace or one Cmd/Ctrl+Z reverts any substitution. Nothing fires in code blocks, inline code, source-mode editors, or during IME composition, and pasted text is left alone.
+
+Dashes are deliberately not applied at render time and won't be, so `--verbose` written in prose stays intact.
+
+The rule engine (`lib/smart-typography/`) imports nothing outside the standard library, enforced by an ESLint rule, and is pinned by a fixture corpus so the v5 port can be verified against it rather than re-derived.
+
+New `smartTypographySettings` column on `chat_settings`.
+
 #### Dependency updates
 
 Refreshed npm dependencies across the app, the published packages, and all 14 bundled plugins.

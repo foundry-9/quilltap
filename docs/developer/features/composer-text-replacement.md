@@ -109,6 +109,15 @@ If two case-insensitive rules collide on the same lower-cased key (e.g. user has
 
 The `{ tag: 'text-replacement' }` option groups the whole replacement into a single Lexical history entry, so one Cmd-Z undoes it back to `Aris ` (the literal text the user typed) — matching the macOS autocorrect feel. A second Cmd-Z then undoes the typing itself.
 
+### Shared with the other typing aids
+
+Two things are no longer this plugin's alone, and changing either means changing both features:
+
+- **`$isInCodeContext()`** (`components/chat/lexical/utils/code-context.ts`) is the ONE code-context predicate shared by this plugin, `CharTypeaheadPlugin` and `SmartTypographyPlugin`. It came out of [bug 63](../bugs/fixed/bug-63-text-replacement-in-code.md), which is what happened when two typing aids kept their own bail lists. Never re-inline a code check at a call site.
+- **Registration order is load-bearing.** `.` is a word-boundary trigger here *and* the ellipsis trigger for [smart typography](composer-smart-typography.md). Smart typography registers at `COMMAND_PRIORITY_NORMAL` (2) and this plugin at `COMMAND_PRIORITY_LOW` (1); Lexical's `triggerCommandListeners` loops `for (let i = 4; i >= 0; i--)`, so NORMAL runs first. The full order is emoji/Unicode typeahead → smart typography → text replacement, mounted in that order in `LexicalComposerWrapper.tsx` and `DocumentPane.tsx`. The worked interaction table (`Aris...`) is asserted step by step in `__tests__/unit/components/chat/lexical/plugins/SmartTypographyPlugin.test.tsx`; that is the test that fails if someone reorders the stack.
+
+⚠ Note also that both plugins commit through a **nested** `editor.update()` — nested because the command listener is already inside an update — which Lexical *queues* rather than running inline. A flag assigned inside that callback is still `false` when the handler returns. Both handlers therefore decide in a `read()` pass and return `true` unconditionally after `preventDefault()`; a flag-based return would hand an already-prevented keystroke to the next listener down.
+
 ### Disabled paths
 
 - If `chatSettings.textReplacementsEnabled` is `false`, the plugin still mounts but its keydown handler returns `false` immediately. Mounting/unmounting on every toggle would be churn.

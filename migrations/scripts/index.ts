@@ -370,6 +370,7 @@ import { addLLMLogsProfileColumnsMigration } from './add-llm-logs-profile-column
 
 import { addComposerEmojiFieldMigration } from './add-composer-emoji-field';
 import { addComposerUnicodeFieldMigration } from './add-composer-unicode-field';
+import { addSmartTypographySettingsFieldMigration } from './add-smart-typography-settings-field';
 
 /**
  * All available migrations.
@@ -738,6 +739,8 @@ export const migrations: Migration[] = [
   addComposerEmojiFieldMigration,
   // Layer 2.0u composer Unicode: composerUnicode toggle column on chat_settings
   addComposerUnicodeFieldMigration,
+  // Layer 1.6 smart typography: smartTypographySettings JSON column on chat_settings
+  addSmartTypographySettingsFieldMigration,
 ];
 
 export {
@@ -1085,5 +1088,7 @@ export {
   addComposerEmojiFieldMigration,
   // Layer 2.0u composer Unicode: composerUnicode toggle column on chat_settings
   addComposerUnicodeFieldMigration,
+  // Layer 1.6 smart typography: smartTypographySettings JSON column on chat_settings
+  addSmartTypographySettingsFieldMigration,
 };
 

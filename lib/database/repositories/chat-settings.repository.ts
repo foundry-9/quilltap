@@ -256,6 +256,11 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
             answerConfirmationSettings: {
               enabled: false,
             },
+            smartTypographySettings: {
+              displayQuotes: false,
+              dashes: true,
+              ellipsis: true,
+            },
             defaultRoleplayTemplateId,
             ...data,
           };

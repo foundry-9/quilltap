@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "4.8.2-bugfix.10",
+  "version": "4.8.2-bugfix.11",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -107,6 +107,7 @@
     "remark-math": "^6.0.0",
     "remark-parse": "^11.0.0",
     "remark-rehype": "^11.1.2",
+    "remark-smartypants": "^3.0.3",
     "semver": "^7.8.5",
     "sharp": "^0.35.3",
     "tar": "^7.5.22",

@@ -472,6 +472,32 @@ export const AnswerConfirmationSettingsSchema = z.object({
 
 export type AnswerConfirmationSettings = z.infer<typeof AnswerConfirmationSettingsSchema>;
 
+/**
+ * Smart typography — two mechanisms, deliberately split by confidence.
+ *
+ * `displayQuotes` is a *rendering* opinion: the message renderer curls quotes on
+ * the way to the screen and the stored bytes are never touched, so the model,
+ * the embeddings and every export still see exactly what the writer typed, and
+ * flipping the toggle off puts all of history back.
+ *
+ * `dashes` and `ellipsis` are *content*: a writer typing `--` means a dash, so
+ * the real character is written into the text at the keystroke, one Backspace
+ * (or one Cmd/Ctrl+Z) away from being undone.
+ *
+ * Dashes are deliberately absent from the render-time half and always will be —
+ * `run it with --verbose` must survive being written in prose.
+ */
+export const SmartTypographySettingsSchema = z.object({
+  /** Part A — curl quotes when rendering messages. Stored text is never modified. Default: false. */
+  displayQuotes: z.boolean().default(false),
+  /** Part B — `--` and `---` become real dashes as you type. Default: true. */
+  dashes: z.boolean().default(true),
+  /** Part B — `...` becomes an ellipsis as you type. Default: true. */
+  ellipsis: z.boolean().default(true),
+});
+
+export type SmartTypographySettings = z.infer<typeof SmartTypographySettingsSchema>;
+
 // ============================================================================
 // STORY BACKGROUNDS SETTINGS
 // ============================================================================
@@ -612,6 +638,12 @@ export const ChatSettingsSchema = z.object({
   /** Answer confirmation — global default for the Salon consistency check (off by default) */
   answerConfirmationSettings: AnswerConfirmationSettingsSchema.default({
     enabled: false,
+  }),
+  /** Smart typography — render-time curly quotes, plus type-time dashes and ellipsis. */
+  smartTypographySettings: SmartTypographySettingsSchema.default({
+    displayQuotes: false,
+    dashes: true,
+    ellipsis: true,
   }),
   /** Story backgrounds settings for AI-generated chat backgrounds */
   storyBackgroundsSettings: StoryBackgroundsSettingsSchema.default({

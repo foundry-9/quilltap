@@ -770,6 +770,7 @@ CREATE TABLE "chat_settings" (
   "autoScrollOnResponseComplete" INTEGER DEFAULT 0, -- added in 4.6 (add-auto-scroll-on-response-complete-field-v1): when 1, the Salon scrolls to the newest message as a reply finishes / a new message arrives (only when already near the bottom). Default 0 so long replies don't yank the reader away. DISPLAY ONLY.
   "answerConfirmationSettings" TEXT DEFAULT '{"enabled":false}', -- added in 4.8 (add-answer-confirmation-columns-v2): global default for the Salon answer-confirmation check { enabled }. Per-project override in project properties.json; per-chat override on chats.answerConfirmationOverride.
   "customTools" INTEGER DEFAULT 1, -- added in 4.8 (add-custom-tools-field-v1): when 0, Pascal's run_custom pseudo-tool is never offered to models and the composer gutter button is hidden. Custom tool definitions themselves are retained.
+  "smartTypographySettings" TEXT DEFAULT '{"displayQuotes":false,"dashes":true,"ellipsis":true}', -- added in 4.8.2 (add-smart-typography-settings-field-v1): Layer 1.6 { displayQuotes, dashes, ellipsis }. `displayQuotes` curls quotes at RENDER time only — chat_messages.content is never rewritten, so model input, embeddings and exports are unaffected; suppressed for a template whose patterns claim a quote character. `dashes`/`ellipsis` are type-time and DO write real –/—/… into the composer text.
   UNIQUE("userId")
 );
 

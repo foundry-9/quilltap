@@ -203,6 +203,54 @@ The feature is, at present, deliberately modest: literal triggers, literal repla
 - A rule's order in the list is presentational, not load-bearing: case-sensitive rules always win over case-insensitive rules with the same trigger.
 - You cannot register two case-insensitive rules with the same trigger (the system politely declines with a conflict notice). Two rules with the same trigger but different case-sensitivity flags are perfectly legal.
 
+### Smart Typography
+
+The Text Replacement card's near neighbour, and its temperamental opposite in one important respect. Here reside the small civilities of the compositor's trade — curled quotation marks, the en dash, the em dash, the ellipsis — arranged in **two groups**, and the difference between those groups is not a filing convenience but the whole substance of the thing.
+
+**The first group changes only what you see.** Tick *Curly quotes when displaying messages* and the conversation acquires proper “curly quotes” where before it wore the typewriter's flat little strokes. What is *stored*, however, and what is dispatched to the model, remains character for character what you typed. Not one byte of your correspondence is altered. Untick the box and the whole of your history reverts on the instant, as though the matter had never been raised. This is a question of dress, not of substance, and the house treats it accordingly.
+
+Code is never touched — neither fenced blocks nor `inline code`. Mathematics is never touched. The address inside a link is never touched. And should your roleplay template have claimed the quotation mark for its own purposes as a delimiter, the curling stands aside in that chat entirely, rather than trampling arrangements you made deliberately.
+
+One acknowledged imperfection, and we would rather name it than have you discover it: a word opening with an apostrophe — `'tis`, `'80s`, `'n'` — will be given an opening quotation mark instead. Every typesetter's engine ever built makes this same mistake, the poor thing having no way to distinguish an elision from a quotation. Because nothing is written down, the blemish is cosmetic only: your text still says `'tis`, and one flick of the toggle sets the appearance right again.
+
+**The second group changes your text.** Type two hyphens and you get an en dash (`–`); a third promotes it to an em dash (`—`); three full stops become a proper ellipsis (`…`). These are **real characters, written into what you have composed**, and they are meant to be: a writer who types `--` wants a dash, the hyphen being merely the keyboard's apology for a key it does not possess. A fourth hyphen leaves matters exactly as they are, which doubles as your escape hatch. One tap of **Backspace** immediately after any substitution restores the literal characters; one tap of Cmd/Ctrl+Z does the same.
+
+**Why dashes are not offered in the first group, and never will be.** Consider `run it with --verbose`. A display-time dash rule would render that as `–verbose` — the source correct, the screen wrong, and the writer with no earthly way to discover why. At the keystroke there is no such trouble: you see the dash arrive and press Backspace once. The arrangement is deliberate and permanent.
+
+Nothing in the second group fires inside code fences or `inline code`, nor in the source-mode views, nor upon pasted text, nor while an input method editor is mid-composition.
+
+**Setting Options:**
+
+- **Curly quotes when displaying messages** — Off by default. On: the conversation displays curly quotes. Your stored text and the model's input are unaffected either way.
+- **Dashes (`--` → `–`, `---` → `—`)** — On by default. Applies in the Salon composer and the Document Mode rich editor.
+- **Ellipsis (`...` → `…`)** — On by default. Same two surfaces.
+- **Try it** — A scratch textarea for the second group. Type a couple of hyphens or three full stops and watch. Nothing typed here is saved.
+
+**How to configure:**
+
+1. Open the **Smart Typography** card on the Chat tab in Settings
+2. Tick or untick each toggle as suits you
+3. The quote setting applies to every message at once — the Salon, the help chat, thinking blocks, the Brahma console alike
+4. The dash and ellipsis settings apply to the next thing you type
+
+**When useful:**
+
+- You want your prose to *look* properly typeset without your archives being quietly rewritten to suit the fashion
+- You write long-form fiction, in which the em dash is not a luxury but a load-bearing member
+- You are on a platform whose operating system declines to supply these substitutions on your behalf
+
+**When to turn it off:**
+
+- **Curly quotes:** you are writing about code, measurements in inches, or anything where the straight mark is the correct mark on screen as well as on disk
+- **Dashes:** you routinely write command-line flags in plain prose and would rather they never be disturbed — though note the ladder gives you a fourth hyphen as an escape, and Backspace as another
+- **Ellipsis:** you have a use for exactly three separate full stops
+
+**Notes for the careful:**
+
+- Turning the quote setting on or off does not alter a single stored message, does not disturb any model's input, does not shift a prompt cache, and does not change what an export contains. It is the one setting in this house that can be flipped with no consequence whatever beyond the visible.
+- Exports and backups always carry the straight quotes you actually typed.
+- Dashes and ellipsis, by contrast, *do* become part of the message and travel with it everywhere.
+
 ### Avatar Settings
 
 Controls how your user avatar appears in chats.

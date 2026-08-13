@@ -33,6 +33,8 @@ import {
   DEFAULT_THINKING_DISPLAY_SETTINGS,
   AnswerConfirmationSettings,
   DEFAULT_ANSWER_CONFIRMATION_SETTINGS,
+  SmartTypographySettings,
+  DEFAULT_SMART_TYPOGRAPHY_SETTINGS,
 } from '../types'
 
 interface UseChatSettingsReturn {
@@ -72,6 +74,7 @@ interface UseChatSettingsReturn {
   handleAutonomousRoomSettingsUpdate: (updates: Partial<AutonomousRoomSettings>) => Promise<void>
   handleThinkingDisplayUpdate: (updates: Partial<ThinkingDisplaySettings>) => Promise<void>
   handleAnswerConfirmationUpdate: (updates: Partial<AnswerConfirmationSettings>) => Promise<void>
+  handleSmartTypographyUpdate: (updates: Partial<SmartTypographySettings>) => Promise<void>
 }
 
 export function useChatSettings(): UseChatSettingsReturn {
@@ -844,6 +847,50 @@ export function useChatSettings(): UseChatSettingsReturn {
   )
 
   /**
+   * Update smart typography settings (merge-then-PUT, like the sibling bags).
+   */
+  const handleSmartTypographyUpdate = useCallback(
+    async (updates: Partial<SmartTypographySettings>) => {
+      if (!settings) return
+
+      const merged: SmartTypographySettings = {
+        ...DEFAULT_SMART_TYPOGRAPHY_SETTINGS,
+        ...(settings.smartTypographySettings ?? {}),
+        ...updates,
+      }
+
+      try {
+        setSaving(true)
+        const res = await fetch('/api/v1/settings/chat', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ smartTypographySettings: merged }),
+        })
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update smart typography settings')
+        }
+        const updatedSettings = await res.json()
+        await mutateSettings(updatedSettings, false)
+        // Persisted messages arrive with server-PRE-RENDERED HTML baked into the
+        // chat payload (see app/api/v1/chats/[id]/handlers/get.ts), so a cached
+        // conversation would keep its old quotes until something else happened
+        // to refetch it. Toggling `displayQuotes` must be visible at once, which
+        // means dropping those cached renders. Messages the client renders
+        // itself pick the change up through the settings query directly.
+        await queryClient.invalidateQueries({ queryKey: queryKeys.chats.all })
+        await showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        console.error('Failed to update smart typography settings', { error: errorMsg })
+      } finally {
+        setSaving(false)
+      }
+    },
+    [settings, mutateSettings, showSuccess, queryClient]
+  )
+
+  /**
    * Update agent mode default enabled setting
    */
   const handleAgentModeDefaultEnabledChange = useCallback(
@@ -1108,5 +1155,6 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleAutonomousRoomSettingsUpdate,
     handleThinkingDisplayUpdate,
     handleAnswerConfirmationUpdate,
+    handleSmartTypographyUpdate,
   }
 }

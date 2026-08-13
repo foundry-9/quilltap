@@ -1,12 +1,16 @@
 import React from 'react'
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import MessageContent from '@/components/chat/MessageContent'
 import { QtapLinkContext, type QtapLinkOpener } from '@/components/qtap/QtapLinkContext'
+// MessageContent reads the smart-typography display setting through TanStack
+// Query, so it needs a QueryClientProvider around it.
+import { renderWithQuery as render } from '../../../__tests__/helpers/renderWithQuery'
 
 jest.mock('remark-gfm', () => () => undefined)
 jest.mock('remark-breaks', () => () => undefined)
 jest.mock('remark-math', () => () => undefined)
 jest.mock('rehype-katex', () => () => undefined)
+jest.mock('remark-smartypants', () => () => undefined)
 jest.mock('react-syntax-highlighter', () => ({
   Prism: ({ children }: { children: React.ReactNode }) => <pre>{children}</pre>,
 }))

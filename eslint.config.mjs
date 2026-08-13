@@ -90,6 +90,36 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  {
+    // Tier A of smart typography (Layer 1.6, Part B) — the `--`/`---`/`...`
+    // rule engine. Same contract, same reasoning, same enforcement as
+    // `lib/char-insert/**` above: quilltap-v5 copies this directory wholesale
+    // and rewrites only the Lexical adapter in components/chat/.
+    //
+    // See docs/developer/features/composer-smart-typography.md. Adding an
+    // import here is not a lint failure to silence; it means the code belongs
+    // in `components/chat/lexical/plugins/SmartTypographyPlugin.tsx` instead.
+    files: ['lib/smart-typography/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            'react',
+            'react-*',
+            'next',
+            'next/*',
+            'lexical',
+            '@lexical/*',
+            '@tanstack/*',
+            '@/components/*',
+            '@/hooks/*',
+            '@/lib/*',
+          ],
+        },
+      ],
+    },
+  },
 ])
 
 export default eslintConfig

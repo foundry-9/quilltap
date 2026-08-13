@@ -10,7 +10,7 @@ import { createContextHandler, type RequestContext } from '@/lib/api/middleware'
 import { successResponse, serverError, badRequest } from '@/lib/api/responses'
 import { logger } from '@/lib/logger'
 import { TagStyleMapSchema, ThemePreferenceSchema } from '@/lib/schemas/common.types'
-import { TokenDisplaySettingsSchema, LLMLoggingSettingsSchema, AgentModeSettingsSchema, StoryBackgroundsSettingsSchema, DangerousContentSettingsSchema, AutoLockSettingsSchema, AnswerConfirmationSettingsSchema } from '@/lib/schemas/settings.types'
+import { TokenDisplaySettingsSchema, LLMLoggingSettingsSchema, AgentModeSettingsSchema, StoryBackgroundsSettingsSchema, DangerousContentSettingsSchema, AutoLockSettingsSchema, AnswerConfirmationSettingsSchema, SmartTypographySettingsSchema } from '@/lib/schemas/settings.types'
 import { type AvatarDisplayMode } from '@/lib/schemas/types'
 import { getErrorMessage } from '@/lib/error-utils'
 
@@ -48,6 +48,7 @@ async function updateChatSettings(
   thinkingDisplay?: unknown,
   autoScrollOnResponseComplete?: boolean,
   answerConfirmationSettings?: unknown,
+  smartTypographySettings?: unknown,
 ) {
   // Validate avatarDisplayMode if provided
   if (avatarDisplayMode) {
@@ -269,6 +270,12 @@ async function updateChatSettings(
     const validated = AnswerConfirmationSettingsSchema.parse(answerConfirmationSettings)
     updateData.answerConfirmationSettings = validated
   }
+  if (typeof smartTypographySettings !== 'undefined') {
+    // Smart typography (render-time quotes + type-time dashes/ellipsis).
+    // Zod governs the persisted shape.
+    const validated = SmartTypographySettingsSchema.parse(smartTypographySettings)
+    updateData.smartTypographySettings = validated
+  }
 
   return repos.chatSettings.updateForUser(userId, updateData)
 }
@@ -340,6 +347,7 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       thinkingDisplay,
       autoScrollOnResponseComplete,
       answerConfirmationSettings,
+      smartTypographySettings,
     } = body
 
     const chatSettings = await updateChatSettings(
@@ -373,6 +381,7 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       thinkingDisplay,
       autoScrollOnResponseComplete,
       answerConfirmationSettings,
+      smartTypographySettings,
     )
 
     return successResponse(chatSettings)

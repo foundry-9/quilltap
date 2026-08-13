@@ -19,6 +19,7 @@ import { GeneralStateSettings } from '@/components/settings/chat-settings/Genera
 import { AgentModeSettings } from '@/components/settings/chat-settings/AgentModeSettings'
 import { ThinkingDisplaySettings } from '@/components/settings/chat-settings/ThinkingDisplaySettings'
 import { AnswerConfirmationSettings } from '@/components/settings/chat-settings/AnswerConfirmationSettings'
+import { SmartTypographySettings } from '@/components/settings/chat-settings/SmartTypographySettings'
 import { DangerousContentSettings } from '@/components/settings/chat-settings/DangerousContentSettings'
 import { DataRetentionSettings } from '@/components/settings/chat-settings/DataRetentionSettings'
 import { BrahmaConsoleSettings } from '@/components/settings/chat-settings/BrahmaConsoleSettings'
@@ -57,6 +58,7 @@ export function ChatTabContent() {
     handleAutonomousRoomSettingsUpdate,
     handleThinkingDisplayUpdate,
     handleAnswerConfirmationUpdate,
+    handleSmartTypographyUpdate,
   } = useChatSettingsContext()
 
   if (loading) {
@@ -115,6 +117,14 @@ export function ChatTabContent() {
             settings={settings}
             saving={saving}
             onMasterToggleChange={handleTextReplacementsEnabledChange}
+          />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Smart Typography" description="Curly quotes when displaying messages; real dashes and ellipsis as you type" sectionId="smart-typography" forceOpen={activeSection === 'smart-typography'}>
+          <SmartTypographySettings
+            settings={settings}
+            saving={saving}
+            onUpdate={handleSmartTypographyUpdate}
           />
         </CollapsibleCard>
 

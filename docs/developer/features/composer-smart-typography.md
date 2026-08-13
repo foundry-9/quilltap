@@ -1,6 +1,8 @@
 # Smart Typography — Layer 1.6 Spec
 
-**Status:** Proposal / Not Implemented
+**Status:** Implemented in v4 (2026-08-13). Every file in the [file-touch summary](#file-touch-summary) is written and the automated suites pass; the [completion gate](#completion-gate) still wants both manual matrices walked on a running instance before this moves to `complete/`. Implementation notes and corrections to this document are collected in [As built](#as-built).
+
+**Original status:** Proposal / Not Implemented
 **Scope:** quilltap-server (message renderer + composer plugin + one settings bag). No shell changes. No API route. One prerequisite bug fix.
 **Phase:** 1.6 of the composer series — a sibling of [Layer 1.5 text replacement](composer-text-replacement.md), sharing its surfaces and its undo contract.
 
@@ -460,10 +462,38 @@ One `[smart-typography]` debug line per Part B substitution. Nothing on non-trig
 
 # Open questions
 
-- **Should `displayQuotes` default on?** Spec says off for v1. It is reversible and non-destructive, so the usual caution applies less than it did to the type-time design — but it restyles all history on first boot after upgrade. A human call, worth making explicitly, and cheap to change (one schema line plus the migration's column default) as long as it is decided *before* the migration ships.
-- **Single-quoted dialogue in the fixed fallback pattern.** The prerequisite recommends double-quote-only. Decide before writing the fix, not after.
-- **The seven other bare-`ReactMarkdown` pipelines.** v1 leaves them straight-quoted, so a help topic and a chat message will render the same text differently. Defensible (they are not conversation) but it is an inconsistency someone will notice. Either accept it in writing or extend to them.
-- **`remark-smartypants` option surface.** Verify the four option names against the installed version before relying on them; an ignored `dashes: false` is the one failure mode that would ship the `--verbose` bug.
+- **Should `displayQuotes` default on?** ✅ **Resolved: off**, as specified, and shipped that way. Still cheap to revisit (one schema line, the repository seed, and the migration's column default) — but the migration has now shipped, so flipping it means a follow-up migration for existing rows, not just a default change.
+- **Single-quoted dialogue in the fixed fallback pattern.** ✅ Resolved in [Bug 62](../bugs/fixed/bug-62-dialogue-fallback-quotes.md): double-quote only.
+- **The seven other bare-`ReactMarkdown` pipelines.** ✅ **Accepted in writing.** They are left straight-quoted; the changelog names the message renderer explicitly as the scope. They are not conversation, they have no roleplay layer, and none of them is read side by side with a chat message.
+- **`remark-smartypants` option surface.** ✅ **Verified against the installed version.** `remark-smartypants` 3.0.3 re-exports `retext-smartypants` 6's `Options` type, whose keys are exactly `quotes`, `ellipses`, `dashes`, `backticks` (plus `openingQuotes`/`closingQuotes`, unused). All four names in `SMARTYPANTS_OPTIONS` are real, and `__tests__/unit/lib/markdown/typography.test.ts` pins the key set so a rename fails a test rather than silently re-enabling dashes.
+
+# As built
+
+Where the implementation departs from, or resolves, what this document assumed.
+
+**Three claims here were stale by the time the work started, and each already had its answer in the tree:**
+
+1. **`no-restricted-imports` "is not used anywhere in the repo today."** It is — `eslint.config.mjs` already scopes it to `lib/char-insert/**` for the Layer 2.0e/2.0u character-insertion engine, which is the same Tier-A contract for the same reason. The `lib/smart-typography/**` override is a copy of that block. It was verified to fire by adding a `react` import to `engine.ts` and watching `npm run lint` fail.
+2. **"No `TextReplacementPlugin` test exists in the repo at all."** One does, added with bug 63, along with `__tests__/helpers/lexicalPluginHarness.tsx` — a real-Lexical harness with `seedParagraph` / `seedCodeBlock` / `seedInlineCode` / `pressKey` helpers. The new plugin suite is built on it, so no separate Layer 1.5 suite was needed.
+3. **"Extract and share `isInCodeContext()`, fixing the latent code-context defect (file that bug too)."** Already done and already filed — `components/chat/lexical/utils/code-context.ts`, [bug 63](../bugs/fixed/bug-63-text-replacement-in-code.md). `SmartTypographyPlugin` just imports it.
+
+**The reserved-character guard reads patterns, not delimiters.** The renderer never receives a template's `TemplateDelimiter[]` — it receives compiled `RenderingPattern`s. So `isQuoteSensitiveRoleplayConfig` (`lib/markdown/typography.ts`) uses the same discriminator `escapeMarkdownInBrackets` already uses: a pattern carrying the generated `(?<rpBody>…)` group came from a declared wrap delimiter, and if such a pattern mentions `"` or `'`, curling is suppressed. The legacy built-in dialogue pattern has no `rpBody` group, so the shipped defaults are unaffected — which is the behaviour that matters, since flagging them would disable the feature for every default chat.
+
+**The guard was extended to dialogue detection.** A custom template declaring `openingChars: ['"']` without the curly counterpart fails in exactly the bug-62 way once paragraphs arrive curled. That is the same silent breakage the prerequisite existed to prevent, arriving through a user's template instead of through the shipped fallback, so it suppresses curling too.
+
+**Part A is read, not threaded.** `MessageContent` reads `smartTypographySettings` through TanStack Query itself rather than taking a prop. Threading it would have meant a prop through `MessageRow` → `LazyMessageContent` → `MessageContent` plus `StreamingMessage`, `ThinkingBlock`, `HelpChatMessageList`, `BrahmaConsoleMessageList` and `BrahmaToolCall`; the query dedupes across every mounted message and re-renders them all on toggle, which is the required behaviour anyway.
+
+**Toggling invalidates the chat cache.** Persisted messages carry server-pre-rendered HTML in the chat payload, so `handleSmartTypographyUpdate` invalidates `queryKeys.chats.all`. Without it, a cached conversation keeps its old quotes until something else happens to refetch — v4's version of the v5 render-cache-key hazard this document flags.
+
+**The server keeps two cached processors.** A unified processor fixes its plugin list at construction, so `getProcessor(curlQuotes)` memoises one pipeline per state instead of one overall.
+
+**⚠ The nested-update trap, which cost the most time and is the thing a v5 port cannot inherit.** A Lexical command listener already runs inside an update, so a nested `editor.update()` is *queued*, not run inline. The first implementation set an `applied` flag inside that callback and returned it — meaning the handler called `preventDefault()` and then told Lexical "I did nothing", handing the keystroke to `TextReplacementPlugin` below it, and never logging. Both `SmartTypographyPlugin` handlers now decide in a `read()` pass and return `true` unconditionally after `preventDefault()`. `TextReplacementPlugin` has the same shape for the same reason.
+
+**Backspace-revert invalidation is keystroke-driven, not update-listener-driven.** An update listener clearing the memo on any untagged update is cleared by Lexical's own selection reconciliation and no-op commits before the writer's finger reaches Backspace. The memo is instead dropped by any non-Backspace keystroke and on blur, and the revert independently re-verifies node, offset and the actual inserted characters before touching anything.
+
+**On testing the remark pipelines.** `unified`/`remark-*`/`remark-smartypants` are ESM-only and this repo's Jest transform does not process them — the constraint the server renderer suite has documented since it was written, and why `components/chat/__tests__/MessageContent.test.tsx` mocks the whole markdown stack. So the committed unit tests pin what actually decides anything (`SMARTYPANTS_OPTIONS` and the guard, in `__tests__/unit/lib/markdown/typography.test.ts`), and the full Part A matrix — including `--verbose`, code, math, link targets, `backticks: false`, the bug-62 fallback regression and the reserved-character guard — was walked against the **real** pipeline, all passing. **The two-pipeline check was run too**: driving `react-markdown` with `MessageContent`'s exact `remarkPlugins` array and diffing the rendered text against the server renderer over ten samples produced no disagreement. Re-run both if either plugin list changes.
+
+**`components/chat/__tests__/MessageContent.test.tsx` needed two edits** it is easy to trip over: `jest.mock('remark-smartypants', …)` alongside the existing markdown-stack mocks, and `renderWithQuery` in place of bare `render`, since the component now reads a query.
 
 # Deferred
 
@@ -483,7 +513,9 @@ One `[smart-typography]` debug line per Part B substitution. Nothing on non-trig
 - [docs/developer/bugs.md](../bugs.md) — ✅ row and header Status paragraph updated
 
 **Part A:**
-- `lib/markdown/typography.ts` — new; `SMARTYPANTS_OPTIONS`, shared by both pipelines (the `REMARK_MATH_OPTIONS` precedent)
+- `lib/markdown/typography.ts` — new; `SMARTYPANTS_OPTIONS` plus the reserved-character guard, shared by both pipelines (the `REMARK_MATH_OPTIONS` precedent)
+- `__tests__/unit/lib/markdown/typography.test.ts` — options + guard
+- [app/api/v1/chats/[id]/handlers/get.ts](../../../app/api/v1/chats/[id]/handlers/get.ts) — pass `displayQuotes` into the pre-render
 - [lib/services/markdown-renderer.service.ts](../../../lib/services/markdown-renderer.service.ts) — plugin at `:86-87`; extend the sync comments at `:79-80,84-85`
 - [components/chat/MessageContent.tsx](../../../components/chat/MessageContent.tsx) — plugin in the array at `:501`; extend the sync comment at `:498-500`
 - The reserved-character guard, threaded through the existing renderer options
@@ -497,9 +529,10 @@ One `[smart-typography]` debug line per Part B substitution. Nothing on non-trig
 **Part B, Tier C (rewritten in v5):**
 - `components/chat/lexical/plugins/SmartTypographyPlugin.tsx`
 - `__tests__/unit/components/chat/lexical/plugins/SmartTypographyPlugin.test.tsx`
-- `__tests__/unit/components/chat/lexical/plugins/TextReplacementPlugin.test.tsx` — the missing Layer 1.5 coverage
+- ~~`__tests__/unit/components/chat/lexical/plugins/TextReplacementPlugin.test.tsx` — the missing Layer 1.5 coverage~~ — already existed (bug 63), together with `__tests__/helpers/lexicalPluginHarness.tsx`, which the new suite is built on
 - [LexicalComposerWrapper.tsx](../../../components/chat/lexical/LexicalComposerWrapper.tsx), [DocumentPane.tsx](../../../app/salon/[id]/components/DocumentPane.tsx) — mount above `TextReplacementPlugin`
-- [TextReplacementPlugin.tsx](../../../components/chat/lexical/plugins/TextReplacementPlugin.tsx) — extract and share `isInCodeContext()`, fixing the latent code-context defect (**file that bug too**)
+- ~~[TextReplacementPlugin.tsx](../../../components/chat/lexical/plugins/TextReplacementPlugin.tsx) — extract and share `isInCodeContext()`~~ — already done and filed as bug 63; the shared predicate is `components/chat/lexical/utils/code-context.ts`
+- `components/chat/__tests__/MessageContent.test.tsx` — mock `remark-smartypants`, render through `renderWithQuery`
 
 **Settings:**
 - `migrations/scripts/add-smart-typography-settings-field.ts`, `migrations/scripts/index.ts`, `lib/startup/prettify.ts`, `docs/developer/DDL.md`
