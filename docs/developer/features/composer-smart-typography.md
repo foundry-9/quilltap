@@ -59,7 +59,9 @@ Four designs were considered. Recording the rejected three matters, because each
 
 ## Prerequisite: fix the roleplay dialogue-pattern fallback first
 
-⚠ **Required, not advisory, and it must land as its own commit before Part A.** With quotes moving to render time this became *strictly* load-bearing rather than merely prudent — see [ordering](#ordering-the-load-bearing-constraint).
+✅ **DONE — [Bug 62](../bugs/fixed/bug-62-dialogue-fallback-quotes.md) landed 2026-08-13 as its own commit.** Both defaults now carry the real curly code points as `“`/`”` escapes, single quotes deliberately excluded, with fallback-path regression coverage on the server suite *and* a `bug 62` block in `components/chat/__tests__/MessageContent.test.tsx` for the streaming path. **This spec is unblocked**; the rest of this section is kept as the record of what was wrong and why it gated Part A.
+
+⚠ It was **required, not advisory, and had to land as its own commit before Part A.** With quotes moving to render time this became *strictly* load-bearing rather than merely prudent — see [ordering](#ordering-the-load-bearing-constraint).
 
 [lib/chat/roleplay-rendering.ts:33](../../../lib/chat/roleplay-rendering.ts) declares the fallback dialogue pattern, and the comment at `:32` claims it handles "straight and curly quotes":
 
@@ -79,8 +81,8 @@ These are the **live fallback** for every chat not on a template supplying its o
 2. Correct both defaults to match straight *and* curly: pattern class containing `"`, U+201C, U+201D; `openingChars: ['"', '“']`, `closingChars: ['"', '”']`.
 3. **Decide the single-quote question explicitly.** Recommendation: double-quote only, matching the seeded template. `'` is far more often an apostrophe than a quotation mark, and a single-quote dialogue pattern would false-positive across most English prose.
 4. Add regression coverage in [`__tests__/unit/lib/services/markdown-renderer.service.test.ts`](../../../__tests__/unit/lib/services/markdown-renderer.service.test.ts) — which already has curly-quote cases at `:409-421` — asserting the **fallback** path, not just the template path. That is the gap that let this survive.
-5. **The bug is already filed — it is [Bug 62](../bugs/bug-62-dialogue-fallback-quotes.md)**, open, with the full root-cause write-up, the hexdumps, the single-quote product decision, and the v5 coordination note. Read it rather than re-deriving any of this. On landing the fix: `git mv` the file into `docs/developer/bugs/fixed/`, fill in the Fixed date, fix site and v5 status in **both** the file's metadata table and its row in [docs/developer/bugs.md](../bugs.md), and add the leading **`FIXED in v4 (date)`** paragraph. Update the index header's Status paragraph, which currently names Bug 62 as the one open entry.
-6. **Cross-repo:** v5 ported this verbatim *and knew it* — `quilltap-v5: apps/web/src/app/chat/render/roleplay-rendering.ts:68-69` carries the comment "v4's stored pattern is straight-quote-only — copied byte-for-byte". The fix moves v5's captured markdown parity corpus; that is ordinary drift, worked in the v5 repo. Details in Bug 62's [v5 section](../bugs/bug-62-dialogue-fallback-quotes.md#v5).
+5. **The bug is filed — it is [Bug 62](../bugs/fixed/bug-62-dialogue-fallback-quotes.md)**, now fixed, with the full root-cause write-up, the hexdumps, the single-quote product decision (resolved: double-quote only), and the v5 coordination note. Read it rather than re-deriving any of this.
+6. **Cross-repo — still owed.** v5 ported this verbatim *and knew it* — `quilltap-v5: apps/web/src/app/chat/render/roleplay-rendering.ts:68-69` carries the comment "v4's stored pattern is straight-quote-only — copied byte-for-byte". v4 has now converged; the mirror on the v5 side has **not** landed, and the fix moves v5's captured markdown parity corpus. That is ordinary drift, worked in the v5 repo. Details in Bug 62's [v5 section](../bugs/fixed/bug-62-dialogue-fallback-quotes.md#v5).
 
 ### Related, worth checking while you are in there
 
@@ -473,11 +475,12 @@ One `[smart-typography]` debug line per Part B substitution. Nothing on non-trig
 
 # File-touch summary
 
-**Prerequisite — [Bug 62](../bugs/bug-62-dialogue-fallback-quotes.md), its own commit, landed and verified first:**
-- [lib/chat/roleplay-rendering.ts](../../../lib/chat/roleplay-rendering.ts) — fix `DEFAULT_RENDERING_PATTERNS:32-33` and `DEFAULT_DIALOGUE_DETECTION:43-49`
-- `__tests__/unit/lib/services/markdown-renderer.service.test.ts` — fallback-path regression coverage, **plus** a `MessageContent` render assertion (a server-only test proves nothing about the streaming path)
-- `docs/developer/bugs/bug-62-dialogue-fallback-quotes.md` — `git mv` into `fixed/`, fill Fixed date / fix site / v5 status, add the `FIXED in v4 (date)` paragraph
-- [docs/developer/bugs.md](../bugs.md) — update Bug 62's row **and** the header Status paragraph
+**Prerequisite — [Bug 62](../bugs/fixed/bug-62-dialogue-fallback-quotes.md): ✅ landed 2026-08-13 as its own commit.**
+- [lib/chat/roleplay-rendering.ts](../../../lib/chat/roleplay-rendering.ts) — ✅ both defaults respelled with `“`/`”` escapes
+- `__tests__/unit/lib/services/markdown-renderer.service.test.ts` — ✅ `shared defaults (fallback path, no options passed)` block
+- `components/chat/__tests__/MessageContent.test.tsx` — ✅ the client render assertion, added to the existing suite (a server-only test proves nothing about the streaming path)
+- `docs/developer/bugs/fixed/bug-62-dialogue-fallback-quotes.md` — ✅ moved, dated, `FIXED in v4` paragraph added
+- [docs/developer/bugs.md](../bugs.md) — ✅ row and header Status paragraph updated
 
 **Part A:**
 - `lib/markdown/typography.ts` — new; `SMARTYPANTS_OPTIONS`, shared by both pipelines (the `REMARK_MATH_OPTIONS` precedent)

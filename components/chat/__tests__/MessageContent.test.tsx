@@ -80,3 +80,116 @@ describe('MessageContent qtap autolinking', () => {
     expect(screen.getByText('qtap://Notes/today.md')).toBeInTheDocument()
   })
 })
+/**
+ * Bug 62 regression: the CLIENT renderer's fallback dialogue defaults.
+ *
+ * `MessageContent` and `renderMarkdownToHtml` are duplicated by convention — one
+ * emits React nodes mid-stream, the other an HTML string once the message
+ * settles — so the server suite's matching `shared defaults (fallback path)`
+ * block proves nothing about the streaming path, which is what a reader actually
+ * watches a reply arrive in. These assert the client half: with NO
+ * `renderingPatterns` / `dialogueDetection` prop (and with the empty-array /
+ * null forms that fall through to the same place), curly-quoted dialogue gets
+ * `qt-chat-dialogue`.
+ *
+ * Everything downstream of `components.p` is the real component; only the
+ * ESM-only markdown stack is mocked (see the top of this file).
+ */
+describe('MessageContent fallback dialogue defaults (bug 62)', () => {
+  /** The rendered paragraph element, for block-level class assertions. */
+  function paragraph(): HTMLElement {
+    const p = document.querySelector('p')
+    if (!p) throw new Error('MessageContent rendered no paragraph')
+    return p
+  }
+
+  /** Every class on the styled inline spans inside the message. */
+  function spanClasses(): string[] {
+    return Array.from(document.querySelectorAll('span[class]')).map((el) => el.className)
+  }
+
+  describe('with no rendering props at all', () => {
+    it('styles curly-quoted dialogue inline', () => {
+      render(<MessageContent content={'\u201cGet down,\u201d she said.'} />)
+      expect(screen.getByText('\u201cGet down,\u201d')).toHaveClass('qt-chat-dialogue')
+    })
+
+    it('still styles straight-quoted dialogue inline', () => {
+      render(<MessageContent content={'"Get down," she said.'} />)
+      expect(screen.getByText('"Get down,"')).toHaveClass('qt-chat-dialogue')
+    })
+
+    it('tags a wholly curly-quoted paragraph at the block level', () => {
+      render(<MessageContent content={'\u201cGet down.\u201d'} />)
+      expect(paragraph()).toHaveClass('qt-chat-dialogue')
+    })
+
+    it('tags a wholly straight-quoted paragraph at the block level', () => {
+      render(<MessageContent content={'"Get down."'} />)
+      expect(paragraph()).toHaveClass('qt-chat-dialogue')
+    })
+
+    it('leaves a narrative paragraph unstyled', () => {
+      render(<MessageContent content={'She said nothing at all.'} />)
+      expect(paragraph()).not.toHaveClass('qt-chat-dialogue')
+      expect(spanClasses()).not.toContain('qt-chat-dialogue')
+    })
+
+    it('leaves apostrophes alone, single quotes being deliberately not dialogue', () => {
+      render(<MessageContent content={"She didn't move; the writers' room was quiet."} />)
+      expect(paragraph()).not.toHaveClass('qt-chat-dialogue')
+      expect(spanClasses()).not.toContain('qt-chat-dialogue')
+    })
+
+    it('leaves curly apostrophes alone', () => {
+      render(<MessageContent content={'She didn\u2019t move.'} />)
+      expect(spanClasses()).not.toContain('qt-chat-dialogue')
+    })
+  })
+
+  describe('empty / null props fall through to the same defaults', () => {
+    it('an empty renderingPatterns array still styles curly dialogue', () => {
+      render(<MessageContent content={'\u201cGet down,\u201d she said.'} renderingPatterns={[]} />)
+      expect(screen.getByText('\u201cGet down,\u201d')).toHaveClass('qt-chat-dialogue')
+    })
+
+    it('a null dialogueDetection still tags a curly-quoted paragraph', () => {
+      render(<MessageContent content={'\u201cGet down.\u201d'} dialogueDetection={null} />)
+      expect(paragraph()).toHaveClass('qt-chat-dialogue')
+    })
+  })
+
+  describe('the template path must not move', () => {
+    // Standard Roleplay's stored dialogue config, copied from
+    // lib/database/repositories/roleplay-templates.repository.ts.
+    const SEEDED_PATTERNS = [
+      { pattern: '["\u201c][^"\u201d]+["\u201d]', className: 'qt-chat-dialogue' },
+    ]
+    const SEEDED_DETECTION = {
+      openingChars: ['"', '\u201c'],
+      closingChars: ['"', '\u201d'],
+      className: 'qt-chat-dialogue',
+    }
+
+    it.each([
+      ['\u201cGet down,\u201d she said.'],
+      ['"Get down," she said.'],
+      ['\u201cGet down.\u201d'],
+      ['"Get down."'],
+      ['She said nothing at all.'],
+    ])('the defaults now render %p identically to the seeded template', (content) => {
+      const { container: withDefaults, unmount } = render(<MessageContent content={content} />)
+      const defaultsHtml = withDefaults.innerHTML
+      unmount()
+
+      const { container: withTemplate } = render(
+        <MessageContent
+          content={content}
+          renderingPatterns={SEEDED_PATTERNS}
+          dialogueDetection={SEEDED_DETECTION}
+        />
+      )
+      expect(defaultsHtml).toBe(withTemplate.innerHTML)
+    })
+  })
+})

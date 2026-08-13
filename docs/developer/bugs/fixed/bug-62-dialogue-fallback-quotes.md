@@ -2,16 +2,51 @@
 
 | | |
 |---|---|
-| **Status** | **OPEN** |
+| **Status** | **FIXED in v4 (2026-08-13)** |
 | **Found** | 2026-08-13 |
-| **Fixed** | — |
+| **Fixed** | 2026-08-13 |
 | **Severity** | Medium (cosmetic, but pervasive and long-standing: curly-quoted dialogue has *never* been highlighted in any chat falling back to the defaults, and most model output is curly-quoted) |
 | **Who it bites** | anyone in a chat with no roleplay template, or one whose template supplies no `renderingPatterns` / a null `dialogueDetection`, whose text contains curly quotes — which is most LLM output, anything pasted from Word/Pages/Scrivener, and anything typed on macOS with system smart quotes on |
-| **Provenance** | Faithful — v5 copied the defect byte-for-byte and says so in a comment. Surfaced 2026-08-13 while spec'ing [composer-smart-typography](../features/composer-smart-typography.md), which cannot ship until this is fixed |
+| **Provenance** | Faithful — v5 copied the defect byte-for-byte and says so in a comment. Surfaced 2026-08-13 while spec'ing [composer-smart-typography](../../features/composer-smart-typography.md), which cannot ship until this is fixed |
 | **Defect site** | `lib/chat/roleplay-rendering.ts:32-33` (`DEFAULT_RENDERING_PATTERNS`, the dialogue entry) and `:43-49` (`DEFAULT_DIALOGUE_DETECTION`) |
-| **Fix site** | proposed: `lib/chat/roleplay-rendering.ts` (both defaults) + fallback-path regression coverage in `__tests__/unit/lib/services/markdown-renderer.service.test.ts` |
+| **Fix site** | `lib/chat/roleplay-rendering.ts` (both defaults) + fallback-path regression coverage in `__tests__/unit/lib/services/markdown-renderer.service.test.ts` plus a bug-62 block in the existing `components/chat/__tests__/MessageContent.test.tsx` |
 | **v5 status** | Owed (Faithful) — v5 reproduces it deliberately; the fix moves v5's captured parity corpus. See [v5](#v5) |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
+
+---
+
+**FIXED in v4 (2026-08-13).** Both defaults in `lib/chat/roleplay-rendering.ts`
+now carry the real curly code points, spelled as `“` / `”` escapes the
+way the seeded Standard Roleplay template does — the inline pattern is
+`'["“][^"”]+["”]'` and `DEFAULT_DIALOGUE_DETECTION` is
+`openingChars: ['"', '“']` / `closingChars: ['"', '”']`. Single quotes
+are **not** matched; see [the product decision](#one-product-decision-to-take-not-to-omit).
+Both misleading comments were rewritten to say what the code does and why the
+escapes are mandatory.
+
+Regression coverage lands on **both** renderers, asserting the defaults with no
+options passed and with the empty-array / null forms that fall through to the
+same place: a `shared defaults (fallback path, no options passed)` block in the
+server suite, and a bug-62 block appended to the existing `components/chat/__tests__/MessageContent.test.tsx`
+that renders the real client component (the ESM-only markdown stack is mocked;
+everything downstream of `components.p` is the real code). Each suite also has a
+*the template path must not move* case asserting the defaults now render
+byte-identically to the seeded template. Verified by reverting each half of the
+defect independently: the pattern-only revert fails 9 tests across the two
+suites, the detection-only revert fails 5.
+
+Two spellings of the same defect survive elsewhere and are **not** covered by
+this fix, because both cost more than the bug does:
+
+- **`packages/plugin-types`** repeats `openingChars: ['"', '"']` — the same
+  duplicated ASCII — in three JSDoc *examples*
+  (`src/plugins/roleplay-template.ts:83,187` and the built `dist/index.d.ts`).
+  Documentation only, but it is what a plugin author copies. Correcting it means
+  a version bump and a manual `npm publish`, so it is left as a follow-up rather
+  than gating this commit.
+- **Stored template rows** written by anyone who copied those examples are
+  unaffected by a defaults change and would need a migration. None are known to
+  exist.
 
 ---
 
@@ -148,7 +183,7 @@ it later is a behaviour change, and adding it silently is worse.
 
 ## Why this is on the critical path
 
-[composer-smart-typography](../features/composer-smart-typography.md) applies
+[composer-smart-typography](../../features/composer-smart-typography.md) applies
 curly quotes as a **remark plugin**, and the roleplay layer runs *after* parsing —
 on the HTML string on the server, on React children on the client. So the
 typographer curls the text before the dialogue matcher ever sees it.

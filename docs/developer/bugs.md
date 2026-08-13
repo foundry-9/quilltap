@@ -5,14 +5,16 @@
 **Provenance**: the quilltap-v5 native port's differential harness, its
 dogfood walks against a copy of real data, and — from Bug 62 — v4's own
 feature-spec work
-**Status**: Bugs **1–61** are **fixed in v4**. **Bug 62 is OPEN** (filed
+**Status**: Bugs **1–62** are **fixed in v4**. Bug 62 (filed and fixed
 2026-08-13): the fallback roleplay dialogue pattern and dialogue detection both
-spell their "straight and curly" quote sets with the straight quote duplicated,
-so curly-quoted dialogue has never been highlighted in any chat that falls
-through to the defaults. Found while spec'ing
+spelled their "straight and curly" quote sets with the straight quote
+duplicated, so curly-quoted dialogue had never been highlighted in any chat that
+falls through to the defaults. Found while spec'ing
 [composer-smart-typography](features/composer-smart-typography.md), which curls
-quotes upstream of the roleplay layer and therefore **cannot ship until this
-lands**. Bug 61 (filed and fixed
+quotes upstream of the roleplay layer and was therefore blocked on it; that
+spec is now **unblocked**. Both defaults now carry the real curly code points
+as `“` / `”` escapes, with fallback-path regression coverage on the
+server *and* client renderers. Bug 61 (filed and fixed
 2026-08-12 by the v5 port while deflaking its wardrobe e2e walk: an outfit edit
 staged in the in-chat Wardrobe dialog before the worn snapshot arrives was
 discarded, and the dialog closed as though it saved) is fixed by recording the
@@ -229,7 +231,7 @@ One row per bug, newest last. **Bug** links to the entry; **Fix site** and
 | 59 | [a failed read reads as an empty database and triggers first-startup seeding](bugs/fixed/bug-59-failed-read-triggers-first-startup-seeding.md) | 2026-08-12 | 2026-08-12 | High (a populated instance sent down the new-install seeding path — default characters, duplicate embedding profile, full `.qtap` import — on a transient read failure) | `findByFilter` passes `[]` as `safeQuery`'s fallback, so "no rows" and "the database is unreachable" are the same value; `seedInitialData` read that `[]` as "first startup" and began seeding an instance holding 24 characters and 10,286 messages | `lib/startup/seed-initial-data.ts` + new `countOrThrow` in `lib/database/repositories/base.repository.ts` | Owed (Faithful) |
 | 60 | [the documented key-file backup procedure copies nothing](bugs/fixed/bug-60-phantom-per-database-key-files.md) | 2026-08-12 | 2026-08-12 | High (a user follows the documented backup and both `cp` commands fail; they believe the encryption key is saved when nothing was copied, and find out when the databases can no longer be opened) | The `.dbkey` path in BACKUP-RESTORE.md and DEPLOYMENT.md omits the `data/` component, and both docs plus DDL.md describe per-database key files that were never built — `quilltap-mount-index.dbkey` has never existed, and `quilltap-llm-logs.dbkey` is written only by `changePassphrase`, read by nothing, and can hold a stale wrapping | `lib/startup/dbkey.ts` + `lib/paths.ts` + `lib/startup/version-guard.ts` and the six docs/help files naming a `.dbkey` path | Owed (Faithful) |
 | 61 | [a wardrobe edit staged before the worn snapshot arrives is dropped](bugs/fixed/bug-61-staged-outfit-edit-dropped.md) | 2026-08-12 | 2026-08-12 | Medium (silent data loss — the staged outfit is discarded, nothing is sent, nothing errors, and the dialog closes exactly as it does on a successful save) | Staging in the in-chat Wardrobe dialog before `refreshOutfit`'s three-round-trip chain publishes the worn snapshot is lost twice over: the first Live seed overwrites the staged slots, and the flush skips any character with no captured baseline and then returns `true`, so Done closes as if it saved | new `lib/wardrobe/staged-live-outfits.ts` + `components/wardrobe/wardrobe-control-dialog.tsx` | Owed (Faithful) |
-| 62 | [the fallback dialogue pattern matches only straight quotes](bugs/bug-62-dialogue-fallback-quotes.md) | 2026-08-13 | — | Medium (cosmetic but pervasive: curly-quoted dialogue has never been highlighted on the fallback path, and most model output is curly-quoted) | `DEFAULT_RENDERING_PATTERNS`' dialogue entry and `DEFAULT_DIALOGUE_DETECTION` both spell their "straight and curly" character sets with the straight quote **duplicated** — every byte `0x22` — so curly-quoted dialogue gets no `qt-chat-dialogue` styling in any chat falling through to the defaults | `lib/chat/roleplay-rendering.ts:32-33` + `:43-49` (proposed) | Owed (Faithful) — moves v5's captured markdown parity corpus |
+| 62 | [the fallback dialogue pattern matches only straight quotes](bugs/fixed/bug-62-dialogue-fallback-quotes.md) | 2026-08-13 | 2026-08-13 | Medium (cosmetic but pervasive: curly-quoted dialogue had never been highlighted on the fallback path, and most model output is curly-quoted) | `DEFAULT_RENDERING_PATTERNS`' dialogue entry and `DEFAULT_DIALOGUE_DETECTION` both spelled their "straight and curly" character sets with the straight quote **duplicated** — every byte `0x22` — so curly-quoted dialogue got no `qt-chat-dialogue` styling in any chat falling through to the defaults | `lib/chat/roleplay-rendering.ts` — both defaults respelled with `“`/`”` escapes, plus fallback-path coverage in the server suite and the `MessageContent` client suite | Owed (Faithful) — moves v5's captured markdown parity corpus |
 
 ### Families and reading order
 

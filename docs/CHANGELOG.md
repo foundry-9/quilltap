@@ -4,6 +4,14 @@
 
 ### 4.8.2
 
+#### Fix: curly-quoted dialogue wasn't highlighted in chats without a roleplay template (bug 62)
+
+Quilltap styles dialogue — the quoted parts of a message — differently from narration. In a chat using a roleplay template that supplies its own patterns, that worked with either kind of quotation mark. In a chat with no template, or one whose template supplies no rendering patterns, only straight quotes (`"like this"`) were ever highlighted. Curly quotes (`"like this"`) were not, and most model output is curly-quoted, as is anything pasted from Word, Pages, or Scrivener, or typed on macOS with smart quotes on.
+
+The built-in fallback patterns claimed in a comment to handle both kinds. They didn't: the character sets they used listed the straight quote twice instead of listing the straight and the curly one, and the duplicate did nothing. Both the inline highlighting and the whole-paragraph dialogue styling were affected, on both the mid-stream and the settled render.
+
+Both now match straight and curly double quotes. Single quotes are deliberately still not treated as dialogue — an apostrophe is a single quote far more often than a quotation mark is, so matching them would mis-highlight ordinary prose. Chats on a roleplay template are unchanged.
+
 #### Fix: wardrobe items moved into a group were invisible to everyone
 
 The wardrobe transfer dialog has offered every group as a destination since groups gained document stores, and moving or copying a garment there worked — the file landed in the group store's `Wardrobe/` folder. Nothing ever read it back. `findArchetypes` and the wearable pool it feeds took only Quilltap General plus the chat's project stores, so a group garment did not appear in the wardrobe dialog, was not listed by `wardrobe_list`, could not be resolved by id or title by `wardrobe_read`/`wardrobe_wear`/`wardrobe_update`/`wardrobe_archive`, was never equipped as a default at chat start, and could not be moved back out (the transfer's source lookup didn't scan groups either). An item moved to a group effectively vanished.

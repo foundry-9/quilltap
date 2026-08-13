@@ -284,6 +284,29 @@ Some templates include dialogue detection:
 - Helps ensure consistent visual formatting
 - Makes conversations easy to distinguish
 
+### When No Template Says Otherwise
+
+A chat need not be dressed in a template at all, and a template need not trouble
+itself with rendering patterns. In either case Quilltap falls back on a set of
+house conventions, and dialogue is among them.
+
+Those house conventions recognise **double quotation marks of either
+persuasion** — the upright typewriter sort, `"like so"`, and the curly
+typographer's sort, `"like so"`. This matters more than it may sound: most
+models compose in curly quotes by habit, as does anything you paste in from a
+word processor, or type on a Mac with smart quotes obliging you. Both are
+styled, in the paragraph and in the line alike.
+
+**Single quotes are left well alone.** The humble apostrophe wears the same
+costume as a single quotation mark — one cannot tell `don't` from `'quoted'`
+by sight — and were Quilltap to treat them as speech, half of ordinary English
+prose would come out dressed as dialogue. If your convention genuinely uses
+single quotes for speech, declare it in a template's rendering patterns, where
+you may say so deliberately.
+
+A template that *does* supply its own patterns is unaffected by any of this; its
+word is final.
+
 ## Best Practices
 
 ### When Creating Templates

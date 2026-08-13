@@ -29,8 +29,14 @@ export const DEFAULT_RENDERING_PATTERNS: RenderingPattern[] = [
   { pattern: '\\(\\([^)]+\\)\\)', className: 'qt-chat-ooc' },
   // OOC: // comment - line prefix style
   { pattern: '^// .+$', className: 'qt-chat-ooc', flags: 'm' },
-  // Dialogue: "speech" - straight and curly quotes
-  { pattern: '[""][^""]+[""]', className: 'qt-chat-dialogue' },
+  // Dialogue: "speech" - straight AND curly double quotes. The curly ones are
+  // written as \u escapes on purpose (as the seeded Standard Roleplay template
+  // does): this entry spent its whole life claiming curly support while holding
+  // four copies of ASCII 0x22, because a literal U+201C in source is
+  // indistinguishable from a straight quote at a glance (bug 62). Single quotes
+  // are deliberately excluded - an apostrophe is a single quote far more often
+  // than a quotation mark is (don't, writers', '80s).
+  { pattern: '["\u201c][^"\u201d]+["\u201d]', className: 'qt-chat-dialogue' },
   // Narration: *actions* - single asterisks (not bold **)
   { pattern: '(?<!\\*)\\*[^*]+\\*(?!\\*)', className: 'qt-chat-narration' },
   // Narration: [actions] - square brackets (not links)
@@ -41,11 +47,15 @@ export const DEFAULT_RENDERING_PATTERNS: RenderingPattern[] = [
 
 /**
  * Default dialogue detection for paragraph-level styling.
- * Handles straight and curly quotes.
+ *
+ * Straight and curly DOUBLE quotes only, the curly pair written as \u escapes
+ * for the reason given on the dialogue pattern above (bug 62). Keep these in
+ * step with that pattern — a paragraph the inline rule styles but this one
+ * doesn't (or vice versa) is a visible split.
  */
 export const DEFAULT_DIALOGUE_DETECTION: DialogueDetection = {
-  openingChars: ['"', '"'],
-  closingChars: ['"', '"'],
+  openingChars: ['"', '\u201c'],
+  closingChars: ['"', '\u201d'],
   className: 'qt-chat-dialogue',
 }
 
