@@ -32,7 +32,7 @@ import {
 } from './physical-backup';
 import { getLLMLogsSQLiteClient, closeLLMLogsSQLiteClient } from './llm-logs-client';
 import { runLLMLogsIntegrityCheck, startLLMLogsPeriodicCheckpoints } from './llm-logs-protection';
-import { getMountIndexSQLiteClient } from './mount-index-client';
+import { getMountIndexSQLiteClient, closeMountIndexSQLiteClient } from './mount-index-client';
 import { runMountIndexIntegrityCheck, startMountIndexPeriodicCheckpoints } from './mount-index-protection';
 import { acquireInstanceLock, releaseActiveInstanceLock, InstanceLockError } from './instance-lock';
 import { getInstanceLockPath } from '@/lib/paths';
@@ -629,6 +629,18 @@ export class SQLiteBackend implements DatabaseBackend {
         });
       }
 
+      // ...then the mount index (also non-fatal). `connect()` opens all three
+      // databases, so `disconnect()` must close all three — otherwise a
+      // teardown leaves the mount index pointing at a file that a caller may
+      // be about to replace underneath it (bug 64).
+      try {
+        closeMountIndexSQLiteClient();
+      } catch (error) {
+        logger.error('Error closing mount index database during disconnect', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
       closeSQLiteClient();
       this.db = null;
       this._state = 'disconnected';
@@ -653,6 +665,49 @@ export class SQLiteBackend implements DatabaseBackend {
   }
 
   /**
+   * Return the live better-sqlite3 handle, self-healing a handle that was
+   * closed behind the backend's back.
+   *
+   * The backend caches its handle at connect time. If someone closes the
+   * underlying client out-of-band — `closeSQLiteClient()` called directly
+   * rather than through `disconnect()` — every subsequent operation throws
+   * `TypeError: The database connection is not open` for the life of the
+   * process, because nothing tells the backend to let go (bug 64). When the
+   * backend still believes it is connected but its handle is shut, re-fetch
+   * from the client singleton instead of handing out a corpse.
+   *
+   * Deliberately does NOT reopen while `_state` is anything other than
+   * `'connected'`: a suspended backend (see `suspendDatabase()`) is mid-way
+   * through having its database files replaced, and reopening there would
+   * bind to the pre-swap inode.
+   */
+  private requireDb(): DatabaseType {
+    const db = this.db;
+
+    if (db && db.open) {
+      return db;
+    }
+
+    if (db && this._state === 'connected') {
+      logger.warn('SQLite handle was closed out-of-band — reopening', {
+        path: this.config.path,
+      });
+
+      const fresh = getSQLiteClient(this.config);
+      if (!fresh.open) {
+        this.db = null;
+        this._state = 'disconnected';
+        throw new Error('SQLite backend not connected');
+      }
+
+      this.db = fresh;
+      return fresh;
+    }
+
+    throw new Error('SQLite backend not connected');
+  }
+
+  /**
    * Get a collection by name
    */
   /**
@@ -666,25 +721,21 @@ export class SQLiteBackend implements DatabaseBackend {
   }
 
   getCollection<T = unknown>(name: string): DatabaseCollection<T> {
-    if (!this.db) {
-      throw new Error('SQLite backend not connected');
-    }
+    const db = this.requireDb();
 
     const jsonColumns = this.collectionJsonColumns.get(name) || [];
     const arrayColumns = this.collectionArrayColumns.get(name) || [];
     const booleanColumns = this.collectionBooleanColumns.get(name) || [];
     const blobColumns = this.collectionBlobColumns.get(name) || [];
 
-    return new SQLiteCollection<T>(this.db, name, jsonColumns, arrayColumns, booleanColumns, blobColumns);
+    return new SQLiteCollection<T>(db, name, jsonColumns, arrayColumns, booleanColumns, blobColumns);
   }
 
   /**
    * Ensure a collection (table) exists with the specified schema
    */
   async ensureCollection(name: string, schema: z.ZodType): Promise<void> {
-    if (!this.db) {
-      throw new Error('SQLite backend not connected');
-    }
+    const db = this.requireDb();
 
     try {
       // Store the schema for later use
@@ -695,7 +746,7 @@ export class SQLiteBackend implements DatabaseBackend {
 
       // Execute DDL
       for (const sql of ddlStatements) {
-        this.db.exec(sql);
+        db.exec(sql);
       }
 
       // Detect JSON, array, and boolean columns from schema
@@ -726,12 +777,10 @@ export class SQLiteBackend implements DatabaseBackend {
    * Drop a collection (table)
    */
   async dropCollection(name: string): Promise<void> {
-    if (!this.db) {
-      throw new Error('SQLite backend not connected');
-    }
+    const db = this.requireDb();
 
     try {
-      this.db.exec(`DROP TABLE IF EXISTS "${name}"`);
+      db.exec(`DROP TABLE IF EXISTS "${name}"`);
       this.collectionSchemas.delete(name);
       this.collectionJsonColumns.delete(name);
       this.collectionArrayColumns.delete(name);
@@ -752,12 +801,10 @@ export class SQLiteBackend implements DatabaseBackend {
    * List all collections (tables)
    */
   async listCollections(): Promise<string[]> {
-    if (!this.db) {
-      throw new Error('SQLite backend not connected');
-    }
+    const db = this.requireDb();
 
     try {
-      const result = this.db.prepare(`
+      const result = db.prepare(`
         SELECT name FROM sqlite_master
         WHERE type = 'table'
         AND name NOT LIKE 'sqlite_%'
@@ -777,9 +824,7 @@ export class SQLiteBackend implements DatabaseBackend {
    * Execute a raw SQL query
    */
   async rawQuery<R = unknown>(query: string, params: unknown[] = []): Promise<R> {
-    if (!this.db) {
-      throw new Error('SQLite backend not connected');
-    }
+    const db = this.requireDb();
 
     try {
       // Determine if this is a row-returning statement. CTEs (`WITH ...`)
@@ -793,9 +838,9 @@ export class SQLiteBackend implements DatabaseBackend {
         trimmed.startsWith('WITH') ||
         trimmed.startsWith('EXPLAIN');
       if (isRowReturning) {
-        return this.db.prepare(query).all(...params) as R;
+        return db.prepare(query).all(...params) as R;
       } else {
-        return this.db.prepare(query).run(...params) as R;
+        return db.prepare(query).run(...params) as R;
       }
     } catch (error) {
       logger.error('Raw query failed', {
@@ -810,13 +855,11 @@ export class SQLiteBackend implements DatabaseBackend {
    * Begin a transaction
    */
   async beginTransaction(): Promise<DatabaseTransaction> {
-    if (!this.db) {
-      throw new Error('SQLite backend not connected');
-    }
+    const db = this.requireDb();
 
     // SQLite transactions in better-sqlite3 are handled via the transaction() method
     // For the interface compliance, we provide a wrapper
-    return new SQLiteTransaction(this.db, this.collectionJsonColumns, this.collectionBooleanColumns, this.collectionBlobColumns);
+    return new SQLiteTransaction(db, this.collectionJsonColumns, this.collectionBooleanColumns, this.collectionBlobColumns);
   }
 
   /**

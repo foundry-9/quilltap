@@ -5,13 +5,30 @@
 **Provenance**: the quilltap-v5 native port's differential harness, its
 dogfood walks against a copy of real data, and — from Bug 62 — v4's own
 feature-spec work
-**Status**: Bugs **1–63** are **fixed in v4**; Bug **64** is **open**. Bug 64
-(filed 2026-08-13, from dogfooding a fresh Docker instance): first-run
-encryption setup closes the main SQLite client out-of-band, but the backend
-and manager singletons keep the dead handle cached — every repository call
-fails with `The database connection is not open` until the process is
-restarted. The fix spec (teardown through `closeDatabase()`, convert, then
-`initializeDatabase()`; same treatment for auto-lock) is in the bug file. Bug
+**Status**: Bugs **1–65** are **fixed in v4**. Bug 65
+(filed and fixed 2026-08-13, noticed while verifying bug 64 on a fresh
+instance): the version guard had been silently inert since 2026-08-12.
+`version-guard.ts` reached into `migrations/lib/database-utils` with a
+synchronous `require()`, and that module became an **async module** in
+Turbopack's graph when the bug 58 fix added a static `instance-lock` import to
+it — a sync `require()` of an async module returns an exports object that is
+never populated, so every call threw `isSQLiteBackend is not a function` into a
+catch that allowed startup anyway. `highest_app_version` was never stored and
+`minServerVersion` never reached `.dbkey`, so an older binary would open a
+newer database without complaint. Both functions are now `async` and use
+`await import`; failures are announced through the migration-warnings channel
+instead of dying in the log; a `no-restricted-syntax` rule fails the build on
+the next sync `require` of `migrations/` from app code; and the tests assert
+the *effect* rather than the absence of a throw. Bug 64
+(filed and fixed 2026-08-13, from dogfooding a fresh Docker instance):
+first-run encryption setup closed the main SQLite client out-of-band, but the
+backend and manager singletons kept the dead handle cached — every repository
+call failed with `The database connection is not open` until the process was
+restarted. Teardown now runs through new `suspendDatabase()` /
+`resumeDatabase()` chokepoints that recycle every handle while keeping the
+backend instance (a rebuilt backend would drop the `ensureCollection` column
+maps that live repositories never re-register), all three databases are
+converted, and auto-lock got the same treatment. Bug
 63 (filed and fixed 2026-08-13): text replacements fired inside fenced code
 blocks and inline code; both the replacement plugin and the emoji typeahead
 now share a `$isInCodeContext` guard. Bug 62 (filed and fixed
@@ -242,7 +259,8 @@ One row per bug, newest last. **Bug** links to the entry; **Fix site** and
 | 61 | [a wardrobe edit staged before the worn snapshot arrives is dropped](bugs/fixed/bug-61-staged-outfit-edit-dropped.md) | 2026-08-12 | 2026-08-12 | Medium (silent data loss — the staged outfit is discarded, nothing is sent, nothing errors, and the dialog closes exactly as it does on a successful save) | Staging in the in-chat Wardrobe dialog before `refreshOutfit`'s three-round-trip chain publishes the worn snapshot is lost twice over: the first Live seed overwrites the staged slots, and the flush skips any character with no captured baseline and then returns `true`, so Done closes as if it saved | new `lib/wardrobe/staged-live-outfits.ts` + `components/wardrobe/wardrobe-control-dialog.tsx` | Owed (Faithful) |
 | 62 | [the fallback dialogue pattern matches only straight quotes](bugs/fixed/bug-62-dialogue-fallback-quotes.md) | 2026-08-13 | 2026-08-13 | Medium (cosmetic but pervasive: curly-quoted dialogue had never been highlighted on the fallback path, and most model output is curly-quoted) | `DEFAULT_RENDERING_PATTERNS`' dialogue entry and `DEFAULT_DIALOGUE_DETECTION` both spelled their "straight and curly" character sets with the straight quote **duplicated** — every byte `0x22` — so curly-quoted dialogue got no `qt-chat-dialogue` styling in any chat falling through to the defaults | `lib/chat/roleplay-rendering.ts` — both defaults respelled with `“`/`”` escapes, plus fallback-path coverage in the server suite and the `MessageContent` client suite | Owed (Faithful) — moves v5's captured markdown parity corpus |
 | 63 | [text replacements fire inside code blocks and inline code](bugs/fixed/bug-63-text-replacement-in-code.md) | 2026-08-13 | 2026-08-13 | Medium (silent corruption of text as the user types it, in the one place a substitution is never wanted; nothing signals it happened and the result is a plausible word, so it reads as your own typo) | `TextReplacementPlugin`'s candidate-word read checks only `$isTextNode(anchorNode)` and cursor-at-end — but `CodeHighlightNode` **extends** `TextNode`, so fenced-block tokens satisfy it, and nothing reads `hasFormat('code')` for inline runs, so both code surfaces fall straight through into the replacement path. The block-check idiom already existed in the same directory (`FormattingCommandPlugin.tsx:223-225`) and was simply not reused; the plugin had no tests at all | new `components/chat/lexical/utils/code-context.ts` (`$isInCodeContext`) shared by `TextReplacementPlugin` and the new `EmojiTypeaheadPlugin` (renamed `CharTypeaheadPlugin` in Layer 2.0u), plus the previously-missing `TextReplacementPlugin` suite | Not yet ported — v5's `textReplacementPlugin` needs the ProseMirror equivalent when it lands |
-| 64 | [first-run encryption setup wedges every database connection until restart](bugs/bug-64-setup-stale-db-handle.md) | 2026-08-13 | — | High (every fresh instance, at first contact; no data loss, but the whole app errors until a manual restart and nothing on screen says so) | `handleSetup` closes the main SQLite client out-of-band before converting the files to SQLCipher, but `SQLiteBackend.db` still holds the closed handle behind `_state === 'connected'` and the manager's initialized-forever cache — `closeDatabase()`, the teardown chokepoint, has zero callers. Riders: the llm-logs client stays open on the unlinked pre-conversion inode (log writes lost), the mount-index DB isn't converted until the next restart, and `handleLock` shares the same pattern | `app/api/v1/system/unlock/route.ts` (`handleSetup`, `handleLock`) + `lib/database/backends/sqlite/backend.ts` (spec in the bug file) | Design note for the port's key-setup flow |
+| 64 | [first-run encryption setup wedges every database connection until restart](bugs/fixed/bug-64-setup-stale-db-handle.md) | 2026-08-13 | 2026-08-13 | High (every fresh instance, at first contact; no data loss, but the whole app errors until a manual restart and nothing on screen says so) | `handleSetup` closed the main SQLite client out-of-band before converting the files to SQLCipher, but `SQLiteBackend.db` still held the closed handle behind `_state === 'connected'` and the manager's initialized-forever cache. Riders: the llm-logs client stayed open on the unlinked pre-conversion inode (log writes lost), the mount-index DB wasn't converted until the next restart, and `handleLock` shared the same pattern. Fixed by new `suspendDatabase()` / `resumeDatabase()` manager chokepoints that recycle the handles while *keeping* the backend instance — a rebuilt backend would drop the `ensureCollection` column maps that already-initialized repositories never re-register — plus a mount-index close in `disconnect()`, all three DBs converted, and an out-of-band-close self-heal in the backend | `app/api/v1/system/unlock/route.ts` (`handleSetup`, `handleLock`, `handleUnlock`) + `lib/database/manager.ts` + `lib/database/backends/sqlite/backend.ts` + `app/setup/page.tsx` | Design note for the port's key-setup flow |
+| 65 | [the version guard has been silently inert since 2026-08-12](bugs/fixed/bug-65-version-guard-async-require.md) | 2026-08-13 | 2026-08-13 | Medium-High (a safety gate that reports success while doing nothing; no corruption caused by the bug, but the only barrier between an older binary and a newer database has been off since 2026-08-12, and every instance created since then has no version floor at all) | `version-guard.ts:50-54` and `:141-145` reach `migrations/lib/database-utils` with a **synchronous `require()`**. That module became an async module in Turbopack's graph when `02821db6` (the bug 58 fix) added a static `instance-lock` import to it, and a sync `require()` of an async module returns an exports object that is never populated — measured empty even a microtask later, while `await import()` of the same specifier returns all twelve exports. Every call throws `isSQLiteBackend is not a function` into a catch that allows startup anyway, so `highest_app_version` is never stored (V4test has no row; Friday is frozen at `4.8.0`) and `minServerVersion` never reaches `.dbkey` | `lib/startup/version-guard.ts` (both functions async, `await import`, failures announced through the migration-warnings channel) + `instrumentation.ts` call sites + an `eslint.config.mjs` `no-restricted-syntax` rule banning sync `require` of `migrations/` from app code; **not** by unwinding the import edge in `database-utils.ts`, which would have left the next static import free to break it again | Design note: port the version-floor *behaviour* from the bug file, not from v4's code — v4's had never actually run |
 
 ### Families and reading order
 

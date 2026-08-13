@@ -44,6 +44,8 @@ For those who prefer their security to be proactive rather than merely passive �
 
 When enabled, Quilltap monitors your activity (or, more precisely, the absence thereof). After a configurable number of minutes of idleness, it quietly closes the database connections, clears the encryption key from memory, and redirects you to a locked screen. One simply re-enters the passphrase, and the application resumes precisely where it left off, as though the interruption had never occurred.
 
+Every ledger is shuttered when the lock falls — the main database, the conversation logs, and the document-store index together — and every one of them is opened again on your passphrase. The establishment need not be stopped and started to come back to its senses; it merely wakes up.
+
 **To configure auto-lock:**
 
 1. Navigate to **Settings > Data & System > Auto-Lock** (or use the navigation tool below)
@@ -161,6 +163,14 @@ npx quilltap db --lock-clean
 ```
 
 `--lock-status` reports the holder's last heartbeat, which is the useful tell: a live instance updates it continuously, while a stale one's grows steadily older. Should you find yourself reaching for `--lock-override`, pause — it seizes the lock regardless of who holds it, and if that party is in fact alive, you have arranged precisely the collision the lock was built to prevent.
+
+### The Version Floor
+
+A newer Quilltap may alter the shape of your data; an older one, meeting that altered shape, will not recognize it and may make matters considerably worse. Quilltap therefore keeps a note of the highest version that has ever opened your database, and stamps the same figure into the key file so the desktop shell can consult it before the server is even started.
+
+Should an older edition come calling, it declines the appointment and shows you a screen saying so — naming both versions and pointing out that installing the newer one is by far the most civilized course. Nothing is touched in the meantime; the server stays up only far enough to explain itself.
+
+The note is rewritten on every startup, so ordinary upgrading requires nothing of you. Should the guard ever be unable to complete its inspection, it now says so in a startup notice rather than passing over the matter in silence: startup proceeds, but you are told that the floor could not be verified this time.
 
 ### The Empty-House Rule
 

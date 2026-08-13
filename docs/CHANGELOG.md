@@ -4,6 +4,53 @@
 
 ### 4.9-dev
 
+### 4.8.3
+
+#### Fix: the version guard was silently inert since 2026-08-12 (bug 65)
+
+The guard that stops an older Quilltap from opening a database a newer Quilltap has already migrated had been doing nothing since 2026-08-12, while reporting success. Two `error` lines at the top of every boot log — `isSQLiteBackend is not a function` — were the only evidence.
+
+`lib/startup/version-guard.ts` reached into `migrations/lib/database-utils` with a synchronous `require()`. That module became an async module in the bundler's server graph when the bug 58 fix added a static `instance-lock` import to it, and a sync `require()` of an async module returns an exports object whose body has never run: every property `undefined`, every call a TypeError, straight into a catch that allows startup anyway. So `instance_settings.highest_app_version` was never written (instances created since 2026-08-12 have no row at all), `minServerVersion` never reached the `.dbkey` where the Electron shell looks for it, and an older binary would open a newer database without complaint.
+
+Both guard functions are now `async` and use `await import(...)`, matching every other app-side reach into `migrations/`; `instrumentation.ts` awaits them. The import edge in `database-utils.ts` was deliberately left alone — unwinding it would have left the next static import free to break the guard again, silently.
+
+Three changes beyond the mechanism:
+
+- The guard can now report that it is broken. Both catch arms still allow startup, but they also push a warning through the migration-warnings channel, so a failure reaches the user instead of dying at `error` level in a log nobody reads on a healthy boot.
+- An ESLint `no-restricted-syntax` rule fails the build on `require('@/migrations/…')` — and on the relative form — anywhere in `lib/`, `app/`, `components/`, or `hooks/`.
+- The tests assert the effect rather than the absence of a throw: that `storeCurrentVersion()` writes `highest_app_version` with the running version, that a failed guard announces a warning, and — since Jest cannot reproduce the bundler's async-module classification — a source-level check that the file contains no sync `require` of the migration utilities.
+
+No repair is needed for existing instances: the correct value is written on the next boot. An instance with no row gets one; an instance frozen at an old value is corrected upward.
+
+#### Bug 65 filed: the version guard has been silently inert since 2026-08-12
+
+Docs only; no code change. `lib/startup/version-guard.ts` reaches into `migrations/lib/database-utils` with a synchronous `require()`. That module became an async module in Turbopack's graph when the bug 58 fix added a static `instance-lock` import to it, and a sync `require()` of an async module returns an exports object that is never populated — measured empty even a microtask later, while `await import()` of the same specifier returns all twelve exports. Every call throws `isSQLiteBackend is not a function` into a catch that allows startup anyway.
+
+Consequences: `instance_settings.highest_app_version` is never written (a fresh instance has no row at all; Friday is frozen at `4.8.0`), `minServerVersion` never reaches `.dbkey`, and an older binary will open a newer database without complaint. Nothing is corrupted by the bug itself, but the guard has been off for a day and reports success while doing nothing.
+
+The bug file (`docs/developer/bugs/bug-65-version-guard-async-require.md`) has the measurements, the experiment that isolates the import edge, and the fix spec: make both guard functions async and `await import`, surface the failure instead of swallowing it, and test the effect rather than the absence of a throw. Explicitly *not* fixed by unwinding the import edge — that would leave the next static import free to break it again, silently.
+
+#### Fix: first-run encryption setup wedged every database connection until restart (bug 64)
+
+Completing the encryption-key setup on a fresh instance left the app broken until the process was stopped and started. Every repository call failed with "The database connection is not open" — the session route, `instance_settings` reads, scheduled housekeeping, job reaping — while the HTTP server kept serving and the setup screen reported success. No data was lost; the encryption conversion itself always completed correctly.
+
+The setup handler closed the SQLite client directly before converting the database files. That respects only the client singleton's invariant: `SQLiteBackend` went on caching the closed handle, and the manager went on handing out that backend, so nothing above the client layer ever learned the connection was gone.
+
+Teardown now goes through two new manager functions, `suspendDatabase()` and `resumeDatabase()`, which close and reopen every handle while keeping the cached backend instance. Keeping the instance matters: repositories latch a per-instance "already ran `ensureCollection`" flag, and the resulting JSON/array/boolean column maps live on the backend, so a rebuilt backend would leave those maps empty for every live repository and structured columns would silently start round-tripping as raw strings.
+
+Four related defects fixed in the same pass:
+
+- The LLM-logs client stayed open while its file was converted, so subsequent log writes landed in the unlinked pre-conversion inode and were lost.
+- The mount-index database was not converted at setup at all — document-store bytes sat in plaintext on disk until the next restart. All three databases are now converted together.
+- `SQLiteBackend.disconnect()` closed two of the three databases `connect()` opens. It now closes the mount index too.
+- Auto-lock had the same disease, so the lock → unlock cycle wedged identically and without even a restart prompt. Lock suspends and unlock resumes; no restart needed.
+
+The backend also self-heals now: if it holds a handle that was closed behind its back, it re-fetches from the client singleton instead of handing out a dead one. It deliberately refuses to do this while suspended, since that is exactly when the database files are being replaced.
+
+If the reopen fails after setup, the response still carries the one-time encryption key — it is displayed exactly once, so it is never withheld behind an error — and the setup screen shows a restart notice beside it.
+
+The `better-sqlite3` test mock now throws `TypeError: The database connection is not open` from `prepare`/`exec`/`pragma` after `close()`, matching the real driver. A mock that kept answering after close hid this class of defect.
+
 ### 4.8.2
 
 #### Bug 64 filed: first-run encryption setup wedges the database until restart

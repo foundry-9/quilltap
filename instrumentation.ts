@@ -383,7 +383,7 @@ export async function register() {
       // schema-altering migrations).
       {
         const { checkVersionGuard } = await import('./lib/startup/version-guard');
-        const versionGuardResult = checkVersionGuard();
+        const versionGuardResult = await checkVersionGuard();
 
         if (versionGuardResult.blocked) {
           logger.error('Version guard: database was modified by a newer Quilltap version', {
@@ -443,7 +443,7 @@ export async function register() {
       // know not to touch this database
       {
         const { storeCurrentVersion } = await import('./lib/startup/version-guard');
-        storeCurrentVersion();
+        await storeCurrentVersion();
       }
 
       // Clean up migration runner's database connection

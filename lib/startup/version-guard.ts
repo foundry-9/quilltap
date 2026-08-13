@@ -21,6 +21,7 @@
 import semver from 'semver';
 import { logger } from '@/lib/logger';
 import { getDbKeyPath } from '@/lib/startup/dbkey';
+import { startupState } from '@/lib/startup/startup-state';
 
 /** Version assumed for databases without an instance_settings table */
 const LEGACY_ASSUMED_VERSION = '3.3.0-dev.127';
@@ -42,8 +43,16 @@ export type VersionGuardResult = {
  * This runs BEFORE migrations, using the migration database utilities directly.
  * It creates the instance_settings table with CREATE TABLE IF NOT EXISTS so it
  * works even on first run.
+ *
+ * Bug 65: the migration utilities MUST be reached with `await import(...)`.
+ * `migrations/lib/database-utils` is an async module in the bundler's server
+ * graph (it imports the instance lock), and a synchronous `require()` of an
+ * async module hands back an exports object whose body has never run — every
+ * property `undefined`. That silently sent this guard down its catch arm on
+ * every boot from 2026-08-12 until this was caught. Never reintroduce a sync
+ * require here.
  */
-export function checkVersionGuard(): VersionGuardResult {
+export async function checkVersionGuard(): Promise<VersionGuardResult> {
   const log = logger.child({ module: 'version-guard' });
 
   try {
@@ -51,7 +60,7 @@ export function checkVersionGuard(): VersionGuardResult {
       isSQLiteBackend,
       getSQLiteDatabase,
       sqliteTableExists,
-    } = require('@/migrations/lib/database-utils');
+    } = await import('@/migrations/lib/database-utils');
 
     if (!isSQLiteBackend()) {
       return { blocked: false };
@@ -121,10 +130,38 @@ export function checkVersionGuard(): VersionGuardResult {
   } catch (error) {
     // If the version guard itself fails, log and allow startup to continue.
     // We don't want a bug in the guard to brick the server.
+    //
+    // But a guard that cannot tell you it is broken is not a guard (bug 65):
+    // announce the failure through the migration-warnings channel so it reaches
+    // a human instead of dying at `error` level in a log nobody reads.
+    const message = error instanceof Error ? error.message : String(error);
     log.error('Version guard check failed — allowing startup to proceed', {
+      error: message,
+    });
+    announceGuardFailure(
+      `The version guard was unable to complete its inspection at startup, so the House ` +
+        `cannot presently vouch that this database has never been opened by a later ` +
+        `edition of Quilltap. The doors were opened regardless. Should anything look ` +
+        `peculiar, a word to the maintainers would be most welcome. (${message})`,
+      log,
+    );
+    return { blocked: false };
+  }
+}
+
+/**
+ * Push a guard failure into the migration-warnings channel.
+ *
+ * Never throws: a broken warning path must not turn a non-fatal guard failure
+ * into a fatal startup failure.
+ */
+function announceGuardFailure(warning: string, log: ReturnType<typeof logger.child>): void {
+  try {
+    startupState.addMigrationWarning(warning);
+  } catch (error) {
+    log.error('Failed to surface version guard failure to the user', {
       error: error instanceof Error ? error.message : String(error),
     });
-    return { blocked: false };
   }
 }
 
@@ -133,8 +170,12 @@ export function checkVersionGuard(): VersionGuardResult {
  *
  * Called after migrations complete on every startup, so the stored version
  * always reflects the latest version that successfully initialized this database.
+ *
+ * Bug 65: reached with `await import(...)` for the reason spelled out on
+ * `checkVersionGuard` above. A sync `require()` here writes nothing at all —
+ * neither the stored version nor `minServerVersion` in the .dbkey.
  */
-export function storeCurrentVersion(): void {
+export async function storeCurrentVersion(): Promise<void> {
   const log = logger.child({ module: 'version-guard' });
 
   try {
@@ -142,7 +183,7 @@ export function storeCurrentVersion(): void {
       isSQLiteBackend,
       getSQLiteDatabase,
       sqliteTableExists,
-    } = require('@/migrations/lib/database-utils');
+    } = await import('@/migrations/lib/database-utils');
 
     if (!isSQLiteBackend()) {
       return;
@@ -177,9 +218,16 @@ export function storeCurrentVersion(): void {
     // reject launches before even opening the database.
     storeMinServerVersionInDbKeys(currentVersion, log);
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     log.error('Failed to store current version in instance_settings', {
-      error: error instanceof Error ? error.message : String(error),
+      error: message,
     });
+    announceGuardFailure(
+      `The House was unable to record which edition of Quilltap last attended this ` +
+        `database. Nothing is lost, but the version guard will have less to go on ` +
+        `should an older edition come calling. (${message})`,
+      log,
+    );
   }
 }
 

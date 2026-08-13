@@ -259,6 +259,8 @@ jest.mock('@/lib/database/manager', () => ({
   isDatabaseInitialized: jest.fn().mockReturnValue(false),
   isDatabaseConnected: jest.fn().mockResolvedValue(false),
   closeDatabase: jest.fn().mockResolvedValue(undefined),
+  suspendDatabase: jest.fn().mockResolvedValue(false),
+  resumeDatabase: jest.fn().mockResolvedValue(null),
   getCollection: jest.fn(),
   ensureCollection: jest.fn().mockResolvedValue(undefined),
   listCollections: jest.fn().mockResolvedValue([]),
