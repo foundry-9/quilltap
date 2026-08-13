@@ -44,6 +44,8 @@ For those who prefer their security to be proactive rather than merely passive �
 
 When enabled, Quilltap monitors your activity (or, more precisely, the absence thereof). After a configurable number of minutes of idleness, it quietly closes the database connections, clears the encryption key from memory, and redirects you to a locked screen. One simply re-enters the passphrase, and the application resumes precisely where it left off, as though the interruption had never occurred.
 
+Every ledger is shuttered when the lock falls — the main database, the conversation logs, and the document-store index together — and every one of them is opened again on your passphrase. The establishment need not be stopped and started to come back to its senses; it merely wakes up.
+
 **To configure auto-lock:**
 
 1. Navigate to **Settings > Data & System > Auto-Lock** (or use the navigation tool below)

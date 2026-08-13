@@ -12,6 +12,7 @@ export default function SetupPage() {
   const [passphrase, setPassphrase] = useState('');
   const [confirmPassphrase, setConfirmPassphrase] = useState('');
   const [generatedPepper, setGeneratedPepper] = useState('');
+  const [requiresRestart, setRequiresRestart] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { copied, copy } = useCopyToClipboard();
@@ -107,6 +108,7 @@ export default function SetupPage() {
       }
 
       setGeneratedPepper(data.pepper);
+      setRequiresRestart(Boolean(data.requiresRestart));
       setDbKeyState('resolved');
     } catch {
       setError('Failed to complete setup');
@@ -183,11 +185,21 @@ export default function SetupPage() {
               {copied ? 'Copied!' : 'Copy'}
             </button>
           </div>
+          {requiresRestart && (
+            <div className="qt-alert qt-alert-warning">
+              <p className="qt-text-small font-semibold">One last formality: please restart Quilltap.</p>
+              <p className="qt-text-xs qt-text-muted mt-1">
+                Your key is safely stored and your data is entirely intact — the strongroom door
+                simply refused to swing back open on the first ask. Stop Quilltap and start it
+                again, and the establishment will be in perfect working order.
+              </p>
+            </div>
+          )}
           <button
             onClick={() => navigateAfterSetup()}
             className="qt-button qt-button-primary w-full py-2"
           >
-            Continue to Quilltap
+            {requiresRestart ? 'Continue Anyway' : 'Continue to Quilltap'}
           </button>
         </div>
       </div>

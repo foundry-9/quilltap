@@ -4411,7 +4411,9 @@ Returns the current database key state.
 
 #### `POST /api/v1/system/unlock?action=setup`
 
-First-run setup: generates encryption pepper, writes `.dbkey` file, and encrypts any existing plaintext databases.
+First-run setup: generates encryption pepper, writes `.dbkey` file, and encrypts any existing plaintext databases — main, LLM logs, and mount index.
+
+The conversion replaces the database files, so the handler suspends the database through `suspendDatabase()` (`lib/database/manager.ts`) beforehand and resumes it afterwards. A `200` therefore means the app is usable, not merely that the key was written. Never close the SQLite clients directly here: doing so leaves the backend caching a shut handle and wedges every repository call until restart (bug 64).
 
 **Request Body**:
 
@@ -4427,9 +4429,12 @@ First-run setup: generates encryption pepper, writes `.dbkey` file, and encrypts
 {
   "success": true,
   "pepper": "hex-encoded-pepper-value",
+  "requiresRestart": false,
   "message": "Encryption key generated and stored. Save this value — it will not be displayed again."
 }
 ```
+
+`requiresRestart` is `true` when the encryption conversion succeeded but the database could not be reopened in-process. The response still carries the pepper — it is displayed exactly once, so it is never withheld behind an error — and the setup screen shows a restart notice alongside it. No data is lost; the next start opens the converted files normally.
 
 #### `POST /api/v1/system/unlock?action=unlock`
 
@@ -4491,6 +4496,24 @@ Change the passphrase protecting the `.dbkey` file. Requires the app to be in `r
   "success": true
 }
 ```
+
+#### `POST /api/v1/system/unlock?action=lock`
+
+Re-lock the application: suspend the database and clear the pepper from memory. Used by the auto-lock idle timer. Requires the `resolved` state and a user passphrase (there is nothing to unlock with otherwise).
+
+Suspension goes through `suspendDatabase()`, which closes the main, LLM-logs, and mount-index handles while keeping the cached backend instance. The matching `?action=unlock` calls `resumeDatabase()` to reopen them, so the lock → unlock cycle needs no restart. Rebuilding the backend instead would work at the handle level but drop the per-table column metadata that already-initialized repositories never re-register.
+
+**Request Body**: `{}`
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true
+}
+```
+
+**Errors**: `400` if the app is not unlocked, or if no user passphrase is set.
 
 ---
 
