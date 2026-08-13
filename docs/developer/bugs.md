@@ -5,7 +5,16 @@
 **Provenance**: the quilltap-v5 native port's differential harness, its
 dogfood walks against a copy of real data, and — from Bug 62 — v4's own
 feature-spec work
-**Status**: Bugs **1–62** are **fixed in v4**. Bug 62 (filed and fixed
+**Status**: Bugs **1–63** are **fixed in v4**; Bug **64** is **open**. Bug 64
+(filed 2026-08-13, from dogfooding a fresh Docker instance): first-run
+encryption setup closes the main SQLite client out-of-band, but the backend
+and manager singletons keep the dead handle cached — every repository call
+fails with `The database connection is not open` until the process is
+restarted. The fix spec (teardown through `closeDatabase()`, convert, then
+`initializeDatabase()`; same treatment for auto-lock) is in the bug file. Bug
+63 (filed and fixed 2026-08-13): text replacements fired inside fenced code
+blocks and inline code; both the replacement plugin and the emoji typeahead
+now share a `$isInCodeContext` guard. Bug 62 (filed and fixed
 2026-08-13): the fallback roleplay dialogue pattern and dialogue detection both
 spelled their "straight and curly" quote sets with the straight quote
 duplicated, so curly-quoted dialogue had never been highlighted in any chat that
@@ -233,6 +242,7 @@ One row per bug, newest last. **Bug** links to the entry; **Fix site** and
 | 61 | [a wardrobe edit staged before the worn snapshot arrives is dropped](bugs/fixed/bug-61-staged-outfit-edit-dropped.md) | 2026-08-12 | 2026-08-12 | Medium (silent data loss — the staged outfit is discarded, nothing is sent, nothing errors, and the dialog closes exactly as it does on a successful save) | Staging in the in-chat Wardrobe dialog before `refreshOutfit`'s three-round-trip chain publishes the worn snapshot is lost twice over: the first Live seed overwrites the staged slots, and the flush skips any character with no captured baseline and then returns `true`, so Done closes as if it saved | new `lib/wardrobe/staged-live-outfits.ts` + `components/wardrobe/wardrobe-control-dialog.tsx` | Owed (Faithful) |
 | 62 | [the fallback dialogue pattern matches only straight quotes](bugs/fixed/bug-62-dialogue-fallback-quotes.md) | 2026-08-13 | 2026-08-13 | Medium (cosmetic but pervasive: curly-quoted dialogue had never been highlighted on the fallback path, and most model output is curly-quoted) | `DEFAULT_RENDERING_PATTERNS`' dialogue entry and `DEFAULT_DIALOGUE_DETECTION` both spelled their "straight and curly" character sets with the straight quote **duplicated** — every byte `0x22` — so curly-quoted dialogue got no `qt-chat-dialogue` styling in any chat falling through to the defaults | `lib/chat/roleplay-rendering.ts` — both defaults respelled with `“`/`”` escapes, plus fallback-path coverage in the server suite and the `MessageContent` client suite | Owed (Faithful) — moves v5's captured markdown parity corpus |
 | 63 | [text replacements fire inside code blocks and inline code](bugs/fixed/bug-63-text-replacement-in-code.md) | 2026-08-13 | 2026-08-13 | Medium (silent corruption of text as the user types it, in the one place a substitution is never wanted; nothing signals it happened and the result is a plausible word, so it reads as your own typo) | `TextReplacementPlugin`'s candidate-word read checks only `$isTextNode(anchorNode)` and cursor-at-end — but `CodeHighlightNode` **extends** `TextNode`, so fenced-block tokens satisfy it, and nothing reads `hasFormat('code')` for inline runs, so both code surfaces fall straight through into the replacement path. The block-check idiom already existed in the same directory (`FormattingCommandPlugin.tsx:223-225`) and was simply not reused; the plugin had no tests at all | new `components/chat/lexical/utils/code-context.ts` (`$isInCodeContext`) shared by `TextReplacementPlugin` and the new `EmojiTypeaheadPlugin` (renamed `CharTypeaheadPlugin` in Layer 2.0u), plus the previously-missing `TextReplacementPlugin` suite | Not yet ported — v5's `textReplacementPlugin` needs the ProseMirror equivalent when it lands |
+| 64 | [first-run encryption setup wedges every database connection until restart](bugs/bug-64-setup-stale-db-handle.md) | 2026-08-13 | — | High (every fresh instance, at first contact; no data loss, but the whole app errors until a manual restart and nothing on screen says so) | `handleSetup` closes the main SQLite client out-of-band before converting the files to SQLCipher, but `SQLiteBackend.db` still holds the closed handle behind `_state === 'connected'` and the manager's initialized-forever cache — `closeDatabase()`, the teardown chokepoint, has zero callers. Riders: the llm-logs client stays open on the unlinked pre-conversion inode (log writes lost), the mount-index DB isn't converted until the next restart, and `handleLock` shares the same pattern | `app/api/v1/system/unlock/route.ts` (`handleSetup`, `handleLock`) + `lib/database/backends/sqlite/backend.ts` (spec in the bug file) | Design note for the port's key-setup flow |
 
 ### Families and reading order
 

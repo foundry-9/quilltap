@@ -4,6 +4,10 @@
 
 ### 4.8.2
 
+#### Bug 64 filed: first-run encryption setup wedges the database until restart
+
+Docs only; no code change. On a fresh instance, completing the encryption-key setup closes the main SQLite connection out-of-band before converting the database files, but the backend and manager singletons keep the dead handle cached — every repository call then fails with "The database connection is not open" until the process is restarted. No data is lost; the conversion itself completes correctly. The bug file (`docs/developer/bugs/bug-64-setup-stale-db-handle.md`) documents the root cause and the fix as a spec: tear down through `closeDatabase()`, convert all three databases (the mount-index DB is currently skipped until the next restart), reinitialize before returning success, and give the auto-lock path the same treatment. Also noted: the LLM-logs client stays open on the pre-conversion file during setup, losing log writes.
+
 #### Smart typography
 
 Two parts, split by how confident the rule is.
