@@ -7,6 +7,42 @@ This lands the typeahead shell that [Layer 2](../composer-typeahead.md) (`@`/`#`
 
 > **Portability mandate.** This feature must be implementable in **quilltap-v5** (Rust core + Angular 21 SPA, ProseMirror editor) without redesign. v4 uses **Lexical**; v5 uses **ProseMirror**. Nothing below may depend on React, Lexical, SWR/TanStack, or any server round-trip. See [Portability contract](#portability-contract) — read it before writing a line of code.
 
+---
+
+## ⚠ AMENDED by Layer 2.0u — read this before following any path below
+
+[**composer-unicode.md**](composer-unicode.md) (shipped 2026-08-13, the same day) generalized this
+feature's engine into a **shared character-insertion engine with emoji and Unicode as two dataset
+profiles**. The behaviour described in this spec is unchanged — the two committed corpora passed
+**unedited** through the whole generalization, which is exactly the assertion that proves it — but
+almost every path and symbol name below has moved. The rest of this document is kept as the record
+of what was designed and why; use this table to translate it.
+
+| This spec says | It is now |
+|---|---|
+| `lib/emoji/**` | `lib/char-insert/**` |
+| `lib/emoji/fixtures/*` | `lib/char-insert/fixtures/*` (unchanged bytes) |
+| `EmojiEntry`, `EmojiIndex`, `EmojiTriggerMatch`, `EmojiIndexError` | `CharEntry`, `CharIndex`, `TriggerMatch`, `CharIndexError` |
+| `EmojiEntry.shortcodes` | `CharEntry.aliases` (the dataset's `"s"` key is unchanged) |
+| `searchEmoji(index, q, n)` | `searchChars(index, q, n)` |
+| `findByShortcode(index, q)` | `findByAlias(index, q, { caseSensitive })` |
+| `findEmojiTrigger(text)` | `findTrigger(text, EMOJI_PROFILE.trigger)` |
+| `loadEmojiIndex` / `getLoadedEmojiIndex` / `resetEmojiIndexForTests` | `EMOJI_PROFILE.loader.{load,getLoaded,resetForTests}` |
+| `EMOJI_INDEX_URL`, `RECENTS_STORAGE_KEY`, the `:` trigger constants, the group labels | fields on `EMOJI_PROFILE` (`lib/char-insert/profiles/emoji.ts`) |
+| `EmojiTypeaheadPlugin.tsx` | `CharTypeaheadPlugin.tsx`, mounted as `<CharTypeaheadPlugin profile={EMOJI_PROFILE} />` |
+| `components/chat/emoji/insert-emoji.ts` | `components/chat/char-insert/insert-char.ts` (`insertCharAtSelection(editor, profile, char)`) |
+| `components/chat/emoji/recents-storage.ts` | `components/chat/char-insert/recents-storage.ts` (`readRecents(profile)` / `recordRecent(profile, char)`) |
+| `EmojiPickerPopover.tsx`'s search field + grid | `components/chat/char-insert/CharPickerPanel.tsx`; `EmojiPickerPopover` is now a thin wrapper |
+| the ESLint override on `lib/emoji/**` | the same override on `lib/char-insert/**` |
+| `__tests__/…/EmojiTypeaheadPlugin.test.tsx` | `…/CharTypeaheadPlugin.emoji.test.tsx` |
+
+One behavioural addition, and it is provably one-way: `searchChars` gained a **`NameAllWords`**
+bucket, ranked below every pre-existing bucket. `bucketFor` returns the best bucket an entry
+reaches, so an entry that already matched keeps its bucket and only entries that previously returned
+`NoMatch` can newly appear. `public/emoji/emoji-index.v1.json` is byte-identical.
+
+---
+
 ## Summary
 
 Let a writer insert an emoji by *searching for its name*. Two surfaces, one engine:

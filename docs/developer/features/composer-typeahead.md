@@ -143,7 +143,7 @@ Add one boolean to the Chat-tab settings module: `composerSuggestions` (default 
 >    *precomputed* match and `toMenuTextMatch(textBefore, match)` converts it to
 >    Lexical's `MenuTextMatch`. That keeps the "where does the trigger start and
 >    end" decision in framework-free logic a v5 port can copy. `triggerFn` is a
->    thin adapter — for emoji, `(text) => findEmojiTrigger(text)`.
+>    thin adapter — for emoji, `(text) => findTrigger(text, EMOJI_PROFILE.trigger)`.
 >
 > Also landed beyond the description below: the shell owns the
 > `aria-activedescendant` / `aria-controls` / `aria-expanded` wiring on the

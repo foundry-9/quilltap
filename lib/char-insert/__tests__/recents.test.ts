@@ -1,18 +1,15 @@
 /**
- * Tier B recents tests. The list arithmetic is pure; the adapter owns storage.
+ * Tier B recents tests. The list arithmetic is pure; the adapter owns storage,
+ * and the profile owns the key.
  *
- * @module lib/emoji/__tests__/recents.test
+ * @module lib/char-insert/__tests__/recents.test
  */
 
-import {
-  pushRecent,
-  parseRecents,
-  serializeRecents,
-  RECENTS_LIMIT,
-  RECENTS_STORAGE_KEY,
-} from '../recents';
+import { pushRecent, parseRecents, serializeRecents, RECENTS_LIMIT } from '../recents';
+import { EMOJI_PROFILE } from '../profiles/emoji';
+import { UNICODE_PROFILE } from '../profiles/unicode';
 
-describe('lib/emoji/recents', () => {
+describe('lib/char-insert/recents', () => {
   describe('pushRecent', () => {
     it('moves a repeat pick to the front instead of duplicating it', () => {
       expect(pushRecent(['😄', '🎉', '🚀'], '🚀')).toEqual(['🚀', '😄', '🎉']);
@@ -81,8 +78,12 @@ describe('lib/emoji/recents', () => {
     expect(JSON.parse(serializeRecents(overlong))).toHaveLength(RECENTS_LIMIT);
   });
 
-  it('pins the storage key shared with quilltap-v5', () => {
-    // Changing this literal orphans every user's list, in BOTH apps.
-    expect(RECENTS_STORAGE_KEY).toBe('quilltap.emoji.recents.v1');
+  it('pins the storage keys shared with quilltap-v5', () => {
+    // Changing either literal orphans every user's list, in BOTH apps. The two
+    // profiles keep SEPARATE lists — a Recents row mixing 😄 with ∮ would be
+    // useless to both.
+    expect(EMOJI_PROFILE.recentsStorageKey).toBe('quilltap.emoji.recents.v1');
+    expect(UNICODE_PROFILE.recentsStorageKey).toBe('quilltap.unicode.recents.v1');
+    expect(EMOJI_PROFILE.recentsStorageKey).not.toBe(UNICODE_PROFILE.recentsStorageKey);
   });
 });

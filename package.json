@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "4.8.2-bugfix.9",
+  "version": "4.8.2-bugfix.10",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -30,6 +30,7 @@
     "generate:schemas": "tsx scripts/generate-plugin-manifest-schema.ts",
     "generate:icon-css": "tsx scripts/generate-icon-css.ts",
     "generate:emoji-index": "tsx scripts/generate-emoji-index.ts",
+    "generate:unicode-index": "tsx scripts/generate-unicode-index.ts",
     "lint": "eslint . && node scripts/check-quilltap-spelling.mjs",
     "lint:fix": "eslint . --fix && node scripts/check-quilltap-spelling.mjs",
     "oneoff:cleanup-old-files-v1.6": "tsx scripts/cleanup-old-files.ts",

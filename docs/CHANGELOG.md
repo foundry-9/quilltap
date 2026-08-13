@@ -26,6 +26,28 @@ eslint-config-next 16.3 adds a rule flagging `window.location.href` for internal
 
 Six sites keep the full page load on purpose and now carry a comment explaining why — the three setup-wizard steps and the auto-lock redirect all need client state rebuilt from scratch (for auto-lock that is the whole point, since a client transition would leave decrypted data in memory), and the message-navigation helper is a plain module with no router in scope whose sessionStorage handoff depends on mount timing.
 
+#### Composer Unicode
+
+Type `\` plus a LaTeX name (`\to`, `\phi`), a description (`\right arrow`), or a code point (`\u2192`, `\u+2192`, `\u{1D538}`) to insert a Unicode character, in both the Salon composer and Document Mode. A menu lists the matches; Enter or a click inserts. Typing a complete name and following it with a space — `\to ` — inserts immediately without the menu, keeping the space. A toolbar button labeled `Ω` opens a searchable picker with a browsable grid and a recents row.
+
+Aliases are case-sensitive: `\phi` is φ and `\Phi` is Φ, likewise `\gamma`/`\Gamma`, `\delta`/`\Delta`, `\sigma`/`\Sigma`, `\omega`/`\Omega`, `\theta`/`\Theta`.
+
+Nothing fires inside a math span, so `$$\phi$$`, `$\phi$`, `\(\phi\)` and `\[\phi\]` stay LaTeX. A `$` followed by a digit or a space is read as currency, so `costs $5 and \to ` still works. Markdown escapes are untouched — an escape is a backslash plus punctuation, and a symbol name must start with a letter, so `\*`, `\_` and `\[` never open a menu. As with emoji, nothing fires in fenced code blocks or inline code.
+
+The dataset holds 3,282 characters across 26 Unicode blocks (40 KB gzipped, smaller than the emoji index), served from `public/` and fetched only on the first `\` query or first picker open. The space bar never triggers the fetch. Characters already in the emoji index are excluded, so `\` and `:` never both offer the same character; 165 were dropped that way. Code-point entry resolves arithmetically with no table lookup, so every character in Unicode stays reachable, including the ones the curation dropped.
+
+Toggle on the Chat settings tab under Composer, labeled "Symbol shortcuts"; default on. The toolbar button is not gated by the toggle. Recently-used characters are stored in the browser's local storage under a key separate from the emoji recents.
+
+Adds a `composerUnicode` column to `chat_settings` (migration `add-composer-unicode-field-v1`).
+
+#### Internal: one character-insertion engine, two dataset profiles
+
+`lib/emoji/` is now `lib/char-insert/`, with emoji and Unicode as profiles over one implementation rather than two near-duplicate features. `EmojiEntry.shortcodes` became `CharEntry.aliases`, `findEmojiTrigger` became `findTrigger(text, config)`, the module-level loader became a per-profile factory, and `EmojiTypeaheadPlugin` became `CharTypeaheadPlugin`, mounted once per profile. The picker's search field and grid moved into a shared `CharPickerPanel`; `EmojiPickerPopover` and the new `UnicodePickerPopover` are thin wrappers.
+
+Search gained one bucket, `NameAllWords`, which matches when every query token prefixes a distinct name word. It ranks below every existing bucket, so it can only add results that previously did not appear at all — which is why the emoji corpus passed unedited through the whole refactor. That is the regression proof: emoji behavior is unchanged.
+
+The dataset files did not change. `public/emoji/emoji-index.v1.json` is byte-identical.
+
 #### Composer emoji
 
 Type `:` plus at least two letters to search emoji by name and insert one, in both the Salon composer and Document Mode. A menu lists the matches; Enter or a click inserts. Typing a complete shortcode and closing it — `:smile:` — inserts immediately without the menu. A button in the formatting toolbar opens a searchable picker with a browsable grid and a recents row.

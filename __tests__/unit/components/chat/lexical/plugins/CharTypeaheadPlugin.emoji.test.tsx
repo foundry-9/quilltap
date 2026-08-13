@@ -1,16 +1,21 @@
 /**
- * Layer 2.0e composer emoji — plugin-level coverage.
+ * Layer 2.0e composer emoji — plugin-level coverage of the EMOJI profile.
+ *
+ * Layer 2.0u generalized the plugin into `CharTypeaheadPlugin`; this suite is
+ * unchanged in substance, which is the point. The Unicode profile has its own
+ * suite beside this one.
  *
  * Runs against a REAL Lexical editor and the REAL committed dataset (served
  * through the fetch mock, exactly as the browser would fetch it), so these
  * assertions exercise the whole adapter: lazy load, trigger detection, the
  * closing-colon commit, the bail conditions, and the undo contract.
  *
- * The `:name` MATCH RULES themselves are pinned in `lib/emoji/__tests__` against
+ * The `:name` MATCH RULES themselves are pinned in `lib/char-insert/__tests__` against
  * a shared corpus that quilltap-v5 copies; this suite is about the wiring.
  */
 
-import { EmojiTypeaheadPlugin } from '@/components/chat/lexical/plugins/EmojiTypeaheadPlugin'
+import { CharTypeaheadPlugin } from '@/components/chat/lexical/plugins/CharTypeaheadPlugin'
+import { EMOJI_PROFILE } from '@/lib/char-insert/profiles/emoji'
 import { TextReplacementPlugin } from '@/components/chat/lexical/plugins/TextReplacementPlugin'
 
 import React from 'react'
@@ -29,9 +34,7 @@ import {
   flush,
   type PluginHarness,
 } from '../../../../../helpers/lexicalPluginHarness'
-import { resetEmojiIndexForTests } from '@/lib/emoji/load'
-import { insertEmojiAtSelection } from '@/components/chat/emoji/insert-emoji'
-import { RECENTS_STORAGE_KEY } from '@/lib/emoji/recents'
+import { insertCharAtSelection } from '@/components/chat/char-insert/insert-char'
 import { compileRules } from '@/lib/text-replacement/useTextReplacementRules'
 
 import datasetPayload from '../../../../../../public/emoji/emoji-index.v1.json'
@@ -91,11 +94,11 @@ function stubFetch({ settings = {}, datasetFails = false } = {}) {
   }) as unknown as typeof fetch
 }
 
-describe('EmojiTypeaheadPlugin', () => {
+describe('CharTypeaheadPlugin — emoji profile', () => {
   let harness: PluginHarness
 
   beforeEach(() => {
-    resetEmojiIndexForTests()
+    EMOJI_PROFILE.loader.resetForTests()
     window.localStorage.clear()
     stubFetch()
     useTextReplacementRules.mockReturnValue({ compiled: compileRules([]) })
@@ -112,7 +115,7 @@ describe('EmojiTypeaheadPlugin', () => {
   function mount(extra?: React.ReactNode) {
     harness = renderPluginEditor(
       <>
-        <EmojiTypeaheadPlugin />
+        <CharTypeaheadPlugin profile={EMOJI_PROFILE} />
         {extra}
       </>,
     )
@@ -180,7 +183,7 @@ describe('EmojiTypeaheadPlugin', () => {
       seedParagraph(editor, ':smile')
       pressKey(editor, ':')
 
-      expect(JSON.parse(window.localStorage.getItem(RECENTS_STORAGE_KEY)!)).toEqual([SMILE])
+      expect(JSON.parse(window.localStorage.getItem(EMOJI_PROFILE.recentsStorageKey)!)).toEqual([SMILE])
     })
 
     it('reverts to the literal typed text in ONE undo', async () => {
@@ -383,12 +386,12 @@ describe('EmojiTypeaheadPlugin', () => {
       seedParagraph(editor, 'hi ')
 
       act(() => {
-        insertEmojiAtSelection(editor, SMILE)
+        insertCharAtSelection(editor, EMOJI_PROFILE, SMILE)
       })
       flush(editor)
 
       expect(readText(editor)).toBe(`hi ${SMILE}`)
-      expect(JSON.parse(window.localStorage.getItem(RECENTS_STORAGE_KEY)!)).toEqual([SMILE])
+      expect(JSON.parse(window.localStorage.getItem(EMOJI_PROFILE.recentsStorageKey)!)).toEqual([SMILE])
     })
 
     it('still works when composerEmoji is off — the flag governs only the `:` trigger', async () => {
@@ -398,7 +401,7 @@ describe('EmojiTypeaheadPlugin', () => {
       seedParagraph(editor, 'hi ')
 
       act(() => {
-        insertEmojiAtSelection(editor, SMILE)
+        insertCharAtSelection(editor, EMOJI_PROFILE, SMILE)
       })
       flush(editor)
 

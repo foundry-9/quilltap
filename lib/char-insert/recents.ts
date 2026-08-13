@@ -1,21 +1,20 @@
 /**
- * Recently-used emoji — Tier B (pure list arithmetic).
+ * Recently-used characters — Tier B (pure list arithmetic).
  *
  * The ADAPTER owns the `localStorage` calls; this file owns what the list
- * becomes. Storage key is `quilltap.emoji.recents.v1` — the SAME literal in v4
- * and v5, so a user moving between them on one origin keeps their list.
+ * becomes. The storage KEY belongs to the profile
+ * (`CharProfile.recentsStorageKey`) — each dataset keeps its own list, and each
+ * key is the SAME literal in v4 and v5, so a user moving between them on one
+ * origin keeps both lists.
  *
  * Why not a server setting? Recents are high-frequency, low-value, single-device
- * state. A settings round-trip per emoji pick would be absurd, and a
- * `chat_settings` column would ride every backup and export for no benefit.
+ * state. A settings round-trip per pick would be absurd, and a `chat_settings`
+ * column would ride every backup and export for no benefit.
  *
- * @module lib/emoji/recents
+ * @module lib/char-insert/recents
  */
 
 export const RECENTS_LIMIT = 24;
-
-/** Shared verbatim with quilltap-v5. Changing it orphans every user's list. */
-export const RECENTS_STORAGE_KEY = 'quilltap.emoji.recents.v1';
 
 /** Move-to-front, dedupe, cap at `RECENTS_LIMIT`. Never mutates `current`. */
 export function pushRecent(current: string[], char: string): string[] {

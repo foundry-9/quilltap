@@ -110,7 +110,7 @@ export function TextReplacementPlugin(): null {
         if (!$isRangeSelection(selection) || !selection.isCollapsed()) return null
 
         // Never rewrite code as it is typed — bug 63. Shared with
-        // EmojiTypeaheadPlugin so the two bail lists cannot drift.
+        // CharTypeaheadPlugin so the two bail lists cannot drift.
         if ($isInCodeContext(selection)) return null
 
         const anchor = selection.anchor

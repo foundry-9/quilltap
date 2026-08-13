@@ -1,16 +1,30 @@
 /**
- * Tier B trigger tests — driven by the shared corpus that quilltap-v5 copies.
+ * Tier B trigger tests for the EMOJI profile — driven by the shared corpus that
+ * quilltap-v5 copies.
  *
- * @module lib/emoji/__tests__/trigger.test
+ * This corpus is the proof that the Layer 2.0u generalization was
+ * behaviour-neutral: the vectors are unedited from the day `findEmojiTrigger`
+ * shipped, and `findTrigger(text, EMOJI_PROFILE.trigger)` must still satisfy
+ * every one of them.
+ *
+ * @module lib/char-insert/__tests__/trigger.test
  */
 
-import { findEmojiTrigger, MIN_QUERY_LENGTH, MAX_QUERY_LENGTH } from '../trigger';
+import { findTrigger } from '../trigger';
+import { EMOJI_PROFILE } from '../profiles/emoji';
 
 import triggerVectors from '../fixtures/emoji-trigger-vectors.json';
 
-describe('lib/emoji/trigger', () => {
+const CONFIG = EMOJI_PROFILE.trigger;
+const { minQueryLength: MIN_QUERY_LENGTH, maxQueryLength: MAX_QUERY_LENGTH } = CONFIG;
+
+function findEmojiTrigger(text: string) {
+  return findTrigger(text, CONFIG);
+}
+
+describe('lib/char-insert/trigger — emoji profile', () => {
   describe('corpus vectors', () => {
-    it.each(triggerVectors.cases)('findEmojiTrigger($text) — $invariant', ({ text, expect: expected }) => {
+    it.each(triggerVectors.cases)('findTrigger($text) — $invariant', ({ text, expect: expected }) => {
       expect(findEmojiTrigger(text)).toEqual(expected);
     });
   });
@@ -76,5 +90,19 @@ describe('lib/emoji/trigger', () => {
     const match = findEmojiTrigger(text)!;
     expect(match.query).toBe('second');
     expect(text.slice(match.start, match.end)).toBe(':second');
+  });
+
+  it('lowercases the query, because github shortcodes are lowercase', () => {
+    expect(findEmojiTrigger(':SMILE')?.query).toBe('smile');
+  });
+
+  /**
+   * A `g`/`y`-flagged pattern carries `lastIndex` between calls, which would
+   * make trigger detection depend on how many keystrokes preceded it. Both
+   * profiles must stay stateless.
+   */
+  it('uses a stateless query pattern', () => {
+    expect(CONFIG.queryPattern.global).toBe(false);
+    expect(CONFIG.queryPattern.sticky).toBe(false);
   });
 });

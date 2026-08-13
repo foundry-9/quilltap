@@ -37,7 +37,9 @@ import { composerTheme } from '@/components/chat/lexical/theme'
 import { MarkdownBridgePlugin, COMPOSER_TRANSFORMERS } from '@/components/chat/lexical/plugins/MarkdownBridgePlugin'
 import { FormattingCommandPlugin } from '@/components/chat/lexical/plugins/FormattingCommandPlugin'
 import { TextReplacementPlugin } from '@/components/chat/lexical/plugins/TextReplacementPlugin'
-import { EmojiTypeaheadPlugin } from '@/components/chat/lexical/plugins/EmojiTypeaheadPlugin'
+import { CharTypeaheadPlugin } from '@/components/chat/lexical/plugins/CharTypeaheadPlugin'
+import { EMOJI_PROFILE } from '@/lib/char-insert/profiles/emoji'
+import { UNICODE_PROFILE } from '@/lib/char-insert/profiles/unicode'
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
 import DocumentChangeTracker from './DocumentChangeTracker'
 import DocumentFocusPlugin from './DocumentFocusPlugin'
@@ -288,9 +290,11 @@ function DocumentEditorPlugins({
         preserveTildes
       />
       <FormattingCommandPlugin />
-      {/* Above TextReplacementPlugin: `:` is a word-boundary trigger for both,
-          and emoji only swallows the keystroke when it actually commits. */}
-      <EmojiTypeaheadPlugin />
+      {/* Above TextReplacementPlugin: `:` and ` ` are word-boundary triggers for
+          both, and the character typeahead only swallows the keystroke when it
+          actually commits. One mount per dataset profile. */}
+      <CharTypeaheadPlugin profile={EMOJI_PROFILE} />
+      <CharTypeaheadPlugin profile={UNICODE_PROFILE} />
       <TextReplacementPlugin />
       <DocumentChangeTracker
         baselineContent={baselineContent}

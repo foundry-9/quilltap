@@ -11,7 +11,7 @@
  * 2. The shell does NOT own trigger detection. A consumer hands it a
  *    precomputed match, so the "where does the trigger start and end" decision
  *    stays in framework-free logic that quilltap-v5 can copy (for emoji, that is
- *    `lib/emoji/trigger.ts`). `LexicalTypeaheadMenuPlugin`'s `triggerFn` becomes
+ *    `lib/char-insert/trigger.ts`). `LexicalTypeaheadMenuPlugin`'s `triggerFn` becomes
  *    a thin adapter that converts such a match into a `MenuTextMatch`.
  *
  * @module components/chat/lexical/typeahead/useTypeaheadShell
@@ -39,7 +39,7 @@ export class TypeaheadOption<TPayload> extends MenuOption {
 
 /**
  * A trigger match expressed in offsets within the anchor text node — the shape
- * `lib/emoji/trigger.ts` (and any future Tier B detector) produces.
+ * `lib/char-insert/trigger.ts` (and any future Tier B detector) produces.
  */
 export interface ShellTriggerMatch {
   /** Offset of the trigger character. */

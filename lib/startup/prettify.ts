@@ -138,6 +138,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-composition-mode-default-field-v1': 'Adding composition-mode default to chat settings',
   'add-composer-spellcheck-field-v1': 'Teaching the composer to flag misspellings',
   'add-composer-emoji-field-v1': 'Cataloguing the little faces',
+  'add-composer-unicode-field-v1': 'Teaching the machine its Greek',
   'add-text-replacement-rules-table-v1': 'Building the autocorrect ledger',
   'add-text-replacements-enabled-field-v1': 'Wiring the autocorrect master switch',
   'add-auto-scroll-on-response-complete-field-v1': 'Deciding whether the Salon should chase each reply to its end',

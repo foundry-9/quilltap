@@ -42,6 +42,7 @@ async function updateChatSettings(
   compositionModeDefault?: boolean,
   composerSpellcheck?: boolean,
   composerEmoji?: boolean,
+  composerUnicode?: boolean,
   textReplacementsEnabled?: boolean,
   autonomousRoomSettings?: unknown,
   thinkingDisplay?: unknown,
@@ -195,6 +196,12 @@ async function updateChatSettings(
     }
     updateData.composerEmoji = composerEmoji
   }
+  if (typeof composerUnicode !== 'undefined') {
+    if (typeof composerUnicode !== 'boolean') {
+      throw new Error('Invalid composerUnicode value (must be boolean)')
+    }
+    updateData.composerUnicode = composerUnicode
+  }
   if (typeof textReplacementsEnabled !== 'undefined') {
     if (typeof textReplacementsEnabled !== 'boolean') {
       throw new Error('Invalid textReplacementsEnabled value (must be boolean)')
@@ -327,6 +334,7 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       compositionModeDefault,
       composerSpellcheck,
       composerEmoji,
+      composerUnicode,
       textReplacementsEnabled,
       autonomousRoomSettings,
       thinkingDisplay,
@@ -359,6 +367,7 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       compositionModeDefault,
       composerSpellcheck,
       composerEmoji,
+      composerUnicode,
       textReplacementsEnabled,
       autonomousRoomSettings,
       thinkingDisplay,

@@ -102,6 +102,42 @@ The emoji catalogue is fetched only the first time you actually want it — inst
 - Your prose is thick with colons — script formatting, timestamps, ratios — and you would rather the menu never stirred
 - Note that the toolbar's emoji button is **not** governed by this toggle. The switch restrains the *automatic* colon, which is the part capable of surprising you; a button pressed on purpose never is.
 
+#### Symbol Shortcuts
+
+Sitting directly beneath its cheerful cousin in the **Composer** card, and addressed to a rather more scholarly appetite: type a **backslash** followed by a name, and the appropriate character presents itself. `\to` yields →. `\phi` yields φ. `\leq` yields ≤, `\infty` yields ∞, `\dagger` yields †. The vocabulary is the one every mathematician, physicist and long-suffering thesis-writer already carries in their fingers — the LaTeX commands — some three thousand two hundred characters across twenty-six regions of the Unicode catalogue, arrows and operators and box-drawing pieces and Greek and dingbats and all.
+
+You may also describe what you are after in plain words: `\right arrow`, `\greek phi`, `\em dash`. And should you know a character only by its number, `\u2192`, `\u+2192` and `\u{1D538}` will fetch it directly, without consulting any catalogue at all — which means **every** character in Unicode remains within reach, including the great many we did not see fit to list.
+
+**A matter of capitalisation, and it is not a trifle.** `\phi` is φ and `\Phi` is Φ. Likewise `\gamma` and `\Gamma`, `\delta` and `\Delta`, `\sigma` and `\Sigma`, `\omega` and `\Omega`, `\theta` and `\Theta`. The house observes the distinction scrupulously, as any respectable house must; type the capital and you shall have the capital.
+
+Two ways to commit, precisely as with emoji: pick from the menu with Enter or a click, or — knowing the name outright — type it entire and follow it with a **space**. `\to ` becomes `→ `, space and all, the menu never having been troubled. Should the name mean nothing to us, your text is left exactly as you wrote it and the menu withdraws; we do not guess.
+
+**Your mathematics is safe.** Quilltap renders LaTeX, and `$$\phi$$` is a formula, not a request. The backslash therefore holds its peace inside any formula you have opened — `$$…`, `$…`, `\(…`, `\[…` — so a formula being typed is never quietly mangled into a character. A dollar sign followed by a figure is understood to be money and not mathematics, so `costs $5 and \to ` behaves perfectly normally. As with the colon, nothing whatever fires inside code fences or `inline code`.
+
+The backslash and the markdown escape do not collide, and cannot: an escape is a backslash followed by *punctuation* — `\*`, `\_`, `\[` — while a symbol name must begin with a *letter*. The two occupy entirely separate quarters of the house.
+
+There is a **button** in the formatting toolbar as well (the small `Ω`), which opens the same catalogue as a browsable grid arranged by Unicode block, with its own **Recently used** row — kept quite separately from your emoji recents, since a drawer holding both 😄 and ∮ would serve neither. The catalogue is fetched only the first time you want it, and pressing the space bar — the most-pressed key on the board — never summons it.
+
+**Setting Options:**
+
+- **Symbol shortcuts** — A single toggle, on by default. On: the `\` menu appears as described. Off: the backslash does nothing untoward, and remains an honest backslash.
+
+**How to configure:**
+
+1. Open the **Composer** card on the Chat tab in Settings
+2. Tick or untick **Symbol shortcuts**
+3. The change applies at once; no reload required
+
+**When useful:**
+
+- You write mathematics, linguistics, or anything else that wants → ≤ ∈ ∞ φ Σ ∮ without a trip to a character map
+- You want an em dash, a proper ellipsis, a degree sign or a non-breaking space and would rather not memorise an operating-system incantation for each
+
+**When to turn it off:**
+
+- Your prose is thick with backslashes — file paths, regular expressions, LaTeX you intend to keep verbatim — and you would rather the menu never stirred
+- As with emoji, the toolbar's `Ω` button is **not** governed by this toggle. The switch restrains the *automatic* backslash; a button pressed on purpose is never a surprise.
+
 ### Auto-Scroll
 
 A question of etiquette: when a character at last lays down the pen at the close of a long reply, should the page hurry you down to the final flourish, or leave you precisely where you were reading? This toggle decides.

@@ -9,7 +9,7 @@
 | **Who it bites** | anyone with a text-replacement rule who types a matching token inside a fenced code block or an inline `` `code` `` run in the Salon composer or Document Mode — e.g. a rule `fn → function`, or an autocorrect-style `teh → the`, applied to a variable name |
 | **Provenance** | Latent since Layer 1.5 shipped. Surfaced 2026-08-13 while implementing [composer-emoji](../../features/complete/composer-emoji.md), whose spec requires the emoji typeahead to bail in code and notes that its sibling plugin does not |
 | **Defect site** | `components/chat/lexical/plugins/TextReplacementPlugin.tsx:105-133` — the editor-state read that builds the candidate word checks only `$isTextNode(anchorNode)` and cursor-at-end |
-| **Fix site** | new `components/chat/lexical/utils/code-context.ts` (`$isInCodeContext`), consumed by `TextReplacementPlugin.tsx` and `EmojiTypeaheadPlugin.tsx`; coverage in the new `__tests__/unit/components/chat/lexical/plugins/TextReplacementPlugin.test.tsx` |
+| **Fix site** | new `components/chat/lexical/utils/code-context.ts` (`$isInCodeContext`), consumed by `TextReplacementPlugin.tsx` and `EmojiTypeaheadPlugin.tsx` (renamed `CharTypeaheadPlugin.tsx` in Layer 2.0u); coverage in the new `__tests__/unit/components/chat/lexical/plugins/TextReplacementPlugin.test.tsx` |
 | **v5 status** | Not yet ported — v5's `textReplacementPlugin` must carry the same guard when it lands. See [v5](#v5) |
 | **Index** | [bugs.md](../../bugs.md) |
 

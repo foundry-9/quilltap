@@ -47,7 +47,9 @@ import {
 } from './plugins/ExternalControlPlugin'
 import { FormattingCommandPlugin } from './plugins/FormattingCommandPlugin'
 import { TextReplacementPlugin } from './plugins/TextReplacementPlugin'
-import { EmojiTypeaheadPlugin } from './plugins/EmojiTypeaheadPlugin'
+import { CharTypeaheadPlugin } from './plugins/CharTypeaheadPlugin'
+import { EMOJI_PROFILE } from '@/lib/char-insert/profiles/emoji'
+import { UNICODE_PROFILE } from '@/lib/char-insert/profiles/unicode'
 
 interface LexicalComposerWrapperProps {
   /**
@@ -155,9 +157,11 @@ const ComposerPlugins = forwardRef<
       <ImagePastePlugin onImagePaste={onImagePaste} />
       <ExternalControlPlugin controlRef={controlRef} />
       <FormattingCommandPlugin />
-      {/* Above TextReplacementPlugin: `:` is a word-boundary trigger for both,
-          and emoji only swallows the keystroke when it actually commits. */}
-      <EmojiTypeaheadPlugin />
+      {/* Above TextReplacementPlugin: `:` and ` ` are word-boundary triggers for
+          both, and the character typeahead only swallows the keystroke when it
+          actually commits. One mount per dataset profile. */}
+      <CharTypeaheadPlugin profile={EMOJI_PROFILE} />
+      <CharTypeaheadPlugin profile={UNICODE_PROFILE} />
       <TextReplacementPlugin />
     </>
   )

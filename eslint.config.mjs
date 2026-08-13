@@ -56,9 +56,11 @@ const eslintConfig = defineConfig([
     },
   },
   {
-    // Tier B of the composer emoji feature (docs/developer/features/complete/composer-emoji.md).
+    // Tier B of the composer character-insertion engine — emoji (Layer 2.0e)
+    // and Unicode (Layer 2.0u) as two dataset profiles over one implementation.
+    // See docs/developer/features/complete/composer-{emoji,unicode}.md.
     //
-    // `lib/emoji/**` is framework-free by contract: quilltap-v5 (Rust core,
+    // `lib/char-insert/**` is framework-free by contract: quilltap-v5 (Rust core,
     // Angular SPA, ProseMirror editor) copies the directory near-verbatim, and
     // the ~120 lines that know about React and Lexical live in components/chat/
     // where they get rewritten. This override is what MECHANICALLY enforces
@@ -67,7 +69,7 @@ const eslintConfig = defineConfig([
     //
     // Adding an import here is not a lint failure to silence; it means the code
     // belongs in the adapter instead.
-    files: ['lib/emoji/**/*.ts'],
+    files: ['lib/char-insert/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',

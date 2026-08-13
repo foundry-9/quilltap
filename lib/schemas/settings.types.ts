@@ -585,6 +585,8 @@ export const ChatSettingsSchema = z.object({
   composerSpellcheck: z.boolean().default(true),
   /** Whether the `:` emoji typeahead fires in the Salon composer and Document Mode editor (default: true). The formatting toolbar's emoji picker is NOT gated by this — an explicit button press is never a surprise. */
   composerEmoji: z.boolean().default(true),
+  /** Whether the `\` Unicode typeahead fires in the Salon composer and Document Mode editor (default: true). The formatting toolbar's symbol picker is NOT gated by this — an explicit button press is never a surprise. */
+  composerUnicode: z.boolean().default(true),
   /** Master switch for user-defined word-boundary text replacements in the Salon composer and Document Mode rich editor (default: true). Rule list lives in the text_replacement_rules table. */
   textReplacementsEnabled: z.boolean().default(true),
   /** Whether the Salon scrolls to the newest message when an assistant reply finishes streaming or a new message arrives. Only scrolls when the reader is already near the bottom. Default off so long replies don't yank the reader away from where they're reading. */

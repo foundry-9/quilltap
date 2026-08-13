@@ -369,6 +369,7 @@ import { addDocMountLinkGroupsMigration } from './add-doc-mount-link-groups';
 import { addLLMLogsProfileColumnsMigration } from './add-llm-logs-profile-columns';
 
 import { addComposerEmojiFieldMigration } from './add-composer-emoji-field';
+import { addComposerUnicodeFieldMigration } from './add-composer-unicode-field';
 
 /**
  * All available migrations.
@@ -735,6 +736,8 @@ export const migrations: Migration[] = [
   addLLMLogsProfileColumnsMigration,
   // Layer 2.0e composer emoji: composerEmoji toggle column on chat_settings
   addComposerEmojiFieldMigration,
+  // Layer 2.0u composer Unicode: composerUnicode toggle column on chat_settings
+  addComposerUnicodeFieldMigration,
 ];
 
 export {
@@ -1080,5 +1083,7 @@ export {
   addLLMLogsProfileColumnsMigration,
   // Layer 2.0e composer emoji: composerEmoji toggle column on chat_settings
   addComposerEmojiFieldMigration,
+  // Layer 2.0u composer Unicode: composerUnicode toggle column on chat_settings
+  addComposerUnicodeFieldMigration,
 };
 
