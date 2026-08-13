@@ -140,6 +140,13 @@ function dispatchUnlockAction(action: UnlockAction, body: Record<string, unknown
  *
  * After setup, any existing plaintext databases are encrypted immediately
  * so there is no window where data sits unencrypted on disk.
+ *
+ * The conversion swaps the database files on disk, so every live handle must
+ * be closed first and reopened afterwards — and that teardown goes through
+ * `suspendDatabase()` / `resumeDatabase()`, never through the raw client
+ * closers. Closing the client behind the backend's back left the backend
+ * caching a shut handle and every repository call throwing
+ * "The database connection is not open" until the process restarted (bug 64).
  */
 async function handleSetup(passphrase: string): Promise<NextResponse> {
   unlockLogger.info('Database key setup requested');
@@ -156,13 +163,16 @@ async function handleSetup(passphrase: string): Promise<NextResponse> {
   // database is created during migrations (Phase 1) before the user runs
   // setup, so it starts life as plaintext.  Without this, the DB would
   // only get encrypted on the next restart (Phase -0.5b).
+  const pepper = process.env.ENCRYPTION_MASTER_PEPPER;
+  let suspended = false;
+
   try {
     const fs = await import('fs');
-    const { getSQLiteDatabasePath, getLLMLogsDatabasePath } = await import('@/lib/paths');
+    const { getSQLiteDatabasePath, getLLMLogsDatabasePath, getMountIndexDatabasePath } = await import('@/lib/paths');
     const { getDatabaseEncryptionState } = await import('@/lib/startup/db-encryption-state');
     const { convertDatabaseToEncrypted } = await import('@/lib/startup/db-encryption-converter');
+    const { suspendDatabase } = await import('@/lib/database/manager');
 
-    const pepper = process.env.ENCRYPTION_MASTER_PEPPER;
     if (pepper) {
       // Close any open migration connections before conversion
       try {
@@ -170,13 +180,15 @@ async function handleSetup(passphrase: string): Promise<NextResponse> {
         closeSQLite();
       } catch { /* ignore */ }
 
-      // Close the main app database singleton if open
-      try {
-        const { closeSQLiteClient } = await import('@/lib/database/backends/sqlite/client');
-        closeSQLiteClient();
-      } catch { /* ignore */ }
+      // Close the app's own handles — main, LLM logs and mount index — through
+      // the manager, so the backend and the manager cache both learn that the
+      // connection is gone rather than only the client singleton.
+      suspended = await suspendDatabase();
 
-      for (const dbPath of [getSQLiteDatabasePath(), getLLMLogsDatabasePath()]) {
+      // All three databases, mirroring Phase -0.5b's list. Leaving the mount
+      // index out meant document-store bytes sat in plaintext on disk until
+      // the next restart.
+      for (const dbPath of [getSQLiteDatabasePath(), getLLMLogsDatabasePath(), getMountIndexDatabasePath()]) {
         if (!fs.default.existsSync(dbPath)) continue;
         const state = getDatabaseEncryptionState(dbPath);
         if (state === 'unknown') {
@@ -196,9 +208,31 @@ async function handleSetup(passphrase: string): Promise<NextResponse> {
     });
   }
 
+  // Reopen against the (now encrypted) files before reporting success, so the
+  // response means "the app is usable", not merely "the key was written".
+  // The pepper is already in process.env, so the reconnect keys correctly.
+  let requiresRestart = false;
+
+  if (suspended) {
+    try {
+      const { resumeDatabase } = await import('@/lib/database/manager');
+      await resumeDatabase();
+      unlockLogger.info('Database reopened after post-setup encryption');
+    } catch (resumeErr) {
+      // Never fail the response over this: the pepper below is the user's one
+      // and only chance to write the key down, and a restart repairs the
+      // connection anyway (Phase -0.5a reopens with the key from .dbkey).
+      requiresRestart = true;
+      unlockLogger.error('Failed to reopen database after setup — a restart is required', {
+        error: resumeErr instanceof Error ? resumeErr.message : String(resumeErr),
+      });
+    }
+  }
+
   // Return the pepper once for the user to save
   return successResponse({
     pepper: result.pepper,
+    requiresRestart,
     message: 'Encryption key generated and stored. Save this value — it will not be displayed again.',
   });
 }
@@ -259,6 +293,23 @@ async function handleUnlock(passphrase: string): Promise<NextResponse> {
   }
 
   startupState.setPepperState('resolved');
+
+  // Reopen the handles that `handleLock` suspended. Returns null when nothing
+  // was cached — that is the boot-locked case (`needs-passphrase` at startup),
+  // where the database was never opened and the deferred `register()` below
+  // owns initialization; forcing a connect here would race it.
+  try {
+    const { resumeDatabase } = await import('@/lib/database/manager');
+    const resumed = await resumeDatabase();
+    if (resumed) {
+      unlockLogger.info('Database reopened after unlock');
+    }
+  } catch (resumeErr) {
+    unlockLogger.error('Failed to reopen the database after unlock', {
+      error: resumeErr instanceof Error ? resumeErr.message : String(resumeErr),
+    });
+    return serverError('Unlocked, but the database could not be reopened. Restart Quilltap to continue.');
+  }
 
   // If the server was in locked mode, trigger deferred initialization
   if (startupState.getPhase() === 'locked') {
@@ -400,21 +451,16 @@ async function handleLock(): Promise<NextResponse> {
     return badRequest('Cannot lock without a user passphrase');
   }
 
-  // Close database connections
+  // Close database connections through the manager, so the backend and the
+  // manager cache both know the handles are gone. Closing the clients
+  // directly (as this did) left the backend holding shut handles, which the
+  // matching unlock had no way to replace — the lock/unlock cycle wedged the
+  // instance exactly the way first-run setup did (bug 64).
   try {
-    const { closeSQLiteClient } = await import('@/lib/database/backends/sqlite/client');
-    closeSQLiteClient();
+    const { suspendDatabase } = await import('@/lib/database/manager');
+    await suspendDatabase();
   } catch (closeErr) {
-    unlockLogger.warn('Error closing main SQLite client during lock', {
-      error: closeErr instanceof Error ? closeErr.message : String(closeErr),
-    });
-  }
-
-  try {
-    const { closeLLMLogsSQLiteClient } = await import('@/lib/database/backends/sqlite/llm-logs-client');
-    closeLLMLogsSQLiteClient();
-  } catch (closeErr) {
-    unlockLogger.warn('Error closing LLM logs SQLite client during lock', {
+    unlockLogger.warn('Error suspending the database during lock', {
       error: closeErr instanceof Error ? closeErr.message : String(closeErr),
     });
   }

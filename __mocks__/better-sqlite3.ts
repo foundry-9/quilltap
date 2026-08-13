@@ -42,15 +42,30 @@ class MockDatabase {
     // Initialize
   }
 
+  /**
+   * Real better-sqlite3 throws `TypeError: The database connection is not
+   * open` from every statement method once `close()` has run. Mirroring that
+   * matters: a mock that keeps answering after close hides exactly the class
+   * of defect where a stale handle is handed out (bug 64).
+   */
+  private assertOpen() {
+    if (!this.isOpen) {
+      throw new TypeError('The database connection is not open');
+    }
+  }
+
   prepare(sql: string) {
+    this.assertOpen();
     return new MockStatement();
   }
 
   exec(sql: string) {
+    this.assertOpen();
     return this;
   }
 
   pragma(sql: string, options?: { simple?: boolean }) {
+    this.assertOpen();
     if (options?.simple) {
       return 0;
     }

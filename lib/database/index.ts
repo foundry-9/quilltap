@@ -91,6 +91,8 @@ export {
   getDatabase,
   getDatabaseAsync,
   closeDatabase,
+  suspendDatabase,
+  resumeDatabase,
   isDatabaseInitialized,
   isDatabaseConnected,
   getCollection,

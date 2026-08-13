@@ -56,6 +56,28 @@ const eslintConfig = defineConfig([
     },
   },
   {
+    // Bug 65: `migrations/lib/database-utils` is an async module in the
+    // bundler's server graph, so a SYNCHRONOUS `require()` of anything under
+    // `migrations/` from app-side code hands back an exports object whose body
+    // has never run — every property `undefined`, every call a TypeError. That
+    // silently disabled the version guard from 2026-08-12 until bug 65 caught
+    // it. Every other app-side reach into `migrations/` already uses
+    // `await import(...)`; this makes the next sync require a build failure
+    // instead of a silent one.
+    files: ['lib/**/*.ts', 'lib/**/*.tsx', 'app/**/*.ts', 'app/**/*.tsx', 'components/**/*.ts', 'components/**/*.tsx', 'hooks/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            'CallExpression[callee.name="require"][arguments.0.value=/^(@\\/migrations|(\\.\\.\\/)+migrations)(\\/|$)/]',
+          message:
+            "Bug 65: never require('@/migrations/...') synchronously from app code — modules under migrations/ are async in the bundler's server graph and a sync require returns an empty exports object. Use `await import(...)` instead.",
+        },
+      ],
+    },
+  },
+  {
     // Tier B of the composer character-insertion engine — emoji (Layer 2.0e)
     // and Unicode (Layer 2.0u) as two dataset profiles over one implementation.
     // See docs/developer/features/complete/composer-{emoji,unicode}.md.

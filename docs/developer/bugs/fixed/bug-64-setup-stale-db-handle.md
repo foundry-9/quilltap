@@ -2,16 +2,29 @@
 
 | | |
 |---|---|
-| **Status** | **Open** |
+| **Status** | **Fixed in v4** |
 | **Found** | 2026-08-13 |
-| **Fixed** | — |
+| **Fixed** | 2026-08-13 |
 | **Severity** | High (every fresh instance hits it at the one moment a new user is forming a first impression; the whole app errors on every database operation until a manual restart. No data is lost — the encryption conversion itself completes correctly — but nothing tells the user that a restart is the cure) |
 | **Who it bites** | anyone standing up a new instance: the moment the first-run setup screen displays the generated encryption key, every repository call in the server starts failing with `The database connection is not open`, and keeps failing until the process is stopped and started again. Docker/standalone users bite hardest — the log flood is the only evidence, and the setup UI itself reports success |
 | **Provenance** | Dogfooding: observed 2026-08-13 starting a fresh Docker instance; the production log shows the session route, `instance_settings` reads, scheduled housekeeping and maintenance all failing with `TypeError: The database connection is not open` immediately after setup, and a restart clearing it |
 | **Defect site** | `app/api/v1/system/unlock/route.ts` — `handleSetup` (~159–197) calls `closeSQLiteClient()` out-of-band; the closed handle stays cached in `SQLiteBackend.db` (`lib/database/backends/sqlite/backend.ts:479`, early-return at `:499-501`) behind the manager's initialized-forever cache (`lib/database/manager.ts:94-99`, `:163-169`) |
-| **Fix site (proposed)** | `app/api/v1/system/unlock/route.ts` (`handleSetup`, `handleLock`) — tear down through `closeDatabase()` and re-run `initializeDatabase()` after conversion; `lib/database/backends/sqlite/backend.ts` (`disconnect()` closes mount-index too; optional liveness self-heal). See [The fix](#the-fix-spec) |
+| **Fix site** | `lib/database/manager.ts` (new `suspendDatabase()` / `resumeDatabase()`), `app/api/v1/system/unlock/route.ts` (`handleSetup`, `handleLock`, `handleUnlock`), `lib/database/backends/sqlite/backend.ts` (`disconnect()` closes mount-index; `requireDb()` self-heal), `app/setup/page.tsx` (restart notice), `__mocks__/better-sqlite3.ts` (throw after close) |
 | **v5 status** | Design note for the native port: key setup / lock / unlock must reset every cached DB handle through one chokepoint, atomically — the port must not reproduce v4's three-layer singleton stack where the bottom layer can be closed behind the top two |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
+
+---
+
+**FIXED in v4 (2026-08-13).** Teardown now runs through two new manager
+chokepoints, `suspendDatabase()` and `resumeDatabase()`, which close and reopen
+every handle the backend owns while **keeping the cached backend instance**.
+`handleSetup` suspends, converts all three databases, resumes, and only then
+reports success; `handleLock` suspends and `handleUnlock` resumes, so the
+auto-lock cycle no longer needs a restart either. `SQLiteBackend.disconnect()`
+closes the mount index alongside the other two, and the backend self-heals a
+handle closed behind its back rather than handing out a corpse. See
+[What was actually done](#what-was-actually-done) — it departs from the spec
+below in one significant way, and the reason matters.
 
 ---
 
@@ -177,6 +190,74 @@ chokepoint already exists — `closeDatabase()` — it just has no callers.
      no longer does;
    - ideally an integration test of `?action=setup` asserting a subsequent
      `GET /api/v1/session` succeeds in the same process.
+
+## What was actually done
+
+The spec above says "tear down through `closeDatabase()` and re-run
+`initializeDatabase()`". **That is not safe, and it is not what shipped.**
+
+`closeDatabase()` drops the manager's cached backend, so
+`initializeDatabase()` builds a *fresh* `SQLiteBackend`. But the per-table
+column maps — `collectionJsonColumns`, `collectionArrayColumns`,
+`collectionBooleanColumns` — live on the backend instance and are populated
+only by `ensureCollection()`. `BaseRepository` latches
+`this.collectionInitialized = true` after its first call
+(`base.repository.ts:100-114`) and `getRepositories()` is a module singleton
+(`repositories/index.ts:225-231`), so **no live repository ever calls
+`ensureCollection` again**. A rebuilt backend would therefore hand every
+already-initialized repository a `SQLiteCollection` with empty JSON/array/
+boolean column sets, and their structured fields would silently start
+round-tripping as raw strings. Trading a loud wedge for quiet data corruption
+is a bad trade.
+
+So the shipped fix recycles the *handles* and keeps the *instance*:
+
+1. **`suspendDatabase()` / `resumeDatabase()` (`lib/database/manager.ts`).**
+   `suspend` calls `backend.disconnect()` and returns whether there was
+   anything to suspend; `resume` calls `backend.connect()`. Neither touches
+   the cached backend or the initialized flag. `closeDatabase()` is left alone
+   as the real-shutdown function.
+2. **`handleSetup`.** Closes the migrations connection, then
+   `suspendDatabase()`, then converts **main, LLM logs and mount index**
+   (closing secondary defects 1 and 2 — the logs client is no longer left on
+   the unlinked pre-conversion inode, and mount-index bytes no longer sit
+   plaintext until the next restart), then `resumeDatabase()` before
+   responding.
+3. **`handleLock` / `handleUnlock`.** Lock suspends instead of closing the two
+   clients directly; unlock resumes. `resumeDatabase()` returns `null` when no
+   backend was cached, which is the boot-locked case (`needs-passphrase` at
+   startup) — there the deferred `register()` still owns initialization, and
+   forcing a connect would race it.
+4. **`SQLiteBackend.disconnect()`** closes the mount-index client, matching
+   the three databases `connect()` opens.
+5. **`SQLiteBackend.requireDb()`** replaces the scattered `if (!this.db)`
+   guards. If the handle is shut but `_state` is still `'connected'` — the
+   exact out-of-band shape of this bug — it re-fetches from
+   `getSQLiteClient()`. It deliberately does **not** reopen while the backend
+   is disconnected: a suspended backend is mid-file-swap, and reopening there
+   would bind to the pre-conversion inode. That is the same hazard as
+   secondary defect 1, arriving from the other direction.
+6. **Key preservation.** A failed resume does not fail the response. The
+   pepper is displayed exactly once; returning a 500 would have cost the user
+   their only disaster-recovery copy. The response carries
+   `requiresRestart: true` instead and `app/setup/page.tsx` shows a restart
+   notice beside the key.
+7. **Mock fidelity.** `__mocks__/better-sqlite3.ts` now throws
+   `TypeError: The database connection is not open` from `prepare`/`exec`/
+   `pragma` after `close()`, as the real driver does. Without that, no test
+   could reproduce this bug at all.
+
+Regression coverage:
+
+- `__tests__/unit/lib/database/suspend-resume-reconnect.test.ts` — suspend
+  closes all three databases and resume reopens them; repositories work after
+  the cycle; the backend instance and its `ensureCollection` metadata survive;
+  the out-of-band close self-heals; a suspended backend refuses to reopen.
+  Two of the five fail against the pre-fix `backend.ts`.
+- `__tests__/unit/app/api/v1/system/unlock-teardown.test.ts` — the route
+  wiring: setup/lock/unlock go through the manager, the raw client closers are
+  never called, all three paths are converted, and the one-time key survives a
+  failed reopen. All six fail against the pre-fix `route.ts`.
 
 ## How to verify
 

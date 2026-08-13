@@ -27,6 +27,8 @@ On your very first launch, Quilltap will walk you through three initial steps:
 
 1. **Encryption Setup** (`/setup`) — An encryption key is generated automatically to protect your API keys and sensitive data. You can optionally protect it with a passphrase.
 
+   Do copy the key down when it is shown to you; the establishment displays it precisely once and is far too discreet to repeat itself. The moment you submit the form, Quilltap re-forges every one of its ledgers in encrypted form — the main database, the conversation logs, and the document-store index alike — and reopens them before it tells you all is well. Should it ever fail to reopen the doors on the first attempt, it will say so plainly and ask you to stop and start Quilltap once. Your key is safe and your data untouched in that event; a restart is the whole of the remedy.
+
 2. **Profile Setup** (`/setup/profile`) — You'll enter your name and choose an archetype that describes how you interact with your characters.
 
 3. **AI Stack Setup Wizard** (`/setup/providers`) — A guided wizard walks you through selecting providers, entering API keys, choosing models, and configuring embeddings and images. See [AI Stack Setup Wizard](setup-wizard.md) for full details.

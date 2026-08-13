@@ -187,6 +187,61 @@ export async function isDatabaseConnected(): Promise<boolean> {
 }
 
 // ============================================================================
+// Suspend / Resume
+// ============================================================================
+
+/**
+ * Close every live database handle while keeping the backend instance cached.
+ *
+ * This is the chokepoint for any code that needs the database *files* to sit
+ * untouched for a moment — first-run encryption conversion, auto-lock — and
+ * then wants the app to keep working afterwards. It exists because closing a
+ * client out-of-band (calling `closeSQLiteClient()` directly) leaves the
+ * backend holding a shut handle and the manager handing that backend out
+ * forever, which wedges every repository call until the process restarts
+ * (bug 64).
+ *
+ * Deliberately *keeps* the cached backend rather than dropping it the way
+ * `closeDatabase()` does. Repositories remember, per instance, that they have
+ * already run `ensureCollection` for their table; the resulting JSON / array /
+ * boolean column maps live on the backend. Swapping in a fresh backend would
+ * leave those maps empty for every already-initialized repository, and their
+ * structured columns would silently start round-tripping as raw strings.
+ * Same instance in, same instance out — only the handles are recycled.
+ *
+ * Pair every call with `resumeDatabase()`.
+ */
+export async function suspendDatabase(): Promise<boolean> {
+  const backend = getDatabaseBackend();
+  if (!backend) {
+    return false;
+  }
+
+  await backend.disconnect();
+  logger.info('Database suspended (backend retained)');
+  return true;
+}
+
+/**
+ * Reopen the handles closed by `suspendDatabase()`.
+ *
+ * Returns null when no backend was cached — the caller never suspended one,
+ * so normal lazy initialization still applies and forcing it here would race
+ * whatever startup path owns it.
+ */
+export async function resumeDatabase(): Promise<DatabaseBackend | null> {
+  const backend = getDatabaseBackend();
+  if (!backend) {
+    return null;
+  }
+
+  await backend.connect();
+  setDbInitialized(true);
+  logger.info('Database resumed');
+  return backend;
+}
+
+// ============================================================================
 // Shutdown
 // ============================================================================
 
