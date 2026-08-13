@@ -20,7 +20,11 @@ export function navigateToMessage(chatId: string, messageId: string): void {
   sessionStorage.setItem(SCROLL_TO_MESSAGE_KEY, messageId)
   sessionStorage.setItem(HIGHLIGHT_MESSAGE_KEY, messageId)
 
-  // Navigate to chat
+  // Navigate to chat. Full page load, not router.push: this is a plain module
+  // with no router in scope, and the sessionStorage handoff above is read by
+  // the chat page on mount — a client transition would change that timing
+  // relative to the message DOM the scroll/highlight depends on.
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
   window.location.href = `/salon/${chatId}`
 }
 

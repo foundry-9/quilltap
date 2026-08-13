@@ -4,6 +4,28 @@
 
 ### 4.8.2
 
+#### Dependency updates
+
+Refreshed npm dependencies across the app, the published packages, and all 14 bundled plugins.
+
+App: Next.js 16.2 → 16.3, openai 7.2 → 7.4, katex 0.18.1 → 0.18.4, mammoth 1.12.0 → 1.12.1, ws 8.21.1 → 8.21.3, and dev tooling (esbuild 0.28.2, postcss 8.5.26, tsx 4.23.12, @openrouter/sdk 1.2.32, eslint-config-next 16.3, @testing-library/user-event 14.6.4).
+
+Packages: `create-quilltap-theme` 2.0.18, `@quilltap/plugin-utils` 2.2.20, `@quilltap/theme-storybook` 1.0.59.
+
+Plugins: all 14 patch-bumped and rebuilt against `@quilltap/plugin-types` 2.5.6 and `@quilltap/plugin-utils` 2.2.20.
+
+Every plugin's `manifest.json` version now matches its `package.json` version. Nine had drifted by one or two patches from earlier bumps that touched only one of the two files. The plugin build doesn't sync them, so the drift was invisible until checked.
+
+#### Fix: chat export navigated the window instead of downloading on Electron
+
+The Salon sidebar's chat export set `window.location.href` to the export API route. In a browser that starts a download, but in the Electron shell it navigated the app window to the API endpoint instead. It now uses the same `triggerUrlDownload` helper the Markdown export directly beside it already used, which calls Electron's download API and falls back to an anchor click in the browser. The server still names the file from the chat title; the `.qtap` name here is only the fallback.
+
+#### Internal navigation cleanup
+
+eslint-config-next 16.3 adds a rule flagging `window.location.href` for internal page navigation. Two sites are now `router.push()`: the legacy-shell handoff that opens a standalone document in the workspace, and canceling the new-chat modal when it was opened from a query parameter.
+
+Six sites keep the full page load on purpose and now carry a comment explaining why — the three setup-wizard steps and the auto-lock redirect all need client state rebuilt from scratch (for auto-lock that is the whole point, since a client transition would leave decrypted data in memory), and the message-navigation helper is a plain module with no router in scope whose sessionStorage handoff depends on mount timing.
+
 #### Composer emoji
 
 Type `:` plus at least two letters to search emoji by name and insert one, in both the Salon composer and Document Mode. A menu lists the matches; Enter or a click inserts. Typing a complete shortcode and closing it — `:smile:` — inserts immediately without the menu. A button in the formatting toolbar opens a searchable picker with a browsable grid and a recents row.

@@ -3,7 +3,7 @@
   "name": "qtap-plugin-deepseek",
   "title": "DeepSeek",
   "description": "DeepSeek V4 chat and reasoning models for Quilltap",
-  "version": "1.0.16",
+  "version": "1.0.18",
   "author": {
     "name": "Foundry-9 LLC",
     "email": "charles.sebold@foundry-9.com",

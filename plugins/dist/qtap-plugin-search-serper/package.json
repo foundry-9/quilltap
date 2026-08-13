@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-search-serper",
-  "version": "1.0.18",
+  "version": "1.0.19",
   "description": "Serper.dev web search provider for Quilltap",
   "main": "index.js",
   "scripts": {
@@ -8,11 +8,11 @@
     "build": "node esbuild.config.mjs"
   },
   "dependencies": {
-    "@quilltap/plugin-types": "^2.5.4",
-    "@quilltap/plugin-utils": "^2.2.16"
+    "@quilltap/plugin-types": "^2.5.6",
+    "@quilltap/plugin-utils": "^2.2.20"
   },
   "devDependencies": {
-    "esbuild": "^0.28.1"
+    "esbuild": "^0.28.2"
   },
   "keywords": [
     "quilltap",
