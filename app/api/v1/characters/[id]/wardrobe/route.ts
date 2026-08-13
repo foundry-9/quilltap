@@ -2,6 +2,10 @@
  * Character Wardrobe Items API v1
  *
  * GET /api/v1/characters/[id]/wardrobe - Get all wardrobe items for a character
+ * GET /api/v1/characters/[id]/wardrobe?scope=group - Get the shared items in the
+ *   `Wardrobe/` folder of every store belonging to a group this character is a
+ *   member of. The group tier of the wearable pool, as a standalone read for the
+ *   client-side merge (`useCharacterWardrobeItems`).
  * POST /api/v1/characters/[id]/wardrobe - Create a new wardrobe item
  */
 
@@ -10,6 +14,7 @@ import { createContextParamsHandler, exists } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 import { notFound, serverError, created } from '@/lib/api/responses';
+import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
 import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types';
 
 const createWardrobeItemSchema = z.object({
@@ -34,6 +39,19 @@ export const GET = createContextParamsHandler<{ id: string }>(
 
       if (!exists(character)) {
         return notFound('Character');
+      }
+
+      const scope = new URL(req.url).searchParams.get('scope');
+      if (scope === 'group') {
+        const groupMountPointIds = await resolveGroupMountPointIdsForCharacter(id);
+        const wardrobeItems = await repos.wardrobe.findArchetypesInMounts(groupMountPointIds);
+        logger.debug('[Wardrobe v1] Group-tier wardrobe read', {
+          characterId: id,
+          groupMountCount: groupMountPointIds.length,
+          itemCount: wardrobeItems.length,
+          context: 'wardrobe',
+        });
+        return NextResponse.json({ wardrobeItems });
       }
 
       const wardrobeItems = await repos.wardrobe.findByCharacterId(id);

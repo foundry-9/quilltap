@@ -19,12 +19,11 @@
 import { logger } from '@/lib/logger';
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
-import { readCharacterVaultWardrobe } from '@/lib/database/repositories/vault-overlay/vault-readers';
-import { CHARACTER_WARDROBE_FOLDER } from '@/lib/database/repositories/vault-overlay/schema';
+import { SHARED_WARDROBE_FOLDER, readSharedWardrobe } from '@/lib/mount-index/shared-wardrobe';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 
 /** Shared archetypes live under the same `Wardrobe/` folder name as character vaults. */
-export const GENERAL_WARDROBE_FOLDER = CHARACTER_WARDROBE_FOLDER;
+export const GENERAL_WARDROBE_FOLDER = SHARED_WARDROBE_FOLDER;
 
 /**
  * Idempotent: ensure the `Wardrobe/` folder exists in the "Quilltap General"
@@ -64,14 +63,5 @@ export async function readGeneralWardrobe(includeArchived = false): Promise<Ward
   const mountPointId = await getGeneralMountPointId();
   if (!mountPointId) return [];
 
-  const vault = await readCharacterVaultWardrobe(mountPointId, undefined, {
-    seedArchetypes: false,
-  });
-  if (!vault) return [];
-
-  let items: WardrobeItem[] = vault.items.map((item) => ({ ...item, characterId: null }));
-  if (!includeArchived) {
-    items = items.filter((item) => !item.archivedAt);
-  }
-  return items;
+  return readSharedWardrobe(mountPointId, includeArchived);
 }

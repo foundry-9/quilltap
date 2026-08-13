@@ -28,9 +28,10 @@ import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.type
 import { WARDROBE_SLOT_TYPES, EquippedSlotsSchema } from '@/lib/schemas/wardrobe.types';
 import { enqueueWardrobeOutfitAnnouncement } from '@/lib/background-jobs/queue-service';
 import {
+  resolveGroupMountPointIdsForCharacter,
   resolveProjectMountPointIds,
-  resolveProjectMountPointIdsForChat,
 } from '@/lib/mount-index/tiered-mount-pool';
+import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
 
 const equipBodySchema = z
   .object({
@@ -130,14 +131,31 @@ export async function handleGetOutfitSummary(
     const itemsById = new Map<string, WardrobeItem>();
     if (allItemIds.size > 0) {
       // No global wardrobe table post-cutover: seed shared items (Quilltap
-      // General + the chat project's stores) so composite components that are
-      // shared items resolve, then layer each participant character's own vault
-      // wardrobe on top.
+      // General + the chat project's stores + every participant's group stores)
+      // so composite components that are shared items resolve, then layer each
+      // participant character's own vault wardrobe on top.
+      //
+      // This summary spans the whole cast, so the group tier is the *union* of
+      // the participants' memberships — unlike the per-character equip paths
+      // below, where each character sees only their own groups.
       const projectMountPointIds = await resolveProjectMountPointIds(chat.projectId);
-      for (const arche of await repos.wardrobe.findArchetypes(true, { projectMountPointIds })) {
+      const characterIds = Object.keys(equippedOutfit);
+      const groupMountPointIds = Array.from(
+        new Set(
+          (
+            await Promise.all(
+              characterIds.map((id) => resolveGroupMountPointIdsForCharacter(id)),
+            )
+          ).flat(),
+        ),
+      );
+      for (const arche of await repos.wardrobe.findArchetypes(true, {
+        groupMountPointIds,
+        projectMountPointIds,
+      })) {
         itemsById.set(arche.id, arche);
       }
-      for (const characterId of Object.keys(equippedOutfit)) {
+      for (const characterId of characterIds) {
         for (const item of await repos.wardrobe.findByCharacterId(characterId, true)) {
           itemsById.set(item.id, item);
         }
@@ -203,7 +221,7 @@ export async function handleEquipSlot(
     // Project tier for tri-tier wardrobe resolution — lets a chat equip items
     // that live in the project's document store, not just the character vault
     // or Quilltap General.
-    const projectMountPointIds = await resolveProjectMountPointIdsForChat(chatId);
+    const tiers = await resolveSharedWardrobeTiersForChat(chatId, characterId);
 
     let updatedSlots;
 
@@ -216,9 +234,7 @@ export async function handleEquipSlot(
         for (const id of bodySlots![key]) allIds.add(id);
       }
       if (allIds.size > 0) {
-        const found = await repos.wardrobe.findByIdsForCharacter(characterId, Array.from(allIds), {
-          projectMountPointIds,
-        });
+        const found = await repos.wardrobe.findByIdsForCharacter(characterId, Array.from(allIds), tiers);
         const foundIds = new Set(found.map((i) => i.id));
         for (const id of allIds) {
           if (!foundIds.has(id)) {
@@ -233,35 +249,29 @@ export async function handleEquipSlot(
     } else if (mode === 'wear' || mode === 'equip') {
       // itemId guaranteed by schema. Validate the item resolves and covers
       // at least one slot we recognize.
-      const item = await repos.wardrobe.findByIdForCharacter(characterId, itemId!, {
-        projectMountPointIds,
-      });
+      const item = await repos.wardrobe.findByIdForCharacter(characterId, itemId!, tiers);
       if (!item) {
         return notFound('Wardrobe item');
       }
-      updatedSlots = await equipItem(repos, chatId, characterId, item, { projectMountPointIds });
+      updatedSlots = await equipItem(repos, chatId, characterId, item, tiers);
       logger.info('[Chats v1] Wardrobe item worn', {
         chatId, characterId, itemId: item.id, slotsAffected: item.types,
         effect: item.replace ? 'replaced' : 'layered',
         context: 'wardrobe',
       });
     } else if (mode === 'replace') {
-      const item = await repos.wardrobe.findByIdForCharacter(characterId, itemId!, {
-        projectMountPointIds,
-      });
+      const item = await repos.wardrobe.findByIdForCharacter(characterId, itemId!, tiers);
       if (!item) {
         return notFound('Wardrobe item');
       }
-      updatedSlots = await replaceItem(repos, chatId, characterId, item, { projectMountPointIds });
+      updatedSlots = await replaceItem(repos, chatId, characterId, item, tiers);
       logger.info('[Chats v1] Wardrobe item force-replaced', {
         chatId, characterId, itemId: item.id, slotsAffected: item.types,
         effect: 'replaced',
         context: 'wardrobe',
       });
     } else if (mode === 'add_to_slot') {
-      const item = await repos.wardrobe.findByIdForCharacter(characterId, itemId!, {
-        projectMountPointIds,
-      });
+      const item = await repos.wardrobe.findByIdForCharacter(characterId, itemId!, tiers);
       if (!item) {
         return notFound('Wardrobe item');
       }
@@ -276,7 +286,7 @@ export async function handleEquipSlot(
         characterId,
         slot as WardrobeItemType,
         item,
-        { projectMountPointIds },
+        tiers,
       );
       logger.info('[Chats v1] Wardrobe item layered into slot', {
         chatId, characterId, slot, itemId: item.id, context: 'wardrobe',

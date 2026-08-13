@@ -3,11 +3,15 @@
 /**
  * Unified character wardrobe loader.
  *
- * Loads a character's wearable garments across the tri-tier wardrobe model and
- * merges them (de-duped by id, nearer tier winning on collision):
+ * Loads a character's wearable garments across every wardrobe tier and merges
+ * them (de-duped by id, nearer tier winning on collision):
  *   1. the character's personal vault items
- *   2. the active project's shared wardrobe (when a `projectId`/`chatId` is given)
- *   3. the Quilltap General shared archetype library
+ *   2. the shared wardrobe of every group the character belongs to
+ *   3. the active project's shared wardrobe (when a `projectId`/`chatId` is given)
+ *   4. the Quilltap General shared archetype library
+ *
+ * Mirrors the server-side precedence in `wardrobe.repository.findArchetypes`:
+ * **character > group > project > general**.
  *
  * Used by:
  *  - The global wardrobe dialog (`WardrobeControlDialogInner`) — passes `chatId`,
@@ -37,7 +41,7 @@ export interface UseCharacterWardrobeItemsResult {
    * "create in this project" affordance without re-resolving the chat.
    */
   projectId: string | null
-  /** Re-fetch personal + project + archetype items. */
+  /** Re-fetch personal + group + project + archetype items. */
   reload: () => Promise<void>
 }
 
@@ -86,15 +90,16 @@ export function useCharacterWardrobeItems(
       }
       setResolvedProjectId(projectTierId)
 
-      const [personalRes, projectRes, archetypeRes] = await Promise.all([
+      const [personalRes, groupRes, projectRes, archetypeRes] = await Promise.all([
         fetch(`/api/v1/characters/${characterId}/wardrobe`),
+        fetch(`/api/v1/characters/${characterId}/wardrobe?scope=group`),
         projectTierId
           ? fetch(`/api/v1/projects/${projectTierId}/wardrobe`)
           : Promise.resolve(null),
         fetch('/api/v1/wardrobe'),
       ])
 
-      // Merge with precedence: personal > project > general.
+      // Merge with precedence: personal > group > project > general.
       const collected: WardrobeItem[] = []
       const push = (list: WardrobeItem[] | undefined) => {
         for (const w of list ?? []) {
@@ -103,6 +108,10 @@ export function useCharacterWardrobeItems(
       }
       if (personalRes.ok) {
         const data = (await personalRes.json()) as { wardrobeItems?: WardrobeItem[] }
+        push(data.wardrobeItems)
+      }
+      if (groupRes.ok) {
+        const data = (await groupRes.json()) as { wardrobeItems?: WardrobeItem[] }
         push(data.wardrobeItems)
       }
       if (projectRes && projectRes.ok) {

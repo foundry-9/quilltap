@@ -1,10 +1,10 @@
 /**
  * Unit tests for `WardrobeRepository.findWearablePoolForCharacter`.
  *
- * Strategy: mock the three tier readers (the character overlay, Quilltap
- * General, and the project stores) and assert only the merge rule — precedence
- * character > project > general, archived filtering, and the degradation
- * behaviour when a project store can't be read.
+ * Strategy: mock the tier readers (the character overlay, Quilltap General, and
+ * the per-mount shared reader that serves both the group and project tiers) and
+ * assert only the merge rule — precedence character > group > project > general,
+ * archived filtering, and the degradation behaviour when a store can't be read.
  */
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
@@ -27,18 +27,19 @@ jest.mock('@/lib/mount-index/general-wardrobe', () => ({
   readGeneralWardrobe: jest.fn(),
 }));
 
-jest.mock('@/lib/mount-index/project-wardrobe', () => ({
-  readProjectWardrobe: jest.fn(),
+jest.mock('@/lib/mount-index/shared-wardrobe', () => ({
+  readSharedWardrobe: jest.fn(),
 }));
 
 const { WardrobeRepository } = require('@/lib/database/repositories/wardrobe.repository');
 const { getOverlaidWardrobeItems } = require('@/lib/database/repositories/character-properties-overlay');
 const generalWardrobe = require('@/lib/mount-index/general-wardrobe');
-const projectWardrobe = require('@/lib/mount-index/project-wardrobe');
+const sharedWardrobe = require('@/lib/mount-index/shared-wardrobe');
 
 const mockOverlay = getOverlaidWardrobeItems as jest.Mock;
 const mockGeneral = generalWardrobe.readGeneralWardrobe as jest.Mock;
-const mockProject = projectWardrobe.readProjectWardrobe as jest.Mock;
+/** Serves both scoped tiers — the repo reads group and project mounts alike. */
+const mockMount = sharedWardrobe.readSharedWardrobe as jest.Mock;
 
 const CHAR_ID = 'c1c1c1c1-0000-0000-0000-000000000001';
 
@@ -70,33 +71,60 @@ beforeEach(() => {
   repo = new WardrobeRepository();
   mockOverlay.mockResolvedValue([]);
   mockGeneral.mockResolvedValue([]);
-  mockProject.mockResolvedValue([]);
+  mockMount.mockResolvedValue([]);
 });
 
 describe('findWearablePoolForCharacter', () => {
-  it('applies precedence character > project > general', async () => {
+  it('applies precedence character > group > project > general', async () => {
     mockGeneral.mockResolvedValue([item('shared', 'general'), item('g-only', 'general')]);
-    mockProject.mockResolvedValue([item('shared', 'project'), item('p-only', 'project')]);
-    mockOverlay.mockResolvedValue([
-      item('shared', 'character', { characterId: CHAR_ID }),
-      item('c-only', 'character', { characterId: CHAR_ID }),
-    ]);
+    mockMount.mockImplementation(async (mountPointId: string) =>
+      mountPointId === 'grp-1'
+        ? [item('shared', 'group'), item('grp-only', 'group')]
+        : [item('shared', 'project'), item('p-only', 'project')],
+    );
+    mockOverlay.mockResolvedValue([item('c-only', 'character', { characterId: CHAR_ID })]);
 
     const pool = await repo.findWearablePoolForCharacter(CHAR_ID, {
+      groupMountPointIds: ['grp-1'],
       projectMountPointIds: ['mp-1'],
     });
 
     expect(titlesById(pool)).toEqual({
-      shared: 'shared (character)',
+      // Group beats project beats general on the contested id.
+      shared: 'shared (group)',
       'g-only': 'g-only (general)',
       'p-only': 'p-only (project)',
+      'grp-only': 'grp-only (group)',
       'c-only': 'c-only (character)',
     });
   });
 
-  it('lets the last project mount win a collision between project stores', async () => {
+  it('lets the character shadow a group item they hold their own copy of', async () => {
+    mockMount.mockResolvedValue([item('livery', 'group')]);
+    mockOverlay.mockResolvedValue([item('livery', 'character', { characterId: CHAR_ID })]);
+
+    const pool = await repo.findWearablePoolForCharacter(CHAR_ID, {
+      groupMountPointIds: ['grp-1'],
+    });
+
+    expect(titlesById(pool)).toEqual({ livery: 'livery (character)' });
+  });
+
+  it('offers the group tier even with no project in scope', async () => {
+    mockMount.mockResolvedValue([item('house-livery', 'group')]);
+
+    const pool = await repo.findWearablePoolForCharacter(CHAR_ID, {
+      groupMountPointIds: ['grp-1'],
+      projectMountPointIds: [],
+    });
+
+    expect(titlesById(pool)).toEqual({ 'house-livery': 'house-livery (group)' });
+    expect(mockMount).toHaveBeenCalledWith('grp-1', false);
+  });
+
+  it('lets the last mount win a collision between stores of the same tier', async () => {
     mockGeneral.mockResolvedValue([]);
-    mockProject.mockImplementation(async (mountPointId: string) => [
+    mockMount.mockImplementation(async (mountPointId: string) => [
       item('livery', `project-${mountPointId}`),
     ]);
 
@@ -138,24 +166,28 @@ describe('findWearablePoolForCharacter', () => {
     expect(titlesById(pool)).toEqual({ livery: 'livery (general)' });
   });
 
-  it('short-circuits before touching the project reader when no project mounts are in scope', async () => {
+  it('short-circuits before touching the mount reader when no scoped mounts are in scope', async () => {
     mockGeneral.mockResolvedValue([item('g-only', 'general')]);
 
-    await repo.findWearablePoolForCharacter(CHAR_ID, { projectMountPointIds: [] });
+    await repo.findWearablePoolForCharacter(CHAR_ID, {
+      groupMountPointIds: [],
+      projectMountPointIds: [],
+    });
 
-    expect(mockProject).not.toHaveBeenCalled();
+    expect(mockMount).not.toHaveBeenCalled();
   });
 
-  it('swallows a failing project store and keeps the other tiers', async () => {
+  it('swallows a failing store and keeps the other tiers', async () => {
     mockGeneral.mockResolvedValue([item('g-only', 'general')]);
     mockOverlay.mockResolvedValue([item('c-only', 'character', { characterId: CHAR_ID })]);
-    mockProject.mockImplementation(async (mountPointId: string) => {
-      if (mountPointId === 'mp-broken') throw new Error('store offline');
+    mockMount.mockImplementation(async (mountPointId: string) => {
+      if (mountPointId === 'grp-broken') throw new Error('store offline');
       return [item('p-only', 'project')];
     });
 
     const pool = await repo.findWearablePoolForCharacter(CHAR_ID, {
-      projectMountPointIds: ['mp-broken', 'mp-ok'],
+      groupMountPointIds: ['grp-broken'],
+      projectMountPointIds: ['mp-ok'],
     });
 
     expect(pool.map((i: { id: string }) => i.id).sort()).toEqual(['c-only', 'g-only', 'p-only']);

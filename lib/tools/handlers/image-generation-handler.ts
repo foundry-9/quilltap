@@ -51,6 +51,7 @@ import {
 } from '@/lib/services/dangerous-content/provider-routing.service';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
+import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers';
 import { resolveProjectMountPointIdsForChat } from '@/lib/mount-index/tiered-mount-pool';
 import {
   resolveAesthetic,
@@ -988,9 +989,12 @@ async function resolveAppearances(
             try {
               const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(context.chatId, p.entityId);
               if (equippedSlots) {
-                const resolved = await resolveEquippedOutfitForCharacter(repos, p.entityId, equippedSlots, {
-                  projectMountPointIds,
-                });
+                const resolved = await resolveEquippedOutfitForCharacter(
+                  repos,
+                  p.entityId,
+                  equippedSlots,
+                  await sharedWardrobeTiersForCharacter(p.entityId, projectMountPointIds),
+                );
                 const flat: Array<{ slot: string; title: string; description?: string | null; imagePrompt?: string | null }> = [];
                 for (const slot of ['top', 'bottom', 'footwear', 'accessories'] as const) {
                   for (const item of resolved.leafItemsBySlot[slot]) {

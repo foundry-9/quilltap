@@ -24,6 +24,8 @@ jest.mock('@/lib/background-jobs/queue-service', () => ({
 // Project-tier resolution is exercised elsewhere; here it's a deterministic no-op.
 jest.mock('@/lib/mount-index/tiered-mount-pool', () => ({
   resolveProjectMountPointIdsForChat: jest.fn().mockResolvedValue([]),
+  resolveProjectMountPointIds: jest.fn().mockResolvedValue([]),
+  resolveGroupMountPointIdsForCharacter: jest.fn().mockResolvedValue([]),
 }))
 
 // The tool handlers call these primitives to actually mutate `chats.equippedOutfit`.
@@ -155,6 +157,26 @@ describe('wardrobe tool handlers', () => {
       expect(byId['own-1'].image_prompt).toBe('worn brass-buttoned coat')
       expect(byId['shared-1'].is_own).toBe(false)
       expect(byId['shared-1'].image_prompt).toBeNull()
+    })
+
+    it('folds the character\'s group stores into the wearable pool', async () => {
+      // The whole point of the group tier: a garment hanging in a group's
+      // `Wardrobe/` folder is wearable by every member without any of them
+      // owning it. Before this was wired up, the item was invisible here.
+      const tieredMountPool = require('@/lib/mount-index/tiered-mount-pool')
+      tieredMountPool.resolveGroupMountPointIdsForCharacter.mockResolvedValueOnce(['grp-mount'])
+      const livery = makeWardrobeItem({ id: 'grp-1', title: 'House Livery', characterId: null })
+      repos.wardrobe.findArchetypes.mockResolvedValue([livery])
+
+      const result = await executeWardrobeListTool({}, context)
+
+      expect(repos.wardrobe.findWearablePoolForCharacter).toHaveBeenCalledWith('char-1', {
+        groupMountPointIds: ['grp-mount'],
+        projectMountPointIds: [],
+      })
+      const byId = Object.fromEntries(result.items.map((i: any) => [i.item_id, i]))
+      expect(byId['grp-1'].title).toBe('House Livery')
+      expect(byId['grp-1'].is_own).toBe(false)
     })
 
     it('lets a character\'s own item override a shared archetype on id collision', async () => {

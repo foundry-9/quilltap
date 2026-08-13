@@ -23,7 +23,7 @@ import type {
 import { validateWardrobeTakeOffInput } from '../wardrobe-take-off-tool';
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 import { removeFromSlot } from '@/lib/wardrobe/outfit-displacement';
-import { resolveProjectMountPointIdsForChat } from '@/lib/mount-index/tiered-mount-pool';
+import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
 import {
   buildWardrobeCoverageSummaryFromState,
   describeWardrobeEffect,
@@ -78,7 +78,7 @@ export async function executeWardrobeTakeOffTool(
     );
   }
 
-  const projectMountPointIds = await resolveProjectMountPointIdsForChat(context.chatId);
+  const tiers = await resolveSharedWardrobeTiersForChat(context.chatId, context.characterId);
 
   const results: WardrobeTakeOffOpResult[] = [];
   let appliedCount = 0;
@@ -117,7 +117,7 @@ export async function executeWardrobeTakeOffTool(
         context.characterId,
         itemId,
         itemTitle,
-        projectMountPointIds,
+        tiers,
       );
       if (!item) {
         throw new WardrobeTakeOffError(wardrobeItemNotFoundMessage(itemId, itemTitle));
@@ -190,7 +190,7 @@ export async function executeWardrobeTakeOffTool(
     repos,
     context.characterId,
     currentState,
-    { projectMountPointIds },
+    tiers,
   );
 
   return {

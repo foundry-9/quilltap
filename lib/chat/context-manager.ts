@@ -82,6 +82,7 @@ import { SceneStateSchema, type SceneState } from '@/lib/schemas/chat.types'
 import { describeOutfit, decorateOutfitItems } from '@/lib/wardrobe/outfit-description'
 import { hashEquippedSlots, hasEquippedItems } from '@/lib/wardrobe/outfit-hash'
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped'
+import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers'
 import {
   resolveTieredMountPool,
   type TieredMountPool,
@@ -1445,9 +1446,14 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
           // Wardrobe unchanged since the cached summary was derived — keep it.
           if (liveHash === (c.clothingHash ?? null)) return
           const { projectMountPointIds } = await getTurnMountPool()
-          const resolved = await resolveEquippedOutfitForCharacter(repos, c.characterId, equippedSlots!, {
-            projectMountPointIds,
-          })
+          // Group stores follow each character's own memberships, so they can't
+          // come from the turn pool (which is keyed on the responding character).
+          const resolved = await resolveEquippedOutfitForCharacter(
+            repos,
+            c.characterId,
+            equippedSlots!,
+            await sharedWardrobeTiersForCharacter(c.characterId, projectMountPointIds),
+          )
           const description = describeOutfit({
             top: decorateOutfitItems(resolved.leafItemsBySlot.top, { titleOnly: true }),
             bottom: decorateOutfitItems(resolved.leafItemsBySlot.bottom, { titleOnly: true }),

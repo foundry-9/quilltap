@@ -1,20 +1,30 @@
 /**
- * Tri-tier coverage for `applyOutfitSelections`.
+ * Multi-tier coverage for `applyOutfitSelections`.
  *
  * The server used to dress characters from their own vault alone, so a
- * character whose wardrobe lives entirely in a shared tier (Quilltap General or
- * a project store) opened a chat wearing nothing and never reached the
- * `llm_choose` LLM at all. These cases pin the merged behaviour: merge all
- * three tiers first, filter `isDefault` last, character shadows shared on id.
+ * character whose wardrobe lives entirely in a shared tier (Quilltap General, a
+ * project store, or one of their groups) opened a chat wearing nothing and
+ * never reached the `llm_choose` LLM at all. These cases pin the merged
+ * behaviour: merge every tier first, filter `isDefault` last, character shadows
+ * shared on id.
+ *
+ * The group tier is read per character rather than with the batch, because it
+ * follows each character's own memberships.
  */
 
 import { applyOutfitSelections } from '@/lib/wardrobe/apply-outfit-selections'
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { chooseLLMOutfit } from '@/lib/memory/cheap-llm-tasks/outfit-selection'
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped'
+import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool'
 
 jest.mock('@/lib/logger', () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+}))
+jest.mock('@/lib/mount-index/tiered-mount-pool', () => ({
+  resolveGroupMountPointIdsForCharacter: jest.fn(),
+  resolveProjectMountPointIds: jest.fn().mockResolvedValue([]),
+  resolveProjectMountPointIdsForChat: jest.fn().mockResolvedValue([]),
 }))
 jest.mock('@/lib/memory/cheap-llm-tasks/outfit-selection', () => ({
   chooseLLMOutfit: jest.fn(),
@@ -30,6 +40,9 @@ jest.mock('@/lib/wardrobe/resolve-equipped', () => ({
 const mockChooseLLMOutfit = chooseLLMOutfit as jest.MockedFunction<typeof chooseLLMOutfit>
 const mockResolve = resolveEquippedOutfitForCharacter as jest.MockedFunction<
   typeof resolveEquippedOutfitForCharacter
+>
+const mockGroupMounts = resolveGroupMountPointIdsForCharacter as jest.MockedFunction<
+  typeof resolveGroupMountPointIdsForCharacter
 >
 
 const CHAR_ID = 'c1c1c1c1-0000-0000-0000-000000000001'
@@ -57,13 +70,17 @@ function item(
   } as WardrobeItem
 }
 
-function makeRepos(opts: { own?: WardrobeItem[]; shared?: WardrobeItem[] } = {}) {
+function makeRepos(
+  opts: { own?: WardrobeItem[]; shared?: WardrobeItem[]; group?: WardrobeItem[] } = {},
+) {
   const setEquippedOutfit = jest.fn().mockResolvedValue(undefined)
   const findArchetypes = jest.fn().mockResolvedValue(opts.shared ?? [])
+  const findArchetypesInMounts = jest.fn().mockResolvedValue(opts.group ?? [])
   const findByCharacterId = jest.fn().mockResolvedValue(opts.own ?? [])
   return {
     setEquippedOutfit,
     findArchetypes,
+    findArchetypesInMounts,
     findByCharacterId,
     repos: {
       characters: {
@@ -78,6 +95,7 @@ function makeRepos(opts: { own?: WardrobeItem[]; shared?: WardrobeItem[] } = {})
       wardrobe: {
         findByCharacterId,
         findArchetypes,
+        findArchetypesInMounts,
         findWearablePoolForCharacter: jest.fn().mockResolvedValue([]),
       },
       connections: {
@@ -105,6 +123,7 @@ const EMPTY_RESOLVED = {
 beforeEach(() => {
   jest.clearAllMocks()
   clock = 0
+  mockGroupMounts.mockResolvedValue([])
   mockResolve.mockResolvedValue(
     EMPTY_RESOLVED as Awaited<ReturnType<typeof resolveEquippedOutfitForCharacter>>,
   )
@@ -267,7 +286,60 @@ describe('applyOutfitSelections — shared wardrobe tiers', () => {
     expect(equippedFor(setEquippedOutfit)?.top).toEqual(['general-coat'])
   })
 
-  it('threads projectMountPointIds into both the pool fetch and the preview resolve', async () => {
+  it('equips a group default when the character vault and the batch tiers are empty', async () => {
+    mockGroupMounts.mockResolvedValue(['grp-mount'])
+    const { repos, setEquippedOutfit, findArchetypesInMounts } = makeRepos({
+      own: [],
+      shared: [],
+      group: [item('house-livery', ['top'], { isDefault: true })],
+    })
+
+    await applyOutfitSelections(
+      'chat-1',
+      [{ characterId: CHAR_ID, mode: 'default' }],
+      repos as never,
+      { userId: 'u1', projectMountPointIds: [] },
+    )
+
+    expect(findArchetypesInMounts).toHaveBeenCalledWith(['grp-mount'], false)
+    expect(equippedFor(setEquippedOutfit)?.top).toEqual(['house-livery'])
+  })
+
+  it('lets a group item shadow the project/general copy of the same id', async () => {
+    mockGroupMounts.mockResolvedValue(['grp-mount'])
+    const { repos, setEquippedOutfit } = makeRepos({
+      own: [],
+      shared: [item('livery', ['top'], { isDefault: true, title: 'shared livery' })],
+      group: [item('livery', ['top'], { isDefault: true, title: 'group livery' })],
+    })
+
+    await applyOutfitSelections(
+      'chat-1',
+      [{ characterId: CHAR_ID, mode: 'default' }],
+      repos as never,
+      { userId: 'u1', projectMountPointIds: ['mp-a'] },
+    )
+
+    expect(equippedFor(setEquippedOutfit)?.top).toEqual(['livery'])
+  })
+
+  it('skips the group read entirely for a character with no memberships', async () => {
+    const { repos, findArchetypesInMounts } = makeRepos({
+      own: [],
+      shared: [item('general-coat', ['top'], { isDefault: true })],
+    })
+
+    await applyOutfitSelections(
+      'chat-1',
+      [{ characterId: CHAR_ID, mode: 'default' }],
+      repos as never,
+      { userId: 'u1', projectMountPointIds: [] },
+    )
+
+    expect(findArchetypesInMounts).not.toHaveBeenCalled()
+  })
+
+  it('threads both shared tiers into the pool fetch and the preview resolve', async () => {
     mockChooseLLMOutfit.mockResolvedValue({
       success: true,
       result: {
@@ -304,7 +376,7 @@ describe('applyOutfitSelections — shared wardrobe tiers', () => {
       expect.anything(),
       CHAR_ID,
       expect.anything(),
-      { projectMountPointIds: ['mp-a', 'mp-b'] },
+      { groupMountPointIds: [], projectMountPointIds: ['mp-a', 'mp-b'] },
     )
   })
 

@@ -3,7 +3,7 @@
  *
  * Soft-retires a wardrobe item via `WardrobeRepository.archive` (sets
  * `archivedAt`). Never hard-deletes — restoring is a human-only UI action.
- * Resolves the target across all (non-group) tiers to LOCATE it, then enforces
+ * Resolves the target across every tier to LOCATE it, then enforces
  * own-items-only: shared archetypes (project / Quilltap General) are read-only
  * and the call is refused.
  *
@@ -17,7 +17,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import type { WardrobeArchiveToolInput, WardrobeArchiveToolOutput } from '../wardrobe-archive-tool';
 import { validateWardrobeArchiveInput } from '../wardrobe-archive-tool';
 import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
-import { resolveProjectMountPointIdsForChat } from '@/lib/mount-index/tiered-mount-pool';
+import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
 import {
   isOwnWardrobeItem,
   normalizeNoItemSentinel,
@@ -59,14 +59,14 @@ export async function executeWardrobeArchiveTool(
 
   try {
     const { item_id, item_title } = parsed;
-    const projectMountPointIds = await resolveProjectMountPointIdsForChat(context.chatId);
+    const tiers = await resolveSharedWardrobeTiersForChat(context.chatId, context.characterId);
 
     const item = await resolveWardrobeItemAcrossTiers(
       repos,
       context.characterId,
       normalizeNoItemSentinel(item_id),
       normalizeNoItemSentinel(item_title),
-      projectMountPointIds,
+      tiers,
     );
     if (!item) {
       return buildFailureResponse(wardrobeItemNotFoundMessage(item_id, item_title));

@@ -35,7 +35,7 @@ To furnish a character's wardrobe, open the **Wardrobe** dialog — the clothes-
 
 1. Pick the character from the dropdown at the top of the dialog (if one isn't already selected)
 2. Click **+ New Item**
-3. Use the **"Add to"** selector to choose where the garment lives — **This character** (a personal item, the default), **Shared — everywhere** (a household archetype), or **Shared — this project** (offered when you've opened the dialog inside a project's chat). See [Where Wardrobe Items Come From](#where-wardrobe-items-come-from-three-tiers) for what each tier means.
+3. Use the **"Add to"** selector to choose where the garment lives — **This character** (a personal item, the default), **Shared — everywhere** (a household archetype), or **Shared — this project** (offered when you've opened the dialog inside a project's chat). See [Where Wardrobe Items Come From](#where-wardrobe-items-come-from-four-tiers) for what each tier means.
 4. Choose the **slot(s)** the garment covers (top, bottom, footwear, or accessories)
 5. Give the item a **title** (e.g., "Burgundy velvet smoking jacket") and a **description** --- as lavish or as terse as you please --- that the AI will use when referencing the garment
 6. Optionally supply a **Portrait Cue** --- a short, literal phrase whispered to the portraitist and the Lantern when a likeness is drawn (see [Portrait Cues](#portrait-cues-dressing-for-the-camera) below)
@@ -82,15 +82,16 @@ Click **Import Selected** to add the approved items to the character's personal 
 
 **Requirements:** This feature requires at least one vision-capable provider to be configured (Anthropic Claude, OpenAI GPT-4o, Google Gemini, or xAI Grok). If you have configured an **Image Description Profile** in your Chat settings, that profile will be used; otherwise Quilltap will select any available vision-capable provider from your connection profiles.
 
-### Where Wardrobe Items Come From (Three Tiers)
+### Where Wardrobe Items Come From (Four Tiers)
 
-A character does not draw her wearable garments from a single drawer. Quilltap consults three tiers, nearest to farthest:
+A character does not draw her wearable garments from a single drawer. Quilltap consults four tiers, nearest to farthest:
 
 1. **The character's own vault** — her personal armoire, hers alone.
-2. **The project's wardrobe** — shared attire belonging to whichever project the chat lives in (a household livery, a regimental coat), wearable by every character in that project's chats. See [Project Wardrobe](project-wardrobe.md).
-3. **Quilltap General** — the household-wide collection of shared items (archetypes, below), available to every character in every chat regardless of project.
+2. **Her groups' wardrobes** — the coats by the door of every group she belongs to: a household livery, a regimental kit, the club's dinner jackets. Wearable by every member of that group, in any chat, without a single one of them owning it. See [Groups](groups.md).
+3. **The project's wardrobe** — shared attire belonging to whichever project the chat lives in, wearable by every character in that project's chats. See [Project Wardrobe](project-wardrobe.md).
+4. **Quilltap General** — the household-wide collection of shared items (archetypes, below), available to every character in every chat regardless of project.
 
-When the same garment appears in more than one tier, the nearer tier prevails: a character's personal item outranks a project item, which in turn outranks a household archetype. A project's garments are on offer only while a chat belongs to that project; outside it, they simply aren't shown.
+When the same garment appears in more than one tier, the nearer tier prevails: a character's personal item outranks her group's, which outranks a project item, which in turn outranks a household archetype. A group's garments follow the character herself — she carries them from chat to chat, and never borrows a fellow guest's. A project's garments, by contrast, are on offer only while a chat belongs to that project; outside it, they simply aren't shown.
 
 ### Shared Items (Archetypes)
 
@@ -151,9 +152,9 @@ Items that have fallen out of favour need not be destroyed entirely. **Archiving
 
 During a chat, characters with the appropriate permissions may attend to their toilette by means of seven tools, each named with a tidy `wardrobe_` prefix so there is never any doubt as to whose drawer one is rummaging through. Wearing and editing are handled by altogether separate instruments — for a single garment and a whole bundled ensemble alike behave identically, the item's own *replace* setting deciding whether it layers atop what is worn or sweeps the slot clean.
 
-Throughout, a character sees not only the items in their **own** wardrobe but also any shared garments hanging in the **project** stores and the great communal cloakroom that is **Quilltap General** — though shared items, being held in common, may be *worn* but never *altered* by a single character's hand.
+Throughout, a character sees not only the items in their **own** wardrobe but also any shared garments hanging in their **groups'** stores, in the **project** stores, and in the great communal cloakroom that is **Quilltap General** — though shared items, being held in common, may be *worn* but never *altered* by a single character's hand.
 
-- **wardrobe_list** --- Survey the available garments — one's own plus the shared finery of the project and Quilltap General. Composites are flagged with their components listed; each item notes whether you own it (and may thus edit it) or merely borrow it.
+- **wardrobe_list** --- Survey the available garments — one's own plus the shared finery of one's groups, the project, and Quilltap General. Composites are flagged with their components listed; each item notes whether you own it (and may thus edit it) or merely borrow it.
 - **wardrobe_read** --- Inspect one item in full: its Portrait Cue, its default-outfit standing, its composite particulars, and the slots it presently occupies. Where `wardrobe_list` offers a glance, this offers a proper appraisal.
 - **wardrobe_wear** --- Put garments on. Hand it an ordered list of changes and it applies them in sequence — force-swap the coat, *then* layer a muffler over it, all in a single gesture. Per item: `wear` (don it across every slot it covers, honoring its replace setting — ordinarily a gentle layering), `replace` (clear those slots first, a decisive swap), or `add_to_slot` (tuck it into one named slot).
 - **wardrobe_take_off** --- Remove garments, or empty a slot entirely. Likewise an ordered list. Per item: `remove` (take a worn piece off across every slot it covers, leaving any other layers undisturbed — narrow it to a single slot if you wish) or `clear_slot` (sweep one slot bare).
@@ -185,9 +186,9 @@ All three flags live on the character's **Wardrobe** tab on the Aurora page — 
 
 When you begin a new conversation, you will be asked how to handle the character's outfit:
 
-- **Default** --- The character arrives wearing everything marked as a default garment across all three tiers --- their own vault, the project's wardrobe, and Quilltap General --- layered one atop the next rather than squabbling over a single slot. Should the character keep their own copy of a shared garment, that copy prevails: mark it *not* a default and they will decline the house livery altogether, with no offence taken.
+- **Default** --- The character arrives wearing everything marked as a default garment across every tier --- their own vault, their groups' wardrobes, the project's wardrobe, and Quilltap General --- layered one atop the next rather than squabbling over a single slot. Should the character keep their own copy of a shared garment, that copy prevails: mark it *not* a default and they will decline the house livery altogether, with no offence taken.
 - **Manual** --- You hand-pick which items the character is wearing at the start of the scene
-- **Let Character Choose** --- The character examines the scenario and the whole of their wardrobe (all three tiers), then selects what seems most appropriate for the occasion. This is accomplished by a discreet consultation with the AI before the conversation begins --- rather like sending one's valet ahead to assess the dress code. Should the consultation fail for any reason (a misplaced cufflink, an uncooperative telegraph, or a valet who has simply not returned within the minute allotted him), the character falls back to their default outfit with admirable composure.
+- **Let Character Choose** --- The character examines the scenario and the whole of their wardrobe (every tier), then selects what seems most appropriate for the occasion. This is accomplished by a discreet consultation with the AI before the conversation begins --- rather like sending one's valet ahead to assess the dress code. Should the consultation fail for any reason (a misplaced cufflink, an uncooperative telegraph, or a valet who has simply not returned within the minute allotted him), the character falls back to their default outfit with admirable composure.
 
   A character may also elect to wear *nothing* --- a nudist at home, a bathing scene, a setting in which clothing would be plainly absurd --- and when they do so deliberately, the house respects it. The distinction matters: an empty answer offered *without* that deliberate declaration is treated as a valet who has lost his nerve, and the character is put into their defaults rather than sent out undressed by accident. When several characters are dressing at once, they now consult in parallel rather than queueing politely in the hall, so one slow valet no longer keeps the entire party waiting.
 - **None** --- The character begins with no equipped outfit; what they wear (if anything) is left to the narrative

@@ -1557,11 +1557,11 @@ Generate a one-off character avatar against an arbitrary equipped-slot snapshot 
 
 #### `GET /api/v1/wardrobe/transfers`
 
-Return the destination options for moving or copying a wardrobe item between tiers (character vault, project stores, Quilltap General).
+Return the destination options for moving or copying a wardrobe item between tiers (character vault, group stores, project stores, Quilltap General).
 
 #### `POST /api/v1/wardrobe/transfers`
 
-Move or copy one wardrobe item between wardrobe tiers.
+Move or copy one wardrobe item between wardrobe tiers. The source item is located by scanning, in order: the source character's own vault, the source project's store, the group stores the source character reaches by membership, then Quilltap General. Destinations are named explicitly by `{scope, id}`.
 
 ---
 
@@ -1572,6 +1572,18 @@ Per-character wardrobe items. Same schema as archetypes but scoped to a specific
 #### `GET /api/v1/characters/[id]/wardrobe`
 
 Get all wardrobe items for a character.
+
+**Query Parameters**:
+
+| Param | Values | Description |
+|---|---|---|
+| `scope` | `group` | Return the **group tier** instead of the character's own items: the shared items in the `Wardrobe/` folder of every store belonging to a group this character is a member of (official + linked), deduped with the later mount winning. `characterId` is `null` on each. Any other value (or none) returns the character's own vault items. |
+
+The group tier is a standalone read so the client can assemble the same pool the
+server does (`useCharacterWardrobeItems` merges character > group > project >
+general). Server-side callers should use
+`repos.wardrobe.findWearablePoolForCharacter` with tiers from
+`resolveSharedWardrobeTiersForChat` rather than reassembling it.
 
 **Response**: `200 OK`
 

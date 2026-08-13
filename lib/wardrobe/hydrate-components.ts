@@ -20,6 +20,7 @@
 
 import { logger } from '@/lib/logger';
 import { COMPOSITE_MAX_DEPTH } from '@/lib/wardrobe/expand-composites';
+import type { SharedWardrobeTiers } from '@/lib/wardrobe/shared-tiers';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 
 /** Minimal repository surface needed to hydrate components. */
@@ -28,15 +29,13 @@ export interface ComponentHydrationRepos {
     findByIdsForCharacter(
       characterId: string,
       ids: string[],
-      opts?: { projectMountPointIds?: string[] },
+      opts?: SharedWardrobeTiers,
     ): Promise<WardrobeItem[]>;
   };
 }
 
-export interface HydrateComponentsOptions {
-  /** Project document stores in scope, for tri-tier resolution. */
-  projectMountPointIds?: string[];
-}
+/** Group + project stores in scope, for multi-tier resolution. */
+export type HydrateComponentsOptions = SharedWardrobeTiers;
 
 /**
  * Fill in every component reachable from the items already in `itemsById`,
@@ -64,9 +63,7 @@ export async function hydrateComponentGraph(
     if (wanted.length === 0) return;
 
     try {
-      const components = await repos.wardrobe.findByIdsForCharacter(characterId, wanted, {
-        projectMountPointIds: opts?.projectMountPointIds,
-      });
+      const components = await repos.wardrobe.findByIdsForCharacter(characterId, wanted, opts);
       if (components.length === 0) return;
       for (const item of components) {
         itemsById.set(item.id, item);
@@ -102,7 +99,7 @@ export async function loadBundleLookup(
     const direct = await repos.wardrobe.findByIdsForCharacter(
       characterId,
       Array.from(componentItemIds),
-      { projectMountPointIds: opts?.projectMountPointIds },
+      opts,
     );
     for (const item of direct) itemsById.set(item.id, item);
   } catch (error) {

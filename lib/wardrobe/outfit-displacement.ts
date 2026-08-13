@@ -46,6 +46,7 @@ import {
 import type { WearableLookup, WearableNode } from '@/lib/wardrobe/dissolve-bundles';
 import { loadBundleLookup } from '@/lib/wardrobe/hydrate-components';
 import type { ComponentHydrationRepos } from '@/lib/wardrobe/hydrate-components';
+import type { SharedWardrobeTiers } from '@/lib/wardrobe/shared-tiers';
 import type { EquippedSlots, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 
 /** Minimal repository interfaces needed for these primitives */
@@ -62,11 +63,11 @@ export interface DisplacementRepos {
   wardrobe?: ComponentHydrationRepos['wardrobe'];
 }
 
-/** Shared options for the persisted primitives. */
-export interface EquipOptions {
-  /** Project document stores in scope, for tri-tier component resolution. */
-  projectMountPointIds?: string[];
-}
+/**
+ * Shared options for the persisted primitives: the group + project stores in
+ * scope, for multi-tier component resolution.
+ */
+export type EquipOptions = SharedWardrobeTiers;
 
 /**
  * Resolve the lookup a bundle needs to dissolve. Non-bundles and repo sets
@@ -79,9 +80,7 @@ async function lookupForBundle(
   opts?: EquipOptions,
 ): Promise<WearableLookup | undefined> {
   if (!repos.wardrobe || !isBundle(item)) return undefined;
-  return loadBundleLookup({ wardrobe: repos.wardrobe }, characterId, item.componentItemIds, {
-    projectMountPointIds: opts?.projectMountPointIds,
-  });
+  return loadBundleLookup({ wardrobe: repos.wardrobe }, characterId, item.componentItemIds, opts);
 }
 
 function freshSlots(): EquippedSlots {

@@ -26,7 +26,7 @@ import type {
 } from '../wardrobe-wear-tool';
 import { validateWardrobeWearInput } from '../wardrobe-wear-tool';
 import { equipItem, replaceItem, addToSlot } from '@/lib/wardrobe/outfit-displacement';
-import { resolveProjectMountPointIdsForChat } from '@/lib/mount-index/tiered-mount-pool';
+import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
 import {
   buildWardrobeCoverageSummaryFromState,
   describeWardrobeEffect,
@@ -81,7 +81,7 @@ export async function executeWardrobeWearTool(
     );
   }
 
-  const projectMountPointIds = await resolveProjectMountPointIdsForChat(context.chatId);
+  const tiers = await resolveSharedWardrobeTiersForChat(context.chatId, context.characterId);
 
   const results: WardrobeWearOpResult[] = [];
   let appliedCount = 0;
@@ -98,7 +98,7 @@ export async function executeWardrobeWearTool(
         context.characterId,
         itemId,
         itemTitle,
-        projectMountPointIds,
+        tiers,
       );
       if (!item) {
         throw new WardrobeWearError(wardrobeItemNotFoundMessage(itemId, itemTitle));
@@ -117,16 +117,16 @@ export async function executeWardrobeWearTool(
             `Item "${item.title}" (types: ${item.types.join(', ')}) cannot be added to the "${slot}" slot`,
           );
         }
-        await addToSlot(repos, context.chatId, context.characterId, slot, item, { projectMountPointIds });
+        await addToSlot(repos, context.chatId, context.characterId, slot, item, tiers);
         effect = 'layered';
         slotsAffected = [slot];
       } else if (mode === 'replace') {
-        await replaceItem(repos, context.chatId, context.characterId, item, { projectMountPointIds });
+        await replaceItem(repos, context.chatId, context.characterId, item, tiers);
         effect = 'replaced';
         slotsAffected = item.types;
       } else {
         // mode === 'wear'
-        await equipItem(repos, context.chatId, context.characterId, item, { projectMountPointIds });
+        await equipItem(repos, context.chatId, context.characterId, item, tiers);
         effect = item.replace ? 'replaced' : 'layered';
         slotsAffected = item.types;
       }
@@ -193,7 +193,7 @@ export async function executeWardrobeWearTool(
     repos,
     context.characterId,
     currentState,
-    { projectMountPointIds },
+    tiers,
   );
 
   return {

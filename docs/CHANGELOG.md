@@ -4,6 +4,20 @@
 
 ### 4.8.2
 
+#### Fix: wardrobe items moved into a group were invisible to everyone
+
+The wardrobe transfer dialog has offered every group as a destination since groups gained document stores, and moving or copying a garment there worked — the file landed in the group store's `Wardrobe/` folder. Nothing ever read it back. `findArchetypes` and the wearable pool it feeds took only Quilltap General plus the chat's project stores, so a group garment did not appear in the wardrobe dialog, was not listed by `wardrobe_list`, could not be resolved by id or title by `wardrobe_read`/`wardrobe_wear`/`wardrobe_update`/`wardrobe_archive`, was never equipped as a default at chat start, and could not be moved back out (the transfer's source lookup didn't scan groups either). An item moved to a group effectively vanished.
+
+The group tier is now read everywhere the other shared tiers are. A character's wearable pool is the union of their own vault, the `Wardrobe/` folder of every store belonging to every group they're a member of (official and linked), the chat project's stores, and Quilltap General. Precedence matches the document-store tiers: **character > group > project > general**, so a group's livery shadows a project's copy of the same item and a character's personal copy shadows both — including the `isDefault: false` personal copy that is how a character opts out of a shared default.
+
+Group stores follow the character, not the chat: a character sees only their own groups' wardrobes and never a co-participant's, the same rule Knowledge already used. The one exception is the chat outfit-summary endpoint, which spans the whole cast and therefore reads the union of the participants' groups so every equipped item resolves to a title.
+
+Paths now covered: `wardrobe_list`, `wardrobe_read`, `wardrobe_wear`, `wardrobe_take_off`, `wardrobe_update`, `wardrobe_archive`, `wardrobe_create` (gifted composites resolve against the *recipient's* groups), the wardrobe dialog and outfit builder, chat-start outfit selection including the cheap LLM's pick and default outfits, equipped-outfit resolution for scene state, story backgrounds, avatar prompts, Aurora's wardrobe announcements, and the chat list's equipped-item titles. Group items are shared, so they are wear-only for a character, exactly like project and General items.
+
+The transfer dialog can now also take an item *out* of a group: the source lookup scans the source character's group stores between the project store and Quilltap General.
+
+Internally, the three copies of "read a mount's `Wardrobe/` folder" (general, project, and now group) collapsed into `lib/mount-index/shared-wardrobe.ts`, with the scoped modules as façades over it. The tier options that used to be threaded as a bare `projectMountPointIds` array are now one `SharedWardrobeTiers` object (`lib/wardrobe/shared-tiers.ts`) resolved by a single helper, so a call site can no longer thread one tier and silently drop the other — which is what let this go unnoticed.
+
 #### Change: wearing a bundled outfit now breaks it apart automatically
 
 Equipped state used to store a composite wardrobe item's own id in every slot it covered, expanding to the individual garments only at read time. In the wardrobe dialog that produced a single "Man in Black · bundle" card above four slot rows that all read *Empty* — the outfit was on, but nothing on screen said which shirt or which boots. Getting to that view took a separate **Break apart** click.
