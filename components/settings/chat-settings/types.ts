@@ -82,6 +82,8 @@ export interface ChatSettings {
   compositionModeDefault?: boolean
   /** Whether browser spellcheck is enabled in the composer and rich-text Document Mode editor */
   composerSpellcheck?: boolean
+  /** Whether the `:` emoji typeahead fires in the composer and Document Mode editor (the toolbar picker is not gated by this) */
+  composerEmoji?: boolean
   /** Master switch for user-defined word-boundary text replacements in the composer and Document Mode editor */
   textReplacementsEnabled?: boolean
   /** Whether the Salon auto-scrolls to the newest message when a response completes (only when already near the bottom) */

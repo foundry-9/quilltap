@@ -345,7 +345,7 @@ Worked through, with a rule `Aris → Aristarchus the Wise` and the user typing 
 
 Correct in both features — which is the point of fixing the order rather than leaving it to registration accident. Assert this table step by step in the plugin tests; it is the test that fails if someone reorders.
 
-[Layer 2.0e emoji](composer-emoji.md) triggers on `:`, which is not a Part B trigger — no interaction. Registration order among the three: emoji → smart typography → text replacement. In v5, all three are plugin-array positions in `buildPlugins()` (`apps/web/src/app/editor/rich-editor.ts:224-280`, whose doc comment already says the order is load-bearing — add this pair to it).
+[Layer 2.0e emoji](complete/composer-emoji.md) triggers on `:`, which is not a Part B trigger — no interaction. Registration order among the three: emoji → smart typography → text replacement. In v5, all three are plugin-array positions in `buildPlugins()` (`apps/web/src/app/editor/rich-editor.ts:224-280`, whose doc comment already says the order is load-bearing — add this pair to it).
 
 ---
 

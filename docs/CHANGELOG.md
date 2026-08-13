@@ -4,6 +4,26 @@
 
 ### 4.8.2
 
+#### Composer emoji
+
+Type `:` plus at least two letters to search emoji by name and insert one, in both the Salon composer and Document Mode. A menu lists the matches; Enter or a click inserts. Typing a complete shortcode and closing it — `:smile:` — inserts immediately without the menu. A button in the formatting toolbar opens a searchable picker with a browsable grid and a recents row.
+
+Inserted emoji are plain Unicode characters, not shortcodes, images, or custom nodes, so exports, Markdown round-trip, search, and the LLM all see ordinary text. No trailing space is added. One Cmd/Ctrl+Z removes the emoji and restores the literal `:smi` that was typed.
+
+The menu does not open after `http://`, inside a time like `10:30`, in a Windows path, after `:` alone or `:a`, or on `:)`. It also stays shut inside fenced code blocks and inline code.
+
+The emoji dataset (1,914 entries, ~53 KB gzipped) is served from `public/` and fetched only on the first `:` or first picker open, so instances that never use the feature never load it. If the fetch fails, typing is unaffected and the menu simply doesn't open.
+
+Toggle on the Chat settings tab under Composer, labeled "Emoji shortcuts"; default on. The toolbar button is not gated by the toggle — the flag governs the automatic `:` trigger only. Recently-used emoji are stored in the browser's local storage, not on the server.
+
+Adds a `composerEmoji` column to `chat_settings` (migration `add-composer-emoji-field-v1`).
+
+#### Fix: text replacements fired inside code blocks and inline code (bug 63)
+
+With any text-replacement rule defined, typing the trigger inside a fenced code block or an inline `code` run and then a word-boundary character applied the replacement — so a rule like `fn → function` silently rewrote code as it was typed. The plugin checked only that the cursor sat at the end of a text node, and `CodeHighlightNode` extends `TextNode`, so fenced-block tokens passed that check; nothing checked the `code` format bit for inline runs.
+
+Both surfaces now bail, via a single `$isInCodeContext` helper shared with the new emoji plugin so the two typing aids can't drift apart again. Replacements in ordinary prose are unchanged. The plugin previously had no tests at all; it has them now.
+
 #### Fix: curly-quoted dialogue wasn't highlighted in chats without a roleplay template (bug 62)
 
 Quilltap styles dialogue — the quoted parts of a message — differently from narration. In a chat using a roleplay template that supplies its own patterns, that worked with either kind of quotation mark. In a chat with no template, or one whose template supplies no rendering patterns, only straight quotes (`"like this"`) were ever highlighted. Curly quotes (`"like this"`) were not, and most model output is curly-quoted, as is anything pasted from Word, Pages, or Scrivener, or typed on macOS with smart quotes on.

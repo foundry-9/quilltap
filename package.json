@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "4.8.2-bugfix.7",
+  "version": "4.8.2-bugfix.8",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -29,6 +29,7 @@
     "devssl": "next dev --experimental-https --experimental-https-key ./certs/localhost-key.pem --experimental-https-cert ./certs/localhost.pem",
     "generate:schemas": "tsx scripts/generate-plugin-manifest-schema.ts",
     "generate:icon-css": "tsx scripts/generate-icon-css.ts",
+    "generate:emoji-index": "tsx scripts/generate-emoji-index.ts",
     "lint": "eslint . && node scripts/check-quilltap-spelling.mjs",
     "lint:fix": "eslint . --fix && node scripts/check-quilltap-spelling.mjs",
     "oneoff:cleanup-old-files-v1.6": "tsx scripts/cleanup-old-files.ts",
@@ -136,6 +137,7 @@
     "autoprefixer": "^10.5.4",
     "cross-env": "^10.1.0",
     "dotenv": "^17.4.2",
+    "emojibase-data": "^17.0.0",
     "esbuild": "^0.28.1",
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.2.12",

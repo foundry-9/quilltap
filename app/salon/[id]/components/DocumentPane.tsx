@@ -37,6 +37,7 @@ import { composerTheme } from '@/components/chat/lexical/theme'
 import { MarkdownBridgePlugin, COMPOSER_TRANSFORMERS } from '@/components/chat/lexical/plugins/MarkdownBridgePlugin'
 import { FormattingCommandPlugin } from '@/components/chat/lexical/plugins/FormattingCommandPlugin'
 import { TextReplacementPlugin } from '@/components/chat/lexical/plugins/TextReplacementPlugin'
+import { EmojiTypeaheadPlugin } from '@/components/chat/lexical/plugins/EmojiTypeaheadPlugin'
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
 import DocumentChangeTracker from './DocumentChangeTracker'
 import DocumentFocusPlugin from './DocumentFocusPlugin'
@@ -287,6 +288,9 @@ function DocumentEditorPlugins({
         preserveTildes
       />
       <FormattingCommandPlugin />
+      {/* Above TextReplacementPlugin: `:` is a word-boundary trigger for both,
+          and emoji only swallows the keystroke when it actually commits. */}
+      <EmojiTypeaheadPlugin />
       <TextReplacementPlugin />
       <DocumentChangeTracker
         baselineContent={baselineContent}

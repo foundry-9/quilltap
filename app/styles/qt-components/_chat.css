@@ -1510,6 +1510,15 @@
   }
 
   /**
+   * Emoji picker button - the glyph carries the meaning, so size it like the
+   * arrow-glyph buttons rather than the text-label ones
+   */
+  .qt-formatting-button-emoji {
+    font-size: 1.05rem;
+    line-height: 1;
+  }
+
+  /**
    * Source mode toggle button
    */
   .qt-formatting-button-source {
@@ -1545,6 +1554,73 @@
 
   .qt-chat-toolbar-button-active:hover:not(:disabled) {
     background: color-mix(in srgb, var(--color-primary) 85%, black);
+  }
+
+  /* ==========================================================================
+     EMOJI PICKER
+     ==========================================================================
+     The toolbar's browsable half of the composer emoji feature. The popover
+     shell itself is `.qt-popover` (see _surfaces.css); these classes shape what
+     sits inside it. */
+
+  .qt-emoji-picker {
+    @apply flex flex-col gap-2 p-2;
+    width: 20rem;
+  }
+
+  .qt-emoji-picker-search {
+    @apply w-full;
+  }
+
+  /**
+   * The scrolling body. A fixed height keeps the popover from growing to the
+   * full 1,900-emoji set when the query is empty.
+   */
+  .qt-emoji-picker-grid {
+    @apply overflow-y-auto overflow-x-hidden;
+    max-height: 16rem;
+  }
+
+  /**
+   * Sticky group headers, so the category stays legible while scrolling.
+   */
+  .qt-emoji-picker-group-header {
+    @apply sticky top-0 z-10 px-1 py-1 text-xs font-semibold;
+    background: var(--qt-popover-bg);
+    color: var(--qt-text-secondary-fg, var(--qt-text-secondary));
+  }
+
+  .qt-emoji-picker-row {
+    @apply flex;
+  }
+
+  .qt-emoji-picker-cell {
+    @apply flex items-center justify-center rounded;
+    @apply cursor-pointer transition-colors duration-150;
+    width: 2.25rem;
+    height: 2.25rem;
+    font-size: 1.25rem;
+    line-height: 1;
+    background: transparent;
+    border: none;
+  }
+
+  .qt-emoji-picker-cell:hover {
+    background: var(--qt-content-bg-hover);
+  }
+
+  .qt-emoji-picker-cell:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -2px;
+  }
+
+  /**
+   * Loading / failure / empty states. Failure is silent and non-blocking by
+   * design — typing is never impeded, the picker just says so.
+   */
+  .qt-emoji-picker-message {
+    @apply px-2 py-6 text-center text-sm;
+    color: var(--qt-text-secondary-fg, var(--qt-text-secondary));
   }
 
   /* ==========================================================================

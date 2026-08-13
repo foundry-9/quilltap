@@ -1,9 +1,9 @@
 # Composer Emoji — Layer 2.0e Spec
 
-**Status:** Proposal / Not Implemented
+**Status:** ✅ **COMPLETE — shipped 2026-08-13.** Every gate item met; see [Completion gate](#completion-gate) for what was verified how, and for the two defects the live walk caught that this spec did not anticipate.
 **Scope:** quilltap-server (renderer + one settings boolean + its migration). No shell changes. No API route.
-**Phase:** 2.0e of the composer series. Layer 1 ([spellcheck](composer-spellcheck.md)) and Layer 1.5 ([text replacement](composer-text-replacement.md)) have shipped in code — note that both of those specs still carry `Status: Proposal / Not Implemented` in their own headers and neither has been moved to `complete/`; trust the code, not their status lines.
-This lands the typeahead shell that [Layer 2](composer-typeahead.md) (`@`/`#`/`/`) needs, and proves it on the cheapest possible consumer.
+**Phase:** 2.0e of the composer series. Layer 1 ([spellcheck](../composer-spellcheck.md)) and Layer 1.5 ([text replacement](../composer-text-replacement.md)) have shipped in code — note that both of those specs still carry `Status: Proposal / Not Implemented` in their own headers and neither has been moved to `complete/`; trust the code, not their status lines.
+This lands the typeahead shell that [Layer 2](../composer-typeahead.md) (`@`/`#`/`/`) needs, and proves it on the cheapest possible consumer.
 
 > **Portability mandate.** This feature must be implementable in **quilltap-v5** (Rust core + Angular 21 SPA, ProseMirror editor) without redesign. v4 uses **Lexical**; v5 uses **ProseMirror**. Nothing below may depend on React, Lexical, SWR/TanStack, or any server round-trip. See [Portability contract](#portability-contract) — read it before writing a line of code.
 
@@ -37,18 +37,18 @@ Both read one static JSON dataset and one **pure search function**. There is no 
 ## Known state (verified 2026-08-13)
 
 - **No emoji handling exists in either composer.** No picker, no `:shortcode:` expansion, no emoji dataset dependency. Emoji appear only as opaque user-supplied strings in tag/group/project style fields (`lib/schemas/common.types.ts`, `lib/tags/styles.ts`, `components/tags/tag-badge.tsx`) and as hardcoded glyphs on tool chips.
-- **No `LexicalTypeaheadMenuPlugin` usage anywhere**, and no `DecoratorNode` subclasses. Greenfield — as [composer-typeahead.md:33-34](composer-typeahead.md) recorded on 2026-05-22 and still true.
+- **No `LexicalTypeaheadMenuPlugin` usage anywhere**, and no `DecoratorNode` subclasses. Greenfield — as [composer-typeahead.md:33-34](../composer-typeahead.md) recorded on 2026-05-22 and still true.
 - **`@lexical/react` is already a dependency** (`package.json`), and `LexicalTypeaheadMenuPlugin` ships inside it. Confirm the subpath resolves before starting; no new dependency should be needed.
-- **The formatting toolbar is text-labelled, not icon-labelled.** `MARKDOWN_FORMATS` entries in [lib/chat/annotations.ts:42-54](../../../lib/chat/annotations.ts) carry `label` strings (`'B'`, `'I'`, `'• …'`, `'“'`), and `FormattingToolbar.tsx:461` renders the literal string `'CODE'`. **An emoji button therefore needs no icon-registry work** — its label is a glyph.
-- **⚠ The formatting toolbar only renders in composition / document-editing mode.** [ChatComposer.tsx:320-342](../../../app/salon/[id]/components/ChatComposer.tsx):
+- **The formatting toolbar is text-labelled, not icon-labelled.** `MARKDOWN_FORMATS` entries in [lib/chat/annotations.ts:42-54](../../../../lib/chat/annotations.ts) carry `label` strings (`'B'`, `'I'`, `'• …'`, `'“'`), and `FormattingToolbar.tsx:461` renders the literal string `'CODE'`. **An emoji button therefore needs no icon-registry work** — its label is a glyph.
+- **⚠ The formatting toolbar only renders in composition / document-editing mode.** [ChatComposer.tsx:320-342](../../../../app/salon/[id]/components/ChatComposer.tsx):
   ```jsx
   {documentEditingMode && lexicalEditor && (
     <FormattingToolbar ... />
   )}
   ```
   A toolbar-only entry point would be **unreachable while chatting normally**. This is precisely why the spec ships the `:` typeahead as the primary surface and the button as the secondary one. Do not "solve" this by rendering the toolbar in plain chat mode — that is a separate UX decision with its own layout consequences.
-- **Existing anchored-popover precedents, and they disagree with each other.** [components/chat/RngDropdown.tsx](../../../components/chat/RngDropdown.tsx) is the closest *composer-anchored* popover and uses [hooks/useClickOutside.ts](../../../hooks/useClickOutside.ts) (`:11`, `:79`) — but its panel is raw Tailwind plus `qt-card`, **not** `qt-popover`. The `.qt-popover` / `.qt-dropdown` / `.qt-dropdown-item` classes ([app/styles/qt-components/_surfaces.css:925-960](../../../app/styles/qt-components/_surfaces.css)) have exactly two consumers: [components/ui/DeleteConfirmPopover.tsx](../../../components/ui/DeleteConfirmPopover.tsx) and [components/scenarios/ScenarioRow.tsx](../../../components/scenarios/ScenarioRow.tsx). **Take the dismissal behaviour from `RngDropdown` and the surface classes from `DeleteConfirmPopover`** — do not assume one file gives you both.
-- **Markdown round-trip is safe for astral characters.** `DEFAULT_PRESERVED_MARKDOWN_CHARS` is `['*','_','`','~']` ([MarkdownBridgePlugin.tsx:127](../../../components/chat/lexical/plugins/MarkdownBridgePlugin.tsx)); Lexical's export escape set is the same four; the import `unescapeText` only strips ASCII-punctuation escapes. Emoji are plain `TextNode` content and survive `serialize(parse(x))` byte-identically. **No new round-trip vectors are required** — but see [4.4](#44-round-trip-guard) for the one cheap guard worth adding.
+- **Existing anchored-popover precedents, and they disagree with each other.** [components/chat/RngDropdown.tsx](../../../../components/chat/RngDropdown.tsx) is the closest *composer-anchored* popover and uses [hooks/useClickOutside.ts](../../../../hooks/useClickOutside.ts) (`:11`, `:79`) — but its panel is raw Tailwind plus `qt-card`, **not** `qt-popover`. The `.qt-popover` / `.qt-dropdown` / `.qt-dropdown-item` classes ([app/styles/qt-components/_surfaces.css:925-960](../../../../app/styles/qt-components/_surfaces.css)) have exactly two consumers: [components/ui/DeleteConfirmPopover.tsx](../../../../components/ui/DeleteConfirmPopover.tsx) and [components/scenarios/ScenarioRow.tsx](../../../../components/scenarios/ScenarioRow.tsx). **Take the dismissal behaviour from `RngDropdown` and the surface classes from `DeleteConfirmPopover`** — do not assume one file gives you both.
+- **Markdown round-trip is safe for astral characters.** `DEFAULT_PRESERVED_MARKDOWN_CHARS` is `['*','_','`','~']` ([MarkdownBridgePlugin.tsx:127](../../../../components/chat/lexical/plugins/MarkdownBridgePlugin.tsx)); Lexical's export escape set is the same four; the import `unescapeText` only strips ASCII-punctuation escapes. Emoji are plain `TextNode` content and survive `serialize(parse(x))` byte-identically. **No new round-trip vectors are required** — but see [4.4](#44-round-trip-guard) for the one cheap guard worth adding.
 
 ## Portability contract
 
@@ -101,7 +101,7 @@ A generated, committed JSON asset. One row per base emoji:
 Notes:
 
 - **Single-character keys** are deliberate: the file is ~1,900 rows and the difference between long and short keys is roughly 180 KB of shipped asset. It is data, not code; legibility lives in the generator and the TypeScript interface.
-- **Generated, not hand-authored.** Add `scripts/generate-emoji-index.ts`, run by an npm script `generate:emoji-index`, reading `emojibase-data` as a **devDependency** (it must not reach the runtime bundle). The generator's output is committed; CI does not regenerate. This mirrors how `_icons.css` is generated-and-committed by [scripts/generate-icon-css.ts](../../../scripts/generate-icon-css.ts).
+- **Generated, not hand-authored.** Add `scripts/generate-emoji-index.ts`, run by an npm script `generate:emoji-index`, reading `emojibase-data` as a **devDependency** (it must not reach the runtime bundle). The generator's output is committed; CI does not regenerate. This mirrors how `_icons.css` is generated-and-committed by [scripts/generate-icon-css.ts](../../../../scripts/generate-icon-css.ts).
 - **Filter at generation time** to the fully-qualified base set: skip skin-tone variants, skip component code points (`🏻`, `🏼`, …), skip regional-indicator pairs beyond the flag group if the flag group is included at all. Target ≈1,900 entries / ≈250 KB minified / ≈70 KB gzipped.
 - **Served from `public/`, fetched lazily.** The first `:` trigger or first picker open issues `fetch('/emoji/emoji-index.v1.json')`, caches the parsed result in a module-level singleton, and resolves every subsequent caller from memory. It must **never** be imported statically — that would put a quarter-megabyte in the main bundle for a feature most sessions never touch.
 - **Failure is silent and non-blocking.** If the fetch fails, the typeahead never opens and the toolbar button shows an inline "Couldn't load emoji" state. Typing is never impeded. Log once at warn level; do not retry on every keystroke (one retry, then a 60-second cooldown).
@@ -210,7 +210,7 @@ Both features hook keystrokes. Their trigger sets **do not overlap** — text re
 
 The one genuine collision is `:` itself, which is a text-replacement word-boundary trigger. Resolution:
 
-- Register `EmojiTypeaheadPlugin` at **`COMMAND_PRIORITY_NORMAL`**, above `TextReplacementPlugin`'s `COMMAND_PRIORITY_LOW` ([TextReplacementPlugin.tsx:173](../../../components/chat/lexical/plugins/TextReplacementPlugin.tsx)).
+- Register `EmojiTypeaheadPlugin` at **`COMMAND_PRIORITY_NORMAL`**, above `TextReplacementPlugin`'s `COMMAND_PRIORITY_LOW` ([TextReplacementPlugin.tsx:173](../../../../components/chat/lexical/plugins/TextReplacementPlugin.tsx)).
 - Emoji only swallows the keystroke (`return true`) when it *commits* an insertion. Opening the menu returns `false`, so a `:` typed after a replaceable word still lets text replacement fire and still opens the menu on the resulting text. That is the behaviour a writer expects; pin it with the test in [4.3](#43-plugin-tests).
 
 In v5, the same ordering is expressed by placing the emoji plugin **before** `textReplacementPlugin` in `buildPlugins()` (`rich-editor.ts:224-280`) — ProseMirror runs `handleTextInput`/`handleKeyDown` props in plugin-array order.
@@ -294,7 +294,7 @@ Commit `public/emoji/emoji-index.v1.json`. Record its provenance (source package
 
 ### 3.1 Typeahead shell (shared with Layer 2)
 
-Build the shell [composer-typeahead.md](composer-typeahead.md) Phase 1 already specified, and build it **here**, because emoji is its cheapest consumer:
+Build the shell [composer-typeahead.md](../composer-typeahead.md) Phase 1 already specified, and build it **here**, because emoji is its cheapest consumer:
 
 - `components/chat/lexical/typeahead/useTypeaheadShell.tsx`
 - `components/chat/lexical/typeahead/MenuPortal.tsx`
@@ -307,32 +307,32 @@ Two deltas from that spec, both to be written back into it when this lands:
 
 ### 3.2 `EmojiTypeaheadPlugin.tsx`
 
-`components/chat/lexical/plugins/EmojiTypeaheadPlugin.tsx`. Follows the established plugin shape (`useLexicalComposerContext`, `editor.registerCommand` inside `useEffect`, return the disposer) — see [TextReplacementPlugin.tsx](../../../components/chat/lexical/plugins/TextReplacementPlugin.tsx) for the closest precedent.
+`components/chat/lexical/plugins/EmojiTypeaheadPlugin.tsx`. Follows the established plugin shape (`useLexicalComposerContext`, `editor.registerCommand` inside `useEffect`, return the disposer) — see [TextReplacementPlugin.tsx](../../../../components/chat/lexical/plugins/TextReplacementPlugin.tsx) for the closest precedent.
 
 Bail conditions, in order — **these mirror Layer 1.5's exactly and must not drift from it**:
 
 1. Feature disabled (see [3.5](#35-settings)).
 2. `editor.isComposing()` — IME.
 3. Selection is not a collapsed `RangeSelection`.
-4. Cursor is inside a code block. The idiom is at [FormattingCommandPlugin.tsx:223-225](../../../components/chat/lexical/plugins/FormattingCommandPlugin.tsx) — **copy it including the `$isElementNode` narrowing**, which is easy to drop and load-bearing:
+4. Cursor is inside a code block. The idiom is at [FormattingCommandPlugin.tsx:223-225](../../../../components/chat/lexical/plugins/FormattingCommandPlugin.tsx) — **copy it including the `$isElementNode` narrowing**, which is easy to drop and load-bearing:
    ```ts
    const block = anchorNode.getTopLevelElement()
    if (!block || !$isElementNode(block) || $isCodeNode(block)) return false
    ```
-5. Cursor is inside inline code: `anchorNode.hasFormat('code')`. **Note:** `TextReplacementPlugin` performs neither check 4 nor check 5, so text replacements currently fire inside code. That is a latent Layer 1.5 defect and its own bug — file it per [CLAUDE.md → Filing bugs](../../../CLAUDE.md), taking the next unused number from the [Status table](../bugs.md#status) at the time you file (62 is taken), and fix it in the same change; the two plugins sharing one `isInCodeContext(selection)` helper is the right shape.
+5. Cursor is inside inline code: `anchorNode.hasFormat('code')`. **Note:** `TextReplacementPlugin` performs neither check 4 nor check 5, so text replacements currently fire inside code. That is a latent Layer 1.5 defect and its own bug — file it per [CLAUDE.md → Filing bugs](../../../../CLAUDE.md), taking the next unused number from the [Status table](../../bugs.md#status) at the time you file (62 is taken), and fix it in the same change; the two plugins sharing one `isInCodeContext(selection)` helper is the right shape.
 6. Index not yet loaded — kick off the lazy load and return `false`.
 
 Menu rendering: each row shows the glyph, the CLDR name, and the primary `:shortcode:` in muted text. Cap at 10 visible rows with keyboard scroll. Empty state: "No emoji found".
 
 ### 3.3 `EmojiPickerPopover.tsx`
 
-`components/chat/EmojiPickerPopover.tsx`. An anchored popover modelled on [RngDropdown.tsx](../../../components/chat/RngDropdown.tsx) — `useClickOutside`, `.qt-popover` surface classes, Escape to close, focus trapped to the search field on open.
+`components/chat/EmojiPickerPopover.tsx`. An anchored popover modelled on [RngDropdown.tsx](../../../../components/chat/RngDropdown.tsx) — `useClickOutside`, `.qt-popover` surface classes, Escape to close, focus trapped to the search field on open.
 
 Contents: a search input (auto-focused), a Recents row when non-empty, and a grid grouped by `group` with sticky group headers. Selecting inserts through the same Tier B/insertion path as the typeahead so the two surfaces cannot diverge.
 
 ### 3.4 Toolbar button
 
-In [components/chat/FormattingToolbar.tsx](../../../components/chat/FormattingToolbar.tsx), add a button in its own section after the RP delimiter section and before the source toggle. Label: the glyph `☺` (or 🙂 — pick one, state it in the code, and use the identical label in v5). Tooltip: "Insert emoji (or type `:` and a name)".
+In [components/chat/FormattingToolbar.tsx](../../../../components/chat/FormattingToolbar.tsx), add a button in its own section after the RP delimiter section and before the source toggle. Label: the glyph `☺` (or 🙂 — pick one, state it in the code, and use the identical label in v5). Tooltip: "Insert emoji (or type `:` and a name)".
 
 The button is a **hand-written `<button>`, not a `MARKDOWN_FORMATS` entry** — `MARKDOWN_FORMATS` describes prefix/suffix wrapping, which this is not. Follow the outdent/indent/CODE precedent at `FormattingToolbar.tsx:431-462`.
 
@@ -349,29 +349,29 @@ composerEmoji: z.boolean().default(true),
 
 Plumb through:
 
-- [lib/schemas/settings.types.ts](../../../lib/schemas/settings.types.ts) — alongside `composerSpellcheck` (:585) and `textReplacementsEnabled` (:587).
-- [lib/database/repositories/chat-settings.repository.ts](../../../lib/database/repositories/chat-settings.repository.ts) — default in `updateForUser`'s `defaultSettings`.
-- [app/api/v1/settings/chat/route.ts](../../../app/api/v1/settings/chat/route.ts) — param, PUT destructure, positional pass-through. Copy the `composerSpellcheck` lines verbatim.
-- [components/settings/chat-settings/types.ts](../../../components/settings/chat-settings/types.ts), [hooks/useChatSettings.ts:565-580](../../../components/settings/chat-settings/hooks/useChatSettings.ts) (the `handleComposerSpellcheckChange` pattern).
-- Migration `migrations/scripts/add-composer-emoji-field.ts`: `ALTER TABLE "chat_settings" ADD COLUMN "composerEmoji" INTEGER DEFAULT 1`. **Copy [add-composer-spellcheck-field.ts:52](../../../migrations/scripts/add-composer-spellcheck-field.ts) — it is the same statement for the sibling column.** Note the naming convention: **no migration in this repo is date-prefixed**; all 179 use `add-<thing>-field.ts` / `add-<thing>-v1.ts`. Per [CLAUDE.md → Writing migrations](../../../CLAUDE.md), add a `PRETTY_LABELS` entry in [lib/startup/prettify.ts](../../../lib/startup/prettify.ts) in the steampunk-Wodehouse voice — *"Cataloguing the little faces."* No loop, so no `reportProgress`. Register in `migrations/scripts/index.ts`. Update [docs/developer/DDL.md](../DDL.md).
+- [lib/schemas/settings.types.ts](../../../../lib/schemas/settings.types.ts) — alongside `composerSpellcheck` (:585) and `textReplacementsEnabled` (:587).
+- [lib/database/repositories/chat-settings.repository.ts](../../../../lib/database/repositories/chat-settings.repository.ts) — default in `updateForUser`'s `defaultSettings`.
+- [app/api/v1/settings/chat/route.ts](../../../../app/api/v1/settings/chat/route.ts) — param, PUT destructure, positional pass-through. Copy the `composerSpellcheck` lines verbatim.
+- [components/settings/chat-settings/types.ts](../../../../components/settings/chat-settings/types.ts), [hooks/useChatSettings.ts:565-580](../../../../components/settings/chat-settings/hooks/useChatSettings.ts) (the `handleComposerSpellcheckChange` pattern).
+- Migration `migrations/scripts/add-composer-emoji-field.ts`: `ALTER TABLE "chat_settings" ADD COLUMN "composerEmoji" INTEGER DEFAULT 1`. **Copy [add-composer-spellcheck-field.ts:52](../../../../migrations/scripts/add-composer-spellcheck-field.ts) — it is the same statement for the sibling column.** Note the naming convention: **no migration in this repo is date-prefixed**; all 179 use `add-<thing>-field.ts` / `add-<thing>-v1.ts`. Per [CLAUDE.md → Writing migrations](../../../../CLAUDE.md), add a `PRETTY_LABELS` entry in [lib/startup/prettify.ts](../../../../lib/startup/prettify.ts) in the steampunk-Wodehouse voice — *"Cataloguing the little faces."* No loop, so no `reportProgress`. Register in `migrations/scripts/index.ts`. Update [docs/developer/DDL.md](../../DDL.md).
 
 The toolbar button is **not** gated by this flag — the flag governs the automatic `:` trigger, which is the part that can surprise. An explicit button press is never a surprise.
 
-UI: a single toggle inside the existing Composer card on the Chat tab ([ChatTabContent.tsx:83-89](../../../components/settings/tabs/ChatTabContent.tsx)), beneath spellcheck. Label **"Emoji shortcuts"**; helper *"Type `:` and at least two letters to search emoji by name. The toolbar's emoji button works either way."*
+UI: a single toggle inside the existing Composer card on the Chat tab ([ChatTabContent.tsx:83-89](../../../../components/settings/tabs/ChatTabContent.tsx)), beneath spellcheck. Label **"Emoji shortcuts"**; helper *"Type `:` and at least two letters to search emoji by name. The toolbar's emoji button works either way."*
 
 That card's `sectionId` is **`composer-spellcheck`** (`ChatTabContent.tsx:83`) — a historical name, and the only anchor that will actually deep-link. Do not invent `section=composer`; either use the existing id or rename it and update every `?section=` reference to it in one pass.
 
 ### 3.6 Mount points
 
-- [LexicalComposerWrapper.tsx](../../../components/chat/lexical/LexicalComposerWrapper.tsx) — add `<EmojiTypeaheadPlugin />` to the plugin stack (:124-159), **above** `<TextReplacementPlugin />` (:157).
-- [DocumentPane.tsx](../../../app/salon/[id]/components/DocumentPane.tsx) — same, inside `DocumentEditorPlugins`.
-- **Not** [components/markdown-editor/MarkdownLexicalEditor.tsx](../../../components/markdown-editor/MarkdownLexicalEditor.tsx) in v1 — its plugin list (`:85-105`) is also missing `TextReplacementPlugin`, and closing that gap is a separate, deliberate decision rather than a rider on this one.
+- [LexicalComposerWrapper.tsx](../../../../components/chat/lexical/LexicalComposerWrapper.tsx) — add `<EmojiTypeaheadPlugin />` to the plugin stack (:124-159), **above** `<TextReplacementPlugin />` (:157).
+- [DocumentPane.tsx](../../../../app/salon/[id]/components/DocumentPane.tsx) — same, inside `DocumentEditorPlugins`.
+- **Not** [components/markdown-editor/MarkdownLexicalEditor.tsx](../../../../components/markdown-editor/MarkdownLexicalEditor.tsx) in v1 — its plugin list (`:85-105`) is also missing `TextReplacementPlugin`, and closing that gap is a separate, deliberate decision rather than a rider on this one.
 
 ## Phase 4 — Styles, guards, docs
 
 ### 4.1 `qt-*` classes
 
-New classes in [app/styles/qt-components/](../../../app/styles/qt-components/):
+New classes in [app/styles/qt-components/](../../../../app/styles/qt-components/):
 
 | Class | File | Purpose |
 | --- | --- | --- |
@@ -381,7 +381,7 @@ New classes in [app/styles/qt-components/](../../../app/styles/qt-components/):
 | `.qt-emoji-picker` / `-search` / `-grid` / `-group-header` / `-cell` / `-recents` | `_chat.css` | the picker |
 | `.qt-formatting-button-emoji` | `_chat.css` | the toolbar button variant, following `-bold` (:1461) etc. |
 
-> **⚠ Mandatory, and it gates the commit.** Per [CLAUDE.md → Themes](../../../CLAUDE.md), *every* `qt-*` change must be mirrored into [packages/theme-storybook/src/css/qt-components.css](../../../packages/theme-storybook/src/css/qt-components.css) in the **same change**, de-Tailwinded to plain CSS, faithfully including quirks. Then bump the package's patch version and **stop and ask the human to `npm publish`** — the publish gates the commit. Add a Storybook story for the picker and menu in `packages/theme-storybook/src/stories/components/Chat.tsx`. Also consider `packages/create-quilltap-theme` and the six bundled themes in `themes/bundled/`.
+> **⚠ Mandatory, and it gates the commit.** Per [CLAUDE.md → Themes](../../../../CLAUDE.md), *every* `qt-*` change must be mirrored into [packages/theme-storybook/src/css/qt-components.css](../../../../packages/theme-storybook/src/css/qt-components.css) in the **same change**, de-Tailwinded to plain CSS, faithfully including quirks. Then bump the package's patch version and **stop and ask the human to `npm publish`** — the publish gates the commit. Add a Storybook story for the picker and menu in `packages/theme-storybook/src/stories/components/Chat.tsx`. Also consider `packages/create-quilltap-theme` and the six bundled themes in `themes/bundled/`.
 
 ### 4.2 Accessibility
 
@@ -427,7 +427,7 @@ This is what mechanically enforces the [Portability contract](#portability-contr
 
 ### 4.6 Help docs
 
-Per CLAUDE.md, all user-visible changes go in `help/*.md`. Add an Emoji section to [help/chat-settings.md](../../../help/chat-settings.md), beside the existing Composer/spellcheck section (`:42-58`) and Text Replacement section (`:96-116`), covering: the `:` trigger and its two-character minimum, the closing-colon shortcut, the toolbar button and its composition-mode caveat, that the inserted value is a plain character (so it works in exports and in anything reading the message), and where the toggle lives.
+Per CLAUDE.md, all user-visible changes go in `help/*.md`. Add an Emoji section to [help/chat-settings.md](../../../../help/chat-settings.md), beside the existing Composer/spellcheck section (`:42-58`) and Text Replacement section (`:96-116`), covering: the `:` trigger and its two-character minimum, the closing-colon shortcut, the toolbar button and its composition-mode caveat, that the inserted value is a plain character (so it works in exports and in anything reading the message), and where the toggle lives.
 
 ⚠ **Do not touch that file's frontmatter.** `help/chat-settings.md:2` declares `url: /settings?tab=chat` with the single matching `help_navigate(url: "/settings?tab=chat")` at `:599`, and CLAUDE.md requires the two to agree. Adding a `&section=` to the frontmatter would break every other section in the file. If a section-scoped deep link is wanted, the repo's convention is a **separate** help file (`help/answer-confirmation.md`, `help/custom-tools.md`, `help/data-retention.md`) with its own `url` and its own `help_navigate` — pick one route, not half of each.
 
@@ -435,7 +435,7 @@ Voice: steampunk + Roaring 20s + Wodehouse + Lemony Snicket.
 
 ### 4.7 Changelog
 
-Top entry in [docs/CHANGELOG.md](../../CHANGELOG.md), terse plain American English (the one place the steampunk voice does not apply):
+Top entry in [docs/CHANGELOG.md](../../../CHANGELOG.md), terse plain American English (the one place the steampunk voice does not apply):
 
 ```
 - Composer emoji: type `:` plus at least two letters to search emoji by name and insert one, in both the Salon composer and Document Mode. A button in the formatting toolbar opens a searchable picker with recents. Inserted emoji are plain Unicode characters, so exports, search, and the LLM see ordinary text. Toggle on the Chat settings tab under Composer; default on.
@@ -481,7 +481,7 @@ Everything in [2.3](#23-unit-tests) and [4.3](#43-plugin-tests), plus the round-
 - **`MarkdownLexicalEditor` (character-sheet and memory fields).** Deliberately excluded, along with Layer 1.5's identical gap. Close both at once, or neither.
 - **Frequency-weighted ranking** (promote what the user actually picks). Would make `searchEmoji` impure or force a weights argument through the corpus. If wanted, pass an optional `weights: Map<string, number>` as a **parameter** so the function stays pure and the corpus keeps working with an empty map.
 - **Custom emoji.** Its own feature.
-- **Layer 2 proper** (`@`/`#`/`/`) — this spec hands it a built-and-proven shell; see [composer-typeahead.md](composer-typeahead.md).
+- **Layer 2 proper** (`@`/`#`/`/`) — this spec hands it a built-and-proven shell; see [composer-typeahead.md](../composer-typeahead.md).
 
 ## File-touch summary
 
@@ -508,7 +508,7 @@ Everything in [2.3](#23-unit-tests) and [4.3](#43-plugin-tests), plus the round-
 - `components/settings/chat-settings/types.ts`, `hooks/useChatSettings.ts`, the Composer card on the Chat tab
 - `components/chat/FormattingToolbar.tsx` — the emoji button
 - `components/chat/lexical/LexicalComposerWrapper.tsx`, `app/salon/[id]/components/DocumentPane.tsx` — mount the plugin
-- `components/chat/lexical/plugins/TextReplacementPlugin.tsx` — extract and share `isInCodeContext()` (and thereby fix the latent code-context defect; **file the bug first**, taking the next unused number from the [Status table](../bugs.md#status) — 62 is taken — with a two-or-three-word dashed slug per CLAUDE.md)
+- `components/chat/lexical/plugins/TextReplacementPlugin.tsx` — extract and share `isInCodeContext()` (and thereby fix the latent code-context defect; **file the bug first**, taking the next unused number from the [Status table](../../bugs.md#status) — 62 is taken — with a two-or-three-word dashed slug per CLAUDE.md)
 - `app/styles/qt-components/_surfaces.css`, `_chat.css`
 - `packages/theme-storybook/src/css/qt-components.css` + `src/stories/components/Chat.tsx` + package version bump (**publish gates the commit**)
 - `help/chat-settings.md`, `docs/CHANGELOG.md`
@@ -519,3 +519,105 @@ Everything in [2.3](#23-unit-tests) and [4.3](#43-plugin-tests), plus the round-
 ## Completion gate
 
 Do not move this spec to `docs/developer/features/complete/` until every entry in the file-touch summary is written, the manual matrix has been walked on a running instance, the theme-storybook mirror is published, and the [Portability contract](#portability-contract) still holds — specifically, until `lib/emoji/**` imports nothing outside the standard library and the two corpora are committed. A v5 port that has to re-derive the ranking order means this spec failed at its actual job.
+
+### Status of the gate (2026-08-13)
+
+| Gate item | State |
+| --- | --- |
+| File-touch summary written | ✅ every entry, plus the extras noted below |
+| `lib/emoji/**` imports nothing | ✅ enforced by `eslint.config.mjs`; verified to fail on a planted `react` import |
+| Both corpora committed | ✅ `lib/emoji/fixtures/` — 10 search vectors, 17 trigger vectors |
+| Automated coverage green | ✅ 93 Tier B + 22 plugin + 19 `TextReplacementPlugin` + 12 idempotency |
+| theme-storybook mirror **published** | ✅ `@quilltap/theme-storybook` **1.0.58** on npm |
+| Manual matrix walked on a running instance | ⚠️ **mostly** — see below |
+
+#### Manual matrix — walked 2026-08-13 on an isolated scratch instance (port 3102, own data dir)
+
+Verified live in the Salon composer: menu opens on `:smi` with 😄 first; Enter inserts **and does
+not send the message**; click inserts; `:smile:` commits on the closing colon; the inserted value is
+a lone astral codepoint with **no** trailing space; one Cmd-Z removes it; recents persist
+most-recent-first under `quilltap.emoji.recents.v1`; `10:30`, `https://ex.com/`, `:)` and
+`C:\Users` open nothing and leave the text untouched; the dataset is fetched **once**, on the first
+`:`, and not at all before it; the toolbar `☺` button opens the picker with a working search, a
+Recents row, sticky group headers and a scrolling grid, and a pick inserts at the cursor; the
+"Emoji shortcuts" toggle renders in the Composer card and the migration's column round-trips
+through `/api/v1/settings/chat`.
+
+**Not** walked in the browser: the code-block / inline-code bails, IME, the dataset-failure state,
+`composerEmoji = off`, and Document Mode. Each is covered by
+`EmojiTypeaheadPlugin.test.tsx` against a **real** Lexical editor and the real dataset, and the
+code-context and glued-run guards were each confirmed load-bearing by reverting them and watching
+the suite go red. Note also that this browser harness dispatches special keys with an **empty**
+`event.key`, which Lexical ignores — Enter and Home had to be driven by an explicit
+`KeyboardEvent` to exercise the real handler chain at all. Worth knowing before trusting a
+"pressing Enter did nothing" observation from it.
+
+#### Two defects the live walk caught that the spec did not anticipate
+
+Both are in the shell, so **Layer 2 inherits the fixes**:
+
+1. **The menu opened downward and was clipped by the viewport, every time.** The Salon composer
+   sits at the BOTTOM of the window, so "below the caret" is always off-screen there. `MenuPortal`
+   now measures and flips, writing `data-placement="above" | "below"` (and `data-align` for the
+   horizontal equivalent) straight to the DOM in a layout effect — not through state, since the row
+   list changes on every keystroke and that would cost a render pass per character.
+2. **Enter never reached the menu.** `KeyboardPlugin` registers `KEY_ENTER_COMMAND` at
+   `COMMAND_PRIORITY_HIGH` to send the message, so the menu's own Enter handler at `NORMAL` never
+   fired — keyboard selection silently sent the draft instead of inserting an emoji. The typeahead
+   now passes `commandPriority={COMMAND_PRIORITY_CRITICAL}`, which is safe because those handlers
+   are mounted only while the menu is open. **Any Layer 2 typeahead needs the same.** The separate
+   closing-colon `KEY_DOWN` handler stays at `NORMAL`, where it must be to sit above
+   `TextReplacementPlugin`'s `LOW`.
+
+### Dataset provenance
+
+`public/emoji/emoji-index.v1.json` — **1,914 entries**, 231 KB raw / **53 KB gzipped**, generated
+2026-08-13 by `scripts/generate-emoji-index.ts` (`npm run generate:emoji-index`) from
+**`emojibase-data` 17.0.0**, English CLDR annotation set plus the **github** shortcode preset
+(**Unicode 17.0**). The spec anticipated emojibase 16.x; 17.0.0 was current and is what shipped.
+Filtered to the fully-qualified base set: skin-tone variants are already nested under `skins` in
+the source and never reach the top level, the 9 `component` modifiers are dropped, and the 26
+bare regional-indicator letters (which carry no `group`) are dropped with them — the flag group
+itself is kept in full. Keywords are deduped against the name and shortcodes at generation time.
+
+Two additions to the documented dataset shape, both load-bearing:
+
+- a top-level **`groups`** array (slug → display order by array index), because the ranking's
+  documented `(group order, entry order)` tie-break needs the group's order and the picker needs
+  its headers. Without it the comparator would have to fall back on insertion order, which is
+  exactly what the spec forbids.
+- `EmojiIndex` carries a **`normalized`** projection built once by `buildIndex`, so the
+  per-keystroke path never re-normalizes 1,914 rows.
+
+### One deviation from the spec text, recorded deliberately
+
+The spec's illustrative corpus row expects `searchEmoji(index, 'smile', 8)` to begin
+`["😄", "😊", "🙂"]`. The **documented seven-step ranking** yields `["😄", "😃", "😺"]` instead,
+because 😃 (`:smiley:`) and 😺 (`:smile_cat:`) are **shortcode-prefix** matches — bucket 2 — while
+😊 and 🙂 reach `smile` only as a **keyword**, bucket 5. The numbered ranking is the normative
+rule and the corpus pins it, so the implementation follows the ranking and the committed vector
+records the real order. 😄, the exact-shortcode match and the emoji anyone typing `:smile` wants,
+is first either way. If the intent was in fact to rank keyword hits above shortcode prefixes,
+that is a ranking change (steps 2 and 5 swap) plus a corpus regeneration — not a bug fix.
+
+### Extras beyond the file-touch summary
+
+- `lib/emoji/README.md` — records the deliberate fixtures-beside-code deviation.
+- `components/chat/emoji/insert-emoji.ts` + `recents-storage.ts` — the storage/insertion adapter,
+  so both surfaces commit through one path and cannot diverge.
+- `components/chat/lexical/utils/code-context.ts` — `$isInCodeContext`, shared with
+  `TextReplacementPlugin` (bug 63).
+- `components/settings/chat-settings/ComposerEmojiSettings.tsx` — the toggle, in the existing
+  Composer card (`sectionId` left as the historical `composer-spellcheck`, per §3.5).
+- `__tests__/helpers/lexicalPluginHarness.tsx` — real-editor harness for composer plugins.
+  ⚠ It documents a genuine trap: `jest.setup.ts` assigns `global.fetch` directly, which
+  **replaces jest-fetch-mock's function**, so `fetchMock.mockResponse(...)` is a silent no-op in
+  this repo. Stub `global.fetch` yourself.
+- `__tests__/unit/components/chat/lexical/markdown-roundtrip-idempotency.test.ts` — §4.4 asked for
+  vectors in `MarkdownBridgePlugin.test.ts` *or* a general table; the general table was built, as
+  the direct analogue of v5's `IDEMPOTENT`. Astral characters, ZWJ sequences, variation selectors
+  and regional-indicator flags all survive `serialize(parse(x))` byte-identically.
+- `$isGluedToPreviousRun` in the plugin — Lexical hands `triggerFn` the text of the **anchor text
+  node**, not the block, so a trigger at offset 0 can still be glued to a preceding inline run
+  (`**bold**:smi`). The adapter checks the previous sibling using Tier B's exported
+  `isTriggerOpenerContext`, rather than re-deriving the rule.

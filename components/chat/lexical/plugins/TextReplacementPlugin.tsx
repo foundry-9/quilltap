@@ -13,6 +13,8 @@
  * - Replacement and trigger char are inserted in a single editor.update tagged
  *   "text-replacement" so a single Cmd-Z reverts to the literal typed text.
  * - IME composition skips the plugin.
+ * - Code is never rewritten: fenced blocks and inline `code` runs both bail via
+ *   the shared $isInCodeContext() guard (bug 63).
  * - Paste does NOT trigger (paste arrives via clipboard events, not keystrokes).
  * - Newline (Enter) is intentionally NOT a trigger in v1 — submission /
  *   paragraph-break handlers own that key.
@@ -39,6 +41,7 @@ import {
   useTextReplacementRules,
   findReplacement,
 } from '@/lib/text-replacement/useTextReplacementRules'
+import { $isInCodeContext } from '../utils/code-context'
 
 /**
  * Word-boundary trigger characters. Newline is excluded — submit/paragraph
@@ -105,6 +108,10 @@ export function TextReplacementPlugin(): null {
       const candidate = editor.getEditorState().read<CandidateWord | null>(() => {
         const selection = $getSelection()
         if (!$isRangeSelection(selection) || !selection.isCollapsed()) return null
+
+        // Never rewrite code as it is typed — bug 63. Shared with
+        // EmojiTypeaheadPlugin so the two bail lists cannot drift.
+        if ($isInCodeContext(selection)) return null
 
         const anchor = selection.anchor
         const anchorNode = anchor.getNode()

@@ -59,6 +59,7 @@ interface UseChatSettingsReturn {
   handleCustomToolsChange: (value: boolean) => Promise<void>
   handleCompositionModeDefaultChange: (value: boolean) => Promise<void>
   handleComposerSpellcheckChange: (value: boolean) => Promise<void>
+  handleComposerEmojiChange: (value: boolean) => Promise<void>
   handleAutoScrollOnResponseCompleteChange: (value: boolean) => Promise<void>
   handleTextReplacementsEnabledChange: (value: boolean) => Promise<void>
   handleAgentModeDefaultEnabledChange: (value: boolean) => Promise<void>
@@ -594,6 +595,41 @@ export function useChatSettings(): UseChatSettingsReturn {
   )
 
   /**
+   * Update composer-emoji setting (the `:` typeahead only — the toolbar's
+   * emoji picker is deliberately not gated by this flag)
+   */
+  const handleComposerEmojiChange = useCallback(
+    async (value: boolean) => {
+      if (!settings) return
+
+      try {
+        setSaving(true)
+
+        const res = await fetch('/api/v1/settings/chat', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ composerEmoji: value }),
+        })
+
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update composer emoji setting')
+        }
+
+        const updatedSettings = await res.json()
+        await mutateSettings(updatedSettings, false)
+        await showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        console.error('Failed to update composer emoji setting', { error: errorMsg })
+      } finally {
+        setSaving(false)
+      }
+    },
+    [settings, mutateSettings, showSuccess]
+  )
+
+  /**
    * Update Salon auto-scroll-on-response-complete setting
    */
   const handleAutoScrollOnResponseCompleteChange = useCallback(
@@ -1023,6 +1059,7 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleCustomToolsChange,
     handleCompositionModeDefaultChange,
     handleComposerSpellcheckChange,
+    handleComposerEmojiChange,
     handleAutoScrollOnResponseCompleteChange,
     handleTextReplacementsEnabledChange,
     handleAgentModeDefaultEnabledChange,

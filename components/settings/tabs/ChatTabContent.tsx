@@ -5,6 +5,7 @@ import { useChatSettingsContext } from '@/components/settings/chat-settings/Chat
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import { CompositionModeDefaultSettings } from '@/components/settings/chat-settings/CompositionModeDefaultSettings'
 import { ComposerSpellcheckSettings } from '@/components/settings/chat-settings/ComposerSpellcheckSettings'
+import { ComposerEmojiSettings } from '@/components/settings/chat-settings/ComposerEmojiSettings'
 import { AutoScrollSettings } from '@/components/settings/chat-settings/AutoScrollSettings'
 import { TextReplacementSettings } from '@/components/settings/chat-settings/TextReplacementSettings'
 import { TokenDisplaySettingsComponent } from '@/components/settings/chat-settings/TokenDisplaySettings'
@@ -38,6 +39,7 @@ export function ChatTabContent() {
     handleTokenDisplayChange,
     handleCompositionModeDefaultChange,
     handleComposerSpellcheckChange,
+    handleComposerEmojiChange,
     handleAutoScrollOnResponseCompleteChange,
     handleTextReplacementsEnabledChange,
     handleContextCompressionUpdate,
@@ -85,6 +87,11 @@ export function ChatTabContent() {
             settings={settings}
             saving={saving}
             onChange={handleComposerSpellcheckChange}
+          />
+          <ComposerEmojiSettings
+            settings={settings}
+            saving={saving}
+            onChange={handleComposerEmojiChange}
           />
         </CollapsibleCard>
 

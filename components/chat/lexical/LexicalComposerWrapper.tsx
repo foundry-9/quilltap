@@ -47,6 +47,7 @@ import {
 } from './plugins/ExternalControlPlugin'
 import { FormattingCommandPlugin } from './plugins/FormattingCommandPlugin'
 import { TextReplacementPlugin } from './plugins/TextReplacementPlugin'
+import { EmojiTypeaheadPlugin } from './plugins/EmojiTypeaheadPlugin'
 
 interface LexicalComposerWrapperProps {
   /**
@@ -154,6 +155,9 @@ const ComposerPlugins = forwardRef<
       <ImagePastePlugin onImagePaste={onImagePaste} />
       <ExternalControlPlugin controlRef={controlRef} />
       <FormattingCommandPlugin />
+      {/* Above TextReplacementPlugin: `:` is a word-boundary trigger for both,
+          and emoji only swallows the keystroke when it actually commits. */}
+      <EmojiTypeaheadPlugin />
       <TextReplacementPlugin />
     </>
   )

@@ -964,6 +964,84 @@
     @apply bg-muted outline-none;
   }
 
+  /* ==========================================================================
+     TYPEAHEAD MENU
+     ==========================================================================
+     The composer's inline typeahead popover — emoji today (`:name`), and the
+     `@` / `#` / `/` menus of Layer 2 tomorrow. Positioned by Lexical's anchor
+     element, so these classes own appearance only, never placement. */
+
+  .qt-typeahead-menu {
+    @apply absolute z-50 overflow-y-auto p-1;
+    /* Anchored to the caret element Lexical positions for us. `top: 100%` clears
+       the caret's own line rather than covering it. */
+    top: 100%;
+    left: 0;
+    min-width: 14rem;
+    max-width: 22rem;
+    max-height: 17rem;
+    border-radius: var(--qt-popover-radius);
+    background: var(--qt-popover-bg);
+    color: var(--qt-popover-fg);
+    border: 1px solid var(--qt-popover-border);
+    box-shadow: var(--qt-popover-shadow);
+  }
+
+  /* Flipped by MenuPortal when the viewport has no room. The Salon composer
+     lives at the bottom of the window, so `above` is the COMMON case there —
+     without it the menu is clipped every time. */
+  .qt-typeahead-menu[data-placement='above'] {
+    top: auto;
+    bottom: 100%;
+  }
+
+  .qt-typeahead-menu[data-align='right'] {
+    left: auto;
+    right: 0;
+  }
+
+  .qt-typeahead-option {
+    @apply flex items-center gap-2;
+    @apply px-2 py-1.5;
+    @apply text-sm;
+    @apply rounded-md;
+    @apply cursor-pointer;
+    @apply transition-colors duration-150;
+  }
+
+  /**
+   * Keyboard highlight. Focus never leaves the composer, so the active row is
+   * marked here rather than by :focus — see the aria-activedescendant wiring in
+   * MenuPortal.
+   */
+  .qt-typeahead-option-active {
+    @apply bg-muted;
+  }
+
+  .qt-typeahead-option:hover {
+    @apply bg-muted;
+  }
+
+  .qt-typeahead-option-glyph {
+    @apply flex-none;
+    font-size: 1.15rem;
+    line-height: 1;
+  }
+
+  .qt-typeahead-option-label {
+    @apply flex-1 truncate;
+  }
+
+  .qt-typeahead-option-detail {
+    @apply flex-none text-xs;
+    color: var(--qt-text-secondary-fg, var(--qt-text-secondary));
+  }
+
+  .qt-typeahead-empty {
+    @apply px-2 py-3 text-center text-sm;
+    color: var(--qt-text-secondary-fg, var(--qt-text-secondary));
+  }
+
   /**
    * Dropdown separator
    */

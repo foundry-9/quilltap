@@ -68,6 +68,40 @@ When running inside the desktop application, Quilltap also discreetly feeds the 
 - The squiggles distract you in flow
 - You are writing in a language Chromium does not recognise (you may also configure additional languages in the desktop app's developer console — a refinement we will dress up in a proper picker in a later issue)
 
+#### Emoji Shortcuts
+
+Also lodged in the **Composer** card, and quite the most cheerful amenity we have yet installed: type a colon followed by **at least two letters** — `:smi`, `:rock`, `:tada` — and a small brass-cornered menu unfurls beside the caret, offering every emoji whose name or keyword answers to what you have typed. Arrow keys to browse, Enter or a click to insert, Escape to dismiss without the slightest fuss. Should you happen to know the shortcode outright, type it entire and close it with a second colon — `:smile:` — and the character is set at once, the menu never having been troubled at all.
+
+Two letters is the minimum, and deliberately so. A single letter would summon half the catalogue; and `:)` — that ancient and honourable glyph — must be permitted to remain exactly what it is. By the same reasoning the menu declines to appear after `http://`, inside `10:30`, in `C:\Users`, or anywhere a colon is merely doing punctuation's ordinary work. It also holds its peace inside code fences and `inline code`, where an uninvited pictograph would be a positive menace.
+
+What lands in your document is **the plain Unicode character itself** — not a shortcode, not a picture, not some contraption of ours. This matters more than it sounds: the emoji you insert is ordinary text to every other part of the house. It exports intact, it survives a round trip through Markdown untouched, it is searchable, and the model at the other end of the conversation reads it exactly as you wrote it. One tap of Cmd/Ctrl+Z removes the character and restores the literal `:smi` you typed, in the customary single gesture.
+
+No trailing space is added — an emoji sits closer to punctuation than to a word, and `word😄` and `😄😄` are both perfectly respectable constructions we decline to interfere with.
+
+There is also a **button** in the formatting toolbar (the small `☺`), which opens a searchable picker with a browsable grid and a **Recently used** row of your last two dozen selections. A caution worth stating plainly: that toolbar appears only in composition and document-editing modes, so the button is a convenience rather than the feature proper. The colon is always at your disposal; the button is not. Your recents are kept in this browser alone, and are quite deliberately never sent anywhere.
+
+The emoji catalogue is fetched only the first time you actually want it — instances whose correspondents never type a colon never pay for it at all. Should the catalogue prove unreachable, nothing whatever is impeded: the menu simply declines to appear, the picker says so, and your typing proceeds unmolested.
+
+**Setting Options:**
+
+- **Emoji shortcuts** — A single toggle, on by default. On: the `:` menu appears as described. Off: the colon does nothing untoward, and remains an honest colon.
+
+**How to configure:**
+
+1. Open the **Composer** card on the Chat tab in Settings
+2. Tick or untick **Emoji shortcuts**
+3. The change applies at once; no reload required
+
+**When useful:**
+
+- You want an emoji by *name* without leaving the keyboard or hunting through a grid
+- You are on a platform whose own emoji picker is an inconvenience, or absent entirely
+
+**When to turn it off:**
+
+- Your prose is thick with colons — script formatting, timestamps, ratios — and you would rather the menu never stirred
+- Note that the toolbar's emoji button is **not** governed by this toggle. The switch restrains the *automatic* colon, which is the part capable of surprising you; a button pressed on purpose never is.
+
 ### Auto-Scroll
 
 A question of etiquette: when a character at last lays down the pen at the close of a long reply, should the page hurry you down to the final flourish, or leave you precisely where you were reading? This toggle decides.

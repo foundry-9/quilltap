@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { Icon } from '@/components/ui/icon'
 import type { LexicalEditor } from 'lexical'
 import { FORMAT_TEXT_COMMAND, $getSelection, $isRangeSelection, $createTextNode, $createParagraphNode, $getRoot } from 'lexical'
@@ -28,6 +28,7 @@ import {
   outdentSourceLines,
 } from '@/components/chat/lexical/transformers/list-indentation'
 import { type HeadingTagType, $createQuoteNode } from '@lexical/rich-text'
+import { EmojiPickerPopover } from '@/components/chat/EmojiPickerPopover'
 
 interface RoleplayTemplateWithDelimiters {
   id: string
@@ -74,6 +75,8 @@ export default function FormattingToolbar({
   const [template, setTemplate] = useState<RoleplayTemplateWithDelimiters | null>(null)
   const [loadingTemplate, setLoadingTemplate] = useState(false)
   const [inCodeBlock, setInCodeBlock] = useState(false)
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false)
+  const emojiButtonRef = useRef<HTMLButtonElement>(null)
 
   // Track whether the cursor is inside a code block
   useEffect(() => {
@@ -483,6 +486,35 @@ export default function FormattingToolbar({
           </div>
         </>
       )}
+
+      {/* Emoji picker — its own section, after the RP delimiters.
+          NOT gated by the composerEmoji setting: that flag governs the automatic
+          `:` trigger, which is the part that can surprise. An explicit button
+          press never can. */}
+      <div className="qt-formatting-toolbar-divider" />
+      <div className="qt-formatting-toolbar-section relative">
+        <button
+          ref={emojiButtonRef}
+          type="button"
+          onMouseDown={preventFocusLoss}
+          onClick={() => setEmojiPickerOpen((open) => !open)}
+          disabled={disabled}
+          className={`qt-formatting-button qt-formatting-button-emoji${emojiPickerOpen ? ' qt-formatting-button-active' : ''}`}
+          title="Insert emoji (or type `:` and a name)"
+          aria-label="Insert emoji"
+          aria-haspopup="dialog"
+          aria-expanded={emojiPickerOpen}
+        >
+          {'☺'}
+        </button>
+        {emojiPickerOpen && (
+          <EmojiPickerPopover
+            onClose={() => setEmojiPickerOpen(false)}
+            editor={editor}
+            toggleRef={emojiButtonRef}
+          />
+        )}
+      </div>
 
       {/* Source mode toggle - always at the end */}
       {onToggleSource && (

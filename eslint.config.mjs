@@ -55,6 +55,39 @@ const eslintConfig = defineConfig([
       'quilltap/no-quilltap-misspelling': 'off',
     },
   },
+  {
+    // Tier B of the composer emoji feature (docs/developer/features/complete/composer-emoji.md).
+    //
+    // `lib/emoji/**` is framework-free by contract: quilltap-v5 (Rust core,
+    // Angular SPA, ProseMirror editor) copies the directory near-verbatim, and
+    // the ~120 lines that know about React and Lexical live in components/chat/
+    // where they get rewritten. This override is what MECHANICALLY enforces
+    // that — without it, Tier B rots within two changes and the port has to
+    // re-derive the ranking order by hand.
+    //
+    // Adding an import here is not a lint failure to silence; it means the code
+    // belongs in the adapter instead.
+    files: ['lib/emoji/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            'react',
+            'react-*',
+            'next',
+            'next/*',
+            'lexical',
+            '@lexical/*',
+            '@tanstack/*',
+            '@/components/*',
+            '@/hooks/*',
+            '@/lib/*',
+          ],
+        },
+      ],
+    },
+  },
 ])
 
 export default eslintConfig

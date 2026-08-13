@@ -217,6 +217,7 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
             customTools: true,
             compositionModeDefault: false,
             composerSpellcheck: true,
+            composerEmoji: true,
             textReplacementsEnabled: true,
             autoScrollOnResponseComplete: false,
             agentModeSettings: {
