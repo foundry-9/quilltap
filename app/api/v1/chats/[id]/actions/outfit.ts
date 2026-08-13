@@ -239,7 +239,7 @@ export async function handleEquipSlot(
       if (!item) {
         return notFound('Wardrobe item');
       }
-      updatedSlots = await equipItem(repos, chatId, characterId, item);
+      updatedSlots = await equipItem(repos, chatId, characterId, item, { projectMountPointIds });
       logger.info('[Chats v1] Wardrobe item worn', {
         chatId, characterId, itemId: item.id, slotsAffected: item.types,
         effect: item.replace ? 'replaced' : 'layered',
@@ -252,7 +252,7 @@ export async function handleEquipSlot(
       if (!item) {
         return notFound('Wardrobe item');
       }
-      updatedSlots = await replaceItem(repos, chatId, characterId, item);
+      updatedSlots = await replaceItem(repos, chatId, characterId, item, { projectMountPointIds });
       logger.info('[Chats v1] Wardrobe item force-replaced', {
         chatId, characterId, itemId: item.id, slotsAffected: item.types,
         effect: 'replaced',
@@ -276,6 +276,7 @@ export async function handleEquipSlot(
         characterId,
         slot as WardrobeItemType,
         item,
+        { projectMountPointIds },
       );
       logger.info('[Chats v1] Wardrobe item layered into slot', {
         chatId, characterId, slot, itemId: item.id, context: 'wardrobe',

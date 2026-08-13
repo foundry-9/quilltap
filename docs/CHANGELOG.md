@@ -4,6 +4,20 @@
 
 ### 4.8.2
 
+#### Change: wearing a bundled outfit now breaks it apart automatically
+
+Equipped state used to store a composite wardrobe item's own id in every slot it covered, expanding to the individual garments only at read time. In the wardrobe dialog that produced a single "Man in Black · bundle" card above four slot rows that all read *Empty* — the outfit was on, but nothing on screen said which shirt or which boots. Getting to that view took a separate **Break apart** click.
+
+Putting a bundle on now dissolves it in the same gesture. The component garments are stored in the slots their own types cover, and the bundle's id is never written to equipped state, so you can see each piece and remove one without touching the rest. Expansion is complete: a bundle nested inside a bundle comes apart too, so no bundle card can reappear.
+
+This happens wherever an outfit is put on, not just in the dialog — the Live tab, the Outfit Builder, the chat-start outfit composer, a character's default outfit, the cheap LLM's chat-start outfit pick, and the `wardrobe_wear` tool's `wear`, `replace`, and `add_to_slot` modes.
+
+The `replace` flag still governs a bundle, and now clears the union of the slots the bundle designates and the slots its pieces actually land in — so a replacing outfit that includes boots turns out the shoes already worn instead of layering over them. A "Naked" composite that designates all four slots still strips the character as documented.
+
+Bundles whose components can't be resolved — a shared outfit whose pieces live in a store the caller can't read — are stored whole, exactly as before, and still render correctly through read-time expansion. Outfits equipped before this change keep their composite id and their bundle card, so **Break apart** remains available for them; no migration is needed.
+
+Component hydration (the level-by-level fetch that resolves a bundle's pieces across the character vault, project stores, and Quilltap General) moved to `lib/wardrobe/hydrate-components.ts` and is now shared by the read and write sides instead of living only in `resolve-equipped`.
+
 #### Fix: a wardrobe change made before the outfit finished loading was thrown away (bug 61)
 
 The in-chat Wardrobe dialog gets its item list from one request and what the character is currently wearing from another, and the second one is a chain of three round trips. Between the list painting and that chain finishing, the Wear and Layer buttons were live but there was nothing to apply them to. A click in that window was staged against an empty outfit, then overwritten when the real outfit arrived, and the Done flush treated "this character has no recorded starting outfit" the same as "nothing changed" — so it sent no request, reported success, and closed the dialog. The change was gone with no error and no visible difference from a save that worked.

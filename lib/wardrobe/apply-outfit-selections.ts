@@ -19,6 +19,7 @@
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
+import { dissolveBundlesInSlots } from '@/lib/wardrobe/dissolve-bundles';
 import type { EquippedSlots, OutfitSelection, WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import type { CheapLLMSettings } from '@/lib/schemas/settings.types';
 import {
@@ -192,7 +193,10 @@ export async function resolveDefaultOutfit(
     }
   }
 
-  return slots;
+  // A bundle marked default dissolves into its parts, same as every other
+  // put-on gesture. The whole pool is the lookup — a shared bundle's
+  // components are in it even when the character doesn't own them.
+  return dissolveBundlesInSlots(slots, new Map(pool.map((i) => [i.id, i])));
 }
 
 /**
@@ -431,7 +435,13 @@ export async function applyOutfitSelections(
                   const declaredBare = result.result?.deliberatelyUnclothed === true;
 
                   if (result.success && result.result && (picked || declaredBare)) {
-                    chosen = result.result.slots;
+                    // The prompt lets the model pick a bundle outright; break
+                    // it into its parts before it's stored, so the wardrobe
+                    // reads as garments rather than an opaque card.
+                    chosen = dissolveBundlesInSlots(
+                      result.result.slots,
+                      new Map(wardrobeItems.map((i) => [i.id, i])),
+                    );
                     deliberatelyUnclothed = declaredBare && !picked;
                   } else {
                     logger.warn('[applyOutfitSelections] LLM outfit selection failed, falling back to defaults', {

@@ -17,6 +17,15 @@
 import { logger } from '@/lib/logger';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 
+/**
+ * The only thing expansion actually reads off an item. Stated structurally so
+ * the lighter client-side wardrobe summaries can be expanded too — a full
+ * `WardrobeItem` satisfies it.
+ */
+export interface CompositeNode {
+  componentItemIds?: readonly string[];
+}
+
 export interface ExpandResult {
   /**
    * Leaf wardrobe item IDs in expansion order, deduplicated. Composites
@@ -51,7 +60,7 @@ const DEFAULT_MAX_DEPTH = COMPOSITE_MAX_DEPTH;
  */
 export function expandComposites(
   rootIds: readonly string[],
-  itemsById: ReadonlyMap<string, WardrobeItem>,
+  itemsById: ReadonlyMap<string, CompositeNode>,
   options?: ExpandOptions,
 ): ExpandResult {
   const maxDepth = options?.maxDepth ?? DEFAULT_MAX_DEPTH;
@@ -91,13 +100,14 @@ export function expandComposites(
       return;
     }
 
-    if (item.componentItemIds.length === 0) {
+    const components = item.componentItemIds ?? [];
+    if (components.length === 0) {
       emitLeaf(id);
       return;
     }
 
     const nextPath = [...path, id];
-    for (const childId of item.componentItemIds) {
+    for (const childId of components) {
       visit(childId, nextPath, depth + 1);
     }
   };
