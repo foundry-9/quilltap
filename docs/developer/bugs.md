@@ -4,7 +4,11 @@
 **Codebase**: Quilltap v4.8.0-dev (HEAD `0472cf6c`)
 **Provenance**: the quilltap-v5 native port's differential harness, and its
 dogfood walks against a copy of real data
-**Status**: Bugs **1–57** are **fixed in v4**; none open. Bug 57 (filed and
+**Status**: Bugs **1–60** are **fixed in v4**. **Bug 61 is OPEN** (filed
+2026-08-12 by the v5 port while deflaking its wardrobe e2e walk: an outfit edit
+staged in the in-chat Wardrobe dialog before the worn snapshot arrives is
+discarded, and the dialog closes as though it saved — v5 reproduces it
+faithfully and is not diverging). Bug 57 (filed and
 fixed 2026-08-11 by the v5 port's round-2 unification: the preserveIds preflight
 refused a rehydrate bundle whose store carries one blob linked at two paths —
 the per-link export duplication meeting an undeduped `carriedBlobIds`) converges
@@ -214,6 +218,7 @@ One row per bug, newest last. **Bug** links to the entry; **Fix site** and
 | 59 | [a failed read reads as an empty database and triggers first-startup seeding](bugs/fixed/bug-59-failed-read-triggers-first-startup-seeding.md) | 2026-08-12 | 2026-08-12 | High (a populated instance sent down the new-install seeding path — default characters, duplicate embedding profile, full `.qtap` import — on a transient read failure) | `findByFilter` passes `[]` as `safeQuery`'s fallback, so "no rows" and "the database is unreachable" are the same value; `seedInitialData` read that `[]` as "first startup" and began seeding an instance holding 24 characters and 10,286 messages | `lib/startup/seed-initial-data.ts` + new `countOrThrow` in `lib/database/repositories/base.repository.ts` | Owed (Faithful) |
 
 | 60 | [the documented key-file backup procedure copies nothing](bugs/fixed/bug-60-phantom-per-database-key-files.md) | 2026-08-12 | 2026-08-12 | High (a user follows the documented backup and both `cp` commands fail; they believe the encryption key is saved when nothing was copied, and find out when the databases can no longer be opened) | The `.dbkey` path in BACKUP-RESTORE.md and DEPLOYMENT.md omits the `data/` component, and both docs plus DDL.md describe per-database key files that were never built — `quilltap-mount-index.dbkey` has never existed, and `quilltap-llm-logs.dbkey` is written only by `changePassphrase`, read by nothing, and can hold a stale wrapping | `lib/startup/dbkey.ts` + `lib/paths.ts` + `lib/startup/version-guard.ts` and the six docs/help files naming a `.dbkey` path | Owed (Faithful) |
+| 61 | [a wardrobe edit staged before the worn snapshot arrives is dropped](bugs/bug-61-staged-outfit-edit-dropped.md) | 2026-08-12 | — | Medium (silent data loss — the staged outfit is discarded, nothing is sent, nothing errors, and the dialog closes exactly as it does on a successful save) | Staging in the in-chat Wardrobe dialog before `refreshOutfit`'s three-round-trip chain publishes the worn snapshot is lost twice over: the first Live seed overwrites the staged slots, and the flush skips any character with no captured baseline and then returns `true`, so Done closes as if it saved | — | Faithful (v5 reproduces it; not diverging) |
 
 ### Families and reading order
 
