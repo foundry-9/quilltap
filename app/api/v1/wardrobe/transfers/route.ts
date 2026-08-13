@@ -16,11 +16,9 @@ import { logger } from '@/lib/logger'
 import { ensureProjectOfficialStore } from '@/lib/mount-index/ensure-project-store'
 import { ensureGroupOfficialStore } from '@/lib/mount-index/ensure-group-store'
 import { ensureProjectWardrobeFolder, readProjectWardrobe } from '@/lib/mount-index/project-wardrobe'
+import { ensureGroupWardrobeFolder, readGroupWardrobe } from '@/lib/mount-index/group-wardrobe'
 import { readGeneralWardrobe } from '@/lib/mount-index/general-wardrobe'
-import { ensureFolderPath } from '@/lib/mount-index/folder-paths'
-import {
-  CHARACTER_WARDROBE_FOLDER,
-} from '@/lib/database/repositories/vault-overlay/schema'
+import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool'
 import {
   createProjectWardrobeItem,
   deleteProjectWardrobeItem,
@@ -28,7 +26,7 @@ import {
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
 
 type TransferAction = 'move' | 'copy'
-type SourceScope = 'character' | 'project' | 'general'
+type SourceScope = 'character' | 'group' | 'project' | 'general'
 type DestinationScope = 'general' | 'project' | 'group' | 'character'
 
 interface ResolvedSource {
@@ -109,6 +107,23 @@ async function resolveSourceItem(
     }
   }
 
+  // The group tier: every store of every group this character belongs to. The
+  // source character is the one wearing the item, so their memberships are the
+  // right scope — matching how the wearable pool resolves the tier.
+  const groupMountPointIds = await resolveGroupMountPointIdsForCharacter(sourceCharacterId)
+  for (const mountPointId of groupMountPointIds) {
+    const groupItems = await readGroupWardrobe(mountPointId, true)
+    const groupItem = groupItems.find((item) => item.id === itemId)
+    if (groupItem) {
+      return {
+        scope: 'group',
+        item: groupItem,
+        characterId: null,
+        mountPointId,
+      }
+    }
+  }
+
   const generalItems = await readGeneralWardrobe(true)
   const general = generalItems.find((item) => item.id === itemId)
   if (general) {
@@ -159,7 +174,7 @@ async function resolveDestination(
   if (!group) return null
   const ensured = await ensureGroupOfficialStore(group.id, group.name || 'Group')
   if (!ensured) return null
-  await ensureFolderPath(ensured.mountPointId, CHARACTER_WARDROBE_FOLDER)
+  await ensureGroupWardrobeFolder(ensured.mountPointId)
   return { scope: 'group', characterId: null, mountPointId: ensured.mountPointId }
 }
 
@@ -177,6 +192,10 @@ async function readDestinationItems(
 
   if (destination.scope === 'character') {
     return repos.wardrobe.findByCharacterId(destination.characterId as string, true)
+  }
+
+  if (destination.scope === 'group') {
+    return readGroupWardrobe(destination.mountPointId as string, true)
   }
 
   return readProjectWardrobe(destination.mountPointId as string, true)
@@ -227,7 +246,9 @@ async function deleteFromSource(
     wardrobe: { delete: (id: string, ownerCharacterId?: string | null) => Promise<boolean> }
   },
 ): Promise<boolean> {
-  if (source.scope === 'project') {
+  // Project and group items both live in a mount's `Wardrobe/` folder rather
+  // than a character vault, so both delete by mount point.
+  if (source.scope === 'project' || source.scope === 'group') {
     return deleteProjectWardrobeItem(source.mountPointId as string, source.item.id)
   }
   return repos.wardrobe.delete(source.item.id, source.characterId)

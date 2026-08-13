@@ -217,6 +217,8 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
             customTools: true,
             compositionModeDefault: false,
             composerSpellcheck: true,
+            composerEmoji: true,
+            composerUnicode: true,
             textReplacementsEnabled: true,
             autoScrollOnResponseComplete: false,
             agentModeSettings: {
@@ -253,6 +255,11 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
             },
             answerConfirmationSettings: {
               enabled: false,
+            },
+            smartTypographySettings: {
+              displayQuotes: false,
+              dashes: true,
+              ellipsis: true,
             },
             defaultRoleplayTemplateId,
             ...data,

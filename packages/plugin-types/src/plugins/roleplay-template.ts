@@ -80,17 +80,17 @@ export interface RenderingPattern {
  * ```typescript
  * // Standard dialogue with straight and curly quotes
  * {
- *   openingChars: ['"', '"'],
- *   closingChars: ['"', '"'],
+ *   openingChars: ['"', '\u201c'],
+ *   closingChars: ['"', '\u201d'],
  *   className: 'qt-chat-dialogue'
  * }
  * ```
  */
 export interface DialogueDetection {
-  /** Opening quote characters to detect (e.g., ['"', '"']) */
+  /** Opening quote characters to detect (e.g., ['"', '\u201c']) */
   openingChars: string[];
 
-  /** Closing quote characters to detect (e.g., ['"', '"']) */
+  /** Closing quote characters to detect (e.g., ['"', '\u201d']) */
   closingChars: string[];
 
   /** CSS class to apply to dialogue paragraphs */
@@ -184,8 +184,8 @@ export interface RoleplayTemplateConfig {
    * @example
    * ```typescript
    * dialogueDetection: {
-   *   openingChars: ['"', '"'],
-   *   closingChars: ['"', '"'],
+   *   openingChars: ['"', '\u201c'],
+   *   closingChars: ['"', '\u201d'],
    *   className: 'qt-chat-dialogue'
    * }
    * ```

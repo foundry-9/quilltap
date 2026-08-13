@@ -1,0 +1,162 @@
+{
+  "$comment": "Shared corpus — quilltap-v5 copies this file verbatim and asserts the same outputs. `cases[].expect` is the WHOLE match object, or null. `mathCases[].expect` is isInsideMathSpan's boolean. Fix the port, not the vectors.",
+  "cases": [
+    {
+      "text": "\\to",
+      "expect": { "start": 0, "end": 3, "query": "to", "closed": false },
+      "invariant": "The ordinary case: a backslash at the start of the run opens on the second query character."
+    },
+    {
+      "text": "hello \\phi",
+      "expect": { "start": 6, "end": 10, "query": "phi", "closed": false },
+      "invariant": "A backslash after whitespace opens; `end` spans the whole query."
+    },
+    {
+      "text": "\\Phi",
+      "expect": { "start": 0, "end": 4, "query": "Phi", "closed": false },
+      "invariant": "CASE IS PRESERVED. `\\Phi` is Φ and `\\phi` is φ; a port that lowercases here inserts the wrong Greek letter and nothing complains."
+    },
+    {
+      "text": "\\OMEGA",
+      "expect": { "start": 0, "end": 6, "query": "OMEGA", "closed": false },
+      "invariant": "Case survives even when no alias has that casing — the ENGINE decides what an unmatched query resolves to, not the trigger."
+    },
+    {
+      "text": "(\\to",
+      "expect": { "start": 1, "end": 4, "query": "to", "closed": false },
+      "invariant": "An opening bracket is a word opening, same as for the emoji profile."
+    },
+    {
+      "text": "x\\to",
+      "expect": null,
+      "invariant": "A backslash glued to a letter is somebody else's construct — a Windows path, an escaped literal — not a trigger."
+    },
+    {
+      "text": "\\",
+      "expect": null,
+      "invariant": "A lone backslash is inert."
+    },
+    {
+      "text": "\\a",
+      "expect": null,
+      "invariant": "One query character is inert: minQueryLength is 2, so a stray `\\a` never flashes a menu."
+    },
+    {
+      "text": "\\*",
+      "expect": null,
+      "invariant": "MARKDOWN ESCAPE. A backslash followed by punctuation is an escape, never a trigger — the query alphabet excludes punctuation entirely."
+    },
+    {
+      "text": "\\_",
+      "expect": null,
+      "invariant": "Same: `\\_` is an escaped underscore."
+    },
+    {
+      "text": "\\[",
+      "expect": null,
+      "invariant": "Same: `\\[` is an escaped bracket — and the opener of display math."
+    },
+    {
+      "text": "\\{ab",
+      "expect": null,
+      "invariant": "Braces are IN the query alphabet (for `\\u{1D538}`) but may not START a query, so `\\{` stays an escaped brace."
+    },
+    {
+      "text": "\\u{1D538}",
+      "expect": { "start": 0, "end": 9, "query": "u{1D538}", "closed": false },
+      "invariant": "The braced code-point form survives the trigger intact; the engine resolves it arithmetically."
+    },
+    {
+      "text": "\\u+2192",
+      "expect": { "start": 0, "end": 7, "query": "u+2192", "closed": false },
+      "invariant": "`+` is in the alphabet so the familiar `U+2192` spelling works."
+    },
+    {
+      "text": "\\to ",
+      "expect": null,
+      "invariant": "A trailing space CANCELS the trigger. The space commit is a keydown path that probes the text as it read BEFORE the space landed — the menu must not still be open behind it."
+    },
+    {
+      "text": "\\to\\phi",
+      "expect": null,
+      "invariant": "Two backslashes running: the second opens no word, so nothing fires rather than guessing which one the writer meant."
+    },
+    {
+      "text": "a \\to",
+      "expect": { "start": 2, "end": 5, "query": "to", "closed": false },
+      "invariant": "Mid-sentence is the common case."
+    },
+    {
+      "text": "\\xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "expect": {
+        "start": 0,
+        "end": 33,
+        "query": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "closed": false
+      },
+      "invariant": "Exactly maxQueryLength still matches."
+    },
+    {
+      "text": "\\xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "expect": null,
+      "invariant": "One past maxQueryLength abandons the match — pasted text must not hold a menu open."
+    }
+  ],
+  "mathCases": [
+    {
+      "text": "$$\\ph",
+      "expect": true,
+      "invariant": "An unclosed `$$` is display math being typed. Substituting φ here would break the formula."
+    },
+    {
+      "text": "$\\ph",
+      "expect": true,
+      "invariant": "Single-dollar spans ARE math by the time it matters — normalizeMathDelimiters promotes them before the parser runs."
+    },
+    {
+      "text": "\\(\\ph",
+      "expect": true,
+      "invariant": "`\\(…\\)` is rewritten to `$$` form; CommonMark would otherwise eat the backslash."
+    },
+    {
+      "text": "\\[\\ph",
+      "expect": true,
+      "invariant": "`\\[…\\]` likewise, in display mode."
+    },
+    {
+      "text": "costs $5 and \\ph",
+      "expect": false,
+      "invariant": "THE CASE THAT MATTERS. A dollar followed by a digit is currency, not math, so the menu opens. Quilltap chat is full of prose about money."
+    },
+    {
+      "text": "he paid $ 5 and \\ph",
+      "expect": false,
+      "invariant": "A dollar followed by whitespace is not opening a formula either."
+    },
+    {
+      "text": "$$x$$ and \\ph",
+      "expect": false,
+      "invariant": "A CLOSED display span leaves nothing open behind it."
+    },
+    {
+      "text": "$$a$$ $$\\ph",
+      "expect": true,
+      "invariant": "`$$` is consumed as a unit, so a second span opening after a closed one is still seen."
+    },
+    {
+      "text": "\\(a\\) and \\ph",
+      "expect": false,
+      "invariant": "A closed `\\(…\\)` span likewise."
+    },
+    {
+      "text": "$x + \\ph",
+      "expect": true,
+      "invariant": "A single-dollar formula with spaces in it is still a formula."
+    },
+    {
+      "text": "plain prose and \\ph",
+      "expect": false,
+      "invariant": "The overwhelmingly common case costs nothing."
+    }
+  ]
+}

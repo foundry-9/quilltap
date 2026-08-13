@@ -2,7 +2,7 @@
  * Update Wardrobe Item Tool Handler
  *
  * Edits the stored fields of an existing wardrobe item. Resolves the target
- * across all (non-group) tiers to LOCATE it, then enforces own-items-only:
+ * across every tier to LOCATE it, then enforces own-items-only:
  * shared archetypes (project / Quilltap General; `characterId === null`) are
  * read-only and the edit is refused. Only the supplied fields change. When the
  * component list changes and `types` wasn't given, the coverage union is
@@ -18,7 +18,7 @@ import type { WardrobeUpdateToolInput, WardrobeUpdateToolOutput } from '../wardr
 import { validateWardrobeUpdateInput } from '../wardrobe-update-tool';
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 import { unionTypes } from '@/lib/wardrobe/composite-types';
-import { resolveProjectMountPointIdsForChat } from '@/lib/mount-index/tiered-mount-pool';
+import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
 import {
   isOwnWardrobeItem,
   normalizeNoItemSentinel,
@@ -66,14 +66,14 @@ export async function executeWardrobeUpdateTool(
       component_item_ids,
     } = parsed;
 
-    const projectMountPointIds = await resolveProjectMountPointIdsForChat(context.chatId);
+    const tiers = await resolveSharedWardrobeTiersForChat(context.chatId, context.characterId);
 
     const item = await resolveWardrobeItemAcrossTiers(
       repos,
       context.characterId,
       normalizeNoItemSentinel(item_id),
       normalizeNoItemSentinel(item_title),
-      projectMountPointIds,
+      tiers,
     );
     if (!item) {
       return buildWardrobeReadFailure(wardrobeItemNotFoundMessage(item_id, item_title));
@@ -99,9 +99,7 @@ export async function executeWardrobeUpdateTool(
     // When the component list changes and types weren't explicitly supplied,
     // recompute the coverage union from the new components (across tiers).
     if (component_item_ids !== undefined && types === undefined && component_item_ids.length > 0) {
-      const comps = await repos.wardrobe.findByIdsForCharacter(context.characterId, component_item_ids, {
-        projectMountPointIds,
-      });
+      const comps = await repos.wardrobe.findByIdsForCharacter(context.characterId, component_item_ids, tiers);
       const union = unionTypes(comps);
       if (union.length > 0) patch.types = union;
     }
@@ -121,7 +119,7 @@ export async function executeWardrobeUpdateTool(
       fields: Object.keys(patch),
     });
 
-    return await buildWardrobeReadOutput(repos, context.characterId, context.chatId, updated, projectMountPointIds);
+    return await buildWardrobeReadOutput(repos, context.characterId, context.chatId, updated, tiers);
   } catch (error) {
     logger.error('Wardrobe update tool execution failed', {
       context: 'wardrobe-update-handler',

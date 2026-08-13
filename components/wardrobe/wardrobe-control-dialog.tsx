@@ -37,7 +37,13 @@ import {
   takeOffBundleFromSlots,
 } from '@/lib/wardrobe/bundle-mutations'
 import { buildDefaultOutfit } from '@/lib/wardrobe/default-outfit'
-import { wearItemIntoSlots } from '@/lib/wardrobe/outfit-displacement'
+import {
+  classifyStagedOutfits,
+  equippedSlotsEqual,
+  rebaseStagedSlots,
+  type SlotsMutator,
+} from '@/lib/wardrobe/staged-live-outfits'
+import { addItemToSlot, wearItemIntoSlots } from '@/lib/wardrobe/outfit-displacement'
 import { nextCopyTitle } from '@/lib/wardrobe/next-copy-title'
 import { useCharacterWardrobeItems } from '@/lib/hooks/use-character-wardrobe-items'
 import { WardrobeItemEditor } from './wardrobe-item-editor'
@@ -66,19 +72,6 @@ type ItemKind = 'items' | 'outfits'
 type RightTab = 'live' | 'builder'
 type EditorIntent = 'create-single' | 'create-bundle'
 type TransferIntent = 'move' | 'copy'
-
-/** Deep array equality on the four EquippedSlots arrays, in order. */
-function equippedSlotsEqual(a: EquippedSlots, b: EquippedSlots): boolean {
-  for (const slot of WARDROBE_SLOT_TYPES) {
-    const av = a[slot]
-    const bv = b[slot]
-    if (av.length !== bv.length) return false
-    for (let i = 0; i < av.length; i++) {
-      if (av[i] !== bv[i]) return false
-    }
-  }
-  return true
-}
 
 /**
  * Wrapper component used by the layout. Reads context from the provider and
@@ -236,6 +229,13 @@ function WardrobeControlDialogInner({
   const [liveStagedByChar, setLiveStagedByChar] = useState<Record<string, EquippedSlots>>({})
   const liveBaselineByCharRef = useRef<Record<string, EquippedSlots>>({})
   const liveSeededByCharRef = useRef<Set<string>>(new Set())
+  // Gestures made before the worn snapshot arrived, keyed by character. In that
+  // window there is nothing to stage onto, so the gesture paints against an
+  // empty fallback and is recorded here; the seeding effect replays it onto the
+  // real slots. Without this the fast click is either overwritten by the first
+  // seed (Bug 61's silent loss) or committed against an empty base, undressing
+  // everything the user never touched.
+  const pendingLiveMutatorsRef = useRef<Record<string, SlotsMutator[]>>({})
 
   const characterIdsForOutfit = useMemo(
     () => (selectedCharacterId ? [selectedCharacterId] : []),
@@ -322,16 +322,23 @@ function WardrobeControlDialogInner({
   // Seed staged Live slots once we have a worn snapshot for this character.
   // The baseline is captured separately so the Done flush can skip no-op
   // commits. Re-seeding is gated by `liveSeededByCharRef` so refreshOutfit
-  // round-trips don't blow away in-progress edits.
+  // round-trips don't blow away in-progress edits — and anything staged
+  // *before* this first seed is replayed onto the snapshot rather than
+  // discarded by it, since the item list is clickable well before the outfit
+  // chain's three round trips finish.
   useEffect(() => {
     if (!isInChat || !selectedCharacterId) return
-    const wornSlots = outfit.outfitState[selectedCharacterId]?.slots
+    const characterId = selectedCharacterId
+    const wornSlots = outfit.outfitState[characterId]?.slots
     if (!wornSlots) return
-    const seedKey = `${selectedCharacterId}|${chatId ?? 'no-chat'}`
+    const seedKey = `${characterId}|${chatId ?? 'no-chat'}`
     if (liveSeededByCharRef.current.has(seedKey)) return
     liveSeededByCharRef.current.add(seedKey)
-    liveBaselineByCharRef.current[selectedCharacterId] = cloneSlots(wornSlots)
-    setLiveStagedByChar((prev) => ({ ...prev, [selectedCharacterId]: cloneSlots(wornSlots) }))
+    liveBaselineByCharRef.current[characterId] = cloneSlots(wornSlots)
+    const pending = pendingLiveMutatorsRef.current[characterId] ?? []
+    delete pendingLiveMutatorsRef.current[characterId]
+    const seed = rebaseStagedSlots(wornSlots, pending)
+    setLiveStagedByChar((prev) => ({ ...prev, [characterId]: seed }))
   }, [selectedCharacterId, chatId, isInChat, outfit.outfitState])
 
   // ---------------------------------------------------------------------------
@@ -457,17 +464,26 @@ function WardrobeControlDialogInner({
   // Every Live-tab gesture goes through `updateLiveStaged`, which mutates the
   // staged slots for the current character. None of these touch the server.
   const updateLiveStaged = useCallback(
-    (mutator: (prev: EquippedSlots) => EquippedSlots) => {
+    (mutator: SlotsMutator) => {
       if (!selectedCharacterId) return
+      const characterId = selectedCharacterId
+      // Until the worn snapshot has seeded there is no honest base to stage
+      // onto: the gesture paints against an empty fallback, and is recorded so
+      // the seed can replay it onto the real slots.
+      const seedKey = `${characterId}|${chatId ?? 'no-chat'}`
+      if (isInChat && !liveSeededByCharRef.current.has(seedKey)) {
+        const queued = pendingLiveMutatorsRef.current[characterId] ?? []
+        pendingLiveMutatorsRef.current[characterId] = [...queued, mutator]
+      }
       setLiveStagedByChar((prev) => {
-        const wornFallback = outfit.outfitState[selectedCharacterId]?.slots
+        const wornFallback = outfit.outfitState[characterId]?.slots
         const current =
-          prev[selectedCharacterId] ??
+          prev[characterId] ??
           (wornFallback ? cloneSlots(wornFallback) : { ...EMPTY_EQUIPPED_SLOTS })
-        return { ...prev, [selectedCharacterId]: mutator(current) }
+        return { ...prev, [characterId]: mutator(current) }
       })
     },
-    [selectedCharacterId, outfit.outfitState],
+    [selectedCharacterId, chatId, isInChat, outfit.outfitState],
   )
 
   // The "Wear" button honors the item's `replace` flag (layer when off,
@@ -476,21 +492,18 @@ function WardrobeControlDialogInner({
   const handleEquipItem = useCallback(
     (item: WardrobeItem) => {
       if (!isInChat) return
-      updateLiveStaged((prev) => wearItemIntoSlots(prev, item))
+      updateLiveStaged((prev) => wearItemIntoSlots(prev, item, itemsById))
     },
-    [isInChat, updateLiveStaged],
+    [isInChat, itemsById, updateLiveStaged],
   )
 
   const handleAddToSlot = useCallback(
     (item: WardrobeItem, slot: WardrobeItemType) => {
       if (!isInChat) return
       if (!item.types.includes(slot)) return
-      updateLiveStaged((prev) => {
-        if (prev[slot].includes(item.id)) return prev
-        return { ...prev, [slot]: [...prev[slot], item.id] }
-      })
+      updateLiveStaged((prev) => addItemToSlot(prev, slot, item, itemsById))
     },
-    [isInChat, updateLiveStaged],
+    [isInChat, itemsById, updateLiveStaged],
   )
 
   // Picking an item from a slot row wears it (fills every slot it covers,
@@ -502,7 +515,7 @@ function WardrobeControlDialogInner({
       const item = itemsById.get(itemId)
       updateLiveStaged((prev) =>
         item
-          ? wearItemIntoSlots(prev, item)
+          ? wearItemIntoSlots(prev, item, itemsById)
           : prev[slot].includes(itemId)
             ? prev
             : { ...prev, [slot]: [...prev[slot], itemId] },
@@ -535,7 +548,7 @@ function WardrobeControlDialogInner({
       const item = itemsById.get(itemId)
       if (!item) return
       // Wear it across every slot it covers, honoring the `replace` flag.
-      setFittingSlots((prev) => wearItemIntoSlots(prev, item))
+      setFittingSlots((prev) => wearItemIntoSlots(prev, item, itemsById))
     },
     [itemsById],
   )
@@ -642,20 +655,31 @@ function WardrobeControlDialogInner({
    * triggers a single avatar regen + Aurora announcement on the server). If
    * nothing is dirty, no requests go out.
    *
+   * A character staged against no baseline at all is *not* clean — their worn
+   * snapshot never arrived, so the staging was built on an empty fallback and
+   * committing it would undress them. That case is put to the operator rather
+   * than passed off as a successful save.
+   *
    * Returns `true` if every commit succeeded (or there was nothing to
    * commit), so the caller can decide whether to actually close the dialog.
    */
   const flushStagedLiveOutfits = useCallback(async (): Promise<boolean> => {
     if (!chatId) return true
-    const baselines = liveBaselineByCharRef.current
-    const dirty: Array<{ characterId: string; slots: EquippedSlots }> = []
-    for (const [characterId, slots] of Object.entries(liveStagedByChar)) {
-      const baseline = baselines[characterId]
-      if (!baseline) continue
-      if (!equippedSlotsEqual(slots, baseline)) {
-        dirty.push({ characterId, slots })
-      }
+    const { dirty, unresolved } = classifyStagedOutfits(
+      liveStagedByChar,
+      liveBaselineByCharRef.current,
+    )
+
+    if (unresolved.length > 0) {
+      const names = unresolved
+        .map((id) => characters.find((c) => c.id === id)?.name ?? 'this character')
+        .join(', ')
+      const discard = await requestConfirmation(
+        `Word of what ${names} is presently wearing never reached us, so your alterations cannot be saved. Close the wardrobe and let them go?`,
+      )
+      if (!discard) return false
     }
+
     if (dirty.length === 0) return true
 
     let allOk = true
@@ -682,7 +706,7 @@ function WardrobeControlDialogInner({
     }
     await outfit.refreshOutfit()
     return allOk
-  }, [chatId, liveStagedByChar, outfit])
+  }, [chatId, liveStagedByChar, outfit, characters, requestConfirmation])
 
   const requestClose = useCallback(() => {
     void (async () => {
@@ -734,12 +758,12 @@ function WardrobeControlDialogInner({
       if (useFittingActions) {
         // Honor the item's `replace` flag across every slot it covers,
         // matching `wearItemIntoSlots` / the live equip path.
-        setFittingSlots((prev) => wearItemIntoSlots(prev, item))
+        setFittingSlots((prev) => wearItemIntoSlots(prev, item, itemsById))
         return
       }
       handleEquipItem(item)
     },
-    [useFittingActions, handleEquipItem],
+    [useFittingActions, itemsById, handleEquipItem],
   )
 
   const rowAddToSlot = useCallback(

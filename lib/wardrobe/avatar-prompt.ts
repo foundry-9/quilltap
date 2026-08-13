@@ -11,6 +11,7 @@ import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
 import type { getRepositories } from '@/lib/repositories/factory';
 import { describeOutfit, decorateOutfitItems } from '@/lib/wardrobe/outfit-description';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
+import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers';
 import { genderNounFromPronouns } from '@/lib/characters/pronoun-gender';
 
 interface BuildPromptOptions {
@@ -21,8 +22,9 @@ interface BuildPromptOptions {
   equippedSlots?: EquippedSlots | null;
   /**
    * Project document stores in scope, so equipped items that live in a project
-   * store (not just the character vault or Quilltap General) resolve. Omit when
-   * there is no project context (two-tier fallback).
+   * store resolve. The character's group stores are resolved here from their own
+   * memberships; Quilltap General and the character's vault are always in scope.
+   * Omit when there is no project context.
    */
   projectMountPointIds?: string[];
   /**
@@ -91,9 +93,12 @@ export async function buildCharacterAvatarPrompt(
     // sitting in slots.bottom whose types include "top" still bubbles up into
     // the rendered top. We then `omit` bottom/footwear at render time so the
     // image generator doesn't paste shoes/pants onto a cropped torso.
-    const resolved = await resolveEquippedOutfitForCharacter(repos, character.id, equippedSlots, {
-      projectMountPointIds,
-    });
+    const resolved = await resolveEquippedOutfitForCharacter(
+      repos,
+      character.id,
+      equippedSlots,
+      await sharedWardrobeTiersForCharacter(character.id, projectMountPointIds),
+    );
 
     topIsBare = resolved.leafItemsBySlot.top.length === 0;
     const accessories = decorateOutfitItems(resolved.leafItemsBySlot.accessories, { titleOnly: true });

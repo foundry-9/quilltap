@@ -82,6 +82,10 @@ export interface ChatSettings {
   compositionModeDefault?: boolean
   /** Whether browser spellcheck is enabled in the composer and rich-text Document Mode editor */
   composerSpellcheck?: boolean
+  /** Whether the `:` emoji typeahead fires in the composer and Document Mode editor (the toolbar picker is not gated by this) */
+  composerEmoji?: boolean
+  /** Whether the `\` Unicode typeahead fires in the composer and Document Mode editor (the toolbar picker is not gated by this) */
+  composerUnicode?: boolean
   /** Master switch for user-defined word-boundary text replacements in the composer and Document Mode editor */
   textReplacementsEnabled?: boolean
   /** Whether the Salon auto-scrolls to the newest message when a response completes (only when already near the bottom) */
@@ -102,6 +106,8 @@ export interface ChatSettings {
   thinkingDisplay?: ThinkingDisplaySettings
   /** Answer confirmation — global default for the Salon consistency check. */
   answerConfirmationSettings?: AnswerConfirmationSettings
+  /** Smart typography — render-time curly quotes plus type-time dashes/ellipsis. */
+  smartTypographySettings?: SmartTypographySettings
   createdAt: string
   updatedAt: string
 }
@@ -135,6 +141,31 @@ export interface AnswerConfirmationSettings {
 
 export const DEFAULT_ANSWER_CONFIRMATION_SETTINGS: AnswerConfirmationSettings = {
   enabled: false,
+}
+
+/**
+ * Smart typography — two mechanisms split by confidence.
+ *
+ * `displayQuotes` curls quotes at *render* time only: the stored message keeps
+ * its straight quotes, so the model, the embeddings and every export are
+ * unaffected and turning the toggle off restores the old appearance everywhere.
+ *
+ * `dashes` and `ellipsis` write real characters into the text as it is typed,
+ * because a writer typing `--` means a dash. Both are undone by one Backspace.
+ */
+export interface SmartTypographySettings {
+  /** Curl quotes when displaying messages. Stored text is never modified. */
+  displayQuotes?: boolean
+  /** `--` → en dash and `---` → em dash, as you type. */
+  dashes?: boolean
+  /** `...` → ellipsis, as you type. */
+  ellipsis?: boolean
+}
+
+export const DEFAULT_SMART_TYPOGRAPHY_SETTINGS: SmartTypographySettings = {
+  displayQuotes: false,
+  dashes: true,
+  ellipsis: true,
 }
 
 /**

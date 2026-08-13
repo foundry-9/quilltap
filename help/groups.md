@@ -29,6 +29,15 @@ will find:
   member keeps here is offered back to them alongside their own Core whisper —
   marked plainly as the Group's — so the few things the circle holds in common ride
   at their elbow whenever they take the floor.
+- **A shared wardrobe** — a `Wardrobe/` shelf of garments the circle holds in common:
+  the household livery, the regimental kit, the club's dinner jackets. Every member
+  may *wear* them — in any chat, whether or not the club is mentioned — without any
+  one of them owning the coat. Move or copy a garment onto the shelf from the item's
+  `⋮` menu in the Wardrobe dialog, choosing the Group under **Groups**. A group
+  garment marked **default** dresses every member at the opening of the curtain. It
+  sits between a character's own armoire and the project's wardrobe in the tiers, so
+  a member's personal copy of an item shadows the Group's; see
+  *[The Wardrobe](wardrobe.md)*.
 - **A shared ledger of State** — a `state.json` of persistent values the whole circle
   reads and writes. It is the **group tier** of the four-tier state cascade
   (chat → project → group → general); edit it from the **Group State** button on the
@@ -110,7 +119,7 @@ nowhere else.
 ## Tips & Notes
 
 - A character may belong to **as many Groups as you like**; in any turn, all of
-  their Groups' stores are pooled together.
+  their Groups' stores are pooled together — wardrobes included.
 - Removing a character from a Group revokes their key at once — their next turn
   will no longer reach that Group's shelves.
 - Deleting a Group drops its memberships and unlinks its stores. The official

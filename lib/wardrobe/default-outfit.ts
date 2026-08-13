@@ -8,6 +8,7 @@
  * @module lib/wardrobe/default-outfit
  */
 
+import { dissolveBundlesInSlots } from '@/lib/wardrobe/dissolve-bundles'
 import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types'
 
 /**
@@ -32,5 +33,7 @@ export function buildDefaultOutfit(items: WardrobeItem[]): EquippedSlots {
     if (!item.isDefault || item.archivedAt) continue
     for (const slot of item.types) next[slot].push(item.id)
   }
-  return next
+  // A bundle marked default goes on as its parts, like every other put-on
+  // gesture — the wardrobe should never open onto a card over empty slots.
+  return dissolveBundlesInSlots(next, new Map(items.map((i) => [i.id, i])))
 }

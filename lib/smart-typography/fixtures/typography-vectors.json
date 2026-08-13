@@ -1,0 +1,108 @@
+{
+  "$comment": [
+    "Smart typography — Tier B: the corpus, and the contract between quilltap-server (v4) and quilltap-v5.",
+    "These fixtures live beside the engine rather than in the repo's usual __tests__/fixtures/ because v5 copies",
+    "the whole lib/smart-typography directory wholesale. Keep the deviation; it is the point.",
+    "Every row exists to protect a stated invariant. If a port disagrees with a row, fix the port, not the row.",
+    "`options` is optional per case and falls back to `defaultOptions`. `expect: null` means no substitution."
+  ],
+  "version": 1,
+  "defaultOptions": { "dashes": true, "ellipsis": true },
+  "cases": [
+    {
+      "name": "second hyphen becomes an en dash",
+      "before": "0-",
+      "typed": "-",
+      "expect": { "deleteBefore": 1, "insert": "–", "rule": "en-dash" }
+    },
+    {
+      "name": "third hyphen promotes the en dash to an em dash",
+      "before": "0–",
+      "typed": "-",
+      "expect": { "deleteBefore": 1, "insert": "—", "rule": "em-dash" }
+    },
+    {
+      "name": "fourth hyphen does nothing — the ladder ends, and this is the escape hatch",
+      "before": "0—",
+      "typed": "-",
+      "expect": null
+    },
+    {
+      "name": "one-character `before` (short text node) still ladders",
+      "before": "-",
+      "typed": "-",
+      "expect": { "deleteBefore": 1, "insert": "–", "rule": "en-dash" }
+    },
+    {
+      "name": "empty `before` (start of block) never substitutes",
+      "before": "",
+      "typed": "-",
+      "expect": null
+    },
+    {
+      "name": "third dot becomes an ellipsis",
+      "before": "t..",
+      "typed": ".",
+      "expect": { "deleteBefore": 2, "insert": "…", "rule": "ellipsis" }
+    },
+    {
+      "name": "second dot is not yet an ellipsis",
+      "before": ".",
+      "typed": ".",
+      "expect": null
+    },
+    {
+      "name": "a dot after an existing ellipsis is a deliberate fourth dot",
+      "before": "t…",
+      "typed": ".",
+      "expect": null
+    },
+    {
+      "name": "only two dots of context, no third character — still an ellipsis",
+      "before": "..",
+      "typed": ".",
+      "expect": { "deleteBefore": 2, "insert": "…", "rule": "ellipsis" }
+    },
+    {
+      "name": "dashes off suppresses the dash ladder",
+      "before": "0-",
+      "typed": "-",
+      "options": { "dashes": false, "ellipsis": true },
+      "expect": null
+    },
+    {
+      "name": "ellipsis off suppresses the ellipsis",
+      "before": "t..",
+      "typed": ".",
+      "options": { "dashes": true, "ellipsis": false },
+      "expect": null
+    },
+    {
+      "name": "ellipsis still fires when only dashes are off",
+      "before": "t..",
+      "typed": ".",
+      "options": { "dashes": false, "ellipsis": true },
+      "expect": { "deleteBefore": 2, "insert": "…", "rule": "ellipsis" }
+    },
+    {
+      "name": "a reserved delimiter is never substituted",
+      "before": "0-",
+      "typed": "-",
+      "options": { "dashes": true, "ellipsis": true, "reservedChars": ["-"] },
+      "expect": null
+    },
+    {
+      "name": "reservedChars naming an unrelated character does not suppress",
+      "before": "t..",
+      "typed": ".",
+      "options": { "dashes": true, "ellipsis": true, "reservedChars": ["\""] },
+      "expect": { "deleteBefore": 2, "insert": "…", "rule": "ellipsis" }
+    },
+    {
+      "name": "a non-trigger character is never touched",
+      "before": "ab",
+      "typed": "x",
+      "expect": null
+    }
+  ]
+}

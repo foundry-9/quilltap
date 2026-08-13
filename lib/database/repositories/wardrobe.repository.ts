@@ -15,6 +15,7 @@ import {
   deleteVaultWardrobeItem,
 } from './vault-overlay/wardrobe-writes';
 import { mergeWearablePool } from '@/lib/wardrobe/wearable-pool';
+import type { SharedWardrobeTiers } from '@/lib/wardrobe/shared-tiers';
 import { TypedQueryFilter } from '../interfaces';
 
 /**
@@ -68,14 +69,14 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
   /**
    * Find a single wardrobe item wearable by a character. Resolves against the
    * character's own vault wardrobe first, then the shared archetype tiers
-   * (Quilltap General + any project stores). Includes archived items because
-   * callers in the equip path need an item's `types` even if it's been archived
-   * after the chat last loaded.
+   * (Quilltap General + the character's group stores + any project stores).
+   * Includes archived items because callers in the equip path need an item's
+   * `types` even if it's been archived after the chat last loaded.
    */
   async findByIdForCharacter(
     characterId: string,
     id: string,
-    opts?: { projectMountPointIds?: string[] },
+    opts?: SharedWardrobeTiers,
   ): Promise<WardrobeItem | null> {
     return this.safeQuery(
       async () => {
@@ -99,7 +100,7 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
   async findByIdsForCharacter(
     characterId: string,
     ids: string[],
-    opts?: { projectMountPointIds?: string[] },
+    opts?: SharedWardrobeTiers,
   ): Promise<WardrobeItem[]> {
     if (ids.length === 0) return [];
     return this.safeQuery(
@@ -108,8 +109,8 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
         const found = new Map(items.filter((i) => ids.includes(i.id)).map((i) => [i.id, i]));
         const missing = ids.filter((id) => !found.has(id));
         if (missing.length > 0) {
-          // Shared items live in Quilltap General + any project stores; seed any
-          // missing ids from the merged tier set.
+          // Shared items live in Quilltap General + the character's group stores
+          // + any project stores; seed any missing ids from the merged tier set.
           const archetypes = await this.findArchetypes(true, opts);
           for (const a of archetypes) {
             if (missing.includes(a.id)) found.set(a.id, a);
@@ -124,9 +125,10 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
 
   /**
    * Find everything a character can actually wear: the shared tiers (Quilltap
-   * General + any project stores in `opts.projectMountPointIds`) merged under
-   * the character's own vault. Character items shadow shared ones on id
-   * collision; archived items are dropped.
+   * General + the character's group stores in `opts.groupMountPointIds` + any
+   * project stores in `opts.projectMountPointIds`) merged under the character's
+   * own vault. Character items shadow shared ones on id collision; archived
+   * items are dropped.
    *
    * This is the pool every "what can this character wear?" question should ask
    * — `wardrobe_list`, chat-start default resolution, the `llm_choose`
@@ -137,14 +139,15 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
    * Do NOT "simplify" this to call `readCharacterVaultWardrobe` directly or to
    * flip `seedArchetypes` on the shared readers. The archetype read is a
    * *sibling* of the vault read here, not nested inside it, which is what keeps
-   * the recursion guard in `lib/mount-index/general-wardrobe.ts` intact.
+   * the recursion guard in `lib/mount-index/shared-wardrobe.ts` intact.
    *
-   * The `opts` object shape is deliberate: the group tier lands later as
-   * `opts.groupMountPointIds` with no call-site churn.
+   * Resolve `opts` through `resolveSharedWardrobeTiersForChat` (or its project
+   * sibling) rather than by hand — threading one tier and dropping the other is
+   * exactly how the group wardrobe went unreadable for as long as it did.
    */
   async findWearablePoolForCharacter(
     characterId: string,
-    opts?: { projectMountPointIds?: string[] },
+    opts?: SharedWardrobeTiers,
   ): Promise<WardrobeItem[]> {
     return this.safeQuery(
       async () => {
@@ -153,54 +156,54 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
         return mergeWearablePool(shared, own);
       },
       'Error finding wearable pool for character',
-      { characterId, projectMountCount: opts?.projectMountPointIds?.length ?? 0 }
+      {
+        characterId,
+        groupMountCount: opts?.groupMountPointIds?.length ?? 0,
+        projectMountCount: opts?.projectMountPointIds?.length ?? 0,
+      }
     );
   }
 
   /**
-   * Find archetype/shared wardrobe items (characterId is null). Tri-tier: reads
-   * Quilltap General plus every project store passed in `opts.projectMountPointIds`.
-   * Project items override Quilltap General items on id collision (precedence
-   * character > project > general; the character tier is handled by callers via
-   * `findByCharacterId`).
+   * Find archetype/shared wardrobe items (characterId is null). Reads Quilltap
+   * General plus every project store in `opts.projectMountPointIds` plus every
+   * group store in `opts.groupMountPointIds`.
+   *
+   * Precedence follows the mount pool's — **character > group > project >
+   * general** — so a group's own livery shadows a project's version of the same
+   * item, and both shadow the household archetype. The character tier is
+   * handled by callers via `findByCharacterId`.
    *
    * @param includeArchived When false (default), excludes items where archivedAt is not null
+   * @param opts.groupMountPointIds Group document stores to fold into the shared pool
    * @param opts.projectMountPointIds Project document stores to fold into the shared pool
    */
   async findArchetypes(
     includeArchived = false,
-    opts?: { projectMountPointIds?: string[] },
+    opts?: SharedWardrobeTiers,
   ): Promise<WardrobeItem[]> {
     return this.safeQuery(
       async () => {
         // Shared archetypes live in Quilltap General/Wardrobe, optionally
-        // shadowed by project stores. There is no DB tier any more — an
-        // unprovisioned General simply yields no archetypes (a startup-ordering
-        // issue to surface, not a row to read).
+        // shadowed by project and group stores. There is no DB tier any more —
+        // an unprovisioned General simply yields no archetypes (a
+        // startup-ordering issue to surface, not a row to read).
         const { readGeneralWardrobe } = await import('@/lib/mount-index/general-wardrobe');
         const general = await readGeneralWardrobe(includeArchived);
 
-        const projectMountPointIds = opts?.projectMountPointIds ?? [];
-        if (projectMountPointIds.length === 0) {
+        // Weakest tier first: later writes win on id collision.
+        const scoped = [
+          ...(opts?.projectMountPointIds ?? []),
+          ...(opts?.groupMountPointIds ?? []),
+        ];
+        if (scoped.length === 0) {
           return general;
         }
 
-        // Merge the project tier over the general tier — project items win on
-        // id collision so a project can shadow a household archetype.
-        const { readProjectWardrobe } = await import('@/lib/mount-index/project-wardrobe');
         const byId = new Map<string, WardrobeItem>();
         for (const item of general) byId.set(item.id, item);
-        for (const mountPointId of projectMountPointIds) {
-          try {
-            const projectItems = await readProjectWardrobe(mountPointId, includeArchived);
-            for (const item of projectItems) byId.set(item.id, item);
-          } catch (error) {
-            logger.warn('Failed to read project wardrobe tier; skipping', {
-              mountPointId,
-              context: 'wardrobe',
-              error: error instanceof Error ? error.message : String(error),
-            });
-          }
+        for (const item of await this.findArchetypesInMounts(scoped, includeArchived)) {
+          byId.set(item.id, item);
         }
         return Array.from(byId.values());
       },
@@ -210,13 +213,49 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
   }
 
   /**
+   * Read the shared `Wardrobe/` folder of each given mount, in order — a later
+   * mount's item shadows an earlier one with the same id, so callers pass their
+   * mounts weakest-tier-first.
+   *
+   * A mount that can't be read is logged and skipped: one unreadable group
+   * store must not cost a character the rest of their wardrobe.
+   */
+  async findArchetypesInMounts(
+    mountPointIds: string[],
+    includeArchived = false,
+  ): Promise<WardrobeItem[]> {
+    if (mountPointIds.length === 0) return [];
+    return this.safeQuery(
+      async () => {
+        const { readSharedWardrobe } = await import('@/lib/mount-index/shared-wardrobe');
+        const byId = new Map<string, WardrobeItem>();
+        for (const mountPointId of mountPointIds) {
+          try {
+            const items = await readSharedWardrobe(mountPointId, includeArchived);
+            for (const item of items) byId.set(item.id, item);
+          } catch (error) {
+            logger.warn('Failed to read shared wardrobe tier; skipping', {
+              mountPointId,
+              context: 'wardrobe',
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+        return Array.from(byId.values());
+      },
+      'Error finding archetype wardrobe items in mounts',
+      { mountCount: mountPointIds.length, includeArchived }
+    );
+  }
+
+  /**
    * Find a single shared archetype by id. Reads Quilltap General/Wardrobe (and
-   * any project stores in `opts.projectMountPointIds`); returns null if the id
-   * isn't present in any tier.
+   * any group/project stores in `opts`); returns null if the id isn't present
+   * in any tier.
    */
   async findArchetypeById(
     id: string,
-    opts?: { projectMountPointIds?: string[] },
+    opts?: SharedWardrobeTiers,
   ): Promise<WardrobeItem | null> {
     return this.safeQuery(
       async () => {

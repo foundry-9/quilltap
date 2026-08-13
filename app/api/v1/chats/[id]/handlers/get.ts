@@ -283,6 +283,14 @@ export async function handleGet(
       }
     }
 
+    // Smart typography, Part A: whether pre-rendered HTML gets curly quotes.
+    // Display only — `event.content` below is still the writer's straight-quoted
+    // text, which is what goes to the model, the embeddings and every export.
+    // The client renderer (MessageContent) reads the same setting for messages
+    // it renders itself, so streaming and settled output agree.
+    const preRenderSettings = await repos.chatSettings.findByUserId(user.id);
+    const displayQuotes = preRenderSettings?.smartTypographySettings?.displayQuotes ?? false;
+
     const chatEvents = await repos.chats.getMessages(chatId);
 
     // Check for TOOL messages to identify which messages have embedded tools
@@ -400,6 +408,7 @@ export async function handleGet(
               renderedHtml = await renderMarkdownToHtml(event.content, {
                 renderingPatterns,
                 dialogueDetection,
+                displayQuotes,
               });
             } catch (err) {
               // Log but don't fail - client can still render

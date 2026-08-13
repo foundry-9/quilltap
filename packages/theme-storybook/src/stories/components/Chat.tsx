@@ -594,6 +594,100 @@ export const Chat: React.FC = () => {
         </div>
       </section>
 
+      {/* Composer Typeahead Menu */}
+      <section style={{ marginBottom: '2rem' }}>
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
+          Composer Typeahead Menu
+        </h3>
+        <p style={{ marginBottom: '1rem', color: 'var(--color-muted-foreground)', fontSize: '0.875rem' }}>
+          The inline `:name` emoji menu. The composer keeps focus throughout, so the
+          highlighted row is marked by <code>.qt-typeahead-option-active</code> rather than
+          by <code>:focus</code>.
+        </p>
+        <p style={{ marginBottom: '1rem', color: 'var(--color-muted-foreground)', fontSize: '0.875rem' }}>
+          The menu positions itself against the caret element Lexical creates, so it is
+          <code>position: absolute</code> — these samples sit in a relatively-positioned host to
+          stand in for that anchor.
+        </p>
+        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+          <div style={{ position: 'relative', width: '22rem', height: '9rem' }}>
+            <div className="qt-typeahead-menu" style={{ top: 0 }}>
+              <div className="qt-typeahead-option qt-typeahead-option-active">
+                <span className="qt-typeahead-option-glyph">😄</span>
+                <span className="qt-typeahead-option-label">grinning face with smiling eyes</span>
+                <span className="qt-typeahead-option-detail">:smile:</span>
+              </div>
+              <div className="qt-typeahead-option">
+                <span className="qt-typeahead-option-glyph">😃</span>
+                <span className="qt-typeahead-option-label">grinning face with big eyes</span>
+                <span className="qt-typeahead-option-detail">:smiley:</span>
+              </div>
+              <div className="qt-typeahead-option">
+                <span className="qt-typeahead-option-glyph">😺</span>
+                <span className="qt-typeahead-option-label">grinning cat</span>
+                <span className="qt-typeahead-option-detail">:smile_cat:</span>
+              </div>
+            </div>
+          </div>
+          <div style={{ position: 'relative', width: '15rem', height: '9rem' }}>
+            <div className="qt-typeahead-menu" style={{ top: 0 }}>
+              <div className="qt-typeahead-empty">No emoji found</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Emoji Picker */}
+      <section style={{ marginBottom: '2rem' }}>
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
+          Emoji Picker
+        </h3>
+        <p style={{ marginBottom: '1rem', color: 'var(--color-muted-foreground)', fontSize: '0.875rem' }}>
+          Opened from the formatting toolbar&apos;s <code>.qt-formatting-button-emoji</code>.
+          The shell is <code>.qt-popover</code>; group headers stick while the grid scrolls.
+        </p>
+        <div className="qt-popover qt-emoji-picker">
+          <input className="qt-input qt-emoji-picker-search" placeholder="Search emoji…" readOnly />
+          <div className="qt-emoji-picker-grid">
+            <div>
+              <div className="qt-emoji-picker-group-header">Recently used</div>
+              <div className="qt-emoji-picker-row">
+                {['😄', '🎉', '🚀', '👍️'].map((char) => (
+                  <button key={char} type="button" className="qt-emoji-picker-cell">{char}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="qt-emoji-picker-group-header">Smileys &amp; Emotion</div>
+              <div className="qt-emoji-picker-row">
+                {['😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂'].map((char) => (
+                  <button key={char} type="button" className="qt-emoji-picker-cell">{char}</button>
+                ))}
+              </div>
+              <div className="qt-emoji-picker-row">
+                {['🙂', '🙃', '😉', '😊', '😇', '🥰', '😍', '🤩'].map((char) => (
+                  <button key={char} type="button" className="qt-emoji-picker-cell">{char}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="qt-emoji-picker-group-header">Animals &amp; Nature</div>
+              <div className="qt-emoji-picker-row">
+                {['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼'].map((char) => (
+                  <button key={char} type="button" className="qt-emoji-picker-cell">{char}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style={{ marginTop: '1rem' }}>
+          <div className="qt-popover qt-emoji-picker">
+            <input className="qt-input qt-emoji-picker-search" placeholder="Search emoji…" readOnly />
+            <div className="qt-emoji-picker-message">Couldn&apos;t load emoji</div>
+          </div>
+        </div>
+      </section>
+
       {/* Full Chat Layout Preview */}
       <section>
         <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>

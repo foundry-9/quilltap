@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { Icon } from '@/components/ui/icon'
 import type { LexicalEditor } from 'lexical'
 import { FORMAT_TEXT_COMMAND, $getSelection, $isRangeSelection, $createTextNode, $createParagraphNode, $getRoot } from 'lexical'
@@ -28,6 +28,8 @@ import {
   outdentSourceLines,
 } from '@/components/chat/lexical/transformers/list-indentation'
 import { type HeadingTagType, $createQuoteNode } from '@lexical/rich-text'
+import { EmojiPickerPopover } from '@/components/chat/EmojiPickerPopover'
+import { UnicodePickerPopover } from '@/components/chat/UnicodePickerPopover'
 
 interface RoleplayTemplateWithDelimiters {
   id: string
@@ -74,6 +76,10 @@ export default function FormattingToolbar({
   const [template, setTemplate] = useState<RoleplayTemplateWithDelimiters | null>(null)
   const [loadingTemplate, setLoadingTemplate] = useState(false)
   const [inCodeBlock, setInCodeBlock] = useState(false)
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false)
+  const emojiButtonRef = useRef<HTMLButtonElement>(null)
+  const [unicodePickerOpen, setUnicodePickerOpen] = useState(false)
+  const unicodeButtonRef = useRef<HTMLButtonElement>(null)
 
   // Track whether the cursor is inside a code block
   useEffect(() => {
@@ -483,6 +489,64 @@ export default function FormattingToolbar({
           </div>
         </>
       )}
+
+      {/* Emoji and symbol pickers — their own section, after the RP delimiters.
+          NEITHER is gated by its composer setting: those flags govern the
+          automatic `:` / `\` triggers, which are the part that can surprise. An
+          explicit button press never can. */}
+      <div className="qt-formatting-toolbar-divider" />
+      <div className="qt-formatting-toolbar-section relative">
+        <button
+          ref={emojiButtonRef}
+          type="button"
+          onMouseDown={preventFocusLoss}
+          onClick={() => setEmojiPickerOpen((open) => !open)}
+          disabled={disabled}
+          className={`qt-formatting-button qt-formatting-button-emoji${emojiPickerOpen ? ' qt-formatting-button-active' : ''}`}
+          title="Insert emoji (or type `:` and a name)"
+          aria-label="Insert emoji"
+          aria-haspopup="dialog"
+          aria-expanded={emojiPickerOpen}
+        >
+          {'☺'}
+        </button>
+        {emojiPickerOpen && (
+          <EmojiPickerPopover
+            onClose={() => setEmojiPickerOpen(false)}
+            editor={editor}
+            toggleRef={emojiButtonRef}
+          />
+        )}
+      </div>
+      {/* Its own section so the popover anchors under Ω rather than under ☺.
+          Shares `qt-formatting-button-emoji`: that class does nothing
+          emoji-specific — it sizes a GLYPH label the way the arrow-glyph buttons
+          are sized, which is exactly what Ω needs. Renaming it to something
+          neutral would be a `qt-*` change and its theme-storybook mirror, for no
+          rendered difference. */}
+      <div className="qt-formatting-toolbar-section relative">
+        <button
+          ref={unicodeButtonRef}
+          type="button"
+          onMouseDown={preventFocusLoss}
+          onClick={() => setUnicodePickerOpen((open) => !open)}
+          disabled={disabled}
+          className={`qt-formatting-button qt-formatting-button-emoji${unicodePickerOpen ? ' qt-formatting-button-active' : ''}`}
+          title="Insert a symbol (or type `\` and a name)"
+          aria-label="Insert a symbol"
+          aria-haspopup="dialog"
+          aria-expanded={unicodePickerOpen}
+        >
+          {'Ω'}
+        </button>
+        {unicodePickerOpen && (
+          <UnicodePickerPopover
+            onClose={() => setUnicodePickerOpen(false)}
+            editor={editor}
+            toggleRef={unicodeButtonRef}
+          />
+        )}
+      </div>
 
       {/* Source mode toggle - always at the end */}
       {onToggleSource && (

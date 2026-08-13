@@ -1509,7 +1509,9 @@ function OrganizeSection({
   onEditEnclaveClick,
 }: OrganizeSectionProps) {
   const handleExport = () => {
-    window.location.href = `/api/v1/chats/${chatId}?action=export`
+    // The server names the file after the chat title via Content-Disposition;
+    // the filename here is only the Electron/anchor fallback.
+    triggerUrlDownload(`/api/v1/chats/${chatId}?action=export`, 'chat_export.qtap')
   }
 
   const handleExportMarkdown = () => {

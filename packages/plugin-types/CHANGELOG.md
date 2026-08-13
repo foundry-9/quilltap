@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.6] - 2026-08-13
+
+### Fixed
+
+- `DialogueDetection` JSDoc examples spelled the "straight and curly" quote pairs with ASCII `"` (U+0022) duplicated instead of the real curly code points, so a plugin author copying them got a detector that never matched curly dialogue. The examples on `RoleplayTemplateConfig.dialogueDetection` and the `openingChars` / `closingChars` field docs now spell the curly pair as `\u201c` / `\u201d` escapes, matching the host's own defaults. Documentation only — no type or runtime change. Same defect as Quilltap bug 62.
+
+### Changed
+
+- `PLUGIN_TYPES_VERSION` re-synced to the package version (was stale at `2.5.2`).
+
 ## [2.5.0] - 2026-05-27
 
 ### Added

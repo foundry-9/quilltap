@@ -6,6 +6,7 @@ import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipp
 import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
 import { enqueueWardrobeOutfitAnnouncement } from '@/lib/background-jobs/queue-service';
 import { getRepositories } from '@/lib/repositories/factory';
+import type { SharedWardrobeTiers } from '@/lib/wardrobe/shared-tiers';
 import type { ToolExecutionContext } from '@/lib/chat/tool-executor';
 
 type WardrobeRepos = ReturnType<typeof getRepositories>;
@@ -22,29 +23,27 @@ export function normalizeNoItemSentinel(value: string | undefined): string | und
 }
 
 /**
- * Resolve a wardrobe item across all (non-group) tiers — the character's own
- * wardrobe, the project store(s), and Quilltap General — by id (preferred) or
- * title (case-insensitive fallback).
+ * Resolve a wardrobe item across every tier — the character's own wardrobe,
+ * their groups' stores, the project store(s), and Quilltap General — by id
+ * (preferred) or title (case-insensitive fallback).
  *
- * - by id: `findByIdForCharacter` already spans character → project → general
+ * - by id: `findByIdForCharacter` spans character → group → project → general
  *   (and includes archived items, which callers reject as needed).
  * - by title: scan the character's own items first (character wins on
  *   collision), then the merged archetype set.
  *
- * The group tier is intentionally NOT covered yet — the repository doesn't
- * accept group mounts. Wiring it in is a tracked follow-up.
+ * `tiers` comes from `resolveSharedWardrobeTiersForChat` — pass the whole
+ * object rather than picking a tier out of it.
  */
 export async function resolveWardrobeItemAcrossTiers(
   repos: WardrobeRepos,
   characterId: string,
   itemId: string | undefined,
   itemTitle: string | undefined,
-  projectMountPointIds?: string[],
+  tiers?: SharedWardrobeTiers,
 ): Promise<WardrobeItem | null> {
   if (itemId) {
-    const found = await repos.wardrobe.findByIdForCharacter(characterId, itemId, {
-      projectMountPointIds,
-    });
+    const found = await repos.wardrobe.findByIdForCharacter(characterId, itemId, tiers);
     if (found) return found;
   }
 
@@ -54,7 +53,7 @@ export async function resolveWardrobeItemAcrossTiers(
     const ownMatch = own.find((i) => i.title.toLowerCase() === lower);
     if (ownMatch) return ownMatch;
 
-    const archetypes = await repos.wardrobe.findArchetypes(false, { projectMountPointIds });
+    const archetypes = await repos.wardrobe.findArchetypes(false, tiers);
     const archMatch = archetypes.find((i) => i.title.toLowerCase() === lower);
     if (archMatch) return archMatch;
   }
@@ -81,7 +80,7 @@ interface WardrobeReposForSummary {
     findByIdsForCharacter(
       characterId: string,
       ids: string[],
-      opts?: { projectMountPointIds?: string[] },
+      opts?: SharedWardrobeTiers,
     ): Promise<WardrobeItem[]>;
   };
 }
@@ -211,11 +210,9 @@ export async function buildWardrobeCoverageSummaryFromState(
   repos: WardrobeReposForSummary,
   characterId: string,
   slots: EquippedSlots,
-  opts?: { projectMountPointIds?: string[] },
+  opts?: SharedWardrobeTiers,
 ): Promise<string> {
-  const resolved = await resolveEquippedOutfitForCharacter(repos, characterId, slots, {
-    projectMountPointIds: opts?.projectMountPointIds,
-  });
+  const resolved = await resolveEquippedOutfitForCharacter(repos, characterId, slots, opts);
   return describeOutfit(resolved.outfitValues);
 }
 

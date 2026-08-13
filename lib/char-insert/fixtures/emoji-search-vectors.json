@@ -1,0 +1,92 @@
+{
+  "$comment": "Shared corpus — quilltap-v5 copies this file verbatim and asserts the same outputs. `expect` is a PREFIX of the result: assert expect equals result.slice(0, expect.length). Fix the port, not the vectors.",
+  "datasetVersion": 1,
+  "cases": [
+    {
+      "query": "smile",
+      "limit": 8,
+      "expect": [
+        "😄",
+        "😃",
+        "😺"
+      ],
+      "invariant": "Exact shortcode outranks shortcode-prefix; ties fall in Unicode presentation order."
+    },
+    {
+      "query": "thumbs_up",
+      "limit": 8,
+      "expect": [
+        "👍️"
+      ],
+      "invariant": "An underscore folds to a space, so the query reaches the CLDR name."
+    },
+    {
+      "query": "thumbs-up",
+      "limit": 8,
+      "expect": [
+        "👍️"
+      ],
+      "invariant": "A hyphen folds exactly as an underscore does."
+    },
+    {
+      "query": "THUMBS UP",
+      "limit": 8,
+      "expect": [
+        "👍️"
+      ],
+      "invariant": "The query is case-folded before matching."
+    },
+    {
+      "query": "",
+      "limit": 3,
+      "expect": [
+        "😀",
+        "😃",
+        "😄"
+      ],
+      "invariant": "An empty query is presentation order — the picker's initial grid."
+    },
+    {
+      "query": "+1",
+      "limit": 8,
+      "expect": [
+        "👍️"
+      ],
+      "invariant": "Shortcodes that are not alphabetic are still searchable."
+    },
+    {
+      "query": "tada",
+      "limit": 8,
+      "expect": [
+        "🎉"
+      ],
+      "invariant": "A github-preset shortcode that is nothing like the CLDR name still resolves."
+    },
+    {
+      "query": "grinning",
+      "limit": 4,
+      "expect": [
+        "😀",
+        "😃",
+        "😄",
+        "😆"
+      ],
+      "invariant": "Name-prefix bucket, tie-broken by Unicode order rather than insertion order."
+    },
+    {
+      "query": "joy",
+      "limit": 8,
+      "expect": [
+        "😂",
+        "😹"
+      ],
+      "invariant": "Word-start matching reaches past the name's first word."
+    },
+    {
+      "query": "zzzzzznope",
+      "limit": 8,
+      "expect": [],
+      "invariant": "A query that matches nothing returns nothing — never the whole set."
+    }
+  ]
+}

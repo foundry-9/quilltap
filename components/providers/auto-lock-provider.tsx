@@ -69,7 +69,10 @@ export function AutoLockProvider() {
       console.error('[AutoLock] Failed to call lock endpoint');
     }
 
-    // Full page reload to /unlock to reset all client state
+    // Full page reload to /unlock to reset all client state. This is the point
+    // of the auto-lock: router.push() would leave decrypted data alive in
+    // memory and in client caches, which is exactly what locking must discard.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.href = '/unlock';
   }, []);
 

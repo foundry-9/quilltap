@@ -2,6 +2,138 @@
 
 ## Recent Changes
 
+### 4.8.2
+
+#### Bug 64 filed: first-run encryption setup wedges the database until restart
+
+Docs only; no code change. On a fresh instance, completing the encryption-key setup closes the main SQLite connection out-of-band before converting the database files, but the backend and manager singletons keep the dead handle cached — every repository call then fails with "The database connection is not open" until the process is restarted. No data is lost; the conversion itself completes correctly. The bug file (`docs/developer/bugs/bug-64-setup-stale-db-handle.md`) documents the root cause and the fix as a spec: tear down through `closeDatabase()`, convert all three databases (the mount-index DB is currently skipped until the next restart), reinitialize before returning success, and give the auto-lock path the same treatment. Also noted: the LLM-logs client stays open on the pre-conversion file during setup, losing log writes.
+
+#### Smart typography
+
+Two parts, split by how confident the rule is.
+
+Quotes: the conversation now displays curly quotes while storing and sending exactly what you typed, so nothing about your text or the model's input changes. Off by default; toggle on the Chat settings tab under Smart Typography. Code, math, and link addresses are skipped structurally — they are separate node types in the markdown tree, not text. A roleplay template that claims a quote character as one of its own delimiters suppresses the curling for that chat, as does dialogue-detection config that names a straight quote without its curly counterpart. Applies everywhere the message renderer runs: the Salon, streaming replies, thinking blocks, the help chat, the Brahma console.
+
+Dashes: typing `--` gives an en dash, `---` an em dash, and `...` an ellipsis, in the Salon composer and Document Mode. On by default. These write real characters into your text. One Backspace or one Cmd/Ctrl+Z reverts any substitution. Nothing fires in code blocks, inline code, source-mode editors, or during IME composition, and pasted text is left alone.
+
+Dashes are deliberately not applied at render time and won't be, so `--verbose` written in prose stays intact.
+
+The rule engine (`lib/smart-typography/`) imports nothing outside the standard library, enforced by an ESLint rule, and is pinned by a fixture corpus so the v5 port can be verified against it rather than re-derived.
+
+New `smartTypographySettings` column on `chat_settings`.
+
+#### Dependency updates
+
+Refreshed npm dependencies across the app, the published packages, and all 14 bundled plugins.
+
+App: Next.js 16.2 → 16.3, openai 7.2 → 7.4, katex 0.18.1 → 0.18.4, mammoth 1.12.0 → 1.12.1, ws 8.21.1 → 8.21.3, and dev tooling (esbuild 0.28.2, postcss 8.5.26, tsx 4.23.12, @openrouter/sdk 1.2.32, eslint-config-next 16.3, @testing-library/user-event 14.6.4).
+
+Packages: `create-quilltap-theme` 2.0.18, `@quilltap/plugin-utils` 2.2.20, `@quilltap/theme-storybook` 1.0.59.
+
+Plugins: all 14 patch-bumped and rebuilt against `@quilltap/plugin-types` 2.5.6 and `@quilltap/plugin-utils` 2.2.20.
+
+Every plugin's `manifest.json` version now matches its `package.json` version. Nine had drifted by one or two patches from earlier bumps that touched only one of the two files. The plugin build doesn't sync them, so the drift was invisible until checked.
+
+#### Fix: chat export navigated the window instead of downloading on Electron
+
+The Salon sidebar's chat export set `window.location.href` to the export API route. In a browser that starts a download, but in the Electron shell it navigated the app window to the API endpoint instead. It now uses the same `triggerUrlDownload` helper the Markdown export directly beside it already used, which calls Electron's download API and falls back to an anchor click in the browser. The server still names the file from the chat title; the `.qtap` name here is only the fallback.
+
+#### Internal navigation cleanup
+
+eslint-config-next 16.3 adds a rule flagging `window.location.href` for internal page navigation. Two sites are now `router.push()`: the legacy-shell handoff that opens a standalone document in the workspace, and canceling the new-chat modal when it was opened from a query parameter.
+
+Six sites keep the full page load on purpose and now carry a comment explaining why — the three setup-wizard steps and the auto-lock redirect all need client state rebuilt from scratch (for auto-lock that is the whole point, since a client transition would leave decrypted data in memory), and the message-navigation helper is a plain module with no router in scope whose sessionStorage handoff depends on mount timing.
+
+#### Composer Unicode
+
+Type `\` plus a LaTeX name (`\to`, `\phi`), a description (`\right arrow`), or a code point (`\u2192`, `\u+2192`, `\u{1D538}`) to insert a Unicode character, in both the Salon composer and Document Mode. A menu lists the matches; Enter or a click inserts. Typing a complete name and following it with a space — `\to ` — inserts immediately without the menu, keeping the space. A toolbar button labeled `Ω` opens a searchable picker with a browsable grid and a recents row.
+
+Aliases are case-sensitive: `\phi` is φ and `\Phi` is Φ, likewise `\gamma`/`\Gamma`, `\delta`/`\Delta`, `\sigma`/`\Sigma`, `\omega`/`\Omega`, `\theta`/`\Theta`.
+
+Nothing fires inside a math span, so `$$\phi$$`, `$\phi$`, `\(\phi\)` and `\[\phi\]` stay LaTeX. A `$` followed by a digit or a space is read as currency, so `costs $5 and \to ` still works. Markdown escapes are untouched — an escape is a backslash plus punctuation, and a symbol name must start with a letter, so `\*`, `\_` and `\[` never open a menu. As with emoji, nothing fires in fenced code blocks or inline code.
+
+The dataset holds 3,282 characters across 26 Unicode blocks (40 KB gzipped, smaller than the emoji index), served from `public/` and fetched only on the first `\` query or first picker open. The space bar never triggers the fetch. Characters already in the emoji index are excluded, so `\` and `:` never both offer the same character; 165 were dropped that way. Code-point entry resolves arithmetically with no table lookup, so every character in Unicode stays reachable, including the ones the curation dropped.
+
+Toggle on the Chat settings tab under Composer, labeled "Symbol shortcuts"; default on. The toolbar button is not gated by the toggle. Recently-used characters are stored in the browser's local storage under a key separate from the emoji recents.
+
+Adds a `composerUnicode` column to `chat_settings` (migration `add-composer-unicode-field-v1`).
+
+#### Internal: one character-insertion engine, two dataset profiles
+
+`lib/emoji/` is now `lib/char-insert/`, with emoji and Unicode as profiles over one implementation rather than two near-duplicate features. `EmojiEntry.shortcodes` became `CharEntry.aliases`, `findEmojiTrigger` became `findTrigger(text, config)`, the module-level loader became a per-profile factory, and `EmojiTypeaheadPlugin` became `CharTypeaheadPlugin`, mounted once per profile. The picker's search field and grid moved into a shared `CharPickerPanel`; `EmojiPickerPopover` and the new `UnicodePickerPopover` are thin wrappers.
+
+Search gained one bucket, `NameAllWords`, which matches when every query token prefixes a distinct name word. It ranks below every existing bucket, so it can only add results that previously did not appear at all — which is why the emoji corpus passed unedited through the whole refactor. That is the regression proof: emoji behavior is unchanged.
+
+The dataset files did not change. `public/emoji/emoji-index.v1.json` is byte-identical.
+
+#### Composer emoji
+
+Type `:` plus at least two letters to search emoji by name and insert one, in both the Salon composer and Document Mode. A menu lists the matches; Enter or a click inserts. Typing a complete shortcode and closing it — `:smile:` — inserts immediately without the menu. A button in the formatting toolbar opens a searchable picker with a browsable grid and a recents row.
+
+Inserted emoji are plain Unicode characters, not shortcodes, images, or custom nodes, so exports, Markdown round-trip, search, and the LLM all see ordinary text. No trailing space is added. One Cmd/Ctrl+Z removes the emoji and restores the literal `:smi` that was typed.
+
+The menu does not open after `http://`, inside a time like `10:30`, in a Windows path, after `:` alone or `:a`, or on `:)`. It also stays shut inside fenced code blocks and inline code.
+
+The emoji dataset (1,914 entries, ~53 KB gzipped) is served from `public/` and fetched only on the first `:` or first picker open, so instances that never use the feature never load it. If the fetch fails, typing is unaffected and the menu simply doesn't open.
+
+Toggle on the Chat settings tab under Composer, labeled "Emoji shortcuts"; default on. The toolbar button is not gated by the toggle — the flag governs the automatic `:` trigger only. Recently-used emoji are stored in the browser's local storage, not on the server.
+
+Adds a `composerEmoji` column to `chat_settings` (migration `add-composer-emoji-field-v1`).
+
+#### Fix: text replacements fired inside code blocks and inline code (bug 63)
+
+With any text-replacement rule defined, typing the trigger inside a fenced code block or an inline `code` run and then a word-boundary character applied the replacement — so a rule like `fn → function` silently rewrote code as it was typed. The plugin checked only that the cursor sat at the end of a text node, and `CodeHighlightNode` extends `TextNode`, so fenced-block tokens passed that check; nothing checked the `code` format bit for inline runs.
+
+Both surfaces now bail, via a single `$isInCodeContext` helper shared with the new emoji plugin so the two typing aids can't drift apart again. Replacements in ordinary prose are unchanged. The plugin previously had no tests at all; it has them now.
+
+#### Fix: curly-quoted dialogue wasn't highlighted in chats without a roleplay template (bug 62)
+
+Quilltap styles dialogue — the quoted parts of a message — differently from narration. In a chat using a roleplay template that supplies its own patterns, that worked with either kind of quotation mark. In a chat with no template, or one whose template supplies no rendering patterns, only straight quotes (`"like this"`) were ever highlighted. Curly quotes (`"like this"`) were not, and most model output is curly-quoted, as is anything pasted from Word, Pages, or Scrivener, or typed on macOS with smart quotes on.
+
+The built-in fallback patterns claimed in a comment to handle both kinds. They didn't: the character sets they used listed the straight quote twice instead of listing the straight and the curly one, and the duplicate did nothing. Both the inline highlighting and the whole-paragraph dialogue styling were affected, on both the mid-stream and the settled render.
+
+Both now match straight and curly double quotes. Single quotes are deliberately still not treated as dialogue — an apostrophe is a single quote far more often than a quotation mark is, so matching them would mis-highlight ordinary prose. Chats on a roleplay template are unchanged.
+
+The same mistake was in the `@quilltap/plugin-types` documentation, where the `DialogueDetection` examples a plugin author copies listed the straight quote twice under a "straight and curly quotes" comment. A plugin built from those examples got a detector that never matched curly dialogue. Fixed in `@quilltap/plugin-types` 2.5.6 — six sites across the two examples and the `openingChars`/`closingChars` field docs, now spelled with explicit escapes so the characters can't be misread. Documentation only; no type or behavior change, and existing plugins are unaffected.
+
+#### Fix: wardrobe items moved into a group were invisible to everyone
+
+The wardrobe transfer dialog has offered every group as a destination since groups gained document stores, and moving or copying a garment there worked — the file landed in the group store's `Wardrobe/` folder. Nothing ever read it back. `findArchetypes` and the wearable pool it feeds took only Quilltap General plus the chat's project stores, so a group garment did not appear in the wardrobe dialog, was not listed by `wardrobe_list`, could not be resolved by id or title by `wardrobe_read`/`wardrobe_wear`/`wardrobe_update`/`wardrobe_archive`, was never equipped as a default at chat start, and could not be moved back out (the transfer's source lookup didn't scan groups either). An item moved to a group effectively vanished.
+
+The group tier is now read everywhere the other shared tiers are. A character's wearable pool is the union of their own vault, the `Wardrobe/` folder of every store belonging to every group they're a member of (official and linked), the chat project's stores, and Quilltap General. Precedence matches the document-store tiers: **character > group > project > general**, so a group's livery shadows a project's copy of the same item and a character's personal copy shadows both — including the `isDefault: false` personal copy that is how a character opts out of a shared default.
+
+Group stores follow the character, not the chat: a character sees only their own groups' wardrobes and never a co-participant's, the same rule Knowledge already used. The one exception is the chat outfit-summary endpoint, which spans the whole cast and therefore reads the union of the participants' groups so every equipped item resolves to a title.
+
+Paths now covered: `wardrobe_list`, `wardrobe_read`, `wardrobe_wear`, `wardrobe_take_off`, `wardrobe_update`, `wardrobe_archive`, `wardrobe_create` (gifted composites resolve against the *recipient's* groups), the wardrobe dialog and outfit builder, chat-start outfit selection including the cheap LLM's pick and default outfits, equipped-outfit resolution for scene state, story backgrounds, avatar prompts, Aurora's wardrobe announcements, and the chat list's equipped-item titles. Group items are shared, so they are wear-only for a character, exactly like project and General items.
+
+The transfer dialog can now also take an item *out* of a group: the source lookup scans the source character's group stores between the project store and Quilltap General.
+
+Internally, the three copies of "read a mount's `Wardrobe/` folder" (general, project, and now group) collapsed into `lib/mount-index/shared-wardrobe.ts`, with the scoped modules as façades over it. The tier options that used to be threaded as a bare `projectMountPointIds` array are now one `SharedWardrobeTiers` object (`lib/wardrobe/shared-tiers.ts`) resolved by a single helper, so a call site can no longer thread one tier and silently drop the other — which is what let this go unnoticed.
+
+#### Change: wearing a bundled outfit now breaks it apart automatically
+
+Equipped state used to store a composite wardrobe item's own id in every slot it covered, expanding to the individual garments only at read time. In the wardrobe dialog that produced a single "Man in Black · bundle" card above four slot rows that all read *Empty* — the outfit was on, but nothing on screen said which shirt or which boots. Getting to that view took a separate **Break apart** click.
+
+Putting a bundle on now dissolves it in the same gesture. The component garments are stored in the slots their own types cover, and the bundle's id is never written to equipped state, so you can see each piece and remove one without touching the rest. Expansion is complete: a bundle nested inside a bundle comes apart too, so no bundle card can reappear.
+
+This happens wherever an outfit is put on, not just in the dialog — the Live tab, the Outfit Builder, the chat-start outfit composer, a character's default outfit, the cheap LLM's chat-start outfit pick, and the `wardrobe_wear` tool's `wear`, `replace`, and `add_to_slot` modes.
+
+The `replace` flag still governs a bundle, and now clears the union of the slots the bundle designates and the slots its pieces actually land in — so a replacing outfit that includes boots turns out the shoes already worn instead of layering over them. A "Naked" composite that designates all four slots still strips the character as documented.
+
+Bundles whose components can't be resolved — a shared outfit whose pieces live in a store the caller can't read — are stored whole, exactly as before, and still render correctly through read-time expansion. Outfits equipped before this change keep their composite id and their bundle card, so **Break apart** remains available for them; no migration is needed.
+
+Component hydration (the level-by-level fetch that resolves a bundle's pieces across the character vault, project stores, and Quilltap General) moved to `lib/wardrobe/hydrate-components.ts` and is now shared by the read and write sides instead of living only in `resolve-equipped`.
+
+#### Fix: a wardrobe change made before the outfit finished loading was thrown away (bug 61)
+
+The in-chat Wardrobe dialog gets its item list from one request and what the character is currently wearing from another, and the second one is a chain of three round trips. Between the list painting and that chain finishing, the Wear and Layer buttons were live but there was nothing to apply them to. A click in that window was staged against an empty outfit, then overwritten when the real outfit arrived, and the Done flush treated "this character has no recorded starting outfit" the same as "nothing changed" — so it sent no request, reported success, and closed the dialog. The change was gone with no error and no visible difference from a save that worked.
+
+Clicks made in that window are now recorded and re-applied to the real outfit the moment it arrives, so the change survives and lands on top of what the character was already wearing rather than replacing it. (Simply keeping the staged outfit would have committed only the item just clicked and removed everything else.) If the outfit never loads at all, Done now says so and asks before discarding the unsaved change instead of closing as though it had saved.
+
+#### Fix: the Core whisper dropdown squeezed its own label into a sliver
+
+On the first tab of the character editor, the "Aurora's Core whisper" card put its label and description in one flex column and the dropdown in another. The dropdown is full-width by default, so it took nearly the whole card and wrapped the label text down a column a few characters wide. The card now stacks: label and description across the full width, dropdown beneath them. The two checkbox cards above it are unchanged — a checkbox is narrow enough for the side-by-side layout.
+
 ### 4.8.1
 
 #### Fix: the spelling lint rule never looked at documentation

@@ -36,7 +36,11 @@ import YAML from 'yaml'
 import { composerTheme } from '@/components/chat/lexical/theme'
 import { MarkdownBridgePlugin, COMPOSER_TRANSFORMERS } from '@/components/chat/lexical/plugins/MarkdownBridgePlugin'
 import { FormattingCommandPlugin } from '@/components/chat/lexical/plugins/FormattingCommandPlugin'
+import { SmartTypographyPlugin } from '@/components/chat/lexical/plugins/SmartTypographyPlugin'
 import { TextReplacementPlugin } from '@/components/chat/lexical/plugins/TextReplacementPlugin'
+import { CharTypeaheadPlugin } from '@/components/chat/lexical/plugins/CharTypeaheadPlugin'
+import { EMOJI_PROFILE } from '@/lib/char-insert/profiles/emoji'
+import { UNICODE_PROFILE } from '@/lib/char-insert/profiles/unicode'
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
 import DocumentChangeTracker from './DocumentChangeTracker'
 import DocumentFocusPlugin from './DocumentFocusPlugin'
@@ -287,6 +291,16 @@ function DocumentEditorPlugins({
         preserveTildes
       />
       <FormattingCommandPlugin />
+      {/* Above TextReplacementPlugin: `:` and ` ` are word-boundary triggers for
+          both, and the character typeahead only swallows the keystroke when it
+          actually commits. One mount per dataset profile. */}
+      <CharTypeaheadPlugin profile={EMOJI_PROFILE} />
+      <CharTypeaheadPlugin profile={UNICODE_PROFILE} />
+      {/* Above TextReplacementPlugin: `.` is a trigger for both, and smart
+          typography must resolve `...` before text replacement claims the word
+          boundary. Registration order is load-bearing — see the interaction
+          table in SmartTypographyPlugin. */}
+      <SmartTypographyPlugin />
       <TextReplacementPlugin />
       <DocumentChangeTracker
         baselineContent={baselineContent}

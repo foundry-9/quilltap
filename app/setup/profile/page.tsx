@@ -93,7 +93,10 @@ export default function ProfileSetupPage() {
         );
       }
 
-      // Continue to provider setup wizard
+      // Continue to provider setup wizard. Full page load, not router.push:
+      // the character records just created must be visible to a freshly
+      // initialized session provider rather than a stale client cache.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.href = '/setup/providers';
     } catch {
       setError('Something went wrong. Please try again.');

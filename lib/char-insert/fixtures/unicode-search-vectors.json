@@ -1,0 +1,90 @@
+{
+  "$comment": "Shared corpus — quilltap-v5 copies this file verbatim and asserts the same outputs. `expect` is a PREFIX of the result: assert expect equals result.slice(0, expect.length). Fix the port, not the vectors.",
+  "datasetVersion": 1,
+  "cases": [
+    {
+      "query": "to",
+      "limit": 4,
+      "expect": ["→"],
+      "invariant": "An exact LaTeX alias outranks everything; `\\to` is the shortest route to the commonest arrow."
+    },
+    {
+      "query": "leq",
+      "limit": 4,
+      "expect": ["≤"],
+      "invariant": "The alias a technical writer already has in their fingers wins over every name match."
+    },
+    {
+      "query": "infty",
+      "limit": 2,
+      "expect": ["∞"],
+      "invariant": "An alias no name contains resolves to exactly one character."
+    },
+    {
+      "query": "phi",
+      "limit": 4,
+      "expect": ["Φ", "φ"],
+      "invariant": "SEARCH is case-insensitive, so `phi` reaches both cases; the tie falls in code-point order. Case is respected only on the exact-alias COMMIT path — see findByAlias."
+    },
+    {
+      "query": "PHI",
+      "limit": 4,
+      "expect": ["Φ", "φ"],
+      "invariant": "Query case is folded before searching, exactly as it is for emoji."
+    },
+    {
+      "query": "rightwards arrow",
+      "limit": 3,
+      "expect": ["→"],
+      "invariant": "A whole-name prefix puts the plain character ahead of its 100-odd decorated variants."
+    },
+    {
+      "query": "double dagger",
+      "limit": 2,
+      "expect": ["‡"],
+      "invariant": "A name that matches exactly has no competition."
+    },
+    {
+      "query": "em dash",
+      "limit": 2,
+      "expect": ["—"],
+      "invariant": "The punctuation a writer actually hunts for is one query away."
+    },
+    {
+      "query": "not equal",
+      "limit": 3,
+      "expect": ["≠"],
+      "invariant": "Name-prefix beats name-substring: ≠ before ≨ and ≩."
+    },
+    {
+      "query": "dagger",
+      "limit": 4,
+      "expect": ["†", "‡"],
+      "invariant": "Ties inside one bucket fall in (block, code point) order — Unicode's own layout does the ranking."
+    },
+    {
+      "query": "double vertical",
+      "limit": 3,
+      "expect": ["‖"],
+      "invariant": "The NameAllWords bucket's headline case: ‖ is DOUBLE VERTICAL LINE and reaches this query as a plain prefix, ahead of the turnstiles that merely contain the words."
+    },
+    {
+      "query": "greek phi",
+      "limit": 3,
+      "expect": ["ϕ", "Φ", "φ"],
+      "invariant": "NameAllWords is what makes `greek phi` reach GREEK SMALL LETTER PHI at all — the words are not adjacent in the name. It ranks below the plain prefix match (ϕ, GREEK PHI SYMBOL), which is the whole point of it being the last bucket."
+    },
+    {
+      "query": "arrow arrow",
+      "limit": 6,
+      "expect": ["↹"],
+      "invariant": "Each query token claims a DISTINCT name word, so a repeated token needs the name to repeat it too: LEFTWARDS ARROW TO BAR OVER RIGHTWARDS ARROW TO BAR qualifies."
+    },
+    {
+      "query": "right right",
+      "limit": 6,
+      "expect": ["▜"],
+      "invariant": "Assignment is greedy, left to right, and NOT a maximum matching. RIGHTWARDS ARROW is absent — its single `right`-prefixed word is taken by the first token. Do not replace this with a backtracking matcher without regenerating both corpora."
+    }
+  ]
+}

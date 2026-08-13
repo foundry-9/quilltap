@@ -24,12 +24,12 @@ import {
   escapeMarkdownInBrackets,
 } from '@/lib/chat/roleplay-rendering'
 
-// Common inline rules mirroring the legacy default patterns.
+// Common inline rules mirroring DEFAULT_RENDERING_PATTERNS.
 const INLINE_PATTERNS: RenderingPattern[] = [
   { pattern: '(?<!\\*)\\*[^*]+\\*(?!\\*)', className: 'qt-chat-narration' },
   { pattern: '\\[[^\\]]+\\](?!\\()', className: 'qt-chat-narration' },
   { pattern: '(?<!\\{)\\{[^{}]+\\}(?!\\})', className: 'qt-chat-inner-monologue' },
-  { pattern: '[""][^""]+[""]', className: 'qt-chat-dialogue' },
+  { pattern: '["\\u201c][^"\\u201d]+["\\u201d]', className: 'qt-chat-dialogue' },
 ]
 
 /** The React adapter, replicated from MessageContent.segmentsToReactNodes. */

@@ -36,6 +36,7 @@ import {
   buildCheapLLMConfig,
   type OutfitSelectionContext,
 } from '@/lib/wardrobe/apply-outfit-selections';
+import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers';
 import { createCreationProgressEmitter } from '@/lib/chat/creation-progress';
 import { notFound, badRequest, serverError, successResponse, created } from '@/lib/api/responses';
 import {
@@ -479,9 +480,11 @@ async function createInitialMessagesScenarioAndStaff(
         ] as string[]
       ).filter((id) => typeof id === 'string' && id.length > 0);
       const equippedItemsData = equippedItemIds.length > 0
-        ? await repos.wardrobe.findByIdsForCharacter(characterId, equippedItemIds, {
-            projectMountPointIds: equippedProjectMountPointIds,
-          })
+        ? await repos.wardrobe.findByIdsForCharacter(
+            characterId,
+            equippedItemIds,
+            await sharedWardrobeTiersForCharacter(characterId, equippedProjectMountPointIds),
+          )
         : [];
       const equippedItemsMap = new Map(equippedItemsData.map((item) => [item.id, item]));
 

@@ -68,6 +68,76 @@ When running inside the desktop application, Quilltap also discreetly feeds the 
 - The squiggles distract you in flow
 - You are writing in a language Chromium does not recognise (you may also configure additional languages in the desktop app's developer console — a refinement we will dress up in a proper picker in a later issue)
 
+#### Emoji Shortcuts
+
+Also lodged in the **Composer** card, and quite the most cheerful amenity we have yet installed: type a colon followed by **at least two letters** — `:smi`, `:rock`, `:tada` — and a small brass-cornered menu unfurls beside the caret, offering every emoji whose name or keyword answers to what you have typed. Arrow keys to browse, Enter or a click to insert, Escape to dismiss without the slightest fuss. Should you happen to know the shortcode outright, type it entire and close it with a second colon — `:smile:` — and the character is set at once, the menu never having been troubled at all.
+
+Two letters is the minimum, and deliberately so. A single letter would summon half the catalogue; and `:)` — that ancient and honourable glyph — must be permitted to remain exactly what it is. By the same reasoning the menu declines to appear after `http://`, inside `10:30`, in `C:\Users`, or anywhere a colon is merely doing punctuation's ordinary work. It also holds its peace inside code fences and `inline code`, where an uninvited pictograph would be a positive menace.
+
+What lands in your document is **the plain Unicode character itself** — not a shortcode, not a picture, not some contraption of ours. This matters more than it sounds: the emoji you insert is ordinary text to every other part of the house. It exports intact, it survives a round trip through Markdown untouched, it is searchable, and the model at the other end of the conversation reads it exactly as you wrote it. One tap of Cmd/Ctrl+Z removes the character and restores the literal `:smi` you typed, in the customary single gesture.
+
+No trailing space is added — an emoji sits closer to punctuation than to a word, and `word😄` and `😄😄` are both perfectly respectable constructions we decline to interfere with.
+
+There is also a **button** in the formatting toolbar (the small `☺`), which opens a searchable picker with a browsable grid and a **Recently used** row of your last two dozen selections. A caution worth stating plainly: that toolbar appears only in composition and document-editing modes, so the button is a convenience rather than the feature proper. The colon is always at your disposal; the button is not. Your recents are kept in this browser alone, and are quite deliberately never sent anywhere.
+
+The emoji catalogue is fetched only the first time you actually want it — instances whose correspondents never type a colon never pay for it at all. Should the catalogue prove unreachable, nothing whatever is impeded: the menu simply declines to appear, the picker says so, and your typing proceeds unmolested.
+
+**Setting Options:**
+
+- **Emoji shortcuts** — A single toggle, on by default. On: the `:` menu appears as described. Off: the colon does nothing untoward, and remains an honest colon.
+
+**How to configure:**
+
+1. Open the **Composer** card on the Chat tab in Settings
+2. Tick or untick **Emoji shortcuts**
+3. The change applies at once; no reload required
+
+**When useful:**
+
+- You want an emoji by *name* without leaving the keyboard or hunting through a grid
+- You are on a platform whose own emoji picker is an inconvenience, or absent entirely
+
+**When to turn it off:**
+
+- Your prose is thick with colons — script formatting, timestamps, ratios — and you would rather the menu never stirred
+- Note that the toolbar's emoji button is **not** governed by this toggle. The switch restrains the *automatic* colon, which is the part capable of surprising you; a button pressed on purpose never is.
+
+#### Symbol Shortcuts
+
+Sitting directly beneath its cheerful cousin in the **Composer** card, and addressed to a rather more scholarly appetite: type a **backslash** followed by a name, and the appropriate character presents itself. `\to` yields →. `\phi` yields φ. `\leq` yields ≤, `\infty` yields ∞, `\dagger` yields †. The vocabulary is the one every mathematician, physicist and long-suffering thesis-writer already carries in their fingers — the LaTeX commands — some three thousand two hundred characters across twenty-six regions of the Unicode catalogue, arrows and operators and box-drawing pieces and Greek and dingbats and all.
+
+You may also describe what you are after in plain words: `\right arrow`, `\greek phi`, `\em dash`. And should you know a character only by its number, `\u2192`, `\u+2192` and `\u{1D538}` will fetch it directly, without consulting any catalogue at all — which means **every** character in Unicode remains within reach, including the great many we did not see fit to list.
+
+**A matter of capitalisation, and it is not a trifle.** `\phi` is φ and `\Phi` is Φ. Likewise `\gamma` and `\Gamma`, `\delta` and `\Delta`, `\sigma` and `\Sigma`, `\omega` and `\Omega`, `\theta` and `\Theta`. The house observes the distinction scrupulously, as any respectable house must; type the capital and you shall have the capital.
+
+Two ways to commit, precisely as with emoji: pick from the menu with Enter or a click, or — knowing the name outright — type it entire and follow it with a **space**. `\to ` becomes `→ `, space and all, the menu never having been troubled. Should the name mean nothing to us, your text is left exactly as you wrote it and the menu withdraws; we do not guess.
+
+**Your mathematics is safe.** Quilltap renders LaTeX, and `$$\phi$$` is a formula, not a request. The backslash therefore holds its peace inside any formula you have opened — `$$…`, `$…`, `\(…`, `\[…` — so a formula being typed is never quietly mangled into a character. A dollar sign followed by a figure is understood to be money and not mathematics, so `costs $5 and \to ` behaves perfectly normally. As with the colon, nothing whatever fires inside code fences or `inline code`.
+
+The backslash and the markdown escape do not collide, and cannot: an escape is a backslash followed by *punctuation* — `\*`, `\_`, `\[` — while a symbol name must begin with a *letter*. The two occupy entirely separate quarters of the house.
+
+There is a **button** in the formatting toolbar as well (the small `Ω`), which opens the same catalogue as a browsable grid arranged by Unicode block, with its own **Recently used** row — kept quite separately from your emoji recents, since a drawer holding both 😄 and ∮ would serve neither. The catalogue is fetched only the first time you want it, and pressing the space bar — the most-pressed key on the board — never summons it.
+
+**Setting Options:**
+
+- **Symbol shortcuts** — A single toggle, on by default. On: the `\` menu appears as described. Off: the backslash does nothing untoward, and remains an honest backslash.
+
+**How to configure:**
+
+1. Open the **Composer** card on the Chat tab in Settings
+2. Tick or untick **Symbol shortcuts**
+3. The change applies at once; no reload required
+
+**When useful:**
+
+- You write mathematics, linguistics, or anything else that wants → ≤ ∈ ∞ φ Σ ∮ without a trip to a character map
+- You want an em dash, a proper ellipsis, a degree sign or a non-breaking space and would rather not memorise an operating-system incantation for each
+
+**When to turn it off:**
+
+- Your prose is thick with backslashes — file paths, regular expressions, LaTeX you intend to keep verbatim — and you would rather the menu never stirred
+- As with emoji, the toolbar's `Ω` button is **not** governed by this toggle. The switch restrains the *automatic* backslash; a button pressed on purpose is never a surprise.
+
 ### Auto-Scroll
 
 A question of etiquette: when a character at last lays down the pen at the close of a long reply, should the page hurry you down to the final flourish, or leave you precisely where you were reading? This toggle decides.
@@ -132,6 +202,54 @@ The feature is, at present, deliberately modest: literal triggers, literal repla
 - Newline (Enter) is **not** a word-boundary trigger in this version. Type a space before pressing Enter if you want a replacement to fire on the last word of your message.
 - A rule's order in the list is presentational, not load-bearing: case-sensitive rules always win over case-insensitive rules with the same trigger.
 - You cannot register two case-insensitive rules with the same trigger (the system politely declines with a conflict notice). Two rules with the same trigger but different case-sensitivity flags are perfectly legal.
+
+### Smart Typography
+
+The Text Replacement card's near neighbour, and its temperamental opposite in one important respect. Here reside the small civilities of the compositor's trade — curled quotation marks, the en dash, the em dash, the ellipsis — arranged in **two groups**, and the difference between those groups is not a filing convenience but the whole substance of the thing.
+
+**The first group changes only what you see.** Tick *Curly quotes when displaying messages* and the conversation acquires proper “curly quotes” where before it wore the typewriter's flat little strokes. What is *stored*, however, and what is dispatched to the model, remains character for character what you typed. Not one byte of your correspondence is altered. Untick the box and the whole of your history reverts on the instant, as though the matter had never been raised. This is a question of dress, not of substance, and the house treats it accordingly.
+
+Code is never touched — neither fenced blocks nor `inline code`. Mathematics is never touched. The address inside a link is never touched. And should your roleplay template have claimed the quotation mark for its own purposes as a delimiter, the curling stands aside in that chat entirely, rather than trampling arrangements you made deliberately.
+
+One acknowledged imperfection, and we would rather name it than have you discover it: a word opening with an apostrophe — `'tis`, `'80s`, `'n'` — will be given an opening quotation mark instead. Every typesetter's engine ever built makes this same mistake, the poor thing having no way to distinguish an elision from a quotation. Because nothing is written down, the blemish is cosmetic only: your text still says `'tis`, and one flick of the toggle sets the appearance right again.
+
+**The second group changes your text.** Type two hyphens and you get an en dash (`–`); a third promotes it to an em dash (`—`); three full stops become a proper ellipsis (`…`). These are **real characters, written into what you have composed**, and they are meant to be: a writer who types `--` wants a dash, the hyphen being merely the keyboard's apology for a key it does not possess. A fourth hyphen leaves matters exactly as they are, which doubles as your escape hatch. One tap of **Backspace** immediately after any substitution restores the literal characters; one tap of Cmd/Ctrl+Z does the same.
+
+**Why dashes are not offered in the first group, and never will be.** Consider `run it with --verbose`. A display-time dash rule would render that as `–verbose` — the source correct, the screen wrong, and the writer with no earthly way to discover why. At the keystroke there is no such trouble: you see the dash arrive and press Backspace once. The arrangement is deliberate and permanent.
+
+Nothing in the second group fires inside code fences or `inline code`, nor in the source-mode views, nor upon pasted text, nor while an input method editor is mid-composition.
+
+**Setting Options:**
+
+- **Curly quotes when displaying messages** — Off by default. On: the conversation displays curly quotes. Your stored text and the model's input are unaffected either way.
+- **Dashes (`--` → `–`, `---` → `—`)** — On by default. Applies in the Salon composer and the Document Mode rich editor.
+- **Ellipsis (`...` → `…`)** — On by default. Same two surfaces.
+- **Try it** — A scratch textarea for the second group. Type a couple of hyphens or three full stops and watch. Nothing typed here is saved.
+
+**How to configure:**
+
+1. Open the **Smart Typography** card on the Chat tab in Settings
+2. Tick or untick each toggle as suits you
+3. The quote setting applies to every message at once — the Salon, the help chat, thinking blocks, the Brahma console alike
+4. The dash and ellipsis settings apply to the next thing you type
+
+**When useful:**
+
+- You want your prose to *look* properly typeset without your archives being quietly rewritten to suit the fashion
+- You write long-form fiction, in which the em dash is not a luxury but a load-bearing member
+- You are on a platform whose operating system declines to supply these substitutions on your behalf
+
+**When to turn it off:**
+
+- **Curly quotes:** you are writing about code, measurements in inches, or anything where the straight mark is the correct mark on screen as well as on disk
+- **Dashes:** you routinely write command-line flags in plain prose and would rather they never be disturbed — though note the ladder gives you a fourth hyphen as an escape, and Backspace as another
+- **Ellipsis:** you have a use for exactly three separate full stops
+
+**Notes for the careful:**
+
+- Turning the quote setting on or off does not alter a single stored message, does not disturb any model's input, does not shift a prompt cache, and does not change what an export contains. It is the one setting in this house that can be flipped with no consequence whatever beyond the visible.
+- Exports and backups always carry the straight quotes you actually typed.
+- Dashes and ellipsis, by contrast, *do* become part of the message and travel with it everywhere.
 
 ### Avatar Settings
 
