@@ -12,6 +12,8 @@ The built-in fallback patterns claimed in a comment to handle both kinds. They d
 
 Both now match straight and curly double quotes. Single quotes are deliberately still not treated as dialogue — an apostrophe is a single quote far more often than a quotation mark is, so matching them would mis-highlight ordinary prose. Chats on a roleplay template are unchanged.
 
+The same mistake was in the `@quilltap/plugin-types` documentation, where the `DialogueDetection` examples a plugin author copies listed the straight quote twice under a "straight and curly quotes" comment. A plugin built from those examples got a detector that never matched curly dialogue. Fixed in `@quilltap/plugin-types` 2.5.6 — six sites across the two examples and the `openingChars`/`closingChars` field docs, now spelled with explicit escapes so the characters can't be misread. Documentation only; no type or behavior change, and existing plugins are unaffected.
+
 #### Fix: wardrobe items moved into a group were invisible to everyone
 
 The wardrobe transfer dialog has offered every group as a destination since groups gained document stores, and moving or copying a garment there worked — the file landed in the group store's `Wardrobe/` folder. Nothing ever read it back. `findArchetypes` and the wearable pool it feeds took only Quilltap General plus the chat's project stores, so a group garment did not appear in the wardrobe dialog, was not listed by `wardrobe_list`, could not be resolved by id or title by `wardrobe_read`/`wardrobe_wear`/`wardrobe_update`/`wardrobe_archive`, was never equipped as a default at chat start, and could not be moved back out (the transfer's source lookup didn't scan groups either). An item moved to a group effectively vanished.

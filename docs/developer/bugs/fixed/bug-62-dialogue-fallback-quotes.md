@@ -44,6 +44,21 @@ this fix, because both cost more than the bug does:
   Documentation only, but it is what a plugin author copies. Correcting it means
   a version bump and a manual `npm publish`, so it is left as a follow-up rather
   than gating this commit.
+
+  **Done in `@quilltap/plugin-types` 2.5.6 (2026-08-13).** The sweep found six
+  sites, not three: both `@example` blocks (`src/plugins/roleplay-template.ts`
+  :83–84 and :187–188) *and* the `openingChars` / `closingChars` field docs at
+  :90 and :93, which carry the same `(e.g., ['"', '"'])`. All six now spell the
+  pair as `\u201c` / `\u201d` escapes, matching
+  `lib/chat/roleplay-rendering.ts`. The escaped form is deliberate: a literal
+  curly glyph is the thing no reviewer can eye-check, which is precisely how the
+  original defect survived. `dist/` is gitignored build output, so it was
+  regenerated with `npm run build` rather than hand-edited — that covers
+  `index.d.ts` and `index.d.mts`, the latter a fourth copy the note above
+  missed. `PLUGIN_TYPES_VERSION` was also re-synced (stale at 2.5.2). Verified
+  by `hexdump`, not by reading the glyphs. Every dependent pins a caret range
+  (`^2.5.4` / `^2.5.5`), so none needed a bump.
+
 - **Stored template rows** written by anyone who copied those examples are
   unaffected by a defaults change and would need a migration. None are known to
   exist.
