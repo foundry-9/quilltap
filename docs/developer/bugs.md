@@ -1,14 +1,17 @@
 # Bugs — defects surfaced by the v5 port
 
-**Last Updated**: 2026-08-11
+**Last Updated**: 2026-08-12
 **Codebase**: Quilltap v4.8.0-dev (HEAD `0472cf6c`)
 **Provenance**: the quilltap-v5 native port's differential harness, and its
 dogfood walks against a copy of real data
-**Status**: Bugs **1–60** are **fixed in v4**. **Bug 61 is OPEN** (filed
+**Status**: Bugs **1–61** are **fixed in v4**. Bug 61 (filed and fixed
 2026-08-12 by the v5 port while deflaking its wardrobe e2e walk: an outfit edit
-staged in the in-chat Wardrobe dialog before the worn snapshot arrives is
-discarded, and the dialog closes as though it saved — v5 reproduces it
-faithfully and is not diverging). Bug 57 (filed and
+staged in the in-chat Wardrobe dialog before the worn snapshot arrives was
+discarded, and the dialog closed as though it saved) is fixed by recording the
+pre-snapshot gestures and **replaying them onto the snapshot** when it lands —
+preserving the staged slots alone would have committed a hat and nothing else —
+plus a flush that tells "nothing changed" from "we never learned what clean
+was". It is **Owed** to the v5 side as a drift catch-up. Bug 57 (filed and
 fixed 2026-08-11 by the v5 port's round-2 unification: the preserveIds preflight
 refused a rehydrate bundle whose store carries one blob linked at two paths —
 the per-link export duplication meeting an undeduped `carriedBlobIds`) converges
@@ -216,9 +219,8 @@ One row per bug, newest last. **Bug** links to the entry; **Fix site** and
 | 57 | [rehydrate refuses any vault that links the same bytes twice](bugs/fixed/bug-57-rehydrate-duplicate-blob-claim.md) | 2026-08-11 | 2026-08-11 | Medium (High for anyone it hits: rehydrate permanently unusable for that character; the ordinary-import workaround severs id continuity) | The export's blob leg emits one record per LINK (`listByMountPoint` joins from the links), so a twice-linked sha-deduped blob appears twice in the bundle with one `blobId` — and the preflight's `carriedBlobIds` is not deduped (unlike `carriedFileIds` one list up), so the within-bundle repeat throws before Bug 54's sha-match skip is ever consulted | `lib/import/quilltap-import/execute.ts:115` — one-line `Set` dedupe | Converged (2026-08-11) — v5's pinned divergence becomes plain equality; the marker retires at the next drift catch-up |
 | 58 | [migrations open the database without the instance lock](bugs/fixed/bug-58-migrations-bypass-instance-lock.md) | 2026-08-12 | 2026-08-12 | High (two processes writing one SQLCipher database — the WAL-corruption scenario the lock exists to prevent — via the heaviest writer in the codebase) | The lock is acquired by the SQLite backend's `connect()`, so every repository read and write inherits it; the migration runner holds its own connection and opened it with a bare `new Database(dbPath)`, and `instrumentation.ts` runs migrations in PHASE 1 ahead of the backend connect that would have refused | `migrations/lib/database-utils.ts` (`getSQLiteDatabase`) | Owed (Faithful) |
 | 59 | [a failed read reads as an empty database and triggers first-startup seeding](bugs/fixed/bug-59-failed-read-triggers-first-startup-seeding.md) | 2026-08-12 | 2026-08-12 | High (a populated instance sent down the new-install seeding path — default characters, duplicate embedding profile, full `.qtap` import — on a transient read failure) | `findByFilter` passes `[]` as `safeQuery`'s fallback, so "no rows" and "the database is unreachable" are the same value; `seedInitialData` read that `[]` as "first startup" and began seeding an instance holding 24 characters and 10,286 messages | `lib/startup/seed-initial-data.ts` + new `countOrThrow` in `lib/database/repositories/base.repository.ts` | Owed (Faithful) |
-
 | 60 | [the documented key-file backup procedure copies nothing](bugs/fixed/bug-60-phantom-per-database-key-files.md) | 2026-08-12 | 2026-08-12 | High (a user follows the documented backup and both `cp` commands fail; they believe the encryption key is saved when nothing was copied, and find out when the databases can no longer be opened) | The `.dbkey` path in BACKUP-RESTORE.md and DEPLOYMENT.md omits the `data/` component, and both docs plus DDL.md describe per-database key files that were never built — `quilltap-mount-index.dbkey` has never existed, and `quilltap-llm-logs.dbkey` is written only by `changePassphrase`, read by nothing, and can hold a stale wrapping | `lib/startup/dbkey.ts` + `lib/paths.ts` + `lib/startup/version-guard.ts` and the six docs/help files naming a `.dbkey` path | Owed (Faithful) |
-| 61 | [a wardrobe edit staged before the worn snapshot arrives is dropped](bugs/bug-61-staged-outfit-edit-dropped.md) | 2026-08-12 | — | Medium (silent data loss — the staged outfit is discarded, nothing is sent, nothing errors, and the dialog closes exactly as it does on a successful save) | Staging in the in-chat Wardrobe dialog before `refreshOutfit`'s three-round-trip chain publishes the worn snapshot is lost twice over: the first Live seed overwrites the staged slots, and the flush skips any character with no captured baseline and then returns `true`, so Done closes as if it saved | — | Faithful (v5 reproduces it; not diverging) |
+| 61 | [a wardrobe edit staged before the worn snapshot arrives is dropped](bugs/fixed/bug-61-staged-outfit-edit-dropped.md) | 2026-08-12 | 2026-08-12 | Medium (silent data loss — the staged outfit is discarded, nothing is sent, nothing errors, and the dialog closes exactly as it does on a successful save) | Staging in the in-chat Wardrobe dialog before `refreshOutfit`'s three-round-trip chain publishes the worn snapshot is lost twice over: the first Live seed overwrites the staged slots, and the flush skips any character with no captured baseline and then returns `true`, so Done closes as if it saved | new `lib/wardrobe/staged-live-outfits.ts` + `components/wardrobe/wardrobe-control-dialog.tsx` | Owed (Faithful) |
 
 ### Families and reading order
 

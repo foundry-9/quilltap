@@ -4,6 +4,12 @@
 
 ### 4.8.2
 
+#### Fix: a wardrobe change made before the outfit finished loading was thrown away (bug 61)
+
+The in-chat Wardrobe dialog gets its item list from one request and what the character is currently wearing from another, and the second one is a chain of three round trips. Between the list painting and that chain finishing, the Wear and Layer buttons were live but there was nothing to apply them to. A click in that window was staged against an empty outfit, then overwritten when the real outfit arrived, and the Done flush treated "this character has no recorded starting outfit" the same as "nothing changed" — so it sent no request, reported success, and closed the dialog. The change was gone with no error and no visible difference from a save that worked.
+
+Clicks made in that window are now recorded and re-applied to the real outfit the moment it arrives, so the change survives and lands on top of what the character was already wearing rather than replacing it. (Simply keeping the staged outfit would have committed only the item just clicked and removed everything else.) If the outfit never loads at all, Done now says so and asks before discarding the unsaved change instead of closing as though it had saved.
+
 #### Fix: the Core whisper dropdown squeezed its own label into a sliver
 
 On the first tab of the character editor, the "Aurora's Core whisper" card put its label and description in one flex column and the dropdown in another. The dropdown is full-width by default, so it took nearly the whole card and wrapped the label text down a column a few characters wide. The card now stacks: label and description across the full width, dropdown beneath them. The two checkbox cards above it are unchanged — a checkbox is narrow enough for the side-by-side layout.

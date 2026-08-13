@@ -2,17 +2,27 @@
 
 | | |
 |---|---|
-| **Status** | **OPEN** |
+| **Status** | **FIXED** |
 | **Found** | 2026-08-12 |
+| **Fixed** | 2026-08-12 |
 | **Severity** | Medium (silent data loss — the staged outfit is discarded, no request is sent, no error is shown, and the dialog closes exactly as it does on success; the window is short but is entirely a function of server/network speed) |
 | **Who it bites** | anyone who opens the in-chat Wardrobe dialog and stages a change (Wear, add-to-slot, take-off) before the outfit fetch chain finishes — wider on a loaded server, a slow link, a large wardrobe, or a cold cache |
 | **Provenance** | Faithful — v5 mirrors the defect exactly. Surfaced by deflaking the v5 port's `wardrobe-flow` e2e beat, which this race had been failing intermittently for months |
 | **Defect site** | `components/wardrobe/wardrobe-control-dialog.tsx:322-335` (the Live-tab seeding effect overwrites staged slots) and `:648-659` (the flush skips any character with no captured baseline, then reports success), with `lib/hooks/use-outfit.ts:219-252` supplying the three-round-trip delay |
-| **Fix site** | — |
-| **v5 status** | Faithful — v5 reproduces it line for line and is NOT diverging; the two sides move together when this is fixed |
-| **Index** | [bugs.md](../bugs.md) |
+| **Fix site** | new `lib/wardrobe/staged-live-outfits.ts` + `components/wardrobe/wardrobe-control-dialog.tsx` (pre-seed gesture queue, rebasing seed, flush classification) |
+| **v5 status** | Owed (Faithful) — v5 reproduces it line for line and was not diverging; it now absorbs the fix as drift |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
+
+**FIXED in v4 (2026-08-12).** The first seed no longer overwrites a staged
+edit, and it no longer has to: gestures made before the worn snapshot arrives
+are recorded as mutators and **replayed onto that snapshot** when it lands, so
+the edit both survives and lands on the true worn slots rather than on the empty
+fallback it was painted against. The Done flush now distinguishes *"nothing
+changed"* from *"we never learned what clean was"* — the latter is put to the
+operator instead of being reported as a successful save. Details in
+[The fix, as taken](#the-fix-as-taken) below.
 
 ## Symptom
 
@@ -134,6 +144,62 @@ Worth doing regardless of which is chosen: make the "no baseline" case in the
 flush distinguishable from "nothing changed", so a future regression cannot
 report success for an outfit it never sent.
 
+## The fix, as taken
+
+**Keeping the staged slots (`prev[characterId] ?? …`) is not sufficient on its
+own, and this is worth recording.** The edit staged inside the window was built
+by `updateLiveStaged`'s `EMPTY_EQUIPPED_SLOTS` fallback, so it describes a
+character wearing *only* the thing just clicked. Preserve it verbatim, pair it
+with a correct baseline, and the flush duly reports it dirty and sends one
+`set_all` — of a hat and nothing else. The silent drop becomes a silent
+undressing. The staged slots have to be **rebased**, not merely preserved.
+
+So the gesture is captured rather than its result. `updateLiveStaged` still
+stages onto the empty fallback for the optimistic paint, but while the character
+is unseeded it also pushes the mutator onto `pendingLiveMutatorsRef`
+(per character). The seeding effect captures the baseline as before, then seeds
+`rebaseStagedSlots(wornSlots, pending)` — the queued gestures replayed, in
+order, onto the true worn slots. The mutators (`wearItemIntoSlots`,
+`takeOffBundleFromSlots`, the slot add/remove closures) are pure, so applying
+them a second time against a different base is safe, and the seed *replaces*
+rather than composes, so nothing is applied twice to the same base.
+
+The flush's second half became `classifyStagedOutfits`, which returns `dirty`
+and `unresolved` instead of letting both fall out of one loop as clean. A
+character in `unresolved` has staged slots and no baseline — their snapshot never
+arrived at all, so the edit can be neither confirmed as a change nor safely
+committed. Rather than close reporting success, the dialog asks:
+
+> Word of what {name} is presently wearing never reached us, so your alterations
+> cannot be saved. Close the wardrobe and let them go?
+
+Declining keeps the dialog open (a late snapshot then seeds, rebases, and the
+next Done saves normally); confirming closes, having said plainly what was lost.
+The confirmation is also the escape hatch — without it a permanently failing
+outfit read would trap the operator in a dialog that refuses to close.
+
+Both helpers live in **`lib/wardrobe/staged-live-outfits.ts`** (with
+`equippedSlotsEqual`, moved out of the dialog) so the two race-sensitive
+decisions are testable away from the render logic.
+
+The affordance is deliberately **not** gated: the queue makes the fast click
+work rather than merely refusing it, which is the better outcome for the gesture
+the operator actually made.
+
+**Regression tests**:
+
+- `__tests__/unit/lib/wardrobe/staged-live-outfits.test.ts` (10 cases) — the
+  early-Wear rebase, ordering across several early gestures, and `unresolved`
+  vs. clean.
+- `__tests__/unit/components/wardrobe/wardrobe-control-dialog.race.test.tsx`
+  (3 cases) — the race itself, driven by holding the `?action=outfit` response
+  open across the Wear click. The click survives the seed and Done fires exactly
+  one `set_all` carrying **both** the shirt the character already wore and the
+  hat just clicked; an unstaged dialog still sends nothing; an edit whose
+  snapshot never arrives is put to the operator rather than closed over. Checked
+  against the pre-fix code: the first and third fail there (the second is the
+  no-regression arm and passes either way).
+
 ## Verification
 
 - The reproduction recipe above, with the throttle still in place: the edit
@@ -154,3 +220,10 @@ was made deterministic by equipping an accessory *before* opening the dialog and
 waiting for it to paint, which sidesteps the race without depending on today's
 behavior. That workaround is deliberately independent of the fix, so it keeps
 passing either way.
+
+**v4 has now moved (2026-08-12), so the fix is Owed as drift.** The three pieces
+to mirror: the pre-seed mutator queue on the dialog's staging path, the seed that
+replays it onto the worn snapshot rather than overwriting with it, and the flush
+returning `dirty` / `unresolved` instead of one loop that treats both as clean.
+The rebase, not merely preserving the staged slots, is the load-bearing part —
+see [The fix, as taken](#the-fix-as-taken). The e2e workaround needs no change.
