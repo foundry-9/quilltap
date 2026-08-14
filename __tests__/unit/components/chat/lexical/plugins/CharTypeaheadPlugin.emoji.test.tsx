@@ -112,21 +112,26 @@ describe('CharTypeaheadPlugin — emoji profile', () => {
     global.fetch = realFetch
   })
 
-  function mount(extra?: React.ReactNode) {
+  function mount(extra?: React.ReactNode, chatSettings?: Record<string, boolean>) {
     harness = renderPluginEditor(
       <>
         <CharTypeaheadPlugin profile={EMOJI_PROFILE} />
         {extra}
       </>,
+      { chatSettings },
     )
     return harness.editor
   }
 
-  /** Let the TanStack settings query resolve so the flag is actually in effect. */
-  async function settleSettings() {
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
+  /**
+   * Mount with `composerEmoji` already off — seeded into the query cache so the
+   * flag is in effect on the FIRST render. The fetch stub answers with the same
+   * value, so the refetch that follows changes nothing; what it buys is that no
+   * assertion here depends on when that refetch lands.
+   */
+  function mountWithEmojiOff() {
+    stubFetch({ settings: { composerEmoji: false } })
+    return mount(undefined, { composerEmoji: false })
   }
 
   /**
@@ -277,10 +282,8 @@ describe('CharTypeaheadPlugin — emoji profile', () => {
       expect(readText(editor)).toBe(':smile')
     })
 
-    it('is inert when composerEmoji is off — and never even fetches the dataset', async () => {
-      stubFetch({ settings: { composerEmoji: false } })
-      const editor = mount()
-      await settleSettings()
+    it('is inert when composerEmoji is off — and never even fetches the dataset', () => {
+      const editor = mountWithEmojiOff()
 
       seedParagraph(editor, ':smile')
       const { defaultPrevented } = pressKey(editor, ':')
@@ -394,10 +397,8 @@ describe('CharTypeaheadPlugin — emoji profile', () => {
       expect(JSON.parse(window.localStorage.getItem(EMOJI_PROFILE.recentsStorageKey)!)).toEqual([SMILE])
     })
 
-    it('still works when composerEmoji is off — the flag governs only the `:` trigger', async () => {
-      stubFetch({ settings: { composerEmoji: false } })
-      const editor = mount()
-      await settleSettings()
+    it('still works when composerEmoji is off — the flag governs only the `:` trigger', () => {
+      const editor = mountWithEmojiOff()
       seedParagraph(editor, 'hi ')
 
       act(() => {

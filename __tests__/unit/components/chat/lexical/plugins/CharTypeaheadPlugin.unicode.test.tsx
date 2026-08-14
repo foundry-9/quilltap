@@ -119,21 +119,26 @@ describe('CharTypeaheadPlugin — unicode profile', () => {
     global.fetch = realFetch
   })
 
-  function mount(extra?: React.ReactNode) {
+  function mount(extra?: React.ReactNode, chatSettings?: Record<string, boolean>) {
     harness = renderPluginEditor(
       <>
         <CharTypeaheadPlugin profile={UNICODE_PROFILE} />
         {extra}
       </>,
+      { chatSettings },
     )
     return harness.editor
   }
 
-  /** Let the TanStack settings query resolve so the flag is actually in effect. */
-  async function settleSettings() {
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
+  /**
+   * Mount with `composerUnicode` already off — seeded into the query cache so
+   * the flag is in effect on the FIRST render. The fetch stub answers with the
+   * same value, so the refetch that follows changes nothing; what it buys is
+   * that no assertion here depends on when that refetch lands.
+   */
+  function mountWithUnicodeOff() {
+    stubFetch({ settings: { composerUnicode: false } })
+    return mount(undefined, { composerUnicode: false })
   }
 
   /**
@@ -352,10 +357,8 @@ describe('CharTypeaheadPlugin — unicode profile', () => {
       expect(readText(editor)).toBe('\\to')
     })
 
-    it('is inert when composerUnicode is off — and never even fetches the dataset', async () => {
-      stubFetch({ settings: { composerUnicode: false } })
-      const editor = mount()
-      await settleSettings()
+    it('is inert when composerUnicode is off — and never even fetches the dataset', () => {
+      const editor = mountWithUnicodeOff()
 
       seedParagraph(editor, '\\to')
       const { defaultPrevented } = pressKey(editor, ' ')
@@ -384,9 +387,10 @@ describe('CharTypeaheadPlugin — unicode profile', () => {
      * Fetching from it would mean every instance downloads 300 KB the moment
      * anyone types a sentence.
      */
-    it('is NEVER fetched from the space bar', async () => {
-      const editor = mount()
-      await settleSettings()
+    it('is NEVER fetched from the space bar', () => {
+      // Seeded ON, so the space bar is being asked of a live feature — a
+      // disabled one would pass this trivially.
+      const editor = mount(undefined, { composerUnicode: true })
 
       seedParagraph(editor, 'no backslashes here')
       pressKey(editor, ' ')
@@ -453,10 +457,8 @@ describe('CharTypeaheadPlugin — unicode profile', () => {
       ).toEqual([ARROW])
     })
 
-    it('still works when composerUnicode is off — the flag governs only the `\\` trigger', async () => {
-      stubFetch({ settings: { composerUnicode: false } })
-      const editor = mount()
-      await settleSettings()
+    it('still works when composerUnicode is off — the flag governs only the `\\` trigger', () => {
+      const editor = mountWithUnicodeOff()
       seedParagraph(editor, 'hi ')
 
       act(() => {
