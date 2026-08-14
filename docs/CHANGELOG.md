@@ -4,6 +4,16 @@
 
 ### 4.9-dev
 
+### 4.8.4
+
+#### Fix: CI failed on a composer-typeahead test that raced the settings query
+
+The GitHub Actions test job went red on the last two runs, both times on the same assertion — `CharTypeaheadPlugin — emoji profile › bail conditions › is inert when composerEmoji is off — and never even fetches the dataset` expected 0 dataset fetches and got 1. It passed on every local run.
+
+The test was racing, not failing. `CharTypeaheadPlugin` reads its feature flag from the chat-settings query and falls back to enabled while that query is in flight, so a `:` typed before the settings land still warms the emoji dataset. The test tried to wait that window out with `await act(async () => new Promise(r => setTimeout(r, 0)))`. That wait cannot be relied on: TanStack Query schedules its notifications through `setTimeout(…, 0)` and React's async `act` drains its work loop through a `setImmediate`-class task, and the order those two fire in is the classic Node coin flip — decided by how busy the machine is. A loaded CI runner lost it; an idle laptop won it.
+
+The wait is gone. `renderPluginEditor` now takes a `chatSettings` option that seeds the settings query cache before mounting, so the flag is in effect on the first render and no timer is involved. Both typeahead suites (emoji and Unicode) use it for their flag-off cases; the Unicode suite's "never fetched from the space bar" test now seeds the flag *on*, where it previously passed even if the feature had been disabled. No production code changed.
+
 ### 4.8.3
 
 #### Fix: the version guard was silently inert since 2026-08-12 (bug 65)
