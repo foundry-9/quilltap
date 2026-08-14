@@ -193,6 +193,11 @@ const METHOD_OVERRIDES: Record<string, 'read' | 'write'> = {
   'tfidfVocabularies.upsertByProfileId': 'write',
   // help docs
   'helpDocs.clearAllEmbeddings': 'write',
+  // `replaceForDoc` is buffered whole and replayed by the parent, so its
+  // internal creates never run in the child. Its return (a row count) is the
+  // synthetic `undefined` — no caller may consume it. `deleteByDocId` and
+  // `deleteOrphaned` classify as writes from their prefix already.
+  'helpDocChunks.replaceForDoc': 'write',
   // llm logs
   'llmLogs.cleanupOldLogs': 'write',
   // vector indices

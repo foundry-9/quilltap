@@ -19,7 +19,7 @@ At the bottom of the left sidebar, you will find a **question-mark icon** --- th
 The **Guide** tab presents Quilltap's full documentation library as a browseable index, organised into sensible categories --- Characters, Chats, Projects, Settings, and so forth. No question need be formulated; simply browse, expand a category, and click any topic to read the guide in full, rendered handsomely right inside the dialog.
 
 - **Context-aware** --- The category most relevant to your current page is automatically expanded, so the pertinent topics are already waiting when you arrive
-- **Searchable** --- A search bar at the top filters topics by title, should you know what you are looking for but not where it lives
+- **Searchable** --- A search bar at the top hunts through the *text* of every guide, not merely their titles. Type `describe`, or `uncensored`, or any other term you recall reading, and the topics containing it rise to the surface with the matching phrase quoted beneath each one, so you may judge at a glance which is the guide you actually want. (Titles still count, and count for more: a topic named for your search sits at the top of the pile.)
 - **Welcome card** --- New arrivals (those with fewer than three chats to their name) are greeted with quick-start links to the most essential guides
 - **Navigable** --- "Open this page in Quilltap" buttons within guides take you directly to the relevant page; links to related topics open within the Guide itself
 

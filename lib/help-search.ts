@@ -111,6 +111,12 @@ export class HelpSearch {
 
     const literalPhrase = getLiteralPhrase(query)
 
+    // Section-level scores first. A whole-document vector for a long, broad
+    // page (chat-settings.md spans a dozen subsystems) is a smear that matches
+    // any specific question only weakly, so the best section's score stands in
+    // for the document wherever sections exist.
+    const bestSectionByDoc = await this.scoreSections(queryEmbedding)
+
     // Calculate similarity scores
     const results: HelpSearchResult[] = []
 
@@ -124,7 +130,13 @@ export class HelpSearch {
         continue
       }
 
-      const rawScore = cosineSimilarity(queryEmbedding, doc.embedding)
+      const docScore = cosineSimilarity(queryEmbedding, doc.embedding)
+      const best = bestSectionByDoc.get(doc.id)
+
+      // Take whichever vector spoke more strongly. The document's own score is
+      // kept in play so a doc that is *broadly* on-topic isn't buried by an
+      // unlucky slicing, and so docs with no chunks yet still rank at all.
+      const rawScore = best ? Math.max(docScore, best.score) : docScore
       const literalHit = literalPhrase
         ? containsLiteralPhrase(doc.title, literalPhrase) ||
           containsLiteralPhrase(doc.content, literalPhrase)
@@ -140,12 +152,65 @@ export class HelpSearch {
           content: doc.content,
         },
         score: literalHit ? applyLiteralBoost(rawScore) : rawScore,
+        ...(best && best.score >= docScore
+          ? {
+            matchedSection: {
+              heading: best.heading,
+              content: best.content,
+              chunkIndex: best.chunkIndex,
+            },
+          }
+          : {}),
       })
     }
 
     return results
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)
+  }
+
+  /**
+   * Score every embedded section chunk against the query and keep the best one
+   * per document.
+   *
+   * Dimension mismatches are skipped exactly as they are for documents — a
+   * chunk embedded under a previous profile is unusable rather than wrong.
+   * Any failure here is swallowed: section scoring is an improvement on
+   * whole-document search, not a precondition for it.
+   */
+  private async scoreSections(
+    queryEmbedding: Float32Array,
+  ): Promise<Map<string, { score: number; heading: string | null; content: string; chunkIndex: number }>> {
+    const best = new Map<string, { score: number; heading: string | null; content: string; chunkIndex: number }>()
+
+    try {
+      const repos = getRepositories()
+      const chunks = await repos.helpDocChunks.findAllWithEmbeddings()
+
+      for (const chunk of chunks) {
+        if (!chunk.embedding || chunk.embedding.length !== queryEmbedding.length) {
+          continue
+        }
+
+        const score = cosineSimilarity(queryEmbedding, chunk.embedding)
+        const current = best.get(chunk.docId)
+        if (!current || score > current.score) {
+          best.set(chunk.docId, {
+            score,
+            heading: chunk.heading ?? null,
+            content: chunk.content,
+            chunkIndex: chunk.chunkIndex,
+          })
+        }
+      }
+    } catch (error) {
+      logger.warn('Section-level help scoring failed; falling back to whole-document scores', {
+        context: 'help-search',
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+
+    return best
   }
 
   /**

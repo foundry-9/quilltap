@@ -142,7 +142,8 @@ The **Brahma Console** can also query these databases from inside a running inst
 ### Embedding BLOB format (all `embedding` columns)
 
 Every `embedding BLOB` column in every database (`memories`, `vector_entries`,
-`conversation_chunks`, `help_docs` in the main DB; `doc_mount_chunks` in the
+`conversation_chunks`, `help_docs`, `help_doc_chunks` in the main DB;
+`doc_mount_chunks` in the
 mount index) holds a **self-describing quantized vector** since
 `quantize-embeddings-v1` (v4.8.0). The single-source-of-truth codec is
 `lib/embedding/float32-conversion.ts`; consumers always see a hydrated
@@ -1001,7 +1002,39 @@ CREATE INDEX "idx_help_docs_url" ON "help_docs" ("url");
 | url | TEXT | URL route this doc is associated with (e.g., `/aurora`, `/settings?tab=chat`) |
 | content | TEXT | Full document content with frontmatter stripped |
 | contentHash | TEXT | SHA-256 hash of raw file content, used for change detection during sync |
-| embedding | BLOB (nullable) | Quantized embedding vector (see "Embedding BLOB format"), generated at runtime using user's embedding profile |
+| embedding | BLOB (nullable) | Quantized embedding vector (see "Embedding BLOB format"), generated at runtime using user's embedding profile. Whole-document granularity — the coarse signal; see `help_doc_chunks` for section granularity |
+| createdAt | TEXT (ISO 8601) | Creation timestamp |
+| updatedAt | TEXT (ISO 8601) | Last update timestamp |
+
+### help_doc_chunks
+
+Section-level slices of each help document, one row per chunk, so semantic search can match a *section* rather than only a whole page. A whole-document vector for a long, topically broad page (`help/chat-settings.md` covers a dozen subsystems) is a smear that matches any specific question only weakly. Rows are rebuilt from disk by the help-doc sync whenever a document's content hash changes, and their embeddings are filled by the same `HELP_DOC` background job that embeds the parent document — so a chunk can never carry a dimension its parent doesn't. Introduced in v4.9.0 (migration: `create-help-doc-chunks-table-v1`).
+
+```sql
+CREATE TABLE "help_doc_chunks" (
+  "id" TEXT PRIMARY KEY,
+  "docId" TEXT NOT NULL,
+  "chunkIndex" INTEGER NOT NULL,
+  "heading" TEXT,
+  "content" TEXT NOT NULL,
+  "embedding" BLOB,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL,
+  UNIQUE("docId", "chunkIndex"),
+  FOREIGN KEY ("docId") REFERENCES "help_docs"("id") ON DELETE CASCADE
+);
+
+CREATE INDEX "idx_help_doc_chunks_docId" ON "help_doc_chunks" ("docId");
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | TEXT (UUID) | Primary key |
+| docId | TEXT (UUID) | Owning `help_docs` row; cascade-deleted with it |
+| chunkIndex | INTEGER | 0-based position within the document |
+| heading | TEXT (nullable) | Nearest Markdown heading above the chunk, used as context when embedding and shown with a search hit |
+| content | TEXT | The chunk text; consecutive chunks overlap by design |
+| embedding | BLOB (nullable) | Quantized embedding vector (see "Embedding BLOB format"). NULL between a content change and the next `HELP_DOC` embedding job |
 | createdAt | TEXT (ISO 8601) | Creation timestamp |
 | updatedAt | TEXT (ISO 8601) | Last update timestamp |
 

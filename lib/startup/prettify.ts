@@ -64,6 +64,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'create-instance-settings-table-v1': 'Opening the instance ledger',
   'create-conversation-tables-v1': 'Setting up the conversation registry',
   'create-help-docs-table-v1': 'Stocking the help library',
+  'create-help-doc-chunks-table-v1': 'Slipping bookmarks between the chapters of the help library',
   'create-character-plugin-data-table-v1': 'Filing per-plugin character notes',
   'create-outfit-presets-and-archive-v1': 'Cataloguing the outfit presets',
   'add-llm-logs-collection-v1': 'Opening the LLM logbook',

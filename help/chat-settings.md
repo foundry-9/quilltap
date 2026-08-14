@@ -285,11 +285,12 @@ Configure a fallback LLM for lower-cost operations. Quilltap can use a cheaper m
 - **Enable Cheap LLM** — Toggle this feature on/off
 - **Cheap LLM Profile** — Select which connection profile to use for cheaper operations
 - **Operations** — Controls which operations use the cheap profile:
-  - Image descriptions
   - Summary generation
   - Memory indexing
   - Title generation for chats
   - Other low-complexity tasks
+
+Image description is *not* among them, though it is thrifty by disposition: it never consults this setting, and instead prefers a profile marked **Cheap** when it has to choose a describer for itself. Name a profile in [Image Description Settings](#image-description-settings) and that choice governs, cheap or dear.
 
 **How to configure:**
 
@@ -311,33 +312,38 @@ Configure a fallback LLM for lower-cost operations. Quilltap can use a cheaper m
 
 ### Image Description Settings
 
-Configure which service generates automatic descriptions for images in chats.
+Not every model has eyes. When you attach a photograph to a conversation whose model cannot see — an Ollama text model, an OpenRouter profile pointed at something wordy but sightless — Quilltap does not simply shrug and drop the picture on the floor. It engages a second model, one that *can* see, to **describe** the image in prose, and hands that description to your correspondent in the picture's place. The conversation proceeds as though you had described the thing yourself, at length, without once being asked to.
+
+These settings govern which model is called upon to do the describing.
+
+**When this happens at all:** only when the profile answering the message has its **Supports image attachments (vision input)** checkbox *unticked* (see [Connection Profiles](connection-profiles.md)). A profile with the box ticked receives the image itself and no describer is troubled. That checkbox — not the provider's name on the door — is the whole of how Quilltap decides who can see.
 
 **Setting Options:**
 
-- **Image Description Provider** — Select which profile to use:
-  - Choose from available connection profiles
-  - Or disable image descriptions entirely
-  - Profiles may require specific provider support
+- **Primary image description profile** — the model that describes your images. Only profiles with the vision checkbox ticked appear in the list. Leaving it on **Auto-select vision-capable profile** does *not* disable descriptions; it lets Quilltap choose for you, preferring a profile you have marked **Cheap** and otherwise taking the first sighted profile it finds. Since the choice is then somewhat arbitrary, naming one explicitly is the wiser course.
+- **Uncensored fallback profile** — optional, and consulted only when the primary refuses the commission or returns something unusable. A more permissive model is the usual choice: a local Ollama LLaVA variant, an uncensored model by way of OpenRouter. Left blank, there is no second attempt, and a refusal stands as a refusal. Unlike the primary, this one is **never** auto-selected; if you have not named it, it does not exist.
 
 **How to configure:**
 
-1. Select a connection profile that supports vision/image analysis
-2. This profile is used whenever an image needs a description
-3. Descriptions appear automatically when images are shared
+1. Tick **Supports image attachments (vision input)** on at least one connection profile whose model can actually read pictures — otherwise both dropdowns will be empty.
+2. Select that profile as your **primary**. Small, quick, inexpensive models do this job admirably: `gpt-4o-mini`, `claude-haiku-4-5`, `gemini-2.0-flash`. Reasoning models are a poor fit — slow, dear, and inclined to spend their whole allowance thinking rather than answering.
+3. Optionally name an **uncensored fallback**, if your chats venture where a well-mannered describer will decline to follow.
 
 **What happens:**
 
-- When an image is attached to a chat message, Quilltap automatically generates a description
-- The description helps the AI understand the image context
-- Descriptions are cached to save on API usage
-- For portraits and scenes conjured by the establishment's own hand — a character's avatar, a story backdrop, an image summoned by the tools — no describer is troubled at all: the very prompt that painted the picture is kept on file and read back verbatim, instantly and without charge. The vision profile is consulted only for pictures of unknown provenance, such as an image you upload yourself.
+- For portraits and scenes conjured by the establishment's own hand — a character's avatar, a story backdrop, an image summoned by the tools — no describer is troubled at all: the very prompt that painted the picture is kept on file and read back verbatim, instantly and without charge. The same courtesy extends to any uploaded image that already carries a description on its file record.
+- Failing that, the primary profile is sent the image with an instruction to describe it in thorough detail — every visible element, colour, composition, mood, and scrap of text.
+- The resulting description is inserted into the message as plain words, plainly labelled as an AI's description of an attachment. Your correspondent reads about the picture; it does not see it.
+- Should the primary refuse — or return an empty answer, or something so terse and hedged that it reads as a refusal ("I cannot…", "unable to…") — the uncensored fallback, if you have named one, is given its turn. If both decline, the message explains as much rather than pretending the attachment never arrived.
+- Every consultation is entered in the LLM logs as an **IMAGE_DESCRIPTION** call, so its cost, its latency, and its refusals are all a matter of record.
 - Should a describer prove sluggish, the consultation is abandoned after a minute so a single slow portrait can never hold your correspondent's reply hostage.
+
+**Elsewhere in the house:** the primary profile is also the model consulted by the wardrobe's image analyser (see [Wardrobe](wardrobe.md)) and Aurora's *Describe from image* step. Those features prefer a *more* capable model when left to choose for themselves, on the reasoning that reading a garment's cut from a photograph is finer work than summarising a snapshot.
 
 **Prerequisites:**
 
-- Connection profile must support image/vision capabilities
-- Not all models support vision — check your profile settings
+- At least one connection profile with **Supports image attachments (vision input)** ticked, and a working API key for it
+- The describing model must genuinely accept images; ticking the box on a model that cannot see produces empty answers rather than descriptions
 
 ### Memory Cascade Settings
 
@@ -697,14 +703,16 @@ Most settings save automatically as you make changes. You'll see:
 - Only certain operations use cheap profile
 - Chat messages always use main profile
 
-### Image descriptions missing
+### Image descriptions missing, refused, or wrong
 
 **Solution:**
 
-- Verify image description provider is configured
-- Check that profile supports vision/images
-- Some providers don't support vision
-- Try updating to a newer model that supports vision
+- Confirm at least one connection profile has **Supports image attachments (vision input)** ticked — with none, the describer dropdowns are empty and no description can be produced
+- Confirm that profile's model can genuinely read images; a ticked box on a sightless model yields an empty answer, which Quilltap reports rather than passes off as a description
+- If the description reads like a polite refusal, name an **uncensored fallback profile** — without one, a refusal is final
+- If descriptions appear for uploads but a Quilltap-generated image seems described oddly, remember that generated images are described by the prompt that painted them rather than by any describer
+- If nothing appears and no error does either, check the LLM logs for an **IMAGE_DESCRIPTION** entry: a minute-long call that ends in a timeout means the describing model is too slow for inline duty
+- Reasoning models (`o1`, `o3`, `gpt-5`, and kin) make poor describers — they spend their tokens thinking. Prefer `gpt-4o-mini`, `claude-haiku-4-5`, or `gemini-2.0-flash`
 
 ## In-Chat Settings Access
 

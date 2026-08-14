@@ -11,6 +11,7 @@ import { EMBEDDING_MAX_CHARS, generateEmbeddingForUser } from '@/lib/embedding/e
 import { getVectorStoreManager } from '@/lib/embedding/vector-store';
 import { getVectorIndicesRepository } from '@/lib/database/repositories/vector-indices.repository';
 import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
+import { helpChunkEmbeddingText } from '@/lib/help/help-doc-chunking';
 import { logger } from '@/lib/logger';
 import type { EmbeddingGeneratePayload } from '../queue-service';
 
@@ -320,9 +321,79 @@ async function handleConversationChunkEmbedding(
 }
 
 /**
+ * Embed every section chunk of a help document that still lacks a vector.
+ *
+ * Chunks that already carry an embedding are skipped, which makes a retry of
+ * a partially-completed job cheap: the rows are recreated with null embeddings
+ * whenever the doc's content changes, and a full reindex clears them, so a
+ * populated embedding is always current for its text.
+ *
+ * A single chunk's failure is logged and skipped rather than thrown. The
+ * document's own embedding has already been stored by the caller, so the doc
+ * stays findable at whole-document granularity; throwing here would fail a job
+ * whose main work succeeded, and the next sync or reindex will retry the
+ * stragglers.
+ *
+ * @returns the number of chunks embedded on this pass
+ */
+async function embedHelpDocChunks(
+  job: BackgroundJob,
+  payload: EmbeddingGeneratePayload,
+  repos: ReturnType<typeof getRepositories>,
+  doc: { id: string; title: string }
+): Promise<number> {
+  let embedded = 0;
+
+  try {
+    const chunks = await repos.helpDocChunks.findByDocId(doc.id);
+
+    for (const chunk of chunks) {
+      if (chunk.embedding && chunk.embedding.length > 0) {
+        continue;
+      }
+
+      const text = helpChunkEmbeddingText(doc.title, chunk.heading, chunk.content);
+      if (text.trim().length === 0) {
+        continue;
+      }
+
+      try {
+        const result = await generateEmbeddingForUser(
+          text,
+          job.userId,
+          payload.profileId,
+          { priority: 'background' }
+        );
+        await repos.helpDocChunks.updateEmbedding(chunk.id, result.embedding);
+        embedded++;
+      } catch (error) {
+        logger.warn('[EmbeddingGenerate] Help doc chunk embedding failed — skipping chunk', {
+          context: 'handleEmbeddingGenerate',
+          jobId: job.id,
+          docId: doc.id,
+          chunkId: chunk.id,
+          chunkIndex: chunk.chunkIndex,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  } catch (error) {
+    logger.warn('[EmbeddingGenerate] Could not embed help doc chunks', {
+      context: 'handleEmbeddingGenerate',
+      jobId: job.id,
+      docId: doc.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  return embedded;
+}
+
+/**
  * Handle embedding generation for a help document.
  * Uses the same embedding infrastructure as memories but stores
- * the embedding directly on the help doc row (Float32 BLOB, same format).
+ * the embedding directly on the help doc row (Float32 BLOB, same format),
+ * then fills in the per-section chunk vectors.
  */
 async function handleHelpDocEmbedding(
   job: BackgroundJob,
@@ -363,6 +434,14 @@ async function handleHelpDocEmbedding(
 
     await repos.helpDocs.updateEmbedding(doc.id, embeddingResult.embedding);
 
+    // Section-level vectors, in the same job as the whole-document one. Doing
+    // it here rather than through a HELP_DOC_CHUNK entity type of its own
+    // keeps one unit of work per document: the reindex enqueue, the
+    // embedding_status bookkeeping, and the dimension reconcile all continue
+    // to count help_docs rows, and chunks can never carry a dimension the
+    // parent doc doesn't — they are always written together.
+    const chunksEmbedded = await embedHelpDocChunks(job, payload, repos, doc);
+
     await repos.embeddingStatus.markAsEmbedded(
       'HELP_DOC',
       payload.entityId,
@@ -376,6 +455,7 @@ async function handleHelpDocEmbedding(
       docId: doc.id,
       title: doc.title,
       dimensions: embeddingResult.dimensions,
+      chunksEmbedded,
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

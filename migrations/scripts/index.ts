@@ -371,6 +371,7 @@ import { addLLMLogsProfileColumnsMigration } from './add-llm-logs-profile-column
 import { addComposerEmojiFieldMigration } from './add-composer-emoji-field';
 import { addComposerUnicodeFieldMigration } from './add-composer-unicode-field';
 import { addSmartTypographySettingsFieldMigration } from './add-smart-typography-settings-field';
+import { createHelpDocChunksTableMigration } from './create-help-doc-chunks-table';
 
 /**
  * All available migrations.
@@ -741,6 +742,8 @@ export const migrations: Migration[] = [
   addComposerUnicodeFieldMigration,
   // Layer 1.6 smart typography: smartTypographySettings JSON column on chat_settings
   addSmartTypographySettingsFieldMigration,
+  // Section-level help search: help_doc_chunks table
+  createHelpDocChunksTableMigration,
 ];
 
 export {
@@ -1090,5 +1093,7 @@ export {
   addComposerUnicodeFieldMigration,
   // Layer 1.6 smart typography: smartTypographySettings JSON column on chat_settings
   addSmartTypographySettingsFieldMigration,
+  // Section-level help search: help_doc_chunks table
+  createHelpDocChunksTableMigration,
 };
 

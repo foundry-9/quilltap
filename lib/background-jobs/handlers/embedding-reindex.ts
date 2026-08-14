@@ -183,6 +183,10 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
     // help search.
     if (scope === 'all') {
       await repos.helpDocs.clearAllEmbeddings();
+      // Section vectors are written by the same HELP_DOC job as the
+      // whole-document one, so they clear together — otherwise the re-embed
+      // pass would skip every chunk that still had a (stale-profile) vector.
+      await repos.helpDocChunks.clearAllEmbeddings();
     }
 
     const failedHelpDocIds = await failedIdsFor('HELP_DOC');

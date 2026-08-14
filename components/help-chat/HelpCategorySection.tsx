@@ -15,6 +15,12 @@ interface HelpCategorySectionProps {
   currentPageUrl: string
   defaultExpanded?: boolean
   forceExpanded?: boolean
+  /**
+   * slug → matching excerpt, for documents the current search matched on their
+   * text rather than their title. Without it a topic appears in the results
+   * with nothing on screen explaining why.
+   */
+  snippets?: Map<string, string | null> | null
   onSelectTopic: (docId: string) => void
 }
 
@@ -56,6 +62,7 @@ export function HelpCategorySection({
   currentPageUrl,
   defaultExpanded = false,
   forceExpanded = false,
+  snippets = null,
   onSelectTopic,
 }: HelpCategorySectionProps) {
   const { isOpen: isExpanded, setOpen, toggle } = useOpenState(defaultExpanded || forceExpanded)
@@ -100,14 +107,23 @@ export function HelpCategorySection({
         <div className="qt-help-guide-category-topics">
           {sortedDocs.map((doc) => {
             const isActive = currentPageUrl === doc.url || currentPageUrl.startsWith(doc.url + '/')
+            const snippet = snippets?.get(doc.id)
             return (
               <button
                 key={doc.id}
                 type="button"
                 onClick={() => onSelectTopic(doc.id)}
-                className={`qt-help-guide-topic ${isActive ? 'qt-help-guide-topic-active' : ''}`}
+                className={`qt-help-guide-topic ${isActive ? 'qt-help-guide-topic-active' : ''} ${snippet ? 'whitespace-normal' : ''}`}
               >
                 {doc.title}
+                {snippet && (
+                  <span
+                    className="block text-xs mt-0.5 truncate"
+                    style={{ color: 'var(--deco-fg-muted)' }}
+                  >
+                    {snippet}
+                  </span>
+                )}
               </button>
             )
           })}

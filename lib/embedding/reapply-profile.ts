@@ -15,6 +15,7 @@
  *   - vector_entries           (main DB)
  *   - conversation_chunks      (main DB)
  *   - help_docs                (main DB)
+ *   - help_doc_chunks          (main DB)
  *   - doc_mount_chunks         (mount index DB)
  *
  * Rules:
@@ -43,7 +44,7 @@ import type { EmbeddingProfile } from '@/lib/schemas/types'
 const FLUSH_BATCH = 500
 const ZERO_MAG = 1e-10
 
-const MAIN_DB_TABLES = ['memories', 'vector_entries', 'conversation_chunks', 'help_docs'] as const
+const MAIN_DB_TABLES = ['memories', 'vector_entries', 'conversation_chunks', 'help_docs', 'help_doc_chunks'] as const
 
 function requireMainDatabase(): DatabaseType {
   const db = getRawDatabase()

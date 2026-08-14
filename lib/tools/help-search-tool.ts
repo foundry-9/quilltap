@@ -51,6 +51,15 @@ export interface HelpSearchResult {
   url: string
   score: number
   content: string
+  /**
+   * The section of the document that actually matched, when the match came
+   * from a section vector rather than the whole-document one. Absent for
+   * keyword results and for docs with no embedded sections.
+   */
+  matchedSection?: {
+    heading: string | null
+    content: string
+  }
 }
 
 /**
