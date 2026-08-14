@@ -34,7 +34,9 @@ import {
   type LexicalEditor,
 } from 'lexical'
 
-import { renderWithQuery } from './renderWithQuery'
+import { queryKeys } from '@/lib/query/keys'
+
+import { createTestQueryClient, renderWithQuery } from './renderWithQuery'
 
 export const HARNESS_NODES = [
   HeadingNode,
@@ -54,8 +56,32 @@ export interface PluginHarness {
   unmount: () => void
 }
 
-export function renderPluginEditor(plugin: ReactNode): PluginHarness {
+export interface RenderPluginEditorOptions {
+  /**
+   * Chat settings the composer plugins should see FROM THE FIRST RENDER.
+   *
+   * Every one of these plugins reads its feature flag through the same
+   * `queryKeys.settings.chat` query and falls back to "on" while that query is
+   * in flight. Waiting for the fetch to land is a race nobody can win reliably:
+   * TanStack Query notifies through `setTimeout(…, 0)`, React's async `act`
+   * drains its work loop through a `setImmediate`-class task, and which of the
+   * two runs first is a coin flip the CI runner loses under load. Seeding the
+   * cache instead means the flag is simply true on the first render — no timers,
+   * no flake. Tests that want the "still loading" default just omit this.
+   */
+  chatSettings?: Record<string, boolean>
+}
+
+export function renderPluginEditor(
+  plugin: ReactNode,
+  options: RenderPluginEditorOptions = {},
+): PluginHarness {
   let captured: LexicalEditor | null = null
+
+  const queryClient = createTestQueryClient()
+  if (options.chatSettings) {
+    queryClient.setQueryData(queryKeys.settings.chat, options.chatSettings)
+  }
 
   function CaptureEditor() {
     const [editor] = useLexicalComposerContext()
@@ -81,6 +107,7 @@ export function renderPluginEditor(plugin: ReactNode): PluginHarness {
       <CaptureEditor />
       {plugin}
     </LexicalComposer>,
+    { queryClient },
   )
 
   if (!captured) throw new Error('Lexical editor was not captured')
