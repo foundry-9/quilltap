@@ -148,6 +148,13 @@ exports[`Provider options schemas Ollama exposes an options schema 1`] = `
           "label": "Enable Thinking",
           "type": "boolean",
         },
+        {
+          "default": 300,
+          "helpText": "How long to wait for the server before giving up (default 300). While streaming this covers only the wait for the first token, so a long answer is never cut off mid-sentence — but loading a large model and reading a long prompt both happen before that first token. Raise it if big models on a busy machine abort with "operation was aborted"; lower it if you would rather a stalled server fail quickly. Leave blank for the default.",
+          "key": "request_timeout_seconds",
+          "label": "Request Timeout (seconds)",
+          "type": "number",
+        },
       ],
       "title": "Ollama Options",
     },

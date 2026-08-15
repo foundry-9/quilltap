@@ -14,6 +14,7 @@ import { getErrorMessage } from '@/lib/error-utils'
 
 import type { ConnectionProfile } from '@/lib/schemas/types'
 import { profileParams } from '@/lib/llm/cheap-llm'
+import { resolveSamplingParams } from '@/lib/llm/sampling-params'
 import type { FileAttachment } from '@/lib/llm/base'
 import { logger } from '@/lib/logger'
 
@@ -235,9 +236,10 @@ async function describeImageWithProfile(
 
     // Get parameters from profile, with sensible defaults for description task
     const modelParams = profileParams(imageDescProfile) ?? {}
-    const temperature = typeof modelParams.temperature === 'number' ? modelParams.temperature : 0.7
-    let maxTokens = typeof modelParams.max_tokens === 'number' ? modelParams.max_tokens : 1000
-    const topP = typeof modelParams.top_p === 'number' ? modelParams.top_p : undefined
+    const sampling = resolveSamplingParams(modelParams)
+    const temperature = sampling.temperature ?? 0.7
+    let maxTokens = sampling.maxTokens ?? 1000
+    const topP = sampling.topP
 
     // Detect reasoning models (o1, o3, gpt-5) which need more tokens
     // They use internal reasoning tokens that don't appear in output

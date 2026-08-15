@@ -13,6 +13,7 @@ import { logLLMCall } from '@/lib/services/llm-logging.service'
 import { normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
 import { computeRequestPrefixHashes } from '@/lib/llm/cache-prefix-hashes'
 import { buildCharacterCacheKey } from '@/lib/llm/cache-key'
+import { resolveSamplingParams } from '@/lib/llm/sampling-params'
 import { extractFinishReason } from '@/lib/llm/extract-finish-reason'
 import { resolveCustomToolRoster, type RosterContext, type DiscoveredCustomTool } from '@/lib/pascal/custom-tools'
 import type { ConnectionProfile, ImageProfile, MessageEvent } from '@/lib/schemas/types'
@@ -387,14 +388,15 @@ export async function* streamMessage(
   let lastRawProviderUsage: Record<string, unknown> | null = null
 
   const cacheKey = buildCharacterCacheKey(characterId)
+  const sampling = resolveSamplingParams(modelParams)
 
   for await (const chunk of provider.streamMessage(
     {
       messages: llmMessages,
       model: connectionProfile.modelName,
-      temperature: modelParams.temperature as number | undefined,
-      maxTokens: modelParams.maxTokens as number | undefined,
-      topP: modelParams.topP as number | undefined,
+      temperature: sampling.temperature,
+      maxTokens: sampling.maxTokens,
+      topP: sampling.topP,
       tools: tools.length > 0 ? tools : undefined,
       webSearchEnabled: useNativeWebSearch,
       profileParameters: modelParams,
@@ -454,8 +456,8 @@ export async function* streamMessage(
               content: m.content,
               attachments: m.attachments,
             })),
-            temperature: modelParams.temperature as number | undefined,
-            maxTokens: modelParams.maxTokens as number | undefined,
+            temperature: sampling.temperature,
+            maxTokens: sampling.maxTokens,
             tools: tools.length > 0 ? tools : undefined,
           },
           response: {
@@ -487,13 +489,14 @@ export function encodeDebugInfo(
   debugInfo: StreamDebugInfo
 ): Uint8Array {
   const { builtContext, connectionProfile, modelParams, messages, tools } = debugInfo
+  const sampling = resolveSamplingParams(modelParams)
 
   const llmRequestDetails = {
     provider: connectionProfile.provider,
     model: connectionProfile.modelName,
-    temperature: modelParams.temperature,
-    maxTokens: modelParams.maxTokens,
-    topP: modelParams.topP,
+    temperature: sampling.temperature,
+    maxTokens: sampling.maxTokens,
+    topP: sampling.topP,
     messageCount: messages.length,
     hasTools: tools.length > 0,
     tools: tools.length > 0 ? tools : undefined,

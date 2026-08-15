@@ -11,7 +11,7 @@
  */
 
 import type { TextProviderPlugin, EmbeddingModelInfo, ProviderOptionsSchema } from './types';
-import { OllamaProvider } from './provider';
+import { DEFAULT_REQUEST_TIMEOUT_SECONDS, OllamaProvider } from './provider';
 import { OllamaEmbeddingProvider } from './embedding-provider';
 import {
   createPluginLogger,
@@ -92,9 +92,10 @@ const cheapModels = {
 
 /**
  * Connection-profile options schema rendered by the Quilltap host.
- * `enable_thinking` is stored in the profile's `parameters` blob and read
- * back by the provider off `LLMParams.profileParameters` at call time,
- * where it becomes Ollama's top-level `think` request parameter.
+ * Both keys are stored in the profile's `parameters` blob and read back by the
+ * provider off `LLMParams.profileParameters` at call time: `enable_thinking`
+ * becomes Ollama's top-level `think` request parameter, and
+ * `request_timeout_seconds` sets how long the provider waits on the endpoint.
  */
 const optionsSchema: ProviderOptionsSchema = {
   groups: [
@@ -111,6 +112,18 @@ const optionsSchema: ProviderOptionsSchema = {
             'Reasoning streams into the thinking display rather than the reply. When off (the default), ' +
             'the model is asked to answer directly — best when you need clean output such as JSON. ' +
             'Either way, any <think> blocks that leak into the reply are routed to the thinking display.',
+        },
+        {
+          key: 'request_timeout_seconds',
+          label: 'Request Timeout (seconds)',
+          type: 'number',
+          default: DEFAULT_REQUEST_TIMEOUT_SECONDS,
+          helpText:
+            `How long to wait for the server before giving up (default ${DEFAULT_REQUEST_TIMEOUT_SECONDS}). ` +
+            'While streaming this covers only the wait for the first token, so a long answer is never cut ' +
+            'off mid-sentence — but loading a large model and reading a long prompt both happen before that ' +
+            'first token. Raise it if big models on a busy machine abort with "operation was aborted"; ' +
+            'lower it if you would rather a stalled server fail quickly. Leave blank for the default.',
         },
       ],
     },

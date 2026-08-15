@@ -11218,6 +11218,12 @@ function resolveEnableThinking(params) {
   const value = params.profileParameters?.enable_thinking;
   return value === true || value === "true";
 }
+var DEFAULT_REQUEST_TIMEOUT_SECONDS = 300;
+function resolveProfileTimeoutMs(params) {
+  const value = params.profileParameters?.request_timeout_seconds;
+  const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  return Number.isFinite(n) && n > 0 ? n * 1e3 : DEFAULT_REQUEST_TIMEOUT_SECONDS * 1e3;
+}
 function isThinkRejection(errorText) {
   return /think/i.test(errorText);
 }
@@ -11310,7 +11316,7 @@ var OllamaProvider = class {
         // Non-streaming: the whole exchange is one JSON blob, so bounding the
         // entire request is right. A local endpoint that stops answering — a
         // model still loading, a crashed runner — fails instead of hanging.
-        signal: buildRequestAbortSignal(params)
+        signal: buildRequestAbortSignal(params, resolveProfileTimeoutMs(params))
       });
       let response = await doFetch();
       if (!response.ok) {
@@ -11418,7 +11424,7 @@ var OllamaProvider = class {
         const controller = new AbortController();
         const firstByteTimer = setTimeout(
           () => controller.abort(),
-          resolveRequestTimeoutMs(params)
+          resolveRequestTimeoutMs(params, resolveProfileTimeoutMs(params))
         );
         try {
           return await fetch(`${this.baseUrl}/api/chat`, {
@@ -12297,6 +12303,13 @@ var optionsSchema = {
           type: "boolean",
           default: false,
           helpText: "Let thinking-capable models (Qwen3, DeepSeek-R1, and kin) reason before answering. Reasoning streams into the thinking display rather than the reply. When off (the default), the model is asked to answer directly \u2014 best when you need clean output such as JSON. Either way, any <think> blocks that leak into the reply are routed to the thinking display."
+        },
+        {
+          key: "request_timeout_seconds",
+          label: "Request Timeout (seconds)",
+          type: "number",
+          default: DEFAULT_REQUEST_TIMEOUT_SECONDS,
+          helpText: `How long to wait for the server before giving up (default ${DEFAULT_REQUEST_TIMEOUT_SECONDS}). While streaming this covers only the wait for the first token, so a long answer is never cut off mid-sentence \u2014 but loading a large model and reading a long prompt both happen before that first token. Raise it if big models on a busy machine abort with "operation was aborted"; lower it if you would rather a stalled server fail quickly. Leave blank for the default.`
         }
       ]
     }

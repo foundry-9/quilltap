@@ -19,6 +19,7 @@
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { createLLMProvider } from '@/lib/llm'
 import { profileParams } from '@/lib/llm/cheap-llm'
+import { resolveSamplingParams } from '@/lib/llm/sampling-params'
 import { deleteMemoriesBySourceMessageWithVectors } from '@/lib/memory/memory-service'
 import {
   resolveRespondingParticipant,
@@ -144,9 +145,7 @@ export async function regenerateMessageAsSwipe({
         toolCalls: m.toolCalls,
       })),
       model: connectionProfile.modelName,
-      temperature: params.temperature as number | undefined,
-      maxTokens: params.max_tokens as number | undefined,
-      topP: params.top_p as number | undefined,
+      ...resolveSamplingParams(params),
       profileParameters: params,
       cacheKey: character.id,
     },

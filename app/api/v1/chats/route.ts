@@ -15,6 +15,7 @@ import { combineScenarioText } from '@/lib/chat/scenario-text';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { generateGreetingMessage } from '@/lib/chat/initial-greeting';
 import { profileParams } from '@/lib/llm/cheap-llm';
+import { resolveSamplingParams } from '@/lib/llm/sampling-params';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { resolveProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service';
 import { buildFirstMessageContext } from '@/lib/chat/first-message-context';
@@ -686,14 +687,7 @@ async function autoGenerateFirstMessage(
     characterId: context.character.id,
   };
 
-  const extractNumber = (value: unknown): number | undefined => {
-    if (typeof value === 'number' && !Number.isNaN(value)) return value;
-    if (typeof value === 'string') {
-      const parsed = Number(value);
-      return Number.isNaN(parsed) ? undefined : parsed;
-    }
-    return undefined;
-  };
+  const sampling = resolveSamplingParams(parameters);
 
   const baseParams = {
     systemPrompt: context.systemPrompt,
@@ -702,9 +696,7 @@ async function autoGenerateFirstMessage(
     modelName: connectionProfile.modelName,
     baseUrl: connectionProfile.baseUrl,
     apiKey,
-    temperature: extractNumber(parameters.temperature),
-    maxTokens: extractNumber(parameters.maxTokens),
-    topP: extractNumber(parameters.topP),
+    ...sampling,
     // Forward the character's profile parameters so per-model settings like
     // DeepSeek thinking mode take effect on the greeting too.
     profileParameters: profileParams(connectionProfile),
@@ -793,7 +785,10 @@ async function autoGenerateFirstMessage(
           });
 
           const uncensoredParams = routeResult.connectionProfile.parameters as Record<string, unknown> | undefined;
-          const uncensoredParameters = uncensoredParams ?? {};
+          // Each knob falls back to the character's own profile independently,
+          // so an uncensored profile that only sets a temperature still borrows
+          // the original's Max Tokens and Top P.
+          const uncensoredSampling = resolveSamplingParams(uncensoredParams ?? {});
 
           const result = await generateGreetingMessage({
             ...loggingFields,
@@ -803,9 +798,9 @@ async function autoGenerateFirstMessage(
             modelName: routeResult.connectionProfile.modelName,
             baseUrl: routeResult.connectionProfile.baseUrl,
             apiKey: routeResult.apiKey,
-            temperature: extractNumber(uncensoredParameters.temperature) ?? extractNumber(parameters.temperature),
-            maxTokens: extractNumber(uncensoredParameters.maxTokens) ?? extractNumber(parameters.maxTokens),
-            topP: extractNumber(uncensoredParameters.topP) ?? extractNumber(parameters.topP),
+            temperature: uncensoredSampling.temperature ?? sampling.temperature,
+            maxTokens: uncensoredSampling.maxTokens ?? sampling.maxTokens,
+            topP: uncensoredSampling.topP ?? sampling.topP,
             participantMemories: participantMemories.length > 0 ? participantMemories : undefined,
             projectContext,
             recentConversationsBlock: recentConversationsBlock || undefined,

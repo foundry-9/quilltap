@@ -23,6 +23,30 @@ function resolveEnableThinking(params: LLMParams): boolean {
 }
 
 /**
+ * Default wait, in seconds, when the profile names none. Matches
+ * `DEFAULT_REQUEST_TIMEOUT_MS` in @quilltap/plugin-utils — restated here in the
+ * unit the profile field uses, and exported so the options schema in index.ts
+ * advertises the same number the provider actually applies.
+ */
+export const DEFAULT_REQUEST_TIMEOUT_SECONDS = 300;
+
+/**
+ * Resolve the profile's `request_timeout_seconds` option (see
+ * getProviderOptionsSchema in index.ts) into milliseconds.
+ *
+ * A local Ollama has no fixed answer to "how long should this take": loading a
+ * 27B model off disk and reading a 20k-token prompt can outlast the shared
+ * 5-minute default on a busy machine, while a small model on a quiet one should
+ * fail fast. The number is therefore the user's, per connection profile.
+ * Anything absent, unparseable or non-positive falls through to the default.
+ */
+function resolveProfileTimeoutMs(params: LLMParams): number {
+  const value = params.profileParameters?.request_timeout_seconds;
+  const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  return Number.isFinite(n) && n > 0 ? n * 1000 : DEFAULT_REQUEST_TIMEOUT_SECONDS * 1000;
+}
+
+/**
  * Whether an Ollama error body is complaining about the `think` request
  * parameter — e.g. `"<model> does not support thinking"` on models whose
  * template Ollama can't drive either way. The caller retries once without
@@ -150,7 +174,7 @@ export class OllamaProvider implements TextProvider {
           // Non-streaming: the whole exchange is one JSON blob, so bounding the
           // entire request is right. A local endpoint that stops answering — a
           // model still loading, a crashed runner — fails instead of hanging.
-          signal: buildRequestAbortSignal(params),
+          signal: buildRequestAbortSignal(params, resolveProfileTimeoutMs(params)),
         });
 
       let response = await doFetch();
@@ -280,11 +304,15 @@ export class OllamaProvider implements TextProvider {
       // exchange would cut off a long generation mid-answer, so the timer is
       // cleared once the response headers land and the body streams unbounded
       // — the same semantics the OpenAI SDK applies to its own timeout.
+      //
+      // Model load and prompt eval both land inside this window, which is why
+      // the budget is the profile's to set: a large model on a long context can
+      // sit silent for minutes before the first token without being stuck.
       const openStream = async (): Promise<Response> => {
         const controller = new AbortController();
         const firstByteTimer = setTimeout(
           () => controller.abort(),
-          resolveRequestTimeoutMs(params)
+          resolveRequestTimeoutMs(params, resolveProfileTimeoutMs(params))
         );
         try {
           return await fetch(`${this.baseUrl}/api/chat`, {
