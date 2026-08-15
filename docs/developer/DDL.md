@@ -835,7 +835,14 @@ CREATE TABLE "connection_profiles" (
   "supportsImageUpload" INTEGER DEFAULT 0,
   "transport" TEXT NOT NULL DEFAULT 'api',
   "courierDeltaMode" INTEGER DEFAULT 1,
-  "pseudoToolMode" TEXT DEFAULT 'auto'
+  "pseudoToolMode" TEXT DEFAULT 'auto',
+  -- Multi-character turn anchor. 1 = prefill an assistant "[Name]" message;
+  -- 0 = append a prose instruction to the system prompt instead. NULL means
+  -- never chosen (rows older than the migration, or imported from a pre-4.9
+  -- bundle) and resolves to the provider default — off for Anthropic, on
+  -- elsewhere. Read it only through profileUsesNamePrefill()
+  -- (lib/llm/multi-character-prefill.ts).
+  "multiCharacterPrefill" INTEGER DEFAULT 1
 );
 
 CREATE INDEX "idx_connection_profiles_createdAt" ON "connection_profiles" ("createdAt" DESC);

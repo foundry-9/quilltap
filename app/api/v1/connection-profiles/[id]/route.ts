@@ -122,6 +122,7 @@ export const PUT = createContextParamsHandler<{ id: string }>(
         maxContext,
         sortIndex,
         supportsImageUpload,
+        multiCharacterPrefill,
       } = body;
 
       // Build update data
@@ -280,6 +281,16 @@ export const PUT = createContextParamsHandler<{ id: string }>(
           return badRequest('pseudoToolMode must be one of auto, native, simple-json, text-block');
         }
         updateData.pseudoToolMode = pseudoToolMode;
+      }
+
+      // Whether multi-character turns are anchored with the assistant "[Name]"
+      // prefill. Applies to every transport — the Courier renders the same
+      // assembled context for the user to carry by hand.
+      if (multiCharacterPrefill !== undefined) {
+        if (typeof multiCharacterPrefill !== 'boolean') {
+          return badRequest('multiCharacterPrefill must be a boolean');
+        }
+        updateData.multiCharacterPrefill = multiCharacterPrefill;
       }
 
       if (modelClass !== undefined) {

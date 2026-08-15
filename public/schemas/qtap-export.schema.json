@@ -1083,6 +1083,10 @@
           "enum": ["auto", "native", "simple-json", "text-block"],
           "description": "How tool calls are framed on the wire. auto picks by model capability; simple-json is the modern <tool_call> JSON-in-XML format; text-block is the legacy [[TOOL ...]] format."
         },
+        "multiCharacterPrefill": {
+          "type": ["boolean", "null"],
+          "description": "How a multi-character chat anchors a reply to the character whose turn it is. true prefills an assistant message containing '[Character Name]'; false appends a prose instruction to the system prompt instead, leaving the request ending on a user message. null means never chosen, and resolves to the provider default whenever the profile is used (off for Anthropic, on elsewhere)."
+        },
         "sortIndex": { "type": "integer", "minimum": 0 },
         "tags": { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
         "totalTokens": { "type": "integer", "minimum": 0 },

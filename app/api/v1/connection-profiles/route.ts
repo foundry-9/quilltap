@@ -22,6 +22,7 @@ import { z } from 'zod';
 import { badRequest, serverError, notFound, successResponse, created, conflict } from '@/lib/api/responses';
 import { isValidModelClassName } from '@/lib/llm/model-classes';
 import { normalizeProfileName } from '@/lib/llm/connection-profile-names';
+import { defaultMultiCharacterPrefill } from '@/lib/llm/multi-character-prefill';
 import { autoConfigureProfile } from '@/lib/services/auto-configure.service';
 
 // Disable caching
@@ -164,12 +165,23 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
       modelClass = null,
       maxContext = null,
       supportsImageUpload,
+      multiCharacterPrefill,
     } = body;
 
     if (transport !== 'api' && transport !== 'courier') {
       return badRequest('Transport must be "api" or "courier"');
     }
     const isCourier = transport === 'courier';
+
+    if (multiCharacterPrefill !== undefined && typeof multiCharacterPrefill !== 'boolean') {
+      return badRequest('multiCharacterPrefill must be a boolean');
+    }
+    // Clients that don't send the field get the provider default — off for
+    // Anthropic (4.6+ rejects an assistant tail), on everywhere else.
+    const resolvedMultiCharacterPrefill =
+      typeof multiCharacterPrefill === 'boolean'
+        ? multiCharacterPrefill
+        : defaultMultiCharacterPrefill(provider);
 
     // Default supportsImageUpload from the historic per-provider capability map
     // so clients that don't send the field keep their current behavior on providers
@@ -277,6 +289,7 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
           ? pseudoToolMode
           : 'auto'
       ),
+      multiCharacterPrefill: resolvedMultiCharacterPrefill,
       modelClass: modelClass || null,
       maxContext: maxContext ? (typeof maxContext === 'string' ? parseInt(maxContext, 10) : maxContext) : null,
       supportsImageUpload: isCourier ? false : resolvedSupportsImageUpload,

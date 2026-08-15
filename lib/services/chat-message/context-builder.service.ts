@@ -13,6 +13,7 @@ import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
+import { profileUsesNamePrefill } from '@/lib/llm/multi-character-prefill'
 import { loadChatFilesForLLM } from '@/lib/chat-files-v2'
 import { getErrorMessage } from '@/lib/error-utils'
 import {
@@ -469,6 +470,52 @@ export function normalizeWhisperRoles<
 }
 
 /**
+ * In multi-character chats, anchor each reply to the responding character and
+ * forbid it from writing anyone else's turn. Two routes, chosen per profile by
+ * `multiCharacterPrefill`:
+ *
+ *   - **prefill** — append an assistant `[Name]` message. The model
+ *     structurally continues only that character's line; the leading tag is
+ *     stripped downstream by `stripCharacterNamePrefix()`.
+ *   - **prose** — append an instruction to the system message instead, leaving
+ *     the conversation ending on a user message. We deliberately do NOT tell
+ *     the model to emit a `[Name]` tag — that both contradicts the always-on
+ *     Identity Reminder ("do not prefix with your name") and teaches weaker
+ *     models the very screenplay format they then run away with, writing the
+ *     whole cast's turns. Identity is anchored in prose and foreign speaker
+ *     tags forbidden outright.
+ *
+ * `finalizeMessageResponse()` truncates a response at the first foreign
+ * `[Name]`/`Name:` tag as a structural backstop either way.
+ *
+ * Mutates `formattedMessages` in place. Exported for unit testing.
+ */
+export function applyMultiCharacterTurnAnchor(
+  formattedMessages: Array<{ role: string; content: string; thoughtSignature?: string; name?: string }>,
+  characterName: string,
+  usePrefill: boolean
+): void {
+  if (usePrefill) {
+    formattedMessages.push({
+      role: 'assistant',
+      content: `[${characterName}]`,
+      thoughtSignature: undefined,
+      name: undefined,
+    })
+    return
+  }
+
+  const systemIdx = formattedMessages.findIndex(m => m.role === 'system')
+  if (systemIdx < 0) return
+
+  formattedMessages[systemIdx] = {
+    ...formattedMessages[systemIdx],
+    content: formattedMessages[systemIdx].content +
+      `\n\nIMPORTANT — this is a multi-character scene. Respond as ${characterName} and ONLY ${characterName}: write only ${characterName}'s own dialogue, actions, and thoughts for this single turn, then stop. Never write, narrate, quote, or continue another participant's turn, and never label any text with another participant's name (no "[Name]" or "Name:" speaker tags for anyone but ${characterName}). Output only ${characterName}'s contribution.`,
+  }
+}
+
+/**
  * Build the full message context for the LLM
  */
 export async function buildMessageContext(
@@ -804,39 +851,12 @@ export async function buildMessageContext(
     }
   })
 
-  // In multi-character chats, anchor each reply to the responding character and
-  // forbid it from writing anyone else's turn. The two providers take different
-  // routes because Anthropic 4.6+ rejects requests that end with an assistant
-  // message (so we can't prefill it with a "[Name]" turn-opener there):
-  //   - Non-Anthropic: prefill an assistant "[Name]" message. The model
-  //     structurally continues only that character's line; the leading tag is
-  //     stripped downstream by stripCharacterNamePrefix().
-  //   - Anthropic: append a system instruction. We deliberately do NOT tell it
-  //     to emit a "[Name]" tag — that both contradicts the always-on Identity
-  //     Reminder ("do not prefix with your name") and teaches weaker models the
-  //     very screenplay format ("[Name] …") they then run away with, writing
-  //     the whole cast's turns. Instead we anchor identity in prose and forbid
-  //     foreign speaker tags outright. finalizeMessageResponse() truncates a
-  //     response at the first foreign "[Name]"/"Name:" tag as a structural
-  //     backstop regardless of provider.
   if (isMultiCharacter) {
-    if (connectionProfile.provider === 'ANTHROPIC') {
-      const systemIdx = formattedMessages.findIndex(m => m.role === 'system')
-      if (systemIdx >= 0) {
-        formattedMessages[systemIdx] = {
-          ...formattedMessages[systemIdx],
-          content: formattedMessages[systemIdx].content +
-            `\n\nIMPORTANT — this is a multi-character scene. Respond as ${character.name} and ONLY ${character.name}: write only ${character.name}'s own dialogue, actions, and thoughts for this single turn, then stop. Never write, narrate, quote, or continue another participant's turn, and never label any text with another participant's name (no "[Name]" or "Name:" speaker tags for anyone but ${character.name}). Output only ${character.name}'s contribution.`,
-        }
-      }
-    } else {
-      formattedMessages.push({
-        role: 'assistant',
-        content: `[${character.name}]`,
-        thoughtSignature: undefined,
-        name: undefined,
-      })
-    }
+    applyMultiCharacterTurnAnchor(
+      formattedMessages,
+      character.name,
+      profileUsesNamePrefill(connectionProfile),
+    )
   }
 
   return {

@@ -4,6 +4,7 @@ import { useCallback } from 'react'
 import { useFormState } from '@/hooks/useFormState'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
+import { defaultMultiCharacterPrefill } from '@/lib/llm/multi-character-prefill'
 import type { ProfileFormData, ConnectionProfile, ProviderConfig } from '../types'
 import { initialFormState } from '../types'
 
@@ -71,6 +72,10 @@ export function useProfileForm(providers: ProviderConfig[]) {
         isDangerousCompatible: profile.isDangerousCompatible ?? false,
         allowToolUse: profile.allowToolUse ?? true,
         pseudoToolMode: profile.pseudoToolMode ?? 'auto',
+        // Null means the profile predates the field; show the provider default
+        // the server would resolve to, so the box reflects actual behaviour.
+        multiCharacterPrefill:
+          profile.multiCharacterPrefill ?? defaultMultiCharacterPrefill(profile.provider),
         supportsImageUpload: profile.supportsImageUpload ?? false,
         allowWebSearch: profile.allowWebSearch ?? false,
         useNativeWebSearch: profile.useNativeWebSearch ?? false,
@@ -101,6 +106,9 @@ export function useProfileForm(providers: ProviderConfig[]) {
         isCheap: form.formData.isCheap,
         isDangerousCompatible: false,
         allowToolUse: false,
+        // Not a tool flag — the Courier renders the same assembled context for
+        // the user to carry by hand, so the turn anchor still applies.
+        multiCharacterPrefill: form.formData.multiCharacterPrefill,
         supportsImageUpload: false,
         allowWebSearch: false,
         useNativeWebSearch: false,
@@ -130,6 +138,7 @@ export function useProfileForm(providers: ProviderConfig[]) {
       isDangerousCompatible: form.formData.isDangerousCompatible,
       allowToolUse: form.formData.allowToolUse,
       pseudoToolMode: form.formData.pseudoToolMode,
+      multiCharacterPrefill: form.formData.multiCharacterPrefill,
       supportsImageUpload: form.formData.supportsImageUpload,
       allowWebSearch: form.formData.allowWebSearch,
       useNativeWebSearch: form.formData.useNativeWebSearch,

@@ -92,6 +92,30 @@ export const ConnectionProfileSchema = z.object({
    *                   format. Kept for compatibility while users migrate.
    */
   pseudoToolMode: z.enum(['auto', 'native', 'simple-json', 'text-block']).default('auto'),
+  /**
+   * How a multi-character chat anchors a reply to the character whose turn it
+   * is.
+   *
+   * - `true` (default) — append an assistant message containing
+   *   `[Character Name]`, so the model structurally continues only that
+   *   character's line. The tag is stripped downstream.
+   * - `false` — append a prose instruction to the system prompt instead,
+   *   leaving the conversation ending on a user message.
+   *
+   * Turn it off for models that cannot take an assistant prefill (Anthropic
+   * 4.6+ rejects the request outright), that lose a capability to it (Ollama's
+   * thinking channel is opened by the chat template at the start of the
+   * assistant turn, so a prefill suppresses reasoning entirely), or that
+   * visibly spend their reply deciding whether `[Name]` was an instruction or
+   * a previous speaker's slip. Single-character chats never use either anchor.
+   *
+   * `null`/absent means "not chosen yet" — rows written before
+   * `add-profile-multi-character-prefill-field-v1` and profiles imported from
+   * a pre-4.9 bundle. Never read this field directly: resolve it through
+   * `profileUsesNamePrefill()` in `lib/llm/multi-character-prefill.ts`, which
+   * falls back to the provider default (off for Anthropic, on elsewhere).
+   */
+  multiCharacterPrefill: z.boolean().nullable().optional(),
   /** Optional model class name for capability tier classification (e.g., 'Compact', 'Standard', 'Extended', 'Deep') */
   modelClass: z.string().nullable().optional(),
   /** Optional override for the context window size in tokens (caps how much input the model accepts) */

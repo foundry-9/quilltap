@@ -533,9 +533,14 @@ async function createInitialMessagesScenarioAndStaff(
   }
 
   let firstMessageContent = (context.firstMessage || '').trim();
+  // Reasoning is only ever captured for a *generated* greeting — a scripted
+  // one never touched a model. DISPLAY ONLY, like every other stored turn.
+  let firstMessageReasoning = '';
 
   if (!firstMessageContent) {
-    firstMessageContent = await autoGenerateFirstMessage(chatId, context, participants, userId, repos, projectId);
+    const generated = await autoGenerateFirstMessage(chatId, context, participants, userId, repos, projectId);
+    firstMessageContent = generated.content;
+    firstMessageReasoning = generated.reasoningContent;
   }
 
   if (!firstMessageContent) {
@@ -555,6 +560,7 @@ async function createInitialMessagesScenarioAndStaff(
     id: crypto.randomUUID(),
     role: 'ASSISTANT',
     content: firstMessageContent,
+    reasoningContent: firstMessageReasoning || null,
     participantId: firstCharacterParticipant?.id || undefined,
     attachments: [],
     createdAt: new Date().toISOString(),
@@ -587,6 +593,16 @@ async function createInitialMessages(
   );
 }
 
+/**
+ * A generated opening greeting. `reasoningContent` is the thinking a
+ * reasoning model produced while composing it — DISPLAY ONLY, persisted onto
+ * the greeting message so the Salon renders its thinking fold like any other
+ * turn. Empty for the give-up paths and for models that produced none.
+ */
+type GeneratedGreeting = { content: string; reasoningContent: string };
+
+const NO_GREETING: GeneratedGreeting = { content: '', reasoningContent: '' };
+
 async function autoGenerateFirstMessage(
   chatId: string,
   context: ChatContext,
@@ -594,19 +610,19 @@ async function autoGenerateFirstMessage(
   userId: string,
   repos: Repos,
   projectId?: string | null
-): Promise<string> {
+): Promise<GeneratedGreeting> {
   const participant = participants
     .filter((p) => p.type === 'CHARACTER' && p.characterId === context.character.id)
     .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))[0] ||
     participants.filter((p) => p.type === 'CHARACTER').sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))[0];
 
   if (!participant?.connectionProfileId) {
-    return '';
+    return NO_GREETING;
   }
 
   const connectionProfile = await repos.connections.findById(participant.connectionProfileId);
   if (!connectionProfile) {
-    return '';
+    return NO_GREETING;
   }
 
   let apiKey = '';
@@ -614,7 +630,7 @@ async function autoGenerateFirstMessage(
     const storedKey = await repos.connections.findApiKeyById(connectionProfile.apiKeyId);
     if (!storedKey) {
       logger.warn('[Chats v1] Connection profile is missing its API key', { context: 'autoGenerateFirstMessage' });
-      return '';
+      return NO_GREETING;
     }
 
     apiKey = storedKey.key_value;
@@ -708,7 +724,7 @@ async function autoGenerateFirstMessage(
     });
 
     if (result.content) {
-      return result.content;
+      return { content: result.content, reasoningContent: result.reasoningContent };
     }
     if (result.contentFilterDetected) {
       contentFilterHit = true;
@@ -740,7 +756,7 @@ async function autoGenerateFirstMessage(
         logger.info('[Chats v1] Greeting generation succeeded on retry without memories', {
           characterId: context.character.id,
         });
-        return result.content;
+        return { content: result.content, reasoningContent: result.reasoningContent };
       }
       if (result.contentFilterDetected) {
         contentFilterHit = true;
@@ -801,7 +817,7 @@ async function autoGenerateFirstMessage(
               provider: routeResult.connectionProfile.provider,
               model: routeResult.connectionProfile.modelName,
             });
-            return result.content;
+            return { content: result.content, reasoningContent: result.reasoningContent };
           }
         }
       }
@@ -822,7 +838,7 @@ async function autoGenerateFirstMessage(
       logger.info('[Chats v1] Greeting generation succeeded on final retry', {
         characterId: context.character.id,
       });
-      return result.content;
+      return { content: result.content, reasoningContent: result.reasoningContent };
     }
   } catch (error) {
     logger.warn('[Chats v1] Final greeting generation retry failed', {
@@ -835,7 +851,7 @@ async function autoGenerateFirstMessage(
     characterId: context.character.id,
     contentFilterHit,
   });
-  return '';
+  return NO_GREETING;
 }
 
 // ============================================================================

@@ -11,6 +11,7 @@ import { MODEL_CLASSES, getModelClass } from '@/lib/llm/model-classes'
 import type { ApiKey, ProviderConfig, ProfileFormData, ConnectionProfile } from './types'
 import { ProviderOptionsPanel } from './ProviderOptionsPanel'
 import { normalizeProfileName, makeUniqueProfileName } from '@/lib/llm/connection-profile-names'
+import { defaultMultiCharacterPrefill } from '@/lib/llm/multi-character-prefill'
 
 interface ProfileModalProps {
   isOpen: boolean
@@ -233,6 +234,7 @@ export function ProfileModal({
         'supportsImageUpload',
         supportsMimeType(newProvider as any, 'image/jpeg', form.formData.baseUrl || undefined)
       )
+      form.setField('multiCharacterPrefill', defaultMultiCharacterPrefill(newProvider))
     }
   }
 
@@ -759,6 +761,36 @@ export function ProfileModal({
                   </p>
                 </div>
               )}
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="multiCharacterPrefill"
+                    checked={form.formData.multiCharacterPrefill}
+                    onChange={(e) => form.setField('multiCharacterPrefill', e.target.checked)}
+                    className="qt-checkbox"
+                  />
+                  <label htmlFor="multiCharacterPrefill" className="text-sm">
+                    Announce the speaker in multi-character scenes ([Name] prefill)
+                  </label>
+                </div>
+                <p className="qt-text-xs ml-6">
+                  Ticked, a multi-character turn is handed to the model already opened with{' '}
+                  <code>[Name]</code>, so it can only continue that character&apos;s line. Unticked, the
+                  same instruction is given in prose and the model is left to begin the turn itself.
+                  Untick it for models that refuse an opened turn outright, for local thinking models
+                  whose reasoning never appears (an opened turn closes that door), and for any model
+                  that spends its reply wondering whether the name was addressed to it.
+                </p>
+                {form.formData.multiCharacterPrefill &&
+                  !defaultMultiCharacterPrefill(form.formData.provider) && (
+                    <p className="qt-text-xs qt-text-warning ml-6">
+                      Anthropic&apos;s recent models reject a request handed over mid-turn and will
+                      return an error on every multi-character reply. Leave this unticked unless you
+                      know your model tolerates it.
+                    </p>
+                  )}
+              </div>
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"

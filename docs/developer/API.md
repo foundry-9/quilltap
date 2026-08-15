@@ -693,9 +693,24 @@ Create a connection profile.
   "isDefault": false,
   "isCheap": false,
   "allowWebSearch": false,
-  "useNativeWebSearch": false
+  "useNativeWebSearch": false,
+  "multiCharacterPrefill": false
 }
 ```
+
+**`multiCharacterPrefill`** — how a multi-character chat anchors a reply to the
+character whose turn it is. `true` appends an assistant message containing
+`[Character Name]` so the model structurally continues only that line; `false`
+appends a prose instruction to the system prompt instead, leaving the request
+ending on a user message. **Omit it and the server picks the provider default:
+`false` for Anthropic (4.6+ rejects an assistant tail), `true` elsewhere.** A
+stored `null` — a row older than
+`add-profile-multi-character-prefill-field-v1`, or a profile imported from a
+pre-4.9 bundle — resolves to that same provider default at use time. Turn it
+off for Ollama profiles with thinking enabled: Ollama opens the reasoning block
+from the chat template at the start of the assistant turn, so a prefill
+suppresses reasoning entirely (bug 68). `PUT` accepts the same field and
+rejects a non-boolean with `400`.
 
 #### `GET /api/v1/connection-profiles/[id]`
 

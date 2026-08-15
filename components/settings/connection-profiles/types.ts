@@ -64,6 +64,12 @@ export interface ConnectionProfile {
   allowToolUse?: boolean
   /** Tool-call framing: native, simple-json, text-block, or auto. */
   pseudoToolMode?: 'auto' | 'native' | 'simple-json' | 'text-block'
+  /**
+   * Multi-character turn anchor: true prefills an assistant `[Name]` message,
+   * false appends a prose instruction instead. Null/absent means never chosen
+   * — resolve through `defaultMultiCharacterPrefill(provider)`.
+   */
+  multiCharacterPrefill?: boolean | null
   supportsImageUpload?: boolean
   modelClass?: string | null
   maxContext?: number | null
@@ -106,6 +112,13 @@ export interface ProfileFormData {
   isDangerousCompatible: boolean
   allowToolUse: boolean
   pseudoToolMode: 'auto' | 'native' | 'simple-json' | 'text-block'
+  /**
+   * Multi-character turn anchor. True sends the assistant `[Name]` prefill;
+   * false anchors the turn with a prose instruction in the system prompt
+   * instead. Seeded from the provider default when a profile has never
+   * recorded a choice.
+   */
+  multiCharacterPrefill: boolean
   supportsImageUpload: boolean
   allowWebSearch: boolean
   useNativeWebSearch: boolean
@@ -135,6 +148,7 @@ export const initialFormState: ProfileFormData = {
   isDangerousCompatible: false,
   allowToolUse: true,
   pseudoToolMode: 'auto',
+  multiCharacterPrefill: true,
   supportsImageUpload: false,
   allowWebSearch: false,
   useNativeWebSearch: false,

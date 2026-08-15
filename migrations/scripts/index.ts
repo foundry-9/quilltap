@@ -372,6 +372,8 @@ import { addComposerEmojiFieldMigration } from './add-composer-emoji-field';
 import { addComposerUnicodeFieldMigration } from './add-composer-unicode-field';
 import { addSmartTypographySettingsFieldMigration } from './add-smart-typography-settings-field';
 import { createHelpDocChunksTableMigration } from './create-help-doc-chunks-table';
+// Per-profile multi-character [Name] turn anchor: multiCharacterPrefill column on connection_profiles
+import { addProfileMultiCharacterPrefillFieldMigration } from './add-profile-multi-character-prefill-field';
 
 /**
  * All available migrations.
@@ -744,6 +746,8 @@ export const migrations: Migration[] = [
   addSmartTypographySettingsFieldMigration,
   // Section-level help search: help_doc_chunks table
   createHelpDocChunksTableMigration,
+  // Per-profile multi-character [Name] turn anchor (replaces the Anthropic-only carve-out)
+  addProfileMultiCharacterPrefillFieldMigration,
 ];
 
 export {
@@ -1095,5 +1099,7 @@ export {
   addSmartTypographySettingsFieldMigration,
   // Section-level help search: help_doc_chunks table
   createHelpDocChunksTableMigration,
+  // Per-profile multi-character [Name] turn anchor (replaces the Anthropic-only carve-out)
+  addProfileMultiCharacterPrefillFieldMigration,
 };
 
