@@ -11115,6 +11115,19 @@ function buildSdkClientOptions(params, defaultMs = DEFAULT_REQUEST_TIMEOUT_MS) {
     maxRetries: capped ? 0 : 2
   };
 }
+function applyProfileParameters(body, params, allowlist, normalize) {
+  const profile = params.profileParameters;
+  if (!profile || typeof profile !== "object") return;
+  const bag = profile;
+  for (const key of allowlist) {
+    const raw = bag[key];
+    if (raw === void 0 || raw === null) continue;
+    if (typeof raw === "string" && raw === "") continue;
+    const value = normalize ? normalize(key, raw, params, body) : raw;
+    if (value === void 0) continue;
+    body[key] = value;
+  }
+}
 var rewriteLogger = createPluginLogger("host-rewrite");
 
 // models.ts
@@ -11388,22 +11401,15 @@ var ZAIProvider = class {
    * request body. Caller supplies the `body` object; we mutate it in place.
    */
   applyProfileParameters(body, params) {
-    const profile = params.profileParameters;
-    if (profile && typeof profile === "object") {
-      for (const key of Z_AI_PROFILE_PARAM_ALLOWLIST) {
-        const value = profile[key];
-        if (value === void 0) continue;
-        if (typeof value === "string" && value === "") continue;
-        if (key === "reasoning_effort" && !supportsReasoningEffort(params.model)) {
-          continue;
-        }
-        if (key === "thinking" && typeof value === "string") {
-          body[key] = { type: value };
-          continue;
-        }
-        body[key] = value;
+    applyProfileParameters(body, params, Z_AI_PROFILE_PARAM_ALLOWLIST, (key, value) => {
+      if (key === "reasoning_effort" && !supportsReasoningEffort(params.model)) {
+        return void 0;
       }
-    }
+      if (key === "thinking" && typeof value === "string") {
+        return { type: value };
+      }
+      return value;
+    });
     if (supportsReasoningEffort(params.model) && body.reasoning_effort === void 0) {
       const thinkingDisabled = body.thinking?.type === "disabled";
       if (!thinkingDisabled) {

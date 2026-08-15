@@ -227,6 +227,11 @@ export function ProfileModal({
 
     // Auto-default allowToolUse and supportsImageUpload based on provider capability
     // (new profiles only — don't clobber saved values on an existing profile).
+    //
+    // `toolUse` is a SEED, never a clamp: the checkbox below stays editable
+    // whatever the capability says. An OpenAI-compatible endpoint declares
+    // `false` because an arbitrary endpoint is the conservative case, but a user
+    // pointing at llama-server --jinja knows better than we do (Bug 71).
     if (!profile?.id) {
       const supportsToolUse = providerConfig?.capabilities?.toolUse ?? false
       form.setField('allowToolUse', supportsToolUse)
@@ -734,6 +739,13 @@ export function ProfileModal({
                   Allow tool use (overrides chat and project tool settings when disabled)
                 </label>
               </div>
+              {!reqs.supportsToolUse && (
+                <p className="qt-text-xs ml-6">
+                  This provider does not advertise tool support, so new profiles start with it off.
+                  If your endpoint does speak native function calling — llama-server with
+                  <code> --jinja</code>, vLLM, LM Studio — you may turn it on regardless.
+                </p>
+              )}
               {form.formData.allowToolUse && (
                 <div className="flex flex-col gap-1 ml-6">
                   <label htmlFor="pseudoToolMode" className="text-sm">

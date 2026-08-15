@@ -11112,6 +11112,19 @@ function buildSdkRequestOptions(params) {
   if (typeof requested !== "number" || requested <= 0) return void 0;
   return { timeout: requested, maxRetries: 0 };
 }
+function applyProfileParameters(body, params, allowlist, normalize) {
+  const profile = params.profileParameters;
+  if (!profile || typeof profile !== "object") return;
+  const bag = profile;
+  for (const key of allowlist) {
+    const raw = bag[key];
+    if (raw === void 0 || raw === null) continue;
+    if (typeof raw === "string" && raw === "") continue;
+    const value = normalize ? normalize(key, raw, params, body) : raw;
+    if (value === void 0) continue;
+    body[key] = value;
+  }
+}
 var DEFAULT_MAX_RETRIES = 2;
 var OpenAICompatibleProvider = class {
   /**
@@ -11123,6 +11136,7 @@ var OpenAICompatibleProvider = class {
     this.supportsFileAttachments = false;
     this.supportedMimeTypes = [];
     this.supportsWebSearch = false;
+    this.profileParamAllowlist = [];
     if (typeof config2 === "string") {
       this.baseUrl = config2;
       this.providerName = "OpenAICompatible";
@@ -11211,6 +11225,53 @@ var OpenAICompatibleProvider = class {
     return buildSdkRequestOptions(params);
   }
   /**
+   * Per-key hook for allow-listed profile parameters. The default forwards the
+   * stored value verbatim.
+   *
+   * Override to reshape a value (the editor stores flat strings where some APIs
+   * want objects), to gate a key on the model, or — by writing into `body` and
+   * returning `undefined` — to send it under a different key entirely.
+   */
+  normalizeProfileParam(_key, value, _params, _body) {
+    return value;
+  }
+  /**
+   * Apply {@link profileParamAllowlist} to a request body under construction.
+   * Called by both body builds so the streaming and non-streaming shapes cannot
+   * drift apart.
+   */
+  applyProfileParams(body, params) {
+    applyProfileParameters(
+      body,
+      params,
+      this.profileParamAllowlist,
+      (key, value, callParams, target) => this.normalizeProfileParam(key, value, callParams, target)
+    );
+  }
+  /**
+   * Normalize an OpenAI-shaped `tool_calls` array into Quilltap's `ToolCall`
+   * shape, tolerating servers that hand back already-parsed argument objects
+   * where the OpenAI wire format specifies a JSON string.
+   */
+  normalizeToolCalls(toolCalls) {
+    if (!toolCalls || toolCalls.length === 0) return [];
+    const out = [];
+    for (const raw of toolCalls) {
+      const tc = raw;
+      if (!tc?.function?.name) continue;
+      const args = tc.function.arguments;
+      out.push({
+        id: tc.id ?? "",
+        type: "function",
+        function: {
+          name: tc.function.name,
+          arguments: typeof args === "string" ? args : JSON.stringify(args ?? {})
+        }
+      });
+    }
+    return out;
+  }
+  /**
    * Sends a message and returns the complete response.
    *
    * @param params - LLM parameters including messages, model, and settings
@@ -11248,17 +11309,26 @@ var OpenAICompatibleProvider = class {
         content: m.content
       };
     });
+    const body = {
+      model: params.model,
+      messages,
+      temperature: params.temperature ?? 0.7,
+      max_tokens: params.maxTokens ?? 4096,
+      top_p: params.topP ?? 1,
+      stop: params.stop,
+      ...params.cacheKey ? { user: params.cacheKey } : {},
+      // Tools arrive only once the runtime gate (the profile's "Allow tool
+      // use") has passed, so no separate guard is needed here.
+      ...params.tools && params.tools.length > 0 ? { tools: params.tools, tool_choice: params.toolChoice ?? "auto" } : {}
+    };
+    this.applyProfileParams(body, params);
     try {
-      const response = await client.chat.completions.create({
-        model: params.model,
-        messages,
-        temperature: params.temperature ?? 0.7,
-        max_tokens: params.maxTokens ?? 4096,
-        top_p: params.topP ?? 1,
-        stop: params.stop,
-        ...params.cacheKey ? { user: params.cacheKey } : {}
-      }, this.buildRequestOptions(params));
+      const response = await client.chat.completions.create(
+        body,
+        this.buildRequestOptions(params)
+      );
       const choice = response.choices[0];
+      const toolCalls = this.normalizeToolCalls(choice.message.tool_calls);
       return {
         content: choice.message.content ?? "",
         finishReason: choice.finish_reason,
@@ -11268,7 +11338,8 @@ var OpenAICompatibleProvider = class {
           totalTokens: response.usage?.total_tokens ?? 0
         },
         raw: response,
-        attachmentResults
+        attachmentResults,
+        ...toolCalls.length > 0 ? { toolCalls } : {}
       };
     } catch (error) {
       this.logger.error(
@@ -11317,23 +11388,32 @@ var OpenAICompatibleProvider = class {
         content: m.content
       };
     });
+    const body = {
+      model: params.model,
+      messages,
+      temperature: params.temperature ?? 0.7,
+      max_tokens: params.maxTokens ?? 4096,
+      top_p: params.topP ?? 1,
+      stop: params.stop,
+      stream: true,
+      stream_options: { include_usage: true },
+      ...params.cacheKey ? { user: params.cacheKey } : {},
+      ...params.tools && params.tools.length > 0 ? { tools: params.tools, tool_choice: params.toolChoice ?? "auto" } : {}
+    };
+    this.applyProfileParams(body, params);
     try {
-      const stream = await client.chat.completions.create({
-        model: params.model,
-        messages,
-        temperature: params.temperature ?? 0.7,
-        max_tokens: params.maxTokens ?? 4096,
-        top_p: params.topP ?? 1,
-        stop: params.stop,
-        stream: true,
-        stream_options: { include_usage: true },
-        ...params.cacheKey ? { user: params.cacheKey } : {}
-      }, this.buildRequestOptions(params));
+      const stream = await client.chat.completions.create(
+        body,
+        this.buildRequestOptions(params)
+      );
       let chunkCount = 0;
       let accumulatedUsage = null;
+      const toolCallAccumulator = /* @__PURE__ */ new Map();
+      let finishReason = null;
       for await (const chunk of stream) {
         chunkCount++;
-        const content = chunk.choices[0]?.delta?.content;
+        const choice = chunk.choices[0];
+        const content = choice?.delta?.content;
         const hasUsage = chunk.usage;
         if (hasUsage) {
           accumulatedUsage = {
@@ -11342,6 +11422,17 @@ var OpenAICompatibleProvider = class {
             total_tokens: chunk.usage?.total_tokens
           };
         }
+        if (choice?.delta?.tool_calls) {
+          for (const tcDelta of choice.delta.tool_calls) {
+            const idx = tcDelta.index ?? 0;
+            const existing = toolCallAccumulator.get(idx) ?? { id: "", name: "", arguments: "" };
+            if (tcDelta.id) existing.id = tcDelta.id;
+            if (tcDelta.function?.name) existing.name = tcDelta.function.name;
+            if (tcDelta.function?.arguments) existing.arguments += tcDelta.function.arguments;
+            toolCallAccumulator.set(idx, existing);
+          }
+        }
+        if (choice?.finish_reason) finishReason = choice.finish_reason;
         if (content) {
           yield {
             content,
@@ -11349,6 +11440,11 @@ var OpenAICompatibleProvider = class {
           };
         }
       }
+      const toolCalls = Array.from(toolCallAccumulator.values()).filter((tc) => tc.name).map((tc) => ({
+        id: tc.id,
+        type: "function",
+        function: { name: tc.name, arguments: tc.arguments }
+      }));
       yield {
         content: "",
         done: true,
@@ -11357,7 +11453,22 @@ var OpenAICompatibleProvider = class {
           completionTokens: accumulatedUsage.completion_tokens ?? 0,
           totalTokens: accumulatedUsage.total_tokens ?? 0
         } : void 0,
-        attachmentResults
+        attachmentResults,
+        // Only synthesized when the stream actually carried tool calls: the
+        // host's tool detection reads `rawResponse`, and an empty one on every
+        // ordinary turn would be noise in the logs for no gain.
+        ...toolCalls.length > 0 ? {
+          toolCalls,
+          rawResponse: {
+            choices: [
+              {
+                index: 0,
+                message: { role: "assistant", content: "", tool_calls: toolCalls },
+                finish_reason: finishReason
+              }
+            ]
+          }
+        } : {}
       };
     } catch (error) {
       this.logger.error(
@@ -11420,6 +11531,56 @@ var OpenAICompatibleProvider = class {
   }
 };
 var rewriteLogger = createPluginLogger("host-rewrite");
+
+// provider.ts
+var OPENAI_COMPATIBLE_PROFILE_PARAM_ALLOWLIST = [
+  "chat_template_kwargs",
+  "reasoning_effort",
+  "top_k",
+  "min_p",
+  "repeat_penalty",
+  "presence_penalty",
+  "frequency_penalty",
+  "seed",
+  "cache_prompt"
+];
+var NUMERIC_PARAMS = /* @__PURE__ */ new Set([
+  "top_k",
+  "min_p",
+  "repeat_penalty",
+  "presence_penalty",
+  "frequency_penalty",
+  "seed"
+]);
+var OpenAICompatibleEndpointProvider = class extends OpenAICompatibleProvider {
+  constructor() {
+    super(...arguments);
+    this.profileParamAllowlist = OPENAI_COMPATIBLE_PROFILE_PARAM_ALLOWLIST;
+  }
+  normalizeProfileParam(key, value, _params, body) {
+    if (key === "reasoning_effort") {
+      const existing = body.chat_template_kwargs;
+      body.chat_template_kwargs = {
+        ...typeof existing === "object" && existing !== null ? existing : {},
+        reasoning_effort: value
+      };
+      return void 0;
+    }
+    if (key === "chat_template_kwargs" && typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        return typeof parsed === "object" && parsed !== null ? parsed : void 0;
+      } catch {
+        return void 0;
+      }
+    }
+    if (NUMERIC_PARAMS.has(key) && typeof value === "string") {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : void 0;
+    }
+    return value;
+  }
+};
 
 // node_modules/@quilltap/plugin-utils/dist/tools/index.mjs
 var TOOL_NAME_ALIASES = {
@@ -11772,6 +11933,12 @@ var capabilities = {
   imageGeneration: false,
   embeddings: false,
   webSearch: false,
+  // Deliberately false: this provider points at an arbitrary user-supplied
+  // endpoint, and assuming tool support would break every endpoint that lacks
+  // it. The capability seeds a NEW profile's "Allow tool use" checkbox and
+  // nothing more — a user whose endpoint does support tools (llama-server
+  // --jinja, vLLM, LM Studio) can tick it, and the provider then sends `tools`
+  // and parses `tool_calls` back. It is a default, not a ceiling.
   toolUse: false
 };
 var attachmentSupport = {
@@ -11788,6 +11955,73 @@ var messageFormat = {
 var cheapModels = {
   defaultModel: "gpt-4o-mini",
   recommendedModels: ["gpt-4o-mini", "gpt-3.5-turbo"]
+};
+var optionsSchema = {
+  groups: [
+    {
+      title: "Endpoint Options",
+      helpText: "These are sent only when you fill them in. An endpoint that does not recognise a setting generally ignores it, so leave anything your server does not support blank.",
+      fields: [
+        {
+          key: "reasoning_effort",
+          label: "Reasoning Effort",
+          type: "enum",
+          default: "",
+          enumValues: [
+            { value: "", label: "Model default", description: "Send nothing; the model decides" },
+            { value: "none", label: "None", description: "Answer without reasoning" },
+            { value: "low", label: "Low" },
+            { value: "medium", label: "Medium" },
+            { value: "high", label: "High" },
+            { value: "xhigh", label: "Extra high", description: "Longest reasoning, slowest replies" }
+          ],
+          helpText: "How long a reasoning model may think before answering. On a machine where every token costs wall-clock time this is the largest speed control you have. Only models whose chat template understands reasoning levels will act on it."
+        },
+        {
+          key: "top_k",
+          label: "Top K",
+          type: "number",
+          helpText: "Keep only the K most likely next tokens. Qwen3 and kin ask for 20. Leave blank for the model default."
+        },
+        {
+          key: "min_p",
+          label: "Min P",
+          type: "number",
+          helpText: "Drop tokens less likely than this fraction of the best one. Qwen3 and kin ask for 0. Leave blank for the model default."
+        },
+        {
+          key: "repeat_penalty",
+          label: "Repeat Penalty",
+          type: "number",
+          helpText: "Penalty applied to tokens already used. Above 1 discourages repetition; 1 disables it."
+        },
+        {
+          key: "presence_penalty",
+          label: "Presence Penalty",
+          type: "number",
+          helpText: "Discourages tokens that have appeared at all. Some publishers recommend a value here for non-thinking mode (Qwen3.8 asks for 1.5)."
+        },
+        {
+          key: "frequency_penalty",
+          label: "Frequency Penalty",
+          type: "number",
+          helpText: "Discourages tokens in proportion to how often they have already appeared."
+        },
+        {
+          key: "seed",
+          label: "Seed",
+          type: "number",
+          helpText: "Fixes the sampler so the same prompt gives the same answer. Leave blank for a fresh roll each turn."
+        },
+        {
+          key: "cache_prompt",
+          label: "Reuse Cached Prompt",
+          type: "boolean",
+          helpText: "Let the server reuse the part of the prompt it has already processed. llama-server does this by default \u2014 this is an escape hatch for servers that do not, and you can leave it alone."
+        }
+      ]
+    }
+  ]
 };
 var plugin = {
   metadata,
@@ -11808,6 +12042,10 @@ var plugin = {
   defaultContextWindow: 8192,
   // Conservative default for unknown implementations
   /**
+   * Connection-profile options schema rendered by the host's profile editor.
+   */
+  getProviderOptionsSchema: () => optionsSchema,
+  /**
    * Factory method to create an OpenAI-compatible LLM provider instance
    * IMPORTANT: baseUrl is REQUIRED for this provider
    */
@@ -11820,7 +12058,7 @@ var plugin = {
       });
     }
     const url = baseUrl || "http://localhost:8080/v1";
-    return new OpenAICompatibleProvider(url);
+    return new OpenAICompatibleEndpointProvider(url);
   },
   /**
    * Get list of available models from the compatible API
@@ -11829,7 +12067,7 @@ var plugin = {
   getAvailableModels: async (apiKey, baseUrl) => {
     try {
       const url = baseUrl || "http://localhost:8080/v1";
-      const provider = new OpenAICompatibleProvider(url);
+      const provider = new OpenAICompatibleEndpointProvider(url);
       const models = await provider.getAvailableModels(apiKey);
       return models;
     } catch (error) {
@@ -11847,7 +12085,7 @@ var plugin = {
   validateApiKey: async (apiKey, baseUrl) => {
     try {
       const url = baseUrl || "http://localhost:8080/v1";
-      const provider = new OpenAICompatibleProvider(url);
+      const provider = new OpenAICompatibleEndpointProvider(url);
       const isValid = await provider.validateApiKey(apiKey);
       return isValid;
     } catch (error) {

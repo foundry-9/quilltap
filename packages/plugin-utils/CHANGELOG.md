@@ -2,6 +2,14 @@
 
 All notable changes to @quilltap/plugin-utils will be documented in this file.
 
+## [2.3.0] - 2026-08-15
+
+### Added
+
+- `applyProfileParameters(body, params, allowlist, normalize?)` — the one mechanism providers use to forward a connection profile's free-form `parameters` blob onto a request body. Allow-listed (never spread, so `model` / `messages` / `stream` / `tools` stay unreachable from a profile); `undefined`, `null` and the empty string omit the key. Exported as a free function rather than a base-class method because only one plugin extends `OpenAICompatibleProvider` — Z.AI, OpenRouter and Ollama implement their providers directly and reach it by composition.
+- `OpenAICompatibleProvider` gained `profileParamAllowlist` (empty by default, so every existing subclass is byte-identical on the wire until it opts in) and an overridable `normalizeProfileParam`, applied in both the streaming and non-streaming body builds.
+- `OpenAICompatibleProvider` now sends `tools` / `tool_choice` when the caller supplies tools, and parses `tool_calls` back — from `choice.message.tool_calls` on the non-streaming path, and by accumulating index-keyed `delta.tool_calls` fragments while streaming. Previously it could never call a tool.
+
 ## [2.2.19] - 2026-08-03
 
 ### Fixed

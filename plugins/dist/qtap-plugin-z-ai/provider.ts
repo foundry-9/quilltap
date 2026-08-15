@@ -16,7 +16,12 @@ import type {
   LLMMessage,
   FileAttachment,
 } from './types';
-import { buildSdkClientOptions, createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
+import {
+  applyProfileParameters,
+  buildSdkClientOptions,
+  createPluginLogger,
+  getQuilltapUserAgent,
+} from '@quilltap/plugin-utils';
 import { STATIC_CHAT_MODEL_IDS, IMAGE_GEN_MODEL_PATTERN } from './models';
 
 const logger = createPluginLogger('qtap-plugin-z-ai');
@@ -227,30 +232,26 @@ export class ZAIProvider implements TextProvider {
    * request body. Caller supplies the `body` object; we mutate it in place.
    */
   private applyProfileParameters(body: Record<string, unknown>, params: LLMParams): void {
-    const profile = params.profileParameters;
-    if (profile && typeof profile === 'object') {
-      for (const key of Z_AI_PROFILE_PARAM_ALLOWLIST) {
-        const value = (profile as Record<string, unknown>)[key];
-        if (value === undefined) continue;
-        // Empty string from the schema-driven profile editor means "omit the
-        // parameter and use the model default." Skip those.
-        if (typeof value === 'string' && value === '') continue;
-        // `reasoning_effort` is only honored by glm-5.2-and-newer; never
-        // forward it to a model that ignores it (or worse, errors on it).
-        if (key === 'reasoning_effort' && !supportsReasoningEffort(params.model)) {
-          continue;
-        }
-        // The schema-driven editor stores `thinking` as a flat string
-        // ("enabled" / "disabled"); Z.AI's wire shape is `{ type: ... }`
-        // (https://docs.z.ai/guides/llm/glm-4.6). Pre-existing profiles that
-        // already stored the object form continue to work unchanged.
-        if (key === 'thinking' && typeof value === 'string') {
-          body[key] = { type: value };
-          continue;
-        }
-        body[key] = value;
+    // The copy loop lives in @quilltap/plugin-utils (allow-list, skip
+    // undefined/null/empty-string); what stays here is the Z.AI-specific
+    // reshaping. This class implements TextProvider directly rather than
+    // extending OpenAICompatibleProvider, so it reaches the mechanism by
+    // composition — which is why the helper is an exported function.
+    applyProfileParameters(body, params, Z_AI_PROFILE_PARAM_ALLOWLIST, (key, value) => {
+      // `reasoning_effort` is only honored by glm-5.2-and-newer; never
+      // forward it to a model that ignores it (or worse, errors on it).
+      if (key === 'reasoning_effort' && !supportsReasoningEffort(params.model)) {
+        return undefined;
       }
-    }
+      // The schema-driven editor stores `thinking` as a flat string
+      // ("enabled" / "disabled"); Z.AI's wire shape is `{ type: ... }`
+      // (https://docs.z.ai/guides/llm/glm-4.6). Pre-existing profiles that
+      // already stored the object form continue to work unchanged.
+      if (key === 'thinking' && typeof value === 'string') {
+        return { type: value };
+      }
+      return value;
+    });
 
     // Default to `high` reasoning effort on glm-5.2-and-newer unless thinking
     // is explicitly disabled and no explicit effort was set. GLM-5.2 thinks

@@ -149,25 +149,23 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
     return out;
   }
 
-  private applyProfileParameters(body: Record<string, unknown>, params: LLMParams): void {
-    const profile = params.profileParameters;
-    if (!profile || typeof profile !== 'object') return;
-    for (const key of DEEPSEEK_PROFILE_PARAM_ALLOWLIST) {
-      const value = (profile as Record<string, unknown>)[key];
-      if (value === undefined) continue;
-      // Empty string from the schema-driven profile editor means
-      // "omit the parameter and use the model default." Skip those.
-      if (typeof value === 'string' && value === '') continue;
-      // The schema-driven editor stores `thinking` as a flat string
-      // ("enabled" / "disabled"); normalize to DeepSeek's wire shape
-      // `{ type: ... }`. Pre-existing profiles that already stored the
-      // object form continue to work unchanged.
-      if (key === 'thinking' && typeof value === 'string') {
-        body[key] = { type: value };
-        continue;
-      }
-      body[key] = value;
+  /**
+   * The base class copies these off `params.profileParameters` (allow-listed;
+   * undefined, null and the empty string omit the key). DeepSeek is the one
+   * plugin that extends the base, so it inherits the mechanism rather than
+   * reaching it by composition the way Z.AI and Ollama do.
+   */
+  protected override readonly profileParamAllowlist = DEEPSEEK_PROFILE_PARAM_ALLOWLIST;
+
+  protected override normalizeProfileParam(key: string, value: unknown): unknown | undefined {
+    // The schema-driven editor stores `thinking` as a flat string
+    // ("enabled" / "disabled"); normalize to DeepSeek's wire shape
+    // `{ type: ... }`. Pre-existing profiles that already stored the
+    // object form continue to work unchanged.
+    if (key === 'thinking' && typeof value === 'string') {
+      return { type: value };
     }
+    return value;
   }
 
   private extractCacheUsage(usage: DeepSeekUsage | null | undefined) {
@@ -217,7 +215,7 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
       body.user_id = params.cacheKey;
     }
 
-    this.applyProfileParameters(body, params);
+    this.applyProfileParams(body, params);
     stripThinkingIncompatibleParams(body);
 
     try {
@@ -318,7 +316,7 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
       body.user_id = params.cacheKey;
     }
 
-    this.applyProfileParameters(body, params);
+    this.applyProfileParams(body, params);
     stripThinkingIncompatibleParams(body);
 
     try {

@@ -11111,6 +11111,19 @@ function resolveRequestTimeoutMs(params, defaultMs = DEFAULT_REQUEST_TIMEOUT_MS)
 function buildRequestAbortSignal(params, defaultMs = DEFAULT_REQUEST_TIMEOUT_MS) {
   return AbortSignal.timeout(resolveRequestTimeoutMs(params, defaultMs));
 }
+function applyProfileParameters(body, params, allowlist, normalize) {
+  const profile = params.profileParameters;
+  if (!profile || typeof profile !== "object") return;
+  const bag = profile;
+  for (const key of allowlist) {
+    const raw = bag[key];
+    if (raw === void 0 || raw === null) continue;
+    if (typeof raw === "string" && raw === "") continue;
+    const value = normalize ? normalize(key, raw, params, body) : raw;
+    if (value === void 0) continue;
+    body[key] = value;
+  }
+}
 var rewriteLogger = createPluginLogger("host-rewrite");
 
 // think-parser.ts
@@ -11212,25 +11225,91 @@ function extractThinkBlocks(content) {
   return { content: out, reasoning: parser.reasoning };
 }
 
-// provider.ts
-var logger = createPluginLogger("qtap-plugin-ollama");
-function resolveEnableThinking(params) {
-  const value = params.profileParameters?.enable_thinking;
-  return value === true || value === "true";
-}
+// profile-options.ts
+var OLLAMA_OPTION_PARAM_ALLOWLIST = [
+  "num_ctx",
+  "top_k",
+  "min_p",
+  "repeat_penalty",
+  "presence_penalty",
+  "frequency_penalty",
+  "seed",
+  "mirostat",
+  "mirostat_tau",
+  "mirostat_eta"
+];
+var OLLAMA_TOP_LEVEL_PARAM_ALLOWLIST = ["keep_alive"];
+var NUMERIC_OPTIONS = /* @__PURE__ */ new Set([
+  "num_ctx",
+  "top_k",
+  "min_p",
+  "repeat_penalty",
+  "presence_penalty",
+  "frequency_penalty",
+  "seed",
+  "mirostat",
+  "mirostat_tau",
+  "mirostat_eta"
+]);
+var POSITIVE_INTEGER_OPTIONS = /* @__PURE__ */ new Set(["num_ctx"]);
+var OLLAMA_THINK_LEVELS = ["low", "medium", "high", "max"];
 var DEFAULT_REQUEST_TIMEOUT_SECONDS = 300;
+function resolveThinkSetting(params) {
+  const value = params.profileParameters?.enable_thinking;
+  if (value !== true && value !== "true") return false;
+  const effort = params.profileParameters?.thinking_effort;
+  if (typeof effort === "string" && OLLAMA_THINK_LEVELS.includes(effort)) {
+    return effort;
+  }
+  return true;
+}
 function resolveProfileTimeoutMs(params) {
   const value = params.profileParameters?.request_timeout_seconds;
   const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
   return Number.isFinite(n) && n > 0 ? n * 1e3 : DEFAULT_REQUEST_TIMEOUT_SECONDS * 1e3;
 }
+function normalizeOption(key, value) {
+  if (NUMERIC_OPTIONS.has(key)) {
+    const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+    if (!Number.isFinite(n)) return void 0;
+    if (POSITIVE_INTEGER_OPTIONS.has(key)) {
+      return n > 0 ? Math.floor(n) : void 0;
+    }
+    return n;
+  }
+  return value;
+}
+function normalizeTopLevel(key, value) {
+  if (key === "keep_alive") {
+    if (typeof value === "string") {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : value;
+    }
+    return value;
+  }
+  return value;
+}
+function applyOllamaProfileParameters(body, params) {
+  const options = body.options ?? {};
+  applyProfileParameters(
+    options,
+    params,
+    OLLAMA_OPTION_PARAM_ALLOWLIST,
+    (key, value) => normalizeOption(key, value)
+  );
+  body.options = options;
+  applyProfileParameters(
+    body,
+    params,
+    OLLAMA_TOP_LEVEL_PARAM_ALLOWLIST,
+    (key, value) => normalizeTopLevel(key, value)
+  );
+}
+
+// provider.ts
+var logger = createPluginLogger("qtap-plugin-ollama");
 function isThinkRejection(errorText) {
   return /think/i.test(errorText);
-}
-function resolveNumCtx(params) {
-  const value = params.profileParameters?.num_ctx;
-  const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : void 0;
 }
 var OllamaProvider = class {
   constructor(baseUrl) {
@@ -11283,25 +11362,24 @@ var OllamaProvider = class {
         content: m.content
       };
     });
-    const enableThinking = resolveEnableThinking(params);
+    const enableThinking = resolveThinkSetting(params);
     const requestBody = {
       model: params.model,
       messages,
       stream: false,
       // Ollama's native thinking switch (0.9+; older servers ignore unknown
       // fields). When off, thinking-capable models answer directly; when on,
-      // Ollama returns the reasoning separately as `message.thinking`.
+      // Ollama returns the reasoning separately as `message.thinking`. Newer
+      // servers also accept an effort level in place of the boolean.
       think: enableThinking,
       options: {
         temperature: params.temperature ?? 0.7,
         num_predict: params.maxTokens ?? 4096,
         top_p: params.topP ?? 1,
-        stop: params.stop,
-        // Context window from the profile's Max Context (undefined keys are
-        // dropped by JSON.stringify, leaving the server default in charge).
-        num_ctx: resolveNumCtx(params)
+        stop: params.stop
       }
     };
+    applyOllamaProfileParameters(requestBody, params);
     if (params.tools && params.tools.length > 0) {
       requestBody.tools = params.tools;
     }
@@ -11397,25 +11475,24 @@ var OllamaProvider = class {
         content: m.content
       };
     });
-    const enableThinking = resolveEnableThinking(params);
+    const enableThinking = resolveThinkSetting(params);
     const requestBody = {
       model: params.model,
       messages,
       stream: true,
       // Ollama's native thinking switch (0.9+; older servers ignore unknown
       // fields). When off, thinking-capable models answer directly; when on,
-      // Ollama streams reasoning deltas as `message.thinking`.
+      // Ollama streams reasoning deltas as `message.thinking`. Newer servers
+      // also accept an effort level in place of the boolean.
       think: enableThinking,
       options: {
         temperature: params.temperature ?? 0.7,
         num_predict: params.maxTokens ?? 4096,
         top_p: params.topP ?? 1,
-        stop: params.stop,
-        // Context window from the profile's Max Context (undefined keys are
-        // dropped by JSON.stringify, leaving the server default in charge).
-        num_ctx: resolveNumCtx(params)
+        stop: params.stop
       }
     };
+    applyOllamaProfileParameters(requestBody, params);
     if (params.tools && params.tools.length > 0) {
       requestBody.tools = params.tools;
     }
@@ -12305,11 +12382,83 @@ var optionsSchema = {
           helpText: "Let thinking-capable models (Qwen3, DeepSeek-R1, and kin) reason before answering. Reasoning streams into the thinking display rather than the reply. When off (the default), the model is asked to answer directly \u2014 best when you need clean output such as JSON. Either way, any <think> blocks that leak into the reply are routed to the thinking display."
         },
         {
+          key: "thinking_effort",
+          label: "Thinking Effort",
+          type: "enum",
+          default: "",
+          showIf: { field: "enable_thinking", equals: true },
+          enumValues: [
+            { value: "", label: "Model default", description: "Let the model decide how long to think" },
+            { value: "low", label: "Low", description: "Shortest reasoning, quickest replies" },
+            { value: "medium", label: "Medium" },
+            { value: "high", label: "High" },
+            { value: "max", label: "Maximum", description: "Longest reasoning, slowest replies" }
+          ],
+          helpText: "How long the model may reason before answering. On a local machine every reasoning token is wall-clock time, so this is the largest speed control you have. Needs a recent Ollama and a model whose template understands effort levels; older servers fall back to plain thinking."
+        },
+        {
+          key: "keep_alive",
+          label: "Keep Model Loaded",
+          type: "enum",
+          default: "",
+          enumValues: [
+            { value: "", label: "Server default", description: "Whatever your Ollama is configured to do" },
+            { value: "0", label: "Unload immediately", description: "Free the memory as soon as the reply is done" },
+            { value: "5m", label: "5 minutes" },
+            { value: "30m", label: "30 minutes" },
+            { value: "1h", label: "1 hour" },
+            { value: "-1", label: "Keep loaded", description: "Never unload while the server runs" }
+          ],
+          helpText: 'How long Ollama keeps this model in memory after a reply. The server unloads after five minutes by default, and reloading a large model costs half a minute on the next message. Set per profile, so a big chat model can stay resident while a small utility one unloads at once. Leave on "Server default" and your OLLAMA_KEEP_ALIVE setting is left entirely alone.'
+        },
+        {
           key: "request_timeout_seconds",
           label: "Request Timeout (seconds)",
           type: "number",
           default: DEFAULT_REQUEST_TIMEOUT_SECONDS,
           helpText: `How long to wait for the server before giving up (default ${DEFAULT_REQUEST_TIMEOUT_SECONDS}). While streaming this covers only the wait for the first token, so a long answer is never cut off mid-sentence \u2014 but loading a large model and reading a long prompt both happen before that first token. Raise it if big models on a busy machine abort with "operation was aborted"; lower it if you would rather a stalled server fail quickly. Leave blank for the default.`
+        }
+      ]
+    },
+    {
+      title: "Sampling",
+      helpText: "Sent only when filled in; blank leaves the model\u2019s own default in charge. Model publishers usually name the values they want \u2014 Qwen3 asks for Top K 20 and Min P 0.",
+      fields: [
+        {
+          key: "top_k",
+          label: "Top K",
+          type: "number",
+          helpText: "Keep only the K most likely next tokens."
+        },
+        {
+          key: "min_p",
+          label: "Min P",
+          type: "number",
+          helpText: "Drop tokens less likely than this fraction of the best one."
+        },
+        {
+          key: "repeat_penalty",
+          label: "Repeat Penalty",
+          type: "number",
+          helpText: "Penalty applied to tokens already used. Above 1 discourages repetition; 1 disables it."
+        },
+        {
+          key: "presence_penalty",
+          label: "Presence Penalty",
+          type: "number",
+          helpText: "Discourages tokens that have appeared at all. Some publishers recommend a value for non-thinking mode (Qwen3.8 asks for 1.5)."
+        },
+        {
+          key: "frequency_penalty",
+          label: "Frequency Penalty",
+          type: "number",
+          helpText: "Discourages tokens in proportion to how often they have already appeared."
+        },
+        {
+          key: "seed",
+          label: "Seed",
+          type: "number",
+          helpText: "Fixes the sampler so the same prompt gives the same answer."
         }
       ]
     }

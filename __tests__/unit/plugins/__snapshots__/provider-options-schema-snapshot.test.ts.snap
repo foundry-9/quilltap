@@ -149,6 +149,78 @@ exports[`Provider options schemas Ollama exposes an options schema 1`] = `
           "type": "boolean",
         },
         {
+          "default": "",
+          "enumValues": [
+            {
+              "description": "Let the model decide how long to think",
+              "label": "Model default",
+              "value": "",
+            },
+            {
+              "description": "Shortest reasoning, quickest replies",
+              "label": "Low",
+              "value": "low",
+            },
+            {
+              "label": "Medium",
+              "value": "medium",
+            },
+            {
+              "label": "High",
+              "value": "high",
+            },
+            {
+              "description": "Longest reasoning, slowest replies",
+              "label": "Maximum",
+              "value": "max",
+            },
+          ],
+          "helpText": "How long the model may reason before answering. On a local machine every reasoning token is wall-clock time, so this is the largest speed control you have. Needs a recent Ollama and a model whose template understands effort levels; older servers fall back to plain thinking.",
+          "key": "thinking_effort",
+          "label": "Thinking Effort",
+          "showIf": {
+            "equals": true,
+            "field": "enable_thinking",
+          },
+          "type": "enum",
+        },
+        {
+          "default": "",
+          "enumValues": [
+            {
+              "description": "Whatever your Ollama is configured to do",
+              "label": "Server default",
+              "value": "",
+            },
+            {
+              "description": "Free the memory as soon as the reply is done",
+              "label": "Unload immediately",
+              "value": "0",
+            },
+            {
+              "label": "5 minutes",
+              "value": "5m",
+            },
+            {
+              "label": "30 minutes",
+              "value": "30m",
+            },
+            {
+              "label": "1 hour",
+              "value": "1h",
+            },
+            {
+              "description": "Never unload while the server runs",
+              "label": "Keep loaded",
+              "value": "-1",
+            },
+          ],
+          "helpText": "How long Ollama keeps this model in memory after a reply. The server unloads after five minutes by default, and reloading a large model costs half a minute on the next message. Set per profile, so a big chat model can stay resident while a small utility one unloads at once. Leave on "Server default" and your OLLAMA_KEEP_ALIVE setting is left entirely alone.",
+          "key": "keep_alive",
+          "label": "Keep Model Loaded",
+          "type": "enum",
+        },
+        {
           "default": 300,
           "helpText": "How long to wait for the server before giving up (default 300). While streaming this covers only the wait for the first token, so a long answer is never cut off mid-sentence — but loading a large model and reading a long prompt both happen before that first token. Raise it if big models on a busy machine abort with "operation was aborted"; lower it if you would rather a stalled server fail quickly. Leave blank for the default.",
           "key": "request_timeout_seconds",
@@ -157,6 +229,48 @@ exports[`Provider options schemas Ollama exposes an options schema 1`] = `
         },
       ],
       "title": "Ollama Options",
+    },
+    {
+      "fields": [
+        {
+          "helpText": "Keep only the K most likely next tokens.",
+          "key": "top_k",
+          "label": "Top K",
+          "type": "number",
+        },
+        {
+          "helpText": "Drop tokens less likely than this fraction of the best one.",
+          "key": "min_p",
+          "label": "Min P",
+          "type": "number",
+        },
+        {
+          "helpText": "Penalty applied to tokens already used. Above 1 discourages repetition; 1 disables it.",
+          "key": "repeat_penalty",
+          "label": "Repeat Penalty",
+          "type": "number",
+        },
+        {
+          "helpText": "Discourages tokens that have appeared at all. Some publishers recommend a value for non-thinking mode (Qwen3.8 asks for 1.5).",
+          "key": "presence_penalty",
+          "label": "Presence Penalty",
+          "type": "number",
+        },
+        {
+          "helpText": "Discourages tokens in proportion to how often they have already appeared.",
+          "key": "frequency_penalty",
+          "label": "Frequency Penalty",
+          "type": "number",
+        },
+        {
+          "helpText": "Fixes the sampler so the same prompt gives the same answer.",
+          "key": "seed",
+          "label": "Seed",
+          "type": "number",
+        },
+      ],
+      "helpText": "Sent only when filled in; blank leaves the model’s own default in charge. Model publishers usually name the values they want — Qwen3 asks for Top K 20 and Min P 0.",
+      "title": "Sampling",
     },
   ],
 }
@@ -235,6 +349,97 @@ exports[`Provider options schemas OpenAI exposes an options schema 1`] = `
       ],
       "helpText": "Request a reasoning summary so the model's thinking can be shown in chat (display only; never re-fed to the model). Only the reasoning OpenAI models (GPT-5, o-series) produce one. OpenAI does not always expose a summary — if nothing appears, the model simply did not return one.",
       "title": "Reasoning",
+    },
+  ],
+}
+`;
+
+exports[`Provider options schemas OpenAI-compatible exposes an options schema 1`] = `
+{
+  "groups": [
+    {
+      "fields": [
+        {
+          "default": "",
+          "enumValues": [
+            {
+              "description": "Send nothing; the model decides",
+              "label": "Model default",
+              "value": "",
+            },
+            {
+              "description": "Answer without reasoning",
+              "label": "None",
+              "value": "none",
+            },
+            {
+              "label": "Low",
+              "value": "low",
+            },
+            {
+              "label": "Medium",
+              "value": "medium",
+            },
+            {
+              "label": "High",
+              "value": "high",
+            },
+            {
+              "description": "Longest reasoning, slowest replies",
+              "label": "Extra high",
+              "value": "xhigh",
+            },
+          ],
+          "helpText": "How long a reasoning model may think before answering. On a machine where every token costs wall-clock time this is the largest speed control you have. Only models whose chat template understands reasoning levels will act on it.",
+          "key": "reasoning_effort",
+          "label": "Reasoning Effort",
+          "type": "enum",
+        },
+        {
+          "helpText": "Keep only the K most likely next tokens. Qwen3 and kin ask for 20. Leave blank for the model default.",
+          "key": "top_k",
+          "label": "Top K",
+          "type": "number",
+        },
+        {
+          "helpText": "Drop tokens less likely than this fraction of the best one. Qwen3 and kin ask for 0. Leave blank for the model default.",
+          "key": "min_p",
+          "label": "Min P",
+          "type": "number",
+        },
+        {
+          "helpText": "Penalty applied to tokens already used. Above 1 discourages repetition; 1 disables it.",
+          "key": "repeat_penalty",
+          "label": "Repeat Penalty",
+          "type": "number",
+        },
+        {
+          "helpText": "Discourages tokens that have appeared at all. Some publishers recommend a value here for non-thinking mode (Qwen3.8 asks for 1.5).",
+          "key": "presence_penalty",
+          "label": "Presence Penalty",
+          "type": "number",
+        },
+        {
+          "helpText": "Discourages tokens in proportion to how often they have already appeared.",
+          "key": "frequency_penalty",
+          "label": "Frequency Penalty",
+          "type": "number",
+        },
+        {
+          "helpText": "Fixes the sampler so the same prompt gives the same answer. Leave blank for a fresh roll each turn.",
+          "key": "seed",
+          "label": "Seed",
+          "type": "number",
+        },
+        {
+          "helpText": "Let the server reuse the part of the prompt it has already processed. llama-server does this by default — this is an escape hatch for servers that do not, and you can leave it alone.",
+          "key": "cache_prompt",
+          "label": "Reuse Cached Prompt",
+          "type": "boolean",
+        },
+      ],
+      "helpText": "These are sent only when you fill them in. An endpoint that does not recognise a setting generally ignores it, so leave anything your server does not support blank.",
+      "title": "Endpoint Options",
     },
   ],
 }

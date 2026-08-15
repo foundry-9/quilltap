@@ -10,4 +10,4 @@
  * Version of the plugin-utils package.
  * Can be used at runtime to check compatibility.
  */
-export const PLUGIN_UTILS_VERSION = '2.2.20';
+export const PLUGIN_UTILS_VERSION = '2.3.0';

@@ -4,6 +4,20 @@
 
 ### 4.9-dev
 
+#### Local providers send the profile's parameters, and OpenAI-compatible endpoints can call tools (bug 71)
+
+`connection_profiles.parameters` is free-form JSON: any key saves and reloads cleanly. Ollama read three of them and hardcoded the rest of its `options` object; the OpenAI-compatible provider never read the blob at all and declared no options schema. Everything else was dropped on the way to the wire without a log line, so no local model could be run at the sampling settings its own publisher specifies, and `reasoning_effort` — exposed on DeepSeek and Z.AI — was unreachable on the two providers where wall-clock control matters most.
+
+`applyProfileParameters(body, params, allowlist, normalize?)` in `@quilltap/plugin-utils` 2.3.0 is now the one mechanism. It is an exported function rather than a base-class method because only DeepSeek extends `OpenAICompatibleProvider` — Z.AI, OpenRouter and Ollama implement their providers directly and reach it by composition. Keys are allow-listed, never spread, so `model`, `messages`, `stream` and `tools` stay unreachable from a profile; `undefined`, `null` and the empty string omit the key. `OpenAICompatibleProvider` gained `profileParamAllowlist` (empty by default, so every subclass is byte-identical on the wire until it opts in) and an overridable `normalizeProfileParam`. DeepSeek and Z.AI dropped their hand-rolled copies of the same loop.
+
+**OpenAI-compatible** (plugin 1.0.40) gets its first provider options schema: Reasoning Effort, Top K, Min P, Repeat Penalty, Presence Penalty, Frequency Penalty, Seed, Reuse Cached Prompt. Reasoning Effort is **not** sent as a top-level key — it is folded into `chat_template_kwargs`, which is how `llama-server` reaches a Jinja template's arguments; a flat key parses fine and is never seen by the template.
+
+**Ollama** (plugin 1.0.43) widens `options` to `top_k`, `min_p`, `repeat_penalty`, `presence_penalty`, `frequency_penalty`, `seed` and the mirostat trio, and gains two top-level settings. **Keep Model Loaded** sets `keep_alive` per profile, so a large chat model can stay resident while a small utility model unloads at once; it defaults to sending nothing at all, which leaves any `OLLAMA_KEEP_ALIVE` on the server in charge. **Thinking Effort** appears when Enable Thinking is on and sends `think` as a level rather than a boolean. Both were measured against a live Ollama 0.32.1 rather than assumed: an unknown think level is rejected outright by the server, and `keep_alive: "-1"` is rejected as a duration while the number `-1` is honoured, so the numeric sentinels go out as numbers. `num_ctx` and the existing thinking/timeout keys now route through the same table, so there is one answer to what a profile may set.
+
+Separately, the OpenAI-compatible provider could never call a tool: its capability is `false` *and* its request bodies had no `tools` key. The capability stays `false` — an arbitrary endpoint is the conservative case — but it is now a default rather than a ceiling. It seeds a new profile's "Allow tool use" checkbox, which was already editable, and the provider now sends `tools`/`tool_choice` when the caller supplies tools and parses `tool_calls` back on both paths (index-keyed accumulation of streamed argument fragments). An endpoint that does not in fact support tools fails visibly rather than falling back silently.
+
+No migration and no export-schema change: `parameters` was already free-form JSON and already round-trips.
+
 #### Max Tokens and Top P from the profile are actually sent
 
 A connection profile stores its sampling knobs under the keys the editor writes: `temperature`, `max_tokens`, `top_p`. The Salon's streaming path read `modelParams.maxTokens` and `modelParams.topP` — camelCase names that do not exist in that blob — so two of the three came out `undefined` on every turn and the provider fell back to its own defaults. On Ollama that meant `num_predict: 4096` and `top_p: 1` regardless of what the profile said, and the profile card in Settings displayed figures that were never used.

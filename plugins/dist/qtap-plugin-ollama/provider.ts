@@ -8,66 +8,23 @@
 import type { TextProvider, LLMParams, LLMResponse, StreamChunk } from './types';
 import { buildRequestAbortSignal, createPluginLogger, getQuilltapUserAgent, resolveRequestTimeoutMs } from '@quilltap/plugin-utils';
 import { ThinkTagStreamParser, extractThinkBlocks } from './think-parser';
+import {
+  applyOllamaProfileParameters,
+  resolveProfileTimeoutMs,
+  resolveThinkSetting,
+} from './profile-options';
 
 const logger = createPluginLogger('qtap-plugin-ollama');
 
 /**
- * Resolve the profile's `enable_thinking` option (see getProviderOptionsSchema
- * in index.ts). Defaults to false: thinking models answer without a reasoning
- * pass, keeping output clean for JSON-shaped work. Tolerates the string form
- * in case an older profile stored one.
- */
-function resolveEnableThinking(params: LLMParams): boolean {
-  const value = params.profileParameters?.enable_thinking;
-  return value === true || value === 'true';
-}
-
-/**
- * Default wait, in seconds, when the profile names none. Matches
- * `DEFAULT_REQUEST_TIMEOUT_MS` in @quilltap/plugin-utils — restated here in the
- * unit the profile field uses, and exported so the options schema in index.ts
- * advertises the same number the provider actually applies.
- */
-export const DEFAULT_REQUEST_TIMEOUT_SECONDS = 300;
-
-/**
- * Resolve the profile's `request_timeout_seconds` option (see
- * getProviderOptionsSchema in index.ts) into milliseconds.
- *
- * A local Ollama has no fixed answer to "how long should this take": loading a
- * 27B model off disk and reading a 20k-token prompt can outlast the shared
- * 5-minute default on a busy machine, while a small model on a quiet one should
- * fail fast. The number is therefore the user's, per connection profile.
- * Anything absent, unparseable or non-positive falls through to the default.
- */
-function resolveProfileTimeoutMs(params: LLMParams): number {
-  const value = params.profileParameters?.request_timeout_seconds;
-  const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
-  return Number.isFinite(n) && n > 0 ? n * 1000 : DEFAULT_REQUEST_TIMEOUT_SECONDS * 1000;
-}
-
-/**
  * Whether an Ollama error body is complaining about the `think` request
  * parameter — e.g. `"<model> does not support thinking"` on models whose
- * template Ollama can't drive either way. The caller retries once without
- * the parameter so such models keep working with the default profile.
+ * template Ollama can't drive either way, or an effort level on a server too
+ * old to know them. The caller retries once without the parameter so such
+ * models keep working with the default profile.
  */
 function isThinkRejection(errorText: string): boolean {
   return /think/i.test(errorText);
-}
-
-/**
- * Resolve the context window to request via `options.num_ctx`. The host
- * injects the profile's Max Context into `profileParameters.num_ctx` for
- * Ollama profiles (see profileParams in lib/llm/cheap-llm.ts); without it the
- * server allocates its own default and silently truncates longer prompts.
- * Undefined leaves the field off the wire — the server/Modelfile default
- * applies, exactly as before.
- */
-function resolveNumCtx(params: LLMParams): number | undefined {
-  const value = params.profileParameters?.num_ctx;
-  const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
 }
 
 // `params.cacheKey` is ignored: Ollama runs locally and manages its own
@@ -137,25 +94,26 @@ export class OllamaProvider implements TextProvider {
         };
       });
 
-    const enableThinking = resolveEnableThinking(params);
+    const enableThinking = resolveThinkSetting(params);
     const requestBody: any = {
       model: params.model,
       messages,
       stream: false,
       // Ollama's native thinking switch (0.9+; older servers ignore unknown
       // fields). When off, thinking-capable models answer directly; when on,
-      // Ollama returns the reasoning separately as `message.thinking`.
+      // Ollama returns the reasoning separately as `message.thinking`. Newer
+      // servers also accept an effort level in place of the boolean.
       think: enableThinking,
       options: {
         temperature: params.temperature ?? 0.7,
         num_predict: params.maxTokens ?? 4096,
         top_p: params.topP ?? 1,
         stop: params.stop,
-        // Context window from the profile's Max Context (undefined keys are
-        // dropped by JSON.stringify, leaving the server default in charge).
-        num_ctx: resolveNumCtx(params),
       },
     };
+    // Everything else the profile may set — the sampler options (including
+    // `num_ctx` from the profile's Max Context) and top-level `keep_alive`.
+    applyOllamaProfileParameters(requestBody, params);
 
     // Add tools if provided
     if (params.tools && params.tools.length > 0) {
@@ -273,7 +231,7 @@ export class OllamaProvider implements TextProvider {
         };
       });
 
-    const enableThinking = resolveEnableThinking(params);
+    const enableThinking = resolveThinkSetting(params);
     // Log message details for debugging
     const requestBody: any = {
       model: params.model,
@@ -281,18 +239,18 @@ export class OllamaProvider implements TextProvider {
       stream: true,
       // Ollama's native thinking switch (0.9+; older servers ignore unknown
       // fields). When off, thinking-capable models answer directly; when on,
-      // Ollama streams reasoning deltas as `message.thinking`.
+      // Ollama streams reasoning deltas as `message.thinking`. Newer servers
+      // also accept an effort level in place of the boolean.
       think: enableThinking,
       options: {
         temperature: params.temperature ?? 0.7,
         num_predict: params.maxTokens ?? 4096,
         top_p: params.topP ?? 1,
         stop: params.stop,
-        // Context window from the profile's Max Context (undefined keys are
-        // dropped by JSON.stringify, leaving the server default in charge).
-        num_ctx: resolveNumCtx(params),
       },
     };
+    // Everything else the profile may set — see applyOllamaProfileParameters.
+    applyOllamaProfileParameters(requestBody, params);
     // Add tools if provided
     if (params.tools && params.tools.length > 0) {
       requestBody.tools = params.tools;

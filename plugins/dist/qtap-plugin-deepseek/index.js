@@ -11109,6 +11109,19 @@ function buildSdkRequestOptions(params) {
   if (typeof requested !== "number" || requested <= 0) return void 0;
   return { timeout: requested, maxRetries: 0 };
 }
+function applyProfileParameters(body, params, allowlist, normalize) {
+  const profile = params.profileParameters;
+  if (!profile || typeof profile !== "object") return;
+  const bag = profile;
+  for (const key of allowlist) {
+    const raw = bag[key];
+    if (raw === void 0 || raw === null) continue;
+    if (typeof raw === "string" && raw === "") continue;
+    const value = normalize ? normalize(key, raw, params, body) : raw;
+    if (value === void 0) continue;
+    body[key] = value;
+  }
+}
 var DEFAULT_MAX_RETRIES = 2;
 var OpenAICompatibleProvider = class {
   /**
@@ -11120,6 +11133,7 @@ var OpenAICompatibleProvider = class {
     this.supportsFileAttachments = false;
     this.supportedMimeTypes = [];
     this.supportsWebSearch = false;
+    this.profileParamAllowlist = [];
     if (typeof config2 === "string") {
       this.baseUrl = config2;
       this.providerName = "OpenAICompatible";
@@ -11208,6 +11222,53 @@ var OpenAICompatibleProvider = class {
     return buildSdkRequestOptions(params);
   }
   /**
+   * Per-key hook for allow-listed profile parameters. The default forwards the
+   * stored value verbatim.
+   *
+   * Override to reshape a value (the editor stores flat strings where some APIs
+   * want objects), to gate a key on the model, or — by writing into `body` and
+   * returning `undefined` — to send it under a different key entirely.
+   */
+  normalizeProfileParam(_key, value, _params, _body) {
+    return value;
+  }
+  /**
+   * Apply {@link profileParamAllowlist} to a request body under construction.
+   * Called by both body builds so the streaming and non-streaming shapes cannot
+   * drift apart.
+   */
+  applyProfileParams(body, params) {
+    applyProfileParameters(
+      body,
+      params,
+      this.profileParamAllowlist,
+      (key, value, callParams, target) => this.normalizeProfileParam(key, value, callParams, target)
+    );
+  }
+  /**
+   * Normalize an OpenAI-shaped `tool_calls` array into Quilltap's `ToolCall`
+   * shape, tolerating servers that hand back already-parsed argument objects
+   * where the OpenAI wire format specifies a JSON string.
+   */
+  normalizeToolCalls(toolCalls) {
+    if (!toolCalls || toolCalls.length === 0) return [];
+    const out = [];
+    for (const raw of toolCalls) {
+      const tc = raw;
+      if (!tc?.function?.name) continue;
+      const args = tc.function.arguments;
+      out.push({
+        id: tc.id ?? "",
+        type: "function",
+        function: {
+          name: tc.function.name,
+          arguments: typeof args === "string" ? args : JSON.stringify(args ?? {})
+        }
+      });
+    }
+    return out;
+  }
+  /**
    * Sends a message and returns the complete response.
    *
    * @param params - LLM parameters including messages, model, and settings
@@ -11245,17 +11306,26 @@ var OpenAICompatibleProvider = class {
         content: m.content
       };
     });
+    const body = {
+      model: params.model,
+      messages,
+      temperature: params.temperature ?? 0.7,
+      max_tokens: params.maxTokens ?? 4096,
+      top_p: params.topP ?? 1,
+      stop: params.stop,
+      ...params.cacheKey ? { user: params.cacheKey } : {},
+      // Tools arrive only once the runtime gate (the profile's "Allow tool
+      // use") has passed, so no separate guard is needed here.
+      ...params.tools && params.tools.length > 0 ? { tools: params.tools, tool_choice: params.toolChoice ?? "auto" } : {}
+    };
+    this.applyProfileParams(body, params);
     try {
-      const response = await client.chat.completions.create({
-        model: params.model,
-        messages,
-        temperature: params.temperature ?? 0.7,
-        max_tokens: params.maxTokens ?? 4096,
-        top_p: params.topP ?? 1,
-        stop: params.stop,
-        ...params.cacheKey ? { user: params.cacheKey } : {}
-      }, this.buildRequestOptions(params));
+      const response = await client.chat.completions.create(
+        body,
+        this.buildRequestOptions(params)
+      );
       const choice = response.choices[0];
+      const toolCalls = this.normalizeToolCalls(choice.message.tool_calls);
       return {
         content: choice.message.content ?? "",
         finishReason: choice.finish_reason,
@@ -11265,7 +11335,8 @@ var OpenAICompatibleProvider = class {
           totalTokens: response.usage?.total_tokens ?? 0
         },
         raw: response,
-        attachmentResults
+        attachmentResults,
+        ...toolCalls.length > 0 ? { toolCalls } : {}
       };
     } catch (error) {
       this.logger.error(
@@ -11314,23 +11385,32 @@ var OpenAICompatibleProvider = class {
         content: m.content
       };
     });
+    const body = {
+      model: params.model,
+      messages,
+      temperature: params.temperature ?? 0.7,
+      max_tokens: params.maxTokens ?? 4096,
+      top_p: params.topP ?? 1,
+      stop: params.stop,
+      stream: true,
+      stream_options: { include_usage: true },
+      ...params.cacheKey ? { user: params.cacheKey } : {},
+      ...params.tools && params.tools.length > 0 ? { tools: params.tools, tool_choice: params.toolChoice ?? "auto" } : {}
+    };
+    this.applyProfileParams(body, params);
     try {
-      const stream = await client.chat.completions.create({
-        model: params.model,
-        messages,
-        temperature: params.temperature ?? 0.7,
-        max_tokens: params.maxTokens ?? 4096,
-        top_p: params.topP ?? 1,
-        stop: params.stop,
-        stream: true,
-        stream_options: { include_usage: true },
-        ...params.cacheKey ? { user: params.cacheKey } : {}
-      }, this.buildRequestOptions(params));
+      const stream = await client.chat.completions.create(
+        body,
+        this.buildRequestOptions(params)
+      );
       let chunkCount = 0;
       let accumulatedUsage = null;
+      const toolCallAccumulator = /* @__PURE__ */ new Map();
+      let finishReason = null;
       for await (const chunk of stream) {
         chunkCount++;
-        const content = chunk.choices[0]?.delta?.content;
+        const choice = chunk.choices[0];
+        const content = choice?.delta?.content;
         const hasUsage = chunk.usage;
         if (hasUsage) {
           accumulatedUsage = {
@@ -11339,6 +11419,17 @@ var OpenAICompatibleProvider = class {
             total_tokens: chunk.usage?.total_tokens
           };
         }
+        if (choice?.delta?.tool_calls) {
+          for (const tcDelta of choice.delta.tool_calls) {
+            const idx = tcDelta.index ?? 0;
+            const existing = toolCallAccumulator.get(idx) ?? { id: "", name: "", arguments: "" };
+            if (tcDelta.id) existing.id = tcDelta.id;
+            if (tcDelta.function?.name) existing.name = tcDelta.function.name;
+            if (tcDelta.function?.arguments) existing.arguments += tcDelta.function.arguments;
+            toolCallAccumulator.set(idx, existing);
+          }
+        }
+        if (choice?.finish_reason) finishReason = choice.finish_reason;
         if (content) {
           yield {
             content,
@@ -11346,6 +11437,11 @@ var OpenAICompatibleProvider = class {
           };
         }
       }
+      const toolCalls = Array.from(toolCallAccumulator.values()).filter((tc) => tc.name).map((tc) => ({
+        id: tc.id,
+        type: "function",
+        function: { name: tc.name, arguments: tc.arguments }
+      }));
       yield {
         content: "",
         done: true,
@@ -11354,7 +11450,22 @@ var OpenAICompatibleProvider = class {
           completionTokens: accumulatedUsage.completion_tokens ?? 0,
           totalTokens: accumulatedUsage.total_tokens ?? 0
         } : void 0,
-        attachmentResults
+        attachmentResults,
+        // Only synthesized when the stream actually carried tool calls: the
+        // host's tool detection reads `rawResponse`, and an empty one on every
+        // ordinary turn would be noise in the logs for no gain.
+        ...toolCalls.length > 0 ? {
+          toolCalls,
+          rawResponse: {
+            choices: [
+              {
+                index: 0,
+                message: { role: "assistant", content: "", tool_calls: toolCalls },
+                finish_reason: finishReason
+              }
+            ]
+          }
+        } : {}
       };
     } catch (error) {
       this.logger.error(
@@ -11447,6 +11558,13 @@ var DeepSeekProvider = class extends OpenAICompatibleProvider {
       requireApiKey: config2?.requireApiKey ?? true,
       attachmentErrorMessage: config2?.attachmentErrorMessage ?? "DeepSeek models do not accept file attachments. Send text-only messages."
     });
+    /**
+     * The base class copies these off `params.profileParameters` (allow-listed;
+     * undefined, null and the empty string omit the key). DeepSeek is the one
+     * plugin that extends the base, so it inherits the mechanism rather than
+     * reaching it by composition the way Z.AI and Ollama do.
+     */
+    this.profileParamAllowlist = DEEPSEEK_PROFILE_PARAM_ALLOWLIST;
   }
   /**
    * Map LLMMessages to OpenAI chat-completion format, preserving
@@ -11496,19 +11614,11 @@ var DeepSeekProvider = class extends OpenAICompatibleProvider {
     }
     return out;
   }
-  applyProfileParameters(body, params) {
-    const profile = params.profileParameters;
-    if (!profile || typeof profile !== "object") return;
-    for (const key of DEEPSEEK_PROFILE_PARAM_ALLOWLIST) {
-      const value = profile[key];
-      if (value === void 0) continue;
-      if (typeof value === "string" && value === "") continue;
-      if (key === "thinking" && typeof value === "string") {
-        body[key] = { type: value };
-        continue;
-      }
-      body[key] = value;
+  normalizeProfileParam(key, value) {
+    if (key === "thinking" && typeof value === "string") {
+      return { type: value };
     }
+    return value;
   }
   extractCacheUsage(usage) {
     const hit = usage?.prompt_cache_hit_tokens;
@@ -11546,7 +11656,7 @@ var DeepSeekProvider = class extends OpenAICompatibleProvider {
     if (typeof params.cacheKey === "string" && params.cacheKey.length > 0) {
       body.user_id = params.cacheKey;
     }
-    this.applyProfileParameters(body, params);
+    this.applyProfileParams(body, params);
     stripThinkingIncompatibleParams(body);
     try {
       const response = await client.chat.completions.create(
@@ -11629,7 +11739,7 @@ var DeepSeekProvider = class extends OpenAICompatibleProvider {
     if (typeof params.cacheKey === "string" && params.cacheKey.length > 0) {
       body.user_id = params.cacheKey;
     }
-    this.applyProfileParameters(body, params);
+    this.applyProfileParams(body, params);
     stripThinkingIncompatibleParams(body);
     try {
       const stream = await client.chat.completions.create(

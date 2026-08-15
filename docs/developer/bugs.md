@@ -1,11 +1,39 @@
 # Bugs — defects surfaced by the v5 port
 
-**Last Updated**: 2026-08-14
+**Last Updated**: 2026-08-15
 **Codebase**: Quilltap v4.9.0-dev
 **Provenance**: the quilltap-v5 native port's differential harness, its
 dogfood walks against a copy of real data, and — from Bug 62 — v4's own
 feature-spec work
-**Status**: Bugs **1–69** are **fixed in v4**; **nothing is open**. Bug 69
+**Status**: Bugs **1–71** are **fixed in v4**. Bug 71
+(filed and fixed 2026-08-15 while benchmarking `Qwen3.8-27B` on an M4 Pro) was
+the general case of the problem
+[Bug 68](bugs/fixed/bug-68-ollama-prefill-kills-thinking.md) solved one instance
+of: the two local-model providers had no route for a provider-specific request
+parameter. `OPENAI_COMPATIBLE` never read `profileParameters` at all and
+declared no options schema; `OLLAMA` read three keys and hardcoded the rest of
+its `options` literal. Because the `parameters` column is free-form JSON that
+accepts and persists anything, a key a user added saved cleanly, reloaded
+cleanly, and was dropped on the way to the wire in silence — so no local model
+could be run at its own publisher's recommended sampling settings, and
+`reasoning_effort` was unavailable on exactly the providers where wall-clock
+control matters most. The mechanism landed as an **exported helper**
+(`applyProfileParameters`, plugin-utils 2.3.0) rather than a base-class method,
+because measuring the graph disproved the obvious design: DeepSeek is the *only*
+subclass of `OpenAICompatibleProvider`, while Z.AI and OpenRouter implement
+`TextProvider` directly. Both local plugins now declare allow-lists, OAC gained
+its first options schema (with `reasoning_effort` folded into
+`chat_template_kwargs`, which is how `llama-server` reaches a template's
+arguments), and Ollama gained per-profile `keep_alive` and thinking-effort —
+both settled by measurement against a live Ollama 0.32.1 rather than by
+assumption, which is what established that `keep_alive: "-1"` is refused as a
+duration while the number is honoured. Carried in the same entry:
+`OPENAI_COMPATIBLE` could never call a tool, blocked twice over. The `false`
+capability is correct for an arbitrary endpoint and stays; what the fix removed
+is that it was a ceiling — the body builds now carry `tools` and parse
+`tool_calls` back. (One claim in the filing did not survive contact: the profile
+editor was already seeding `allowToolUse` on new profiles only, and the checkbox
+had never been disabled, so there was no clamp to remove.) Bug 69
 (filed and fixed 2026-08-14) was found *while verifying* the bug 66 fix, which
 needed an archived character to look at: the file watcher re-derives every
 changed file's `sha256` from its bytes on disk, and an archived character's
@@ -291,6 +319,7 @@ One row per bug, newest last. **Bug** links to the entry; **Fix site** and
 | 68 | [the multi-character `[Name]` prefill silently kills Ollama's thinking channel](bugs/fixed/bug-68-ollama-prefill-kills-thinking.md) | 2026-08-14 | 2026-08-14 | Medium (a paid-for feature is off with no signal — the toggle reads on, the model reasons, the reasoning is discarded before capture, and the reasoning tokens cost wall-clock either way) | Ollama's `think` support lives in the model's **chat template**, which opens the thinking block at the start of the assistant turn — so the multi-character `[Name]` assistant prefill (`context-builder.service.ts`, everything but Anthropic) means the turn has already begun with visible content and the block is never opened; `message.thinking` returns empty regardless of `think: true`. Reproduced against `localhost:11434`: same 27B, no prefill → 470 thinking chars, with prefill → 0. Ollama-only — other providers carry a protocol-level reasoning field that survives the prefill (DeepSeek 1742/5689 multi-char turns, Ollama 0/12) | The route is now the user's choice per profile: `connection_profiles.multiCharacterPrefill` (migration `add-profile-multi-character-prefill-field-v1`, backfilled Anthropic-off/rest-on) resolved through the one chokepoint `profileUsesNamePrefill` in new `lib/llm/multi-character-prefill.ts`, applied by `applyMultiCharacterTurnAnchor` in `context-builder.service.ts` with the provider hardcoding removed, and surfaced as a profile-editor checkbox. A NULL column means "never chosen" and resolves to the provider default, so a pre-4.9 Anthropic import can't come back with the prefill on. The separate greeting-path reasoning drop (`lib/chat/initial-greeting.ts` read only `chunk.content`) was fixed alongside | Not yet assessed — v5 ports the same carve-out and inherits the defect; port the per-profile setting from the bug file, not v4's pre-fix provider branch |
 | 69 | [the file watcher overwrites an archive bundle's content digest, so no archived character can be rehydrated](bugs/fixed/bug-69-watcher-clobbers-archive-digest.md) | 2026-08-14 | 2026-08-14 | **High** | An archive row records the PLAINTEXT digest of an encrypted bundle; `handleFileChange` re-derives every changed file's `sha256` from disk, so seconds after each archive the row holds the ciphertext digest and every rehydrate refuses the bundle as corrupt — archiving is one-way | new `lib/file-storage/digest-policy.ts` honoured by `watcher.ts` + `reconciliation.ts`, plus a self-heal in `archive-service.ts` for rows already clobbered | Not yet assessed — any v5 watcher that re-derives digests inherits it |
 | 70 | [the context budget ignores the profile's Max Context, so an unrecognised model is budgeted as 8192 tokens](bugs/fixed/bug-70-budget-ignores-profile-max-context.md) | 2026-08-15 | 2026-08-15 | **High** | Two resolutions of the model's context window on the same turn: `calculateContextBudget` used a model-name lookup only (`getModelContextLimit` → 8192 OLLAMA default for any `hf.co/...` tag) while `calculateMaxAvailable` read the profile's real 65536. The small one won where it hurts — `remainingBudget` left ~1–1.5k tokens for 4897 tokens of history, silently trimmed every turn, while compression correctly saw no need to compress and the pre-send warning validated against the same corrupt figure. Two adjacent gaps fixed alongside: the builder packed to `totalLimit − responseReserve` while the validator warned 10% lower, and the tool schemas (never in the message array) plus the post-build agent-mode / tool-change injections were spent unbudgeted and uncounted | new `resolveContextWindow` chokepoint in `lib/llm/model-context-data.ts` honoured by `getRecommendedContextAllocation` / `getSafeInputLimit` / `calculateMaxAvailable`, with `calculateContextBudget` (`lib/chat/context-manager.ts`) now taking the profile and `buildContext` passing it; `computeSafeInputLimit` as the single ceiling both sides read; new `lib/services/chat-message/turn-extras.ts` (`collectTurnExtras`) building, measuring and reserving the payload's non-context parts | Not yet assessed — any v5 budget resolving the window from the model name inherits it |
+| 71 | [the two local-model providers silently drop every profile parameter, and `OPENAI_COMPATIBLE` can never call a tool](bugs/fixed/bug-71-local-provider-params-dropped.md) | 2026-08-15 | 2026-08-15 | Medium (a persisted setting that does nothing, on every local deployment) | `OPENAI_COMPATIBLE` never reads `profileParameters` and has no options schema; `OLLAMA` reads three keys and hardcodes the rest of `options`. Arbitrary keys save and reload cleanly, then vanish before the wire — so no local model can run at its publisher's recommended sampling settings (`top_k` / `min_p` / `presence_penalty` are all unreachable) and `reasoning_effort` is unavailable on the two providers where wall-clock control matters most. Separately, OAC's `toolUse: false` is a ceiling rather than a default, and the body builds carry no `tools` key either way | new `packages/plugin-utils/src/providers/profile-parameters.ts` + `openai-compatible.ts`'s allowlist hooks and tool legs (**plugin-utils 2.3.0**) + new `qtap-plugin-ollama/profile-options.ts` + OAC's first options schema + the DeepSeek and Z.AI collapses | Not yet assessed — v5's declarative manifests need a per-provider allowlist or inherit it; moves the `request-envelopes` corpus |
 
 ### Families and reading order
 
