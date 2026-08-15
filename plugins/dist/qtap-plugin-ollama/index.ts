@@ -10,7 +10,7 @@
  * - Embeddings support through compatible models
  */
 
-import type { TextProviderPlugin, EmbeddingModelInfo } from './types';
+import type { TextProviderPlugin, EmbeddingModelInfo, ProviderOptionsSchema } from './types';
 import { OllamaProvider } from './provider';
 import { OllamaEmbeddingProvider } from './embedding-provider';
 import {
@@ -56,7 +56,11 @@ const capabilities = {
   imageGeneration: false,
   embeddings: true,
   webSearch: false,
-  toolUse: false,
+  // The provider forwards native tool definitions and normalizes tool_calls,
+  // and modern local models (Qwen3 family, Llama 3.x, …) handle them. The
+  // per-profile "Allow tool use" checkbox remains the gate; models without
+  // template tool support can use the pseudo-tool (simple-json) format.
+  toolUse: true,
 } as const;
 
 /**
@@ -87,6 +91,33 @@ const cheapModels = {
 };
 
 /**
+ * Connection-profile options schema rendered by the Quilltap host.
+ * `enable_thinking` is stored in the profile's `parameters` blob and read
+ * back by the provider off `LLMParams.profileParameters` at call time,
+ * where it becomes Ollama's top-level `think` request parameter.
+ */
+const optionsSchema: ProviderOptionsSchema = {
+  groups: [
+    {
+      title: 'Ollama Options',
+      fields: [
+        {
+          key: 'enable_thinking',
+          label: 'Enable Thinking',
+          type: 'boolean',
+          default: false,
+          helpText:
+            'Let thinking-capable models (Qwen3, DeepSeek-R1, and kin) reason before answering. ' +
+            'Reasoning streams into the thinking display rather than the reply. When off (the default), ' +
+            'the model is asked to answer directly — best when you need clean output such as JSON. ' +
+            'Either way, any <think> blocks that leak into the reply are routed to the thinking display.',
+        },
+      ],
+    },
+  ],
+};
+
+/**
  * The Ollama Provider Plugin
  * Implements the LLMProviderPlugin interface for Quilltap
  */
@@ -112,6 +143,11 @@ export const plugin: TextProviderPlugin = {
   toolFormat: 'openai', // Ollama uses OpenAI-compatible format
   cheapModels,
   defaultContextWindow: 8192, // Conservative default for local models
+
+  /**
+   * Connection-profile options schema rendered by the host's profile editor.
+   */
+  getProviderOptionsSchema: () => optionsSchema,
 
   /**
    * Factory method to create an Ollama LLM provider instance

@@ -93,7 +93,7 @@ import {
 } from './memory-trigger.service'
 import { flushPendingWardrobeAnnouncements } from '@/lib/tools/handlers/wardrobe-handler-shared'
 import { countMessagesTokens } from '@/lib/tokens/token-counter'
-import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm'
+import { getCheapLLMProvider, profileParams, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 import type { RosterContext as CustomToolRosterContext } from '@/lib/pascal/custom-tools'
 import { runPreContextPreCompute } from './pre-compute.service'
@@ -1031,7 +1031,7 @@ async function processMessage(
     resolvedToolMode === 'simple-json' ? SIMPLE_JSON_STOP : undefined
 
   // Build message context
-  const modelParams = streamingState.effectiveProfile.parameters as Record<string, unknown>
+  const modelParams = profileParams(streamingState.effectiveProfile) ?? {}
   const contextChatSettings = chatSettings ? {
     cheapLLMSettings: chatSettings.cheapLLMSettings ? {} : undefined,
     defaultTimestampConfig: chatSettings.defaultTimestampConfig,

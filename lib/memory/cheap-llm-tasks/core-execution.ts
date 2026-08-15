@@ -5,7 +5,7 @@
 import { createLLMProvider } from '@/lib/llm'
 import type { LLMMessage, LLMResponse } from '@/lib/llm/base'
 import { buildCharacterCacheKey } from '@/lib/llm/cache-key'
-import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
+import { profileParams, type CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { getApiKeyForCheapLLMSelection } from '@/lib/services/api-key.service'
 import { getErrorMessage } from '@/lib/error-utils'
 import { logger } from '@/lib/logger'
@@ -295,9 +295,7 @@ function shouldAttemptUncensoredFallback(
     baseUrl: uncensoredProfile.baseUrl || undefined,
     connectionProfileId: uncensoredProfile.id,
     isLocal: false,
-    profileParameters: uncensoredProfile.parameters && typeof uncensoredProfile.parameters === 'object'
-      ? (uncensoredProfile.parameters as Record<string, unknown>)
-      : undefined,
+    profileParameters: profileParams(uncensoredProfile),
   }
 }
 

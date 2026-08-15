@@ -25,6 +25,9 @@ jest.mock('@/lib/memory/cheap-llm-tasks/core-execution', () => ({
 }));
 jest.mock('@/lib/llm/cheap-llm', () => ({
   resolveUncensoredCheapLLMSelection: jest.fn((sel) => sel),
+  profileParams: jest.fn((profile) =>
+    profile?.parameters && typeof profile.parameters === 'object' ? profile.parameters : undefined
+  ),
 }));
 
 const mockExecute = jest.mocked(executeCheapLLMTask);

@@ -136,6 +136,25 @@ exports[`Provider options schemas DeepSeek exposes an options schema 1`] = `
 }
 `;
 
+exports[`Provider options schemas Ollama exposes an options schema 1`] = `
+{
+  "groups": [
+    {
+      "fields": [
+        {
+          "default": false,
+          "helpText": "Let thinking-capable models (Qwen3, DeepSeek-R1, and kin) reason before answering. Reasoning streams into the thinking display rather than the reply. When off (the default), the model is asked to answer directly — best when you need clean output such as JSON. Either way, any <think> blocks that leak into the reply are routed to the thinking display.",
+          "key": "enable_thinking",
+          "label": "Enable Thinking",
+          "type": "boolean",
+        },
+      ],
+      "title": "Ollama Options",
+    },
+  ],
+}
+`;
+
 exports[`Provider options schemas OpenAI exposes an options schema 1`] = `
 {
   "groups": [

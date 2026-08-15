@@ -24,6 +24,7 @@ const { plugin: openaiPlugin } = require('../../../plugins/dist/qtap-plugin-open
 const { plugin: openrouterPlugin } = require('../../../plugins/dist/qtap-plugin-openrouter/index.js')
 const { plugin: deepseekPlugin } = require('../../../plugins/dist/qtap-plugin-deepseek/index.js')
 const { plugin: zaiPlugin } = require('../../../plugins/dist/qtap-plugin-z-ai/index.js')
+const { plugin: ollamaPlugin } = require('../../../plugins/dist/qtap-plugin-ollama/index.js')
 
 describe('Provider options schemas', () => {
   it('Anthropic exposes an options schema', () => {
@@ -44,5 +45,9 @@ describe('Provider options schemas', () => {
 
   it('Z.AI exposes an options schema', () => {
     expect(zaiPlugin.getProviderOptionsSchema?.()).toMatchSnapshot()
+  })
+
+  it('Ollama exposes an options schema', () => {
+    expect(ollamaPlugin.getProviderOptionsSchema?.()).toMatchSnapshot()
   })
 })

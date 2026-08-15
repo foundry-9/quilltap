@@ -7,8 +7,44 @@
 
 import type { TextProvider, LLMParams, LLMResponse, StreamChunk } from './types';
 import { buildRequestAbortSignal, createPluginLogger, getQuilltapUserAgent, resolveRequestTimeoutMs } from '@quilltap/plugin-utils';
+import { ThinkTagStreamParser, extractThinkBlocks } from './think-parser';
 
 const logger = createPluginLogger('qtap-plugin-ollama');
+
+/**
+ * Resolve the profile's `enable_thinking` option (see getProviderOptionsSchema
+ * in index.ts). Defaults to false: thinking models answer without a reasoning
+ * pass, keeping output clean for JSON-shaped work. Tolerates the string form
+ * in case an older profile stored one.
+ */
+function resolveEnableThinking(params: LLMParams): boolean {
+  const value = params.profileParameters?.enable_thinking;
+  return value === true || value === 'true';
+}
+
+/**
+ * Whether an Ollama error body is complaining about the `think` request
+ * parameter — e.g. `"<model> does not support thinking"` on models whose
+ * template Ollama can't drive either way. The caller retries once without
+ * the parameter so such models keep working with the default profile.
+ */
+function isThinkRejection(errorText: string): boolean {
+  return /think/i.test(errorText);
+}
+
+/**
+ * Resolve the context window to request via `options.num_ctx`. The host
+ * injects the profile's Max Context into `profileParameters.num_ctx` for
+ * Ollama profiles (see profileParams in lib/llm/cheap-llm.ts); without it the
+ * server allocates its own default and silently truncates longer prompts.
+ * Undefined leaves the field off the wire — the server/Modelfile default
+ * applies, exactly as before.
+ */
+function resolveNumCtx(params: LLMParams): number | undefined {
+  const value = params.profileParameters?.num_ctx;
+  const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
+}
 
 // `params.cacheKey` is ignored: Ollama runs locally and manages its own
 // per-process KV cache; no remote routing or isolation hint applies.
@@ -77,15 +113,23 @@ export class OllamaProvider implements TextProvider {
         };
       });
 
+    const enableThinking = resolveEnableThinking(params);
     const requestBody: any = {
       model: params.model,
       messages,
       stream: false,
+      // Ollama's native thinking switch (0.9+; older servers ignore unknown
+      // fields). When off, thinking-capable models answer directly; when on,
+      // Ollama returns the reasoning separately as `message.thinking`.
+      think: enableThinking,
       options: {
         temperature: params.temperature ?? 0.7,
         num_predict: params.maxTokens ?? 4096,
         top_p: params.topP ?? 1,
         stop: params.stop,
+        // Context window from the profile's Max Context (undefined keys are
+        // dropped by JSON.stringify, leaving the server default in charge).
+        num_ctx: resolveNumCtx(params),
       },
     };
 
@@ -95,28 +139,62 @@ export class OllamaProvider implements TextProvider {
     }
 
     try {
-      const response = await fetch(`${this.baseUrl}/api/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': getQuilltapUserAgent(),
-        },
-        body: JSON.stringify(requestBody),
-        // Non-streaming: the whole exchange is one JSON blob, so bounding the
-        // entire request is right. A local endpoint that stops answering — a
-        // model still loading, a crashed runner — fails instead of hanging.
-        signal: buildRequestAbortSignal(params),
-      });
+      const doFetch = () =>
+        fetch(`${this.baseUrl}/api/chat`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': getQuilltapUserAgent(),
+          },
+          body: JSON.stringify(requestBody),
+          // Non-streaming: the whole exchange is one JSON blob, so bounding the
+          // entire request is right. A local endpoint that stops answering — a
+          // model still loading, a crashed runner — fails instead of hanging.
+          signal: buildRequestAbortSignal(params),
+        });
 
+      let response = await doFetch();
       if (!response.ok) {
-        const errorText = await response.text();
-        logger.error('Ollama API error response', { context: 'OllamaProvider.sendMessage', status: response.status, error: errorText });
-        throw new Error(`Ollama API error: ${response.status} ${errorText}`);
+        let errorText = await response.text();
+        if ('think' in requestBody && isThinkRejection(errorText)) {
+          // Some models refuse the think parameter outright (e.g. ones that
+          // cannot disable thinking). Retry once without it rather than
+          // failing the whole call.
+          logger.warn('Ollama rejected the think parameter; retrying without it', {
+            context: 'OllamaProvider.sendMessage',
+            model: params.model,
+            enableThinking,
+            error: errorText,
+          });
+          delete requestBody.think;
+          response = await doFetch();
+          if (!response.ok) errorText = await response.text();
+        }
+        if (!response.ok) {
+          logger.error('Ollama API error response', { context: 'OllamaProvider.sendMessage', status: response.status, error: errorText });
+          throw new Error(`Ollama API error: ${response.status} ${errorText}`);
+        }
       }
 
       const data = await response.json();
+      // Reasoning may arrive on the dedicated `thinking` field (Ollama parsed
+      // the template) or as inline `<think>` blocks in the content (it did
+      // not). Route both into reasoningContent and keep the message clean.
+      const rawContent = typeof data.message?.content === 'string' ? data.message.content : '';
+      const { content, reasoning: inlineReasoning } = extractThinkBlocks(rawContent);
+      const nativeThinking = typeof data.message?.thinking === 'string' ? data.message.thinking : '';
+      const reasoningContent = nativeThinking + inlineReasoning;
+      if (reasoningContent) {
+        logger.debug('Ollama response carried reasoning', {
+          context: 'OllamaProvider.sendMessage',
+          model: params.model,
+          enableThinking,
+          nativeChars: nativeThinking.length,
+          inlineChars: inlineReasoning.length,
+        });
+      }
       return {
-        content: data.message.content,
+        content,
         finishReason: data.done ? 'stop' : 'length',
         usage: {
           promptTokens: data.prompt_eval_count ?? 0,
@@ -125,6 +203,7 @@ export class OllamaProvider implements TextProvider {
         },
         raw: data,
         attachmentResults,
+        ...(reasoningContent ? { reasoningContent } : {}),
       };
     } catch (error) {
       logger.error('Ollama sendMessage failed', { context: 'OllamaProvider.sendMessage', baseUrl: this.baseUrl }, error instanceof Error ? error : undefined);
@@ -170,16 +249,24 @@ export class OllamaProvider implements TextProvider {
         };
       });
 
+    const enableThinking = resolveEnableThinking(params);
     // Log message details for debugging
     const requestBody: any = {
       model: params.model,
       messages,
       stream: true,
+      // Ollama's native thinking switch (0.9+; older servers ignore unknown
+      // fields). When off, thinking-capable models answer directly; when on,
+      // Ollama streams reasoning deltas as `message.thinking`.
+      think: enableThinking,
       options: {
         temperature: params.temperature ?? 0.7,
         num_predict: params.maxTokens ?? 4096,
         top_p: params.topP ?? 1,
         stop: params.stop,
+        // Context window from the profile's Max Context (undefined keys are
+        // dropped by JSON.stringify, leaving the server default in charge).
+        num_ctx: resolveNumCtx(params),
       },
     };
     // Add tools if provided
@@ -193,29 +280,47 @@ export class OllamaProvider implements TextProvider {
       // exchange would cut off a long generation mid-answer, so the timer is
       // cleared once the response headers land and the body streams unbounded
       // — the same semantics the OpenAI SDK applies to its own timeout.
-      const controller = new AbortController();
-      const firstByteTimer = setTimeout(
-        () => controller.abort(),
-        resolveRequestTimeoutMs(params)
-      );
-      let response: Response;
-      try {
-        response = await fetch(`${this.baseUrl}/api/chat`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'User-Agent': getQuilltapUserAgent(),
-          },
-          body: JSON.stringify(requestBody),
-          signal: controller.signal,
-        });
-      } finally {
-        clearTimeout(firstByteTimer);
-      }
+      const openStream = async (): Promise<Response> => {
+        const controller = new AbortController();
+        const firstByteTimer = setTimeout(
+          () => controller.abort(),
+          resolveRequestTimeoutMs(params)
+        );
+        try {
+          return await fetch(`${this.baseUrl}/api/chat`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'User-Agent': getQuilltapUserAgent(),
+            },
+            body: JSON.stringify(requestBody),
+            signal: controller.signal,
+          });
+        } finally {
+          clearTimeout(firstByteTimer);
+        }
+      };
+      let response = await openStream();
       if (!response.ok) {
-        const errorText = await response.text();
-        logger.error('Ollama streaming API error', { context: 'OllamaProvider.streamMessage', status: response.status, error: errorText });
-        throw new Error(`Ollama API error: ${response.status} ${errorText}`);
+        let errorText = await response.text();
+        if ('think' in requestBody && isThinkRejection(errorText)) {
+          // Some models refuse the think parameter outright (e.g. ones that
+          // cannot disable thinking). Retry once without it rather than
+          // failing the whole call.
+          logger.warn('Ollama rejected the think parameter; retrying without it', {
+            context: 'OllamaProvider.streamMessage',
+            model: params.model,
+            enableThinking,
+            error: errorText,
+          });
+          delete requestBody.think;
+          response = await openStream();
+          if (!response.ok) errorText = await response.text();
+        }
+        if (!response.ok) {
+          logger.error('Ollama streaming API error', { context: 'OllamaProvider.streamMessage', status: response.status, error: errorText });
+          throw new Error(`Ollama API error: ${response.status} ${errorText}`);
+        }
       }
 
       const reader = response.body?.getReader();
@@ -230,6 +335,13 @@ export class OllamaProvider implements TextProvider {
       let totalContent = '';
       let toolCalls: any[] = [];
       let lastModel = params.model;
+      // Reasoning can arrive on the dedicated `message.thinking` channel
+      // (Ollama parsed the template) or as inline `<think>` blocks in the
+      // content stream (it did not). Both accumulate here; the host expects
+      // reasoningContent CUMULATIVELY — the full thinking-so-far each time.
+      const thinkParser = new ThinkTagStreamParser();
+      let reasoningSoFar = '';
+      let inlineReasoningSeen = 0;
       // Carries the trailing partial line between reads. Ollama streams NDJSON;
       // a JSON object can straddle two network reads, so we hold the incomplete
       // tail here until its terminating newline arrives instead of splitting
@@ -269,15 +381,39 @@ export class OllamaProvider implements TextProvider {
                 toolCalls = [...toolCalls, ...data.message.tool_calls];
               }
 
+              let reasoningGrew = false;
+              if (typeof data.message?.thinking === 'string' && data.message.thinking) {
+                reasoningSoFar += data.message.thinking;
+                reasoningGrew = true;
+              }
+
               if (data.message?.content) {
-                chunkCount++;
-                totalContent += data.message.content;
-                yield {
-                  content: data.message.content,
-                  done: false,
-                };
+                const visible = thinkParser.push(data.message.content);
+                if (thinkParser.reasoning.length > inlineReasoningSeen) {
+                  reasoningSoFar += thinkParser.reasoning.slice(inlineReasoningSeen);
+                  inlineReasoningSeen = thinkParser.reasoning.length;
+                  reasoningGrew = true;
+                }
+                if (visible) {
+                  chunkCount++;
+                  totalContent += visible;
+                  yield {
+                    content: visible,
+                    done: false,
+                    ...(reasoningGrew ? { reasoningContent: reasoningSoFar } : {}),
+                  };
+                  reasoningGrew = false;
+                }
               } else if (data.message && !data.message.content && !data.done && !data.message.tool_calls) {
                 // Log cases where message exists but has no content and no tool calls
+              }
+
+              if (reasoningGrew) {
+                yield {
+                  content: '',
+                  done: false,
+                  reasoningContent: reasoningSoFar,
+                };
               }
 
               // Track token usage
@@ -290,6 +426,28 @@ export class OllamaProvider implements TextProvider {
 
               // Final chunk
               if (data.done) {
+                // Release anything the think parser held back (a trailing
+                // partial tag, or an unterminated think block's reasoning).
+                const tail = thinkParser.flush();
+                if (thinkParser.reasoning.length > inlineReasoningSeen) {
+                  reasoningSoFar += thinkParser.reasoning.slice(inlineReasoningSeen);
+                  inlineReasoningSeen = thinkParser.reasoning.length;
+                }
+                if (tail) {
+                  chunkCount++;
+                  totalContent += tail;
+                  yield { content: tail, done: false };
+                }
+                if (reasoningSoFar) {
+                  logger.debug('Ollama stream carried reasoning', {
+                    context: 'OllamaProvider.streamMessage',
+                    model: lastModel,
+                    enableThinking,
+                    reasoningChars: reasoningSoFar.length,
+                    inlineChars: inlineReasoningSeen,
+                  });
+                }
+
                 // Build rawResponse object in OpenAI format for tool detection
                 // This allows the tool-executor to parse tool calls
                 const rawResponse: any = {
@@ -332,6 +490,7 @@ export class OllamaProvider implements TextProvider {
                   },
                   attachmentResults,
                   rawResponse,
+                  ...(reasoningSoFar ? { reasoningContent: reasoningSoFar } : {}),
                 };
               }
             } catch (e) {

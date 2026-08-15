@@ -12,6 +12,7 @@
 import { createLLMProvider } from '@/lib/llm'
 import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
+import { profileParams } from '@/lib/llm/cheap-llm'
 import { logger } from '@/lib/logger'
 import type { ConnectionProfile } from '@/lib/schemas/types'
 import type { RepositoryContainer } from '@/lib/repositories/factory'
@@ -306,9 +307,7 @@ export async function analyzeImageForWardrobeItems(
         temperature: 0.5,
         // Forward the profile's provider params (e.g. DeepSeek thinking mode)
         // so a "reasoning off" setting on the analysis profile takes effect.
-        profileParameters: profile.parameters && typeof profile.parameters === 'object'
-          ? (profile.parameters as Record<string, unknown>)
-          : undefined,
+        profileParameters: profileParams(profile),
       },
       apiKeyValue
     )

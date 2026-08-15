@@ -12,6 +12,7 @@ import {
   estimateModelCost,
   validateCheapLLMConfig,
   resolveUncensoredCheapLLMSelection,
+  profileParams,
   DEFAULT_CHEAP_LLM_CONFIG,
   RECOMMENDED_CHEAP_MODELS,
   type CheapLLMConfig,
@@ -688,5 +689,47 @@ describe('Cheap LLM Provider Selection', () => {
       // WARN mode is not OFF, so it should still route to uncensored
       expect(result.provider).toBe('DEEPSEEK')
     })
+  })
+})
+
+describe('profileParams', () => {
+  it('returns the parameters blob untouched for non-Ollama providers', () => {
+    const params = { temperature: 0.7, thinking: 'enabled' }
+    expect(
+      profileParams({ provider: 'DEEPSEEK', parameters: params, maxContext: 131072 })
+    ).toBe(params)
+  })
+
+  it('injects num_ctx from maxContext for Ollama profiles', () => {
+    expect(
+      profileParams({
+        provider: 'OLLAMA',
+        parameters: { temperature: 0.7, max_tokens: 16384 },
+        maxContext: 40960,
+      })
+    ).toEqual({ temperature: 0.7, max_tokens: 16384, num_ctx: 40960 })
+  })
+
+  it('injects num_ctx even when the profile has no parameters blob', () => {
+    expect(profileParams({ provider: 'OLLAMA', parameters: undefined, maxContext: 65536 }))
+      .toEqual({ num_ctx: 65536 })
+  })
+
+  it('does not clobber an explicit num_ctx in the parameters blob', () => {
+    expect(
+      profileParams({ provider: 'OLLAMA', parameters: { num_ctx: 8192 }, maxContext: 65536 })
+    ).toEqual({ num_ctx: 8192 })
+  })
+
+  it('leaves Ollama profiles without maxContext at the server default', () => {
+    const params = { temperature: 0.7 }
+    expect(profileParams({ provider: 'OLLAMA', parameters: params, maxContext: null })).toBe(params)
+    expect(profileParams({ provider: 'OLLAMA', parameters: undefined, maxContext: null })).toBeUndefined()
+  })
+
+  it('does not mutate the profile parameters object when injecting', () => {
+    const params = { temperature: 0.7 }
+    profileParams({ provider: 'OLLAMA', parameters: params, maxContext: 40960 })
+    expect(params).toEqual({ temperature: 0.7 })
   })
 })

@@ -18,6 +18,7 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { createLLMProvider } from '@/lib/llm'
+import { profileParams } from '@/lib/llm/cheap-llm'
 import { deleteMemoriesBySourceMessageWithVectors } from '@/lib/memory/memory-service'
 import {
   resolveRespondingParticipant,
@@ -131,7 +132,7 @@ export async function regenerateMessageAsSwipe({
 
   // Single non-streaming generation.
   const provider = await createLLMProvider(connectionProfile.provider, connectionProfile.baseUrl || undefined)
-  const params = (connectionProfile.parameters || {}) as Record<string, unknown>
+  const params = profileParams(connectionProfile) ?? {}
   const response = await provider.sendMessage(
     {
       messages: formattedMessages.map(m => ({

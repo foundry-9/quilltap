@@ -22,7 +22,7 @@ import { logger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/error-utils'
 import { getRepositories } from '@/lib/repositories/factory'
 import type { Character, ConnectionProfile } from '@/lib/schemas/types'
-import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
+import { profileParams, type CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { LLMMessage } from '@/lib/llm/base'
 import { executeCheapLLMTask } from '@/lib/memory/cheap-llm-tasks/core-execution'
 import { buildSystemPrompt } from '@/lib/chat/context/system-prompt-builder'
@@ -62,9 +62,7 @@ function buildSelection(profile: ConnectionProfile): CheapLLMSelection {
     isLocal: profile.provider === 'OLLAMA',
     // Forward the profile's provider params (e.g. DeepSeek thinking mode) so
     // per-model settings take effect for this utility call too.
-    profileParameters: profile.parameters && typeof profile.parameters === 'object'
-      ? (profile.parameters as Record<string, unknown>)
-      : undefined,
+    profileParameters: profileParams(profile),
   }
 }
 

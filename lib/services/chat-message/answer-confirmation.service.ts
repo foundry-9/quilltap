@@ -20,7 +20,7 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { withTimeout } from '@/lib/promise-timeout'
-import { resolveUncensoredCheapLLMSelection, type CheapLLMSelection } from '@/lib/llm/cheap-llm'
+import { profileParams, resolveUncensoredCheapLLMSelection, type CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { executeCheapLLMTask } from '@/lib/memory/cheap-llm-tasks/core-execution'
 import type { UncensoredFallbackOptions, CheapLLMTaskResult } from '@/lib/memory/cheap-llm-tasks/types'
 import type { LLMMessage } from '@/lib/llm/base'
@@ -398,9 +398,7 @@ export async function runAnswerConfirmation(
     baseUrl: connectionProfile.baseUrl || undefined,
     connectionProfileId: connectionProfile.id,
     isLocal: false,
-    profileParameters: connectionProfile.parameters && typeof connectionProfile.parameters === 'object'
-      ? (connectionProfile.parameters as Record<string, unknown>)
-      : undefined,
+    profileParameters: profileParams(connectionProfile),
   }
 
   const reaffParts: string[] = []

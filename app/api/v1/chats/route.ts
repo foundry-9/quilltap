@@ -14,6 +14,7 @@ import { buildChatContext, type ChatContext } from '@/lib/chat/initialize';
 import { combineScenarioText } from '@/lib/chat/scenario-text';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { generateGreetingMessage } from '@/lib/chat/initial-greeting';
+import { profileParams } from '@/lib/llm/cheap-llm';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { resolveProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service';
 import { buildFirstMessageContext } from '@/lib/chat/first-message-context';
@@ -690,9 +691,7 @@ async function autoGenerateFirstMessage(
     topP: extractNumber(parameters.topP),
     // Forward the character's profile parameters so per-model settings like
     // DeepSeek thinking mode take effect on the greeting too.
-    profileParameters: connectionProfile.parameters && typeof connectionProfile.parameters === 'object'
-      ? (connectionProfile.parameters as Record<string, unknown>)
-      : undefined,
+    profileParameters: profileParams(connectionProfile),
   };
 
   // Track whether any attempt hit a content filter so we can try the Concierge fallback

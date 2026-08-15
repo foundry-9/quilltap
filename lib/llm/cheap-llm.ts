@@ -77,10 +77,28 @@ export interface CheapLLMSelection {
  * call from a profile — the cheap-LLM selection sites here and the direct
  * utility calls (auto-configure, wizards, optimizer, greeting, …) — so a
  * profile's "reasoning off" setting takes effect uniformly.
+ *
+ * For Ollama profiles this also injects `num_ctx` from the profile's
+ * Max Context. Ollama allocates its own default context window (typically far
+ * below the model's capability) unless the request carries `options.num_ctx`,
+ * so without this the budgeter sizes prompts against Max Context while the
+ * server silently truncates at its default. An explicit `num_ctx` already in
+ * the parameters blob wins over the injected value.
  */
-export function profileParams(profile: ConnectionProfile): Record<string, unknown> | undefined {
+export function profileParams(
+  profile: Pick<ConnectionProfile, 'provider' | 'parameters'> & { maxContext?: number | null }
+): Record<string, unknown> | undefined {
   const params = profile.parameters
-  return params && typeof params === 'object' ? (params as Record<string, unknown>) : undefined
+  const base = params && typeof params === 'object' ? (params as Record<string, unknown>) : undefined
+  if (
+    profile.provider === 'OLLAMA' &&
+    typeof profile.maxContext === 'number' &&
+    profile.maxContext > 0 &&
+    base?.num_ctx == null
+  ) {
+    return { ...(base ?? {}), num_ctx: profile.maxContext }
+  }
+  return base
 }
 
 /**
