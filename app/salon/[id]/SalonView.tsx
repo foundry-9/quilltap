@@ -55,6 +55,7 @@ import type { Chat, Message, PendingToolResult, CharacterData } from './types'
 import { groupToolMessagesIntoAssistants } from './group-tool-messages'
 import { buildRenderItems } from './announcement-render-items'
 import { isMessageVisibleToOperator } from './whisper-visibility'
+import { resolveComposerSubmitText, resolveComposerHasContent } from './composer-source-mode'
 import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
 import {
   ChatComposer,
@@ -1547,7 +1548,10 @@ export function SalonView({ chatId }: SalonViewProps) {
           speakingAs={speakingAsSeat}
           input={input}
           setInput={setInput}
-          hasContent={hasComposerContent}
+          // Bug 67: in raw-source view the textarea is the visible surface and
+          // the editor bridge is suspended, so `input` — not the editor's
+          // presence flag — is what decides whether there is anything to send.
+          hasContent={resolveComposerHasContent(modals.showPreview, input, hasComposerContent)}
           onContentChange={handleComposerContentChange}
           onPersistDraft={persistDraft}
           attachedFiles={attachedFiles}
@@ -1577,8 +1581,11 @@ export function SalonView({ chatId }: SalonViewProps) {
           onSubmit={(e) => sseStreaming.sendMessage(
             e,
             // Read the live text straight from the editor handle — page `input`
-            // intentionally lags while typing (that's the decoupling).
-            inputRef.current?.getMarkdown() ?? input,
+            // intentionally lags while typing (that's the decoupling). Except in
+            // raw-source view (bug 67), where the textarea is the edited surface
+            // and the editor's bridge is suspended: its handle still holds the
+            // pre-toggle document, so send what the writer can see.
+            resolveComposerSubmitText(modals.showPreview, input, inputRef.current?.getMarkdown()),
             clearComposerInput,
             attachedFiles,
             pendingToolResults,

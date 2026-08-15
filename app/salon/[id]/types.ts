@@ -150,6 +150,9 @@ export interface CharacterData {
     url?: string
   } | null
   talkativeness?: number
+  /** Set when the character is archived — the seat is a tombstone until
+   *  rehydration, and the sidebar badges it. */
+  archivedAt?: string | null
   systemPrompts?: Array<{
     id: string
     name: string

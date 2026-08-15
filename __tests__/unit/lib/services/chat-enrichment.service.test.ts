@@ -170,8 +170,43 @@ describe('chat-enrichment.service', () => {
         defaultImage: null,
         talkativeness: 0.5,
         systemPrompts: [],
+        archivedAt: null,
       })
       expect(result).not.toHaveProperty('tags')
+    })
+
+    // Bug 66: the sidebar renders from the chat GET, which enriches through
+    // this function — without the projection the Archived badge cannot light
+    // on a fresh load, only after a participants action + refetch.
+    it('should project archivedAt for an archived character', async () => {
+      const character = createMockCharacter({
+        id: 'char-1',
+        name: 'Alice',
+        archivedAt: '2026-08-11T12:00:00.000Z',
+      })
+
+      mockRepos.characters.findById.mockResolvedValue(character)
+
+      const result = await getCharacterDetail('char-1', mockRepos)
+
+      expect(result?.archivedAt).toBe('2026-08-11T12:00:00.000Z')
+    })
+
+    it('should project archivedAt on the chat avatar-override path too', async () => {
+      const character = createMockCharacter({
+        id: 'char-1',
+        name: 'Alice',
+        archivedAt: '2026-08-11T12:00:00.000Z',
+        avatarOverrides: [{ chatId: 'chat-1', imageId: 'img-9' }],
+      })
+
+      mockRepos.characters.findById.mockResolvedValue(character)
+      mockRepos.files.findById.mockResolvedValue({ id: 'img-9', originalFilename: 'alice-alt.png' })
+
+      const result = await getCharacterDetail('char-1', mockRepos, 'chat-1')
+
+      expect(result?.defaultImageId).toBe('img-9')
+      expect(result?.archivedAt).toBe('2026-08-11T12:00:00.000Z')
     })
   })
 

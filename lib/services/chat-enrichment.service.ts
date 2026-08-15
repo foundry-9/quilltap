@@ -104,6 +104,10 @@ export interface EnrichedCharacterSummary extends EnrichedCharacterBase {
  */
 export interface EnrichedCharacterDetail extends EnrichedCharacterBase {
   systemPrompts: EnrichedCharacterSystemPrompt[]
+  /** Archive tombstone timestamp — participant chips badge archived seats
+   *  (character-archive spec §5.2). Mirrors the enrichment in
+   *  `app/api/v1/chats/[id]/helpers.ts`. */
+  archivedAt: string | null
 }
 
 
@@ -318,6 +322,7 @@ export async function getCharacterDetail(
           defaultImage: overrideImage,
           talkativeness: character.talkativeness ?? 0.5,
           systemPrompts,
+          archivedAt: character.archivedAt ?? null,
         }
       }
     }
@@ -343,6 +348,9 @@ export async function getCharacterDetail(
     defaultImage,
     talkativeness: character.talkativeness ?? 0.5,
     systemPrompts,
+    // Bug 66: the chat GET renders the sidebar, so the archive badge needs
+    // this projection here too — not only in the participants/PUT enrichment.
+    archivedAt: character.archivedAt ?? null,
   }
 }
 

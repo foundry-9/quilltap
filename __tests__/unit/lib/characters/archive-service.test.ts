@@ -856,6 +856,24 @@ describe('rehydrateCharacter — failure leaves the character archived', () => {
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 
+  // Bug 69: the file watcher used to overwrite the row's plaintext digest with
+  // the digest of the encrypted bytes moments after the archive was written,
+  // which made every later rehydrate refuse the bundle as corrupt. When the
+  // recorded digest is EXACTLY the digest of the file as stored, the bundle is
+  // intact and the row is the damaged part — repair it and carry on.
+  it('rehydrates and repairs a row whose digest was overwritten with the ciphertext digest', async () => {
+    const { rehydrateCharacter } = setupRehydrate();
+    const ciphertextSha = createHash('sha256').update(ENCRYPTED_BUNDLE).digest('hex');
+    mockFilesFindById.mockResolvedValue(archiveFileRow({ sha256: ciphertextSha }) as never);
+
+    const result = await rehydrateCharacter('user-1', CHARACTER_ID);
+
+    expect(result.rehydrated).toBe(true);
+    expect(mockExecuteImport).toHaveBeenCalled();
+    expect(mockFilesUpdate).toHaveBeenCalledWith('archive-file', { sha256: BUNDLE_SHA });
+    expect(result.warnings.join(' ')).toMatch(/recorded digest/);
+  });
+
   it('refuses a bundle written without preserveIds', async () => {
     const { rehydrateCharacter } = setupRehydrate();
     mockAssembleExportFromStream.mockResolvedValue(

@@ -350,10 +350,39 @@ async function restoreArchiveBundle(
   // The file row's sha256 is the plaintext digest (§4.2d) — the one check
   // that survives re-encryption and actually verifies content.
   const digest = createHash('sha256').update(plaintext).digest('hex');
+  const clobberWarnings: string[] = [];
   if (fileRow.sha256 && digest !== fileRow.sha256) {
-    throw new ArchiveVerificationError(
-      `the bundle's decrypted content does not match its recorded digest (expected ${fileRow.sha256}, got ${digest}) — the bundle is corrupt`
+    // Bug 69 self-heal. Until the file watcher learned to leave content
+    // digests alone, it re-derived this row's sha256 from the encrypted bytes
+    // seconds after the archive was written, and every rehydrate afterwards
+    // failed here. If the recorded digest is exactly the digest of the file as
+    // stored, the bundle is intact and the ROW is what was damaged: repair it
+    // and carry on. Any other mismatch is a genuinely corrupt bundle.
+    const storedDigest = createHash('sha256').update(raw).digest('hex');
+    if (fileRow.sha256 !== storedDigest) {
+      throw new ArchiveVerificationError(
+        `the bundle's decrypted content does not match its recorded digest (expected ${fileRow.sha256}, got ${digest}) — the bundle is corrupt`
+      );
+    }
+    logger.warn('Repairing an archive row whose plaintext digest was overwritten with the ciphertext digest (bug 69)', {
+      characterId,
+      archiveFileId,
+      recordedDigest: fileRow.sha256.slice(0, 12) + '...',
+      plaintextDigest: digest.slice(0, 12) + '...',
+    });
+    clobberWarnings.push(
+      "The bundle's recorded digest had been overwritten with the digest of its encrypted bytes; " +
+        'the contents verified against the file as stored, and the record has been repaired.'
     );
+    try {
+      await repos.files.update(archiveFileId, { sha256: digest });
+    } catch (error) {
+      logger.warn('Failed to repair the archive row digest; the rehydrate continues', {
+        characterId,
+        archiveFileId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   const exportData = await assembleExportFromStream(
@@ -409,7 +438,7 @@ async function restoreArchiveBundle(
       documents: result.imported.documentStoreDocuments ?? 0,
       blobs: result.imported.documentStoreBlobs ?? 0,
     },
-    warnings: result.warnings,
+    warnings: [...clobberWarnings, ...result.warnings],
   };
 }
 

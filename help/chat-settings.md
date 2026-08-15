@@ -39,6 +39,15 @@ Decides whether each new chat is delivered to your blotter pre-poised for prose.
 - You favor multi-paragraph messages and would rather not bump Shift each time
 - You're using Quilltap chiefly for long-form roleplay or co-writing rather than rapid-fire chat
 
+**The raw-Markdown view.** While a chat is in composition mode, the formatting
+toolbar offers a source toggle — a peek behind the curtain at the raw Markdown
+of whatever you are drafting, laid bare in a plain writing box. Edit it there as
+freely as you like: what you can see is what gets sent, and the Send button
+attends to the source box while it is showing, then hands your revisions back to
+the rich editor when you flip the toggle again. (Before 4.9.0 the two surfaces
+were at cross purposes, and a message sent from the source view arrived in its
+*pre*-edit state; that discourtesy has been dealt with.)
+
 ### Composer
 
 A small but civilising amenity: red-pencil underlines beneath any word the dictionary fails to recognise, kept switched on by default for the saving of one's dignity. The toggle governs both the Salon composer (where one's daily correspondence is conducted) and the Document Mode rich editor (where longer compositions are mustered into shape). It does **not** disturb the raw-Markdown or plain-text source views, which are left blissfully unsquiggled so that one's punctuation and tagging are not mistaken for misspellings.

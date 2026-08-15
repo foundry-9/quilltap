@@ -126,6 +126,10 @@ export function useParticipants({
           talkativeness: resolvedTalkativeness,
           defaultImage: p.character.defaultImage,
           systemPrompts: p.character.systemPrompts,
+          // Bug 66: this projection is rebuilt field by field, so the archive
+          // tombstone has to be carried explicitly or the sidebar's Archived
+          // badge can never light, however well the payload carries it.
+          archivedAt: p.character.archivedAt ?? null,
         } : null,
         // User-controlled characters use the same .character field as LLM characters
         connectionProfile: p.connectionProfile,
