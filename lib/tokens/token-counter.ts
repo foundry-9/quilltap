@@ -141,6 +141,45 @@ export function countMessagesTokens(
 }
 
 /**
+ * Estimate the tokens a tool/function-definition list occupies in a request.
+ *
+ * Tool schemas never appear in the message array, but every provider serializes
+ * them into the same payload the context window measures — a dozen tools with
+ * fleshed-out parameter descriptions is thousands of tokens. Counting only
+ * messages therefore understates the payload by exactly the amount that matters
+ * most on a small window, where the tool block can outweigh the conversation.
+ *
+ * The shape is provider-specific (`{type, function:{...}}` for OpenAI-style,
+ * flat `{name, input_schema}` for Anthropic-style), so this measures the
+ * serialized form rather than reaching into either layout.
+ *
+ * @param tools Tool definitions as they will be sent
+ * @param provider Optional provider for more accurate estimation
+ * @returns Estimated token count including per-tool framing overhead
+ */
+export function countToolSchemaTokens(
+  tools: readonly unknown[] | null | undefined,
+  provider?: Provider
+): number {
+  if (!tools || tools.length === 0) return 0
+
+  // Per-tool framing (delimiters, name/description separators) beyond the
+  // serialized JSON itself.
+  const TOOL_OVERHEAD = 4
+
+  let serialized: string
+  try {
+    serialized = JSON.stringify(tools)
+  } catch {
+    // A non-serializable definition can't be measured; don't let an estimate
+    // take down a turn that would otherwise succeed.
+    return 0
+  }
+
+  return estimateTokens(serialized, provider) + tools.length * TOOL_OVERHEAD
+}
+
+/**
  * Format token count for display
  *
  * @param tokens Token count

@@ -36,6 +36,7 @@ import {
   loadAndProcessFiles,
   buildMessageContext,
 } from './context-builder.service'
+import { collectTurnExtras, extractToolNames } from './turn-extras'
 import {
   loadProsperoProjectContext,
   loadProsperoGeneralContext,
@@ -111,7 +112,6 @@ import {
 } from './message-finalizer.service'
 import {
   resolveAgentModeSetting,
-  buildAgentModeInstructions,
   type ResolvedAgentMode,
 } from './agent-mode-resolver.service'
 import { resolveUserIdentity } from './user-identity-resolver.service'
@@ -1075,6 +1075,18 @@ async function processMessage(
     encoder,
   })
 
+  // Everything this turn will add to the payload *after* the context is built —
+  // the tool schemas, plus the agent-mode and tool-change system messages
+  // spliced in below. Built and measured here, before the context, so the
+  // builder can hold room for them instead of packing history into space they
+  // are about to occupy. The strings are reused at the splice sites.
+  const turnExtras = collectTurnExtras({
+    tools: actualTools,
+    agentMode,
+    toolSettingsChanged,
+    provider: streamingState.effectiveProfile.provider,
+  })
+
   // Send status update for context gathering
   safeEnqueue(controller, encodeStatusEvent(encoder, {
     stage: 'gathering',
@@ -1107,6 +1119,9 @@ async function processMessage(
       // Autonomous-room per-turn context cap (tokens). Clamps the model-derived
       // budget so a token-budgeted room paces its run across multiple turns.
       autonomousContextCap: options.autonomousContextCap,
+      // Room held back for the tool schemas and the system messages spliced in
+      // after this returns.
+      reservedOutgoingTokens: turnExtras.reservedTokens,
       // "Nothing to add" turn-skipping — per-turn ephemeral instruction control.
       turnSkip,
       // Pass cached compression result and message count for dynamic window calculation
@@ -1211,23 +1226,12 @@ async function processMessage(
   // ============================================================================
   // If tool settings were changed, inject a system message to inform the LLM
   // This only happens when the user explicitly changed settings, not on first message or interval
-  if (toolSettingsChanged) {
-    // Extract tool names from the tools array
-    const toolNames = actualTools.map((tool: unknown) => {
-      const toolObj = tool as { function?: { name?: string }; name?: string }
-      return toolObj.function?.name || toolObj.name || 'unknown'
-    }).filter(name => name !== 'unknown')
-
-    let toolChangeContent: string
-    if (toolNames.length === 0) {
-      toolChangeContent = '[System Notice] Your available tools have been updated. All tools have been disabled for this chat. Do not attempt to use any tools.'
-    } else {
-      toolChangeContent = `[System Notice] Your available tools have been updated. You now have access to the following ${toolNames.length} tool(s): ${toolNames.join(', ')}. Tools not listed are no longer available for this chat.`
-    }
+  if (turnExtras.toolChangeNotice) {
+    const toolNames = extractToolNames(actualTools)
 
     const toolChangeMessage = {
       role: 'system',
-      content: toolChangeContent,
+      content: turnExtras.toolChangeNotice,
       attachments: [],
     }
 
@@ -1253,11 +1257,10 @@ async function processMessage(
   // Agent Mode Instructions
   // ============================================================================
   // If agent mode is enabled, inject instructions into the system prompt
-  if (agentMode.enabled) {
-    const agentModeInstructions = buildAgentModeInstructions(agentMode.maxTurns)
+  if (turnExtras.agentModeInstructions) {
     const agentModeMessage = {
       role: 'system',
-      content: agentModeInstructions,
+      content: turnExtras.agentModeInstructions,
       attachments: [],
     }
 
@@ -1311,12 +1314,17 @@ async function processMessage(
     characterName: character.name,
     characterId: character.id,
   }))
-  const estimatedInputTokens = countMessagesTokens(
+  // Measure the whole payload, not just the message array: the tool schemas
+  // ride alongside it and count against the same window. The ceiling is the
+  // budget's own `safeInputLimit` — the number the builder packed to — so this
+  // check can no longer fire on a context that was filled exactly as instructed.
+  const messageTokens = countMessagesTokens(
     formattedMessages.map(m => ({ content: m.content, role: m.role }))
   )
+  const estimatedInputTokens = messageTokens + turnExtras.toolSchemaTokens
   const modelContextLimit = builtContext.budget.totalLimit
   const responseReserve = builtContext.budget.responseReserve
-  const safeInputLimit = modelContextLimit - responseReserve - Math.ceil(modelContextLimit * 0.10)
+  const safeInputLimit = builtContext.budget.safeInputLimit
 
   if (estimatedInputTokens > safeInputLimit) {
     logger.warn('Context exceeds model safe input limit, payload may be rejected', {
@@ -1325,9 +1333,14 @@ async function processMessage(
       provider: streamingState.effectiveProfile.provider,
       model: streamingState.effectiveProfile.modelName,
       estimatedInputTokens,
+      messageTokens,
+      toolSchemaTokens: turnExtras.toolSchemaTokens,
+      toolCount: actualTools.length,
       safeInputLimit,
       modelContextLimit,
       responseReserve,
+      safetyMargin: builtContext.budget.safetyMargin,
+      reservedOutgoingTokens: turnExtras.reservedTokens,
       compressionApplied: builtContext.compressionApplied ?? false,
       overage: estimatedInputTokens - safeInputLimit,
     })

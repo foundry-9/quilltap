@@ -68,9 +68,11 @@ export {
 // Context and pricing utilities
 export {
   getModelContextLimit,
+  resolveContextWindow,
   getSafeInputLimit,
   hasExtendedContext,
   getRecommendedContextAllocation,
   shouldSummarizeConversation,
   calculateRecentMessageCount,
 } from './model-context-data'
+export type { ContextWindowSource } from './model-context-data'

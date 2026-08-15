@@ -123,27 +123,95 @@ export function getModelContextLimit(
 }
 
 /**
+ * Minimal profile shape needed to resolve a context window. Kept structural so
+ * callers can pass a full `ConnectionProfile` or any subset carrying the field.
+ */
+export interface ContextWindowSource {
+  maxContext?: number | null
+}
+
+/**
+ * Resolve the effective context window for a request.
+ *
+ * **This is the single source of truth for "how big is this model's window".**
+ * The profile's user-set Max Context wins over any table lookup: the tables are
+ * keyed by model name and go stale the moment someone points Ollama or an
+ * OpenAI-compatible endpoint at a model the table has never heard of, at which
+ * point `getModelContextLimit` silently returns a conservative provider default
+ * (8192 for OLLAMA / OPENAI_COMPATIBLE). Budgeting a 64k model as 8k truncates
+ * conversation history on every turn and reports nothing but a vague
+ * "conversation is getting long" warning.
+ *
+ * Callers that hold a profile must route through here rather than calling
+ * `getModelContextLimit` directly, or the budget and the compression trigger
+ * end up working from two different windows.
+ *
+ * @param provider The LLM provider
+ * @param modelName The model name/identifier
+ * @param profile Connection profile whose `maxContext` overrides the lookup
+ * @returns Context window size in tokens
+ */
+export function resolveContextWindow(
+  provider: Provider,
+  modelName: string,
+  profile?: ContextWindowSource | null
+): number {
+  if (profile?.maxContext != null && profile.maxContext > 0) {
+    return profile.maxContext
+  }
+
+  return getModelContextLimit(provider, modelName)
+}
+
+/**
+ * Fraction of the context window held back beyond the response reserve, to
+ * absorb the gap between our character-based token estimates and the model's
+ * real tokenizer.
+ */
+export const CONTEXT_SAFETY_MARGIN_RATIO = 0.10
+
+/**
+ * The ceiling the outgoing payload must fit under: window, less the response
+ * reserve, less the safety margin.
+ *
+ * **Everything that packs the payload and everything that validates it must use
+ * this same number.** They used not to: the context builder filled to
+ * `totalLimit − responseReserve` while the pre-send check warned above
+ * `totalLimit − responseReserve − 10%`, so the builder always aimed past the
+ * line the validator drew and a full context reported an overage it had been
+ * told to produce.
+ *
+ * @param totalLimit The model's context window
+ * @param responseReserve Tokens held back for the response
+ * @returns Safe input limit in tokens (floored at 1000)
+ */
+export function computeSafeInputLimit(totalLimit: number, responseReserve: number): number {
+  const safetyMargin = Math.ceil(totalLimit * CONTEXT_SAFETY_MARGIN_RATIO)
+
+  // Ensure we have at least some room for input
+  return Math.max(1000, totalLimit - responseReserve - safetyMargin)
+}
+
+/**
  * Get safe context limit (with buffer for response)
  * Returns the amount we can use for input (prompt + history)
  *
  * @param provider The LLM provider
  * @param modelName The model name/identifier
  * @param maxResponseTokens Maximum tokens to reserve for response
+ * @param profile Connection profile whose `maxContext` overrides the lookup
  * @returns Safe input context limit in tokens
  */
 export function getSafeInputLimit(
   provider: Provider,
   modelName: string,
-  maxResponseTokens: number = 4096
+  maxResponseTokens: number = 4096,
+  profile?: ContextWindowSource | null
 ): number {
-  const totalLimit = getModelContextLimit(provider, modelName)
-
-  // Reserve tokens for response and add 10% safety buffer
-  const safetyBuffer = Math.ceil(totalLimit * 0.10)
-  const safeLimit = totalLimit - maxResponseTokens - safetyBuffer
-
-  // Ensure we have at least some room for input
-  return Math.max(1000, safeLimit)
+  return computeSafeInputLimit(
+    resolveContextWindow(provider, modelName, profile),
+    maxResponseTokens
+  )
 }
 
 /**
@@ -166,11 +234,13 @@ export function hasExtendedContext(
  *
  * @param provider The LLM provider
  * @param modelName The model name/identifier
+ * @param profile Connection profile whose `maxContext` overrides the lookup
  * @returns Object with recommended token allocations
  */
 export function getRecommendedContextAllocation(
   provider: Provider,
-  modelName: string
+  modelName: string,
+  profile?: ContextWindowSource | null
 ): {
   totalLimit: number
   systemPrompt: number
@@ -179,8 +249,10 @@ export function getRecommendedContextAllocation(
   conversationSummary: number
   recentMessages: number
   responseReserve: number
+  safetyMargin: number
+  safeInputLimit: number
 } {
-  const totalLimit = getModelContextLimit(provider, modelName)
+  const totalLimit = resolveContextWindow(provider, modelName, profile)
 
   // Scale allocations as percentages of total context, with minimum floors.
   // System prompt gets up to 20%: a fleshed-out character (description,
@@ -213,6 +285,8 @@ export function getRecommendedContextAllocation(
     conversationSummary,
     recentMessages,
     responseReserve,
+    safetyMargin: Math.ceil(totalLimit * CONTEXT_SAFETY_MARGIN_RATIO),
+    safeInputLimit: computeSafeInputLimit(totalLimit, responseReserve),
   }
 }
 
@@ -337,9 +411,7 @@ export function calculateMaxAvailable(
   }
 ): { maxAvailable: number; maxContext: number; maxTokens: number } {
   // Resolve maxContext: profile override -> model lookup -> default
-  const maxContext = (profile.maxContext != null && profile.maxContext > 0)
-    ? profile.maxContext
-    : getModelContextLimit(provider, modelName) || DEFAULT_MAX_CONTEXT
+  const maxContext = resolveContextWindow(provider, modelName, profile) || DEFAULT_MAX_CONTEXT
 
   // Resolve maxTokens
   const maxTokens = resolveMaxTokens(profile)

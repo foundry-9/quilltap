@@ -4,6 +4,24 @@
 
 ### 4.9-dev
 
+#### The context budget honors the profile's Max Context (bug 70)
+
+A profile whose model name isn't in Quilltap's lookup tables — any `hf.co/...` Ollama tag, any custom OpenAI-compatible endpoint — was budgeted at 8192 tokens no matter what Max Context said. Conversation history was trimmed to fit that figure on every turn, silently, and the only signal was a "Conversation is getting long" warning that fires exclusively when history has just been dropped.
+
+The window was resolved two different ways in the same function. `calculateContextBudget` used a model-name lookup (`getModelContextLimit`), which falls through to the 8192 OLLAMA/OPENAI_COMPATIBLE default for an unknown name; `calculateMaxAvailable`, 270 lines later, read `profile.maxContext` and saw the real value. One live turn resolved 8192 and 65536 seconds apart. The small figure won everywhere it did damage: it drove `systemPromptBudget`, `recentMessagesBudget`, and the remaining-budget math that feeds `selectRecentMessages`. Compression, working from the correct number, rightly did nothing — so the logs paired an apparent overage with `compressionApplied: false`, which reads like a compression failure and isn't one. The pre-send validation warning derived its limit from the same corrupt figure, so it confirmed the bad number instead of catching it.
+
+`resolveContextWindow(provider, modelName, profile)` in `lib/llm/model-context-data.ts` is now the single source of truth: the profile's `maxContext` wins, the name lookup is the fallback, and a zero or negative column falls through rather than producing a zero-token budget. `getRecommendedContextAllocation`, `getSafeInputLimit`, and `calculateMaxAvailable` all route through it, `calculateContextBudget` takes the profile, and `buildContext` passes `options.connectionProfile`. `external-prompt-generator.service.ts` had the same blind spot on the character-prompt path and now passes its profile too.
+
+For the reported 65536-token profile the budget goes from 8192 to 65536, the history allowance from roughly 1.5k tokens to 32768, and the spurious warning stops.
+
+Two adjacent gaps in the same accounting were fixed alongside it.
+
+**The builder and the validator now use one ceiling.** The builder filled to `totalLimit − responseReserve` while the pre-send check warned above `totalLimit − responseReserve − 10%`, so a context packed exactly as instructed could be reported as an overage. `computeSafeInputLimit` owns that formula now; `ContextBudget` carries `safeInputLimit` and `safetyMargin`, the builder's `remainingBudget` derives from it, and the orchestrator reads it instead of recomputing.
+
+**The budget now counts the whole payload.** Tool schemas ride alongside the message array and were never counted at all — thousands of tokens on a full roster, and on a small window more than the conversation. Agent-mode instructions and the tool-change notice were spliced in after the budget had been spent. All three are known before the context is built, so new `lib/services/chat-message/turn-extras.ts` builds and measures them in one place: the total is passed to the builder as `reservedOutgoingTokens` and held back from the message budget, the tool schemas are added to the pre-send estimate, and the same strings it built are spliced in rather than reconstructed at the splice site. `countToolSchemaTokens` measures the serialized form, so it works for both provider tool shapes, and returns 0 instead of throwing on a definition that won't serialize.
+
+One consequence: with the reservation subtracted, a large character on a small window can leave no room for history at all. That case now warns by name instead of silently sending a character with no memory of the exchange.
+
 #### Archived characters can be rehydrated again (bug 69)
 
 Rehydrating an archived character failed with "the bundle's decrypted content does not match its recorded digest — the bundle is corrupt". The bundle was fine; its database row was not.

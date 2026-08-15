@@ -15,7 +15,7 @@
 
 import { Provider, Character, ChatParticipantBase, ChatMetadataBase, TimestampConfig } from '@/lib/schemas/types'
 import { estimateTokens, countMessagesTokens, truncateToTokenLimit } from '@/lib/tokens/token-counter'
-import { getModelContextLimit, getRecommendedContextAllocation, shouldSummarizeConversation, calculateMaxAvailable, CONTEXT_HISTORY_BUDGET_RATIO, MEMORY_BUDGET_RATIO } from '@/lib/llm/model-context-data'
+import { getRecommendedContextAllocation, shouldSummarizeConversation, calculateMaxAvailable, resolveContextWindow, type ContextWindowSource, CONTEXT_HISTORY_BUDGET_RATIO, MEMORY_BUDGET_RATIO } from '@/lib/llm/model-context-data'
 import { searchMemoriesSemantic, type SemanticSearchResult } from '@/lib/memory/memory-service'
 import type { RecallContext, ContextTag, TemporalTag } from '@/lib/memory/recall-tags'
 import {
@@ -231,6 +231,20 @@ export interface ContextBudget {
   recentMessagesBudget: number
   /** Tokens reserved for response */
   responseReserve: number
+  /**
+   * Tokens held back beyond the response reserve to absorb estimator error
+   * (10% of the window). Part of `safeInputLimit`; broken out for logging.
+   */
+  safetyMargin: number
+  /**
+   * The ceiling the outgoing payload must fit under:
+   * `totalLimit − responseReserve − safetyMargin`.
+   *
+   * This is what the builder packs to *and* what the pre-send validation
+   * checks against — one number, so a full context can no longer be reported
+   * as an overage it was told to produce.
+   */
+  safeInputLimit: number
 }
 
 /**
@@ -446,6 +460,22 @@ export interface BuildContextOptions {
    */
   autonomousContextCap?: number
 
+  /**
+   * Tokens the caller will add to this turn's payload *after* the context is
+   * built, and which therefore cannot be discovered by measuring what the
+   * builder produced: the tool/function schemas (never in the message array at
+   * all), plus any system message the orchestrator splices in downstream —
+   * agent-mode instructions, the tool-change notice.
+   *
+   * Held back from the message budget so the builder doesn't pack history into
+   * space that is already spoken for. Undefined → unchanged behavior.
+   *
+   * See `collectTurnExtras` (`lib/services/chat-message/turn-extras.ts`), which
+   * builds those additions and measures them in one place so the reservation
+   * and the text it pays for can't drift apart.
+   */
+  reservedOutgoingTokens?: number
+
   // ============================================================================
   // "Nothing to add" turn-skipping
   // ============================================================================
@@ -490,13 +520,23 @@ One caution: ${characterName} appears to have been addressed or mentioned since 
 }
 
 /**
- * Calculate context budget based on model limits
+ * Calculate context budget based on model limits.
+ *
+ * `profile` is not optional in spirit — pass it whenever one is in hand. Without
+ * it the window comes from a model-name table lookup that knows nothing about
+ * the user's Max Context setting, so a profile pointed at an unrecognised model
+ * (any `hf.co/...` Ollama tag, any OpenAI-compatible endpoint) budgets against
+ * the 8192-token provider default while `calculateMaxAvailable` — which *does*
+ * read the profile — works from the real window. The two then disagree, and the
+ * smaller one wins where it hurts: history gets trimmed to fit a window the
+ * model never had.
  */
 export function calculateContextBudget(
   provider: Provider,
-  modelName: string
+  modelName: string,
+  profile?: ContextWindowSource | null
 ): ContextBudget {
-  const allocation = getRecommendedContextAllocation(provider, modelName)
+  const allocation = getRecommendedContextAllocation(provider, modelName, profile)
 
   return {
     totalLimit: allocation.totalLimit,
@@ -506,6 +546,8 @@ export function calculateContextBudget(
     summaryBudget: allocation.conversationSummary,
     recentMessagesBudget: allocation.recentMessages,
     responseReserve: allocation.responseReserve,
+    safetyMargin: allocation.safetyMargin,
+    safeInputLimit: allocation.safeInputLimit,
   }
 }
 
@@ -579,7 +621,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   } = options
 
   const warnings: string[] = []
-  const budget = calculateContextBudget(provider, modelName)
+  const budget = calculateContextBudget(provider, modelName, options.connectionProfile)
 
   // Determine if this is a multi-character chat
   const isMultiCharacter = !!(
@@ -1738,9 +1780,19 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   const summaryTokens = 0
 
   // 4. Calculate remaining budget for messages
-  // Use effective (possibly compressed) system prompt tokens
+  // Use effective (possibly compressed) system prompt tokens.
+  //
+  // The ceiling is `safeInputLimit` — window less response reserve less the
+  // estimator safety margin — which is the same number the pre-send validation
+  // checks against. Packing to `totalLimit − responseReserve` instead (as this
+  // did) meant deliberately filling 10% past the line that then warned about it.
+  //
+  // `reservedOutgoingTokens` is the caller's declaration of what it will add
+  // afterwards (tool schemas, agent-mode instructions, tool-change notice);
+  // history must not be packed into space those will occupy.
   const usedTokens = effectiveSystemPromptTokens + memoryRecapTokens + memoryTokens + interCharacterMemoryTokens + summaryTokens
-  const remainingBudget = budget.totalLimit - usedTokens - budget.responseReserve
+  const reservedOutgoingTokens = options.reservedOutgoingTokens ?? 0
+  const remainingBudget = budget.safeInputLimit - usedTokens - reservedOutgoingTokens
 
   // 5. Prepare messages based on single vs multi-character mode
   let messagesToProcess: SelectableMessage[]
@@ -1796,10 +1848,31 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     messagesToProcess = messagesToProcess.filter(m => !m.id || !anchorSet.has(m.id))
   }
 
+  // The fixed parts of the payload (system prompt, memories, and whatever the
+  // caller reserved) can add up to more than the window allows, leaving nothing
+  // for the conversation itself. That state is worth saying out loud: the
+  // symptom is a character with no apparent memory of the exchange, and the
+  // trimming that produces it is otherwise indistinguishable from routine
+  // housekeeping.
+  if (remainingBudget <= 0) {
+    warnings.push(
+      `No room left for conversation history: the system prompt, memories and reserved payload (${usedTokens + reservedOutgoingTokens} tokens) fill the ${budget.safeInputLimit}-token input budget. Raise Max Context on the connection profile, or trim the character.`
+    )
+    logger.warn('[ContextManager] Message budget exhausted before any history', {
+      safeInputLimit: budget.safeInputLimit,
+      systemPromptTokens: effectiveSystemPromptTokens,
+      memoryTokens,
+      memoryRecapTokens,
+      interCharacterMemoryTokens,
+      reservedOutgoingTokens,
+      remainingBudget,
+    })
+  }
+
   // 6. Select recent messages to fit budget
   const { messages: selectedMessages, tokenCount: messagesTokens, truncated } = selectRecentMessages(
     messagesToProcess,
-    Math.min(remainingBudget, budget.recentMessagesBudget),
+    Math.max(0, Math.min(remainingBudget, budget.recentMessagesBudget)),
     provider
   )
 
@@ -2365,9 +2438,10 @@ export function willExceedContextLimit(
   newMessage: string,
   provider: Provider,
   modelName: string,
-  systemPromptEstimate: number = 2000
+  systemPromptEstimate: number = 2000,
+  profile?: ContextWindowSource | null
 ): { willExceed: boolean; estimatedUsage: number; limit: number; percentUsed: number } {
-  const limit = getModelContextLimit(provider, modelName)
+  const limit = resolveContextWindow(provider, modelName, profile)
   const responseReserve = 4096
 
   const messagesTokens = countMessagesTokens(

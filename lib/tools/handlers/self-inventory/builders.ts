@@ -16,7 +16,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { isMountIndexDegraded } from '@/lib/database/backends/sqlite/mount-index-client';
 import { buildSystemPrompt, buildOtherParticipantsInfo, type OtherParticipantInfo } from '@/lib/chat/context/system-prompt-builder';
 import { resolveConnectionProfile } from '@/lib/chat/connection-resolver';
-import { getModelContextLimit } from '@/lib/llm/model-context-data';
+import { getModelContextLimit, resolveContextWindow } from '@/lib/llm/model-context-data';
 import { isParticipantPresent } from '@/lib/schemas/chat.types';
 import type { Character, ChatParticipantBase } from '@/lib/schemas/types';
 import type { LoadedMemoriesContext } from '@/lib/chat/tool-executor';
@@ -632,8 +632,7 @@ export async function buildLastTurnSection(
       };
     }
 
-    const contextWindow =
-      profile.maxContext ?? getModelContextLimit(profile.provider, profile.modelName);
+    const contextWindow = resolveContextWindow(profile.provider, profile.modelName, profile);
 
     return {
       available: true,

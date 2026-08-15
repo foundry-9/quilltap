@@ -90,6 +90,14 @@ export interface BuildMessageContextOptions {
    */
   autonomousContextCap?: number
   /**
+   * Tokens the caller will add to the payload after this returns — the tool
+   * schemas plus any system message the orchestrator splices in (agent-mode
+   * instructions, tool-change notice). Held back from the message budget so
+   * history is not packed into space they will occupy. See `collectTurnExtras`
+   * in `turn-extras.ts`, which builds and measures them together.
+   */
+  reservedOutgoingTokens?: number
+  /**
    * "Nothing to add" turn-skipping — per-turn instruction control. When
    * `offerSkip` is true, a Turn note is injected inviting the character to pass
    * with the `[NOTHING TO ADD]` sentinel; `recentlyAddressed` adds a caution to
@@ -731,6 +739,9 @@ export async function buildMessageContext(
     // Autonomous-room per-turn context cap (tokens) — clamps the model-derived
     // budget so a token-budgeted room paces its run across multiple turns.
     autonomousContextCap: options.autonomousContextCap,
+    // Room held back for the tool schemas and the system messages the caller
+    // splices in after this returns.
+    reservedOutgoingTokens: options.reservedOutgoingTokens,
     // "Nothing to add" turn-skipping — per-turn ephemeral instruction control.
     turnSkip: options.turnSkip,
   })
