@@ -4,6 +4,10 @@
 
 ### 4.9-dev
 
+#### Logs: background-job child debug lines no longer appear as info
+
+The parent process re-emits every log record the forked job child sends it, so all output lands in one `combined.log` with a single writer. That relay only handled `error`, `warn`, and `info`, and sent everything else — `debug` and `trace` — through `log.info`. Since most of the image pipeline, memory extraction, and autonomous turns run in the child, a large share of the file's `"level":"info"` lines were actually debug output, making level-based triage unreliable. The relay now maps `trace` and `debug` to their own levels and re-emits anything unrecognized at debug rather than info. Log volume is unchanged: the child inherits `LOG_LEVEL` through `fork` and already filters before sending.
+
 #### Ollama: Enable Thinking profile option, and `<think>` blocks routed to the thinking display
 
 The Ollama plugin (1.0.41) gains an **Enable Thinking** checkbox in the connection profile's provider options, default off. The setting maps to Ollama's top-level `think` request parameter on both streaming and non-streaming calls: off asks thinking-capable models (Qwen3, DeepSeek-R1, etc.) to answer directly — the clean-output mode you want for JSON-shaped work — and on lets them reason first. Older Ollama servers ignore the unknown field. If a model rejects the parameter outright (some cannot disable thinking), the request is retried once without it instead of failing.

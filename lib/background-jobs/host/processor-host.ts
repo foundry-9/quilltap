@@ -238,7 +238,12 @@ function replayLogRecord(record: { level: string; message: string; timestamp: st
     case 'error': log.error(record.message, meta); break;
     case 'warn':  log.warn(record.message, meta); break;
     case 'info':  log.info(record.message, meta); break;
-    default:      log.info(record.message, meta); break;
+    case 'trace': log.trace(record.message, meta); break;
+    // 'debug' and anything unrecognised: re-emit at debug, never at info. The
+    // child has already filtered against the shared LOG_LEVEL (it inherits the
+    // parent's env), so promoting an unknown level here would only mislabel it
+    // and let it slip past a level filter downstream.
+    default:      log.debug(record.message, meta); break;
   }
 }
 
