@@ -4,6 +4,14 @@
 
 ### 4.9-dev
 
+#### Three MODERN sample prompts for high-context models
+
+The default-system-prompts plugin (1.1.17) gains three model-agnostic sample prompts written for modern 128K+ context models: `MODERN_GENERAL` (relationship-neutral — the character definition and story decide the dynamic), `MODERN_ROMANTIC` (romance-forward, with pacing discipline and guardrails against love-bombing and purple drift), and `MODERN_PLATONIC` (a companion prompt whose anti-romance guardrail is framed as character identity rather than a prohibition list, which holds up better over long contexts). All three lean on what current models do well — long-range callbacks, in-character refusal — and name the failure modes they drift into (assistant bleed, therapy-speak, echoing, uniform rhythm). The manifest's stale `promptCount` (10) was corrected to 21. `help/prompts.md` now describes the three groups of samples (MODERN, model-specific, GENERIC) and when to pick each.
+
+#### Model-specific sample prompts modernized
+
+The 16 model-specific prompts (CLAUDE / GPT5 / GPT4O / GEMINI / GROK / DEEPSEEK / MISTRAL / OLLAMA, companion + romantic) were rewritten around each family's dominant current failure mode rather than a shared anti-pattern list: Claude gets its assistant reflexes named as reflexes to override (caregiver swerve, tidy wrap-ups); GPT-5 gets an explicit output contract (no document structure, no closing offers, permission to be inefficient in the romantic register); GPT-4o gets anti-sycophancy discipline; Gemini gets a style governor against overwriting, "not X but Y" constructions, and long-context phrase looping; Grok gets wit calibration (sincerity without irony allowed); DeepSeek gets an escalation governor (pacing, metaphor budget, emotional continuity); Mistral gets pushed the opposite direction — initiative and interiority over flat economy; Ollama's stay short and imperative with a loop guard and updated sampler guidance. Every file now carries the never-write-{{user}} rule (previously missing from several), long-context callback guidance, and each model's structural dialect (XML tags for Claude/Gemini, `###` sections for DeepSeek). The GENERIC pair is unchanged; MODERN supersedes it for new characters.
+
 #### Connection profiles can be tagged (bug 74)
 
 Tagging a connection profile has never worked. `TagEditor` maps an entity type to an API base path, and the `profile` branch returned `/api/v1/profiles/<id>` — connection profiles are served from `/api/v1/connection-profiles`, and there has never been an `/api/v1/profiles` route. Every read and write 404'd. The read fails silently (the loader checks `res.ok` and simply doesn't set state), so the Tags section always looked empty; adding a tag created the tag but failed to attach it, with a generic "Failed to add tag" toast that gave no hint the URL was wrong.

@@ -3,7 +3,7 @@
   "name": "qtap-plugin-default-system-prompts",
   "title": "Default System Prompts",
   "description": "Built-in system prompt templates for various LLM models and use cases including companion and romantic categories",
-  "version": "1.1.16",
+  "version": "1.1.17",
   "author": {
     "name": "Foundry-9 LLC",
     "email": "charles.sebold@foundry-9.com",
@@ -38,8 +38,8 @@
     "mistral"
   ],
   "systemPromptConfig": {
-    "promptCount": 10,
-    "description": "System prompts optimized for Claude, GPT-4o, GPT-5, Gemini, Grok, DeepSeek, and Mistral models in companion and romantic categories",
+    "promptCount": 21,
+    "description": "System prompts optimized for Claude, GPT-4o, GPT-5, Gemini, Grok, DeepSeek, and Mistral models in companion and romantic categories, plus generic MODERN prompts (general, romantic, platonic) for any high-context model",
     "tags": [
       "companion",
       "romantic",
