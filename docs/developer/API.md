@@ -47,7 +47,7 @@ API reference for Quilltap v4.3 and later.
   - [NPCs](#npcs)
   - [Wardrobe (Archetypes)](#wardrobe-archetypes)
   - [Character Wardrobe](#character-wardrobe)
-  - [Outfit Presets](#outfit-presets)
+  - [Outfit Presets (removed)](#outfit-presets-removed)
   - [Character Photos](#character-photos)
   - [Chats](#chats)
   - [Brahma Console](#brahma-console)
@@ -1652,92 +1652,20 @@ Delete a character wardrobe item.
 
 ---
 
-### Outfit Presets
+### Outfit Presets (removed)
 
-Named outfit combinations for characters. Each preset maps wardrobe items to equipment slots.
+**Outfit presets no longer exist as a separate concept — composite wardrobe items replaced them.** Every `/api/v1/characters/[id]/wardrobe/presets*` route (list, create, read, update, delete, and `?action=apply`) is gone; there is no `presets` route under `app/api/v1/characters/[id]/wardrobe/`. Calls to those paths 404.
 
-#### `GET /api/v1/characters/[id]/wardrobe/presets`
+A composite is an ordinary wardrobe item that bundles others via `componentItemIds`, so the preset endpoints' work is done by the ordinary wardrobe routes above:
 
-List outfit presets for a character.
+| Old preset call | Current equivalent |
+|---|---|
+| `GET .../wardrobe/presets` | `GET /api/v1/characters/[id]/wardrobe` — composites come back in the same list, carrying `componentItemIds` |
+| `POST .../wardrobe/presets` | `POST /api/v1/characters/[id]/wardrobe` with `componentItemIds` (and `replace` if the ensemble should clear its slots rather than layer) |
+| `PUT`/`DELETE .../wardrobe/presets/[presetId]` | `PUT`/`DELETE /api/v1/characters/[id]/wardrobe/[itemId]` |
+| `POST .../wardrobe/presets/[presetId]?action=apply` | `POST /api/v1/chats/[id]?action=equip` with `mode: "wear"` (or `"replace"`) and the composite's `itemId` |
 
-**Response**: `200 OK`
-
-```json
-{
-  "presets": [
-    {
-      "id": "preset-uuid",
-      "characterId": "char-uuid",
-      "name": "Casual Friday",
-      "description": "Relaxed office attire",
-      "slots": {
-        "top": "item-uuid-1",
-        "bottom": "item-uuid-2",
-        "footwear": "item-uuid-3",
-        "accessories": null
-      }
-    }
-  ]
-}
-```
-
-#### `POST /api/v1/characters/[id]/wardrobe/presets`
-
-Create a new outfit preset.
-
-**Request Body**:
-
-```json
-{
-  "name": "Casual Friday",
-  "description": "Relaxed office attire",
-  "slots": {
-    "top": "item-uuid-1",
-    "bottom": "item-uuid-2",
-    "footwear": "item-uuid-3",
-    "accessories": null
-  }
-}
-```
-
-**Response**: `201 Created`
-
-#### `GET /api/v1/characters/[id]/wardrobe/presets/[presetId]`
-
-Get a specific outfit preset.
-
-#### `PUT /api/v1/characters/[id]/wardrobe/presets/[presetId]`
-
-Update an outfit preset. All fields optional.
-
-#### `DELETE /api/v1/characters/[id]/wardrobe/presets/[presetId]`
-
-Delete an outfit preset.
-
-#### `POST /api/v1/characters/[id]/wardrobe/presets/[presetId]?action=apply`
-
-Apply a preset outfit to a chat.
-
-**Request Body**:
-
-```json
-{
-  "chatId": "chat-uuid"
-}
-```
-
-**Response**: `200 OK`
-
-```json
-{
-  "equipped": {
-    "top": "item-uuid-1",
-    "bottom": "item-uuid-2",
-    "footwear": "item-uuid-3",
-    "accessories": null
-  }
-}
-```
+Pre-rework data is not lost: `.qtap` imports and backup restores fold a legacy `outfitPresets` array into composite wardrobe items (`lib/import/quilltap-import/legacy-presets.ts`, `lib/backup/restore/legacy-migrations.ts`), and the retired `Outfits/` vault folder is deliberately not read — see `lib/database/repositories/vault-overlay/vault-readers.ts`.
 
 ---
 
@@ -2327,13 +2255,20 @@ Reset general state to `{}`. Returns `{ "success": true, "previousState": { ... 
 
 Get full equipped outfit state for all characters in this chat.
 
+Every slot is an **array** of wardrobe item ids (empty when nothing is worn there) — slots layer, so a t-shirt under a sweater is two ids in `top`. `EquippedSlotsSchema` in `lib/schemas/wardrobe.types.ts` is the source of truth. A composite is stored as its own id and expanded to its components only at read time.
+
 **Response**: `200 OK`
 
 ```json
 {
   "equippedOutfit": {
-    "char-uuid-1": { "top": "item-uuid", "bottom": null, "footwear": null, "accessories": null },
-    "char-uuid-2": { "top": null, "bottom": null, "footwear": null, "accessories": null }
+    "char-uuid-1": {
+      "top": ["item-uuid-1", "item-uuid-2"],
+      "bottom": ["item-uuid-3"],
+      "footwear": ["item-uuid-4"],
+      "accessories": []
+    },
+    "char-uuid-2": { "top": [], "bottom": [], "footwear": [], "accessories": [] }
   }
 }
 ```

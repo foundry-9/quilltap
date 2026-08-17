@@ -4,6 +4,14 @@
 
 ### 4.9-dev
 
+#### Docs: removed the outfit-preset endpoints and fixed the equipped-outfit shape
+
+`docs/developer/API.md` documented six `/api/v1/characters/[id]/wardrobe/presets*` endpoints (list, create, read, update, delete, `?action=apply`) that no longer exist — outfit presets were retired when composite wardrobe items replaced them, and there is no `presets` route under `app/api/v1/characters/[id]/wardrobe/`. The section is now marked as removed and carries a mapping table from each old preset call to its current equivalent (the ordinary wardrobe routes, plus `POST /api/v1/chats/[id]?action=equip` for applying one), along with a pointer to the legacy-preset folding that import and backup restore still perform.
+
+The same region showed the pre-4.5 equipped shape — one UUID per slot, `null` when empty. Every slot has been an array of ids since 4.5 (slots layer; composites are stored as their own id and expanded at read time). The `GET /api/v1/chats/[id]?action=outfit` example now shows arrays and names `EquippedSlotsSchema` in `lib/schemas/wardrobe.types.ts` as the source of truth.
+
+`help/character-editing.md` still described a vault `Outfits/` folder of saved presets with a four-slot `slots` map; `vault-readers.ts` has not read that folder since the rework. The vault-folder paragraph now covers what `buildWardrobeItemFile` actually writes, including the previously undocumented `imagePrompt` and `componentItems` frontmatter keys and the composite `replace` flag, plus the cycle and unknown-reference handling.
+
 #### The three character-generation systems now know every character bucket
 
 The AI Wizard, Summon From Lore, and the Character Optimizer ("Refine from Memories") previously shared only a partial map of the character data model — the vantage-point preamble covering manifesto/identity/description/personality/title — and each had its own blind spots beyond that. `lib/services/character-field-semantics.ts` now carries the complete taxonomy: new prose blocks for system prompts (`PROMPT_SEMANTICS`), properties/pronouns/aliases (`PROPERTIES_SEMANTICS`), the physical description (nothing removable), and the wardrobe (slots, imagePrompt vs description, composites, defaults), plus a composed `FULL_FIELD_SEMANTICS`. All three systems consume the shared blocks instead of ad-hoc wording.
