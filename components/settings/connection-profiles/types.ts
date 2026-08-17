@@ -19,6 +19,21 @@ export interface Tag {
   createdAt?: string
 }
 
+/**
+ * A tag as the connection-profiles **collection** endpoint sends it:
+ * `enrichWithTags`'s `{ tagId, tag }` envelope, not a flat `Tag`.
+ *
+ * Declared rather than assumed because this field was typed `Tag[]` while the
+ * wire carried envelopes, and `fetchJson<any>` meant nothing checked — so
+ * `ProfileCard` read `tag.name` off the envelope and rendered every tag as an
+ * empty pill (Bug 74, third layer). The item route's `?action=get-tags` answers
+ * flat `Tag`s; these two shapes are not interchangeable.
+ */
+export interface EnrichedTag {
+  tagId: string
+  tag: Tag
+}
+
 export interface ProviderConfig {
   name: string
   displayName: string
@@ -75,7 +90,7 @@ export interface ConnectionProfile {
   maxContext?: number | null
   sortIndex?: number
   apiKey?: ApiKey | null
-  tags?: Tag[]
+  tags?: EnrichedTag[]
   messageCount?: number
   totalTokens?: number
   totalPromptTokens?: number

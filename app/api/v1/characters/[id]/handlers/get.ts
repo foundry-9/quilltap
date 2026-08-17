@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { exists, enrichWithDefaultImage, getFilePath } from '@/lib/api/middleware';
+import { exists, enrichWithDefaultImage, getFilePath, resolveEditorTags } from '@/lib/api/middleware';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { getCascadeDeletePreview } from '@/lib/cascade-delete';
 import { exportSTCharacter, createSTCharacterPNG } from '@/lib/sillytavern/character';
@@ -281,14 +281,9 @@ export async function handleGet(
 
     'get-tags': async () => {
       try {
-        const tagDetails = await Promise.all(
-          (character.tags || []).map(async (tagId) => {
-            const tag = await repos.tags.findById(tagId);
-            return tag ? { id: tag.id, name: tag.name, visualStyle: tag.visualStyle } : null;
-          })
-        );
-
-        const validTags = tagDetails.filter(Boolean);
+        // Shared with the connection-profile route so the two answers TagEditor
+        // consumes cannot drift apart again (Bug 74).
+        const validTags = await resolveEditorTags(character.tags, repos);
         return NextResponse.json({ tags: validTags });
       } catch (error) {
         logger.error('[Characters v1] Error fetching character tags', { characterId: id }, error instanceof Error ? error : undefined);

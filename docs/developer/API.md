@@ -714,7 +714,19 @@ rejects a non-boolean with `400`.
 
 #### `GET /api/v1/connection-profiles/[id]`
 
-Get a specific profile.
+Get a specific profile. Rejects an unrecognised `?action=` with `400` rather
+than serving the profile body — a lenient GET is what let a caller ask for an
+unimplemented action and receive a `200` of the wrong shape (bug 74).
+
+Tags on this response use the `{ tagId, tag }` envelope `enrichWithTags`
+produces, **not** flat tags. For flat tags, ask for the action below.
+
+#### `GET /api/v1/connection-profiles/[id]?action=get-tags`
+
+The profile's tags as `{ tags: [{ id, name, visualStyle }] }` — the flat shape
+`components/tags/tag-editor.tsx` consumes, in the profile's own tag order.
+Resolved through `resolveEditorTags` (`@/lib/api/middleware`), which every
+entity's `get-tags` action shares so the shape cannot drift between them.
 
 #### `PUT /api/v1/connection-profiles/[id]`
 

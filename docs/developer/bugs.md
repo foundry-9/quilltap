@@ -1,11 +1,52 @@
 # Bugs — defects surfaced by the v5 port
 
-**Last Updated**: 2026-08-15
+**Last Updated**: 2026-08-17
 **Codebase**: Quilltap v4.9.0-dev
 **Provenance**: the quilltap-v5 native port's differential harness, its
 dogfood walks against a copy of real data, and — from Bug 62 — v4's own
-feature-spec work
-**Status**: Bugs **1–71** are **fixed in v4**. Bug 71
+feature-spec work and browser verification
+**Status**: Bugs **1–74** are **fixed in v4**. Bug 74 (found 2026-08-16, fixed
+2026-08-17) is the first entry here found by **v4 verifying its own fix**: two
+404s sitting in the network log while the profile modal was open for bugs 72
+and 73. Tagging a connection profile had never worked, three independent layers
+deep — `TagEditor`'s `profile` branch called `/api/v1/profiles/<id>`, a route
+that has never existed; behind that, the connection-profile GET had no
+`get-tags` action and answered an unknown one with the whole profile body, so
+the corrected path would still have read `data.tags` as `undefined` and shown
+nothing; and behind *that*, `ProfileCard` read `tag.name` off
+`enrichWithTags`'s `{tagId, tag}` envelope, so a tagged profile drew an empty
+pill. The last two are one confusion twice — **two tag shapes with no owner** —
+and are now settled by `resolveEditorTags`, a flattening of `enrichWithTags`
+that both `get-tags` routes read, plus an `EnrichedTag` type that says what the
+collection endpoint actually sends. The GET also refuses unknown actions now
+rather than serving the profile, which is the leniency that hid layer 2 in the
+first place. Bugs 72 and 73 (filed and fixed
+2026-08-16) are both the profile editor failing to distinguish *shown* from
+*sent*, and both were surfaced by the same dogfood walk over the bug 71
+schemas — the panel's first contact with real hands. In **72** a numeric option
+read its value straight off the parameter bag, so clearing the box deleted the
+key, `fieldValue` fell back to `field.default`, and the default repainted over
+the empty box with the caret behind it: clear `300`, type `5`, store `3005`.
+`NumberField` now owns a draft string, with a `syncedFrom` companion telling its
+own echo from an outside change — the naive re-sync-on-prop-change spelling
+reintroduces the bug for any field that had a stored value before the clear.
+The draft alone leaves the second consequence live, because a fresh mount still
+seeds from `fieldValue`'s fold-in of the default; so `fieldValue` now returns
+`undefined` for number fields and the default renders as the `placeholder`,
+which is what finally makes *"leave blank for the default"* a state the user
+can see themselves reaching, on first open as well as after a clear. In **73** the Base URL box is gated
+on `requiresBaseUrl`, but all four outbound sites sent the value on truthiness
+— so a passing glance at Ollama left `http://localhost:11434` clinging
+invisibly to a profile that then could not connect, with no gesture available to
+clear it. A new `outboundBaseUrl` chokepoint returns `''` for any provider the
+plugin list says takes none — and, deliberately, *not* for a provider the list
+does not know, since an unloaded or failed provider fetch must not read as
+"clear this profile's URL". The save body drops its `if (baseUrl)` guard and
+sends the empty string, because omitting the key leaves the PUT's
+`baseUrl !== undefined` gate untripped and every already-poisoned row broken
+forever. `handleProviderChange` is deliberately untouched — the value stays in
+form state, inert rather than destructive, and returns if the user switches
+back. Bug 71
 (filed and fixed 2026-08-15 while benchmarking `Qwen3.8-27B` on an M4 Pro) was
 the general case of the problem
 [Bug 68](bugs/fixed/bug-68-ollama-prefill-kills-thinking.md) solved one instance
@@ -320,8 +361,9 @@ One row per bug, newest last. **Bug** links to the entry; **Fix site** and
 | 69 | [the file watcher overwrites an archive bundle's content digest, so no archived character can be rehydrated](bugs/fixed/bug-69-watcher-clobbers-archive-digest.md) | 2026-08-14 | 2026-08-14 | **High** | An archive row records the PLAINTEXT digest of an encrypted bundle; `handleFileChange` re-derives every changed file's `sha256` from disk, so seconds after each archive the row holds the ciphertext digest and every rehydrate refuses the bundle as corrupt — archiving is one-way | new `lib/file-storage/digest-policy.ts` honoured by `watcher.ts` + `reconciliation.ts`, plus a self-heal in `archive-service.ts` for rows already clobbered | Not yet assessed — any v5 watcher that re-derives digests inherits it |
 | 70 | [the context budget ignores the profile's Max Context, so an unrecognised model is budgeted as 8192 tokens](bugs/fixed/bug-70-budget-ignores-profile-max-context.md) | 2026-08-15 | 2026-08-15 | **High** | Two resolutions of the model's context window on the same turn: `calculateContextBudget` used a model-name lookup only (`getModelContextLimit` → 8192 OLLAMA default for any `hf.co/...` tag) while `calculateMaxAvailable` read the profile's real 65536. The small one won where it hurts — `remainingBudget` left ~1–1.5k tokens for 4897 tokens of history, silently trimmed every turn, while compression correctly saw no need to compress and the pre-send warning validated against the same corrupt figure. Two adjacent gaps fixed alongside: the builder packed to `totalLimit − responseReserve` while the validator warned 10% lower, and the tool schemas (never in the message array) plus the post-build agent-mode / tool-change injections were spent unbudgeted and uncounted | new `resolveContextWindow` chokepoint in `lib/llm/model-context-data.ts` honoured by `getRecommendedContextAllocation` / `getSafeInputLimit` / `calculateMaxAvailable`, with `calculateContextBudget` (`lib/chat/context-manager.ts`) now taking the profile and `buildContext` passing it; `computeSafeInputLimit` as the single ceiling both sides read; new `lib/services/chat-message/turn-extras.ts` (`collectTurnExtras`) building, measuring and reserving the payload's non-context parts | Not yet assessed — any v5 budget resolving the window from the model name inherits it |
 | 71 | [the two local-model providers silently drop every profile parameter, and `OPENAI_COMPATIBLE` can never call a tool](bugs/fixed/bug-71-local-provider-params-dropped.md) | 2026-08-15 | 2026-08-15 | Medium (a persisted setting that does nothing, on every local deployment) | `OPENAI_COMPATIBLE` never reads `profileParameters` and has no options schema; `OLLAMA` reads three keys and hardcodes the rest of `options`. Arbitrary keys save and reload cleanly, then vanish before the wire — so no local model can run at its publisher's recommended sampling settings (`top_k` / `min_p` / `presence_penalty` are all unreachable) and `reasoning_effort` is unavailable on the two providers where wall-clock control matters most. Separately, OAC's `toolUse: false` is a ceiling rather than a default, and the body builds carry no `tools` key either way | new `packages/plugin-utils/src/providers/profile-parameters.ts` + `openai-compatible.ts`'s allowlist hooks and tool legs (**plugin-utils 2.3.0**) + new `qtap-plugin-ollama/profile-options.ts` + OAC's first options schema + the DeepSeek and Z.AI collapses | Not yet assessed — v5's declarative manifests need a per-provider allowlist or inherit it; moves the `request-envelopes` corpus |
-| 72 | [a cleared provider-option number field snaps back to the schema default and swallows the next keystroke](bugs/bug-72-cleared-number-field-snaps-back.md) | 2026-08-16 | — | Medium (a wrong value reaches a real server silently — the cleared field re-reads as the default, so nothing says the keystroke was eaten) | Clearing a numeric option emits `undefined`, `setParameter` deletes the key, and `fieldValue` then falls back to `field.default` — so the default repaints with the caret after it and the next digit appends (`300`, type `5`, get `3005`, stored). Absent and explicitly-default also render identically, so "leave blank for the default" is a state the user can never see reaching | `ProviderOptionsPanel.tsx` `NumberField` (`:274-313`) vs `fieldValue` (`:43-47`) | Reproduces identically (faithful port); stays faithful pending this fix — dogfood finding #87 |
-| 73 | [a base URL survives a provider change while its field is hidden, and permanently breaks the profile it lands on](bugs/bug-73-hidden-base-url-survives-provider-change.md) | 2026-08-16 | — | **High** (a profile that cannot connect, with no visible cause and no visible cure) | Selecting `OLLAMA` fills `http://localhost:11434`; selecting `OPENAI` next hides the Base URL field but keeps the value, and all four outbound sites send it on truthiness rather than on `requiresBaseUrl` — so Connect/Fetch Models fail against the ollama port and the save writes the stale URL onto the row. `handleProviderChange` only ever *fills* a base URL, never clears one | `ProfileModal.tsx` `handleProviderChange` (`:219-243`) + the `showBaseUrl` gate (`:437`) + `useProfileForm.ts` (`:158-160`, `:191`, `:226`, `:260`) | Reproduces identically (faithful port); stays faithful pending this fix — dogfood finding #88 |
+| 72 | [a cleared provider-option number field snaps back to the schema default and swallows the next keystroke](bugs/fixed/bug-72-cleared-number-field-snaps-back.md) | 2026-08-16 | 2026-08-16 | Medium (a wrong value reaches a real server silently — the cleared field re-reads as the default, so nothing says the keystroke was eaten) | Clearing a numeric option emits `undefined`, `setParameter` deletes the key, and `fieldValue` then falls back to `field.default` — so the default repaints with the caret after it and the next digit appends (`300`, type `5`, get `3005`, stored). Absent and explicitly-default also render identically, so "leave blank for the default" is a state the user can never see reaching | `ProviderOptionsPanel.tsx` — `NumberField` holds a draft string reconciled against `syncedFrom`; `fieldValue` returns `undefined` for number fields so the default renders as `placeholder` | Owed (Faithful) — retires dogfood finding #87 |
+| 73 | [a base URL survives a provider change while its field is hidden, and permanently breaks the profile it lands on](bugs/fixed/bug-73-hidden-base-url-survives-provider-change.md) | 2026-08-16 | 2026-08-16 | **High** (a profile that cannot connect, with no visible cause and no visible cure) | Selecting `OLLAMA` fills `http://localhost:11434`; selecting `OPENAI` next hides the Base URL field but keeps the value, and all four outbound sites send it on truthiness rather than on `requiresBaseUrl` — so Connect/Fetch Models fail against the ollama port and the save writes the stale URL onto the row. `handleProviderChange` only ever *fills* a base URL, never clears one | new `outboundBaseUrl` chokepoint in `useProfileForm.ts` read by all four outbound sites (the save body always sends it, `''` clearing the row) + the two provider-judging reads in `ProfileModal.tsx` | Owed (Faithful) — retires dogfood finding #88 |
+| 74 | [tagging a connection profile has never worked, three layers deep](bugs/fixed/bug-74-profile-tags-wrong-route.md) | 2026-08-16 | 2026-08-17 | Medium (a whole affordance dead end to end; the read fails silently, the write fails with a generic toast) | `TagEditor`'s `profile` branch calls `/api/v1/profiles/<id>`, a route that has never existed — so every read and write 404s. Behind it: the connection-profile GET had no `get-tags` action and answered `{profile}` for one, and `ProfileCard` read `tag.name` off `enrichWithTags`'s `{tagId, tag}` envelope, drawing every tag as an empty pill | corrected path in `tag-editor.tsx` + a strict `get-tags` GET action + new shared `resolveEditorTags` in `lib/api/middleware/enrichment.ts` + `EnrichedTag` declared and unwrapped in the profile card | Not yet assessed — v5 has no connection-profile editor; take the shape contract from the bug file |
 
 ### Families and reading order
 

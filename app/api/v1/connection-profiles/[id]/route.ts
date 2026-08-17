@@ -2,6 +2,7 @@
  * Connection Profiles API v1 - Individual Profile Endpoint
  *
  * GET /api/v1/connection-profiles/[id] - Get a specific profile
+ * GET /api/v1/connection-profiles/[id]?action=get-tags - Get the profile's tags
  * PUT /api/v1/connection-profiles/[id] - Update a profile
  * DELETE /api/v1/connection-profiles/[id] - Delete a profile
  * POST /api/v1/connection-profiles/[id]?action=add-tag - Add a tag
@@ -10,7 +11,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createContextParamsHandler, RequestContext } from '@/lib/api/middleware';
+import { createContextParamsHandler, RequestContext, resolveEditorTags } from '@/lib/api/middleware';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
@@ -34,6 +35,9 @@ const removeTagSchema = z.object({
 
 const CONNECTION_PROFILE_ITEM_POST_ACTIONS = ['add-tag', 'remove-tag', 'auto-configure'] as const;
 type ConnectionProfileItemPostAction = typeof CONNECTION_PROFILE_ITEM_POST_ACTIONS[number];
+
+const CONNECTION_PROFILE_ITEM_GET_ACTIONS = ['get-tags'] as const;
+type ConnectionProfileItemGetAction = typeof CONNECTION_PROFILE_ITEM_GET_ACTIONS[number];
 
 /**
  * Helper to enrich profile with API key info
@@ -77,6 +81,28 @@ export const GET = createContextParamsHandler<{ id: string }>(
 
       if (!profile) {
         return notFound('Connection profile');
+      }
+
+      // An unrecognised action is refused rather than quietly serving the whole
+      // profile. Leniency here is what hid Bug 74's second layer: `get-tags`
+      // did not exist, the GET ignored the parameter, and the caller read
+      // `data.tags` off a `{ profile }` body as `undefined` — no tags, no error.
+      const action = getActionParam(req);
+      if (action) {
+        if (!isValidAction(action, CONNECTION_PROFILE_ITEM_GET_ACTIONS)) {
+          return badRequest(
+            `Unknown action: ${action}. Available actions: ${CONNECTION_PROFILE_ITEM_GET_ACTIONS.join(', ')}`
+          );
+        }
+
+        const getActionHandlers: Record<ConnectionProfileItemGetAction, () => Promise<NextResponse>> = {
+          'get-tags': async () => {
+            const tags = await resolveEditorTags(profile.tags, repos);
+            return NextResponse.json({ tags });
+          },
+        };
+
+        return getActionHandlers[action]();
       }
 
       const enrichedProfile = await enrichProfile(profile, repos);

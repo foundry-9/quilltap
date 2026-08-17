@@ -72,6 +72,16 @@ export function ProfileModal({
 
   // Note: No need for state reset effect - modal is keyed by profile.id so it remounts fresh
 
+  // A stored row can carry a base URL its provider does not take — every
+  // profile saved before Bug 73 was fixed, and any import. Reading the
+  // requirement here rather than the row's truthiness keeps the edit-time
+  // model fetch off the wrong endpoint; the next save clears the row. A
+  // provider the list does not know about (not loaded, or the fetch failed)
+  // keeps its stored URL — absence is not evidence.
+  const savedProvider = providers.find((p) => p.name === profile?.provider)
+  const savedProviderTakesBaseUrl =
+    !savedProvider || (savedProvider.configRequirements?.requiresBaseUrl ?? false)
+
   // Auto-fetch models when editing
   useEffect(() => {
     if (isOpen && profile?.id) {
@@ -83,7 +93,7 @@ export function ProfileModal({
             body: JSON.stringify({
               provider: profile.provider,
               apiKeyId: profile.apiKeyId || undefined,
-              baseUrl: profile.baseUrl || undefined,
+              baseUrl: (savedProviderTakesBaseUrl && profile.baseUrl) || undefined,
             }),
           })
           if (result.ok) {
@@ -97,7 +107,14 @@ export function ProfileModal({
       }
       fetchModelsForEdit()
     }
-  }, [isOpen, profile?.id, profile?.provider, profile?.apiKeyId, profile?.baseUrl])
+  }, [
+    isOpen,
+    profile?.id,
+    profile?.provider,
+    profile?.apiKeyId,
+    profile?.baseUrl,
+    savedProviderTakesBaseUrl,
+  ])
 
   const handleConnectClick = useCallback(async () => {
     const result = await operations.handleConnect((data) => {
@@ -235,9 +252,17 @@ export function ProfileModal({
     if (!profile?.id) {
       const supportsToolUse = providerConfig?.capabilities?.toolUse ?? false
       form.setField('allowToolUse', supportsToolUse)
+      // Only the providers that take a base URL may be judged by one — on the
+      // rest the field is hidden and its value belongs to a provider the user
+      // has moved off (Bug 73).
+      const takesBaseUrl = providerConfig?.configRequirements?.requiresBaseUrl ?? false
       form.setField(
         'supportsImageUpload',
-        supportsMimeType(newProvider as any, 'image/jpeg', form.formData.baseUrl || undefined)
+        supportsMimeType(
+          newProvider as any,
+          'image/jpeg',
+          (takesBaseUrl && form.formData.baseUrl) || undefined
+        )
       )
       form.setField('multiCharacterPrefill', defaultMultiCharacterPrefill(newProvider))
     }
@@ -353,7 +378,7 @@ export function ProfileModal({
                     )}
                   </select>
                   <p className="qt-text-xs mt-1">
-                    Non-image attachments: {getAttachmentSupportDescription(form.formData.provider as any, form.formData.baseUrl || undefined)}
+                    Non-image attachments: {getAttachmentSupportDescription(form.formData.provider as any, (reqs.requiresBaseUrl && form.formData.baseUrl) || undefined)}
                   </p>
                 </div>
               )}

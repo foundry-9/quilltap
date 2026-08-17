@@ -81,6 +81,8 @@ Before creating a connection profile, you need an API key:
    - **Top P** — Nucleus sampling (alternative to temperature)
    - **Provider-specific options** — May vary by provider
 
+   > **On blank boxes, as of 4.9.** Every numeric provider option is entitled to be left empty, and an empty one means *the model's own default stands* — but until now the box would not permit it. Delete the contents of, say, an Ollama profile's *Request Timeout* and the default sprang straight back with the cursor tucked in behind it, so the `5` you typed next arrived as `3005` and was saved with a perfectly straight face. Cleared fields now stay cleared. The default is shown in grey behind the empty box, as a suggestion rather than an occupant, and a field left that way is genuinely absent — which means the day a provider revises its default, your profile receives the revision.
+
    > **A correction, as of 4.9.** *Max Tokens* and *Top P* were, until now, written down faithfully and then left in the drawer: the Salon sent neither to the provider, which fell back on whatever default it kept for itself. Regenerating a reply used your figures; the original reply did not — which explains a good deal of otherwise inexplicable difference between the two. Both settings are now sent on every path. If a profile has been carrying a *Max Tokens* far above what you actually want spent, this is the moment to look at it, because it will now be honoured.
 
 3. Click **Save** to create the profile
@@ -199,6 +201,8 @@ For self-hosted or alternative LLM providers (like local Ollama instances):
 4. Complete other settings as needed
 5. Test to verify connection works
 
+**The Base URL keeps to its own provider.** The box appears only for the providers that require one — Ollama and OpenAI-Compatible — and selecting either fills in the customary local address. Should you then move the dropdown to a hosted provider, the box withdraws and, as of 4.9, so does its contents: nothing is sent, and nothing is saved onto the profile. This was formerly a most unsporting trap. A brief visit to Ollama, purely to see what was on offer, left `http://localhost:11434` clinging invisibly to the profile, and every subsequent attempt to connect was despatched to that address instead of the provider's own — a profile that could not connect, with nothing on screen to say why and no gesture available to put it right. Any profile already labouring under such a stowaway is cleared the next time you save it. A base URL you typed yourself is remembered, and returns should you return to a provider that uses one.
+
 > **Docker users:** If you're running Quilltap in Docker and local services (like Ollama) on your host machine, you don't need to change any URLs. Add the port to the `HOST_REDIRECT_PORTS` environment variable when starting the container (e.g., `HOST_REDIRECT_PORTS="11434"`), and `http://localhost:11434` works transparently inside the container.
 
 ## Provider-Specific Notes
@@ -308,6 +312,8 @@ Add tags to profiles for easy filtering:
 1. Edit a profile
 2. Add tags like: "production", "testing", "fast", "expensive"
 3. Tags help you remember each profile's purpose
+
+> **This actually works now, as of 4.9.** An awkward admission: the labels one attached to a connection profile were being posted to an address at which no clerk had ever sat. Every tag went into the void — the panel showed none however many you added, and the attempt itself returned nothing more helpful than *"Failed to add tag."* The correspondence is now correctly directed, the profile card displays the tag's name rather than the blank lozenge it used to manage, and a tag applied today will still be there tomorrow. Any labels you attempted to attach before this were never recorded and will need attaching again — though the tags themselves were duly created, so you will find them waiting in the suggestions list.
 
 ## Allow Tool Use
 

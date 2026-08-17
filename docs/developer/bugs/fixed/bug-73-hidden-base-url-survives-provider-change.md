@@ -2,14 +2,85 @@
 
 | | |
 |---|---|
-| **Status** | **Open** |
+| **Status** | **Fixed in v4** |
 | **Found** | 2026-08-16 (the v5 port's `93ed8abf` dogfood walk, step A5 — a human cycling the provider dropdown on a new profile; measured in v4's own modal the same day) |
+| **Fixed** | 2026-08-16 |
 | **Severity** | **High** (a profile that cannot connect, with no visible cause and no visible cure — the offending value is not rendered on the provider it breaks) |
 | **Who it bites** | anyone who touches `OLLAMA` or `OPENAI_COMPATIBLE` in the provider dropdown and then selects a hosted provider — including anyone merely *browsing* the list to see what is available |
 | **Provenance** | Faithful — v5's modal is site-for-site equivalent and reproduces it |
 | **Defect site** | `components/settings/connection-profiles/ProfileModal.tsx` `handleProviderChange` (`:219-243`) + the `showBaseUrl = reqs.requiresBaseUrl` render gate (`:437`) + `useProfileForm.ts`'s `handleConnect` (`:191`), `handleFetchModels` (`:226`), `handleTestMessage` (`:260`) and `buildRequestBody` (`:158-160`) |
-| **v5 status** | Reproduces identically; v5 stays faithful and will absorb the fix in a drift catch-up (dogfood finding #88) |
+| **Fix site** | new `outboundBaseUrl` chokepoint in `useProfileForm.ts` honoured by all four outbound sites, plus the two remaining provider-judging reads in `ProfileModal.tsx` |
+| **v5 status** | Owed (Faithful) — v5 reproduces it identically and must absorb the chokepoint in a drift catch-up; retires dogfood finding #88 |
 | **Index** | [bugs.md](../bugs.md) |
+
+---
+
+**FIXED in v4 (2026-08-16)** by the filing's second option — *don't send what
+you don't show* — which subsumes the first and needs no rule about whose URL is
+whose. One new chokepoint in `useProfileForm.ts`:
+
+```ts
+const outboundBaseUrl = useCallback((): string => {
+  const known = providers.find((p) => p.name === form.formData.provider)
+  if (known && !known.configRequirements?.requiresBaseUrl) return ''
+  return form.formData.baseUrl || ''
+}, [...])
+```
+
+All four outbound sites read it instead of `form.formData.baseUrl`:
+`handleConnect`, `handleFetchModels` and `handleTestMessage` send
+`outboundBaseUrl() || undefined`, so a hidden field cannot reach a probe.
+
+It asks `providers` directly rather than going through
+`getProviderRequirements`, which defaults an *unknown* provider to
+`requiresBaseUrl: false`. That default is right for deciding what to render —
+a provider nobody can describe gets no field — but wrong for deciding what to
+erase: the list not having loaded, or its fetch having failed, would otherwise
+read as "this provider takes no base URL" and the next save would clear a
+working local profile. Absence is not evidence, so an unknown provider keeps
+what is stored.
+
+`buildRequestBody` goes one step further and drops the `if (baseUrl)` guard
+entirely — `requestBody.baseUrl` is now **always** present, carrying `''` when
+the provider takes none. Omitting the key would have left the row untouched
+(`PUT` gates on `baseUrl !== undefined`, `:208-210`), so every profile already
+written broken would have stayed broken; an empty string maps to `NULL` on both
+the create (`route.ts:278`) and the update path, which makes the next ordinary
+save the cure for a row poisoned before this fix. That is the only reason the
+save leg is not simply symmetric with the other three.
+
+Two further reads judged the provider by a base URL it may not own, and were
+gated the same way rather than left as a second seam: the edit-time model
+fetch in `ProfileModal`'s auto-fetch effect (a *stored* row can still carry a
+stale URL until its first save), and the `supportsMimeType` /
+`getAttachmentSupportDescription` pair, which decide vision and attachment
+support partly from the endpoint.
+
+`handleProviderChange` is deliberately untouched. The value stays in form
+state, so switching back to a provider that renders the field restores what was
+there — the stale URL is now merely inert rather than destructive, and no rule
+is needed about whether a typed URL outranks an auto-filled one. That also
+answers the filing's open question: nothing is cleared on the way out, because
+nothing needs to be.
+
+Coverage: new
+`__tests__/unit/components/settings/profile-modal-base-url.test.tsx` — the real
+`ProfileModal` over the real `useProfileForm`, driven through the actual
+dropdown gesture with `fetchJson` captured. Six cases: the fill-then-hide
+gesture, the connect body (the filing's measurement, inverted), the save body,
+a guard that a provider which *does* take a base URL still sends it, a guard
+that an unloaded provider list does not clear a stored URL, and the
+`OPENAI_COMPATIBLE → OLLAMA → OPENAI_COMPATIBLE` typed-endpoint guard. Checked
+against the pre-fix modal: the two body assertions fail there.
+
+**Verified in the running app** (V4test, a real OpenAI key): the filing's
+measurement, run forwards. Selecting Ollama fills `http://localhost:11434` and
+shows the field; selecting OpenAI hides it; **Connect** then answers
+*"Successfully connected to OPENAI"* where the filing measured *"Failed to
+validate connection to OpenAI"*. Saving the profile writes `baseUrl` as SQL
+`NULL` on the row, confirmed by `quilltap db` — and an Ollama profile saved in
+the same session keeps its `http://localhost:11434`, so the gate discriminates
+rather than blanket-clearing.
 
 ---
 

@@ -2,14 +2,74 @@
 
 | | |
 |---|---|
-| **Status** | **Open** |
+| **Status** | **Fixed in v4** |
 | **Found** | 2026-08-16 (the v5 port's `93ed8abf` dogfood walk, step A4 — a human clearing Ollama's Request Timeout on a real instance; measured in v4's own component the same day) |
+| **Fixed** | 2026-08-16 |
 | **Severity** | Medium (a wrong value reaches a real server silently — the cleared field re-reads as the default, so nothing on screen says the keystroke was eaten) |
 | **Who it bites** | anyone editing a numeric provider option (Ollama's Request Timeout, every Sampling knob, OAC's numeric fields) who clears the box to type a new value |
 | **Provenance** | Faithful — v5 ports `NumberField` line for line and reproduces it exactly |
 | **Defect site** | `components/settings/connection-profiles/ProviderOptionsPanel.tsx` — `NumberField` (`:274-313`) against `fieldValue` (`:43-47`) |
-| **v5 status** | Reproduces identically; v5 stays faithful and will absorb the fix in a drift catch-up (dogfood finding #87) |
+| **Fix site** | `components/settings/connection-profiles/ProviderOptionsPanel.tsx` — `NumberField` holds a draft string reconciled against `syncedFrom`; `fieldValue` returns `undefined` for number fields so `field.default` renders as `placeholder`; new `toInputString` helper |
+| **v5 status** | Owed (Faithful) — v5 reproduces it identically and must absorb the draft in a drift catch-up; retires dogfood finding #87 |
 | **Index** | [bugs.md](../bugs.md) |
+
+---
+
+**FIXED in v4 (2026-08-16)** by taking **both** halves of the filing's first
+option, which turned out to be one repair rather than two.
+
+**The draft.** `NumberField` now owns the string it displays: it seeds a
+`draft` from the value prop and renders *that*, so emptying the box leaves it
+empty. The deeper reason the input cannot be driven off the prop is that a
+half-typed number is not a value the bag can hold — a `type="number"` input
+reports `''` for `1.` and for `-` alike — so any input re-deriving its display
+from what the host stored will fight the person typing, and the cleared-field
+case is merely the loudest instance.
+
+The subtlety is telling our own echo from a genuine outside change. A second
+piece of state, `syncedFrom`, records the prop value the draft was last
+reconciled against, and every write-through sets it to the value the host is
+about to hand back. A prop arriving equal to `syncedFrom` is our own round trip
+and leaves the draft alone; a prop arriving different is someone else moving
+the parameter — a different profile, a schema swap reusing the component — and
+re-seeds it. Without that distinction the naive "re-sync when the prop changes"
+spelling reintroduces the bug for any field that had a *stored* value before
+the clear (500 → clear → prop becomes 300 → re-seed → 300 painted back).
+
+**The placeholder.** The draft alone does *not* close the second consequence,
+which is easy to miss: a fresh mount still seeds from `fieldValue`, which folds
+in `field.default`, so an untouched Ollama profile still opened with `300`
+sitting in the box as a value — indistinguishable from someone having chosen
+`300`, and reappearing on every reopen after a deliberate clear. (Measured in
+the running app during verification: `value:"300", placeholder:"300"` on first
+open.) So `fieldValue` now returns `undefined` for `type: 'number'` and
+`NumberField` renders `field.default` as the input's `placeholder`. An unset
+numeric option is an empty box with the default behind it in grey, on first
+open and on every reopen.
+
+That narrowing is deliberately keyed to the field type rather than applied
+across the panel, which is where the filing's second option would have gone:
+`EnumField` relies on the fallback being a real value to preselect its default
+option, so a blanket change is the whole panel's blast radius for a defect that
+lives in one control.
+
+Coverage: five cases in
+`__tests__/unit/components/settings/provider-options-panel.test.tsx`, driven
+through a `ParameterHost` that reproduces `ProfileModal`'s `setParameter`
+(delete-on-`undefined`) — the bug only exists in the round trip between the two.
+Checked against the pre-fix component: the repro cases fail there; the
+outside-change guard must pass both ways.
+
+**Verified in the running app** (V4test, a fresh Ollama profile): unset opens
+`value:"", placeholder:"300"`; typing `300` stores `300`; clearing leaves the
+box empty with the key gone from the bag; typing `5` gives `5`, not `3005`; the
+saved row holds `request_timeout_seconds: 5`; reopening shows `5` against the
+grey `300`; and clearing then saving removes the key from `parameters`
+altogether rather than writing the default. The clear itself had to be driven
+as a native `input` event — the harness's key action does not deliver
+Backspace — so the keystroke-level assertion rests on the jsdom test, where
+`user.clear()` dispatches real key events. Everything downstream of the clear,
+which is where the defect lived, was observed in the real browser.
 
 ---
 

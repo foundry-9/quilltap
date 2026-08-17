@@ -43,7 +43,9 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
       case 'chat':
         return `/api/v1/chats/${entityId}`;
       case 'profile':
-        return `/api/v1/profiles/${entityId}`;
+        // Connection profiles are served from `/api/v1/connection-profiles`;
+        // there has never been an `/api/v1/profiles` route (Bug 74).
+        return `/api/v1/connection-profiles/${entityId}`;
     }
   }, [entityType, entityId]);
 

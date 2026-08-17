@@ -12,6 +12,7 @@
 
 'use client'
 
+import { useState } from 'react'
 import type {
   ProviderOptionField,
   ProviderOptionsSchema,
@@ -43,7 +44,20 @@ function shouldRenderField(
 function fieldValue(field: ProviderOptionField, parameters: Record<string, unknown>): unknown {
   const stored = parameters[field.key]
   if (stored !== undefined) return stored
+  // A number field renders its default as a PLACEHOLDER rather than a value, so
+  // an unset option reads as unset — otherwise "absent" and "explicitly the
+  // default" look identical and *"leave blank for the default"* is a state the
+  // user can never see themselves reach (Bug 72). Every other control needs the
+  // fallback as a real value: `EnumField` relies on it to preselect.
+  if (field.type === 'number') return undefined
   return field.default
+}
+
+/** A stored value (or a schema default) as the string an `<input>` displays. */
+function toInputString(value: unknown): string {
+  if (typeof value === 'number') return String(value)
+  if (typeof value === 'string') return value
+  return ''
 }
 
 export function ProviderOptionsPanel({
@@ -282,12 +296,29 @@ function NumberField({
   onChange: (value: unknown) => void
 }) {
   const id = `pof-${field.key}`
-  const numericValue =
-    typeof value === 'number'
-      ? String(value)
-      : typeof value === 'string'
-        ? value
-        : ''
+  const incoming = toInputString(value)
+
+  // The box owns its own string while it is being edited, rather than reading
+  // straight off the value prop. A half-typed number is not a value the bag can
+  // hold — `1.` and `-` both arrive as `''` — and an input that re-derives its
+  // display from what the host stored will fight the person typing (Bug 72).
+  //
+  // `syncedFrom` is the prop value the draft was last reconciled against.
+  // Writing through sets it to the value the host will hand back, so our own
+  // echo is never mistaken for the parameter changing underneath us. Anything
+  // else moving the prop (a different profile, a schema swap) re-seeds it.
+  const [draft, setDraft] = useState(incoming)
+  const [syncedFrom, setSyncedFrom] = useState(incoming)
+  if (incoming !== syncedFrom) {
+    setSyncedFrom(incoming)
+    setDraft(incoming)
+  }
+
+  const emit = (next: unknown) => {
+    setSyncedFrom(toInputString(next))
+    onChange(next)
+  }
+
   return (
     <div>
       <label htmlFor={id} className="qt-text-label-xs">
@@ -296,14 +327,19 @@ function NumberField({
       <input
         id={id}
         type="number"
-        value={numericValue}
+        value={draft}
+        // An empty box means "unset", so the default shows through as the
+        // placeholder — the only way the user can see they have reached the
+        // state the help text calls "leave blank for the default".
+        placeholder={field.default === undefined ? undefined : toInputString(field.default)}
         onChange={(e) => {
           const raw = e.target.value
+          setDraft(raw)
           if (raw === '') {
-            onChange(undefined)
+            emit(undefined)
           } else {
             const parsed = Number(raw)
-            onChange(Number.isNaN(parsed) ? raw : parsed)
+            emit(Number.isNaN(parsed) ? raw : parsed)
           }
         }}
         className="qt-input text-sm"

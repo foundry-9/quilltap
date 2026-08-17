@@ -35,6 +35,27 @@ export function useProfileForm(providers: ProviderConfig[]) {
     [providers]
   )
 
+  /**
+   * The base URL as it is allowed to leave the form.
+   *
+   * A provider that does not require one hides the field (`ProfileModal`'s
+   * `showBaseUrl` gate), so whatever is still sitting in form state belongs to
+   * a provider the user has since moved off — most often the `localhost:11434`
+   * that selecting Ollama auto-filled. Sending it points every probe, and the
+   * saved row, at the wrong endpoint with nothing on screen to explain it, and
+   * no gesture that clears it (Bug 73). The value stays in form state so
+   * switching back restores it; it simply never reaches the wire.
+   *
+   * A provider missing from `providers` is not evidence of anything —
+   * the list has not loaded, or its fetch failed — so the stored value is left
+   * alone there rather than clearing a working profile on a failed fetch.
+   */
+  const outboundBaseUrl = useCallback((): string => {
+    const known = providers.find((p) => p.name === form.formData.provider)
+    if (known && !known.configRequirements?.requiresBaseUrl) return ''
+    return form.formData.baseUrl || ''
+  }, [providers, form.formData.provider, form.formData.baseUrl])
+
   const resetForm = useCallback(() => {
     form.resetForm()
   }, [form])
@@ -155,13 +176,15 @@ export function useProfileForm(providers: ProviderConfig[]) {
       requestBody.apiKeyId = null
     }
 
-    // Only include baseUrl if set
-    if (form.formData.baseUrl) {
-      requestBody.baseUrl = form.formData.baseUrl
-    }
+    // Always sent, never conditionally: an empty string is how the row is
+    // *cleared* of a base URL the current provider does not take, so a profile
+    // that picked one up from an earlier provider heals on its next save
+    // rather than staying broken and invisible (Bug 73). Both the create and
+    // the update handler map a falsy value to NULL.
+    requestBody.baseUrl = outboundBaseUrl()
 
     return requestBody
-  }, [form.formData])
+  }, [form.formData, outboundBaseUrl])
 
   const handleConnect = useCallback(
     async (onSuccess?: (data: any) => void) => {
@@ -188,7 +211,7 @@ export function useProfileForm(providers: ProviderConfig[]) {
           body: JSON.stringify({
             provider: form.formData.provider,
             apiKeyId: form.formData.apiKeyId || undefined,
-            baseUrl: form.formData.baseUrl || undefined,
+            baseUrl: outboundBaseUrl() || undefined,
           }),
         })
 
@@ -205,7 +228,7 @@ export function useProfileForm(providers: ProviderConfig[]) {
 
       return result
     },
-    [form.formData, connectOp, getProviderRequirements]
+    [form.formData, connectOp, getProviderRequirements, outboundBaseUrl]
   )
 
   const handleFetchModels = useCallback(
@@ -223,7 +246,7 @@ export function useProfileForm(providers: ProviderConfig[]) {
           body: JSON.stringify({
             provider: form.formData.provider,
             apiKeyId: form.formData.apiKeyId || undefined,
-            baseUrl: form.formData.baseUrl || undefined,
+            baseUrl: outboundBaseUrl() || undefined,
           }),
         })
 
@@ -240,7 +263,7 @@ export function useProfileForm(providers: ProviderConfig[]) {
 
       return result
     },
-    [form.formData, fetchModelsOp, getProviderRequirements]
+    [form.formData, fetchModelsOp, getProviderRequirements, outboundBaseUrl]
   )
 
   const handleTestMessage = useCallback(
@@ -257,7 +280,7 @@ export function useProfileForm(providers: ProviderConfig[]) {
           body: JSON.stringify({
             provider: form.formData.provider,
             apiKeyId: form.formData.apiKeyId || undefined,
-            baseUrl: form.formData.baseUrl || undefined,
+            baseUrl: outboundBaseUrl() || undefined,
             modelName: form.formData.modelName,
             parameters: {
               temperature: parseFloat(String(form.formData.temperature)),
@@ -280,7 +303,7 @@ export function useProfileForm(providers: ProviderConfig[]) {
 
       return result
     },
-    [form.formData, testMessageOp]
+    [form.formData, testMessageOp, outboundBaseUrl]
   )
 
   const handleAutoConfigure = useCallback(

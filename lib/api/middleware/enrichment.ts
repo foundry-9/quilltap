@@ -111,6 +111,44 @@ export async function enrichWithTags(
 }
 
 /**
+ * A tag as `components/tags/tag-editor.tsx` reads it — flat, not the
+ * `{ tagId, tag }` envelope `EnrichedTag` uses for entity payloads.
+ *
+ * `TagBadge` styles from `getStyleForTag(tag.id)`, so `id` and `name` are the
+ * load-bearing fields; `visualStyle` rides along for callers rendering a tag
+ * outside the style provider.
+ */
+export interface EditorTag {
+  id: string;
+  name: string;
+  visualStyle: Tag['visualStyle'];
+}
+
+/**
+ * Resolve an entity's tag ids for a `?action=get-tags` response.
+ *
+ * TagEditor is entity-agnostic: it swaps a base path and expects every
+ * `get-tags` route to answer with the same `{ tags: [...] }` body. That
+ * contract had no owner, so each route open-coded its own loop and they were
+ * free to drift — which is Bug 74's second layer. Any entity that grows a
+ * `get-tags` action resolves its tags here.
+ *
+ * Built on {@link enrichWithTags} so the batching and the "preserve the
+ * entity's own order" rule are stated once; this only unwraps the envelope.
+ */
+export async function resolveEditorTags(
+  tagIds: string[] | null | undefined,
+  repos: RepositoryContainer
+): Promise<EditorTag[]> {
+  const enriched = await enrichWithTags(tagIds ?? undefined, repos);
+  return enriched.map(({ tag }) => ({
+    id: tag.id,
+    name: tag.name,
+    visualStyle: tag.visualStyle,
+  }));
+}
+
+/**
  * Enriched default image info for responses
  */
 export interface EnrichedDefaultImage {

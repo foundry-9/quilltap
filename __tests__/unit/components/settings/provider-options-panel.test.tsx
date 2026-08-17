@@ -5,6 +5,7 @@
 
 import { describe, it, expect, jest } from '@jest/globals'
 import { render, screen, fireEvent } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import React from 'react'
 import type { ProviderOptionsSchema } from '@quilltap/plugin-types'
 import { ProviderOptionsPanel } from '@/components/settings/connection-profiles/ProviderOptionsPanel'
@@ -58,9 +59,51 @@ const SCHEMA: ProviderOptionsSchema = {
           default: false,
           affects: 'modelInput',
         },
+        {
+          key: 'request_timeout_seconds',
+          label: 'Request Timeout (seconds)',
+          type: 'number',
+          default: 300,
+          helpText: 'Leave blank for the default.',
+        },
       ],
     },
   ],
+}
+
+/**
+ * The panel's real host: `ProfileModal`'s `setParameter`, which deletes the
+ * key on `undefined`. Bug 72 only exists in the round trip between the two.
+ */
+function ParameterHost({
+  initial = {},
+  onBag,
+}: {
+  initial?: Record<string, unknown>
+  onBag?: (bag: Record<string, unknown>) => void
+}) {
+  const [parameters, setParameters] = React.useState<Record<string, unknown>>(initial)
+  React.useEffect(() => {
+    onBag?.(parameters)
+  }, [parameters, onBag])
+  return (
+    <ProviderOptionsPanel
+      schema={SCHEMA}
+      parameters={parameters}
+      fetchedModels={[]}
+      onSetParameter={(key, value) => {
+        setParameters((prev) => {
+          const next = { ...prev }
+          if (value === undefined) {
+            delete next[key]
+          } else {
+            next[key] = value
+          }
+          return next
+        })
+      }}
+    />
+  )
 }
 
 describe('ProviderOptionsPanel', () => {
@@ -164,6 +207,88 @@ describe('ProviderOptionsPanel', () => {
     const checkboxA = screen.getByRole('checkbox', { name: /model-a/i })
     fireEvent.click(checkboxA)
     expect(onSet).toHaveBeenCalledWith('fallbacks', ['model-b'])
+  })
+
+  // Bug 72 — clearing a numeric option used to repaint the schema default with
+  // the caret after it, so the next keystroke appended to it (300 → 3005).
+  describe('number fields (Bug 72)', () => {
+    it('stays empty when cleared, and the key leaves the bag', async () => {
+      const user = userEvent.setup()
+      let bag: Record<string, unknown> = {}
+      render(<ParameterHost initial={{ request_timeout_seconds: 300 }} onBag={(b) => (bag = b)} />)
+
+      const input = screen.getByLabelText('Request Timeout (seconds)') as HTMLInputElement
+      expect(input.value).toBe('300')
+
+      await user.clear(input)
+      expect(input.value).toBe('')
+      expect(bag).not.toHaveProperty('request_timeout_seconds')
+    })
+
+    it('does not prepend the default to the value typed after a clear', async () => {
+      const user = userEvent.setup()
+      let bag: Record<string, unknown> = {}
+      render(<ParameterHost initial={{ request_timeout_seconds: 300 }} onBag={(b) => (bag = b)} />)
+
+      const input = screen.getByLabelText('Request Timeout (seconds)') as HTMLInputElement
+      expect(input.value).toBe('300')
+
+      await user.clear(input)
+      await user.type(input, '5')
+
+      expect(input.value).toBe('5')
+      expect(bag.request_timeout_seconds).toBe(5)
+    })
+
+    it('renders an unset number as blank with the default as placeholder', () => {
+      // Absent and explicitly-default must not look identical, or the field's
+      // own "leave blank for the default" is unreachable and unverifiable.
+      render(<ParameterHost />)
+      const input = screen.getByLabelText('Request Timeout (seconds)') as HTMLInputElement
+      expect(input.value).toBe('')
+      expect(input).toHaveAttribute('placeholder', '300')
+    })
+
+    it('keeps a blank field absent across a reopen rather than writing the default', async () => {
+      const user = userEvent.setup()
+      let bag: Record<string, unknown> = {}
+      const { unmount } = render(
+        <ParameterHost initial={{ request_timeout_seconds: 300 }} onBag={(b) => (bag = b)} />
+      )
+      await user.clear(screen.getByLabelText('Request Timeout (seconds)'))
+      expect(bag).not.toHaveProperty('request_timeout_seconds')
+      unmount()
+
+      // Reopening must not resurrect the default as a stored-looking value —
+      // otherwise a later change to the plugin's default never reaches the
+      // profiles that deliberately never set one.
+      render(<ParameterHost initial={bag} />)
+      expect((screen.getByLabelText('Request Timeout (seconds)') as HTMLInputElement).value).toBe(
+        ''
+      )
+    })
+
+    it('re-seeds the box when the parameter moves for some other reason', () => {
+      const { rerender } = render(
+        <ProviderOptionsPanel
+          schema={SCHEMA}
+          parameters={{ request_timeout_seconds: 300 }}
+          fetchedModels={[]}
+          onSetParameter={jest.fn()}
+        />
+      )
+      rerender(
+        <ProviderOptionsPanel
+          schema={SCHEMA}
+          parameters={{ request_timeout_seconds: 900 }}
+          fetchedModels={[]}
+          onSetParameter={jest.fn()}
+        />
+      )
+      expect((screen.getByLabelText('Request Timeout (seconds)') as HTMLInputElement).value).toBe(
+        '900'
+      )
+    })
   })
 
   it('skips multi-enum choice equal to the active modelName', () => {
