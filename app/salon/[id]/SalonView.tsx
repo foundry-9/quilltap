@@ -1569,6 +1569,7 @@ export function SalonView({ chatId }: SalonViewProps) {
           setShowSource={modals.setShowPreview}
           uploadingFile={uploadingFile}
           toolExecutionStatus={sseStreaming.toolExecutionStatus}
+          onDismissToolExecutionStatus={sseStreaming.dismissToolExecutionStatus}
           customToolsAvailable={customToolsAvailable}
           onCustomToolRan={fetchChat}
           renderingPatterns={roleplayRenderingPatterns}

@@ -18,6 +18,10 @@ The AI Wizard, Summon From Lore, and the Character Optimizer ("Refine from Memor
 
 Help docs updated (`ai-character-import.md`, `character-optimizer.md`, `character-creation.md`); new unit coverage for the shared wardrobe helpers, composite assembly, and the new prompts.
 
+#### The Salon's image-generation notice now clears itself (bug 77)
+
+The `Generating image...` / `Successfully generated 1 image!` banner above the Salon composer had exactly one teardown — a detached `setTimeout` at the end of `sendMessage`'s terminal `onDone` — so any turn that finished another way (continue mode, an intermediate turn in a tool chain, an error) left it pinned above the composer for the rest of the session, with no way to close it. The notice now owns its own lifetime: a settled success/error status auto-dismisses after 6 seconds (timer held in a ref, superseded on each new status, cleared on unmount), turn boundaries drop only a `pending` status whose result never arrived, and the alert has a close button. Stopping a turn clears it immediately.
+
 #### Importing a `.qtap` no longer breaks composite outfits (bug 75)
 
 `importCharacterWardrobeItems` re-mints every wardrobe item id on import but passed `componentItemIds` through verbatim, so every composite outfit in an imported character kept references to ids that exist only in the export — equipping it cleared its slots and put nothing on, silently. The importer now pre-assigns the new ids, remaps composite references through the old→new map (dropping unresolvable ones with an import warning), creates leaf items before the composites that bundle them, and passes the pre-assigned id to `wardrobe.create`.

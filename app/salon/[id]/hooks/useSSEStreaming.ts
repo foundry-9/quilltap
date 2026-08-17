@@ -34,6 +34,9 @@ export interface ToolExecutionStatus {
   message: string
 }
 
+/** How long a settled tool-execution notice lingers before it dismisses itself. */
+const TOOL_STATUS_DISMISS_MS = 6000
+
 export interface ResponseStatus {
   stage: string
   message: string
@@ -218,6 +221,11 @@ export function useSSEStreaming({
   const [streamingToolBatches, setStreamingToolBatches] = useState<StreamingToolBatch[]>([])
   const [toolExecutionStatus, setToolExecutionStatus] = useState<ToolExecutionStatus | null>(null)
   const [responseStatus, setResponseStatus] = useState<ResponseStatus | null>(null)
+  // Auto-dismiss timer for a settled (success/error) tool-execution notice. The
+  // banner used to be cleared only from the send path's onDone, so any turn that
+  // finished by another route — a chain's intermediate done, continue mode, an
+  // error, an autonomous turn — left it pinned above the composer forever.
+  const toolStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const abortControllerRef = useRef<AbortController | null>(null)
   // Monotonic batch counter so tool-call React keys stay unique across batches.
@@ -297,7 +305,8 @@ export function useSSEStreaming({
     } : m))
   }, [setMessages])
 
-  // Cancel any pending rAF on unmount to avoid setting state after teardown.
+  // Cancel any pending rAF (and the tool-status auto-dismiss timer) on unmount
+  // to avoid setting state after teardown.
   useEffect(() => {
     return () => {
       if (streamingContentRafRef.current !== null) {
@@ -306,6 +315,44 @@ export function useSSEStreaming({
       if (streamingReasoningRafRef.current !== null) {
         cancelAnimationFrame(streamingReasoningRafRef.current)
       }
+      if (toolStatusTimerRef.current !== null) {
+        clearTimeout(toolStatusTimerRef.current)
+      }
+    }
+  }, [])
+
+  /** Clear the tool-execution notice and any pending auto-dismiss timer. */
+  const dismissToolExecutionStatus = useCallback(() => {
+    if (toolStatusTimerRef.current !== null) {
+      clearTimeout(toolStatusTimerRef.current)
+      toolStatusTimerRef.current = null
+    }
+    setToolExecutionStatus(null)
+  }, [])
+
+  /**
+   * Turn-boundary cleanup: drop a notice that is still 'pending' (its tool
+   * result never arrived). A settled notice is left alone — its own
+   * auto-dismiss timer is already running.
+   */
+  const clearPendingToolExecutionStatus = useCallback(() => {
+    setToolExecutionStatus(prev => (prev?.status === 'pending' ? null : prev))
+  }, [])
+
+  // Single door for the tool-execution notice. A 'pending' notice stays up until
+  // it settles or the turn ends; a settled one self-expires, so no caller has to
+  // remember to tear it down.
+  const publishToolExecutionStatus = useCallback((status: ToolExecutionStatus) => {
+    if (toolStatusTimerRef.current !== null) {
+      clearTimeout(toolStatusTimerRef.current)
+      toolStatusTimerRef.current = null
+    }
+    setToolExecutionStatus(status)
+    if (status.status !== 'pending') {
+      toolStatusTimerRef.current = setTimeout(() => {
+        toolStatusTimerRef.current = null
+        setToolExecutionStatus(null)
+      }, TOOL_STATUS_DISMISS_MS)
     }
   }, [])
 
@@ -331,13 +378,13 @@ export function useSSEStreaming({
     }))
     setStreamingToolBatches(prev => [...prev, { offset, calls }])
     if (toolNames.includes('generate_image')) {
-      setToolExecutionStatus({
+      publishToolExecutionStatus({
         tool: 'generate_image',
         status: 'pending',
         message: `Generating image...`,
       })
     }
-  }, [])
+  }, [publishToolExecutionStatus])
 
   // Mark a tool result on the most recent batch (results stream immediately
   // after their detection) and run per-tool side effects (navigation, image
@@ -367,14 +414,14 @@ export function useSSEStreaming({
     if (name === 'generate_image') {
       if (success) {
         const imageCount = result?.images?.length || 1
-        setToolExecutionStatus({
+        publishToolExecutionStatus({
           tool: name,
           status: 'success',
           message: `Successfully generated ${imageCount} image${imageCount > 1 ? 's' : ''}!`,
         })
         showSuccessToast(`Image generation complete! ${imageCount} image${imageCount > 1 ? 's' : ''} generated.`)
       } else {
-        setToolExecutionStatus({
+        publishToolExecutionStatus({
           tool: name,
           status: 'error',
           message: result?.error || 'Failed to generate image',
@@ -386,7 +433,7 @@ export function useSSEStreaming({
     // Notify the page about tool results (for Document Mode, etc.)
     onToolResultCallback?.(name, success, result)
   // eslint-disable-next-line react-hooks/exhaustive-deps -- onToolResultCallback is a stable page-level callback
-  }, [])
+  }, [publishToolExecutionStatus])
 
   /**
    * Shared SSE stream reader. Processes lines from a ReadableStreamDefaultReader.
@@ -796,9 +843,9 @@ export function useSSEStreaming({
           scrollOnStreamComplete()
           await fetchChat()
           notifyQueueChange()
-          setTimeout(() => {
-            setToolExecutionStatus(null)
-          }, 3000)
+          // A settled notice is already counting itself down; only a 'pending'
+          // one that never got a result needs clearing at the turn boundary.
+          clearPendingToolExecutionStatus()
         },
         onIntermediateDone: async (fullContent, data) => {
           // Intermediate done during a chain — add temp message but don't reset state
@@ -888,7 +935,7 @@ export function useSSEStreaming({
       focusInput()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- onToolResultCallback is a stable page-level callback
-  }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, readSSEStream, extractErrorMessage, focusInput, resetStreamingContent, trackToolsDetected, trackToolResult, applyConfirmationResult])
+  }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, readSSEStream, extractErrorMessage, focusInput, resetStreamingContent, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
 
   /**
    * Trigger continue mode - request AI to generate a response from a specific participant.
@@ -966,6 +1013,7 @@ export function useSSEStreaming({
         onConfirmationResult: applyConfirmationResult,
         onDone: (fullContent, data) => {
           setResponseStatus(null)
+          clearPendingToolExecutionStatus()
 
           // "Nothing to add" turn-pass: Host note surfaced via onHostAnnouncement;
           // reset streaming without appending a bubble or toasting.
@@ -1065,7 +1113,7 @@ export function useSSEStreaming({
       notifyQueueChange()
       focusInput()
     }
-  }, [chatId, streaming, waitingForResponse, isPaused, participantsAsBase, hasActiveCharacters, setMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, trackToolsDetected, trackToolResult, applyConfirmationResult])
+  }, [chatId, streaming, waitingForResponse, isPaused, participantsAsBase, hasActiveCharacters, setMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
 
   const stopStreaming = useCallback(() => {
     if (abortControllerRef.current) {
@@ -1077,7 +1125,7 @@ export function useSSEStreaming({
     setSending(false)
     setRespondingParticipantId(null)
     setStreamingToolBatches([])
-    setToolExecutionStatus(null)
+    dismissToolExecutionStatus()
     if (isMultiChar) {
       setPauseState(true)
     }
@@ -1085,7 +1133,7 @@ export function useSSEStreaming({
       showInfoToast('Response stopped - chat paused')
     }
     resetStreamingContent()
-  }, [streamingContent, isMultiChar, setPauseState, setRespondingParticipantId, resetStreamingContent])
+  }, [streamingContent, isMultiChar, setPauseState, setRespondingParticipantId, resetStreamingContent, dismissToolExecutionStatus])
 
   return {
     sending,
@@ -1095,6 +1143,7 @@ export function useSSEStreaming({
     waitingForResponse,
     streamingToolBatches,
     toolExecutionStatus,
+    dismissToolExecutionStatus,
     responseStatus,
     abortControllerRef,
     sendMessage,
