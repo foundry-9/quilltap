@@ -392,7 +392,9 @@ function ReviewStep({
   const chats = stepResults.chats as { title?: string; messages?: unknown[] } | undefined;
   const physDesc = stepResults.physical_descriptions as { shortPrompt?: string } | undefined;
   const pronouns = stepResults.pronouns as { subject?: string; object?: string; possessive?: string } | undefined;
+  const aliases = stepResults.aliases as string[] | undefined;
   const systemPrompts = stepResults.system_prompts as { name?: string }[] | undefined;
+  const wardrobeItems = stepResults.wardrobe_items as { title?: string; components?: string[] }[] | undefined;
 
   const completedFields: string[] = [];
   const failedFields: string[] = [];
@@ -402,7 +404,8 @@ function ReviewStep({
     first_message: 'Dialogue',
     system_prompts: 'System Prompts',
     physical_descriptions: 'Appearance',
-    pronouns: 'Pronouns',
+    wardrobe_items: 'Wardrobe',
+    pronouns: 'Pronouns & Aliases',
     memories: 'Memories',
     chats: 'Example Chat',
   };
@@ -468,6 +471,11 @@ function ReviewStep({
               <strong>Pronouns:</strong> {pronouns.subject}/{pronouns.object}/{pronouns.possessive}
             </p>
           )}
+          {aliases && aliases.length > 0 && (
+            <p className="qt-text-default">
+              <strong>Aliases:</strong> {aliases.join(', ')}
+            </p>
+          )}
           {basics?.description && (
             <p className="qt-text-small qt-text-muted mt-2">
               {basics.description.length > 200
@@ -499,6 +507,15 @@ function ReviewStep({
       <div className="flex gap-4 qt-text-small">
         {physDesc && <span className="qt-text-muted">Physical descriptions: 5 variants</span>}
         {systemPrompts && <span className="qt-text-muted">System prompts: {systemPrompts.length}</span>}
+        {wardrobeItems && wardrobeItems.length > 0 && (
+          <span className="qt-text-muted">
+            Wardrobe: {wardrobeItems.length} item(s)
+            {(() => {
+              const outfits = wardrobeItems.filter((i) => i.components && i.components.length > 0).length;
+              return outfits > 0 ? `, ${outfits} outfit(s)` : '';
+            })()}
+          </span>
+        )}
         {memories && <span className="qt-text-muted">Memories: {memories.length}</span>}
         {chats?.messages && <span className="qt-text-muted">Chat messages: {chats.messages.length}</span>}
       </div>

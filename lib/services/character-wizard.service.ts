@@ -15,12 +15,23 @@ import { fileStorageManager } from '@/lib/file-storage/manager';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { extractFileContent } from '@/lib/services/file-content-extractor';
 import { logger } from '@/lib/logger';
-import { parseLLMJson } from '@/lib/services/ai-import.service';
-import { FIELD_SEMANTICS_PREAMBLE } from '@/lib/services/character-field-semantics';
+import { parseLLMJson, sanitizePronouns } from '@/lib/services/ai-import.service';
+import {
+  FIELD_SEMANTICS_PREAMBLE,
+  PROMPT_SEMANTICS,
+  PROPERTIES_SEMANTICS,
+} from '@/lib/services/character-field-semantics';
+import {
+  WARDROBE_ITEMS_GENERATION_PROMPT,
+  sanitizeGeneratedWardrobeItems,
+  type GeneratedWardrobeItem,
+} from '@/lib/wardrobe/generated-items';
 import type { ConnectionProfile, FileEntry } from '@/lib/schemas/types';
 import type { FileAttachment } from '@/lib/llm/base';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
-import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types';
+
+export { WARDROBE_ITEMS_GENERATION_PROMPT, sanitizeGeneratedWardrobeItems };
+export type { GeneratedWardrobeItem };
 
 // ============================================================================
 // Types
@@ -42,6 +53,9 @@ export interface WizardRequest {
     scenarios?: Array<{ id: string; title: string; content: string }>;
     exampleDialogues?: string;
     systemPrompt?: string;
+    firstMessage?: string;
+    pronouns?: { subject: string; object: string; possessive: string } | null;
+    aliases?: string[];
   };
   background: string;
   fieldsToGenerate: (
@@ -53,7 +67,9 @@ export interface WizardRequest {
     | 'personality'
     | 'scenarios'
     | 'exampleDialogues'
+    | 'firstMessage'
     | 'systemPrompt'
+    | 'properties'
     | 'physicalDescription'
     | 'wardrobeItems'
   )[];
@@ -70,11 +86,9 @@ export interface GeneratedPhysicalDescription {
   fullDescription: string;
 }
 
-export interface GeneratedWardrobeItem {
-  title: string;
-  description: string;
-  types: WardrobeItemType[];
-  appropriateness?: string;
+export interface GeneratedProperties {
+  pronouns: { subject: string; object: string; possessive: string } | null;
+  aliases: string[];
 }
 
 export interface WizardResult {
@@ -182,7 +196,17 @@ Format each exchange as:
 
 Show variety in the character's emotional range and speech patterns. Include *actions* and *expressions* in asterisks.`,
 
-  systemPrompt: `Write a system prompt that instructs an AI how to roleplay as this character. This will serve as the default system prompt (characters can have multiple named system prompts for different interaction styles, but this one should be a comprehensive general-purpose default).
+  firstMessage: `Write an engaging opening message from this character that starts a brand-new conversation (1-3 paragraphs).
+- Written in the character's own voice, consistent with their personality and speech patterns.
+- Include *actions* and *expressions* in asterisks alongside dialogue.
+- Set a scene the other party can step into, and end with an implicit or explicit invitation to respond.
+- Refer to the person being addressed as {{user}} if a direct reference is needed.
+
+Respond with ONLY the message, no explanation.`,
+
+  systemPrompt: `${PROMPT_SEMANTICS}
+
+Write a system prompt that instructs an AI how to roleplay as this character. This will serve as the default system prompt (characters can have multiple named system prompts for different interaction styles or different models, but this one should be a comprehensive general-purpose default).
 
 Include:
 - Core identity and self-perception
@@ -192,8 +216,23 @@ Include:
 - Relationship dynamics to maintain
 
 Write as direct instructions to the AI, in second person ("You are...", "You always...").
+Character facts live in the identity/description/personality/manifesto fields — the prompt directs the performance rather than restating the lore.
 Keep it under 500 words but comprehensive.`,
 };
+
+export const PROPERTIES_PROMPT = `${PROPERTIES_SEMANTICS}
+
+Determine this character's PROPERTIES from the context provided.
+
+Respond with ONLY valid JSON, no markdown fences:
+{
+  "pronouns": { "subject": "she", "object": "her", "possessive": "hers" },
+  "aliases": ["Nickname", "Alternate name"]
+}
+
+Rules:
+- If the context does not clearly indicate the character's pronouns, set "pronouns" to JSON null. Never invent placeholders like "unknown", "n/a", or empty strings.
+- "aliases" lists only nicknames or alternate names the context actually supports — names other people call the character. Do NOT include the character's primary name, and do NOT include their title/epithet (that is a separate private field). Use an empty array when there are none.`;
 
 /**
  * Head-and-shoulders portrait prompt. Exported so the avatar-backfill job
@@ -252,24 +291,8 @@ Unique marks, mannerisms, or visual traits
 Be thorough and specific. This will be used as reference for consistent character portrayal.`,
 };
 
-const WARDROBE_ITEMS_PROMPT = `Generate wardrobe items for this character based on their typical clothing and style.
-Each item must cover one or more of these slot types: "top" (shirts, jackets, dresses that cover the torso), "bottom" (pants, skirts, shorts), "footwear" (shoes, boots, sandals), "accessories" (jewelry, hats, belts, scarves, bags).
-
-A single item can cover multiple slots — for example, a full-length dress would have types ["top", "bottom"].
-
-Generate 3-6 items that represent this character's typical wardrobe. Include a mix of everyday and situational items.
-
-Respond with ONLY valid JSON, no markdown fences:
-[
-  {
-    "title": "Short descriptive name for the item",
-    "description": "A sentence or two describing the item's appearance in detail",
-    "types": ["top"],
-    "appropriateness": "casual, everyday"
-  }
-]
-
-The "appropriateness" field is a comma-separated list of context tags describing when this item is appropriate (e.g., "casual", "formal", "combat", "sleepwear", "intimate").`;
+// Wardrobe generation shares its prompt, item shape, and sanitizer with
+// Summon From Lore via lib/wardrobe/generated-items (re-exported above).
 
 // ============================================================================
 // Helper Functions
@@ -324,6 +347,13 @@ ${documentContent}
   if (existingData) {
     const existingFields = [];
     if (existingData.title?.trim()) existingFields.push(`Title: ${existingData.title}`);
+    if (existingData.pronouns) {
+      const p = existingData.pronouns;
+      existingFields.push(`Pronouns: ${p.subject}/${p.object}/${p.possessive}`);
+    }
+    if (existingData.aliases && existingData.aliases.length > 0) {
+      existingFields.push(`Aliases: ${existingData.aliases.join(', ')}`);
+    }
     if (existingData.identity?.trim()) existingFields.push(`Identity: ${existingData.identity}`);
     if (existingData.description?.trim()) existingFields.push(`Description: ${existingData.description}`);
     if (existingData.manifesto?.trim()) existingFields.push(`Manifesto: ${existingData.manifesto}`);
@@ -332,6 +362,9 @@ ${documentContent}
       const scenarioLines = existingData.scenarios.map(s => `  - ${s.title}: ${s.content}`).join('\n');
       existingFields.push(`Scenarios:\n${scenarioLines}`);
     }
+    if (existingData.firstMessage?.trim()) existingFields.push(`First Message:\n${existingData.firstMessage}`);
+    if (existingData.exampleDialogues?.trim()) existingFields.push(`Example Dialogues:\n${existingData.exampleDialogues}`);
+    if (existingData.systemPrompt?.trim()) existingFields.push(`Default System Prompt:\n${existingData.systemPrompt}`);
 
     if (existingFields.length > 0) {
       context += `
@@ -593,7 +626,7 @@ export async function generateWardrobeItems(
     apiKey,
     modelName,
     contextPrompt,
-    WARDROBE_ITEMS_PROMPT,
+    WARDROBE_ITEMS_GENERATION_PROMPT,
     2000,
     userId,
     characterId,
@@ -602,16 +635,45 @@ export async function generateWardrobeItems(
   );
 
   const items = parseLLMJson<GeneratedWardrobeItem[]>(content);
+  return sanitizeGeneratedWardrobeItems(items);
+}
 
-  // Validate types are valid wardrobe slot types
-  const validTypes = new Set(['top', 'bottom', 'footwear', 'accessories']);
-  return items
-    .filter((item) => item.title && item.types?.length > 0)
-    .map((item) => ({
-      ...item,
-      types: item.types.filter((t) => validTypes.has(t)) as WardrobeItemType[],
-    }))
-    .filter((item) => item.types.length > 0);
+/**
+ * Generate the character's properties (pronouns + aliases) from context.
+ */
+export async function generateProperties(
+  provider: LLMProvider,
+  apiKey: string,
+  modelName: string,
+  contextPrompt: string,
+  userId?: string,
+  characterId?: string,
+  profileProvider?: string,
+  profileParameters?: Record<string, unknown>
+): Promise<GeneratedProperties> {
+  const content = await generateField(
+    provider,
+    apiKey,
+    modelName,
+    contextPrompt,
+    PROPERTIES_PROMPT,
+    300,
+    userId,
+    characterId,
+    profileProvider,
+    profileParameters
+  );
+
+  const parsed = parseLLMJson<{ pronouns?: unknown; aliases?: unknown }>(content);
+  const aliases = Array.isArray(parsed?.aliases)
+    ? parsed.aliases
+        .filter((a): a is string => typeof a === 'string' && a.trim().length > 0)
+        .map((a) => a.trim())
+    : [];
+  return {
+    pronouns: sanitizePronouns(parsed?.pronouns) ?? null,
+    aliases,
+  };
 }
 
 // ============================================================================
@@ -794,9 +856,23 @@ export async function runCharacterWizard(
           primaryProfile.provider,
           profileParams(primaryProfile)
         );
+      } else if (field === 'properties') {
+        generated.properties = await generateProperties(
+          primaryProvider,
+          primaryApiKey,
+          primaryProfile.modelName,
+          contextPrompt,
+          userId,
+          request.characterId,
+          primaryProfile.provider,
+          profileParams(primaryProfile)
+        );
       } else {
         const fieldPrompt = FIELD_PROMPTS[field];
-        const maxTokens = field === 'exampleDialogues' || field === 'systemPrompt' ? 1000 : field === 'scenarios' ? 4000 : 500;
+        const maxTokens =
+          field === 'exampleDialogues' || field === 'systemPrompt' || field === 'firstMessage'
+            ? 1000
+            : field === 'scenarios' ? 4000 : 500;
         const rawContent = await generateField(
           primaryProvider,
           primaryApiKey,
@@ -1053,9 +1129,29 @@ export async function runCharacterWizardStreaming(
           );
           generated.wardrobeItems = items;
           onProgress({ type: 'field_complete', field, snippet: `${items.length} wardrobe item(s) generated` });
+        } else if (field === 'properties') {
+          const props = await generateProperties(
+            primaryProvider,
+            primaryApiKey,
+            primaryProfile.modelName,
+            contextPrompt,
+            userId,
+            request.characterId,
+            primaryProfile.provider,
+            profileParams(primaryProfile)
+          );
+          generated.properties = props;
+          const pronounText = props.pronouns
+            ? `${props.pronouns.subject}/${props.pronouns.object}/${props.pronouns.possessive}`
+            : 'no pronouns found';
+          const aliasText = props.aliases.length > 0 ? `aliases: ${props.aliases.join(', ')}` : 'no aliases';
+          onProgress({ type: 'field_complete', field, snippet: `${pronounText}; ${aliasText}` });
         } else {
           const fieldPrompt = FIELD_PROMPTS[field];
-          const maxTokens = field === 'exampleDialogues' || field === 'systemPrompt' ? 1000 : field === 'scenarios' ? 4000 : 500;
+          const maxTokens =
+            field === 'exampleDialogues' || field === 'systemPrompt' || field === 'firstMessage'
+              ? 1000
+              : field === 'scenarios' ? 4000 : 500;
           const rawContent = await generateField(
             primaryProvider,
             primaryApiKey,

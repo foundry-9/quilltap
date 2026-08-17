@@ -30,6 +30,8 @@ const FIELD_LABELS: Record<string, string> = {
   systemPrompts: 'System Prompt',
   physicalDescription: 'Physical Description',
   talkativeness: 'Talkativeness',
+  wardrobeItems: 'Wardrobe',
+  aliases: 'Alias',
   title: 'Title',
 };
 
@@ -45,6 +47,8 @@ const FIELD_BADGE_CLASS: Record<string, string> = {
   systemPrompts: 'qt-badge-memory',
   physicalDescription: 'qt-badge-user-character',
   talkativeness: 'qt-badge-chat',
+  wardrobeItems: 'qt-badge-user-character',
+  aliases: 'qt-badge-primary',
   title: 'qt-badge-primary',
 };
 

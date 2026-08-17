@@ -6,7 +6,7 @@
  * "description = appearance + behaviour" conflation.
  */
 
-import { FIELD_PROMPTS } from '@/lib/services/character-wizard.service'
+import { FIELD_PROMPTS, PROPERTIES_PROMPT } from '@/lib/services/character-wizard.service'
 
 describe('character-wizard FIELD_PROMPTS', () => {
   it('defines a prompt for the identity field', () => {
@@ -55,5 +55,29 @@ describe('character-wizard FIELD_PROMPTS', () => {
       expect(p).toContain('PERSONALITY')
       expect(p).toContain('vantage point')
     }
+  })
+
+  it('defines a firstMessage prompt in the character voice', () => {
+    const p = FIELD_PROMPTS.firstMessage
+    expect(p).toBeDefined()
+    expect(p.toLowerCase()).toContain('opening message')
+    expect(p).toContain('{{user}}')
+  })
+
+  it('systemPrompt prompt carries the Prompt-bucket semantics', () => {
+    const p = FIELD_PROMPTS.systemPrompt
+    expect(p).toContain('SYSTEM PROMPTS')
+    expect(p.toLowerCase()).toContain('second person')
+  })
+})
+
+describe('character-wizard PROPERTIES_PROMPT', () => {
+  it('extracts pronouns and aliases without inventing placeholders', () => {
+    expect(PROPERTIES_PROMPT).toContain('pronouns')
+    expect(PROPERTIES_PROMPT).toContain('aliases')
+    expect(PROPERTIES_PROMPT.toLowerCase()).toContain('null')
+    expect(PROPERTIES_PROMPT.toLowerCase()).toContain('placeholder')
+    // Aliases are distinct from the private title/epithet.
+    expect(PROPERTIES_PROMPT.toLowerCase()).toContain('title')
   })
 })

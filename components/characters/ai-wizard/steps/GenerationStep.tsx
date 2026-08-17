@@ -57,7 +57,36 @@ export function GenerationStep({
       return null
     }
 
-    const value = generatedData[field as keyof Omit<GeneratedCharacterData, 'scenarios' | 'physicalDescription'>]
+    if (field === 'wardrobeItems') {
+      const items = generatedData.wardrobeItems
+      if (items && items.length > 0) {
+        return items
+          .map((item) => {
+            const outfit = item.components && item.components.length > 0 ? ' (outfit)' : ''
+            const isDefault = item.isDefault ? ' [default]' : ''
+            return `${item.title}${outfit}${isDefault} — ${item.types.join(', ')}`
+          })
+          .join('\n')
+      }
+      return null
+    }
+
+    if (field === 'properties') {
+      const props = generatedData.properties
+      if (props) {
+        const parts: string[] = []
+        if (props.pronouns) {
+          parts.push(`Pronouns: ${props.pronouns.subject}/${props.pronouns.object}/${props.pronouns.possessive}`)
+        }
+        if (props.aliases.length > 0) {
+          parts.push(`Aliases: ${props.aliases.join(', ')}`)
+        }
+        return parts.length > 0 ? parts.join('\n') : 'No pronouns or aliases derivable'
+      }
+      return null
+    }
+
+    const value = generatedData[field as keyof Omit<GeneratedCharacterData, 'scenarios' | 'physicalDescription' | 'wardrobeItems' | 'properties'>]
     return typeof value === 'string' ? value || null : null
   }
 

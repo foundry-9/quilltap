@@ -4,12 +4,13 @@ import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
-import { AIWizardModal, type GeneratedCharacterData, type GeneratedPhysicalDescription, type GeneratedWardrobeItem, normalizeGeneratedScenarios } from '@/components/characters/ai-wizard'
+import { AIWizardModal, type GeneratedCharacterData, type GeneratedPhysicalDescription, type GeneratedProperties, type GeneratedWardrobeItem, normalizeGeneratedScenarios } from '@/components/characters/ai-wizard'
 import { ImportModal } from '@/components/characters/system-prompts-editor/ImportModal'
 import type { PromptTemplate } from '@/components/characters/system-prompts-editor/types'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 import { useConnectionProfiles } from '@/hooks/useConnectionProfiles'
 import { buildWizardCurrentData, getGeneratedCharacterTextEntries } from '../shared/wizard-text-fields'
+import { saveGeneratedWardrobeItems } from '../shared/save-generated-wardrobe'
 import { Icon } from '@/components/ui/icon'
 import { useWorkspaceNavigate } from '@/components/workspace/useWorkspaceNavigate'
 import { useCloseSelfTab } from '@/components/workspace/useCloseSelfTab'
@@ -39,6 +40,8 @@ export function NewCharacterView() {
   const pendingScenarios = useRef<Array<{ title: string; content: string }> | null>(null)
   // Store pending wardrobe items from wizard to save after character creation
   const pendingWardrobeItems = useRef<GeneratedWardrobeItem[] | null>(null)
+  // Store pending properties (pronouns + aliases) from wizard to save after character creation
+  const pendingProperties = useRef<GeneratedProperties | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     title: '',
@@ -75,6 +78,10 @@ export function NewCharacterView() {
     // Store wardrobe items to save after character creation
     if (data.wardrobeItems && data.wardrobeItems.length > 0) {
       pendingWardrobeItems.current = data.wardrobeItems
+    }
+    // Store properties (pronouns + aliases) to save after character creation
+    if (data.properties && (data.properties.pronouns || data.properties.aliases.length > 0)) {
+      pendingProperties.current = data.properties
     }
     setExternalUpdateCount((n) => n + 1)
   }
@@ -180,30 +187,37 @@ export function NewCharacterView() {
         }
       }
 
-      // Save pending wardrobe items if any (from wizard)
-      if (pendingWardrobeItems.current && pendingWardrobeItems.current.length > 0) {
-        let wardrobeItemsSaved = 0
-        for (const item of pendingWardrobeItems.current) {
-          try {
-            const wardrobeRes = await fetch(`/api/v1/characters/${characterId}/wardrobe`, {
-              method: 'POST',
+      // Save pending properties (pronouns + aliases) if any (from wizard)
+      if (pendingProperties.current) {
+        try {
+          const propsBody: Record<string, unknown> = {}
+          if (pendingProperties.current.pronouns) propsBody.pronouns = pendingProperties.current.pronouns
+          if (pendingProperties.current.aliases.length > 0) propsBody.aliases = pendingProperties.current.aliases
+          if (Object.keys(propsBody).length > 0) {
+            const propsRes = await fetch(`/api/v1/characters/${characterId}`, {
+              method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                title: item.title,
-                description: item.description || null,
-                types: item.types,
-                appropriateness: item.appropriateness || null,
-              }),
+              body: JSON.stringify(propsBody),
             })
-            if (wardrobeRes.ok) {
-              wardrobeItemsSaved++
+            if (!propsRes.ok) {
+              console.error('Failed to save generated properties', { status: propsRes.status })
+              showErrorToast('Character created, but pronouns/aliases failed to save')
             }
-          } catch (wardrobeErr) {
-            console.error('Error saving wardrobe item', wardrobeErr instanceof Error ? wardrobeErr.message : String(wardrobeErr))
           }
+        } catch (propsErr) {
+          console.error('Error saving generated properties', propsErr instanceof Error ? propsErr.message : String(propsErr))
+          showErrorToast('Character created, but pronouns/aliases failed to save')
         }
-        if (wardrobeItemsSaved > 0) {
-          showSuccessToast(`${wardrobeItemsSaved} wardrobe item${wardrobeItemsSaved > 1 ? 's' : ''} created`)
+        pendingProperties.current = null
+      }
+
+      // Save pending wardrobe items if any (from wizard) — leaf garments
+      // first, then composites with their component titles resolved to ids.
+      if (pendingWardrobeItems.current && pendingWardrobeItems.current.length > 0) {
+        const { saved, outfits } = await saveGeneratedWardrobeItems(characterId, pendingWardrobeItems.current)
+        if (saved > 0) {
+          const outfitText = outfits > 0 ? ` (including ${outfits} outfit${outfits > 1 ? 's' : ''})` : ''
+          showSuccessToast(`${saved} wardrobe item${saved > 1 ? 's' : ''} created${outfitText}`)
         }
         pendingWardrobeItems.current = null
       }

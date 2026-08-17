@@ -4,6 +4,24 @@
 
 ### 4.9-dev
 
+#### The three character-generation systems now know every character bucket
+
+The AI Wizard, Summon From Lore, and the Character Optimizer ("Refine from Memories") previously shared only a partial map of the character data model — the vantage-point preamble covering manifesto/identity/description/personality/title — and each had its own blind spots beyond that. `lib/services/character-field-semantics.ts` now carries the complete taxonomy: new prose blocks for system prompts (`PROMPT_SEMANTICS`), properties/pronouns/aliases (`PROPERTIES_SEMANTICS`), the physical description (nothing removable), and the wardrobe (slots, imagePrompt vs description, composites, defaults), plus a composed `FULL_FIELD_SEMANTICS`. All three systems consume the shared blocks instead of ad-hoc wording.
+
+**AI Wizard** gains two new generatable fields: Properties (pronouns + aliases, with the same no-placeholder rule Summon uses) and First Message. Its context prompt now shows existing example dialogues, system prompt, first message, pronouns, and aliases (previously omitted even when present). Two bugs fixed: `wardrobeItems` was missing from the server-side request schema, so "Select all" failed the whole request with a validation error; and the wardrobe checkbox was absent from the field-selection step, making it unreachable. Generated properties persist via character PUT (staged into form state in the edit view); the generation preview renders wardrobe and properties results.
+
+**Wardrobe generation** (Wizard + Summon, shared in new `lib/wardrobe/generated-items.ts`) now produces items with `imagePrompt` visual cues, marks the everyday set `isDefault` so a summoned character starts dressed, and generates 1–2 composite outfits whose components are referenced by title and resolved to real item ids at persistence time (leaf items created first).
+
+**Summon From Lore**'s pronouns step now also extracts aliases; the review screen shows aliases and the wardrobe counts it previously omitted, and the step matrix includes the wardrobe step that was already running but never reported.
+
+**Character Optimizer** now sees the whole character: title, pronouns, aliases, first message, and the full wardrobe inventory join its context, so suggestions stop colliding with what's already on record. Two new suggestion passes: Wardrobe (add a memory-established garment as a proper structured item, or refine an existing item's description — never bodily features, never deletions) and Aliases (additions only, one per suggestion; pronouns are read-only). The apply flow persists both through the wardrobe endpoints and the character PUT, and the suggestions-file dossier groups them under their own headings.
+
+Help docs updated (`ai-character-import.md`, `character-optimizer.md`, `character-creation.md`); new unit coverage for the shared wardrobe helpers, composite assembly, and the new prompts.
+
+#### Importing a `.qtap` no longer breaks composite outfits (bug 75)
+
+`importCharacterWardrobeItems` re-mints every wardrobe item id on import but passed `componentItemIds` through verbatim, so every composite outfit in an imported character kept references to ids that exist only in the export — equipping it cleared its slots and put nothing on, silently. The importer now pre-assigns the new ids, remaps composite references through the old→new map (dropping unresolvable ones with an import warning), creates leaf items before the composites that bundle them, and passes the pre-assigned id to `wardrobe.create`.
+
 #### Three MODERN sample prompts for high-context models
 
 The default-system-prompts plugin (1.1.17) gains three model-agnostic sample prompts written for modern 128K+ context models: `MODERN_GENERAL` (relationship-neutral — the character definition and story decide the dynamic), `MODERN_ROMANTIC` (romance-forward, with pacing discipline and guardrails against love-bombing and purple drift), and `MODERN_PLATONIC` (a companion prompt whose anti-romance guardrail is framed as character identity rather than a prohibition list, which holds up better over long contexts). All three lean on what current models do well — long-range callbacks, in-character refusal — and name the failure modes they drift into (assistant bleed, therapy-speak, echoing, uniform rhythm). The manifest's stale `promptCount` (10) was corrected to 21. `help/prompts.md` now describes the three groups of samples (MODERN, model-specific, GENERIC) and when to pick each.

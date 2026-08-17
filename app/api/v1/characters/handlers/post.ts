@@ -103,6 +103,12 @@ const wizardRequestSchema = z.object({
       scenarios: z.array(z.object({ id: z.string(), title: z.string(), content: z.string() })).optional(),
       exampleDialogues: z.string().optional(),
       systemPrompt: z.string().optional(),
+      firstMessage: z.string().optional(),
+      pronouns: z
+        .object({ subject: z.string(), object: z.string(), possessive: z.string() })
+        .nullable()
+        .optional(),
+      aliases: z.array(z.string()).optional(),
     })
     .optional(),
   background: z.string(),
@@ -116,8 +122,11 @@ const wizardRequestSchema = z.object({
       'personality',
       'scenarios',
       'exampleDialogues',
+      'firstMessage',
       'systemPrompt',
+      'properties',
       'physicalDescription',
+      'wardrobeItems',
     ])
   ),
   characterId: z.uuid().optional(),

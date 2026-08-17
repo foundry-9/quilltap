@@ -7,6 +7,7 @@ export const GENERATED_CHARACTER_TEXT_FIELDS = [
   'description',
   'manifesto',
   'personality',
+  'firstMessage',
   'exampleDialogues',
   'systemPrompt',
 ] as const
@@ -32,8 +33,11 @@ export function buildWizardCurrentData(data: {
   description: string
   manifesto: string
   personality: string
+  firstMessage?: string
   exampleDialogues: string
   systemPrompt: string
+  pronouns?: { subject: string; object: string; possessive: string } | null
+  aliases?: string[]
 }) {
   return {
     title: data.title,
@@ -41,7 +45,10 @@ export function buildWizardCurrentData(data: {
     description: data.description,
     manifesto: data.manifesto,
     personality: data.personality,
+    firstMessage: data.firstMessage,
     exampleDialogues: data.exampleDialogues,
     systemPrompt: data.systemPrompt,
+    pronouns: data.pronouns,
+    aliases: data.aliases,
   }
 }

@@ -17,7 +17,18 @@ import { providerRegistry } from '@/lib/plugins/provider-registry';
 import { extractFileContent } from '@/lib/services/file-content-extractor';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { validateQtapExport } from '@/lib/validation/qtap-schema-validator';
-import { FIELD_SEMANTICS_PREAMBLE } from '@/lib/services/character-field-semantics';
+import {
+  FULL_FIELD_SEMANTICS,
+  PROMPT_SEMANTICS,
+  PROPERTIES_SEMANTICS,
+  PHYSICAL_DESCRIPTION_SEMANTICS,
+} from '@/lib/services/character-field-semantics';
+import {
+  WARDROBE_ITEMS_GENERATION_PROMPT,
+  sanitizeGeneratedWardrobeItems,
+  orderGeneratedItemsLeafFirst,
+  type GeneratedWardrobeItem,
+} from '@/lib/wardrobe/generated-items';
 import { logger } from '@/lib/logger';
 import packageJson from '@/package.json';
 import type { ConnectionProfile } from '@/lib/schemas/types';
@@ -100,17 +111,14 @@ export interface AIImportStepResults {
     completePrompt: string;
     fullDescription: string;
   };
-  wardrobe_items?: Array<{
-    title: string;
-    description: string;
-    types: string[];
-    appropriateness?: string;
-  }>;
+  wardrobe_items?: GeneratedWardrobeItem[];
   pronouns?: {
     subject: string;
     object: string;
     possessive: string;
   };
+  /** Nicknames / alternate names extracted alongside pronouns in the properties step. */
+  aliases?: string[];
   memories?: Array<{
     content: string;
     summary: string;
@@ -155,9 +163,9 @@ Respond with JSON:
 }`;
 }
 
-export const CHARACTER_BASICS_PROMPT = `${FIELD_SEMANTICS_PREAMBLE}
+export const CHARACTER_BASICS_PROMPT = `${FULL_FIELD_SEMANTICS}
 
-Extract or generate the character's basic information from the source material. Use the vantage-point rule above to decide what belongs in IDENTITY vs DESCRIPTION vs PERSONALITY. Do NOT put the same content under two different fields, and do NOT put physical appearance into DESCRIPTION — physical appearance is generated separately and lives in physicalDescription.
+Extract or generate the character's basic information from the source material. Use the vantage-point rule above to decide what belongs in IDENTITY vs DESCRIPTION vs PERSONALITY. Do NOT put the same content under two different fields, and do NOT put physical appearance into DESCRIPTION — physical appearance is generated separately and lives in physicalDescription. Likewise, system prompts, pronouns/aliases, physical descriptions, and wardrobe are each extracted in their own later step — leave that content out of these fields.
 
 Respond with JSON:
 {
@@ -180,7 +188,9 @@ Respond with JSON:
   "exampleDialogues": "2-3 example dialogue exchanges showing the character's voice.\\nFormat:\\n{{char}}: [dialogue and *actions*]\\n{{user}}: [response]\\n{{char}}: [follow-up]\\n\\nSeparate exchanges with a blank line."
 }`;
 
-const SYSTEM_PROMPTS_PROMPT = `Create system prompts that instruct an AI how to roleplay as this character.
+const SYSTEM_PROMPTS_PROMPT = `${PROMPT_SEMANTICS}
+
+Create system prompts that instruct an AI how to roleplay as this character.
 
 Respond with JSON array:
 [
@@ -191,10 +201,12 @@ Respond with JSON array:
   }
 ]
 
-The main prompt should capture the character's essence from the source material. Include specific details about speech patterns, mannerisms, and reactions that make the character unique.`;
+The main prompt should capture the character's essence from the source material. Include specific details about speech patterns, mannerisms, and reactions that make the character unique. If the source material implies distinct interaction modes or model-specific needs, you may add 1-2 additional named prompts (isDefault false) tailored to them.`;
 
-const PHYSICAL_DESCRIPTIONS_PROMPT = `Generate physical descriptions of this character at varying detail levels for image generation.
-Do NOT include clothing, outfits, or accessories — those are handled separately by the wardrobe system. Focus only on the character's physical traits.
+const PHYSICAL_DESCRIPTIONS_PROMPT = `${PHYSICAL_DESCRIPTION_SEMANTICS}
+
+Generate physical descriptions of this character at varying detail levels for image generation.
+Do NOT include clothing, outfits, or accessories — those are handled separately by the wardrobe system. Describe the person as if nothing removable were part of the description; focus only on the character's physical traits.
 
 Respond with JSON:
 {
@@ -206,35 +218,25 @@ Respond with JSON:
   "fullDescription": "Complete physical description in markdown format with sections: ## Overview, ## Face & Head, ## Body, ## Distinctive Features. No clothing section."
 }`;
 
-const WARDROBE_ITEMS_PROMPT = `Generate wardrobe items for this character based on the source material and their typical clothing and style.
-Each item must cover one or more slot types: "top" (shirts, jackets, dresses that cover the torso), "bottom" (pants, skirts, shorts), "footwear" (shoes, boots, sandals), "accessories" (jewelry, hats, belts, scarves, bags).
+// Wardrobe generation shares its prompt, item shape, and sanitizer with the
+// AI Wizard via lib/wardrobe/generated-items.
+const WARDROBE_ITEMS_PROMPT = `${WARDROBE_ITEMS_GENERATION_PROMPT}
 
-A single item can cover multiple slots — for example, a full-length dress would have types ["top", "bottom"].
+Ground every item in the source material where it describes the character's clothing and style; generate plausible items only where the source is silent.`;
 
-Generate 3-6 items that represent this character's typical wardrobe. Include a mix of everyday and situational items if the source material provides enough detail.
+const PROPERTIES_EXTRACTION_PROMPT = `${PROPERTIES_SEMANTICS}
 
-Respond with JSON array:
-[
-  {
-    "title": "Short descriptive name for the item",
-    "description": "A sentence or two describing the item's appearance in detail",
-    "types": ["top"],
-    "appropriateness": "casual, everyday"
-  }
-]
+Determine the character's pronouns and aliases from the source material.
 
-The "appropriateness" field is a comma-separated list of context tags describing when this item is appropriate (e.g., "casual", "formal", "combat", "sleepwear", "intimate").`;
-
-const PRONOUNS_PROMPT = `Determine the character's pronouns from the source material.
-
-If the source material clearly indicates pronouns, respond with JSON:
+Respond with JSON:
 {
-  "subject": "he/she/they/etc",
-  "object": "him/her/them/etc",
-  "possessive": "his/her/their/etc"
+  "pronouns": { "subject": "he/she/they/etc", "object": "him/her/them/etc", "possessive": "his/her/their/etc" },
+  "aliases": ["Nickname", "Alternate name"]
 }
 
-If the source material does NOT indicate pronouns, respond with JSON null (literally: null). Do not invent placeholders like "unknown", "n/a", or empty strings — return null instead.`;
+Rules:
+- If the source material does NOT clearly indicate pronouns, set "pronouns" to JSON null (literally: null). Do not invent placeholders like "unknown", "n/a", or empty strings — return null instead.
+- "aliases" lists only nicknames or alternate names the source material actually supports — names other people call the character. Do NOT include the character's primary name, and do NOT include their title/epithet. Use an empty array when there are none.`;
 
 const MEMORIES_PROMPT = `Generate memories that this character would have based on the source material. These are key facts, experiences, and knowledge the character should remember.
 
@@ -428,7 +430,8 @@ const PRONOUN_PLACEHOLDERS = new Set([
 // fields are usable strings; otherwise returns undefined so the assembler stores null.
 // PronounsSchema requires non-empty strings ≤20 chars on subject/object/possessive,
 // so anything else would explode at character-create time.
-function sanitizePronouns(raw: unknown): { subject: string; object: string; possessive: string } | undefined {
+// Exported for the AI Wizard's properties generation, which shares the contract.
+export function sanitizePronouns(raw: unknown): { subject: string; object: string; possessive: string } | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
   const obj = raw as Record<string, unknown>;
   const fields = ['subject', 'object', 'possessive'] as const;
@@ -586,6 +589,45 @@ function getSnippet(content: unknown, maxLength: number = 100): string {
 // ============================================================================
 
 /**
+ * Turn sanitized generated wardrobe items into export-shaped rows. Composites
+ * reference components by title in the generated shape; ids are minted here
+ * (leaf-first) so each composite's `componentItemIds` resolves to the ids of
+ * its components in the same batch.
+ */
+export function assembleWardrobeItems(
+  generatedItems: GeneratedWardrobeItem[] | undefined,
+  characterId: string,
+  now: string
+): Record<string, unknown>[] {
+  if (!generatedItems || generatedItems.length === 0) return [];
+
+  const ordered = orderGeneratedItemsLeafFirst(generatedItems);
+  const idByTitle = new Map<string, string>();
+  for (const item of ordered) {
+    idByTitle.set(item.title.toLowerCase(), crypto.randomUUID());
+  }
+
+  return ordered.map((item) => ({
+    id: idByTitle.get(item.title.toLowerCase()),
+    characterId,
+    title: item.title,
+    description: item.description || null,
+    imagePrompt: item.imagePrompt || null,
+    types: item.types,
+    componentItemIds: (item.components || [])
+      .map((title) => idByTitle.get(title.trim().toLowerCase()))
+      .filter((id): id is string => Boolean(id)),
+    appropriateness: item.appropriateness || null,
+    isDefault: item.isDefault === true,
+    replace: item.replace === true,
+    migratedFromClothingRecordId: null,
+    archivedAt: null,
+    createdAt: now,
+    updatedAt: now,
+  }));
+}
+
+/**
  * Assemble a QuilltapExport from the generated step results
  */
 export function assembleQtapExport(
@@ -636,7 +678,7 @@ export function assembleQtapExport(
     controlledBy: 'llm',
     defaultAgentModeEnabled: null,
     partnerLinks: [],
-    aliases: [],
+    aliases: stepResults.aliases || [],
     pronouns: stepResults.pronouns || null,
     tags: [],
     avatarOverrides: [],
@@ -654,23 +696,7 @@ export function assembleQtapExport(
           updatedAt: now,
         }
       : null,
-    wardrobeItems: stepResults.wardrobe_items
-      ? stepResults.wardrobe_items.map((item) => ({
-          id: crypto.randomUUID(),
-          characterId,
-          title: item.title,
-          description: item.description || null,
-          types: item.types,
-          componentItemIds: [],
-          appropriateness: item.appropriateness || null,
-          isDefault: false,
-          replace: false,
-          migratedFromClothingRecordId: null,
-          archivedAt: null,
-          createdAt: now,
-          updatedAt: now,
-        }))
-      : [],
+    wardrobeItems: assembleWardrobeItems(stepResults.wardrobe_items, characterId, now),
     createdAt: now,
     updatedAt: now,
   };
@@ -889,6 +915,16 @@ export function restampStructuralFields(data: QuilltapExport['data'], now: strin
           if (!isValidUuid(item.characterId) && isValidUuid(character.id)) {
             item.characterId = character.id;
             fixes++;
+          }
+          // Repair can rewrite componentItemIds wholesale; keep only entries
+          // that are real uuids so composites never carry dangling references.
+          if (item.componentItemIds !== undefined) {
+            const original = item.componentItemIds;
+            const filtered = Array.isArray(original) ? original.filter(isValidUuid) : [];
+            if (!Array.isArray(original) || filtered.length !== original.length) {
+              item.componentItemIds = filtered;
+              fixes++;
+            }
           }
         }
       }
@@ -1134,18 +1170,10 @@ export async function runAIImportStreaming(
           provider, apiKey, profile.modelName,
           charContext,
           WARDROBE_ITEMS_PROMPT,
-          { temperature: 0.7, maxTokens: 2000, ...llmOpts }
+          { temperature: 0.7, maxTokens: 3000, ...llmOpts }
         );
-        const items = parseLLMJson<Array<{ title: string; description: string; types: string[]; appropriateness?: string }>>(raw);
-        // Validate types
-        const validTypes = new Set(['top', 'bottom', 'footwear', 'accessories']);
-        stepResults.wardrobe_items = items
-          .filter((item) => item.title && item.types?.length > 0)
-          .map((item) => ({
-            ...item,
-            types: item.types.filter((t) => validTypes.has(t)),
-          }))
-          .filter((item) => item.types.length > 0);
+        const items = parseLLMJson<GeneratedWardrobeItem[]>(raw);
+        stepResults.wardrobe_items = sanitizeGeneratedWardrobeItems(items);
         onProgress({
           type: 'step_complete',
           step: 'wardrobe_items',
@@ -1159,37 +1187,44 @@ export async function runAIImportStreaming(
       }
     }
 
-    // Step 5: Pronouns
+    // Step 5: Properties (pronouns + aliases; step keeps its historical name)
     if (shouldRunStep('pronouns')) {
       onProgress({ type: 'step_start', step: 'pronouns' });
       try {
         const raw = await callLLM(
           provider, apiKey, profile.modelName,
           charContext,
-          PRONOUNS_PROMPT,
-          { temperature: 0.3, maxTokens: 100, ...llmOpts }
+          PROPERTIES_EXTRACTION_PROMPT,
+          { temperature: 0.3, maxTokens: 300, ...llmOpts }
         );
-        const parsed = parseLLMJson<unknown>(raw);
-        stepResults.pronouns = sanitizePronouns(parsed);
-        if (stepResults.pronouns) {
-          onProgress({
-            type: 'step_complete',
-            step: 'pronouns',
-            snippet: `${stepResults.pronouns.subject}/${stepResults.pronouns.object}/${stepResults.pronouns.possessive}`,
-          });
-        } else {
-          onProgress({
-            type: 'step_complete',
-            step: 'pronouns',
-            snippet: 'pronouns not derivable — left blank',
-          });
+        const parsed = parseLLMJson<{ pronouns?: unknown; aliases?: unknown }>(raw);
+        // Tolerate a model answering with the bare pronouns object (the
+        // pre-aliases response shape) instead of the wrapper.
+        stepResults.pronouns = sanitizePronouns(parsed?.pronouns) ?? sanitizePronouns(parsed);
+        stepResults.aliases = Array.isArray(parsed?.aliases)
+          ? parsed.aliases
+              .filter((a): a is string => typeof a === 'string' && a.trim().length > 0)
+              .map((a) => a.trim())
+          : [];
+        const pronounText = stepResults.pronouns
+          ? `${stepResults.pronouns.subject}/${stepResults.pronouns.object}/${stepResults.pronouns.possessive}`
+          : 'pronouns not derivable — left blank';
+        const aliasText = stepResults.aliases.length > 0
+          ? `aliases: ${stepResults.aliases.join(', ')}`
+          : 'no aliases';
+        if (!stepResults.pronouns) {
           logger.info('[AIImport] Pronouns not derivable from source — leaving null');
         }
+        onProgress({
+          type: 'step_complete',
+          step: 'pronouns',
+          snippet: `${pronounText}; ${aliasText}`,
+        });
       } catch (error) {
-        const msg = error instanceof Error ? error.message : 'Pronouns failed';
+        const msg = error instanceof Error ? error.message : 'Properties extraction failed';
         errors.pronouns = msg;
         onProgress({ type: 'step_error', step: 'pronouns', error: msg });
-        logger.warn('[AIImport] Pronouns step failed (non-fatal)', { error: msg });
+        logger.warn('[AIImport] Properties step failed (non-fatal)', { error: msg });
       }
     }
 

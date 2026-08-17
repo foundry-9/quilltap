@@ -183,17 +183,19 @@ If you want AI to generate content:
    - Check which fields AI should create:
      - ☐ Name (if not provided)
      - ☐ Title
+     - ☐ Properties (pronouns and aliases — only what the source material supports; no invented placeholders)
      - ☐ Identity (outside view — what strangers know on sight)
      - ☐ Description (acquaintance view — behaviour and mannerisms, not appearance)
      - ☐ Manifesto (axiomatic core — load-bearing truths and basic tenets)
      - ☐ Personality (internal view — self-knowledge and inner drivers)
      - ☐ Scenarios
      - ☐ Example Dialogues
+     - ☐ First Message (the character's opening message for new chats)
      - ☐ System Prompt
-     - ☐ Physical Description (appearance only)
-     - ☐ Wardrobe Items
+     - ☐ Physical Description (appearance only — nothing removable)
+     - ☐ Wardrobe (slot-typed items with image cues, plus composite outfits; the everyday outfit is marked default)
    - Leave others blank for manual entry
-   - The wizard treats Identity, Description, Manifesto, Personality, and Physical Description as distinct vantage points — the same trait won't be repeated across them.
+   - The wizard treats Identity, Description, Manifesto, Personality, and Physical Description as distinct vantage points — the same trait won't be repeated across them — and keeps everything removable in the Wardrobe rather than the Physical Description.
 8. **Step 4: Review and Generate**
    - AI generates selected content
    - Review generated text

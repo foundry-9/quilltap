@@ -31,6 +31,9 @@ interface AIWizardModalProps {
     scenarios?: Array<{ id: string; title: string; content: string }>
     exampleDialogues?: string
     systemPrompt?: string
+    firstMessage?: string
+    pronouns?: { subject: string; object: string; possessive: string } | null
+    aliases?: string[]
   }
   onApply: (data: GeneratedCharacterData) => void
 }

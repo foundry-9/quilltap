@@ -348,6 +348,9 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
         const physicalUpdates: Array<{ key: string; finalValue: string }> = [];
         const promptUpdates: Array<{ subId: string; finalValue: string }> = [];
         const promptCreates: Array<{ name: string; finalValue: string }> = [];
+        const wardrobeUpdates: Array<{ subId: string; finalValue: string }> = [];
+        const wardrobeCreates: Array<{ suggestion: OptimizerSuggestion; finalValue: string }> = [];
+        const aliasAdditions: string[] = [];
 
         for (const { suggestion, finalValue } of accepted) {
           const field = suggestion.field;
@@ -376,7 +379,30 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
                 suggestion.name?.trim() || suggestion.title?.trim() || 'Refined Prompt';
               promptCreates.push({ name, finalValue });
             }
+          } else if (field === 'wardrobeItems') {
+            if (suggestion.subId) {
+              wardrobeUpdates.push({ subId: suggestion.subId, finalValue });
+            } else if (suggestion.wardrobeItem) {
+              wardrobeCreates.push({ suggestion, finalValue });
+            }
+          } else if (field === 'aliases') {
+            const alias = finalValue.trim();
+            if (alias) aliasAdditions.push(alias);
           }
+        }
+
+        // Merge alias additions into the full aliases array (PUT replaces it
+        // wholesale), skipping duplicates case-insensitively.
+        if (aliasAdditions.length > 0) {
+          const existingAliases = ((character['aliases'] as string[] | undefined) ?? []).slice();
+          const seen = new Set(existingAliases.map((a) => a.toLowerCase()));
+          for (const alias of aliasAdditions) {
+            if (!seen.has(alias.toLowerCase())) {
+              existingAliases.push(alias);
+              seen.add(alias.toLowerCase());
+            }
+          }
+          updatePayload.aliases = existingAliases;
         }
 
         // Merge scenario refinements into the full scenarios array (PUT replaces it wholesale).
@@ -428,8 +454,53 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
           },
         });
 
-        if (errors.length > 0) {
-          throw new Error(errors.join(' '));
+        // Wardrobe changes go through the dedicated wardrobe endpoints.
+        const wardrobeErrors: string[] = [];
+        for (const { subId, finalValue } of wardrobeUpdates) {
+          try {
+            const res = await fetch(`/api/v1/characters/${characterId}/wardrobe/${subId}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ description: finalValue }),
+            });
+            if (!res.ok) {
+              wardrobeErrors.push('A wardrobe item refinement could not be saved.');
+            }
+          } catch {
+            wardrobeErrors.push('A wardrobe item refinement could not be saved.');
+          }
+        }
+        for (const { suggestion, finalValue } of wardrobeCreates) {
+          const item = suggestion.wardrobeItem;
+          if (!item) continue;
+          // If the operator amended the suggestion, their text becomes the
+          // item's description; the structured payload supplies the rest.
+          const description =
+            decisions.get(suggestion.id) === 'edited' ? finalValue : item.description;
+          try {
+            const res = await fetch(`/api/v1/characters/${characterId}/wardrobe`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                title: item.title,
+                description: description || null,
+                imagePrompt: item.imagePrompt || null,
+                types: item.types,
+                appropriateness: item.appropriateness || null,
+                isDefault: item.isDefault === true,
+              }),
+            });
+            if (!res.ok) {
+              wardrobeErrors.push(`The new wardrobe item "${item.title}" could not be saved.`);
+            }
+          } catch {
+            wardrobeErrors.push(`The new wardrobe item "${item.title}" could not be saved.`);
+          }
+        }
+
+        const allErrors = [...errors, ...wardrobeErrors];
+        if (allErrors.length > 0) {
+          throw new Error(allErrors.join(' '));
         }
       } catch (err) {
         const errorMessage =
@@ -441,7 +512,7 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
         setApplying(false);
       }
     },
-    [getAcceptedChanges]
+    [getAcceptedChanges, decisions]
   );
 
   const reset = useCallback(() => {

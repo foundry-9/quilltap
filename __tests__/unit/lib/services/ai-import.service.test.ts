@@ -272,6 +272,59 @@ describe('ai-import.service', () => {
       expect(item.title).toBe('Wedding Guest Sari');
     });
 
+    it('writes extracted aliases onto the character', () => {
+      const exportData = assembleQtapExport(
+        {
+          character_basics: { name: 'Maya Kapoor' },
+          aliases: ['Em', 'The Botanist'],
+        },
+        false,
+        false,
+        '4.6.0'
+      );
+      const character = (exportData.data as { characters: Record<string, unknown>[] }).characters[0];
+      expect(character.aliases).toEqual(['Em', 'The Botanist']);
+    });
+
+    it('resolves generated composite outfits to componentItemIds and keeps imagePrompt/isDefault/replace', () => {
+      const exportData = assembleQtapExport(
+        {
+          character_basics: { name: 'Maya Kapoor' },
+          wardrobe_items: [
+            {
+              title: 'Everyday Outfit',
+              description: 'Her usual ensemble.',
+              types: ['top', 'bottom'],
+              isDefault: true,
+              components: ['Field Blouse', 'Khaki Trousers'],
+              replace: true,
+            },
+            { title: 'Field Blouse', description: 'Linen blouse.', imagePrompt: 'cream linen blouse', types: ['top'] },
+            { title: 'Khaki Trousers', description: 'Practical trousers.', types: ['bottom'] },
+          ],
+        },
+        false,
+        false,
+        '4.6.0'
+      );
+      const items = (exportData.data as { characters: Array<{ wardrobeItems: Record<string, unknown>[] }> })
+        .characters[0].wardrobeItems;
+      // Leaf items come before the composite that bundles them.
+      expect(items.map((i) => i.title)).toEqual(['Field Blouse', 'Khaki Trousers', 'Everyday Outfit']);
+      const byTitle = new Map(items.map((i) => [i.title as string, i]));
+      const outfit = byTitle.get('Everyday Outfit')!;
+      expect(outfit.componentItemIds).toEqual([
+        byTitle.get('Field Blouse')!.id,
+        byTitle.get('Khaki Trousers')!.id,
+      ]);
+      expect(outfit.isDefault).toBe(true);
+      expect(outfit.replace).toBe(true);
+      expect(byTitle.get('Field Blouse')!.imagePrompt).toBe('cream linen blouse');
+      // The whole export still validates.
+      const result = validateQtapExport(exportData);
+      expect(result.errors).toEqual([]);
+    });
+
     it('stamps id/createdAt/updatedAt on every system prompt', () => {
       const exportData = assembleQtapExport(
         {

@@ -17,6 +17,7 @@ import { AestheticEditorField } from '@/components/settings/AestheticEditorField
 import type { CharacterScenario } from './types'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { buildWizardCurrentData, getGeneratedCharacterTextEntries } from '../../shared/wizard-text-fields'
+import { saveGeneratedWardrobeItems } from '../../shared/save-generated-wardrobe'
 
 /**
  * Tab configuration for character edit page
@@ -161,32 +162,29 @@ export function CharacterEditView({ characterId, initialTab }: { characterId: st
       }
     }
 
-    // Handle wizard-generated wardrobe items
-    if (data.wardrobeItems && data.wardrobeItems.length > 0) {
-      let wardrobeItemsSaved = 0
-      for (const item of data.wardrobeItems) {
-        try {
-          const res = await fetch(`/api/v1/characters/${id}/wardrobe`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: item.title,
-              description: item.description || null,
-              types: item.types,
-              appropriateness: item.appropriateness || null,
-            }),
-          })
-          if (res.ok) {
-            wardrobeItemsSaved++
-          }
-        } catch (err) {
-          console.error('Failed to create wardrobe item', {
-            error: err instanceof Error ? err.message : String(err),
-          })
+    // Handle wizard-generated properties (pronouns + aliases): stage them in
+    // form state like the text fields, so the user reviews and saves them.
+    if (data.properties) {
+      if (data.properties.pronouns && !formData.pronouns) {
+        handlePronounsChange(data.properties.pronouns)
+      }
+      if (data.properties.aliases.length > 0) {
+        const existing = formData.aliases || []
+        const existingLower = new Set(existing.map((a) => a.toLowerCase()))
+        const additions = data.properties.aliases.filter((a) => !existingLower.has(a.toLowerCase()))
+        if (additions.length > 0) {
+          handleAliasesChange([...existing, ...additions])
         }
       }
-      if (wardrobeItemsSaved > 0) {
-        showSuccessToast(`${wardrobeItemsSaved} wardrobe item${wardrobeItemsSaved > 1 ? 's' : ''} created`)
+    }
+
+    // Handle wizard-generated wardrobe items — leaf garments first, then
+    // composites with their component titles resolved to ids.
+    if (data.wardrobeItems && data.wardrobeItems.length > 0) {
+      const { saved, outfits } = await saveGeneratedWardrobeItems(id, data.wardrobeItems)
+      if (saved > 0) {
+        const outfitText = outfits > 0 ? ` (including ${outfits} outfit${outfits > 1 ? 's' : ''})` : ''
+        showSuccessToast(`${saved} wardrobe item${saved > 1 ? 's' : ''} created${outfitText}`)
       }
     }
 

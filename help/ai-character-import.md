@@ -53,7 +53,8 @@ Watch the AI work through each extraction step:
 | Generating Dialogue | First message and example dialogue exchanges |
 | Creating System Prompts | Instructions for AI roleplay behavior |
 | Describing Appearance | Physical descriptions at 5 detail levels for image generation |
-| Determining Pronouns | Subject, object, and possessive pronouns |
+| Generating Wardrobe | Slot-typed clothing and accessories (top, bottom, footwear, accessories), each with an image-generation cue, plus one or two composite outfits — the everyday one marked as the character's default |
+| Determining Pronouns & Aliases | Subject/object/possessive pronouns, and any nicknames the source material establishes |
 | Generating Memories | Key facts and experiences (if enabled) |
 | Creating Example Chat | Sample conversation (if enabled) |
 | Assembling Export | Builds the `.qtap` file |
@@ -65,9 +66,9 @@ Each step shows its status: pending, in progress, complete, or warning. Non-crit
 
 Review the generated character before importing:
 
-- **Character Summary** — Name, title, pronouns, and description preview
+- **Character Summary** — Name, title, pronouns, aliases, and description preview
 - **Generated Content** — Which fields were successfully generated and which had issues
-- **Content Counts** — Number of memories, system prompts, and chat messages generated
+- **Content Counts** — Number of memories, system prompts, wardrobe items and outfits, and chat messages generated
 
 Three actions are available:
 
@@ -75,17 +76,20 @@ Three actions are available:
 - **Add More & Regenerate** — Go back to Step 1 with existing material preserved, add new sources, and re-run generation. Only failed or missing steps re-run.
 - **Start Over** — Clear everything and begin fresh
 
-## Field Vantage Points
+## Field Vantage Points and Buckets
 
-Summon From Lore distinguishes five character fields by *vantage point*. The AI is instructed not to mix them up — the same trait should not appear in two fields.
+Summon From Lore distinguishes the character fields by *vantage point*, plus the buckets that sit alongside them. The AI is instructed not to mix them up — the same trait should not appear in two places.
 
 - **Identity** — outside view; what strangers know on sight or by reputation (name, station, occupation, public reputation). Never private mannerisms or appearance.
 - **Description** — acquaintance view; behaviour, mannerisms, frequent verbal patterns. Never physical appearance — that lives in physical descriptions.
 - **Manifesto** — axiomatic core; the character's foundational tenets and most important facts of existence. Load-bearing truths that every other field should remain consistent with. Never opinions or trends.
 - **Personality** — internal view; the character's own self-knowledge, inner drivers, motivations, beliefs.
-- **Physical descriptions** — appearance only; generated as a separate step in five detail levels.
+- **System prompts** — stage direction for the model, written in second person; how to perform the character, not lore about them.
+- **Properties** — structured facts: pronouns and aliases. Only extracted when the source material actually supports them — the AI never invents placeholder pronouns.
+- **Physical descriptions** — appearance only, with nothing removable; generated as a separate step in five detail levels.
+- **Wardrobe** — everything removable: clothing, accessories, and composite outfits, kept strictly apart from the physical description.
 
-If your source material describes a character's looks, those details flow into the physical descriptions, not into the description field. Similarly, foundational tenets (core beliefs, immutable principles) flow into the manifesto, not into personality or description.
+If your source material describes a character's looks, those details flow into the physical descriptions; her habitual coat flows into the wardrobe, not into her body's description. Similarly, foundational tenets (core beliefs, immutable principles) flow into the manifesto, not into personality or description.
 
 ## Tips
 

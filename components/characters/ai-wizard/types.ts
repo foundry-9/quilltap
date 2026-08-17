@@ -23,7 +23,9 @@ export type GeneratableField =
   | 'personality'
   | 'scenarios'
   | 'exampleDialogues'
+  | 'firstMessage'
   | 'systemPrompt'
+  | 'properties'
   | 'physicalDescription'
   | 'wardrobeItems'
 
@@ -47,8 +49,21 @@ export interface GeneratedPhysicalDescription {
 export interface GeneratedWardrobeItem {
   title: string
   description: string
+  /** Terse literal visual cue for image generation; never Markdown. */
+  imagePrompt?: string
   types: string[]
   appropriateness?: string
+  /** Part of the character's default outfit. */
+  isDefault?: boolean
+  /** Composite outfit: titles of other items in the same batch it bundles. */
+  components?: string[]
+  /** Composite-only: clear the designated slots on equip instead of layering. */
+  replace?: boolean
+}
+
+export interface GeneratedProperties {
+  pronouns: { subject: string; object: string; possessive: string } | null
+  aliases: string[]
 }
 
 export interface GeneratedCharacterData {
@@ -60,7 +75,9 @@ export interface GeneratedCharacterData {
   personality?: string
   scenarios?: Array<{ title: string; content: string }> | string  // string when LLM returns unparseable JSON
   exampleDialogues?: string
+  firstMessage?: string
   systemPrompt?: string
+  properties?: GeneratedProperties
   physicalDescription?: GeneratedPhysicalDescription
   wardrobeItems?: GeneratedWardrobeItem[]
 }
@@ -142,6 +159,9 @@ export interface AIWizardRequest {
     scenarios?: Array<{ id: string; title: string; content: string }>
     exampleDialogues?: string
     systemPrompt?: string
+    firstMessage?: string
+    pronouns?: { subject: string; object: string; possessive: string } | null
+    aliases?: string[]
   }
 
   background: string
@@ -175,6 +195,9 @@ export interface AIWizardModalProps {
     scenarios?: Array<{ id: string; title: string; content: string }>
     exampleDialogues?: string
     systemPrompt?: string
+    firstMessage?: string
+    pronouns?: { subject: string; object: string; possessive: string } | null
+    aliases?: string[]
   }
   onApply: (data: GeneratedCharacterData) => void
 }
@@ -212,7 +235,7 @@ export interface FieldSelectionStepProps {
   availableFields: GeneratableField[]
   selectedFields: Set<GeneratableField>
   onFieldToggle: (field: GeneratableField) => void
-  currentData: Record<string, string | Array<unknown> | undefined>
+  currentData: Record<string, unknown>
   canGeneratePhysicalDescription: boolean
 }
 
@@ -238,9 +261,11 @@ export const FIELD_LABELS: Record<GeneratableField, string> = {
   personality: 'Personality',
   scenarios: 'Scenarios',
   exampleDialogues: 'Example Dialogues',
+  firstMessage: 'First Message',
   systemPrompt: 'System Prompt',
+  properties: 'Properties (Pronouns & Aliases)',
   physicalDescription: 'Physical Description',
-  wardrobeItems: 'Wardrobe Items',
+  wardrobeItems: 'Wardrobe',
 }
 
 export const FIELD_DESCRIPTIONS: Record<GeneratableField, string> = {
@@ -252,7 +277,9 @@ export const FIELD_DESCRIPTIONS: Record<GeneratableField, string> = {
   personality: 'The character\'s own self-knowledge: inner drivers, motivations, beliefs',
   scenarios: 'Generate 2-3 named scenarios with distinct settings and contexts for interactions',
   exampleDialogues: 'Example conversations to guide AI responses',
+  firstMessage: 'The character\'s opening message when a new chat begins',
   systemPrompt: 'Custom system instructions for AI roleplay',
-  physicalDescription: 'Detailed physical description for image generation',
-  wardrobeItems: 'Clothing and accessories for the character\'s wardrobe (top, bottom, footwear, accessories)',
+  properties: 'Structured facts: pronouns and aliases (nicknames others use)',
+  physicalDescription: 'Detailed physical description for image generation (the person only — clothing lives in the wardrobe)',
+  wardrobeItems: 'Clothing, accessories, and composite outfits (top, bottom, footwear, accessories)',
 }
