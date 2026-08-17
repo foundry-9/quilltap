@@ -81,6 +81,11 @@ export function ProfileModal({
   const savedProvider = providers.find((p) => p.name === profile?.provider)
   const savedProviderTakesBaseUrl =
     !savedProvider || (savedProvider.configRequirements?.requiresBaseUrl ?? false)
+  // The same reading for the api key (Bug 76): a row written before that fix —
+  // or by import — can carry a key its provider does not take, and probing a
+  // keyless endpoint with one is how the mismatch stays invisible.
+  const savedProviderTakesApiKey =
+    !savedProvider || (savedProvider.configRequirements?.requiresApiKey ?? true)
 
   // Auto-fetch models when editing
   useEffect(() => {
@@ -92,7 +97,7 @@ export function ProfileModal({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               provider: profile.provider,
-              apiKeyId: profile.apiKeyId || undefined,
+              apiKeyId: (savedProviderTakesApiKey && profile.apiKeyId) || undefined,
               baseUrl: (savedProviderTakesBaseUrl && profile.baseUrl) || undefined,
             }),
           })
@@ -114,6 +119,7 @@ export function ProfileModal({
     profile?.apiKeyId,
     profile?.baseUrl,
     savedProviderTakesBaseUrl,
+    savedProviderTakesApiKey,
   ])
 
   const handleConnectClick = useCallback(async () => {

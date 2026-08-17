@@ -51,7 +51,7 @@ export default function ConnectionProfilesTab() {
     handleTestMessage,
     handleAutoConfigure,
     handleSubmit,
-  } = useProfileForm(providers)
+  } = useProfileForm(providers, apiKeys)
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false)

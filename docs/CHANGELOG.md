@@ -4,6 +4,14 @@
 
 ### 4.9-dev
 
+#### An API key no longer follows a connection profile onto another provider (bug 76)
+
+Changing a connection profile's provider left the previously selected API key in form state, and the form sent it regardless. On a keyless provider (Ollama, OpenAI-Compatible) the API Key select isn't rendered at all, so saving failed with `API key provider does not match profile provider` — a message about a field that isn't on screen, with no way to clear it. On a different hosted provider the select re-rendered blank, because its options are filtered to the current provider, while Connect / Fetch Models / Test Message kept sending the old provider's key.
+
+The form now sends only a key the select could currently display: nothing when the provider requires no key, and nothing when the stored id isn't among the options listed for the current provider. This is the same `outboundBaseUrl` chokepoint bug 73 added, one field over (`outboundApiKeyId` in `useProfileForm`). Connect's own validation judges the same value, so a blank select reports "API Key is required for this provider" instead of probing with a hidden key. The save body always sends the field, `null` when nothing may leave, so a profile already saved with a mismatched key clears it on the next save instead of being refused forever.
+
+Two lists are treated as "not loaded" rather than as evidence: an unknown provider keeps its stored key, and an API-key list that hasn't arrived yet skips the displayability check entirely. The provider dropdown still doesn't clear the field, so switching back to the original provider restores the selection.
+
 #### New "hair" wardrobe slot
 
 The wardrobe gains a fifth slot, `hair`, alongside top/bottom/footwear/accessories. It holds a *hairdo*, not hair: braids, an updo, marcel waves, a severe bun, the occasional wig. A character's natural hair — colour, length, texture — stays in the physical description, where it has always lived. The distinction is stated the same way in every prompt that draws the wardrobe/physical line.
