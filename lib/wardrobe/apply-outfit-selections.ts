@@ -20,7 +20,17 @@ import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import { dissolveBundlesInSlots } from '@/lib/wardrobe/dissolve-bundles';
-import type { EquippedSlots, OutfitSelection, WardrobeItem } from '@/lib/schemas/wardrobe.types';
+import {
+  CLOTHING_SLOT_TYPES,
+  WARDROBE_SLOT_TYPES,
+  makeEmptyEquippedSlots,
+} from '@/lib/schemas/wardrobe.types';
+import type {
+  EquippedSlots,
+  OutfitSelection,
+  WardrobeItem,
+  WardrobeItemType,
+} from '@/lib/schemas/wardrobe.types';
 import type { CheapLLMSettings } from '@/lib/schemas/settings.types';
 import {
   getCheapLLMProvider,
@@ -41,15 +51,6 @@ import type {
 } from '@/lib/chat/creation-progress';
 
 type Repos = RepositoryContainer;
-
-const SLOT_KEYS = ['top', 'bottom', 'footwear', 'accessories'] as const;
-
-const emptySlots = (): EquippedSlots => ({
-  top: [],
-  bottom: [],
-  footwear: [],
-  accessories: [],
-});
 
 /**
  * How long to wait on the wardrobe LLM for one character before giving up and
@@ -125,24 +126,18 @@ export interface OutfitSelectionContext {
  * Map a resolved outfit's per-slot leaf items into the lightweight preview DTO
  * the status dialog renders (no full `WardrobeItem` payloads over the wire).
  */
-function toOutfitPreviewSlots(leafItemsBySlot: {
-  top: WardrobeItem[];
-  bottom: WardrobeItem[];
-  footwear: WardrobeItem[];
-  accessories: WardrobeItem[];
-}): OutfitPreviewSlots {
+function toOutfitPreviewSlots(
+  leafItemsBySlot: Record<WardrobeItemType, WardrobeItem[]>,
+): OutfitPreviewSlots {
   const map = (items: WardrobeItem[]) =>
     items.map((i) => ({
       id: i.id,
       title: i.title,
       isComposite: (i.componentItemIds?.length ?? 0) > 0,
     }));
-  return {
-    top: map(leafItemsBySlot.top),
-    bottom: map(leafItemsBySlot.bottom),
-    footwear: map(leafItemsBySlot.footwear),
-    accessories: map(leafItemsBySlot.accessories),
-  };
+  return Object.fromEntries(
+    WARDROBE_SLOT_TYPES.map((slot) => [slot, map(leafItemsBySlot[slot] ?? [])]),
+  ) as OutfitPreviewSlots;
 }
 
 /**
@@ -176,12 +171,7 @@ export async function resolveDefaultOutfit(
 
   const defaultItems = pool.filter((item) => item.isDefault && !item.archivedAt);
 
-  const slots: EquippedSlots = {
-    top: [],
-    bottom: [],
-    footwear: [],
-    accessories: [],
-  };
+  const slots: EquippedSlots = makeEmptyEquippedSlots();
 
   if (defaultItems.length === 0) {
     return slots;
@@ -365,10 +355,10 @@ export async function applyOutfitSelections(
         });
 
       case 'manual':
-        return selection.slots ?? emptySlots();
+        return selection.slots ?? makeEmptyEquippedSlots();
 
       case 'none':
-        return emptySlots();
+        return makeEmptyEquippedSlots();
 
       case 'previous_chat': {
         if (context?.sourceChatId) {
@@ -461,8 +451,11 @@ export async function applyOutfitSelections(
                   // answer therefore means either "nothing usable" or "naked on
                   // purpose", and only the model's own `deliberate` flag tells
                   // the two apart. Without it, dress them in their defaults.
+                  // Only the *clothing* slots count here: a pick of nothing but
+                  // a hairdo is still "chose nothing to wear".
                   const picked =
-                    !!result.result && SLOT_KEYS.some((slot) => result.result!.slots[slot].length > 0);
+                    !!result.result &&
+                    CLOTHING_SLOT_TYPES.some((slot) => result.result!.slots[slot].length > 0);
                   const declaredBare = result.result?.deliberatelyUnclothed === true;
 
                   if (result.success && result.result && (picked || declaredBare)) {

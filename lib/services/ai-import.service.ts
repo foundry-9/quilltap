@@ -206,7 +206,7 @@ The main prompt should capture the character's essence from the source material.
 const PHYSICAL_DESCRIPTIONS_PROMPT = `${PHYSICAL_DESCRIPTION_SEMANTICS}
 
 Generate physical descriptions of this character at varying detail levels for image generation.
-Do NOT include clothing, outfits, or accessories — those are handled separately by the wardrobe system. Describe the person as if nothing removable were part of the description; focus only on the character's physical traits.
+Do NOT include clothing, outfits, or accessories — those are handled separately by the wardrobe system. Describe the person as if nothing removable were part of the description; focus only on the character's physical traits. Include the character's natural hair (colour, length, texture) here, but not a styled hairdo — hairstyles are wardrobe items.
 
 Respond with JSON:
 {

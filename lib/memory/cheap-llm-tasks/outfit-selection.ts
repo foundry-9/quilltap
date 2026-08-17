@@ -11,7 +11,7 @@
 import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { WardrobeItem, EquippedSlots } from '@/lib/schemas/wardrobe.types'
-import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types'
+import { WARDROBE_SLOT_TYPES, makeEmptyEquippedSlots } from '@/lib/schemas/wardrobe.types'
 import { stripCodeFences } from '@/lib/services/ai-import.service'
 import { executeCheapLLMTask } from './core-execution'
 import type { CheapLLMTaskResult } from './types'
@@ -24,18 +24,20 @@ const OUTFIT_SELECTION_PROMPT = `You are a wardrobe assistant for a roleplay cha
 
 Choose items that are contextually appropriate. For example, formal wear for a business meeting, casual clothes for relaxing at home, or era-appropriate costume for a historical setting.
 
-You MUST respond with ONLY a JSON object mapping slot names to ARRAYS of wardrobe item IDs. Valid slots are: "top", "bottom", "footwear", "accessories". Use an empty array [] for any slot you want to leave empty.
+You MUST respond with ONLY a JSON object mapping slot names to ARRAYS of wardrobe item IDs. Valid slots are: "top", "bottom", "footwear", "accessories", "hair". Use an empty array [] for any slot you want to leave empty. The "hair" slot holds a hairstyle or hairdo (braided, permed, elegantly coiffed, a wig) — not the hair itself. Leave "hair" empty for the character's natural, unstyled hair.
 
 You may put multiple items in the same slot to layer them (e.g. a t-shirt under a sweater); list them inner-to-outer.
 
 If the available wardrobe contains a composite item (its description mentions it bundles other items, or its title implies an outfit set), you may pick that composite directly — equipping it places it in all the slots it covers.
 
 Example response:
-{"top": ["uuid-tshirt", "uuid-sweater"], "bottom": ["uuid-jeans"], "footwear": ["uuid-boots"], "accessories": []}
+{"top": ["uuid-tshirt", "uuid-sweater"], "bottom": ["uuid-jeans"], "footwear": ["uuid-boots"], "accessories": [], "hair": []}
 
 Wearing nothing at all is a legitimate choice, but you must mark it as a choice. If the character genuinely should be unclothed — a nudist at home, a bath or swim scene, a setting where clothing would be absurd — leave every slot empty AND include "deliberate": true:
 
-{"deliberate": true, "top": [], "bottom": [], "footwear": [], "accessories": []}
+{"deliberate": true, "top": [], "bottom": [], "footwear": [], "accessories": [], "hair": []}
+
+Deliberate nudity is about the clothing slots — an unclothed character may still keep a styled hairdo, so fill or empty "hair" on its own merits.
 
 An all-empty response WITHOUT "deliberate": true is read as a failure to choose, and the character will be dressed in their default outfit instead. Do not use the empty response to opt out of the task — if you are unsure, pick something.
 
@@ -84,7 +86,7 @@ export async function chooseLLMOutfit(
     return {
       success: true,
       result: {
-        slots: { top: [], bottom: [], footwear: [], accessories: [] },
+        slots: makeEmptyEquippedSlots(),
         deliberatelyUnclothed: false,
       },
     }
@@ -158,7 +160,7 @@ Choose what ${characterName} should wear for this scene:`,
           responsePreview: cleanContent.substring(0, 200),
         })
         return {
-          slots: { top: [], bottom: [], footwear: [], accessories: [] },
+          slots: makeEmptyEquippedSlots(),
           deliberatelyUnclothed: false,
         }
       }
@@ -173,12 +175,7 @@ Choose what ${characterName} should wear for this scene:`,
       // and the item covers this slot (composites that cover the slot are
       // accepted as-is — equipping them is the "store-as-composite" path),
       // and drop anything else with a debug log.
-      const slots: EquippedSlots = {
-        top: [],
-        bottom: [],
-        footwear: [],
-        accessories: [],
-      }
+      const slots: EquippedSlots = makeEmptyEquippedSlots()
 
       for (const slot of WARDROBE_SLOT_TYPES) {
         const raw = parsed[slot]

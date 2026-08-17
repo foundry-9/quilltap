@@ -1,5 +1,5 @@
 import { logger } from '@/lib/logger';
-import { EMPTY_EQUIPPED_SLOTS, WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
+import { EMPTY_EQUIPPED_SLOTS, WARDROBE_SLOT_TYPES, isSlotReportedWhenEmpty } from '@/lib/schemas/wardrobe.types';
 import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import { describeOutfit } from '@/lib/wardrobe/outfit-description';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
@@ -182,6 +182,9 @@ export function formatWardrobeMutationResults(output: WardrobeMutationOutput): s
   const state = output.current_state;
   for (const slotKey of WARDROBE_SLOT_TYPES) {
     const ids = state[slotKey];
+    // An unreported-if-blank slot (hair) is omitted entirely when empty rather
+    // than listed as "(empty)" — the model must never read that as baldness.
+    if (ids.length === 0 && !isSlotReportedWhenEmpty(slotKey)) continue;
     lines.push(`  ${slotKey}: ${ids.length === 0 ? '(empty)' : ids.join(', ')}`);
   }
   lines.push('');

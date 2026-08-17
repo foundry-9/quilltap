@@ -83,17 +83,18 @@ describe('applyOutfitSelections — status-dialog emissions', () => {
     mockChooseLLMOutfit.mockResolvedValue({
       success: true,
       result: {
-        slots: { top: ['w1'], bottom: [], footwear: [], accessories: [] },
+        slots: { top: ['w1'], bottom: [], footwear: [], accessories: [], hair: [] },
         deliberatelyUnclothed: false,
       },
     } as Awaited<ReturnType<typeof chooseLLMOutfit>>)
     mockResolve.mockResolvedValue({
-      outfitValues: { top: ['Jacket'], bottom: [], footwear: [], accessories: [] },
+      outfitValues: { top: ['Jacket'], bottom: [], footwear: [], accessories: [], hair: [] },
       leafItemsBySlot: {
         top: [{ id: 'w1', title: 'Jacket', componentItemIds: [] }],
         bottom: [],
         footwear: [],
         accessories: [],
+        hair: [],
       },
       itemsById: new Map(),
     } as unknown as Awaited<ReturnType<typeof resolveEquippedOutfitForCharacter>>)
@@ -114,12 +115,14 @@ describe('applyOutfitSelections — status-dialog emissions', () => {
       bottom: [],
       footwear: [],
       accessories: [],
+      hair: [],
     })
     expect(setEquippedOutfit).toHaveBeenCalledWith('chat-1', 'c1', {
       top: ['w1'],
       bottom: [],
       footwear: [],
       accessories: [],
+      hair: [],
     })
   })
 
@@ -129,8 +132,8 @@ describe('applyOutfitSelections — status-dialog emissions', () => {
       error: 'model said no',
     } as Awaited<ReturnType<typeof chooseLLMOutfit>>)
     mockResolve.mockResolvedValue({
-      outfitValues: { top: [], bottom: [], footwear: [], accessories: [] },
-      leafItemsBySlot: { top: [], bottom: [], footwear: [], accessories: [] },
+      outfitValues: { top: [], bottom: [], footwear: [], accessories: [], hair: [] },
+      leafItemsBySlot: { top: [], bottom: [], footwear: [], accessories: [], hair: [] },
       itemsById: new Map(),
     } as Awaited<ReturnType<typeof resolveEquippedOutfitForCharacter>>)
 
@@ -177,7 +180,7 @@ describe('applyOutfitSelections — status-dialog emissions', () => {
         {
           characterId: 'c1',
           mode: 'manual',
-          slots: { top: ['w1'], bottom: [], footwear: [], accessories: [] },
+          slots: { top: ['w1'], bottom: [], footwear: [], accessories: [], hair: [] },
         },
       ],
       repos as any,

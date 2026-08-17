@@ -7,6 +7,7 @@
  * @module backup/restore/legacy-migrations
  */
 
+import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
 import type { WardrobeItemType, EquippedSlots } from '@/lib/schemas/wardrobe.types';
 
 /**
@@ -96,10 +97,10 @@ export function upgradeLegacyEquippedSlots(
     if (typeof val === 'string') return [val];
     return [];
   };
-  return {
-    top: upgrade((raw as Record<string, unknown>).top),
-    bottom: upgrade((raw as Record<string, unknown>).bottom),
-    footwear: upgrade((raw as Record<string, unknown>).footwear),
-    accessories: upgrade((raw as Record<string, unknown>).accessories),
-  };
+  // Built over the live slot list rather than the four legacy names: slots the
+  // legacy shape never had (hair) simply upgrade to `[]`, which is the correct
+  // reading of a backup written before they existed.
+  return Object.fromEntries(
+    WARDROBE_SLOT_TYPES.map((slot) => [slot, upgrade((raw as Record<string, unknown>)[slot])]),
+  ) as unknown as EquippedSlots;
 }

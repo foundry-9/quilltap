@@ -8,6 +8,7 @@
 import { getRepositories } from '@/lib/repositories/factory';
 import { BackgroundJobType } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
+import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
 import type { QueueStats } from '@/lib/database/repositories';
 import { ensureProcessorRunning } from './processor';
 import {
@@ -207,12 +208,7 @@ export interface CharacterAvatarGenerationPayload {
    * when the user generates from a "fitting room" composition that does
    * not match what the character is actually wearing in the chat.
    */
-  equippedSlotsOverride?: {
-    top: string[];
-    bottom: string[];
-    footwear: string[];
-    accessories: string[];
-  } | null;
+  equippedSlotsOverride?: EquippedSlots | null;
 }
 
 /**

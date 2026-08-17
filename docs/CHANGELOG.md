@@ -4,6 +4,27 @@
 
 ### 4.9-dev
 
+#### New "hair" wardrobe slot
+
+The wardrobe gains a fifth slot, `hair`, alongside top/bottom/footwear/accessories. It holds a *hairdo*, not hair: braids, an updo, marcel waves, a severe bun, the occasional wig. A character's natural hair — colour, length, texture — stays in the physical description, where it has always lived. The distinction is stated the same way in every prompt that draws the wardrobe/physical line.
+
+Hair is threaded through every surface that knows about slots: the wardrobe tools (`wardrobe_create`, `wardrobe_update`, `wardrobe_wear`, `wardrobe_take_off`, `wardrobe_list`), the outfit-choosing LLM at chat start, all three AI character generators, the Character Optimizer, wardrobe-from-image analysis, avatar and Lantern scene prompts, the wardrobe dialogs and the Green Room preview (rose badge), and `.qtap` exports.
+
+Hair is deliberately not clothing:
+
+- **An empty hair slot is never reported.** Slots now carry a `reportWhenEmpty` property. Garment slots announce their vacancies ("topless", "barefoot") because a missing shoe is information; hair does not, because an empty hair slot means unstyled hair, not a bald character. Nothing — Aurora's announcements, scene state, image prompts, or wardrobe tool results — says anything about hair when the slot is blank.
+- **Nudity semantics ignore hair.** "Completely naked and unadorned", the "naked" collapse, and the deliberately-unclothed detector are all computed over clothing slots only. A naked character keeps their braids, and an outfit of nothing but a hairdo still counts as "chose nothing to wear".
+- **Avatars carry the hairdo** on both the dressed and bare-top branches.
+- **Undressing keeps the hairstyle** in the scene-state clothing summary unless the narrative explicitly takes it down.
+
+Hats remain accessories — a hat is worn over a coiffure.
+
+Two upgrade notes. Every chat's cached clothing summary is re-derived once after upgrade (the equipped-outfit hash now includes the hair key), a one-time cheap-LLM call per active chat. And a `.qtap` export containing hair items imports into *older* Quilltap builds with those items silently skipped; everything else comes through.
+
+No migration and no schema change: `equippedOutfit` is unconstrained JSON and every slot defaults to an empty array, so existing rows parse with `hair: []`.
+
+Internally, the duplicated slot lists are gone. `lib/schemas/wardrobe.types.ts` now holds one ordered slot list plus a metadata registry (`WARDROBE_SLOT_META`) carrying each slot's labels, badge class, clothing flag, and empty-reporting rule; the four UI label/badge maps, three local `SLOT_KEYS` copies, two `cloneSlots` copies, and five independent `validTypes` sets all read from it.
+
 #### The three character-generation systems now know every character bucket
 
 The AI Wizard, Summon From Lore, and the Character Optimizer ("Refine from Memories") previously shared only a partial map of the character data model — the vantage-point preamble covering manifesto/identity/description/personality/title — and each had its own blind spots beyond that. `lib/services/character-field-semantics.ts` now carries the complete taxonomy: new prose blocks for system prompts (`PROMPT_SEMANTICS`), properties/pronouns/aliases (`PROPERTIES_SEMANTICS`), the physical description (nothing removable), and the wardrobe (slots, imagePrompt vs description, composites, defaults), plus a composed `FULL_FIELD_SEMANTICS`. All three systems consume the shared blocks instead of ad-hoc wording.

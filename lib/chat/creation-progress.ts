@@ -20,6 +20,7 @@
  * status/log/done/error vocabulary).
  */
 
+import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 import {
   createOperationProgressEmitter,
   failOperationProgress,
@@ -37,13 +38,8 @@ export interface OutfitPreviewEntry {
   isComposite: boolean;
 }
 
-/** The decided four-slot outfit, rendered read-only in the dialog. */
-export interface OutfitPreviewSlots {
-  top: OutfitPreviewEntry[];
-  bottom: OutfitPreviewEntry[];
-  footwear: OutfitPreviewEntry[];
-  accessories: OutfitPreviewEntry[];
-}
+/** The decided per-slot outfit, rendered read-only in the dialog. */
+export type OutfitPreviewSlots = Record<WardrobeItemType, OutfitPreviewEntry[]>;
 
 /** Chat creation's own events, on top of the shared core vocabulary. */
 export type CreationProgressEvent =

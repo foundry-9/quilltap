@@ -12,8 +12,8 @@ import {
 } from '@/lib/wardrobe/generated-items';
 
 describe('WARDROBE_ITEMS_GENERATION_PROMPT', () => {
-  it('teaches the four slot types', () => {
-    for (const slot of ['top', 'bottom', 'footwear', 'accessories']) {
+  it('teaches every slot type', () => {
+    for (const slot of ['top', 'bottom', 'footwear', 'accessories', 'hair']) {
       expect(WARDROBE_ITEMS_GENERATION_PROMPT).toContain(`"${slot}"`);
     }
   });
@@ -32,6 +32,14 @@ describe('WARDROBE_ITEMS_GENERATION_PROMPT', () => {
 });
 
 describe('sanitizeGeneratedWardrobeItems', () => {
+  it('keeps a hair-typed item — the sanitizer must not strip the styling slot', () => {
+    const items = sanitizeGeneratedWardrobeItems([
+      { title: 'Marcel Waves', description: 'Finger-set waves, close to the skull', types: ['hair'] },
+    ] as unknown as GeneratedWardrobeItem[]);
+    expect(items).toHaveLength(1);
+    expect(items[0].types).toEqual(['hair']);
+  });
+
   it('drops invalid slot types and items with no valid slots', () => {
     const items = sanitizeGeneratedWardrobeItems([
       { title: 'Duster', description: 'Long coat', types: ['top', 'cloak'] },

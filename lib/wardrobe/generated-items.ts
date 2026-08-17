@@ -11,6 +11,7 @@
  */
 
 import { WARDROBE_SEMANTICS } from '@/lib/services/character-field-semantics';
+import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types';
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 
 export interface GeneratedWardrobeItem {
@@ -35,7 +36,7 @@ export interface GeneratedWardrobeItem {
 export const WARDROBE_ITEMS_GENERATION_PROMPT = `${WARDROBE_SEMANTICS}
 
 Generate this character's wardrobe based on the context provided and their typical clothing and style.
-Each item must cover one or more of these slot types: "top" (shirts, jackets, dresses that cover the torso), "bottom" (pants, skirts, shorts), "footwear" (shoes, boots, sandals), "accessories" (jewelry, hats, belts, scarves, bags).
+Each item must cover one or more of these slot types: "top" (shirts, jackets, dresses that cover the torso), "bottom" (pants, skirts, shorts), "footwear" (shoes, boots, sandals), "accessories" (jewelry, hats, belts, scarves, bags), "hair" (a hairstyle or hairdo — braided, permed, an updo, a wig; the styling, not the hair itself).
 
 A single item can cover multiple slots — for example, a full-length dress would have types ["top", "bottom"].
 
@@ -61,12 +62,12 @@ Respond with ONLY valid JSON, no markdown fences:
 ]
 
 Rules:
-- Generate 4-8 individual garments/accessories representing this character's typical wardrobe — a mix of everyday and situational items.
+- Generate 4-8 individual garments/accessories representing this character's typical wardrobe — a mix of everyday and situational items, plus optionally ONE signature hairstyle item (types: ["hair"]) if the character's look calls for a deliberate hairdo.
 - Then add 1-2 composite OUTFITS: entries whose "components" array lists the exact titles of items from THIS response that are worn together. An outfit's "types" is the union of its components' slot types. Set "replace": true so equipping the outfit swaps out whatever was worn before; individual garments never need "components" or "replace".
 - Mark the character's everyday outfit as the default: set "isDefault": true on the everyday composite outfit if you made one (preferred), otherwise on each everyday individual item. Everything else gets "isDefault": false.
 - "imagePrompt" is fed directly to an image-generation model: short, literal, comma-friendly, never Markdown. Omit it only when the title already says everything visual.
 - "appropriateness" is a comma-separated list of context tags describing when the item is appropriate (e.g., "casual", "formal", "combat", "sleepwear", "intimate").
-- The wardrobe holds only removable things. Permanent bodily features (scars, tattoos, fur, anatomy) belong to the physical description and must never appear as wardrobe items.`;
+- The wardrobe holds only removable things. Permanent bodily features (scars, tattoos, fur, anatomy) belong to the physical description and must never appear as wardrobe items — with one deliberate exception: a hairSTYLE goes in the "hair" slot, while the hair's natural colour, length, and texture stay in the physical description.`;
 
 /**
  * Validate and normalize LLM-generated wardrobe items: drop invalid slot
@@ -74,7 +75,7 @@ Rules:
  * only when they resolve to another item's title in the same batch.
  */
 export function sanitizeGeneratedWardrobeItems(items: GeneratedWardrobeItem[]): GeneratedWardrobeItem[] {
-  const validTypes = new Set(['top', 'bottom', 'footwear', 'accessories']);
+  const validTypes = new Set<string>(WardrobeItemTypeEnum.options);
   const typed = (Array.isArray(items) ? items : [])
     .filter((item) => item && typeof item.title === 'string' && item.title.trim() && Array.isArray(item.types))
     .map((item) => ({

@@ -31,7 +31,11 @@ import { expandComposites } from '@/lib/wardrobe/expand-composites';
 import { hydrateComponentGraph } from '@/lib/wardrobe/hydrate-components';
 import type { OutfitSlotValues } from '@/lib/wardrobe/outfit-description';
 import type { SharedWardrobeTiers } from '@/lib/wardrobe/shared-tiers';
-import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
+import {
+  WARDROBE_SLOT_TYPES,
+  allEquippedItemIds,
+} from '@/lib/schemas/wardrobe.types';
+import type { EquippedSlots, WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 
 /** Minimal repository surface needed to resolve equipped items. */
 export interface ResolveEquippedRepos {
@@ -56,23 +60,22 @@ export interface ResolvedEquippedOutfit {
   /** Per-slot title arrays, ready for `describeOutfit`. */
   outfitValues: OutfitSlotValues;
   /** Per-slot leaf items (composites expanded), in the order they appear in equipped state. */
-  leafItemsBySlot: {
-    top: WardrobeItem[];
-    bottom: WardrobeItem[];
-    footwear: WardrobeItem[];
-    accessories: WardrobeItem[];
-  };
+  leafItemsBySlot: Record<WardrobeItemType, WardrobeItem[]>;
   /** Map of every item id encountered during resolution (composites + leaves). */
   itemsById: Map<string, WardrobeItem>;
 }
 
-const SLOT_KEYS = ['top', 'bottom', 'footwear', 'accessories'] as const;
-type SlotKey = (typeof SLOT_KEYS)[number];
+/** Fresh per-slot record with an empty array in every slot. */
+function emptyBySlot<T>(): Record<WardrobeItemType, T[]> {
+  return Object.fromEntries(
+    WARDROBE_SLOT_TYPES.map((slot) => [slot, [] as T[]]),
+  ) as Record<WardrobeItemType, T[]>;
+}
 
 function emptyResolved(): ResolvedEquippedOutfit {
   return {
-    outfitValues: { top: [], bottom: [], footwear: [], accessories: [] },
-    leafItemsBySlot: { top: [], bottom: [], footwear: [], accessories: [] },
+    outfitValues: emptyBySlot<string>(),
+    leafItemsBySlot: emptyBySlot<WardrobeItem>(),
     itemsById: new Map(),
   };
 }
@@ -92,12 +95,7 @@ export async function resolveEquippedOutfitForCharacter(
   slots: EquippedSlots,
   opts?: ResolveEquippedOptions,
 ): Promise<ResolvedEquippedOutfit> {
-  const equippedItemIds = Array.from(new Set([
-    ...slots.top,
-    ...slots.bottom,
-    ...slots.footwear,
-    ...slots.accessories,
-  ]));
+  const equippedItemIds = allEquippedItemIds(slots);
 
   if (equippedItemIds.length === 0) {
     return emptyResolved();
@@ -156,22 +154,12 @@ export async function resolveEquippedOutfitForCharacter(
   // composite whose components are blouse(top)/slacks(bottom)/loafers(footwear)
   // distributes correctly even if the composite itself was equipped to one
   // slot).
-  const leafItemsBySlot: ResolvedEquippedOutfit['leafItemsBySlot'] = {
-    top: [],
-    bottom: [],
-    footwear: [],
-    accessories: [],
-  };
-  const outfitValues: OutfitSlotValues = {
-    top: [],
-    bottom: [],
-    footwear: [],
-    accessories: [],
-  };
+  const leafItemsBySlot: ResolvedEquippedOutfit['leafItemsBySlot'] = emptyBySlot<WardrobeItem>();
+  const outfitValues: OutfitSlotValues = emptyBySlot<string>();
 
   const seenLeafIds = new Set<string>();
   const orderedLeaves: WardrobeItem[] = [];
-  for (const slot of SLOT_KEYS) {
+  for (const slot of WARDROBE_SLOT_TYPES) {
     const expanded = expandComposites(slots[slot], itemsById);
     for (const id of expanded.leafIds) {
       if (seenLeafIds.has(id)) continue;
@@ -187,7 +175,7 @@ export async function resolveEquippedOutfitForCharacter(
     // If `types` is somehow empty (shouldn't happen — the schema requires
     // min(1)), fall back to no-op rather than guessing.
     for (const slot of item.types) {
-      if (!SLOT_KEYS.includes(slot as SlotKey)) continue;
+      if (!WARDROBE_SLOT_TYPES.includes(slot)) continue;
       leafItemsBySlot[slot].push(item);
       outfitValues[slot].push(item.title);
     }

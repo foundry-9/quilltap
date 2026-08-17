@@ -281,5 +281,5 @@ export const FIELD_DESCRIPTIONS: Record<GeneratableField, string> = {
   systemPrompt: 'Custom system instructions for AI roleplay',
   properties: 'Structured facts: pronouns and aliases (nicknames others use)',
   physicalDescription: 'Detailed physical description for image generation (the person only — clothing lives in the wardrobe)',
-  wardrobeItems: 'Clothing, accessories, and composite outfits (top, bottom, footwear, accessories)',
+  wardrobeItems: 'Clothing, accessories, hairstyles, and composite outfits (top, bottom, footwear, accessories, hair)',
 }

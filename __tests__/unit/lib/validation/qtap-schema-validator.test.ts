@@ -45,6 +45,44 @@ describe('qtap-schema-validator', () => {
       expect(result.errors).toHaveLength(0);
     });
 
+    it('accepts a wardrobe item in the hair slot', () => {
+      const withHair = {
+        manifest: {
+          format: 'quilltap-export',
+          version: '1.0',
+          exportType: 'characters',
+          createdAt: '2026-02-18T00:00:00.000Z',
+          appVersion: '3.0.0',
+          settings: { includeMemories: false, scope: 'selected', selectedIds: [] },
+          counts: { characters: 1 },
+        },
+        data: {
+          characters: [
+            {
+              id: '550e8400-e29b-41d4-a716-446655440000',
+              userId: '550e8400-e29b-41d4-a716-446655440001',
+              name: 'Test Character',
+              createdAt: '2026-02-18T00:00:00.000Z',
+              updatedAt: '2026-02-18T00:00:00.000Z',
+              wardrobeItems: [
+                {
+                  id: '550e8400-e29b-41d4-a716-446655440002',
+                  title: 'Braided Crown',
+                  types: ['hair'],
+                  createdAt: '2026-02-18T00:00:00.000Z',
+                  updatedAt: '2026-02-18T00:00:00.000Z',
+                },
+              ],
+            },
+          ],
+        },
+      };
+
+      const result = validateQtapExport(withHair);
+      expect(result.errors).toHaveLength(0);
+      expect(result.valid).toBe(true);
+    });
+
     it('rejects data missing manifest', () => {
       const result = validateQtapExport({ data: {} });
       expect(result.valid).toBe(false);

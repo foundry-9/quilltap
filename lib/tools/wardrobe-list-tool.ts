@@ -7,6 +7,7 @@
 
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
+import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 
 /**
  * Zod schema for the wardrobe list tool's input.
@@ -15,7 +16,7 @@ export const wardrobeListToolInputSchema = z.object({
   type_filter: z
     .array(z.string())
     .describe(
-      'Filter items by slot type. Possible values include "top", "bottom", "footwear", "accessories". ' +
+      'Filter items by slot type. Possible values include "top", "bottom", "footwear", "accessories", "hair". ' +
       'Only items matching at least one of the specified types will be returned.'
     )
     .optional(),
@@ -81,12 +82,7 @@ export interface WardrobeListPresetResult {
   preset_id: string;
   name: string;
   description: string | null;
-  slots: {
-    top: string | null;
-    bottom: string | null;
-    footwear: string | null;
-    accessories: string | null;
-  };
+  slots: Record<WardrobeItemType, string | null>;
 }
 
 /**

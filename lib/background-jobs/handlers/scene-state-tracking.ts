@@ -17,7 +17,7 @@ import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-ove
 import { classifyContent } from '@/lib/services/dangerous-content/gatekeeper.service';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import type { SceneStateTrackingPayload } from '../queue-service';
-import { describeOutfit, decorateOutfitItems } from '@/lib/wardrobe/outfit-description';
+import { describeOutfit, decorateOutfitItems, buildOutfitSlotValues } from '@/lib/wardrobe/outfit-description';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
 import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers';
 import { hashEquippedSlots, hasEquippedItems } from '@/lib/wardrobe/outfit-hash';
@@ -198,12 +198,11 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
           equippedSlots,
           await sharedWardrobeTiersForCharacter(char!.id, projectMountPointIds),
         );
-        clothingDescription = describeOutfit({
-          top: decorateOutfitItems(resolved.leafItemsBySlot.top, { titleOnly: true }),
-          bottom: decorateOutfitItems(resolved.leafItemsBySlot.bottom, { titleOnly: true }),
-          footwear: decorateOutfitItems(resolved.leafItemsBySlot.footwear, { titleOnly: true }),
-          accessories: decorateOutfitItems(resolved.leafItemsBySlot.accessories, { titleOnly: true }),
-        });
+        clothingDescription = describeOutfit(
+          buildOutfitSlotValues((slot) =>
+            decorateOutfitItems(resolved.leafItemsBySlot[slot], { titleOnly: true }),
+          ),
+        );
       }
     } catch (error) {
       logger.warn('[SceneStateTracking] Failed to load equipped wardrobe for character', {

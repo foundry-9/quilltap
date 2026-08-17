@@ -256,7 +256,7 @@ describe('handleRunTool', () => {
               slots_affected: ['top'],
             },
           ],
-          current_state: { top: ['item-1'], bottom: [], footwear: [], accessories: [] },
+          current_state: { top: ['item-1'], bottom: [], footwear: [], accessories: [], hair: [] },
           coverage_summary: 'Wearing: Crimson Jacket (top)',
         },
       });
@@ -283,7 +283,7 @@ describe('handleRunTool', () => {
             slots_affected: ['top'],
           },
         ],
-        current_state: { top: ['item-1'], bottom: [], footwear: [], accessories: [] },
+        current_state: { top: ['item-1'], bottom: [], footwear: [], accessories: [], hair: [] },
         coverage_summary: 'Wearing: Crimson Jacket (top)',
       });
     });

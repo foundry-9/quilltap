@@ -42,6 +42,7 @@ describe('groupEquippedSlots', () => {
       bottom: [],
       footwear: [],
       accessories: ['jewelry'],
+      hair: [],
     }
     const result = groupEquippedSlots(slots, [composite])
     expect(result.bundles).toEqual([])
@@ -55,6 +56,7 @@ describe('groupEquippedSlots', () => {
       bottom: ['rain-outfit'],
       footwear: [],
       accessories: [],
+      hair: [],
     }
     const result = groupEquippedSlots(slots, [composite])
     expect(result.bundles).toHaveLength(1)
@@ -74,6 +76,7 @@ describe('groupEquippedSlots', () => {
       bottom: ['outfit'],
       footwear: [],
       accessories: [],
+      hair: [],
     }
     const result = groupEquippedSlots(slots, [composite, layered])
     expect(result.bundles).toHaveLength(1)
@@ -93,6 +96,7 @@ describe('groupEquippedSlots', () => {
       bottom: ['fullkit'],
       footwear: ['fullkit'],
       accessories: ['fullkit'],
+      hair: [],
     }
     const result = groupEquippedSlots(slots, [all])
     expect(result.bundles).toHaveLength(1)
@@ -114,6 +118,7 @@ describe('groupEquippedSlots', () => {
       bottom: ['lower'],
       footwear: ['lower'],
       accessories: ['upper'],
+      hair: [],
     }
     const result = groupEquippedSlots(slots, [upper, lower])
     expect(result.bundles).toHaveLength(2)
@@ -129,6 +134,7 @@ describe('groupEquippedSlots', () => {
       bottom: [],
       footwear: [],
       accessories: [],
+      hair: [],
     }
     const result = groupEquippedSlots(slots, [composite])
     // Only one slot occupied → not a bundle (needs ≥ 2).
@@ -142,6 +148,7 @@ describe('groupEquippedSlots', () => {
       bottom: [],
       footwear: [],
       accessories: [],
+      hair: [],
     }
     const result = groupEquippedSlots(slots, [])
     expect(result.bundles).toEqual([])
@@ -157,6 +164,7 @@ describe('groupEquippedSlots', () => {
       bottom: ['dress'],
       footwear: [],
       accessories: [],
+      hair: [],
     }
     const result = groupEquippedSlots(slots, [dress])
     expect(result.bundles).toEqual([])
@@ -172,6 +180,7 @@ describe('groupEquippedSlots', () => {
       bottom: ['t-bundle'],
       footwear: ['a-bundle'],
       accessories: ['a-bundle'],
+      hair: [],
     }
     const result = groupEquippedSlots(slots, [accessoryBundle, topBundle])
     expect(result.bundles.map((b) => b.compositeId)).toEqual(['t-bundle', 'a-bundle'])

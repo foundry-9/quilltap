@@ -32,10 +32,10 @@ const { executeCheapLLMTask } = require('@/lib/memory/cheap-llm-tasks/core-execu
 
 const mockExecute = executeCheapLLMTask as jest.Mock;
 
-type Slots = { top: string[]; bottom: string[]; footwear: string[]; accessories: string[] };
+type Slots = { top: string[]; bottom: string[]; footwear: string[]; accessories: string[]; hair: string[] };
 type Choice = { slots: Slots; deliberatelyUnclothed: boolean };
 
-const EMPTY: Slots = { top: [], bottom: [], footwear: [], accessories: [] };
+const EMPTY: Slots = { top: [], bottom: [], footwear: [], accessories: [], hair: [] };
 
 function item(id: string, types: string[], overrides: Record<string, unknown> = {}) {
   return {
@@ -58,6 +58,7 @@ const POOL = [
   item('general-coat', ['top']),
   item('own-jeans', ['bottom'], { characterId: 'char-1' }),
   item('own-boots', ['footwear'], { characterId: 'char-1' }),
+  item('own-braids', ['hair'], { characterId: 'char-1' }),
 ];
 
 /** Run `chooseLLMOutfit` far enough to capture the parser, then drive it. */
@@ -148,6 +149,28 @@ describe('chooseLLMOutfit — response parsing', () => {
     expect(parse('{"top":[],"bottom":[],"footwear":[],"accessories":[]}').deliberatelyUnclothed).toBe(
       false,
     );
+  });
+
+  // ─────────────────────────────────────────── the hair slot
+
+  it('accepts a hair-typed item placed in the hair slot', async () => {
+    const parse = await parserFor();
+    expect(parse('{"hair":["own-braids"]}').slots).toEqual({
+      ...EMPTY,
+      hair: ['own-braids'],
+    });
+  });
+
+  it('rejects a hair-typed item offered to a clothing slot', async () => {
+    const parse = await parserFor();
+    expect(parse('{"top":["own-braids"]}').slots).toEqual(EMPTY);
+  });
+
+  it('keeps a styled hairdo alongside a deliberate-nudity flag', async () => {
+    const parse = await parserFor();
+    const out = parse('{"deliberate":true,"top":[],"bottom":[],"footwear":[],"accessories":[],"hair":["own-braids"]}');
+    expect(out.deliberatelyUnclothed).toBe(true);
+    expect(out.slots).toEqual({ ...EMPTY, hair: ['own-braids'] });
   });
 
   it('requires a real boolean — a stringy "true" is not a deliberate claim', async () => {

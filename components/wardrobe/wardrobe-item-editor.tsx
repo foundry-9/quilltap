@@ -98,7 +98,7 @@ export function WardrobeItemEditor({
   // Composite equip behaviour. `replace: false` (default) = additive layering;
   // `true` = clear the designated slots first. `bundleDesignatedTypes` lets a
   // replace-composite designate slots beyond its components' union (e.g. Naked
-  // covering every slot but only containing a ring); seeded from the stored
+  // covering every clothing slot but only containing a ring); seeded from the stored
   // types, with the component union always forced in at save time.
   const [replace, setReplace] = useState<boolean>(item?.replace ?? false)
   const [bundleDesignatedTypes, setBundleDesignatedTypes] = useState<WardrobeItemType[]>(

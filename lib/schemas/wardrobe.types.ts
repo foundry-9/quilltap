@@ -21,12 +21,87 @@ import {
 // WARDROBE ITEM TYPES
 // ============================================================================
 
-/** Coverage slot types for wardrobe items */
-export const WardrobeItemTypeEnum = z.enum(['top', 'bottom', 'footwear', 'accessories']);
+/**
+ * All valid wardrobe slot types, in canonical order (types arrays, frontmatter,
+ * bundle sorting, and UI slot rows all follow this order). Append new slots at
+ * the END — inserting mid-list rewrites every serialized `types` array and
+ * reorders existing UI.
+ */
+export const WARDROBE_SLOT_TYPES = ['top', 'bottom', 'footwear', 'accessories', 'hair'] as const;
+
+/** Coverage slot types for wardrobe items (derived — never restate the list) */
+export const WardrobeItemTypeEnum = z.enum(WARDROBE_SLOT_TYPES);
 export type WardrobeItemType = z.infer<typeof WardrobeItemTypeEnum>;
 
-/** All valid wardrobe slot types */
-export const WARDROBE_SLOT_TYPES = ['top', 'bottom', 'footwear', 'accessories'] as const;
+/** Per-slot presentation and semantics metadata. One place to describe a slot. */
+export interface WardrobeSlotMeta {
+  /** Singular display label ("Hair") */
+  label: string;
+  /** Group-header label in the item editor ("Tops", "Hair") */
+  groupLabel: string;
+  /** qt-* badge class for this slot's chip */
+  badgeClass: string;
+  /**
+   * True for garment slots that participate in nudity semantics; false for
+   * styling slots (hair). Drives naked collapses and deliberate-unclothed
+   * detection.
+   */
+  isClothing: boolean;
+  /**
+   * Whether an EMPTY slot is reported at all — to an LLM, to an image model, or
+   * to the user.
+   *
+   * True for garment slots, where emptiness is real information: an empty top
+   * means "topless", an empty footwear slot means "barefoot".
+   *
+   * False for styling slots ("unreported-if-blank"). An empty `hair` slot does
+   * NOT mean the character has no hair — it means their hair is in its natural,
+   * unstyled state, which the physical description already covers. Saying
+   * anything at all about it invites a model to render a bald character or to
+   * narrate the absence. Every surface that lists slots must SKIP an empty
+   * unreported-if-blank slot entirely rather than emitting a phrase, a label,
+   * or an "(empty)" marker for it.
+   *
+   * Use {@link isSlotReportedWhenEmpty} at reporting sites rather than testing
+   * slot names.
+   */
+  reportWhenEmpty: boolean;
+  /**
+   * Phrase rendered when a *reported* slot is empty. Non-null exactly when
+   * `reportWhenEmpty` is true; null for unreported-if-blank slots, which
+   * render nothing.
+   */
+  emptyFallback: string | null;
+}
+
+export const WARDROBE_SLOT_META: Record<WardrobeItemType, WardrobeSlotMeta> = {
+  top:         { label: 'Top',         groupLabel: 'Tops',        badgeClass: 'qt-badge-wardrobe-top',         isClothing: true,  reportWhenEmpty: true,  emptyFallback: 'topless' },
+  bottom:      { label: 'Bottom',      groupLabel: 'Bottoms',     badgeClass: 'qt-badge-wardrobe-bottom',      isClothing: true,  reportWhenEmpty: true,  emptyFallback: 'bottomless' },
+  footwear:    { label: 'Footwear',    groupLabel: 'Footwear',    badgeClass: 'qt-badge-wardrobe-footwear',    isClothing: true,  reportWhenEmpty: true,  emptyFallback: 'barefoot' },
+  accessories: { label: 'Accessories', groupLabel: 'Accessories', badgeClass: 'qt-badge-wardrobe-accessories', isClothing: true,  reportWhenEmpty: true,  emptyFallback: 'no accessories' },
+  hair:        { label: 'Hair',        groupLabel: 'Hair',        badgeClass: 'qt-badge-wardrobe-hair',        isClothing: false, reportWhenEmpty: false, emptyFallback: null },
+};
+
+/** Slots that count as clothing for nudity/undress semantics. */
+export const CLOTHING_SLOT_TYPES: readonly WardrobeItemType[] =
+  WARDROBE_SLOT_TYPES.filter((s) => WARDROBE_SLOT_META[s].isClothing);
+
+/**
+ * True when an empty `slot` should still be reported (as a phrase, a label, or
+ * an "(empty)" marker). False for unreported-if-blank slots — skip them.
+ *
+ * Call this at every site that enumerates slots for an LLM, an image model, or
+ * the reader. See {@link WardrobeSlotMeta.reportWhenEmpty}.
+ */
+export function isSlotReportedWhenEmpty(slot: WardrobeItemType): boolean {
+  return WARDROBE_SLOT_META[slot].reportWhenEmpty;
+}
+
+/**
+ * Slots that vanish from every report when empty (today: `hair`).
+ */
+export const UNREPORTED_IF_BLANK_SLOT_TYPES: readonly WardrobeItemType[] =
+  WARDROBE_SLOT_TYPES.filter((s) => !WARDROBE_SLOT_META[s].reportWhenEmpty);
 
 // ============================================================================
 // WARDROBE ITEM API SCHEMAS (single source for create + update routes)
@@ -118,12 +193,15 @@ export type WardrobeItem = z.infer<typeof WardrobeItemSchema>;
  * multiple items per slot represent layering (t-shirt + sweater). Composite
  * items appear as a single ID and are expanded at read time.
  */
+const equippedSlotArray = () => z.array(UUIDSchema).default([]);
+
 export const EquippedSlotsSchema = z.object({
-  top: z.array(UUIDSchema).default([]),
-  bottom: z.array(UUIDSchema).default([]),
-  footwear: z.array(UUIDSchema).default([]),
-  accessories: z.array(UUIDSchema).default([]),
-});
+  top: equippedSlotArray(),
+  bottom: equippedSlotArray(),
+  footwear: equippedSlotArray(),
+  accessories: equippedSlotArray(),
+  hair: equippedSlotArray(),
+} satisfies Record<WardrobeItemType, ReturnType<typeof equippedSlotArray>>);
 
 export type EquippedSlots = z.infer<typeof EquippedSlotsSchema>;
 
@@ -150,11 +228,23 @@ export type OutfitSelection = z.infer<typeof OutfitSelectionSchema>;
 // HELPERS
 // ============================================================================
 
-/** Empty equipped slots (all empty arrays) */
-export const EMPTY_EQUIPPED_SLOTS: EquippedSlots = {
-  top: [],
-  bottom: [],
-  footwear: [],
-  accessories: [],
-};
+/** Fresh all-empty equipped slots. Prefer this over spreading EMPTY_EQUIPPED_SLOTS. */
+export function makeEmptyEquippedSlots(): EquippedSlots {
+  return Object.fromEntries(WARDROBE_SLOT_TYPES.map((s) => [s, []])) as unknown as EquippedSlots;
+}
+
+/** Empty equipped slots (all empty arrays) — kept for existing call sites. */
+export const EMPTY_EQUIPPED_SLOTS: EquippedSlots = makeEmptyEquippedSlots();
+
+/** Deep-ish clone (fresh arrays per slot). Tolerates missing keys on raw JSON. */
+export function cloneEquippedSlots(slots: EquippedSlots): EquippedSlots {
+  return Object.fromEntries(
+    WARDROBE_SLOT_TYPES.map((s) => [s, [...(slots[s] ?? [])]]),
+  ) as unknown as EquippedSlots;
+}
+
+/** Every item id equipped in any slot, deduplicated. Tolerates missing keys. */
+export function allEquippedItemIds(slots: EquippedSlots): string[] {
+  return Array.from(new Set(WARDROBE_SLOT_TYPES.flatMap((s) => slots[s] ?? [])));
+}
 

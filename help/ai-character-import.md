@@ -53,7 +53,7 @@ Watch the AI work through each extraction step:
 | Generating Dialogue | First message and example dialogue exchanges |
 | Creating System Prompts | Instructions for AI roleplay behavior |
 | Describing Appearance | Physical descriptions at 5 detail levels for image generation |
-| Generating Wardrobe | Slot-typed clothing and accessories (top, bottom, footwear, accessories), each with an image-generation cue, plus one or two composite outfits — the everyday one marked as the character's default |
+| Generating Wardrobe | Slot-typed clothing, accessories, and hairstyles (top, bottom, footwear, accessories, hair), each with an image-generation cue, plus one or two composite outfits — the everyday one marked as the character's default |
 | Determining Pronouns & Aliases | Subject/object/possessive pronouns, and any nicknames the source material establishes |
 | Generating Memories | Key facts and experiences (if enabled) |
 | Creating Example Chat | Sample conversation (if enabled) |

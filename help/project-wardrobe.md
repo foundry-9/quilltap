@@ -31,7 +31,7 @@ A default **composite** ("House Livery" bundling coat, waistcoat, and boots) res
 
 Each project wardrobe item lives as a Markdown file inside a folder called `Wardrobe/` within the project's official document store (the auto-created store named `Project Files: <your project name>`). The folder is conjured automatically the moment you visit the project page, so no incantation is required to bring it into being. The same `Wardrobe/` convention is used by character vaults and by Quilltap General, so an item may be moved between tiers simply by moving its file.
 
-A wardrobe item carries a small block of **YAML frontmatter** declaring its metadata — title, the slots it covers (top, bottom, footwear, accessories), an optional appropriateness note, and whether it is a default — with the descriptive prose below. Composite outfits (a "House Livery" bundling coat, waistcoat, and boots) are supported here exactly as in personal wardrobes; the system computes slot coverage automatically and refuses circular bundles.
+A wardrobe item carries a small block of **YAML frontmatter** declaring its metadata — title, the slots it covers (top, bottom, footwear, accessories, hair), an optional appropriateness note, and whether it is a default — with the descriptive prose below. Composite outfits (a "House Livery" bundling coat, waistcoat, and boots) are supported here exactly as in personal wardrobes; the system computes slot coverage automatically and refuses circular bundles.
 
 ## Tending the Collection
 

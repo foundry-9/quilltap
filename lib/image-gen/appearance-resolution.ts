@@ -11,7 +11,7 @@
 import type { PhysicalDescription } from '@/lib/schemas/types'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
-import { describeOutfit } from '@/lib/wardrobe/outfit-description'
+import { describeOutfit, buildOutfitSlotValues } from '@/lib/wardrobe/outfit-description'
 import {
   resolveAppearance,
   sanitizeAppearance,
@@ -108,16 +108,11 @@ function canSkipResolution(
 function wardrobeItemsToSlotValues(
   items: Array<{ slot: string; title: string; description?: string | null; imagePrompt?: string | null }>
 ): import('@/lib/wardrobe/outfit-description').OutfitSlotValues {
-  const valuesFor = (slot: string): string[] =>
+  return buildOutfitSlotValues((slot) =>
     items
       .filter(i => i.slot === slot)
-      .map(i => (i.imagePrompt?.trim() ? i.imagePrompt.trim() : i.title))
-  return {
-    top: valuesFor('top'),
-    bottom: valuesFor('bottom'),
-    footwear: valuesFor('footwear'),
-    accessories: valuesFor('accessories'),
-  }
+      .map(i => (i.imagePrompt?.trim() ? i.imagePrompt.trim() : i.title)),
+  )
 }
 
 /**

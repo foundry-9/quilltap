@@ -377,7 +377,7 @@ emitted only when set; vault path lookups are case-insensitive.
 |---|---|---|
 | id | string (UUID) | Stable item id. Falls back to a deterministic UUID derived from the mount + path if absent. |
 | title | string | Display name. Falls back to a leading `# Heading` or the filename if absent. |
-| types | list | Coverage slots this item designates: any of `top`, `bottom`, `footwear`, `accessories`. For composites this **may be a superset** of the components' slot union (so a composite can designate slots beyond the garments it actually contains, in order to clear them). |
+| types | list | Coverage slots this item designates: any of `top`, `bottom`, `footwear`, `accessories`, `hair`. For composites this **may be a superset** of the components' slot union (so a composite can designate slots beyond the garments it actually contains, in order to clear them). |
 | componentItems | list (composites only) | Component refs as slugs or UUIDs; resolved to canonical UUIDs in a second pass. Omitted for leaf items. |
 | appropriateness | string | Context tags ("casual", "formal", "intimate", etc.). |
 | imagePrompt | string | Optional plain-text cue fed to image-generation pipelines (avatar + Lantern scene) **in place of** the title; falls back to the title when absent/blank. Authored for a diffusion model (e.g. a literal description of a rank glyph), unlike the human-prose `description` body, which is stripped from image prompts. Emitted only when set. |
@@ -493,7 +493,7 @@ CREATE TABLE "chats" (
   "spokenThisCycleParticipantIds" TEXT DEFAULT '[]',  -- JSON array of participantIds that have spoken in the current rotation cycle (includes user-controlled characters)
   "sceneState" TEXT DEFAULT NULL,
   "renderedMarkdown" TEXT DEFAULT NULL,
-  "equippedOutfit" TEXT DEFAULT NULL,
+  "equippedOutfit" TEXT DEFAULT NULL,  -- JSON map { [characterId]: { top: [], bottom: [], footwear: [], accessories: [], hair: [] } }, each slot an array of wardrobe item ids (layering order significant). Unconstrained JSON: rows written before a slot existed simply lack the key and parse with an empty array.
   "pendingOutfitNotifications" TEXT DEFAULT NULL,
   "characterAvatars" TEXT DEFAULT NULL,  -- JSON map { [characterId]: { imageId, generatedAt, afterMessageCount } } where imageId is a vault link id (post-photos-Phase-3); pre-cutover values were legacy files.id and are translated by the migration.
   "avatarGenerationEnabled" INTEGER DEFAULT NULL,

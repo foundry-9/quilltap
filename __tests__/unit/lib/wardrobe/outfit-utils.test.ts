@@ -29,6 +29,7 @@ describe('wardrobe outfit utilities', () => {
           bottom: [],
           footwear: [],
           accessories: [],
+          hair: [],
         })
       ).toBe('- completely naked and unadorned\n')
     })
@@ -40,6 +41,7 @@ describe('wardrobe outfit utilities', () => {
           bottom: ['striped trousers'],
           footwear: [],
           accessories: ['silver rings'],
+          hair: [],
         })
       ).toBe([
         '- **top:** topless',
@@ -57,6 +59,7 @@ describe('wardrobe outfit utilities', () => {
           bottom: ['Working Outfit'],
           footwear: ['Working Outfit'],
           accessories: ['Working Outfit'],
+          hair: [],
         })
       ).toBe('- **top, bottom, footwear, accessories:** Working Outfit\n')
     })
@@ -68,6 +71,7 @@ describe('wardrobe outfit utilities', () => {
           bottom: ['silk dress'],
           footwear: ['leather boots'],
           accessories: ['pearl earrings'],
+          hair: [],
         })
       ).toBe([
         '- **top, bottom:** silk dress',
@@ -84,12 +88,84 @@ describe('wardrobe outfit utilities', () => {
           bottom: ['jeans'],
           footwear: ['sneakers'],
           accessories: [],
+          hair: [],
         })
       ).toBe([
         '- **top:** t-shirt, cardigan',
         '- **bottom:** jeans',
         '- **footwear:** sneakers',
         '- **accessories:** no accessories',
+        '',
+      ].join('\n'))
+    })
+
+    // Hair is styling, not a garment: it must never produce negative space and
+    // must never be mistaken for clothing by the nudity collapses.
+    it('renders nothing for an empty hair slot on a dressed character', () => {
+      const out = describeOutfit({
+        top: ['linen shirt'],
+        bottom: ['jeans'],
+        footwear: ['boots'],
+        accessories: [],
+        hair: [],
+      })
+      expect(out).not.toContain('hair')
+      expect(out).toBe([
+        '- **top:** linen shirt',
+        '- **bottom:** jeans',
+        '- **footwear:** boots',
+        '- **accessories:** no accessories',
+        '',
+      ].join('\n'))
+    })
+
+    it('renders a set hairdo last, after every clothing slot', () => {
+      expect(
+        describeOutfit({
+          top: ['linen shirt'],
+          bottom: ['jeans'],
+          footwear: ['boots'],
+          accessories: ['signet ring'],
+          hair: ['braided crown, silver pins'],
+        })
+      ).toBe([
+        '- **top:** linen shirt',
+        '- **bottom:** jeans',
+        '- **footwear:** boots',
+        '- **accessories:** signet ring',
+        '- **hair:** braided crown, silver pins',
+        '',
+      ].join('\n'))
+    })
+
+    it('keeps the naked-and-unadorned collapse when hair is empty too', () => {
+      expect(
+        describeOutfit({
+          top: [],
+          bottom: [],
+          footwear: [],
+          accessories: [],
+          hair: [],
+        })
+      ).toBe('- completely naked and unadorned\n')
+    })
+
+    it('does not collapse to naked-and-unadorned when only the hair is styled', () => {
+      const out = describeOutfit({
+        top: [],
+        bottom: [],
+        footwear: [],
+        accessories: [],
+        hair: ['braided'],
+      })
+      expect(out).not.toContain('completely naked and unadorned')
+      expect(out).toContain('- naked')
+      expect(out).toContain('- **hair:** braided')
+      expect(out).toBe([
+        '- naked',
+        '- **footwear:** barefoot',
+        '- **accessories:** no accessories',
+        '- **hair:** braided',
         '',
       ].join('\n'))
     })
@@ -141,11 +217,12 @@ describe('wardrobe outfit utilities', () => {
       bottom: ['dress-1'],
       footwear: ['boots-1'],
       accessories: [],
+      hair: [],
     }
 
     it('wear mode layers a leaf garment into its slot when the replace flag is off', () => {
       const next = computeDisplacedSlots(
-        { top: ['shirt-1'], bottom: ['jeans-1'], footwear: [], accessories: [] },
+        { top: ['shirt-1'], bottom: ['jeans-1'], footwear: [], accessories: [], hair: [] },
         {
           mode: 'wear',
           item: { id: 'cardigan-1', types: ['top'] },
@@ -157,12 +234,13 @@ describe('wardrobe outfit utilities', () => {
         bottom: ['jeans-1'],
         footwear: [],
         accessories: [],
+        hair: [],
       })
     })
 
     it('wear mode layers a multi-slot dress into both top and bottom (replace flag off)', () => {
       const next = computeDisplacedSlots(
-        { top: ['shirt-1'], bottom: ['jeans-1'], footwear: [], accessories: [] },
+        { top: ['shirt-1'], bottom: ['jeans-1'], footwear: [], accessories: [], hair: [] },
         {
           mode: 'wear',
           item: { id: 'dress-1', types: ['top', 'bottom'] },
@@ -174,12 +252,13 @@ describe('wardrobe outfit utilities', () => {
         bottom: ['jeans-1', 'dress-1'],
         footwear: [],
         accessories: [],
+        hair: [],
       })
     })
 
     it('wear mode replaces every covered slot when the item replace flag is on', () => {
       const next = computeDisplacedSlots(
-        { top: ['shirt-1'], bottom: ['jeans-1'], footwear: [], accessories: [] },
+        { top: ['shirt-1'], bottom: ['jeans-1'], footwear: [], accessories: [], hair: [] },
         {
           mode: 'wear',
           item: { id: 'dress-1', types: ['top', 'bottom'], replace: true },
@@ -191,12 +270,13 @@ describe('wardrobe outfit utilities', () => {
         bottom: ['dress-1'],
         footwear: [],
         accessories: [],
+        hair: [],
       })
     })
 
     it('wear mode layers an additive composite onto existing slots (replace=false)', () => {
       const next = computeDisplacedSlots(
-        { top: ['shirt-1'], bottom: ['jeans-1'], footwear: [], accessories: [] },
+        { top: ['shirt-1'], bottom: ['jeans-1'], footwear: [], accessories: [], hair: [] },
         {
           mode: 'wear',
           item: { id: 'outfit-1', types: ['top', 'bottom'], componentItemIds: ['a', 'b'] },
@@ -208,12 +288,13 @@ describe('wardrobe outfit utilities', () => {
         bottom: ['jeans-1', 'outfit-1'],
         footwear: [],
         accessories: [],
+        hair: [],
       })
     })
 
     it('wear mode does not duplicate an item already in a slot', () => {
       const next = computeDisplacedSlots(
-        { top: ['outfit-1'], bottom: ['outfit-1'], footwear: [], accessories: [] },
+        { top: ['outfit-1'], bottom: ['outfit-1'], footwear: [], accessories: [], hair: [] },
         {
           mode: 'wear',
           item: { id: 'outfit-1', types: ['top', 'bottom'], componentItemIds: ['a'] },
@@ -226,7 +307,7 @@ describe('wardrobe outfit utilities', () => {
 
     it('wear mode clears every designated slot for a replace composite (Naked)', () => {
       const next = computeDisplacedSlots(
-        { top: ['shirt-1'], bottom: ['jeans-1'], footwear: ['boots-1'], accessories: ['watch-1'] },
+        { top: ['shirt-1'], bottom: ['jeans-1'], footwear: ['boots-1'], accessories: ['watch-1'], hair: [] },
         {
           mode: 'wear',
           item: {
@@ -245,12 +326,13 @@ describe('wardrobe outfit utilities', () => {
         bottom: ['naked-1'],
         footwear: ['naked-1'],
         accessories: ['naked-1'],
+        hair: [],
       })
     })
 
     it('replace mode force-swaps every covered slot regardless of the flag', () => {
       const next = computeDisplacedSlots(
-        { top: ['shirt-1', 'cardigan-1'], bottom: ['jeans-1'], footwear: [], accessories: [] },
+        { top: ['shirt-1', 'cardigan-1'], bottom: ['jeans-1'], footwear: [], accessories: [], hair: [] },
         {
           mode: 'replace',
           item: { id: 'dress-1', types: ['top', 'bottom'] },
@@ -262,12 +344,13 @@ describe('wardrobe outfit utilities', () => {
         bottom: ['dress-1'],
         footwear: [],
         accessories: [],
+        hair: [],
       })
     })
 
     it('add_to_slot mode appends to the slot array without displacing siblings', () => {
       const next = computeDisplacedSlots(
-        { top: ['t-shirt-1'], bottom: [], footwear: [], accessories: [] },
+        { top: ['t-shirt-1'], bottom: [], footwear: [], accessories: [], hair: [] },
         {
           mode: 'add_to_slot',
           slot: 'top',
@@ -280,12 +363,13 @@ describe('wardrobe outfit utilities', () => {
         bottom: [],
         footwear: [],
         accessories: [],
+        hair: [],
       })
     })
 
     it('add_to_slot mode is a no-op when the item is already in the slot', () => {
       const next = computeDisplacedSlots(
-        { top: ['t-shirt-1'], bottom: [], footwear: [], accessories: [] },
+        { top: ['t-shirt-1'], bottom: [], footwear: [], accessories: [], hair: [] },
         {
           mode: 'add_to_slot',
           slot: 'top',
@@ -298,7 +382,7 @@ describe('wardrobe outfit utilities', () => {
 
     it('remove_from_slot with an itemId filters that id out of the slot', () => {
       const next = computeDisplacedSlots(
-        { top: ['t-shirt-1', 'cardigan-1'], bottom: [], footwear: [], accessories: [] },
+        { top: ['t-shirt-1', 'cardigan-1'], bottom: [], footwear: [], accessories: [], hair: [] },
         {
           mode: 'remove_from_slot',
           slot: 'top',
@@ -311,7 +395,7 @@ describe('wardrobe outfit utilities', () => {
 
     it('remove_from_slot without an itemId clears the slot entirely', () => {
       const next = computeDisplacedSlots(
-        { top: ['t-shirt-1', 'cardigan-1'], bottom: [], footwear: [], accessories: [] },
+        { top: ['t-shirt-1', 'cardigan-1'], bottom: [], footwear: [], accessories: [], hair: [] },
         {
           mode: 'remove_from_slot',
           slot: 'top',
@@ -332,12 +416,13 @@ describe('wardrobe outfit utilities', () => {
         bottom: ['dress-1'],
         footwear: ['boots-1'],
         accessories: [],
+        hair: [],
       })
     })
   })
 
   describe('wearItemIntoSlots / replaceItemIntoSlots (pure)', () => {
-    const worn = { top: ['shirt-1'], bottom: ['jeans-1'], footwear: [], accessories: [] }
+    const worn = { top: ['shirt-1'], bottom: ['jeans-1'], footwear: [], accessories: [], hair: [] }
 
     it('wearItemIntoSlots layers when the flag is off and replaces when on', () => {
       expect(
@@ -347,6 +432,7 @@ describe('wardrobe outfit utilities', () => {
         bottom: ['jeans-1', 'dress-1'],
         footwear: [],
         accessories: [],
+        hair: [],
       })
 
       expect(
@@ -356,13 +442,14 @@ describe('wardrobe outfit utilities', () => {
         bottom: ['dress-1'],
         footwear: [],
         accessories: [],
+        hair: [],
       })
     })
 
     it('replaceItemIntoSlots always clears and sets the covered slots', () => {
       expect(
         replaceItemIntoSlots(
-          { top: ['shirt-1', 'cardigan-1'], bottom: ['jeans-1'], footwear: [], accessories: [] },
+          { top: ['shirt-1', 'cardigan-1'], bottom: ['jeans-1'], footwear: [], accessories: [], hair: [] },
           { id: 'dress-1', types: ['top', 'bottom'] },
         ),
       ).toEqual({
@@ -370,11 +457,12 @@ describe('wardrobe outfit utilities', () => {
         bottom: ['dress-1'],
         footwear: [],
         accessories: [],
+        hair: [],
       })
     })
 
     it('does not mutate the input slots', () => {
-      const input = { top: ['shirt-1'], bottom: [], footwear: [], accessories: [] }
+      const input = { top: ['shirt-1'], bottom: [], footwear: [], accessories: [], hair: [] }
       wearItemIntoSlots(input, { id: 'cardigan-1', types: ['top'] })
       expect(input.top).toEqual(['shirt-1'])
     })
@@ -403,6 +491,7 @@ describe('wardrobe outfit utilities', () => {
         bottom: ['jeans-1'],
         footwear: ['boots-1'],
         accessories: [],
+        hair: [],
       })
 
       const result = await equipItem(repos, 'chat-1', 'char-1', {
@@ -415,12 +504,14 @@ describe('wardrobe outfit utilities', () => {
         bottom: ['jeans-1', 'dress-1'],
         footwear: ['boots-1'],
         accessories: [],
+        hair: [],
       })
       expect(result).toEqual({
         top: ['shirt-1', 'dress-1'],
         bottom: ['jeans-1', 'dress-1'],
         footwear: ['boots-1'],
         accessories: [],
+        hair: [],
       })
     })
 
@@ -430,6 +521,7 @@ describe('wardrobe outfit utilities', () => {
         bottom: ['jeans-1'],
         footwear: ['boots-1'],
         accessories: [],
+        hair: [],
       })
 
       const result = await equipItem(repos, 'chat-1', 'char-1', {
@@ -443,6 +535,7 @@ describe('wardrobe outfit utilities', () => {
         bottom: ['dress-1'],
         footwear: ['boots-1'],
         accessories: [],
+        hair: [],
       })
     })
 
@@ -452,6 +545,7 @@ describe('wardrobe outfit utilities', () => {
         bottom: ['jeans-1'],
         footwear: ['boots-1'],
         accessories: [],
+        hair: [],
       })
 
       const result = await replaceItem(repos, 'chat-1', 'char-1', {
@@ -464,6 +558,7 @@ describe('wardrobe outfit utilities', () => {
         bottom: ['dress-1'],
         footwear: ['boots-1'],
         accessories: [],
+        hair: [],
       })
       expect(result.top).toEqual(['dress-1'])
       expect(result.bottom).toEqual(['dress-1'])
@@ -482,6 +577,7 @@ describe('wardrobe outfit utilities', () => {
         bottom: ['dress-1'],
         footwear: [],
         accessories: [],
+        hair: [],
       })
     })
 
@@ -493,6 +589,7 @@ describe('wardrobe outfit utilities', () => {
         bottom: [],
         footwear: [],
         accessories: [],
+        hair: [],
       })
 
       await equipItem(repos, 'chat-1', 'char-1', {
@@ -505,6 +602,7 @@ describe('wardrobe outfit utilities', () => {
         bottom: ['rain-outfit'],
         footwear: ['rain-outfit'],
         accessories: [],
+        hair: [],
       })
     })
 
@@ -514,6 +612,7 @@ describe('wardrobe outfit utilities', () => {
         bottom: [],
         footwear: [],
         accessories: [],
+        hair: [],
       })
 
       const result = await addToSlot(repos, 'chat-1', 'char-1', 'top', {
@@ -526,6 +625,7 @@ describe('wardrobe outfit utilities', () => {
         bottom: [],
         footwear: [],
         accessories: [],
+        hair: [],
       })
       expect(result.top).toEqual(['t-shirt-1', 'cardigan-1'])
     })
@@ -548,6 +648,7 @@ describe('wardrobe outfit utilities', () => {
         bottom: [],
         footwear: [],
         accessories: [],
+        hair: [],
       })
 
       const result = await addToSlot(repos, 'chat-1', 'char-1', 'top', {
@@ -565,6 +666,7 @@ describe('wardrobe outfit utilities', () => {
         bottom: [],
         footwear: [],
         accessories: [],
+        hair: [],
       })
 
       const result = await removeFromSlot(repos, 'chat-1', 'char-1', 'top', 't-shirt-1')
@@ -574,6 +676,7 @@ describe('wardrobe outfit utilities', () => {
         bottom: [],
         footwear: [],
         accessories: [],
+        hair: [],
       })
       expect(result.top).toEqual(['cardigan-1'])
     })
@@ -584,6 +687,7 @@ describe('wardrobe outfit utilities', () => {
         bottom: ['jeans-1'],
         footwear: [],
         accessories: [],
+        hair: [],
       })
 
       const result = await removeFromSlot(repos, 'chat-1', 'char-1', 'top')
@@ -593,6 +697,7 @@ describe('wardrobe outfit utilities', () => {
         bottom: ['jeans-1'],
         footwear: [],
         accessories: [],
+        hair: [],
       })
       expect(result.top).toEqual([])
     })

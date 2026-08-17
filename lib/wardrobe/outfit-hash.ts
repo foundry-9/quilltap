@@ -11,6 +11,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
 
 const OUTFIT_HASH_LENGTH = 16;
@@ -23,12 +24,11 @@ const OUTFIT_HASH_LENGTH = 16;
  * ids in the same order. A null/empty outfit hashes to a stable sentinel.
  */
 export function hashEquippedSlots(slots: EquippedSlots | null | undefined): string {
-  const normalized = {
-    top: slots?.top ?? [],
-    bottom: slots?.bottom ?? [],
-    footwear: slots?.footwear ?? [],
-    accessories: slots?.accessories ?? [],
-  };
+  // Object key order is the canonical slot order, so the serialization stays
+  // deterministic as slots are added.
+  const normalized = Object.fromEntries(
+    WARDROBE_SLOT_TYPES.map((slot) => [slot, slots?.[slot] ?? []]),
+  );
   return createHash('sha256')
     .update(JSON.stringify(normalized))
     .digest('hex')
@@ -38,11 +38,5 @@ export function hashEquippedSlots(slots: EquippedSlots | null | undefined): stri
 /** True when at least one slot holds an equipped item. */
 export function hasEquippedItems(slots: EquippedSlots | null | undefined): boolean {
   if (!slots) return false;
-  return (
-    (slots.top?.length ?? 0) +
-      (slots.bottom?.length ?? 0) +
-      (slots.footwear?.length ?? 0) +
-      (slots.accessories?.length ?? 0) >
-    0
-  );
+  return WARDROBE_SLOT_TYPES.some((slot) => (slots[slot]?.length ?? 0) > 0);
 }

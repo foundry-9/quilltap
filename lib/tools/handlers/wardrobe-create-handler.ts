@@ -22,7 +22,7 @@ import type {
 } from '../wardrobe-create-tool';
 import { validateWardrobeCreateInput } from '../wardrobe-create-tool';
 import type { WardrobeItem, WardrobeItemType, EquippedSlots } from '@/lib/schemas/wardrobe.types';
-import { WARDROBE_SLOT_TYPES, EMPTY_EQUIPPED_SLOTS } from '@/lib/schemas/wardrobe.types';
+import { WARDROBE_SLOT_TYPES, EMPTY_EQUIPPED_SLOTS, isSlotReportedWhenEmpty } from '@/lib/schemas/wardrobe.types';
 import { equipItem } from '@/lib/wardrobe/outfit-displacement';
 import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
 import { unionTypes } from '@/lib/wardrobe/composite-types';
@@ -379,6 +379,12 @@ export function formatWardrobeCreateResults(output: WardrobeCreateToolOutput): s
 
     if (output.current_state) {
       const slotSummary = WARDROBE_SLOT_TYPES
+        // An unreported-if-blank slot (hair) drops out when empty — never
+        // surfaced as "(empty)", which reads as "has no hair".
+        .filter((slot) => {
+          const ids = output.current_state![slot];
+          return (ids && ids.length > 0) || isSlotReportedWhenEmpty(slot);
+        })
         .map((slot) => {
           const ids = output.current_state![slot];
           const label = !ids || ids.length === 0 ? '(empty)' : ids.join(', ');

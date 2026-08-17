@@ -14,4 +14,4 @@ export interface CandidateItem {
   isShared: boolean
 }
 
-export type CandidateGroup = 'top' | 'bottom' | 'footwear' | 'accessories' | 'multi'
+export type CandidateGroup = WardrobeItemType | 'multi'

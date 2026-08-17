@@ -45,6 +45,7 @@ import { resolveOrientation } from '@/lib/image-gen/orientation';
 import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
+import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
 import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
@@ -261,7 +262,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
           await sharedWardrobeTiersForCharacter(char!.id, projectMountPointIds),
         );
         const flat: Array<{ slot: string; title: string; description?: string | null; imagePrompt?: string | null }> = [];
-        for (const slot of ['top', 'bottom', 'footwear', 'accessories'] as const) {
+        for (const slot of WARDROBE_SLOT_TYPES) {
           for (const item of resolved.leafItemsBySlot[slot]) {
             flat.push({ slot, title: item.title, description: item.description, imagePrompt: item.imagePrompt });
           }

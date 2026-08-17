@@ -5,7 +5,7 @@
 import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { logger } from '@/lib/logger'
-import { describeOutfit } from '@/lib/wardrobe/outfit-description'
+import { describeOutfit, buildOutfitSlotValues } from '@/lib/wardrobe/outfit-description'
 import { stripCodeFences } from '@/lib/services/ai-import.service'
 import { executeCheapLLMTask } from './core-execution'
 import type {
@@ -185,12 +185,12 @@ CRITICAL RULES — read carefully:
 - The CONVERSATION and SCENARIO are the primary authority. Character baselines are only defaults.
 - If the scenario or conversation describes a character wearing something specific, USE THAT, not the baseline clothing.
 - If the scenario or conversation describes a character's appearance differently from baseline, USE THAT.
-- If a character undresses, is described as nude/naked, or removes clothing in the narrative, clothing should reflect that accurately — do not fall back to baseline clothing.
+- If a character undresses, is described as nude/naked, or removes clothing in the narrative, clothing should reflect that accurately — do not fall back to baseline clothing. Undressing removes clothing but does NOT remove a hairstyle; keep the hairstyle in the summary unless the narrative explicitly changes it (hair let down, ribbon pulled loose).
 - Baselines are ONLY used when the conversation gives NO information about a character's current state.
 - location: concise (1-2 sentences). Derive from scenario and conversation context.
 - action: what the character is doing RIGHT NOW at the end of the conversation.
 - appearance: complete snapshot of current state. Use baseline if the conversation provides no appearance info.
-- clothing: a concise, salience-based summary of what the character is visibly wearing RIGHT NOW. It MUST be a single short sentence of plain prose, **200 characters or fewer**, describing only what is visually prominent (an outer layer may hide what is under it — summarise the look, do not rattle off every piece, and drop per-item trivia and style commentary). No markdown, no bullet lists, no parentheticals, no quoted item names. ALWAYS provide a string; NEVER use null. If the character has undressed or is naked, say so plainly (e.g. "nude", "naked", "wearing only underwear"). Only lean on the baseline clothing when the conversation has not described any clothing change. Use "unknown" only when neither the conversation nor the baseline gives any clothing information.
+- clothing: a concise, salience-based summary of what the character is visibly wearing RIGHT NOW. It MUST be a single short sentence of plain prose, **200 characters or fewer**, describing only what is visually prominent (an outer layer may hide what is under it — summarise the look, do not rattle off every piece, and drop per-item trivia and style commentary). No markdown, no bullet lists, no parentheticals, no quoted item names. ALWAYS provide a string; NEVER use null. If the character has undressed or is naked, say so plainly (e.g. "nude", "naked", "wearing only underwear"). Only lean on the baseline clothing when the conversation has not described any clothing change. Use "unknown" only when neither the conversation nor the baseline gives any clothing information. Include the character's current hairstyle in this summary ONLY when one is actually set (e.g. "hair in a tight braid"). If no hairstyle is set, say NOTHING about hair at all — do not write "no hairstyle", "hair down", "unstyled", or anything implying the character lacks hair; their natural hair is already covered by their physical description.
 - Be concise and accurate. Output ONLY the JSON object.`
 
 /**
@@ -221,7 +221,7 @@ CRITICAL RULES — read carefully:
 - If nothing changed for a field, carry it forward from the previous state.
 - Update location if the scene has moved.
 - Update action to reflect what each character is doing NOW at the end of the new messages.
-- clothing: a concise, salience-based summary of what the character is visibly wearing RIGHT NOW. It MUST be a single short sentence of plain prose, **200 characters or fewer**, describing only what is visually prominent (an outer layer may hide what is under it — summarise the look, do not rattle off every piece, and drop per-item trivia and style commentary). No markdown, no bullet lists, no parentheticals, no quoted item names. ALWAYS provide a string; NEVER use null. If a character has undressed or is naked, say so plainly (e.g. "nude", "naked", "wearing only underwear"). If the previous state had clothing as null or missing, check the character baselines and new messages to determine the current clothing state.
+- clothing: a concise, salience-based summary of what the character is visibly wearing RIGHT NOW. It MUST be a single short sentence of plain prose, **200 characters or fewer**, describing only what is visually prominent (an outer layer may hide what is under it — summarise the look, do not rattle off every piece, and drop per-item trivia and style commentary). No markdown, no bullet lists, no parentheticals, no quoted item names. ALWAYS provide a string; NEVER use null. If a character has undressed or is naked, say so plainly (e.g. "nude", "naked", "wearing only underwear"). If the previous state had clothing as null or missing, check the character baselines and new messages to determine the current clothing state. Include the character's current hairstyle in this summary ONLY when one is actually set (e.g. "hair in a tight braid"). If no hairstyle is set, say NOTHING about hair at all — do not write "no hairstyle", "hair down", "unstyled", or anything implying the character lacks hair; their natural hair is already covered by their physical description.
 - Character baselines are provided for reference — use them to fill in null or missing fields from the previous state, but the new messages always take priority.
 - Be concise and accurate. Output ONLY the JSON object.`
 
@@ -831,16 +831,13 @@ export async function resolveAppearance(
     // otherwise be echoed verbatim into the image prompt.
     let wardrobeSection = ''
     if (char.equippedWardrobeItems && char.equippedWardrobeItems.length > 0) {
-      const valuesFor = (slot: string): string[] =>
-        char.equippedWardrobeItems!
-          .filter(i => i.slot === slot)
-          .map(i => (i.imagePrompt?.trim() ? i.imagePrompt.trim() : i.title))
-      const outfitDescription = describeOutfit({
-        top: valuesFor('top'),
-        bottom: valuesFor('bottom'),
-        footwear: valuesFor('footwear'),
-        accessories: valuesFor('accessories'),
-      })
+      const outfitDescription = describeOutfit(
+        buildOutfitSlotValues((slot) =>
+          char.equippedWardrobeItems!
+            .filter(i => i.slot === slot)
+            .map(i => (i.imagePrompt?.trim() ? i.imagePrompt.trim() : i.title)),
+        ),
+      )
       wardrobeSection = `\n  Equipped Wardrobe (stored items the character currently has on — summarize as a brief visual sentence):\n${outfitDescription}`
     }
 

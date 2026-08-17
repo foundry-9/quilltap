@@ -79,7 +79,7 @@ import {
   type SceneStateEmissionEntry,
 } from './context/memory-injector'
 import { SceneStateSchema, type SceneState } from '@/lib/schemas/chat.types'
-import { describeOutfit, decorateOutfitItems } from '@/lib/wardrobe/outfit-description'
+import { describeOutfit, decorateOutfitItems, buildOutfitSlotValues } from '@/lib/wardrobe/outfit-description'
 import { hashEquippedSlots, hasEquippedItems } from '@/lib/wardrobe/outfit-hash'
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped'
 import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers'
@@ -1496,12 +1496,11 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
             equippedSlots!,
             await sharedWardrobeTiersForCharacter(c.characterId, projectMountPointIds),
           )
-          const description = describeOutfit({
-            top: decorateOutfitItems(resolved.leafItemsBySlot.top, { titleOnly: true }),
-            bottom: decorateOutfitItems(resolved.leafItemsBySlot.bottom, { titleOnly: true }),
-            footwear: decorateOutfitItems(resolved.leafItemsBySlot.footwear, { titleOnly: true }),
-            accessories: decorateOutfitItems(resolved.leafItemsBySlot.accessories, { titleOnly: true }),
-          })
+          const description = describeOutfit(
+            buildOutfitSlotValues((slot) =>
+              decorateOutfitItems(resolved.leafItemsBySlot[slot], { titleOnly: true }),
+            ),
+          )
           if (description) liveClothingByCharacterId.set(c.characterId, description)
         } catch (error) {
           logger.warn('Failed to read live wardrobe for scene-state clothing override', {

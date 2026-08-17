@@ -50,6 +50,7 @@ import {
   resolveUncensoredImageProfileForReroute,
 } from '@/lib/services/dangerous-content/provider-routing.service';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
+import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
 import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers';
 import { resolveProjectMountPointIdsForChat } from '@/lib/mount-index/tiered-mount-pool';
@@ -996,7 +997,7 @@ async function resolveAppearances(
                   await sharedWardrobeTiersForCharacter(p.entityId, projectMountPointIds),
                 );
                 const flat: Array<{ slot: string; title: string; description?: string | null; imagePrompt?: string | null }> = [];
-                for (const slot of ['top', 'bottom', 'footwear', 'accessories'] as const) {
+                for (const slot of WARDROBE_SLOT_TYPES) {
                   for (const item of resolved.leafItemsBySlot[slot]) {
                     flat.push({ slot, title: item.title, description: item.description, imagePrompt: item.imagePrompt });
                   }

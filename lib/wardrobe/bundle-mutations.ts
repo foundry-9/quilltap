@@ -8,23 +8,15 @@
  */
 
 import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types'
+import { cloneEquippedSlots } from '@/lib/schemas/wardrobe.types'
 import type { EquippedBundle } from '@/lib/wardrobe/group-equipped'
-
-export function cloneSlots(slots: EquippedSlots): EquippedSlots {
-  return {
-    top: [...slots.top],
-    bottom: [...slots.bottom],
-    footwear: [...slots.footwear],
-    accessories: [...slots.accessories],
-  }
-}
 
 /** Remove a bundle's composite id from every slot it occupies. */
 export function takeOffBundleFromSlots(
   slots: EquippedSlots,
   bundle: EquippedBundle,
 ): EquippedSlots {
-  const next = cloneSlots(slots)
+  const next = cloneEquippedSlots(slots)
   for (const slot of bundle.occupiedSlots) {
     next[slot] = next[slot].filter((id) => id !== bundle.compositeId)
   }
@@ -42,7 +34,7 @@ export function breakApartBundleInSlots(
 ): EquippedSlots {
   const composite = itemsById.get(bundle.compositeId)
   if (!composite) return slots
-  const next = cloneSlots(slots)
+  const next = cloneEquippedSlots(slots)
   for (const slot of bundle.occupiedSlots) {
     const replacementIds = composite.componentItemIds.filter((leafId) => {
       const leaf = itemsById.get(leafId)

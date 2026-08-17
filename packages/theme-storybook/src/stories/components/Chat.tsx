@@ -399,7 +399,10 @@ export const Chat: React.FC = () => {
             <div className="qt-chat-wardrobe-label">Wardrobe</div>
             <div className="qt-chat-wardrobe-summary">
               <div>Equipped &ldquo;Crimson Evening Gown&rdquo; in the top slot.</div>
-              <div>Wearing: Crimson Evening Gown (top, bottom), Glass Slippers (footwear)</div>
+              <div>
+                Wearing: Crimson Evening Gown (top, bottom), Glass Slippers (footwear), Marcel
+                Waves (hair)
+              </div>
             </div>
           </div>
 

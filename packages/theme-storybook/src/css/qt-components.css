@@ -193,6 +193,20 @@
   --qt-badge-project-bg: hsl(185 80% 40% / 0.15);
   --qt-badge-project-fg: hsl(185 80% 30%);
 
+  /* Wardrobe slot badge colors */
+  --qt-badge-wardrobe-top-bg: hsl(220 60% 55% / 0.12);
+  --qt-badge-wardrobe-top-fg: hsl(220 60% 42%);
+  --qt-badge-wardrobe-bottom-bg: hsl(152 50% 38% / 0.12);
+  --qt-badge-wardrobe-bottom-fg: hsl(152 50% 30%);
+  --qt-badge-wardrobe-footwear-bg: hsl(38 70% 48% / 0.12);
+  --qt-badge-wardrobe-footwear-fg: hsl(38 70% 38%);
+  --qt-badge-wardrobe-accessories-bg: hsl(270 45% 55% / 0.12);
+  --qt-badge-wardrobe-accessories-fg: hsl(270 45% 42%);
+  --qt-badge-wardrobe-hair-bg: hsl(345 55% 55% / 0.12);
+  --qt-badge-wardrobe-hair-fg: hsl(345 55% 42%);
+  --qt-badge-wardrobe-shared-bg: hsl(240 50% 55% / 0.12);
+  --qt-badge-wardrobe-shared-fg: hsl(240 50% 42%);
+
   /* Status badge colors */
   --qt-badge-enabled-bg: hsl(142 76% 36% / 0.15);
   --qt-badge-enabled-fg: hsl(142 76% 30%);
@@ -903,6 +917,79 @@
   background-color: transparent;
   color: var(--color-foreground);
   border: 1px solid var(--color-border);
+}
+
+/* ==========================================================================
+   WARDROBE SLOT BADGES
+   ========================================================================== */
+
+/**
+ * Shared geometry for the wardrobe slot chips. These do NOT build on
+ * .qt-badge in the app — they carry their own box, so the rule below is
+ * self-contained (and, mirroring the app, sets no line-height).
+ */
+.qt-badge-wardrobe-top,
+.qt-badge-wardrobe-bottom,
+.qt-badge-wardrobe-footwear,
+.qt-badge-wardrobe-accessories,
+.qt-badge-wardrobe-hair,
+.qt-badge-wardrobe-shared {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: var(--qt-badge-padding-y) var(--qt-badge-padding-x);
+  border-radius: var(--qt-badge-radius);
+  font-size: var(--qt-badge-font-size);
+  font-weight: var(--qt-badge-font-weight);
+}
+
+/**
+ * Wardrobe top badge (blue)
+ */
+.qt-badge-wardrobe-top {
+  background-color: var(--qt-badge-wardrobe-top-bg);
+  color: var(--qt-badge-wardrobe-top-fg);
+}
+
+/**
+ * Wardrobe bottom badge (green)
+ */
+.qt-badge-wardrobe-bottom {
+  background-color: var(--qt-badge-wardrobe-bottom-bg);
+  color: var(--qt-badge-wardrobe-bottom-fg);
+}
+
+/**
+ * Wardrobe footwear badge (amber)
+ */
+.qt-badge-wardrobe-footwear {
+  background-color: var(--qt-badge-wardrobe-footwear-bg);
+  color: var(--qt-badge-wardrobe-footwear-fg);
+}
+
+/**
+ * Wardrobe accessories badge (purple)
+ */
+.qt-badge-wardrobe-accessories {
+  background-color: var(--qt-badge-wardrobe-accessories-bg);
+  color: var(--qt-badge-wardrobe-accessories-fg);
+}
+
+/**
+ * Wardrobe hair badge (rose)
+ */
+.qt-badge-wardrobe-hair {
+  background-color: var(--qt-badge-wardrobe-hair-bg);
+  color: var(--qt-badge-wardrobe-hair-fg);
+}
+
+/**
+ * Wardrobe shared/archetype badge (indigo)
+ */
+.qt-badge-wardrobe-shared {
+  background-color: var(--qt-badge-wardrobe-shared-bg);
+  color: var(--qt-badge-wardrobe-shared-fg);
 }
 
 /* ==========================================================================
@@ -3052,6 +3139,20 @@
   --qt-badge-message-fg: hsl(45 70% 68%);
   --qt-badge-project-bg: hsl(185 80% 40% / 0.3);
   --qt-badge-project-fg: hsl(185 80% 70%);
+
+  /* Wardrobe slot badge tokens - brighter for dark backgrounds */
+  --qt-badge-wardrobe-top-bg: hsl(220 60% 58% / 0.25);
+  --qt-badge-wardrobe-top-fg: hsl(220 60% 72%);
+  --qt-badge-wardrobe-bottom-bg: hsl(152 50% 40% / 0.25);
+  --qt-badge-wardrobe-bottom-fg: hsl(152 50% 62%);
+  --qt-badge-wardrobe-footwear-bg: hsl(38 70% 50% / 0.25);
+  --qt-badge-wardrobe-footwear-fg: hsl(38 70% 68%);
+  --qt-badge-wardrobe-accessories-bg: hsl(270 45% 58% / 0.25);
+  --qt-badge-wardrobe-accessories-fg: hsl(270 45% 72%);
+  --qt-badge-wardrobe-hair-bg: hsl(345 55% 58% / 0.25);
+  --qt-badge-wardrobe-hair-fg: hsl(345 55% 72%);
+  --qt-badge-wardrobe-shared-bg: hsl(240 50% 58% / 0.25);
+  --qt-badge-wardrobe-shared-fg: hsl(240 50% 72%);
 
   /* Status badge tokens */
   --qt-badge-enabled-bg: hsl(142 76% 36% / 0.3);

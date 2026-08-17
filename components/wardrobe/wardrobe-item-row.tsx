@@ -20,6 +20,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { WARDROBE_SLOT_META } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 
 interface WardrobeItemRowProps {
@@ -46,20 +47,6 @@ interface WardrobeItemRowProps {
   onAddToSlot?: (item: WardrobeItem, slot: WardrobeItemType) => void
   /** Nesting depth for composite components — used for indentation. */
   depth?: number
-}
-
-const TYPE_BADGE_CLASS: Record<WardrobeItemType, string> = {
-  top: 'qt-badge-wardrobe-top',
-  bottom: 'qt-badge-wardrobe-bottom',
-  footwear: 'qt-badge-wardrobe-footwear',
-  accessories: 'qt-badge-wardrobe-accessories',
-}
-
-const SLOT_LABEL: Record<WardrobeItemType, string> = {
-  top: 'Top',
-  bottom: 'Bottom',
-  footwear: 'Footwear',
-  accessories: 'Accessories',
 }
 
 export function WardrobeItemRow({
@@ -151,7 +138,7 @@ export function WardrobeItemRow({
 
   const addTooltip =
     item.types.length === 1
-      ? `${addAction === 'layer' ? 'Layer onto' : 'Add to'} ${SLOT_LABEL[item.types[0]].toLowerCase()}`
+      ? `${addAction === 'layer' ? 'Layer onto' : 'Add to'} ${WARDROBE_SLOT_META[item.types[0]].label.toLowerCase()}`
       : addAction === 'layer'
         ? 'Layer onto a slot'
         : 'Add to a slot'
@@ -200,7 +187,7 @@ export function WardrobeItemRow({
               <span className="qt-text-xs qt-text-secondary">· default</span>
             )}
             {item.types.map((t) => (
-              <span key={t} className={`qt-badge ${TYPE_BADGE_CLASS[t]}`}>
+              <span key={t} className={`qt-badge ${WARDROBE_SLOT_META[t].badgeClass}`}>
                 {t}
               </span>
             ))}
@@ -255,8 +242,8 @@ export function WardrobeItemRow({
                           }}
                           className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:qt-bg-muted"
                         >
-                          <span>{SLOT_LABEL[slot]}</span>
-                          <span className={`qt-badge ${TYPE_BADGE_CLASS[slot]}`}>
+                          <span>{WARDROBE_SLOT_META[slot].label}</span>
+                          <span className={`qt-badge ${WARDROBE_SLOT_META[slot].badgeClass}`}>
                             {slot}
                           </span>
                         </button>

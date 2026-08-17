@@ -70,7 +70,7 @@ describe('creation-progress bus', () => {
     expect(() => {
       emitter.status('nope')
       emitter.wardrobeStart('c1', 'Nemo')
-      emitter.wardrobeResult('c1', 'Nemo', { top: [], bottom: [], footwear: [], accessories: [] })
+      emitter.wardrobeResult('c1', 'Nemo', { top: [], bottom: [], footwear: [], accessories: [], hair: [] })
       emitter.finish()
     }).not.toThrow()
     // Nothing was created — a fresh subscribe replays nothing.
@@ -83,7 +83,7 @@ describe('creation-progress bus', () => {
     subscribeCreationProgress('chan-emitter', (e) => received.push(e))
     const emitter = createCreationProgressEmitter('chan-emitter')
     emitter.wardrobeStart('c1', 'Jeeves')
-    emitter.wardrobeResult('c1', 'Jeeves', { top: [], bottom: [], footwear: [], accessories: [] })
+    emitter.wardrobeResult('c1', 'Jeeves', { top: [], bottom: [], footwear: [], accessories: [], hair: [] })
     emitter.finish()
     expect(received.map((e) => e.kind)).toEqual(['wardrobe-start', 'wardrobe-result', 'done'])
   })

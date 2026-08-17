@@ -31,8 +31,10 @@ import { Cron } from 'croner';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import {
   OutfitSelectionSchema,
+  allEquippedItemIds,
   type OutfitSelection,
 } from '@/lib/schemas/wardrobe.types';
+import { buildOutfitSlotValues } from '@/lib/wardrobe/outfit-description';
 import {
   applyOutfitSelections,
   buildCheapLLMConfig,
@@ -473,14 +475,8 @@ async function createInitialMessagesScenarioAndStaff(
       const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(chatId, characterId);
       if (!equippedSlots) continue;
 
-      const equippedItemIds = (
-        [
-          ...equippedSlots.top,
-          ...equippedSlots.bottom,
-          ...equippedSlots.footwear,
-          ...equippedSlots.accessories,
-        ] as string[]
-      ).filter((id) => typeof id === 'string' && id.length > 0);
+      const equippedItemIds = allEquippedItemIds(equippedSlots)
+        .filter((id) => typeof id === 'string' && id.length > 0);
       const equippedItemsData = equippedItemIds.length > 0
         ? await repos.wardrobe.findByIdsForCharacter(
             characterId,
@@ -501,12 +497,7 @@ async function createInitialMessagesScenarioAndStaff(
         return titles;
       };
 
-      const outfit = {
-        top: titlesFor('top'),
-        bottom: titlesFor('bottom'),
-        footwear: titlesFor('footwear'),
-        accessories: titlesFor('accessories'),
-      };
+      const outfit = buildOutfitSlotValues((slot) => titlesFor(slot));
 
       await postOpeningOutfitWhisper({
         chatId,

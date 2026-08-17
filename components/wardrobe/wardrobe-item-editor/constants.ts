@@ -3,25 +3,19 @@
  * component picker.
  */
 
+import { WARDROBE_SLOT_TYPES, WARDROBE_SLOT_META } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import type { CandidateItem, CandidateGroup } from './types'
 
 export const GROUP_LABEL: Record<CandidateGroup, string> = {
-  top: 'Tops',
-  bottom: 'Bottoms',
-  footwear: 'Footwear',
-  accessories: 'Accessories',
+  ...(Object.fromEntries(
+    WARDROBE_SLOT_TYPES.map((slot) => [slot, WARDROBE_SLOT_META[slot].groupLabel]),
+  ) as Record<WardrobeItemType, string>),
   multi: 'Multi-slot',
 }
 
-export const GROUP_ORDER: CandidateGroup[] = ['top', 'bottom', 'footwear', 'accessories', 'multi']
-
-export const TYPE_BADGE_CLASS: Record<WardrobeItemType, string> = {
-  top: 'qt-badge-wardrobe-top',
-  bottom: 'qt-badge-wardrobe-bottom',
-  footwear: 'qt-badge-wardrobe-footwear',
-  accessories: 'qt-badge-wardrobe-accessories',
-}
+/** Slot groups in canonical order; the multi-slot catch-all always sits last. */
+export const GROUP_ORDER: CandidateGroup[] = [...WARDROBE_SLOT_TYPES, 'multi']
 
 export function getCandidateGroup(c: CandidateItem): CandidateGroup {
   if (c.types.length > 1) return 'multi'

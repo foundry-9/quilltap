@@ -231,7 +231,7 @@ export interface CharacterAppearanceInput {
   }>
   /** Equipped wardrobe items (from the wardrobe system) */
   equippedWardrobeItems?: Array<{
-    slot: string        // 'top', 'bottom', 'footwear', 'accessories'
+    slot: string        // 'top', 'bottom', 'footwear', 'accessories', 'hair'
     title: string
     description?: string | null
     /** Plain-text image cue; preferred over `title` in image prompts. */

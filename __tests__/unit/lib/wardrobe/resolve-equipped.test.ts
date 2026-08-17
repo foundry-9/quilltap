@@ -48,13 +48,13 @@ function makeRepos(items: WardrobeItem[]) {
   } as unknown as Parameters<typeof resolveEquippedOutfitForCharacter>[0]
 }
 
-const emptySlots = (): EquippedSlots => ({ top: [], bottom: [], footwear: [], accessories: [] })
+const emptySlots = (): EquippedSlots => ({ top: [], bottom: [], footwear: [], accessories: [], hair: [] })
 
 describe('resolveEquippedOutfitForCharacter', () => {
   it('returns empty results when nothing is equipped', async () => {
     const repos = makeRepos([])
     const resolved = await resolveEquippedOutfitForCharacter(repos, CHAR_ID, emptySlots())
-    expect(resolved.outfitValues).toEqual({ top: [], bottom: [], footwear: [], accessories: [] })
+    expect(resolved.outfitValues).toEqual({ top: [], bottom: [], footwear: [], accessories: [], hair: [] })
     expect(resolved.leafItemsBySlot.top).toEqual([])
     expect(resolved.leafItemsBySlot.bottom).toEqual([])
   })

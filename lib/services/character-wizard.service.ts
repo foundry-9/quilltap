@@ -257,24 +257,24 @@ OUTPUT ONLY THE DESCRIPTION, NO EXPLANATION.`,
 
   medium: `Create a concise visual description for image generation, maximum 500 characters.
 Include: hair color/style, eye color, skin tone, body type, facial features.
-Do NOT include clothing, outfits, or accessories — those are handled separately by the wardrobe system.
+Do NOT include clothing, outfits, or accessories — those are handled separately by the wardrobe system. Include the character's natural hair (colour, length, texture) here, but not a styled hairdo — hairstyles are wardrobe items.
 Write as a continuous description, no line breaks.
 OUTPUT ONLY THE DESCRIPTION, NO EXPLANATION.`,
 
   long: `Create a detailed visual description for image generation, maximum 750 characters.
 Include: complete hair description, eye details, skin, facial structure, body type, posture, any distinctive marks or features.
-Do NOT include clothing, outfits, or accessories — those are handled separately by the wardrobe system.
+Do NOT include clothing, outfits, or accessories — those are handled separately by the wardrobe system. Include the character's natural hair (colour, length, texture) here, but not a styled hairdo — hairstyles are wardrobe items.
 Write as flowing description suitable for stable diffusion or DALL-E.
 OUTPUT ONLY THE DESCRIPTION, NO EXPLANATION.`,
 
   complete: `Create a comprehensive visual description for image generation, maximum 1000 characters.
 Include all physical details: hair (color, length, style, texture), eyes (color, shape, expression), face (shape, features, expression), body (type, height, build), skin (tone, texture, any marks), posture and body language.
-Do NOT include clothing, outfits, or accessories — those are handled separately by the wardrobe system.
+Do NOT include clothing, outfits, or accessories — those are handled separately by the wardrobe system. Include the character's natural hair (colour, length, texture) here, but not a styled hairdo — hairstyles are wardrobe items.
 Optimized for AI image generation.
 OUTPUT ONLY THE DESCRIPTION, NO EXPLANATION.`,
 
   full: `Write a complete, detailed physical description of this character in markdown format.
-Do NOT include clothing, outfits, or accessories — those are handled separately by the wardrobe system.
+Do NOT include clothing, outfits, or accessories — those are handled separately by the wardrobe system. Include the character's natural hair (colour, length, texture) here, but not a styled hairdo — hairstyles are wardrobe items.
 Structure with headers:
 ## Overview
 Brief 1-2 sentence summary

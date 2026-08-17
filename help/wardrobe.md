@@ -8,7 +8,7 @@ tags: [characters, wardrobe, outfit, clothing, appearance, tools, image, import,
 
 > **[Open this page in Quilltap](/aurora)**
 
-One does not simply *describe* a character's attire in a single breathless paragraph and call it a day --- not in a civilized establishment such as this. The Wardrobe system grants your characters a proper, itemized collection of garments: tops, bottoms, footwear, and accessories, each catalogued with the precision of a Savile Row tailor and the creative latitude of a Montmartre costumier. Characters may mix, match, and swap individual pieces mid-conversation, and --- should you permit it --- even conjure entirely new ensembles from the gossamer threads of their own imagination.
+One does not simply *describe* a character's attire in a single breathless paragraph and call it a day --- not in a civilized establishment such as this. The Wardrobe system grants your characters a proper, itemized collection of garments: tops, bottoms, footwear, accessories, and hair, each catalogued with the precision of a Savile Row tailor and the creative latitude of a Montmartre costumier. Characters may mix, match, and swap individual pieces mid-conversation, and --- should you permit it --- even conjure entirely new ensembles from the gossamer threads of their own imagination.
 
 ## What the Wardrobe System Does
 
@@ -18,7 +18,7 @@ The equipped outfit travels with each chat, so a character might be wearing a ba
 
 ## Wardrobe Slots
 
-Every wardrobe item belongs to one of four slots, which together compose a complete outfit:
+Every wardrobe item belongs to one of five slots, which together compose a complete outfit:
 
 | Slot | What It Covers | Examples |
 |------|---------------|----------|
@@ -26,6 +26,17 @@ Every wardrobe item belongs to one of four slots, which together compose a compl
 | **Bottom** | Lower-body garments | Trousers, skirts, kilts, petticoats |
 | **Footwear** | Shoes, boots, and the like | Oxfords, riding boots, ballet slippers, bare feet |
 | **Accessories** | Everything else | Hats, gloves, jewellery, monocles, pocket watches, scarves |
+| **Hair** | A hairdo, not the hair itself | Braids, chignons, marcel waves, a severe bun, the occasional wig |
+
+### A Word on the Hair Slot
+
+The Hair slot is the newest arrival and the one most liable to be misconstrued, so let us be perfectly plain about it. It holds a **coiffure**, not a head of hair. Your character's *natural* hair --- its colour, its length, whether it curls or lies flat --- has always lived in their physical description, and there it remains. What goes in the Hair slot is the deliberate *arrangement* of that hair: the plaited crown, the marcel waves, the severe bun that brooks no argument, and --- for the theatrically inclined --- the occasional wig.
+
+Three consequences follow, and they are worth committing to memory:
+
+- **An empty Hair slot is not a bald character.** It simply means the hair is *au naturel*, unbothered by pins or tongs. Quilltap will say nothing whatever about it: not in Aurora's announcements, not in the scene's stage directions, not in a portrait or a Lantern backdrop. The other slots announce their vacancies (*topless*, *barefoot*), because a missing shoe is news; a missing hairdo is not.
+- **Hats remain Accessories.** A hat is worn *over* a coiffure, not instead of one, and the two may perfectly well coexist.
+- **Undressing does not undo the hair.** A character who sheds every stitch keeps their braids. Nudity is a matter for the clothing slots; the coiffure is nobody's business but the character's.
 
 A character may have many items in each slot, and equip multiple of them at once — a t-shirt under a sweater, a dress shirt beneath a waistcoat. The system trusts the LLM (and your own scene-setting) to decide what shows. List them inner-to-outer when it matters; layering is half the fun.
 
@@ -36,7 +47,7 @@ To furnish a character's wardrobe, open the **Wardrobe** dialog — the clothes-
 1. Pick the character from the dropdown at the top of the dialog (if one isn't already selected)
 2. Click **+ New Item**
 3. Use the **"Add to"** selector to choose where the garment lives — **This character** (a personal item, the default), **Shared — everywhere** (a household archetype), or **Shared — this project** (offered when you've opened the dialog inside a project's chat). See [Where Wardrobe Items Come From](#where-wardrobe-items-come-from-four-tiers) for what each tier means.
-4. Choose the **slot(s)** the garment covers (top, bottom, footwear, or accessories)
+4. Choose the **slot(s)** the garment covers (top, bottom, footwear, accessories, or hair)
 5. Give the item a **title** (e.g., "Burgundy velvet smoking jacket") and a **description** --- as lavish or as terse as you please --- that the AI will use when referencing the garment
 6. Optionally supply a **Portrait Cue** --- a short, literal phrase whispered to the portraitist and the Lantern when a likeness is drawn (see [Portrait Cues](#portrait-cues-dressing-for-the-camera) below)
 
@@ -122,7 +133,7 @@ When you use **Move** or **Copy** from an item's `⋮` menu, Quilltap opens a de
 
 Rather than selecting each garment individually every time a character must dress for an occasion, you may compose a single wardrobe item out of *other* wardrobe items. A "Garden Party Attire" composite might bundle a linen blazer, white slacks, and oxfords; a "Nice Jewellery" composite might bundle a pair of earrings, a locket, and a ring. The composite itself is a wardrobe item like any other — it covers whichever slots its components do, and one gesture dresses the character in the whole of it.
 
-**A bundle comes apart as it goes on.** The ensemble is a convenience for *dressing*, not a parcel the character then wears sealed: the moment it is donned, the blazer settles into Top, the slacks into Bottom, the oxfords into Footwear, each as its own removable chip. There is nothing further to unwrap, and the wardrobe never presents you with a single opaque card above four slots protesting that they are *Empty*. You can see what is actually on the character, and shed one piece of it — the oxfords, say, in favour of sandals — without disturbing the rest.
+**A bundle comes apart as it goes on.** The ensemble is a convenience for *dressing*, not a parcel the character then wears sealed: the moment it is donned, the blazer settles into Top, the slacks into Bottom, the oxfords into Footwear, each as its own removable chip. There is nothing further to unwrap, and the wardrobe never presents you with a single opaque card above a column of slots protesting that they are *Empty*. You can see what is actually on the character, and shed one piece of it — the oxfords, say, in favour of sandals — without disturbing the rest.
 
 This holds wherever the dressing happens: the *Wearing now* tab, the *Outfit Builder*, the outfit chosen for you when a chat opens, a character's default outfit, and a character attending to their own toilette through the tools. A bundle nested inside a bundle comes apart too, all the way down to actual garments.
 
@@ -224,7 +235,7 @@ A Portrait Cue changes only what the *image* pipeline is told. The title still a
 
 ## Aurora's Wardrobe Announcements
 
-Whenever a character's outfit changes during a chat --- whether you yourself adjust a slot from the sidebar, gift a freshly-tailored garment with the equip-now option ticked, or the character themselves invokes the `update_outfit_item` tool --- Aurora will quietly take note. After a polite minute of stillness (long enough for you to fuss with all four slots without setting off a flurry of announcements), she steps in with a brief Markdown summary of the present ensemble, addressed to everyone at the table. The wait resets each time another change lands, so she only speaks once the dust has truly settled.
+Whenever a character's outfit changes during a chat --- whether you yourself adjust a slot from the sidebar, gift a freshly-tailored garment with the equip-now option ticked, or the character themselves invokes the `update_outfit_item` tool --- Aurora will quietly take note. After a polite minute of stillness (long enough for you to fuss with every slot without setting off a flurry of announcements), she steps in with a brief Markdown summary of the present ensemble, addressed to everyone at the table. The wait resets each time another change lands, so she only speaks once the dust has truly settled.
 
 These announcements appear as ordinary chat messages attributed to Aurora and are visible to every character in the conversation, ensuring nobody is left guessing about who is now wearing what.
 

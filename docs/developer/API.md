@@ -1873,7 +1873,7 @@ Each SSE frame is `data: <json>\n\n` where the payload is one of:
 { "kind": "log", "message": "…", "level": "info|warn|error", "ts": 0 }
 { "kind": "wardrobe-start", "characterId": "…", "characterName": "…", "ts": 0 }
 { "kind": "wardrobe-result", "characterId": "…", "characterName": "…",
-  "slots": { "top": [{ "id": "…", "title": "…", "isComposite": false }], "bottom": [], "footwear": [], "accessories": [] }, "ts": 0 }
+  "slots": { "top": [{ "id": "…", "title": "…", "isComposite": false }], "bottom": [], "footwear": [], "accessories": [], "hair": [] }, "ts": 0 }
 { "kind": "done", "ts": 0 }
 { "kind": "error", "message": "…", "ts": 0 }
 ```
@@ -2332,8 +2332,8 @@ Get full equipped outfit state for all characters in this chat.
 ```json
 {
   "equippedOutfit": {
-    "char-uuid-1": { "top": "item-uuid", "bottom": null, "footwear": null, "accessories": null },
-    "char-uuid-2": { "top": null, "bottom": null, "footwear": null, "accessories": null }
+    "char-uuid-1": { "top": ["item-uuid"], "bottom": [], "footwear": [], "accessories": [], "hair": ["braid-uuid"] },
+    "char-uuid-2": { "top": [], "bottom": [], "footwear": [], "accessories": [], "hair": [] }
   }
 }
 ```

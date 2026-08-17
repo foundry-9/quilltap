@@ -213,6 +213,7 @@
   .qt-badge-wardrobe-bottom,
   .qt-badge-wardrobe-footwear,
   .qt-badge-wardrobe-accessories,
+  .qt-badge-wardrobe-hair,
   .qt-badge-wardrobe-shared {
     @apply inline-flex items-center justify-center flex-shrink-0;
     padding: var(--qt-badge-padding-y) var(--qt-badge-padding-x);
@@ -1663,6 +1664,14 @@
   .qt-badge-wardrobe-accessories {
     background-color: var(--qt-badge-wardrobe-accessories-bg);
     color: var(--qt-badge-wardrobe-accessories-fg);
+  }
+
+  /**
+   * Wardrobe hair badge (rose)
+   */
+  .qt-badge-wardrobe-hair {
+    background-color: var(--qt-badge-wardrobe-hair-bg);
+    color: var(--qt-badge-wardrobe-hair-fg);
   }
 
   /**

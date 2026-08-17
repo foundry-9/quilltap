@@ -27,13 +27,17 @@ import { BaseModal } from '@/components/ui/BaseModal'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
-import { WARDROBE_SLOT_TYPES, EMPTY_EQUIPPED_SLOTS } from '@/lib/schemas/wardrobe.types'
+import {
+  WARDROBE_SLOT_TYPES,
+  EMPTY_EQUIPPED_SLOTS,
+  makeEmptyEquippedSlots,
+  cloneEquippedSlots,
+} from '@/lib/schemas/wardrobe.types'
 import type { EquippedSlots, WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { useOutfit } from '@/lib/hooks/use-outfit'
 import { type EquippedBundle } from '@/lib/wardrobe/group-equipped'
 import {
   breakApartBundleInSlots,
-  cloneSlots,
   takeOffBundleFromSlots,
 } from '@/lib/wardrobe/bundle-mutations'
 import { buildDefaultOutfit } from '@/lib/wardrobe/default-outfit'
@@ -67,7 +71,7 @@ interface ImageProfileSummary {
 }
 
 type SlotFilter = 'all' | WardrobeItemType
-const SLOT_FILTERS: SlotFilter[] = ['all', 'top', 'bottom', 'footwear', 'accessories']
+const SLOT_FILTERS: SlotFilter[] = ['all', ...WARDROBE_SLOT_TYPES]
 type ItemKind = 'items' | 'outfits'
 type RightTab = 'live' | 'builder'
 type EditorIntent = 'create-single' | 'create-bundle'
@@ -190,9 +194,9 @@ function WardrobeControlDialogInner({
   // Distinct from the chat's stored `equippedOutfit` (the "Wearing now" tab):
   // changes here never hit the equip API. Seeded from Wearing now (in chat)
   // or from the character's defaults (out of chat) when the character loads.
-  const [fittingSlots, setFittingSlots] = useState<EquippedSlots>(() => ({
-    ...EMPTY_EQUIPPED_SLOTS,
-  }))
+  const [fittingSlots, setFittingSlots] = useState<EquippedSlots>(() =>
+    makeEmptyEquippedSlots(),
+  )
   const isInChat = chatId !== null
   const [rightTab, setRightTab] = useState<RightTab>(
     isInChat ? 'live' : 'builder',
@@ -314,7 +318,7 @@ function WardrobeControlDialogInner({
     fittingSeedKeyRef.current = seedKey
 
     const seed = isInChat && wornSlots
-      ? cloneSlots(wornSlots)
+      ? cloneEquippedSlots(wornSlots)
       : buildDefaultOutfit(items)
     setFittingSlots(seed)
   }, [selectedCharacterId, chatId, isInChat, outfit.outfitState, items])
@@ -334,7 +338,7 @@ function WardrobeControlDialogInner({
     const seedKey = `${characterId}|${chatId ?? 'no-chat'}`
     if (liveSeededByCharRef.current.has(seedKey)) return
     liveSeededByCharRef.current.add(seedKey)
-    liveBaselineByCharRef.current[characterId] = cloneSlots(wornSlots)
+    liveBaselineByCharRef.current[characterId] = cloneEquippedSlots(wornSlots)
     const pending = pendingLiveMutatorsRef.current[characterId] ?? []
     delete pendingLiveMutatorsRef.current[characterId]
     const seed = rebaseStagedSlots(wornSlots, pending)
@@ -479,7 +483,7 @@ function WardrobeControlDialogInner({
         const wornFallback = outfit.outfitState[characterId]?.slots
         const current =
           prev[characterId] ??
-          (wornFallback ? cloneSlots(wornFallback) : { ...EMPTY_EQUIPPED_SLOTS })
+          (wornFallback ? cloneEquippedSlots(wornFallback) : makeEmptyEquippedSlots())
         return { ...prev, [characterId]: mutator(current) }
       })
     },
@@ -564,7 +568,7 @@ function WardrobeControlDialogInner({
   const fittingResetToWorn = useCallback(async () => {
     if (!selectedCharacterId) return
     const wornSlots = outfit.outfitState[selectedCharacterId]?.slots
-    const target = wornSlots ? cloneSlots(wornSlots) : { ...EMPTY_EQUIPPED_SLOTS }
+    const target = wornSlots ? cloneEquippedSlots(wornSlots) : makeEmptyEquippedSlots()
     if (
       !equippedSlotsEqual(fittingSlots, target) &&
       !(await requestConfirmation(
@@ -596,7 +600,7 @@ function WardrobeControlDialogInner({
     ) {
       return
     }
-    setFittingSlots({ ...EMPTY_EQUIPPED_SLOTS })
+    setFittingSlots(makeEmptyEquippedSlots())
   }, [fittingSlots, requestConfirmation])
 
   /**
@@ -701,7 +705,7 @@ function WardrobeControlDialogInner({
         allOk = false
       } else {
         outfit.invalidateWardrobe(characterId)
-        liveBaselineByCharRef.current[characterId] = cloneSlots(slots)
+        liveBaselineByCharRef.current[characterId] = cloneEquippedSlots(slots)
       }
     }
     await outfit.refreshOutfit()

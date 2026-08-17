@@ -488,6 +488,8 @@
   --qt-badge-wardrobe-footwear-fg: hsl(38 70% 38%);
   --qt-badge-wardrobe-accessories-bg: hsl(270 45% 55% / 0.12);
   --qt-badge-wardrobe-accessories-fg: hsl(270 45% 42%);
+  --qt-badge-wardrobe-hair-bg: hsl(345 55% 55% / 0.12);
+  --qt-badge-wardrobe-hair-fg: hsl(345 55% 42%);
   --qt-badge-wardrobe-shared-bg: hsl(240 50% 55% / 0.12);
   --qt-badge-wardrobe-shared-fg: hsl(240 50% 42%);
 
@@ -826,6 +828,8 @@
   --qt-badge-wardrobe-footwear-fg: hsl(38 70% 68%);
   --qt-badge-wardrobe-accessories-bg: hsl(270 45% 58% / 0.25);
   --qt-badge-wardrobe-accessories-fg: hsl(270 45% 72%);
+  --qt-badge-wardrobe-hair-bg: hsl(345 55% 58% / 0.25);
+  --qt-badge-wardrobe-hair-fg: hsl(345 55% 72%);
   --qt-badge-wardrobe-shared-bg: hsl(240 50% 58% / 0.25);
   --qt-badge-wardrobe-shared-fg: hsl(240 50% 72%);
 

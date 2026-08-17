@@ -233,6 +233,7 @@ describe('Aurora opaque builders', () => {
     bottom: ['a wool skirt'],
     footwear: ['low boots'],
     accessories: [],
+    hair: [],
   }
   const params = { characterName: 'Beatrice', outfit }
 

@@ -137,7 +137,7 @@ const SYSTEM_MESSAGE = `You are a character analysis assistant for Quilltap, a c
 Key concepts:
 - Characters can have MULTIPLE named scenarios. A scenario is a setting for a chat — it describes the environment, circumstances, and context in which an interaction takes place. Scenarios set the stage but do not fundamentally change the character's personality, voice, or behavior. Think of them as different locations or situations where the character might be encountered.
 - Characters can have MULTIPLE named system prompts. Each system prompt provides different instructions for how the AI should roleplay the character, potentially for different contexts or styles of interaction.
-- Characters have a WARDROBE of slot-typed clothing/accessory items (top, bottom, footwear, accessories) that is separate from their physical description — the physical description covers only the person, nothing removable.
+- Characters have a WARDROBE of slot-typed clothing/accessory items (top, bottom, footwear, accessories, hair) that is separate from their physical description — the physical description covers only the person, nothing removable. The "hair" slot holds a hairstyle or hairdo (braided, permed, an updo, a wig) — the styling, not the hair itself; natural hair colour, length, and texture stay in the physical description.
 - Characters have structured PROPERTIES: pronouns (read-only for you) and aliases (nicknames others actually call the character).
 
 Always respond with ONLY valid JSON — no markdown code fences, no explanations, no extra text.`;
@@ -502,7 +502,7 @@ export function getWardrobeSuggestionPrompt(
   const activeItems = wardrobeItems.filter((item) => !item.archivedAt);
   return `${WARDROBE_SEMANTICS}
 
-Focus solely on the character's WARDROBE (shown in the character context above). Decide whether the memories establish anything about what the character habitually wears that the wardrobe does not yet capture. This is about removable things — clothing, outfits, accessories. A bodily feature (scar, tattoo, fur) belongs to the physical description and must NEVER become a wardrobe item.
+Focus solely on the character's WARDROBE (shown in the character context above). Decide whether the memories establish anything about what the character habitually wears that the wardrobe does not yet capture. This is about removable things — clothing, outfits, accessories, and hairstyles. A bodily feature (scar, tattoo, fur) belongs to the physical description and must NEVER become a wardrobe item — with one deliberate exception: a hairSTYLE goes in the wardrobe's "hair" slot, while the hair's natural colour, length, and texture stay in the physical description.
 
 Two kinds of suggestions are allowed:
 
@@ -516,7 +516,7 @@ Two kinds of suggestions are allowed:
      "appropriateness": "casual, everyday",
      "isDefault": false
    }
-   Valid slot types: "top", "bottom", "footwear", "accessories"; a single garment may cover several slots (a dress is ["top","bottom"]).
+   Valid slot types: "top", "bottom", "footwear", "accessories", "hair"; a single garment may cover several slots (a dress is ["top","bottom"]; a braided updo is ["hair"]).
 
 The character currently has ${activeItems.length} wardrobe item(s). Only propose what the memories genuinely support; if they reveal nothing about the character's clothing or accessories, respond with an empty JSON array — this is the common case. Never propose deleting items.
 

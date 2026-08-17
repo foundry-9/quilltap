@@ -176,7 +176,7 @@ A few points of etiquette worth knowing:
 
 **A note on example dialogues.** An *empty* `example-dialogues.md` is a perfectly valid state — it means "no examples," and Quilltap treats it accordingly rather than falling back to the database. If you genuinely want the database value to show through, delete the file entirely; presence of the file (even at zero bytes) is what tells the overlay to take over.
 
-**A note on the wardrobe.** The character's wardrobe lives across two folders. `Wardrobe/` holds one Markdown file per item — frontmatter carries the `title`, the `types` list (one or more of `top`, `bottom`, `footwear`, `accessories`), an optional `appropriateness` tag, the `default` flag, and the timestamps; the body of the file is the freeform description, written however you please. `Outfits/` holds one Markdown file per saved preset — frontmatter carries the `name` and a four-slot `slots` map naming which item belongs in each slot, where each value is an item *slug* (the kebab-cased title, e.g. `top: blue-tweed-jacket`) and a raw UUID is accepted as a fallback for items the slug map can't find. Adding a new item, then, is as easy as dropping a fresh `.md` file into `Wardrobe/` with `title:` and `types:` in the frontmatter; the system fills in the `id` and timestamps on its next sync. Items marked with `archived: true` (or carrying a non-null `archivedAt`) are filtered out of the normal list the same way they are in the database. When the overlay is on, the Salon sidebar, the wardrobe tools the LLM reaches for, and every other consumer read their lists from these folders. The first time Quilltap boots after the folder format ships, a one-time sweep projects every existing character's wardrobe from the database into the new layout and tidies away the legacy `wardrobe.json` — so stale snapshots from earlier vault provisioning don't mislead anyone the moment the switch is flipped on.
+**A note on the wardrobe.** The character's wardrobe lives across two folders. `Wardrobe/` holds one Markdown file per item — frontmatter carries the `title`, the `types` list (one or more of `top`, `bottom`, `footwear`, `accessories`, `hair`), an optional `appropriateness` tag, the `default` flag, and the timestamps; the body of the file is the freeform description, written however you please. `Outfits/` holds one Markdown file per saved preset — frontmatter carries the `name` and a four-slot `slots` map naming which item belongs in each slot, where each value is an item *slug* (the kebab-cased title, e.g. `top: blue-tweed-jacket`) and a raw UUID is accepted as a fallback for items the slug map can't find. Adding a new item, then, is as easy as dropping a fresh `.md` file into `Wardrobe/` with `title:` and `types:` in the frontmatter; the system fills in the `id` and timestamps on its next sync. Items marked with `archived: true` (or carrying a non-null `archivedAt`) are filtered out of the normal list the same way they are in the database. When the overlay is on, the Salon sidebar, the wardrobe tools the LLM reaches for, and every other consumer read their lists from these folders. The first time Quilltap boots after the folder format ships, a one-time sweep projects every existing character's wardrobe from the database into the new layout and tidies away the legacy `wardrobe.json` — so stale snapshots from earlier vault provisioning don't mislead anyone the moment the switch is flipped on.
 
 **When to use it.** Reach for this switch when you would rather author your character's prose fields as plain Markdown — version-controlled in your own tooling, perhaps, or edited alongside the character's narrative notes — and have the rest of Quilltap treat those files as the current truth. Leave the switch off for the conventional editor-as-source-of-truth workflow, which remains the default and entirely sensible choice.
 
@@ -297,6 +297,7 @@ Physical descriptions help:
 
 - The prompt the avatar generator reaches for first, since an avatar is a head-and-shoulders crop
 - Describe only what such a crop reveals: face, hair, expression, neckline, and any visible upper attire — never the chest, waist, hips, legs, or other anatomy below the shoulders
+- **Hair, but not hairdressing.** Its colour, length, and texture belong here; a deliberate *style* — a braid, an updo, a wig — belongs in the wardrobe's [Hair slot](wardrobe.md) instead, so the character may put it up and take it down without you rewriting their person
 - Keeping it above the collar also keeps image-provider moderation from balking at a portrait it would otherwise refuse
 - Example: "Young woman, glossy jet-black wavy hair from a center part, deep brown almond eyes, warm wheatish skin, high cheekbones, a warm closed-lipped smile, pearl stud earrings, open collar of a deep-wine field shirt"
 
@@ -310,15 +311,16 @@ Physical descriptions help:
 
 - Balanced detail
 - Good for quick lookups
-- Example: "Tall woman with long dark red hair usually braided,
-sharp green eyes, pale skin. Wears practical leather clothing."
+- Example: "Tall woman with long dark red hair, sharp green eyes,
+pale skin. Wears practical leather clothing." (The braid she usually
+wears it in is a wardrobe Hair item, not part of her person.)
 
 **Long Description** (1 paragraph)
 
 - Detailed information
 - Good for image generation
-- Example: "Tall woman (5'9") with waist-length dark red hair
-usually worn in a complicated braid. Sharp green eyes, pale skin.
+- Example: "Tall woman (5'9") with waist-length dark red hair.
+Sharp green eyes, pale skin.
 Thin face with high cheekbones. Usually wears practical leather
 armor from her military days..."
 

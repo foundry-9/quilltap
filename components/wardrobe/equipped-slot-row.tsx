@@ -13,6 +13,7 @@
  */
 
 import { useMemo, useState, useRef, useEffect } from 'react'
+import { WARDROBE_SLOT_META } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 
 interface EquippedSlotRowProps {
@@ -24,20 +25,6 @@ interface EquippedSlotRowProps {
   onAdd: (slot: WardrobeItemType, itemId: string) => void
   onRemove: (slot: WardrobeItemType, itemId: string) => void
   onClear: (slot: WardrobeItemType) => void
-}
-
-const SLOT_LABEL: Record<WardrobeItemType, string> = {
-  top: 'Top',
-  bottom: 'Bottom',
-  footwear: 'Footwear',
-  accessories: 'Accessories',
-}
-
-const TYPE_BADGE_CLASS: Record<WardrobeItemType, string> = {
-  top: 'qt-badge-wardrobe-top',
-  bottom: 'qt-badge-wardrobe-bottom',
-  footwear: 'qt-badge-wardrobe-footwear',
-  accessories: 'qt-badge-wardrobe-accessories',
 }
 
 export function EquippedSlotRow({
@@ -99,13 +86,13 @@ export function EquippedSlotRow({
   return (
     <div className="qt-card py-2 px-3">
       <div className="flex items-center justify-between mb-1">
-        <span className={`qt-badge ${TYPE_BADGE_CLASS[slot]}`}>{SLOT_LABEL[slot]}</span>
+        <span className={`qt-badge ${WARDROBE_SLOT_META[slot].badgeClass}`}>{WARDROBE_SLOT_META[slot].label}</span>
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={() => setPickerOpen((v) => !v)}
             className="qt-button-ghost qt-button-sm"
-            title={`Wear something in ${SLOT_LABEL[slot].toLowerCase()} (fills every slot it covers)`}
+            title={`Wear something in ${WARDROBE_SLOT_META[slot].label.toLowerCase()} (fills every slot it covers)`}
           >
             +
           </button>
@@ -114,7 +101,7 @@ export function EquippedSlotRow({
               type="button"
               onClick={() => onClear(slot)}
               className="qt-button-ghost qt-button-sm qt-text-secondary"
-              title={`Clear ${SLOT_LABEL[slot].toLowerCase()}`}
+              title={`Clear ${WARDROBE_SLOT_META[slot].label.toLowerCase()}`}
             >
               Clear
             </button>
@@ -160,7 +147,7 @@ export function EquippedSlotRow({
               autoFocus
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder={`Search ${SLOT_LABEL[slot].toLowerCase()} items…`}
+              placeholder={`Search ${WARDROBE_SLOT_META[slot].label.toLowerCase()} items…`}
               className="qt-input qt-input-sm w-full"
             />
           </div>

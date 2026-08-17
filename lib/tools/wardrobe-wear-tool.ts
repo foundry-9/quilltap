@@ -20,6 +20,9 @@
 
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
+import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types'
+import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
+import { HAIR_SLOT_GUIDANCE } from '@/lib/wardrobe/slot-guidance'
 
 /** One put-on operation in a `wardrobe_wear` call. */
 const WardrobeWearOperationSchema = z.object({
@@ -45,9 +48,11 @@ const WardrobeWearOperationSchema = z.object({
       '"add_to_slot" — layer the item into one named slot (requires slot).'
     )
     .optional(),
-  slot: z
-    .enum(['top', 'bottom', 'footwear', 'accessories'])
-    .describe('Target slot. Required for add_to_slot; ignored by wear/replace.')
+  slot: WardrobeItemTypeEnum
+    .describe(
+      'Target slot. Required for add_to_slot; ignored by wear/replace. ' +
+      HAIR_SLOT_GUIDANCE
+    )
     .optional(),
 })
 
@@ -106,12 +111,7 @@ export interface WardrobeWearToolOutput {
   /** Per-operation results, in input order (truncated at the first failure). */
   operations: WardrobeWearOpResult[];
   /** Per-slot arrays of equipped item IDs after all applied operations. */
-  current_state: {
-    top: string[];
-    bottom: string[];
-    footwear: string[];
-    accessories: string[];
-  };
+  current_state: Record<WardrobeItemType, string[]>;
   coverage_summary: string;
   error?: string;
 }

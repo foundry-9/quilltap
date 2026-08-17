@@ -240,7 +240,7 @@ export function ProjectWardrobeManager({
                     onChange={() => toggleType(type)}
                     className="qt-checkbox"
                   />
-                  {type}
+                  <span className="capitalize">{type}</span>
                 </label>
               ))}
             </div>

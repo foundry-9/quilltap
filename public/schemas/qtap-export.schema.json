@@ -560,7 +560,7 @@
         },
         "equippedOutfit": {
           "type": ["object", "null"],
-          "description": "Per-character equipped outfit state, keyed by characterId. Each character entry is { top, bottom, footwear, accessories } where each slot is an array of wardrobe-item UUIDs (post-rework). Legacy pre-rework exports may store each slot as a single UUID or null; importers upgrade those to single-element/empty arrays.",
+          "description": "Per-character equipped outfit state, keyed by characterId. Each character entry is { top, bottom, footwear, accessories, hair } where each slot is an array of wardrobe-item UUIDs (post-rework). Legacy pre-rework exports may store each slot as a single UUID or null; importers upgrade those to single-element/empty arrays.",
           "additionalProperties": {
             "type": "object",
             "properties": {
@@ -586,6 +586,13 @@
                 ]
               },
               "accessories": {
+                "oneOf": [
+                  { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
+                  { "type": "string" },
+                  { "type": "null" }
+                ]
+              },
+              "hair": {
                 "oneOf": [
                   { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
                   { "type": "string" },
@@ -1241,7 +1248,7 @@
           "minItems": 1,
           "items": {
             "type": "string",
-            "enum": ["top", "bottom", "footwear", "accessories"]
+            "enum": ["top", "bottom", "footwear", "accessories", "hair"]
           },
           "description": "Coverage slots this item covers"
         },

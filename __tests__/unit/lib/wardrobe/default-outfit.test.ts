@@ -31,6 +31,7 @@ describe('buildDefaultOutfit', () => {
       bottom: [],
       footwear: [],
       accessories: [],
+      hair: [],
     })
   })
 
