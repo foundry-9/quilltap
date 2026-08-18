@@ -50,6 +50,7 @@ import {
 import { addItemToSlot, wearItemIntoSlots } from '@/lib/wardrobe/outfit-displacement'
 import { nextCopyTitle } from '@/lib/wardrobe/next-copy-title'
 import { useCharacterWardrobeItems } from '@/lib/hooks/use-character-wardrobe-items'
+import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
 import { WardrobeItemEditor } from './wardrobe-item-editor'
 import { WardrobeItemRow } from './wardrobe-item-row'
 import { OutfitComposer } from './outfit-composer'
@@ -170,6 +171,13 @@ function WardrobeControlDialogInner({
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(initialCharacterId)
   const { items, loading: itemsLoading, reload: reloadItems, projectId: dialogProjectId } =
     useCharacterWardrobeItems(selectedCharacterId, { chatId })
+
+  // As a rail-opened workspace tab, navigating back refreshes the garment
+  // list. Safe mid-edit: the fitting-room/live seeding is ref-gated, so a
+  // reload never blows away staged slots.
+  useOnTabActivated(() => {
+    void reloadItems()
+  })
   const [editingItem, setEditingItem] = useState<WardrobeItem | null>(null)
   const [transferringItem, setTransferringItem] = useState<WardrobeItem | null>(null)
   const [transferIntent, setTransferIntent] = useState<TransferIntent | null>(null)

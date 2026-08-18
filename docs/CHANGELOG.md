@@ -4,6 +4,14 @@
 
 ### 4.9-dev
 
+#### Workspace tabs refresh their data when you navigate back to them
+
+The workspace keeps every open tab mounted (that's what lets a streaming Salon survive tab switches), which meant a tab you returned to still showed whatever it had loaded when you left — rename a character in their detail tab and the characters list behind it kept the old name until a full page reload.
+
+Now a tab refreshes its data sources every time it becomes the active tab again. The Home tab reloads its dashboard (recent chats, active projects, characters); the characters, chats, projects, Scriptorium, Files, Photos, Scenarios, Pascal's Workbench, Wardrobe, Profile, Generate Image, and Settings tabs all refetch what they display, including in-place detail views (a project or document store you've drilled into). Refreshes are silent — the current content stays on screen while fresh data loads, so nothing flickers back to a loading screen.
+
+Mechanics: each tab's subtree now knows its own visibility (`useOnTabActivated` in `components/workspace/workspace-tab-context.tsx`). TanStack Query reads are invalidated centrally from a per-tab-kind map (`lib/workspace/tab-refetch.ts`); views still fetching outside TanStack Query re-run their loads through the same hook with a new `silent` option so loading flags don't flip. Live surfaces (Salon conversations, terminals, Document Mode) and editors with unsaved state (character edit, the settings wizard, standalone documents) are deliberately left alone.
+
 #### An API key no longer follows a connection profile onto another provider (bug 76)
 
 Changing a connection profile's provider left the previously selected API key in form state, and the form sent it regardless. On a keyless provider (Ollama, OpenAI-Compatible) the API Key select isn't rendered at all, so saving failed with `API key provider does not match profile provider` — a message about a field that isn't on screen, with no way to clear it. On a different hosted provider the select re-rendered blank, because its options are filtered to the current provider, while Connect / Fetch Models / Test Message kept sending the old provider's key.

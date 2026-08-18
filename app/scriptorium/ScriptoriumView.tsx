@@ -18,7 +18,7 @@ import {
 } from './components'
 import type { DocumentStore, CreateDocumentStoreData, UpdateDocumentStoreData } from './types'
 import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
-import { useWorkspaceTabId } from '@/components/workspace/workspace-tab-context'
+import { useOnTabActivated, useWorkspaceTabId } from '@/components/workspace/workspace-tab-context'
 import dynamic from 'next/dynamic'
 
 // Lazy so the list bundle doesn't pull in the detail (and its file-manager deps)
@@ -63,6 +63,12 @@ export function ScriptoriumView({ initialStoreId }: ScriptoriumViewProps = {}) {
   useEffect(() => {
     fetchStores()
   }, [fetchStores])
+
+  // Navigating back to this tab refreshes the list in place (silent — no
+  // loading flip, which would unmount an in-place store detail).
+  useOnTabActivated(() => {
+    void fetchStores({ silent: true })
+  })
 
   // A deep-link re-open refreshes the tab payload; follow it into the store.
   // Adjusting state during render is React's sanctioned derive-from-prop-change

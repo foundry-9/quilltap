@@ -32,6 +32,12 @@ export const queryKeys = {
   },
   chats: {
     all: ['chats'] as const,
+    /**
+     * Prefix of every `list(filters)` key — invalidates the collection reads
+     * (all filter variants) without touching per-chat detail/state/background,
+     * which open Salon tabs hold live around a possible in-flight stream.
+     */
+    lists: ['chats', 'list'] as const,
     list: (filters?: Filters) => ['chats', 'list', filters ?? {}] as const,
     detail: (id: string) => ['chats', 'detail', id] as const,
     state: (id: string) => ['chats', id, 'state'] as const,

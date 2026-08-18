@@ -37,8 +37,10 @@ export function useGeneralScenarios(): ScenarioMutator {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const refresh = useCallback(async () => {
-    setLoading(true)
+  const refresh = useCallback(async (opts?: { silent?: boolean }) => {
+    // A silent refresh (workspace tab re-activation) keeps the current list on
+    // screen instead of flipping the manager back to its loading state.
+    if (!opts?.silent) setLoading(true)
     setError(null)
     try {
       const res = await fetch('/api/v1/scenarios')

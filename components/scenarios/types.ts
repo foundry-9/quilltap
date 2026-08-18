@@ -24,7 +24,8 @@ export interface ScenarioMutator {
   warnings: string[]
   loading: boolean
   error: string | null
-  refresh: () => Promise<void>
+  /** `silent` refreshes in place without flipping `loading` (tab re-activation). */
+  refresh: (opts?: { silent?: boolean }) => Promise<void>
   createScenario: (input: {
     filename: string
     name?: string

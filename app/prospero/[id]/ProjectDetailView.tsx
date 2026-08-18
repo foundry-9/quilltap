@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
 import { useProjectDetail, useProjectChats, useProjectFiles, useProjectCardState, useProjectDocumentStores } from './hooks'
 import { useStoryBackground } from '@/hooks/useStoryBackground'
 import {
@@ -99,6 +100,19 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
       .then(data => setImageProfiles(data?.profiles || []))
       .catch(() => {/* non-critical, selector will just be empty */})
   }, [projectId, fetchProject, fetchChats, fetchFiles, fetchLinkedStores, fetchAllStores])
+
+  // Navigating back to the containing workspace tab refreshes everything this
+  // page shows (fetchProject only flips `loading` on the very first load, so
+  // the page stays on screen during the refresh). While the header edit form
+  // is open, skip the project refetch — fetchProject resets editForm and would
+  // clobber in-progress typing.
+  useOnTabActivated(() => {
+    if (!isEditing) void fetchProject()
+    void fetchChats()
+    void fetchFiles()
+    void fetchLinkedStores()
+    void fetchAllStores()
+  })
 
   if (loading) {
     return (

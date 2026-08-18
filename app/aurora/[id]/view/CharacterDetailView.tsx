@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
@@ -197,6 +198,15 @@ export function CharacterDetailView({ characterId: id, onBack, openChatOnMount =
   useEffect(() => {
     fetchStats()
   }, [fetchStats, dataRefreshKey])
+
+  // Navigating back to the containing workspace tab refreshes the character
+  // and everything keyed off dataRefreshKey (stats, memories, photos…).
+  // fetchCharacter never flips `loading` after the first load, so the page
+  // stays on screen during the refresh.
+  useOnTabActivated(() => {
+    void fetchCharacter()
+    setDataRefreshKey((k) => k + 1)
+  })
 
   // Open the chat modal when arriving via ?action=chat (initialize once)
   useEffect(() => {

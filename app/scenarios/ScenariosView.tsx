@@ -16,10 +16,17 @@
 
 import { ScenariosIcon } from '@/components/scenarios/ScenariosIcon'
 import { ScenariosManager } from '@/components/scenarios/ScenariosManager'
+import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
 import { useGeneralScenarios } from './hooks/useGeneralScenarios'
 
 export function ScenariosView() {
   const mutator = useGeneralScenarios()
+
+  // Navigating back to this tab refreshes the list in place (silent — the
+  // current scenarios stay on screen while the fresh set loads).
+  useOnTabActivated(() => {
+    void mutator.refresh({ silent: true })
+  })
 
   return (
     <div className="qt-page-container min-h-screen text-foreground">

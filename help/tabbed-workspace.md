@@ -47,6 +47,19 @@ consult a character's dossier on the right.
 Your arrangement — which tabs are open, in which pane, in what order, and how the
 split is set — is remembered between visits.
 
+## Always the latest word
+
+A tab you return to does not sit about reciting yesterday's news. The moment you
+bring one back to the front, it quietly sends for fresh figures — the home tab
+re-counts your conversations, projects, and characters; the characters gallery
+learns of any rechristening the instant you step back into it; project pages,
+the Scriptorium, Files, Photos, and their kin all do likewise. The refresh
+happens discreetly behind the page you're looking at, so nothing blinks or
+vanishes while the new intelligence arrives. Live company is left undisturbed:
+a streaming conversation, an open terminal, or a document mid-edit is never
+interrupted by this housekeeping, and a form you are halfway through filling in
+keeps every word you've typed.
+
 ## A few turns of the wrist (keyboard shortcuts)
 
 For those who prefer to keep their hands upon the keys, the workspace answers to a

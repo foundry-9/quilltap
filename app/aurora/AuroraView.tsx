@@ -21,7 +21,7 @@ import { useGroups } from '@/app/aurora/hooks/useGroups'
 import { GroupsGrid } from '@/app/aurora/components/GroupsGrid'
 import { Icon } from '@/components/ui/icon'
 import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
-import { useWorkspaceTabId } from '@/components/workspace/workspace-tab-context'
+import { useOnTabActivated, useWorkspaceTabId } from '@/components/workspace/workspace-tab-context'
 
 const AIImportWizard = dynamic(() => import('@/components/settings/ai-import/AIImportWizard'), {
   loading: () => <p className="qt-text-muted p-8 text-center">Loading wizard...</p>,
@@ -97,6 +97,12 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
   useEffect(() => {
     fetchGroups()
   }, [fetchGroups])
+
+  // Navigating back to this tab refreshes the groups list (the characters
+  // list is TanStack-backed and refreshed by the tab-activation invalidator).
+  useOnTabActivated(() => {
+    void fetchGroups()
+  })
 
   // A deep-link re-open refreshes the tab payload; follow it into the group.
   // Adjusting state during render is React's sanctioned derive-from-prop-change

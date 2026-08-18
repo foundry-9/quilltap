@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { showConfirmation } from '@/lib/alert';
 import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider';
+import { useOnTabActivated } from '@/components/workspace/workspace-tab-context';
 
 interface PhotoLinker {
   linkId: string;
@@ -78,35 +79,46 @@ export function PhotosView() {
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const bgStyle = useSubsystemBackgroundStyle('lantern');
 
+  // First-page fetch, shared by the on-search-change effect and the tab
+  // re-activation refresh. `silent` keeps the current grid on screen (no
+  // loading flip) while the fresh page loads.
+  const fetchFirstPage = useCallback(async (opts?: { silent?: boolean }) => {
+    const generation = ++fetchGenerationRef.current;
+    if (!opts?.silent) setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      if (appliedQuery.trim()) params.set('q', appliedQuery.trim());
+      params.set('limit', String(PAGE_SIZE));
+      params.set('offset', '0');
+      const res = await fetch(`/api/v1/photos?${params.toString()}`);
+      if (!res.ok) {
+        throw new Error(`Failed to load gallery (${res.status})`);
+      }
+      const json: ListResponse = await res.json();
+      if (generation !== fetchGenerationRef.current) return;
+      setEntries(json.entries ?? []);
+      setTotal(json.total ?? json.entries?.length ?? 0);
+      setHasMore(Boolean(json.hasMore));
+    } catch (err) {
+      if (generation !== fetchGenerationRef.current) return;
+      setError(err instanceof Error ? err.message : 'Failed to load gallery');
+    } finally {
+      if (generation === fetchGenerationRef.current) setLoading(false);
+    }
+  }, [appliedQuery]);
+
   // Initial / on-search-change fetch.
   useEffect(() => {
-    const generation = ++fetchGenerationRef.current;
-    const fetchInitial = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const params = new URLSearchParams();
-        if (appliedQuery.trim()) params.set('q', appliedQuery.trim());
-        params.set('limit', String(PAGE_SIZE));
-        params.set('offset', '0');
-        const res = await fetch(`/api/v1/photos?${params.toString()}`);
-        if (!res.ok) {
-          throw new Error(`Failed to load gallery (${res.status})`);
-        }
-        const json: ListResponse = await res.json();
-        if (generation !== fetchGenerationRef.current) return;
-        setEntries(json.entries ?? []);
-        setTotal(json.total ?? json.entries?.length ?? 0);
-        setHasMore(Boolean(json.hasMore));
-      } catch (err) {
-        if (generation !== fetchGenerationRef.current) return;
-        setError(err instanceof Error ? err.message : 'Failed to load gallery');
-      } finally {
-        if (generation === fetchGenerationRef.current) setLoading(false);
-      }
-    };
-    fetchInitial();
-  }, [appliedQuery]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial fetch on mount/search change; the flags it flips are loading/error bookkeeping inside async fetchFirstPage()
+    void fetchFirstPage();
+  }, [fetchFirstPage]);
+
+  // Navigating back to this tab restarts the gallery from a fresh first page
+  // (silently — the current grid stays up while it loads).
+  useOnTabActivated(() => {
+    void fetchFirstPage({ silent: true });
+  });
 
   const loadMore = useCallback(async () => {
     if (loadingMore || loading || !hasMore) return;

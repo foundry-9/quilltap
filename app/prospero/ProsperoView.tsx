@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react'
 import { useProjects } from './hooks/useProjects'
 import { ProjectsGrid, CreateProjectDialog, DeleteProjectDialog } from './components'
 import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
-import { useWorkspaceTabId } from '@/components/workspace/workspace-tab-context'
+import { useOnTabActivated, useWorkspaceTabId } from '@/components/workspace/workspace-tab-context'
 import dynamic from 'next/dynamic'
 
 // Lazy so the list bundle doesn't pull in the detail (and its Lexical editors)
@@ -37,6 +37,12 @@ export function ProsperoView({ initialProjectId }: ProsperoViewProps = {}) {
   useEffect(() => {
     fetchProjects()
   }, [fetchProjects])
+
+  // Navigating back to this tab refreshes the list in place (silent — no
+  // loading flip, which would unmount an in-place project detail).
+  useOnTabActivated(() => {
+    void fetchProjects({ silent: true })
+  })
 
   // A deep-link re-open refreshes the tab payload; follow it into the project.
   // Adjusting state during render is React's sanctioned derive-from-prop-change

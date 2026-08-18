@@ -20,7 +20,8 @@ interface UseDocumentStoreDetailReturn {
   filesLoading: boolean
   error: string | null
   scanning: boolean
-  fetchStore: () => Promise<void>
+  /** `silent` refreshes in place without flipping `loading` (tab re-activation). */
+  fetchStore: (opts?: { silent?: boolean }) => Promise<void>
   fetchFiles: () => Promise<void>
   updateStore: (data: UpdateDocumentStoreData) => Promise<DocumentStore | null>
   scanStore: () => Promise<{ scanResult: ScanResult; embeddingJobsEnqueued: number } | null>
@@ -34,9 +35,11 @@ export function useDocumentStoreDetail(storeId: string): UseDocumentStoreDetailR
   const [error, setError] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
 
-  const fetchStore = useCallback(async () => {
+  const fetchStore = useCallback(async (opts?: { silent?: boolean }) => {
     try {
-      setLoading(true)
+      // A silent refresh (workspace tab re-activation) keeps the page on
+      // screen instead of flipping the whole view back to its loading state.
+      if (!opts?.silent) setLoading(true)
       setError(null)
 
       const res = await fetch(`/api/v1/mount-points/${storeId}`)

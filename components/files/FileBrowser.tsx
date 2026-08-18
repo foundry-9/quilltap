@@ -18,6 +18,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
 import FileBrowserGrid from './FileBrowserGrid'
@@ -287,10 +288,12 @@ export default function FileBrowser({
   const handleFileSelect = isMountMode ? mountUpload.handleFileSelect : legacyUpload.handleFileSelect
   const triggerFileSelect = isMountMode ? mountUpload.triggerFileSelect : legacyUpload.triggerFileSelect
 
-  const fetchFiles = useCallback(async () => {
+  const fetchFiles = useCallback(async (opts?: { silent?: boolean }) => {
     if (!mountResolved) return
     try {
-      setLoading(true)
+      // A silent refresh (workspace tab re-activation) keeps the current
+      // listing on screen instead of flipping back to the loading state.
+      if (!opts?.silent) setLoading(true)
 
       if (isMountMode && resolvedMountPoint) {
         const res = await fetch(`/api/v1/mount-points/${resolvedMountPoint.id}/files`)
@@ -343,6 +346,12 @@ export default function FileBrowser({
   useEffect(() => {
     fetchFiles()
   }, [fetchFiles])
+
+  // Navigating back to the containing workspace tab (Files, or a project
+  // detail hosting this browser) refreshes the listing in place.
+  useOnTabActivated(() => {
+    void fetchFiles({ silent: true })
+  })
 
   // Batch thumbnail pre-generation — only useful for the legacy endpoint,
   // which drives a server-side sharp pipeline keyed by files.id. Mount-mode
@@ -704,7 +713,7 @@ export default function FileBrowser({
             </button>
           )}
           <button
-            onClick={fetchFiles}
+            onClick={() => { void fetchFiles() }}
             disabled={loading}
             className="qt-button qt-button-secondary p-2"
             title="Refresh"
