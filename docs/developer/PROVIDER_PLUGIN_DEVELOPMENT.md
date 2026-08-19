@@ -298,7 +298,8 @@ Create `manifest.json` - this tells Quilltap about your provider:
 |-------|-------------|
 | `capabilities` | Must include `"LLM_PROVIDER"` |
 | `providerConfig.providerName` | Unique identifier (uppercase, used in API key storage) |
-| `providerConfig.requiresApiKey` | Whether users need to provide an API key |
+| `providerConfig.requiresApiKey` | Whether users **must** provide an API key |
+| `providerConfig.acceptsApiKey` | Optional. Whether users **may** provide one — it gates the Add-New-API-Key dropdown and the profile form's key field. Omitted, it follows `requiresApiKey`; set it only for an endpoint that spans authenticated and unauthenticated services, as `OPENAI_COMPATIBLE` does |
 | `providerConfig.requiresBaseUrl` | For self-hosted/custom endpoints (e.g., Ollama) |
 | `providerConfig.capabilities` | Which features your provider supports |
 | `providerConfig.attachmentSupport` | File attachment capabilities |

@@ -20,7 +20,7 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
-import { requiresApiKey } from '@/lib/plugins/provider-validation'
+import { resolveConnectionProfileApiKey } from '@/lib/services/api-key.service'
 import { resolveBrahmaMaxAgentTurns } from './turn-budget'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
@@ -187,14 +187,17 @@ async function processBrahmaResponse(
   controller: ReadableStreamDefaultController<Uint8Array>,
   encoder: TextEncoder
 ): Promise<void> {
-  // Resolve the API key (providers that require one)
-  let apiKey = ''
-  if (requiresApiKey(connectionProfile.provider)) {
-    if (!connectionProfile.apiKeyId) throw new Error('No API key configured for this connection profile')
-    const apiKeyData = await repos.connections.findApiKeyById(connectionProfile.apiKeyId)
-    if (!apiKeyData) throw new Error('API key not found')
-    apiKey = apiKeyData.key_value
+  // Resolve the API key (providers that require one, and those that merely
+  // accept one — see Bug 81)
+  const keyResolution = await resolveConnectionProfileApiKey(repos, connectionProfile)
+  if (!keyResolution.ok) {
+    throw new Error(
+      keyResolution.reason === 'no-api-key-configured'
+        ? 'No API key configured for this connection profile'
+        : 'API key not found'
+    )
   }
+  const apiKey = keyResolution.apiKey
 
   // Build tools — Brahma flags: agent mode on, no help tools, document editing
   // (read/write) on, no wardrobe, no Carina, workspace tools stripped, search

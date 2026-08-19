@@ -38,6 +38,8 @@ For one Salon turn, in wire order:
 
 Blocks 1–3 are emitted as separate system messages precisely so their cache lifetimes are independent: the persona prefix does not get invalidated when the rolling summary is refolded.
 
+**Local providers see them folded into one.** A local runtime applies the *model's own* chat template, and the Qwen family — plus several Llama- and Gemma-derived templates — raises an exception on any system message after index 0, rejecting the whole request. So the Ollama and OpenAI-Compatible request builders fold the leading `system` run into a single message at request-build time, joining the contents with a blank line (`collapseLeadingSystemMessages` in `@quilltap/plugin-utils`; `OpenAICompatibleProvider.acceptsRepeatedSystemMessages`, which defaults to `true`). Nothing about the assembly above changes, and no hosted provider's bytes or cache breakpoints move — see [bug 82](bugs/fixed/bug-82-three-leading-system-messages.md). A new local provider must opt into the same fold; a new hosted one must not.
+
 On Anthropic, step 8 is impossible (Sonnet 4.6+ rejects a trailing `assistant` message — "does not support assistant message prefill"), so the multi-character anchor is appended to block 1 as prose instead. The same constraint is why every Staff whisper reaching the model is re-roled to `user`.
 
 ---

@@ -12,6 +12,7 @@ import type { ApiKey, ProviderConfig, ProfileFormData, ConnectionProfile } from 
 import { ProviderOptionsPanel } from './ProviderOptionsPanel'
 import { normalizeProfileName, makeUniqueProfileName } from '@/lib/llm/connection-profile-names'
 import { defaultMultiCharacterPrefill } from '@/lib/llm/multi-character-prefill'
+import { providerAcceptsApiKey } from '@/lib/llm/api-key-support'
 
 interface ProfileModalProps {
   isOpen: boolean
@@ -83,9 +84,12 @@ export function ProfileModal({
     !savedProvider || (savedProvider.configRequirements?.requiresBaseUrl ?? false)
   // The same reading for the api key (Bug 76): a row written before that fix —
   // or by import — can carry a key its provider does not take, and probing a
-  // keyless endpoint with one is how the mismatch stays invisible.
+  // keyless endpoint with one is how the mismatch stays invisible. The question
+  // is whether the provider *takes* a key, not whether it demands one — an
+  // OpenAI-Compatible profile aimed at a hosted endpoint holds an optional one
+  // (Bug 81).
   const savedProviderTakesApiKey =
-    !savedProvider || (savedProvider.configRequirements?.requiresApiKey ?? true)
+    !savedProvider || providerAcceptsApiKey(savedProvider.configRequirements)
 
   // Auto-fetch models when editing
   useEffect(() => {
@@ -464,7 +468,12 @@ export function ProfileModal({
 
             {/* API Key and Base URL Fields — API transport only */}
             {!isCourier && (() => {
-              const showApiKey = reqs.requiresApiKey
+              // Shown when the provider *takes* a key; starred only when it
+              // demands one. OpenAI-Compatible is the provider where those
+              // differ — a hosted endpoint needs a bearer token, a local
+              // llama.cpp has nowhere to put one — so its field is offered and
+              // optional rather than absent (Bug 81).
+              const showApiKey = reqs.acceptsApiKey
               const showBaseUrl = reqs.requiresBaseUrl
               const showBoth = showApiKey && showBaseUrl
 
@@ -473,7 +482,7 @@ export function ProfileModal({
                   {showApiKey && (
                     <div>
                       <label htmlFor="apiKeyId" className="block qt-text-label mb-2">
-                        API Key *
+                        {reqs.requiresApiKey ? 'API Key *' : 'API Key'}
                       </label>
                       <select
                         id="apiKeyId"
@@ -482,7 +491,9 @@ export function ProfileModal({
                         onChange={(e) => form.setField('apiKeyId', e.target.value)}
                         className="qt-select"
                       >
-                        <option value="">Select an API Key</option>
+                        <option value="">
+                          {reqs.requiresApiKey ? 'Select an API Key' : 'None — the endpoint needs no key'}
+                        </option>
                         {(apiKeys || [])
                           .filter((key) => key.provider === form.formData.provider)
                           .map((key) => (

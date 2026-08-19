@@ -547,6 +547,9 @@
           "default": true,
           "type": "boolean"
         },
+        "acceptsApiKey": {
+          "type": "boolean"
+        },
         "requiresBaseUrl": {
           "default": false,
           "type": "boolean"

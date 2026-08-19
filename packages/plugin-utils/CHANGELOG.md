@@ -2,6 +2,13 @@
 
 All notable changes to @quilltap/plugin-utils will be documented in this file.
 
+## [2.4.0] - 2026-08-19
+
+### Added
+
+- `collapseLeadingSystemMessages(messages)` — folds a run of consecutive leading `system` messages into one, joining the contents with a blank line. Arrays with fewer than two leading system messages come back untouched (same reference).
+- `OpenAICompatibleProvider` gained `acceptsRepeatedSystemMessages` (default `true`, so every existing subclass is byte-identical on the wire) and applies it through `applySystemMessagePolicy` in both the streaming and non-streaming body builds. A subclass pointing at a local runtime sets it `false`: the model's own chat template is what runs there, and the Qwen family — plus several Llama- and Gemma-derived templates — `raise_exception` on any system message after index 0, rejecting the whole request. Quilltap emits up to three leading system blocks so its cache breakpoints survive, so every non-opening turn against such a model failed outright. (Quilltap bug 82.)
+
 ## [2.3.0] - 2026-08-15
 
 ### Added

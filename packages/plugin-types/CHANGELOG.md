@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.7] - 2026-08-19
+
+### Added
+
+- `ProviderConfigRequirements.acceptsApiKey` — optional, and when omitted it means "same answer as `requiresApiKey`", so no existing plugin changes behaviour. `requiresApiKey` answers "must a key be supplied before the profile is valid?"; the new flag answers "may one be supplied?". OpenAI-Compatible is the provider that splits them — it spans an unauthenticated llama.cpp on localhost and a hosted endpoint behind a bearer token — and until it could say so, a hosted OpenAI-compatible endpoint was unconfigurable: the provider appeared in neither the Add-New-API-Key list nor the profile form's key field. (Quilltap bug 81.)
+
 ## [2.5.6] - 2026-08-13
 
 ### Fixed

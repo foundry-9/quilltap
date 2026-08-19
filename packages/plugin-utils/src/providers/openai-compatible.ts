@@ -39,6 +39,7 @@ import { createPluginLogger } from '../logging';
 import { getQuilltapUserAgent } from '../version';
 import { DEFAULT_REQUEST_TIMEOUT_MS, buildSdkRequestOptions } from './request-budget';
 import { applyProfileParameters } from './profile-parameters';
+import { collapseLeadingSystemMessages } from './system-messages';
 
 /** Matches the OpenAI SDK default; retries never apply to a caller-supplied budget. */
 const DEFAULT_MAX_RETRIES = 2;
@@ -142,6 +143,30 @@ export class OpenAICompatibleProvider implements TextProvider {
   protected readonly maxRetries: number;
   /** Logger instance */
   protected readonly logger: PluginLogger;
+
+  /**
+   * Whether the endpoint tolerates more than one leading `system` message.
+   *
+   * True for every hosted service — and so the default, which keeps the
+   * outbound bytes of OpenRouter, Z.AI and every other subclass exactly as they
+   * were. A subclass that points at a local runtime applying the *model's* chat
+   * template sets this false: several template families reject a system message
+   * anywhere but index 0, and Quilltap's context builder deliberately emits up
+   * to three of them so its cache breakpoints survive. See Bug 82 and
+   * {@link collapseLeadingSystemMessages}.
+   */
+  protected readonly acceptsRepeatedSystemMessages: boolean = true;
+
+  /**
+   * Apply {@link acceptsRepeatedSystemMessages} to a mapped wire-message array.
+   * Called by both body builds so the streaming and non-streaming shapes cannot
+   * drift apart.
+   */
+  protected applySystemMessagePolicy<T extends { role: string; content?: string | null }>(
+    messages: T[]
+  ): T[] {
+    return this.acceptsRepeatedSystemMessages ? messages : collapseLeadingSystemMessages(messages);
+  }
 
   /**
    * Creates a new OpenAI-compatible provider instance.
@@ -337,7 +362,7 @@ export class OpenAICompatibleProvider implements TextProvider {
     const client = this.createClient(apiKey);
 
     // Map messages to OpenAI Chat Completions format, including tool messages
-    const messages = params.messages
+    const mappedMessages = params.messages
       .filter((m) => {
         // Skip tool messages without toolCallId (backward compat)
         if (m.role === 'tool' && !m.toolCallId) return false;
@@ -370,6 +395,11 @@ export class OpenAICompatibleProvider implements TextProvider {
           content: m.content,
         };
       });
+
+    // Endpoints whose chat template insists the system message be first and
+    // singular get the leading run folded into one (Bug 82); everyone else is
+    // handed the array untouched.
+    const messages = this.applySystemMessagePolicy(mappedMessages);
 
     // Built as a Record so the allow-list can write non-standard keys the
     // OpenAI SDK's own types don't know about (`chat_template_kwargs`, `top_k`,
@@ -434,7 +464,7 @@ export class OpenAICompatibleProvider implements TextProvider {
     const client = this.createClient(apiKey);
 
     // Map messages to OpenAI Chat Completions format, including tool messages
-    const messages = params.messages
+    const mappedMessages = params.messages
       .filter((m) => {
         // Skip tool messages without toolCallId (backward compat)
         if (m.role === 'tool' && !m.toolCallId) return false;
@@ -467,6 +497,11 @@ export class OpenAICompatibleProvider implements TextProvider {
           content: m.content,
         };
       });
+
+    // Endpoints whose chat template insists the system message be first and
+    // singular get the leading run folded into one (Bug 82); everyone else is
+    // handed the array untouched.
+    const messages = this.applySystemMessagePolicy(mappedMessages);
 
     // See the note in sendMessage: a Record so non-standard allow-listed keys
     // are writable without scattering casts.

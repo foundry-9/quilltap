@@ -67,6 +67,21 @@ const NUMERIC_PARAMS = new Set([
 export class OpenAICompatibleEndpointProvider extends OpenAICompatibleProvider {
   protected override readonly profileParamAllowlist = OPENAI_COMPATIBLE_PROFILE_PARAM_ALLOWLIST;
 
+  /**
+   * LOAD-BEARING: this endpoint kind is a *local runtime* as often as not, and
+   * a local runtime applies the model's own chat template. The Qwen family —
+   * plus several Llama- and Gemma-derived templates — `raise_exception` on any
+   * system message after index 0, and Quilltap's context builder deliberately
+   * emits up to three leading system blocks so its cache breakpoints survive.
+   * The result was that the opening greeting worked and every turn after it
+   * died with a 500 (Bug 82). Folding the run is a request-shape concern that
+   * belongs to whoever knows the endpoint, which is here.
+   *
+   * The hosted subclass of this base class (DeepSeek) leaves the default
+   * `true` alone and is byte-identical on the wire.
+   */
+  protected override readonly acceptsRepeatedSystemMessages = false;
+
   protected override normalizeProfileParam(
     key: string,
     value: unknown,

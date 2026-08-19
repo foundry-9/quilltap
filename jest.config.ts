@@ -44,6 +44,13 @@ const config: Config = {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
+    // The plugin SDK is exercised at its source, not through the published
+    // copy in node_modules: `packages/` is where a change lands first, and the
+    // publish that installs it necessarily comes later. Without this the suite
+    // tests the previous release of the SDK while asserting on this one's
+    // plugins.
+    '^@quilltap/plugin-utils$': '<rootDir>/packages/plugin-utils/src/index.ts',
+    '^@quilltap/plugin-utils/(.*)$': '<rootDir>/packages/plugin-utils/src/$1',
     '^openid-client$': '<rootDir>/__mocks__/openid-client.ts',
     '^@openrouter/sdk$': '<rootDir>/__mocks__/@openrouter/sdk.ts',
     '^@openrouter/sdk/lib/chat-compat$': '<rootDir>/__mocks__/@openrouter/sdk-chat-compat.ts',

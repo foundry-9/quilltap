@@ -1,12 +1,30 @@
 # Bugs — defects surfaced by the v5 port
 
-**Last Updated**: 2026-08-18
+**Last Updated**: 2026-08-19
 **Codebase**: Quilltap v4.9.0-dev
 **Provenance**: the quilltap-v5 native port's differential harness, its
 dogfood walks against a copy of real data, and — from Bug 62 — v4's own
 feature-spec work and browser verification
-**Status**: Bugs **1–80** are **fixed in v4** — nothing in this catalogue is
-open. Bug 80 (filed and fixed 2026-08-18) is the workspace's arbitrated
+**Status**: Bugs **1–82** are **fixed in v4** — nothing in this catalogue is
+open. Bugs 81 and 82 (filed and fixed 2026-08-19) both come of a request being
+shaped by one answer where two were needed. In **81** the answer is a boolean:
+`requiresApiKey` was asked both "must this provider have a key?" and "may it?",
+and for OpenAI-Compatible — the one provider spanning an unauthenticated
+llama.cpp and a hosted endpoint behind a bearer token — those answers differ, so
+`false` was the only workable value and `false` removed the provider from the
+Add-New-API-Key list and the profile form's key field alike. The repair is an
+optional `acceptsApiKey` capability that means "same as `requiresApiKey`" when
+omitted, read through one pure predicate on both sides of the wire; and the fix
+had to reach further than the filing saw, because four server paths gated the
+key *lookup* on the same flag and would have dropped an attached key even with
+both UI gates open. In **82** the answer is a request shape: the context builder
+emits up to three leading `system` blocks so a cache breakpoint on the first
+survives churn in the others, which every hosted provider accepts and which the
+Qwen family's chat template refuses outright — the greeting worked, every turn
+after it died with a 500. The leading run is now folded at request-build time
+for the two local builders only, behind a per-provider flag that defaults to
+"leave it alone", so no hosted provider's bytes or cache breakpoints moved.
+Bug 80 (filed and fixed 2026-08-18) is the workspace's arbitrated
 backdrop meeting a view that was never converted to it: the project detail
 still set `--story-background-url` on a layer that `.qt-workspace` hides, so
 the "Latest chat background" setting painted nothing while the Prospero
@@ -417,8 +435,8 @@ One row per bug, newest last. **Bug** links to the entry; **Fix site** and
 | 78 | [avatar generation crashes on any chat row written before the hair slot](bugs/fixed/bug-78-avatar-crash-pre-hair-outfit-rows.md) | 2026-08-18 | 2026-08-18 | High | `getEquippedOutfit` returns the stored JSON through a raw cast and the resolver indexes `slots[slot]` with no `?? []`, so a four-key pre-hair row makes `expandComposites` iterate `undefined` — `rootIds is not iterable`, the avatar job dies outside any try; the scene-state and context-manager sites degrade soft, silently losing live clothing | new `normalizeEquippedSlots` in `lib/schemas/wardrobe.types.ts`, applied in `getEquippedOutfit`; `?? []` kept at `resolve-equipped.ts:163` for direct callers; `wardrobe-create-handler` reads through the repository | Not affected — pinned both directions with a convergence tripwire (`avatar_job_tier3_equivalence` → `legacy_four_key_equipped`) |
 | 79 | [`.qtap` import swallows destination read errors and proceeds into a partial apply](bugs/fixed/bug-79-import-swallows-read-errors.md) | 2026-08-15 | 2026-08-18 | Medium | `safeQuery`'s 4-arg fallback mode turns a FAILED read into "row absent" everywhere the import's reconcile leans on repository reads, so a damaged destination yields a partial, duplicated apply that reports success with zero warnings | new `strict-failures.ts` scope suspends `safeQuery`'s fallback for the duration of `executeImport` / `previewImport`; the five importers that only logged now name what they dropped in `warnings`, as does the preserveIds preflight's refusal | Fixed in v5, deliberately divergent (named skip sentences); both-direction pins retire on convergence |
 | 80 | [a project's story background is ignored inside the workspace](bugs/fixed/bug-80-project-background-ignored-in-workspace.md) | 2026-08-18 | 2026-08-18 | Medium | The workspace replaced the per-view `::before` background layer with one arbitrated backdrop that views must *report* to, and suppressed the old layer inside `.qt-workspace` — but `ProjectDetailView` was never converted, so its `--story-background-url` reaches the screen by neither route. What paints instead is `ProsperoView`'s subsystem background, still registered under the tab's id after the view drilled into a project | `ProjectDetailView` reports its story background (falling back to the Prospero subsystem image for `theme` mode); the list's subsystem background moved into a `ProsperoListShell` that unmounts while a detail is shown, so one reporter holds the tab's key at a time | Not applicable — the workspace shell and its backdrop arbitration have no v5 counterpart yet |
-| 81 | [an OpenAI-Compatible profile can never hold an API key](bugs/bug-81-oac-cannot-hold-an-api-key.md) | 2026-08-19 | — | Medium | `requiresApiKey` answers two questions with one boolean, so OpenAI-Compatible is absent from the Add-New-API-Key provider list **and** from the profile form's key field — every hosted OpenAI-compatible endpoint that needs a bearer token is unconfigurable | `ApiKeyModal.tsx:68` + `ProfileModal.tsx:467` + the OAC plugin's flag | Faithful |
-| 82 | [three leading system messages break strict local chat templates](bugs/bug-82-three-leading-system-messages.md) | 2026-08-19 | — | High (for local models) | Every non-opening turn dies with `Jinja Exception: System message must be at the beginning` on Qwen-family templates — the user sees no reply and no error | collapse the leading system run in the Ollama + OAC request builders | Faithful |
+| 81 | [an OpenAI-Compatible profile can never hold an API key](bugs/fixed/bug-81-oac-cannot-hold-an-api-key.md) | 2026-08-19 | 2026-08-19 | Medium | `requiresApiKey` answers two questions with one boolean, so OpenAI-Compatible is absent from the Add-New-API-Key provider list **and** from the profile form's key field — every hosted OpenAI-compatible endpoint that needs a bearer token is unconfigurable. Server-side, four call sites gated the key *lookup* on the same flag, so even an attached key never reached the wire | An optional `acceptsApiKey` capability answers the second question (`@quilltap/plugin-types` 2.5.7, absent = same answer as `requiresApiKey`); both UI gates and `useProfileForm`'s outbound guard read it via `lib/llm/api-key-support.ts`; the four services share `resolveConnectionProfileApiKey` | Owed |
+| 82 | [three leading system messages break strict local chat templates](bugs/fixed/bug-82-three-leading-system-messages.md) | 2026-08-19 | 2026-08-19 | High (for local models) | Every non-opening turn dies with `Jinja Exception: System message must be at the beginning` on Qwen-family templates — the greeting sends one system block and works, a normal turn sends three and is refused before a token is generated | `collapseLeadingSystemMessages` (`@quilltap/plugin-utils` 2.4.0) folds the leading run at request-build time; Ollama calls it unconditionally, OAC via `acceptsRepeatedSystemMessages: false` — the flag defaults true, so hosted subclasses stay byte-identical | Owed |
 
 ### Families and reading order
 

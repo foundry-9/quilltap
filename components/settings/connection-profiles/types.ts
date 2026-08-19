@@ -39,6 +39,12 @@ export interface ProviderConfig {
   displayName: string
   configRequirements: {
     requiresApiKey: boolean
+    /**
+     * Whether a key *may* be attached, as against `requiresApiKey`'s "must it
+     * be?". Absent means the same answer as `requiresApiKey`; read it through
+     * `providerAcceptsApiKey` rather than by hand (Bug 81).
+     */
+    acceptsApiKey?: boolean
     requiresBaseUrl: boolean
     baseUrlLabel?: string
     baseUrlDefault?: string

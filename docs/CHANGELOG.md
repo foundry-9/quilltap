@@ -4,6 +4,24 @@
 
 ### 4.9-dev
 
+#### Local models with strict chat templates stop failing on every turn after the first (bug 82)
+
+A chat on a local Ollama or OpenAI-compatible server running a Qwen model would greet you and then never answer again. Every turn after the opening died with `Jinja Exception: System message must be at the beginning`, and because the failure was an HTTP 500 from the endpoint rather than an empty reply, it showed up as a toast and a server-log entry and nothing else.
+
+The context builder emits the head of a turn as up to three consecutive system messages on purpose: the persona prefix, the identity reinforcement, and the compressed-history summary, kept separate so a cache breakpoint on the first isn't invalidated by churn in the others. Hosted providers accept that. A local runtime doesn't answer for itself — it applies the model's own chat template, and the Qwen family (plus several Llama- and Gemma-derived templates) raises an exception on any system message after index 0, rejecting the whole request before a token is generated. The greeting sends one system message, which is why it worked.
+
+The leading run is now folded into a single message at request-build time, in the Ollama and OpenAI-compatible builders only, joined with blank lines so nothing is lost from the prompt. `@quilltap/plugin-utils` gained `collapseLeadingSystemMessages`, and `OpenAICompatibleProvider` gained an `acceptsRepeatedSystemMessages` flag that defaults to true — so hosted providers, including DeepSeek and every other subclass, send exactly the bytes they sent before, and their cache breakpoints land where they always did.
+
+#### An OpenAI-Compatible profile can hold an API key (bug 81)
+
+Pointing an OpenAI-Compatible profile at a hosted service — Together, Fireworks, Groq, DeepInfra, a vLLM behind auth, a corporate gateway — was impossible: the profile form showed no API Key field for that provider, and Settings → API Keys → Add New API Key didn't offer OpenAI-Compatible at all, so no such key could be created. The request went out unauthenticated and the endpoint returned 401.
+
+One flag, `requiresApiKey`, was answering two different questions: must this provider have a key, and may it have one? For every other provider those answers match. OpenAI-Compatible is the one that spans both worlds — an unauthenticated llama.cpp on localhost and a hosted endpoint behind a bearer token — so `false` was the only workable value, and `false` removed the provider from both key surfaces.
+
+Providers can now declare `acceptsApiKey` alongside `requiresApiKey`. Omitted, it means the same answer as `requiresApiKey`, so no existing plugin changes behavior; Ollama still offers no key field. OpenAI-Compatible declares `false`/`true`: the key field appears, unstarred and optional, and an OpenAI-Compatible key can be created in Settings → API Keys.
+
+The server side needed the same split. The chat, Brahma Console and help-chat paths all gated the key lookup on `requiresApiKey`, so even a key attached to an OpenAI-Compatible profile was dropped before the request left. They now go through one resolver that requires a key where a key is required and forwards one wherever a key is accepted; a profile naming a key that has since been deleted fails loudly instead of silently going out bare.
+
 #### Story background prompts stop concealing nudity when the image provider doesn't require it
 
 The story-background prompt crafter carries a "depicting intimate or unclothed states" section that teaches it to translate narrative nudity into cinematic concealment — a sheet draped where it's needed, a silhouette, foreground occlusion, a bath at a discreet level. That exists to get a prompt past image-provider moderation, and it was unconditional: baked into the system prompt constant, applied to every story background regardless of where the image was going.

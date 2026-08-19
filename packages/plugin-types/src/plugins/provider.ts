@@ -106,6 +106,21 @@ export interface ProviderMetadata {
 export interface ProviderConfigRequirements {
   /** Whether this provider requires an API key */
   requiresApiKey: boolean;
+  /**
+   * Whether this provider *may* hold an API key at all.
+   *
+   * `requiresApiKey` answers "must a key be supplied before the profile is
+   * valid?"; this answers "may one be supplied?". They are the same question
+   * for every provider that is wholly hosted or wholly local, which is why one
+   * boolean served for so long — and why omitting this field means "same
+   * answer as `requiresApiKey`", so no existing plugin changes behaviour.
+   *
+   * OpenAI-Compatible is the provider that splits them: it legitimately spans
+   * an unauthenticated llama.cpp on localhost and a hosted endpoint behind a
+   * bearer token, so it declares `requiresApiKey: false, acceptsApiKey: true`
+   * and the key becomes optional rather than absent. (Bug 81.)
+   */
+  acceptsApiKey?: boolean;
   /** Whether this provider requires a custom base URL */
   requiresBaseUrl: boolean;
   /** Label text for API key input field */

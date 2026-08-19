@@ -7,7 +7,7 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { createLLMProvider } from '@/lib/llm'
-import { requiresApiKey } from '@/lib/plugins/provider-validation'
+import { acceptsApiKey, requiresApiKey } from '@/lib/plugins/provider-validation'
 import {
   isMultiCharacterChat,
   computeSkipEligibility,
@@ -387,13 +387,20 @@ async function processMessage(
   // can all short-circuit later.
   const isCourierTransport = connectionProfile.transport === 'courier'
 
-  // Validate API key for providers that require it
+  // Validate the API key for providers that require one — and forward it for
+  // providers that merely accept one. `requiresApiKey` alone answered both
+  // questions and so dropped the key an OpenAI-Compatible profile had attached
+  // for a hosted endpoint, which then answered 401 (Bug 81). The key itself was
+  // already decrypted upstream by the participant resolver, which asks no
+  // question of the provider at all.
   let apiKey = ''
-  if (!isCourierTransport && requiresApiKey(connectionProfile.provider)) {
-    if (!rawApiKey) {
+  if (!isCourierTransport) {
+    if (requiresApiKey(connectionProfile.provider) && !rawApiKey) {
       throw new Error('No API key configured for this connection profile')
     }
-    apiKey = rawApiKey
+    if (acceptsApiKey(connectionProfile.provider)) {
+      apiKey = rawApiKey
+    }
   }
 
   // Resolve user identity through fallback chain:

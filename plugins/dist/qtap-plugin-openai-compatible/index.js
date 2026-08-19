@@ -11125,6 +11125,19 @@ function applyProfileParameters(body, params, allowlist, normalize) {
     body[key] = value;
   }
 }
+function collapseLeadingSystemMessages(messages) {
+  let runLength = 0;
+  while (runLength < messages.length && messages[runLength].role === "system") {
+    runLength++;
+  }
+  if (runLength < 2) return messages;
+  const run = messages.slice(0, runLength);
+  const merged = {
+    ...run[0],
+    content: run.map((m) => m.content ?? "").filter((c) => c.length > 0).join("\n\n")
+  };
+  return [merged, ...messages.slice(runLength)];
+}
 var DEFAULT_MAX_RETRIES = 2;
 var OpenAICompatibleProvider = class {
   /**
@@ -11136,6 +11149,7 @@ var OpenAICompatibleProvider = class {
     this.supportsFileAttachments = false;
     this.supportedMimeTypes = [];
     this.supportsWebSearch = false;
+    this.acceptsRepeatedSystemMessages = true;
     this.profileParamAllowlist = [];
     if (typeof config2 === "string") {
       this.baseUrl = config2;
@@ -11153,6 +11167,14 @@ var OpenAICompatibleProvider = class {
       this.maxRetries = config2.maxRetries ?? DEFAULT_MAX_RETRIES;
     }
     this.logger = createPluginLogger(`${this.providerName}Provider`);
+  }
+  /**
+   * Apply {@link acceptsRepeatedSystemMessages} to a mapped wire-message array.
+   * Called by both body builds so the streaming and non-streaming shapes cannot
+   * drift apart.
+   */
+  applySystemMessagePolicy(messages) {
+    return this.acceptsRepeatedSystemMessages ? messages : collapseLeadingSystemMessages(messages);
   }
   /**
    * Collects attachment failures for messages with attachments.
@@ -11282,7 +11304,7 @@ var OpenAICompatibleProvider = class {
     this.validateApiKeyRequirement(apiKey);
     const attachmentResults = this.collectAttachmentFailures(params);
     const client = this.createClient(apiKey);
-    const messages = params.messages.filter((m) => {
+    const mappedMessages = params.messages.filter((m) => {
       if (m.role === "tool" && !m.toolCallId) return false;
       return true;
     }).map((m) => {
@@ -11309,6 +11331,7 @@ var OpenAICompatibleProvider = class {
         content: m.content
       };
     });
+    const messages = this.applySystemMessagePolicy(mappedMessages);
     const body = {
       model: params.model,
       messages,
@@ -11361,7 +11384,7 @@ var OpenAICompatibleProvider = class {
     this.validateApiKeyRequirement(apiKey);
     const attachmentResults = this.collectAttachmentFailures(params);
     const client = this.createClient(apiKey);
-    const messages = params.messages.filter((m) => {
+    const mappedMessages = params.messages.filter((m) => {
       if (m.role === "tool" && !m.toolCallId) return false;
       return true;
     }).map((m) => {
@@ -11388,6 +11411,7 @@ var OpenAICompatibleProvider = class {
         content: m.content
       };
     });
+    const messages = this.applySystemMessagePolicy(mappedMessages);
     const body = {
       model: params.model,
       messages,
@@ -11556,6 +11580,20 @@ var OpenAICompatibleEndpointProvider = class extends OpenAICompatibleProvider {
   constructor() {
     super(...arguments);
     this.profileParamAllowlist = OPENAI_COMPATIBLE_PROFILE_PARAM_ALLOWLIST;
+    /**
+     * LOAD-BEARING: this endpoint kind is a *local runtime* as often as not, and
+     * a local runtime applies the model's own chat template. The Qwen family —
+     * plus several Llama- and Gemma-derived templates — `raise_exception` on any
+     * system message after index 0, and Quilltap's context builder deliberately
+     * emits up to three leading system blocks so its cache breakpoints survive.
+     * The result was that the opening greeting worked and every turn after it
+     * died with a 500 (Bug 82). Folding the run is a request-shape concern that
+     * belongs to whoever knows the endpoint, which is here.
+     *
+     * The hosted subclass of this base class (DeepSeek) leaves the default
+     * `true` alone and is byte-identical on the wire.
+     */
+    this.acceptsRepeatedSystemMessages = false;
   }
   normalizeProfileParam(key, value, _params, body) {
     if (key === "reasoning_effort") {
@@ -11922,6 +11960,7 @@ var metadata = {
 };
 var config = {
   requiresApiKey: false,
+  acceptsApiKey: true,
   requiresBaseUrl: true,
   apiKeyLabel: "API Key (optional)",
   baseUrlLabel: "Base URL",

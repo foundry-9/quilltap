@@ -5,6 +5,7 @@ import { useFormState } from '@/hooks/useFormState'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { defaultMultiCharacterPrefill } from '@/lib/llm/multi-character-prefill'
+import { providerAcceptsApiKey, providerRequiresApiKey } from '@/lib/llm/api-key-support'
 import type { ApiKey, ProfileFormData, ConnectionProfile, ProviderConfig } from '../types'
 import { initialFormState } from '../types'
 
@@ -30,7 +31,8 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
     (providerName: string) => {
       const provider = providers.find((p) => p.name === providerName)
       return {
-        requiresApiKey: provider?.configRequirements?.requiresApiKey ?? true,
+        requiresApiKey: providerRequiresApiKey(provider?.configRequirements),
+        acceptsApiKey: providerAcceptsApiKey(provider?.configRequirements),
         requiresBaseUrl: provider?.configRequirements?.requiresBaseUrl ?? false,
         supportsWebSearch: provider?.capabilities?.webSearch ?? false,
         supportsToolUse: provider?.capabilities?.toolUse ?? false,
@@ -78,13 +80,18 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
    * evidence in either list — a provider list that has not loaded is no reason
    * to judge the provider keyless, and an api-key list that has not loaded is
    * no reason to call a stored id undisplayable.
+   *
+   * "Keyless" here is `providerAcceptsApiKey`, not `requiresApiKey`: an
+   * OpenAI-Compatible profile pointed at a hosted endpoint holds an optional
+   * key, and the stricter reading silently dropped it on the way to the wire
+   * (Bug 81).
    */
   const outboundApiKeyId = useCallback((): string => {
     const stored = form.formData.apiKeyId || ''
     if (!stored) return ''
 
     const known = providers.find((p) => p.name === form.formData.provider)
-    if (known && !known.configRequirements?.requiresApiKey) return ''
+    if (known && !providerAcceptsApiKey(known.configRequirements)) return ''
 
     // The select's own option filter, asked as a question.
     if (apiKeys.length > 0) {

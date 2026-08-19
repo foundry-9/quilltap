@@ -40,9 +40,17 @@ const metadata = {
 /**
  * Configuration requirements
  * Note: baseUrl is REQUIRED for this provider
+ *
+ * `requiresApiKey` and `acceptsApiKey` disagree here on purpose, and this is
+ * the only provider where they do. The same plugin serves an unauthenticated
+ * llama.cpp on localhost and a hosted endpoint behind a bearer token, so a key
+ * must never be demanded — and must always be offerable. Collapsing the two
+ * back into one flag removes OpenAI-Compatible from the Add-New-API-Key list
+ * and from the profile form's key field, which is Bug 81.
  */
 const config = {
   requiresApiKey: false,
+  acceptsApiKey: true,
   requiresBaseUrl: true,
   apiKeyLabel: 'API Key (optional)',
   baseUrlLabel: 'Base URL',

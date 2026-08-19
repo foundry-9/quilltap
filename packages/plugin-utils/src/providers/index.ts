@@ -18,6 +18,8 @@ export {
   type ProfileParamNormalizer,
 } from './profile-parameters';
 
+export { collapseLeadingSystemMessages } from './system-messages';
+
 export {
   DEFAULT_REQUEST_TIMEOUT_MS,
   resolveRequestTimeoutMs,

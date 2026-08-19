@@ -6,7 +6,7 @@
  */
 
 import type { TextProvider, LLMParams, LLMResponse, StreamChunk } from './types';
-import { buildRequestAbortSignal, createPluginLogger, getQuilltapUserAgent, resolveRequestTimeoutMs } from '@quilltap/plugin-utils';
+import { buildRequestAbortSignal, collapseLeadingSystemMessages, createPluginLogger, getQuilltapUserAgent, resolveRequestTimeoutMs } from '@quilltap/plugin-utils';
 import { ThinkTagStreamParser, extractThinkBlocks } from './think-parser';
 import {
   applyOllamaProfileParameters,
@@ -60,7 +60,7 @@ export class OllamaProvider implements TextProvider {
     const attachmentResults = this.collectAttachmentFailures(params);
 
     // Map messages to Ollama/OpenAI Chat Completions format, including tool messages
-    const messages = params.messages
+    const mappedMessages = params.messages
       .filter((m) => {
         // Skip tool messages without toolCallId (backward compat)
         if (m.role === 'tool' && !m.toolCallId) return false;
@@ -93,6 +93,16 @@ export class OllamaProvider implements TextProvider {
           content: m.content,
         };
       });
+
+    // LOAD-BEARING: Ollama hands the array to the *model's own* chat template,
+    // and the Qwen family — plus several Llama- and Gemma-derived templates —
+    // `raise_exception` on any system message after index 0. Quilltap's context
+    // builder deliberately emits up to three leading system blocks so its cache
+    // breakpoints survive, which meant the opening greeting worked and every
+    // turn after it died with a 500 (Bug 82). Fold the run here, where the
+    // endpoint's constraint is known, rather than in the context assembly,
+    // where it would cost every hosted provider its cache prefix.
+    const messages = collapseLeadingSystemMessages(mappedMessages);
 
     const enableThinking = resolveThinkSetting(params);
     const requestBody: any = {
@@ -197,7 +207,7 @@ export class OllamaProvider implements TextProvider {
     const attachmentResults = this.collectAttachmentFailures(params);
 
     // Map messages to Ollama/OpenAI Chat Completions format, including tool messages
-    const messages = params.messages
+    const mappedMessages = params.messages
       .filter((m) => {
         // Skip tool messages without toolCallId (backward compat)
         if (m.role === 'tool' && !m.toolCallId) return false;
@@ -230,6 +240,16 @@ export class OllamaProvider implements TextProvider {
           content: m.content,
         };
       });
+
+    // LOAD-BEARING: Ollama hands the array to the *model's own* chat template,
+    // and the Qwen family — plus several Llama- and Gemma-derived templates —
+    // `raise_exception` on any system message after index 0. Quilltap's context
+    // builder deliberately emits up to three leading system blocks so its cache
+    // breakpoints survive, which meant the opening greeting worked and every
+    // turn after it died with a 500 (Bug 82). Fold the run here, where the
+    // endpoint's constraint is known, rather than in the context assembly,
+    // where it would cost every hosted provider its cache prefix.
+    const messages = collapseLeadingSystemMessages(mappedMessages);
 
     const enableThinking = resolveThinkSetting(params);
     // Log message details for debugging

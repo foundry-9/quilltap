@@ -297,6 +297,15 @@ List all available providers, including both LLM providers and search providers.
 | `llm` | LLM providers for chat, embeddings, and image generation. Include `capabilities` describing supported features. |
 | `search` | Search providers that power the `search_web` tool. Include `configRequirements` with `requiresApiKey`, `requiresBaseUrl`, and `apiKeyLabel`. |
 
+An `llm` provider's `configRequirements` may also carry **`acceptsApiKey`**,
+which answers a different question from `requiresApiKey`: *may* this provider
+hold a key, rather than *must* it. **When the field is absent, the answer is the
+same as `requiresApiKey`**, so a consumer must read the pair rather than the
+flag it happens to find (`providerAcceptsApiKey` in `lib/llm/api-key-support.ts`
+does exactly that). Only `OPENAI_COMPATIBLE` sets them apart today — `false` and
+`true` — because it serves both an unauthenticated local runtime and a hosted
+endpoint behind a bearer token.
+
 ---
 
 ### Health

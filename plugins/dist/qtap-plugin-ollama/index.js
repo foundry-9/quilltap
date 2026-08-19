@@ -11124,6 +11124,19 @@ function applyProfileParameters(body, params, allowlist, normalize) {
     body[key] = value;
   }
 }
+function collapseLeadingSystemMessages(messages) {
+  let runLength = 0;
+  while (runLength < messages.length && messages[runLength].role === "system") {
+    runLength++;
+  }
+  if (runLength < 2) return messages;
+  const run = messages.slice(0, runLength);
+  const merged = {
+    ...run[0],
+    content: run.map((m) => m.content ?? "").filter((c) => c.length > 0).join("\n\n")
+  };
+  return [merged, ...messages.slice(runLength)];
+}
 var rewriteLogger = createPluginLogger("host-rewrite");
 
 // think-parser.ts
@@ -11335,7 +11348,7 @@ var OllamaProvider = class {
   }
   async sendMessage(params, apiKey) {
     const attachmentResults = this.collectAttachmentFailures(params);
-    const messages = params.messages.filter((m) => {
+    const mappedMessages = params.messages.filter((m) => {
       if (m.role === "tool" && !m.toolCallId) return false;
       return true;
     }).map((m) => {
@@ -11362,6 +11375,7 @@ var OllamaProvider = class {
         content: m.content
       };
     });
+    const messages = collapseLeadingSystemMessages(mappedMessages);
     const enableThinking = resolveThinkSetting(params);
     const requestBody = {
       model: params.model,
@@ -11448,7 +11462,7 @@ var OllamaProvider = class {
   }
   async *streamMessage(params, apiKey) {
     const attachmentResults = this.collectAttachmentFailures(params);
-    const messages = params.messages.filter((m) => {
+    const mappedMessages = params.messages.filter((m) => {
       if (m.role === "tool" && !m.toolCallId) return false;
       return true;
     }).map((m) => {
@@ -11475,6 +11489,7 @@ var OllamaProvider = class {
         content: m.content
       };
     });
+    const messages = collapseLeadingSystemMessages(mappedMessages);
     const enableThinking = resolveThinkSetting(params);
     const requestBody = {
       model: params.model,

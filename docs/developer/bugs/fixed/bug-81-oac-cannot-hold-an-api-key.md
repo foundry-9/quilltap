@@ -2,14 +2,66 @@
 
 | | |
 |---|---|
-| **Status** | **Open** |
+| **Status** | **Fixed in v4** |
 | **Found** | 2026-08-19 (v5 dogfood walk: trying to point an `OPENAI_COMPATIBLE` profile at a hosted OpenAI-compatible endpoint, to exercise the OAC tool path against something other than a local server) |
+| **Fixed** | 2026-08-19 |
 | **Severity** | Medium (a whole class of providers is unreachable; no data loss, nothing silently wrong — it simply cannot be configured) |
 | **Who it bites** | anyone pointing Quilltap at a hosted OpenAI-compatible service that needs a bearer token — Together, Fireworks, Groq, DeepInfra, OpenRouter-alikes, a self-hosted vLLM/llama.cpp behind auth, or any corporate gateway. Local unauthenticated servers (llama.cpp, LM Studio, Ollama's OpenAI shim) are unaffected and work today |
 | **Provenance** | Faithful-by-omission: the OAC plugin has declared `requiresApiKey: false` since it was written, and every key-related surface reads that one boolean as if it answered two different questions |
+| **Fix site** | `packages/plugin-types` (`ProviderConfigRequirements.acceptsApiKey`, 2.5.7); `lib/llm/api-key-support.ts` (the pure predicate both sides read); `lib/plugins/provider-validation.ts` (`acceptsApiKey(provider)`); `lib/services/api-key.service.ts` (`resolveConnectionProfileApiKey`, now used by the chat, Brahma and help-chat paths); `ApiKeyModal.tsx`, `ProfileModal.tsx`, `useProfileForm.ts`; the OAC plugin's `config` and `manifest.json` |
 | **Defect site** | `plugins/dist/qtap-plugin-openai-compatible/index.ts:45` — `requiresApiKey: false`; `components/settings/api-keys/ApiKeyModal.tsx:68` — the Add-New-API-Key provider list is `providers.filter((p) => p.configRequirements?.requiresApiKey)`, so **OpenAI-Compatible is not offered and no such key can be created**; `components/settings/connection-profiles/ProfileModal.tsx:467` — the profile form renders the API Key selector only `if (reqs.requiresApiKey)`, and labels it `API Key *`, so even a key that existed would have nowhere to be attached |
-| **v5 status** | **Faithful — v5 reproduces this exactly** (same dropdown contents, same absent field). No v5 fix is wanted before v4 moves; v5 will absorb the change in a drift catch-up |
+| **v5 status** | **Owed** — v5 reproduced this exactly (same dropdown contents, same absent field) and now owes the flag split, both UI gates, and the server-side key forwarding |
 | **Index** | [bugs.md](../bugs.md) |
+
+---
+
+**FIXED in v4 (2026-08-19).** The flag was split as prescribed, and one thing
+the write-up below did not see was fixed with it.
+
+`ProviderConfigRequirements` gained an optional `acceptsApiKey`
+(`@quilltap/plugin-types` 2.5.7). Omitted, it means "the same answer as
+`requiresApiKey`", so every plugin that predates it is unchanged; the OAC plugin
+declares `requiresApiKey: false, acceptsApiKey: true` in both its `config` and
+its `manifest.json`, and Ollama declares neither and stays keyless. Both flags
+are read through one pure module, `lib/llm/api-key-support.ts`
+(`providerRequiresApiKey` / `providerAcceptsApiKey`), which the settings UI asks
+of a `/api/v1/providers` payload and the server asks of the plugin registry via
+`acceptsApiKey(provider)` in `lib/plugins/provider-validation.ts`. The Zod
+manifest schema and the generated JSON Schema carry the field so an external
+plugin can declare it too.
+
+On the two UI gates: `ApiKeyModal` filters the Add-New-API-Key list on
+`providerAcceptsApiKey`, so **OpenAI-Compatible** is offered; `ProfileModal`
+renders the key selector on the same question, labels it `API Key` without the
+star when `requiresApiKey` is false, and titles the empty option *"None — the
+endpoint needs no key"*. `useProfileForm`'s `outboundApiKeyId` — the Bug 76
+guard that refuses to send a key the select cannot display — now judges
+"keyless" by `acceptsApiKey` as well, which is what lets an optional key reach
+the wire at all.
+
+**What the write-up missed: the key was being dropped server-side too.** Four
+call sites gated the *lookup* on `requiresApiKey` —
+`lib/services/chat-message/orchestrator.service.ts`,
+`lib/services/brahma-console/{one-shot,orchestrator}.service.ts` and
+`lib/services/help-chat/orchestrator.service.ts` — so even with both UI gates
+open, an OAC profile's key stayed in the database and the request still went
+out bare. All four now go through one resolver,
+`resolveConnectionProfileApiKey` in `lib/services/api-key.service.ts`, which
+asks both questions: it refuses when a *requiring* provider names no key,
+forwards the key wherever a provider *accepts* one, and — deliberately — fails
+loudly on a dangling `apiKeyId` even where the key is optional, because a key
+the user attached on purpose must not silently become an unauthenticated
+request. (`carina.service.ts` already read the column without asking the
+provider anything, and needed no change; `auto-associate.ts` keeps
+`requiresApiKey`, since auto-attaching a key to a local llama.cpp profile would
+be wrong.)
+
+Regression cover: `__tests__/unit/components/settings/profile-modal-optional-api-key.test.tsx`
+drives the real modal over the real hook (field present and unstarred, key sent
+on Connect, save succeeds with no key, still hidden on Ollama, and no OAC key
+carried onto Ollama); `__tests__/unit/lib/services/api-key-service.test.ts`
+covers the resolver's six cases; `api-key-modal.test.tsx` gained the
+accepts-but-does-not-require case.
 
 ---
 
