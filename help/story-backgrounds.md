@@ -49,6 +49,16 @@ Chat titles are used as scene context. Descriptive titles like "Midnight convers
 ### Image Profiles
 Consider using an image profile with a model optimized for landscape/scene generation rather than portrait-focused models.
 
+## Intimate Scenes and the Draped Sheet
+
+A story that has wandered somewhere less than fully clothed presents the Lantern with a small difficulty of etiquette, and the answer depends entirely on which door the picture is going out through.
+
+**Ordinary image providers.** Most houses will simply decline the commission, so the Lantern practises what one might call cinematic discretion. The scene is rendered honestly — the mood, the hour, the tousled bedding, the clothing on the floor — but the figure itself is arranged behind a sheet slipped just so, a bedpost, a shoulder turned away, a doorway's shadow, or the merciful steam of a bath. Nothing about the story is altered; the camera has merely learned some manners. What the Lantern will *never* do is put everyone back into pyjamas and pretend a different evening took place.
+
+**Uncensored image providers.** If the conversation has been marked dangerous and you have nominated an uncensored image profile to the Concierge (**Chat** tab in Settings, `/settings?tab=chat&section=dangerous-content`), the drapery is dispensed with. There is no moderation to slip past at that door, so the Lantern describes the scene plainly instead of arranging occlusions nobody asked for. The framing rules survive intact — this remains a wide, calm background with the figures toward the edges of the frame, never an anatomical study.
+
+**When a provider changes its mind.** Should an ordinary provider accept the commission and then reject the finished plate on moderation grounds, the Concierge reroutes it to your uncensored profile — and the prompt is *rewritten* for the new door rather than posted through it unchanged. The second attempt therefore arrives candid, not still wrapped in a sheet intended for the house that just turned it away.
+
 ## Project Backgrounds
 
 Projects can display backgrounds in different ways:

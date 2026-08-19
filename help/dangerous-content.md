@@ -135,6 +135,16 @@ Overriding a message's danger flags marks all flags as user-overridden and remov
 
 When an image prompt is flagged as dangerous, the system can use a separate uncensored LLM for prompt expansion (the step where character placeholders are resolved into visual descriptions). Configure this in the **Chat** tab in Settings (`/settings?tab=chat&section=dangerous-content`) under **Cheap LLM Settings** > "Image Prompt Expansion LLM (Uncensored - Optional)." If not set, the standard cheap LLM is always used for prompt expansion.
 
+## Story Background Prompts
+
+The Lantern's story backgrounds hold a second, separate courtesy. By default the prompt crafter translates any undressed or intimate moment into cinematic concealment — drapery, silhouette, foreground occlusion — because ordinary image providers reject the alternative.
+
+That courtesy is now conditional. When a chat is marked dangerous **and** you have an uncensored image profile configured, the picture is already headed for a door that does not moderate, so the crafter describes the scene plainly instead. Previously the concealment applied regardless, and an uncensored provider received a scene needlessly draped for a provider it was never going to see.
+
+The same holds on a reroute: if a standard provider rejects a finished image for moderation and the Concierge sends it to your uncensored profile, the prompt is re-crafted candidly for that provider rather than forwarded unchanged.
+
+If no uncensored image profile is configured, concealment applies as before — the character appearance descriptions are additionally sanitized in that case, since there is nowhere else for the image to go.
+
 ## Chat-Level Classification
 
 In addition to per-message scanning, Quilltap can classify entire chats as dangerous based on the compressed context summary. This happens automatically in the background after messages are exchanged and a context summary has been generated.

@@ -4,6 +4,20 @@
 
 ### 4.9-dev
 
+#### Story background prompts stop concealing nudity when the image provider doesn't require it
+
+The story-background prompt crafter carries a "depicting intimate or unclothed states" section that teaches it to translate narrative nudity into cinematic concealment — a sheet draped where it's needed, a silhouette, foreground occlusion, a bath at a discreet level. That exists to get a prompt past image-provider moderation, and it was unconditional: baked into the system prompt constant, applied to every story background regardless of where the image was going.
+
+So a chat marked dangerous with a Concierge uncensored image profile configured got accurate per-character appearance text ("nude" — appearance sanitization already steps aside for exactly this case) fed into a crafter that then draped a sheet over it. The concealment was being applied to clear moderation the target provider does not perform.
+
+The intimacy guidance is now selected per call. `StoryBackgroundPromptContext` gains `uncensoredImageTarget`, and the crafter's system prompt is assembled from a shared head/tail plus one of two intimacy blocks: cinematic concealment (the default, unchanged wording) or candid depiction. The candid variant keeps every background-framing rule — figures toward the edges, environment primary, wide atmospheric shot, never an anatomical close-up — and both variants still refuse to re-dress a character the narrative undressed.
+
+The handler passes `isDangerousChat && hasUncensoredImageProvider`, the same signal `sanitizeAppearancesIfNeeded` already uses, so the two layers now agree. The empty-response retry that swaps in the uncensored text profile carries the flag through, instead of re-sending the concealment instructions to an uncensored model.
+
+Third case: when a standard provider accepts the prompt and then rejects the finished image on moderation grounds, the Concierge reroutes to the uncensored image profile — and that path was resending the already-concealed prompt verbatim. It now re-crafts the prompt candidly for the reroute target first. Best-effort: a failed re-craft keeps the existing prompt so the reroute still produces an image.
+
+Unchanged: the `generate_image` tool's prompt crafter, which never had concealment language; the avatar prompt builder, whose bare-chest handling is a framing constraint (crop at the collarbone) rather than prompt prose; and concealment as the default everywhere a moderated provider is the target.
+
 #### A project's story background follows its display-mode setting again (bug 80)
 
 A project set to "Latest chat background" (or "Project background", or a static upload) showed the theme's Prospero image instead. The setting saved correctly and the API returned the right image — only the page never painted it.

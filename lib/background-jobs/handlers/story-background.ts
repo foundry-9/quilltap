@@ -226,6 +226,12 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   const dangerSettings = dangerousContentResolved.settings;
   const isDangerousChat = isChatActiveDangerous(chat);
   const hasUncensoredImageProvider = Boolean(dangerSettings.uncensoredImageProfileId);
+  // A dangerous-marked chat with an uncensored image profile configured is
+  // already headed for a provider that accepts adult content — appearance
+  // sanitization steps aside for exactly this case (see
+  // `sanitizeAppearancesIfNeeded`), so the prompt crafter should too rather
+  // than draping a sheet over a scene nobody asked to have covered.
+  const uncensoredImageTarget = isDangerousChat && hasUncensoredImageProvider;
 
   // For dangerous chats, use uncensored provider for all cheap LLM tasks
   if (isDangerousChat) {
@@ -493,6 +499,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       sceneAesthetic,
       characterAesthetic,
       depictionGuidelines,
+      uncensoredImageTarget,
     },
     cheapLLMSelection,
     job.userId,
@@ -533,6 +540,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
           sceneAesthetic,
           characterAesthetic,
           depictionGuidelines,
+          uncensoredImageTarget,
         },
         uncensoredLLMSelection,
         job.userId,
@@ -574,10 +582,13 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   // woman with…"). Re-appending canonical `Friday: A woman. …` portraits on
   // top of that produces a divided/triptych image as the provider tries to
   // render both the integrated scene AND the portrait sidecards.
+  // Held for the moderation-reroute path below, which re-crafts the prompt and
+  // must re-run this same enrichment on the replacement.
+  let nonParticipantCharacters: Awaited<ReturnType<typeof repos.characters.findByUserId>> = [];
   try {
     const participantIdSet = new Set(payload.characterIds);
     const userCharacters = await repos.characters.findByUserId(job.userId);
-    const nonParticipantCharacters = userCharacters.filter(c => !participantIdSet.has(c.id));
+    nonParticipantCharacters = userCharacters.filter(c => !participantIdSet.has(c.id));
     const enrichResult = appendMissingCharacterEnumerations(
       finalPrompt!,
       nonParticipantCharacters,
@@ -704,11 +715,64 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       originalError: errorMessage,
     });
 
+    // The prompt that just got rejected was crafted for a moderated provider,
+    // so unless the chat was already flagged it carries the cinematic-
+    // concealment guidance. The reroute target accepts adult content, so
+    // re-craft candidly rather than sending a needlessly draped scene to a
+    // provider that never asked for one. Best-effort: any failure keeps the
+    // prompt we already have, so the reroute still happens.
+    let rerouteBasePrompt = finalPrompt!;
+    if (!uncensoredImageTarget && cheapLLMSelection) {
+      try {
+        const recraftResult = await craftStoryBackgroundPrompt(
+          {
+            sceneContext,
+            characters: characterDescriptions,
+            provider: reroute.profile.provider,
+            sceneAesthetic,
+            characterAesthetic,
+            depictionGuidelines,
+            uncensoredImageTarget: true,
+          },
+          uncensoredLLMSelection ?? cheapLLMSelection,
+          job.userId,
+          payload.chatId
+        );
+        if (recraftResult.success && recraftResult.result) {
+          // A fresh prompt needs the step-9b enumeration pass re-run over it —
+          // the one applied above belongs to the prompt we are replacing.
+          rerouteBasePrompt = appendMissingCharacterEnumerations(
+            recraftResult.result,
+            nonParticipantCharacters,
+          ).prompt;
+          logger.info('[StoryBackground] Re-crafted prompt candidly for the uncensored reroute target', {
+            context: 'background-jobs.story-background',
+            jobId: job.id,
+            promptLengthBefore: finalPrompt!.length,
+            promptLengthAfter: rerouteBasePrompt.length,
+            usedUncensoredCrafter: Boolean(uncensoredLLMSelection),
+          });
+        } else {
+          logger.warn('[StoryBackground] Candid re-craft for the reroute target returned nothing, reusing the concealed prompt', {
+            context: 'background-jobs.story-background',
+            jobId: job.id,
+            error: recraftResult.error,
+          });
+        }
+      } catch (recraftError) {
+        logger.warn('[StoryBackground] Candid re-craft for the reroute target failed, reusing the concealed prompt', {
+          context: 'background-jobs.story-background',
+          jobId: job.id,
+          error: getErrorMessage(recraftError),
+        });
+      }
+    }
+
     const rerouteProvider = createImageProvider(reroute.profile.provider);
     const rerouteStartTime = Date.now();
     // Re-resolve for the reroute provider/model — its shape mechanism may differ.
     const rerouteResolved = resolveOrientation(reroute.profile.provider, reroute.profile.modelName, 'landscape');
-    const reroutePrompt = rerouteResolved.promptHint ? `${finalPrompt}\n\n${rerouteResolved.promptHint}` : finalPrompt;
+    const reroutePrompt = rerouteResolved.promptHint ? `${rerouteBasePrompt}\n\n${rerouteResolved.promptHint}` : rerouteBasePrompt;
     try {
       generationResponse = await rerouteProvider.generateImage({
         prompt: reroutePrompt,
@@ -730,7 +794,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         modelName: reroute.profile.modelName,
         imageProfileId: reroute.profile.id,
         request: {
-          messages: [{ role: 'user', content: finalPrompt }],
+          messages: [{ role: 'user', content: rerouteBasePrompt }],
         },
         response: {
           content: rerouteRevisedPrompt || `Generated ${generationResponse.images?.length ?? 0} image(s) (Concierge reroute)`,
@@ -759,7 +823,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         modelName: reroute.profile.modelName,
         imageProfileId: reroute.profile.id,
         request: {
-          messages: [{ role: 'user', content: finalPrompt }],
+          messages: [{ role: 'user', content: rerouteBasePrompt }],
         },
         response: {
           content: '',

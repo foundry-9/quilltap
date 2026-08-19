@@ -189,6 +189,14 @@ export interface StoryBackgroundPromptContext {
   characterAesthetic?: string | null
   /** The Ariel Clause: mandatory per-character depiction guidelines (never dropped). */
   depictionGuidelines?: Array<{ characterName: string; content: string }> | null
+  /**
+   * True when the crafted prompt is bound for a Concierge uncensored image
+   * provider — a dangerous-marked chat with one configured, or a post-hoc
+   * moderation reroute onto one. Swaps the crafter's intimacy guidance from
+   * cinematic concealment to a candid depiction. Defaults to false: a prompt
+   * headed for a moderated provider still gets the concealment treatment.
+   */
+  uncensoredImageTarget?: boolean
 }
 
 /**

@@ -226,10 +226,13 @@ CRITICAL RULES — read carefully:
 - Be concise and accurate. Output ONLY the JSON object.`
 
 /**
- * Story background prompt crafting system prompt
- * Creates atmospheric landscape scene prompts suitable for chat backgrounds
+ * Story background prompt crafting system prompt — shared opening.
+ *
+ * The intimacy guidance that follows it is NOT fixed: it swaps depending on
+ * whether the crafted prompt is bound for a moderated image provider or for a
+ * Concierge uncensored one. Assembled by `buildStoryBackgroundPrompt`.
  */
-const STORY_BACKGROUND_PROMPT = `You are a skilled visual artist and prompt engineer specializing in atmospheric landscape scenes for story backgrounds.
+const STORY_BACKGROUND_PROMPT_HEAD = `You are a skilled visual artist and prompt engineer specializing in atmospheric landscape scenes for story backgrounds.
 
 You will receive:
 - A scene context (typically a chat title or summary describing the story)
@@ -250,9 +253,15 @@ CRITICAL GUIDELINES:
 - Focus on atmospheric qualities: lighting, weather, time of day, mood
 - Include environmental details: location type, architectural elements, nature
 - Avoid cluttered compositions - keep it visually calm for use as a background
-- Write in a flowing, descriptive style suitable for image generation
+- Write in a flowing, descriptive style suitable for image generation`
 
-DEPICTING INTIMATE OR UNCLOTHED STATES:
+/**
+ * Intimacy guidance for a MODERATED image provider (the default). Teaches the
+ * crafter to translate narrative nudity into cinematic concealment rather than
+ * either rendering explicit anatomy (which the provider rejects) or sanitizing
+ * the scene into a different one.
+ */
+const STORY_BACKGROUND_CONCEALED_INTIMACY = `DEPICTING INTIMATE OR UNCLOTHED STATES:
 When the scene context or a character description implies someone is undressed, partially clothed, or in an intimate state, do NOT render explicit nudity. Instead, use cinematic concealment to preserve the narrative truth while keeping the image renderable. The figure is still nude in the story — the camera is just polite about it. Choose whichever technique fits the scene most naturally, and you may combine them:
 - Drapery: a sheet, blanket, towel, or robe carelessly arranged, falling just where it needs to fall; a quilt pulled up to the collarbone; a towel knotted at the chest
 - Composition & framing: crop from the shoulders up, shoot from behind, use a side silhouette, or frame so the figure is partly off-canvas
@@ -262,9 +271,25 @@ When the scene context or a character description implies someone is undressed, 
 - Environment: water (bath, pool, sea, hot spring) at a discreet level; tall grass; deep snow; a steamed-over mirror
 - Implied context: tousled bedding, discarded clothing on the floor, a robe thrown over a chair — let the surroundings tell the story while the figure itself is shown with tasteful concealment
 
-The intent of the scene MUST come through. Use evocative mood language — "intimate", "tender", "vulnerable", "private moment", "morning after", "candlelit", "bare-shouldered", "barefoot", "freshly bathed" — to preserve the meaning. Do NOT erase the narrative by substituting fully-clothed alternatives ("wearing pajamas", "in casual clothes"); that destroys the scene. The reader of the final image should understand exactly what is happening; only the explicit anatomy is held back.
+The intent of the scene MUST come through. Use evocative mood language — "intimate", "tender", "vulnerable", "private moment", "morning after", "candlelit", "bare-shouldered", "barefoot", "freshly bathed" — to preserve the meaning. Do NOT erase the narrative by substituting fully-clothed alternatives ("wearing pajamas", "in casual clothes"); that destroys the scene. The reader of the final image should understand exactly what is happening; only the explicit anatomy is held back.`
 
-AESTHETIC & DEPICTION GUIDELINES:
+/**
+ * Intimacy guidance for a Concierge UNCENSORED image provider. The concealment
+ * techniques above exist to get a prompt past moderation the target provider
+ * does not apply, so drop them: depict the scene as the narrative actually has
+ * it. This is still a background image, so the framing rules stay in force.
+ */
+const STORY_BACKGROUND_CANDID_INTIMACY = `DEPICTING INTIMATE OR UNCLOTHED STATES:
+The target image provider accepts adult content, so depict the scene as the narrative actually has it. When the scene context or a character description implies someone is undressed, partially clothed, or in an intimate state, say so plainly — "nude", "naked", "bare", "undressed" — and describe pose, skin, and light honestly.
+
+Do NOT reach for coy substitutes you were not asked for: no sheet draped precisely where it is needed, no steam or convenient furniture parked over a body, no silhouette-only framing, unless the scene itself genuinely calls for them. Equally, do NOT erase the narrative by re-dressing a character the story undressed ("wearing pajamas", "in casual clothes"); that destroys the scene.
+
+The BACKGROUND framing rules still apply in full: figures toward the left and right of the frame, the environment primary, the composition visually calm. Nudity is a plain fact of the scene, not its subject — this is a wide atmospheric shot, never an anatomical close-up.`
+
+/**
+ * Aesthetic handling and the framing examples, shared by both variants.
+ */
+const STORY_BACKGROUND_PROMPT_TAIL = `AESTHETIC & DEPICTION GUIDELINES:
 - You may receive an overall image aesthetic and/or a character depiction aesthetic. Apply these as the consistent visual style (medium, era, palette, rendering) across the whole scene and its figures.
 - You may also receive per-character depiction guidelines. These are MANDATORY, binding constraints for the named character and OVERRIDE the general aesthetic wherever they conflict. Never omit, soften, or contradict them.
 
@@ -272,15 +297,46 @@ GOOD EXAMPLE OUTPUT:
 "A misty forest clearing at twilight. A woman with flowing dark hair in a simple dress stands near a weathered stone bridge at the left of the frame, a man in traveler's clothes paused at the right edge. Soft golden light filters through ancient oaks; fog drifts across the mossy ground; fireflies just beginning to glow. Painterly, calm, atmospheric."
 
 BAD EXAMPLE OUTPUT:
-"Close-up of two people talking face-to-face in the center of the frame, the woman's smile filling most of the image, fine detail on her green eyes."
+"Close-up of two people talking face-to-face in the center of the frame, the woman's smile filling most of the image, fine detail on her green eyes."`
 
-INTIMATE-SCENE EXAMPLE:
+/** Worked intimate-scene example matching the concealed guidance. */
+const STORY_BACKGROUND_CONCEALED_EXAMPLE = `INTIMATE-SCENE EXAMPLE:
 SCENE INPUT: "After their first night together, she lies in bed, nude and half-asleep, while he watches her from the window."
 GOOD: "A woman half-asleep in a tousled bed, a white sheet draped loosely across her hips and trailing off the mattress, bare shoulders catching the soft dawn light. A man stands silhouetted at the window in a half-buttoned shirt, watching her. Clothing scattered across the floor. Intimate, candlelit-into-morning mood."
 BAD (too explicit, will be rejected): "A nude woman naked in bed..."
-BAD (sanitized into a different scene): "A woman in pajamas sitting up in bed while a fully-dressed man stands at the window."
+BAD (sanitized into a different scene): "A woman in pajamas sitting up in bed while a fully-dressed man stands at the window."`
 
-Respond with ONLY the final prompt - no explanations, no markdown formatting, no quotes.`
+/** Worked intimate-scene example matching the candid guidance. */
+const STORY_BACKGROUND_CANDID_EXAMPLE = `INTIMATE-SCENE EXAMPLE:
+SCENE INPUT: "After their first night together, she lies in bed, nude and half-asleep, while he watches her from the window."
+GOOD: "A bedroom at dawn, wide and quiet. At the left of the frame a woman lies nude on her side in tousled sheets, half-asleep, soft morning light across her bare skin. At the right a man stands at the window in a half-buttoned shirt, watching her. Clothing scattered across the floorboards. Warm, still, morning-after mood."
+BAD (needlessly coy — the provider did not ask for this): "A woman with a sheet draped carefully across her hips, only her bare shoulders showing."
+BAD (sanitized into a different scene): "A woman in pajamas sitting up in bed while a fully-dressed man stands at the window."`
+
+const STORY_BACKGROUND_PROMPT_CLOSING = `Respond with ONLY the final prompt - no explanations, no markdown formatting, no quotes.`
+
+/**
+ * Assembles the story-background crafter's system prompt.
+ *
+ * @param uncensoredImageTarget - True when the crafted prompt is bound for a
+ *   Concierge uncensored image provider, which swaps cinematic concealment for
+ *   a candid depiction. Defaults to false: concealment is the default.
+ */
+function buildStoryBackgroundPrompt(uncensoredImageTarget: boolean): string {
+  const intimacy = uncensoredImageTarget
+    ? STORY_BACKGROUND_CANDID_INTIMACY
+    : STORY_BACKGROUND_CONCEALED_INTIMACY
+  const example = uncensoredImageTarget
+    ? STORY_BACKGROUND_CANDID_EXAMPLE
+    : STORY_BACKGROUND_CONCEALED_EXAMPLE
+  return [
+    STORY_BACKGROUND_PROMPT_HEAD,
+    intimacy,
+    STORY_BACKGROUND_PROMPT_TAIL,
+    example,
+    STORY_BACKGROUND_PROMPT_CLOSING,
+  ].join('\n\n')
+}
 
 /**
  * Appearance resolution system prompt
@@ -760,7 +816,7 @@ export async function craftStoryBackgroundPrompt(
   const llmMessages: LLMMessage[] = [
     {
       role: 'system',
-      content: STORY_BACKGROUND_PROMPT,
+      content: buildStoryBackgroundPrompt(context.uncensoredImageTarget === true),
     },
     {
       role: 'user',
