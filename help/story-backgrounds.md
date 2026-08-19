@@ -58,6 +58,10 @@ Projects can display backgrounds in different ways:
 - **Project**: A generated background for the project (based on character roster)
 - **Latest Chat**: Automatically uses the most recent chat's background
 
+Set the mode on the project's own page, in the **Image Generation** card under **Story Backgrounds**. In **Theme** mode the project page falls back to whatever decorative backdrop your theme gives the Prospero section, exactly as the projects list does — the other three modes replace it with the project's chosen image.
+
+When a project is open beside a conversation in a split workspace, the conversation's background wins the whole screen; the project's background returns when you close or move away from that conversation.
+
 ## Performance Notes
 
 - Background images are generated as background jobs, so they won't slow down your chat
@@ -68,6 +72,8 @@ Projects can display backgrounds in different ways:
 
 **Background not appearing:**
 - Check that Story Backgrounds is enabled in the **Images** tab in Settings (`/settings?tab=images&section=story-backgrounds`)
+- On a project page, check the project's background display mode — in **Theme** mode the project shows the theme's backdrop rather than a generated one
+- In **Latest Chat** mode, at least one chat in the project must already have a generated background
 - Verify your image profile has a valid API key
 - Check the Tasks Queue for any failed generation jobs
 

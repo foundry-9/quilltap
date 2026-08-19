@@ -4,6 +4,14 @@
 
 ### 4.9-dev
 
+#### A project's story background follows its display-mode setting again (bug 80)
+
+A project set to "Latest chat background" (or "Project background", or a static upload) showed the theme's Prospero image instead. The setting saved correctly and the API returned the right image — only the page never painted it.
+
+The tabbed workspace replaced each view's own background layer with a single arbitrated backdrop, so two panes in a split can't paint over each other. Views report their background to it, and the old per-view layer is suppressed inside the workspace. The project detail view was never converted: it still set the CSS variable for a layer that is now hidden, and reported nothing. What painted instead was the projects list's subsystem background, which stayed registered under the tab even after you drilled into a project.
+
+The project detail now reports its background to the backdrop, falling back to the Prospero image when the project's mode is "Theme colors". The list's subsystem background moved into its own component that unmounts while a project is open, so exactly one background is registered per tab — which also fixes the deep-link case (opening a project straight into a new tab), where the two competing reporters used to resolve the wrong way.
+
 #### Avatar generation no longer crashes on chats older than the hair slot (bug 78)
 
 `equippedOutfit` is unconstrained JSON, and the hair slot was added without a migration: every slot key defaults to an empty array, so a chat row written before the slot existed is supposed to read back with `hair: []`. That held everywhere the value passed through the schema, and `getEquippedOutfit` was the one place it did not — it returned the stored object through a raw cast. The outfit resolver then indexed the missing key and handed `undefined` to `expandComposites`, which threw `rootIds is not iterable` and killed the avatar job.

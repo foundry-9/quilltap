@@ -6,7 +6,7 @@
  * Displays all user projects with counts and actions.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useProjects } from './hooks/useProjects'
 import { ProjectsGrid, CreateProjectDialog, DeleteProjectDialog } from './components'
 import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
@@ -32,7 +32,6 @@ export function ProsperoView({ initialProjectId }: ProsperoViewProps = {}) {
   // In a workspace tab, drilling into a project renders in place (keep-alive).
   const inTab = useWorkspaceTabId() != null
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(initialProjectId ?? null)
-  const bgStyle = useSubsystemBackgroundStyle('prospero')
 
   useEffect(() => {
     fetchProjects()
@@ -96,7 +95,7 @@ export function ProsperoView({ initialProjectId }: ProsperoViewProps = {}) {
   }
 
   return (
-    <div className="qt-page-container text-foreground" style={bgStyle}>
+    <ProsperoListShell>
       <div className="flex flex-wrap items-center justify-between gap-4 border-b qt-border-default/60 pb-6">
         <h1 className="qt-heading-1 leading-tight">Projects</h1>
         <button
@@ -125,6 +124,27 @@ export function ProsperoView({ initialProjectId }: ProsperoViewProps = {}) {
         onClose={() => setDeleteProjectId(null)}
         onConfirm={handleDelete}
       />
+    </ProsperoListShell>
+  )
+}
+
+/**
+ * The list view's page shell, carrying the Prospero subsystem background.
+ *
+ * This lives in its own component so the subsystem background — which reports
+ * itself to the workspace backdrop — is *unmounted* while a project detail is
+ * shown in place. The registry keys on the tab id, and the list and the detail
+ * it drills into share one tab, so a reporter left mounted in ProsperoView
+ * would leave the subsystem image parked under that key: exactly how the
+ * project background stopped following `backgroundDisplayMode` (bug 80).
+ * Keeping one reporter alive at a time makes the winner unambiguous instead of
+ * a race between two effects.
+ */
+function ProsperoListShell({ children }: { children: ReactNode }) {
+  const bgStyle = useSubsystemBackgroundStyle('prospero')
+  return (
+    <div className="qt-page-container text-foreground" style={bgStyle}>
+      {children}
     </div>
   )
 }
