@@ -247,6 +247,8 @@ To enable this feature, look for the **Auto-Generate Avatars** toggle in your ch
 
 The generated avatars update asynchronously: the chat continues without interruption, and the new portrait appears once the image provider has finished its work. Previous messages retain whatever avatar was current at the time, so scrolling backwards through the conversation reveals each costume change in sequence.
 
+Conversations begun before the Hair slot arrived sit for their portraits exactly as the newer ones do. A dressed character in such a chat had, for a time, been quietly refused at the studio door --- the portraitist balked at an outfit that predated the fifth slot and simply produced nothing --- and along with the portrait went the scene's own account of what the character was wearing. Both are restored, and neither requires anything of you: the older ensembles are read as they always ought to have been, with the coiffure merely unarranged.
+
 ## Migration from Legacy Clothing
 
 If your characters already have clothing descriptions from before the Wardrobe system existed, fear not: Quilltap automatically migrates those descriptions into wardrobe items as full-coverage outfits. The original `clothingRecords` data is preserved, so nothing is lost in the transition. Think of it as unpacking a steamer trunk into a proper armoire --- everything is still there, just better organized.

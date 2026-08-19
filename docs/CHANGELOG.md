@@ -4,6 +4,22 @@
 
 ### 4.9-dev
 
+#### Avatar generation no longer crashes on chats older than the hair slot (bug 78)
+
+`equippedOutfit` is unconstrained JSON, and the hair slot was added without a migration: every slot key defaults to an empty array, so a chat row written before the slot existed is supposed to read back with `hair: []`. That held everywhere the value passed through the schema, and `getEquippedOutfit` was the one place it did not — it returned the stored object through a raw cast. The outfit resolver then indexed the missing key and handed `undefined` to `expandComposites`, which threw `rootIds is not iterable` and killed the avatar job.
+
+This hit any chat created before the hair slot that has something equipped — in practice every long-lived instance, since only chats made after the feature write all five keys. Two more readers behind the same call degrade quietly instead of crashing: the scene-state tracker and the context manager's live-outfit override both sit behind their own try/catch, so the model simply stopped being told what the character was wearing.
+
+Stored slot bags are now normalized in one place (`normalizeEquippedSlots` in `lib/schemas/wardrobe.types.ts`) on the way out of the column, which fixes the crash and the two silent readers together. A bag the schema refuses outright — a bad id in one slot — is salvaged key by key rather than discarded, so a repair never costs you clothing that was still legible. The resolver keeps an `?? []` of its own for callers that pass a slot bag directly, and the wardrobe-create tool now reads the post-equip state through the repository instead of off the chat row by hand.
+
+#### Import says so when it can't read the destination (bug 79)
+
+Repository reads answer a failure with a fallback value — `null`, `[]`, `false` — which is the right default when the alternative is a blank screen. The importers were consuming those values as facts about the destination ("no such row", "no collision") and committing writes on the strength of them. On a database that fails individual reads — a corrupt page, a missing table after a bad migration, a competing writer — an entity that *existed* read as *absent*, the import took the wrong branch and produced duplicates or skipped merges, and it reported success with nothing in its warnings.
+
+Import and import preview now run with those fallbacks suspended: a read that fails stays a failure, lands in the importer's per-item handler, and is reported by name. Partial progress still works the way it did — one unreadable entity is skipped rather than aborting the run — but the summary now names what was skipped and why.
+
+Five importers (tags, roleplay templates, and the three profile types) were only writing failures to the log, never to the warnings you see. They now report them like the others. So does the preserve-ids preflight, which refuses the whole import before anything is written and had been returning failure with no explanation at all — including when a character rehydrate uses it, which previously reported "unknown import error".
+
 #### Workspace tabs refresh their data when you navigate back to them
 
 The workspace keeps every open tab mounted (that's what lets a streaming Salon survive tab switches), which meant a tab you returned to still showed whatever it had loaded when you left — rename a character in their detail tab and the characters list behind it kept the old name until a full page reload.

@@ -42,6 +42,10 @@ import { reconcileRelationships } from './reconcile';
 import { enqueueEmbeddingGenerate } from '@/lib/background-jobs/queue-service';
 import { getDefaultEmbeddingProfile } from '@/lib/embedding/embedding-service';
 import { scheduleRefit } from '@/lib/embedding/embedding-job-scheduler';
+import {
+  withStrictRepositoryFailures,
+  withRepositoryFallbacks,
+} from '@/lib/database/repositories/strict-failures';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
 
@@ -414,9 +418,24 @@ async function enqueueImportedMemoryEmbeddings(
 }
 
 /**
- * Executes the import of QuilltapExport data
+ * Executes the import of QuilltapExport data.
+ *
+ * Runs under {@link withStrictRepositoryFailures}: every phase below decides
+ * what to write from what it reads out of the destination, so a read that
+ * *fails* must not arrive here wearing the same face as a row that is simply
+ * absent. Inside the scope a failing repository call throws instead of
+ * returning its fallback, and the per-item catch arms turn it into a named
+ * warning rather than a silently wrong branch (Bug 79).
  */
 export async function executeImport(
+  userId: string,
+  exportData: QuilltapExport,
+  options: ImportOptions
+): Promise<ImportResult> {
+  return withStrictRepositoryFailures(() => executeImportStrict(userId, exportData, options));
+}
+
+async function executeImportStrict(
   userId: string,
   exportData: QuilltapExport,
   options: ImportOptions
@@ -485,6 +504,11 @@ export async function executeImport(
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     moduleLogger.warn('Preserve IDs preflight failed', { userId, error: errorMessage });
+    // `warnings` is the only channel the result carries to the user, and this
+    // refusal aborts the whole import — saying nothing here is exactly the
+    // silence Bug 79 is about, whether the preflight refused a real collision
+    // or gave up because the destination would not answer a read.
+    warnings.push(`Import refused before anything was written: ${errorMessage}`);
     return {
       success: false,
       imported,
@@ -510,7 +534,8 @@ export async function executeImport(
         data.tags,
         options,
         idMaps,
-        repos
+        repos,
+        warnings
       );
       imported.tags = tagCounts.imported;
       skipped.tags = tagCounts.skipped;
@@ -523,7 +548,8 @@ export async function executeImport(
         data.connectionProfiles,
         options,
         idMaps,
-        repos
+        repos,
+        warnings
       );
       imported.connectionProfiles = counts.imported;
       skipped.connectionProfiles = counts.skipped;
@@ -536,7 +562,8 @@ export async function executeImport(
         data.imageProfiles,
         options,
         idMaps,
-        repos
+        repos,
+        warnings
       );
       imported.imageProfiles = counts.imported;
       skipped.imageProfiles = counts.skipped;
@@ -549,7 +576,8 @@ export async function executeImport(
         data.embeddingProfiles,
         options,
         idMaps,
-        repos
+        repos,
+        warnings
       );
       imported.embeddingProfiles = counts.imported;
       skipped.embeddingProfiles = counts.skipped;
@@ -562,7 +590,8 @@ export async function executeImport(
         data.roleplayTemplates,
         options,
         idMaps,
-        globalRepos
+        globalRepos,
+        warnings
       );
       imported.roleplayTemplates = counts.imported;
       skipped.roleplayTemplates = counts.skipped;
@@ -837,7 +866,13 @@ export async function executeImport(
     // Re-embed what we just inserted. Imported memories carry no vector, and
     // without this their semantic search stays broken until the next boot's
     // reconcile sweep runs.
-    await enqueueImportedMemoryEmbeddings(userId, importedMemoryRefs, warnings);
+    // Follow-up job scheduling, not an import decision: it neither reads the
+    // destination to choose a branch nor writes user data, and it already
+    // guards every call. Restore the ordinary degrade-and-log behaviour so the
+    // import's strictness does not ride out into the job queue.
+    await withRepositoryFallbacks(() =>
+      enqueueImportedMemoryEmbeddings(userId, importedMemoryRefs, warnings)
+    );
 
     // Destination character IDs — for the `duplicate` strategy every value is a
     // freshly created character (see import-characters). The Salon "Summon from

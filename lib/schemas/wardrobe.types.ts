@@ -248,3 +248,32 @@ export function allEquippedItemIds(slots: EquippedSlots): string[] {
   return Array.from(new Set(WARDROBE_SLOT_TYPES.flatMap((s) => slots[s] ?? [])));
 }
 
+/**
+ * Coerce a raw stored slot bag into a full five-slot `EquippedSlots`.
+ *
+ * `equippedOutfit` is unconstrained JSON and slots were added over time (the
+ * hair slot arrived after real instances were already writing four-key rows),
+ * so anything read back off a chat row may be missing keys entirely. Every
+ * slot in `EquippedSlotsSchema` is `.default([])`, which makes the parse the
+ * canonical repair — this is the one place that performs it, so a legacy row
+ * reads as an empty slot rather than an `undefined` the readers then iterate.
+ *
+ * Malformed values (a non-array slot, a non-string entry) fall back to a
+ * key-by-key salvage rather than discarding the whole bag: what is still
+ * legible survives, the rest becomes an empty slot.
+ */
+export function normalizeEquippedSlots(raw: unknown): EquippedSlots {
+  const parsed = EquippedSlotsSchema.safeParse(raw ?? {});
+  if (parsed.success) {
+    return parsed.data;
+  }
+
+  const bag = (raw ?? {}) as Record<string, unknown>;
+  return Object.fromEntries(
+    WARDROBE_SLOT_TYPES.map((slot) => {
+      const value = bag[slot];
+      return [slot, Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []];
+    }),
+  ) as unknown as EquippedSlots;
+}
+

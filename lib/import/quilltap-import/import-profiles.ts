@@ -26,7 +26,8 @@ export async function importConnectionProfiles(
   profiles: ConnectionProfile[],
   options: ImportOptions,
   idMaps: IdMappingState,
-  repos: ReturnType<typeof getUserRepositories>
+  repos: ReturnType<typeof getUserRepositories>,
+  warnings: string[]
 ): Promise<ImportCounts> {
   let imported = 0;
   let skipped = 0;
@@ -114,6 +115,11 @@ export async function importConnectionProfiles(
       idMaps.connectionProfiles.set(profile.id, newProfile.id);
       imported++;
     } catch (error) {
+      warnings.push(
+        `Failed to import connection profile "${profile.name}": ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
       moduleLogger.warn('Failed to import connection profile', {
         profileId: profile.id,
         error: error instanceof Error ? error.message : String(error),
@@ -129,7 +135,8 @@ export async function importImageProfiles(
   profiles: ImageProfile[],
   options: ImportOptions,
   idMaps: IdMappingState,
-  repos: ReturnType<typeof getUserRepositories>
+  repos: ReturnType<typeof getUserRepositories>,
+  warnings: string[]
 ): Promise<ImportCounts> {
   let imported = 0;
   let skipped = 0;
@@ -184,6 +191,11 @@ export async function importImageProfiles(
       idMaps.imageProfiles.set(profile.id, newProfile.id);
       imported++;
     } catch (error) {
+      warnings.push(
+        `Failed to import image profile "${profile.name}": ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
       moduleLogger.warn('Failed to import image profile', {
         profileId: profile.id,
         error: error instanceof Error ? error.message : String(error),
@@ -199,7 +211,8 @@ export async function importEmbeddingProfiles(
   profiles: EmbeddingProfile[],
   options: ImportOptions,
   idMaps: IdMappingState,
-  repos: ReturnType<typeof getUserRepositories>
+  repos: ReturnType<typeof getUserRepositories>,
+  warnings: string[]
 ): Promise<ImportCounts> {
   let imported = 0;
   let skipped = 0;
@@ -254,6 +267,11 @@ export async function importEmbeddingProfiles(
       idMaps.embeddingProfiles.set(profile.id, newProfile.id);
       imported++;
     } catch (error) {
+      warnings.push(
+        `Failed to import embedding profile "${profile.name}": ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
       moduleLogger.warn('Failed to import embedding profile', {
         profileId: profile.id,
         error: error instanceof Error ? error.message : String(error),

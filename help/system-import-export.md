@@ -173,6 +173,19 @@ After import completes, you see:
 - Number of templates created
 - Number of memories queued (if included)
 
+**Warnings, if there were any:**
+
+An import does not stop at the first item it cannot manage — it carries on and
+tells you afterwards. Anything it had to leave behind is named in the results:
+which item it was, and what went wrong. An import that ran into nothing at all
+reports no warnings, so a list with entries in it is worth reading before you
+assume everything arrived.
+
+Should the import decline to begin — which happens when it is asked to preserve
+the original identifiers and finds them already spoken for — it says so, names
+the obstacle, and writes nothing whatsoever. Nothing has been half-applied and
+there is nothing to undo.
+
 **Next steps:**
 
 - New items appear in your system immediately
@@ -351,6 +364,19 @@ instance cannot reach the outside world; otherwise a refresh knows better.
 - If using "Create New" strategy, duplicates are expected
 - To avoid duplicates, use "Replace" or "Keep Existing"
 - Delete duplicates manually if not wanted
+
+**The import warned that it could not read something**
+
+- A warning of this shape means the import asked your existing database whether
+  an item was already there and got an error rather than an answer. It declines
+  to guess: the item is skipped and named, instead of being created a second
+  time on top of one that may well already exist
+- The rest of the import proceeds normally — the summary tells you exactly what
+  was left out
+- The cause is nearly always the destination rather than the file: a database
+  interrupted mid-upgrade, a copy damaged in transit, or another process holding
+  it open. Restart Quilltap and try again; if the warnings persist, restore the
+  instance from a backup first and import into the restored copy
 
 ## Best Practices
 

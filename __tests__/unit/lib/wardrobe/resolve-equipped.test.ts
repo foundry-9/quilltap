@@ -246,4 +246,23 @@ describe('resolveEquippedOutfitForCharacter', () => {
     // Equipped id, then one attempt at the missing component — no retry loop.
     expect(findByIdsForCharacter).toHaveBeenCalledTimes(2)
   })
+
+  // Bug 78: `equippedOutfit` is unconstrained JSON, so a chat row written
+  // before a slot existed simply has no key for it. The loop must read the
+  // absent key as an empty slot, not hand `undefined` to `expandComposites`.
+  it('resolves a legacy slot bag written before the hair slot existed', async () => {
+    const shirt = makeItem('shirt-id', 'Linen shirt', ['top'])
+    const legacySlots = {
+      top: ['shirt-id'],
+      bottom: [],
+      footwear: [],
+      accessories: [],
+    } as unknown as EquippedSlots
+
+    const resolved = await resolveEquippedOutfitForCharacter(makeRepos([shirt]), CHAR_ID, legacySlots)
+
+    expect(resolved.outfitValues.top).toEqual(['Linen shirt'])
+    expect(resolved.outfitValues.hair).toEqual([])
+    expect(resolved.leafItemsBySlot.hair).toEqual([])
+  })
 })

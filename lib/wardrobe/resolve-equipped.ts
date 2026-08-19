@@ -160,7 +160,9 @@ export async function resolveEquippedOutfitForCharacter(
   const seenLeafIds = new Set<string>();
   const orderedLeaves: WardrobeItem[] = [];
   for (const slot of WARDROBE_SLOT_TYPES) {
-    const expanded = expandComposites(slots[slot], itemsById);
+    // `?? []` is load-bearing: a slot bag written before this slot existed has
+    // no key at all, and `expandComposites` iterates what it is handed.
+    const expanded = expandComposites(slots[slot] ?? [], itemsById);
     for (const id of expanded.leafIds) {
       if (seenLeafIds.has(id)) continue;
       const item = itemsById.get(id);

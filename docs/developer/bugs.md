@@ -1,12 +1,39 @@
 # Bugs — defects surfaced by the v5 port
 
-**Last Updated**: 2026-08-17
+**Last Updated**: 2026-08-18
 **Codebase**: Quilltap v4.9.0-dev
 **Provenance**: the quilltap-v5 native port's differential harness, its
 dogfood walks against a copy of real data, and — from Bug 62 — v4's own
 feature-spec work and browser verification
-**Status**: Bugs **1–77** are **fixed in v4** — nothing in this catalogue is
-open. Bug 76 (filed and fixed 2026-08-17) was Bug 73's shape one field over,
+**Status**: Bugs **1–79** are **fixed in v4** — nothing in this catalogue is
+open. Bugs 78 and 79 (filed 2026-08-18, fixed the same day) are the same
+sentence about two different columns: a value read back out of a loosely-typed
+store was allowed to mean something it did not. In **78** `equippedOutfit` is
+unconstrained JSON and the hair slot shipped on a deliberate no-migration
+design — every slot key is `.default([])`, so a four-key legacy row is
+*supposed* to read as `hair: []`. That holds wherever the value passes through
+the schema, and `getEquippedOutfit` was the one place it did not: a raw cast,
+after which the resolver indexed `slots['hair']`, handed `undefined` to
+`expandComposites` and killed the avatar job on every chat older than the
+feature — which is to say every real instance, since only fixtures are written
+after it. The repair is a `normalizeEquippedSlots` chokepoint on the way out of
+the column, which also heals the two sites that were degrading soft and quietly
+dropping the character's clothes from the model's view; the resolver keeps its
+`?? []` regardless, because it is exported and several callers hand it a bag
+that never went near the repository. In **79** the value is a *fallback*:
+`safeQuery`'s 4-arg mode answers a thrown read with `null`, and the import's
+reconcile consumes that as "no such row" before committing a write — so a
+destination that fails reads imports as an empty one, partially and
+duplicated, and reports success. Editing the 23 nested read sites would have
+meant re-deciding one question per site in files whose other callers still want
+the degraded answer, so the fix carries the missing bit instead — *who is
+asking* — as a `withStrictRepositoryFailures` scope around both import entry
+points and a single `&& !strict` in `safeQuery`. The half the filing did not
+anticipate: five importers had no `warnings` array at all and only logged, so
+strictness alone would have traded a silent wrong branch for a silent skip;
+they now name what they dropped, as does the preserveIds preflight, whose
+refusal aborts the whole import and had been returning `success: false` with
+nothing in it. Bug 76 (filed and fixed 2026-08-17) was Bug 73's shape one field over,
 and the fix that closed 73 had gone straight past it: an api key chosen for one
 provider stayed on the form after the provider changed, invisible on a keyless
 provider and shown as blank on a different hosted one, while all four outbound
@@ -382,8 +409,8 @@ One row per bug, newest last. **Bug** links to the entry; **Fix site** and
 | 75 | [importing a `.qtap` re-mints wardrobe item ids but not the composite references to them](bugs/fixed/bug-75-import-composite-id-remap.md) | 2026-08-17 | 2026-08-17 | Medium (silent: every imported composite outfit arrives hollow — equipping it clears its slots and puts nothing on) | `importCharacterWardrobeItems` strips `item.id` so `wardrobe.create` mints a fresh one, but spreads `componentItemIds` through verbatim — every composite keeps the export's old ids, which resolve to nothing in the destination | same function: pre-assigned id map, remapped `componentItemIds` (unresolvable refs dropped with a warning), leaf-first creation order, ids passed via `create`'s `options.id` | Not yet assessed — v5's importer must remap composite references whenever it re-mints item ids |
 | 76 | [an api key survives a provider change, and the form sends a key the user cannot see and did not choose](bugs/fixed/bug-76-api-key-survives-provider-change.md) | 2026-08-17 | 2026-08-17 | Medium (the save is refused, not written wrong — but the refusal names a field the dialog does not show, and on a keyless provider nothing clears it; meanwhile Connect / Fetch Models / Test Message send a key the select reads as unselected) | `handleProviderChange` never clears `apiKeyId`, the select cannot express what is stored (hidden on a keyless provider, blank on a different hosted one), and all four outbound sites send it on truthiness — measured in v4's own modal: `ANTHROPIC → OLLAMA` saves `{"provider":"OLLAMA","apiKeyId":"key-anthropic"}` | new `outboundApiKeyId` chokepoint in `useProfileForm.ts` (the twin of Bug 73's) read by all four outbound sites + `handleConnect`'s validation, plus `savedProviderTakesApiKey` in `ProfileModal.tsx` | Owed (Faithful) — reproduces it; absorbs the chokepoint in a drift catch-up. Retires dogfood finding #90 |
 | 77 | [the Salon's tool-execution notice pins itself above the composer and can never be dismissed](bugs/fixed/bug-77-tool-status-banner-never-clears.md) | 2026-08-17 | 2026-08-17 | Low (cosmetic but permanent — the notice holds a row of composer space for the rest of the session, with no affordance to remove it) | `toolExecutionStatus` was raised by every streaming path but torn down in one: a detached `setTimeout` at the bottom of `sendMessage`'s terminal `onDone`. Continue mode, the intermediate-done leg of a tool chain, and both error arms all left `Successfully generated 1 image!` pinned forever — and the alert had no close control | ownership moved onto the notice in `useSSEStreaming.ts`: `publishToolExecutionStatus` self-expires a settled status after 6 s (ref-held timer, cleared on unmount), `clearPendingToolExecutionStatus` drops only a stranded `pending` one at turn boundaries, `dismissToolExecutionStatus` is wired through `SalonView` to a new close button on the `ChatComposer` alert | Not yet assessed — any v5 surface pinning a tool notice from a stream event must own the expiry with the notice, not with one caller's completion path |
-| 78 | [avatar generation crashes on any chat row written before the hair slot](bugs/bug-78-avatar-crash-pre-hair-outfit-rows.md) | 2026-08-18 | — | High | `getEquippedOutfit` returns the stored JSON through a raw cast and the resolver indexes `slots[slot]` with no `?? []`, so a four-key pre-hair row makes `expandComposites` iterate `undefined` — `rootIds is not iterable`, the avatar job dies outside any try; the scene-state and context-manager sites degrade soft, silently losing live clothing | `lib/wardrobe/resolve-equipped.ts:163` (`?? []`) or a schema parse at `chats.repository.ts:554` | Not affected — pinned both directions with a convergence tripwire (`avatar_job_tier3_equivalence` → `legacy_four_key_equipped`) |
-| 79 | [`.qtap` import swallows destination read errors and proceeds into a partial apply](bugs/bug-79-import-swallows-read-errors.md) | 2026-08-15 | — | Medium | `safeQuery`'s 4-arg fallback mode turns a FAILED read into "row absent" everywhere the import's reconcile leans on repository reads, so a damaged destination yields a partial, duplicated apply that reports success with zero warnings | import-scope reads through `safeQuery`'s rethrow mode (or routed into the per-item warning arms) | Fixed in v5, deliberately divergent (named skip sentences); both-direction pins retire on convergence |
+| 78 | [avatar generation crashes on any chat row written before the hair slot](bugs/fixed/bug-78-avatar-crash-pre-hair-outfit-rows.md) | 2026-08-18 | 2026-08-18 | High | `getEquippedOutfit` returns the stored JSON through a raw cast and the resolver indexes `slots[slot]` with no `?? []`, so a four-key pre-hair row makes `expandComposites` iterate `undefined` — `rootIds is not iterable`, the avatar job dies outside any try; the scene-state and context-manager sites degrade soft, silently losing live clothing | new `normalizeEquippedSlots` in `lib/schemas/wardrobe.types.ts`, applied in `getEquippedOutfit`; `?? []` kept at `resolve-equipped.ts:163` for direct callers; `wardrobe-create-handler` reads through the repository | Not affected — pinned both directions with a convergence tripwire (`avatar_job_tier3_equivalence` → `legacy_four_key_equipped`) |
+| 79 | [`.qtap` import swallows destination read errors and proceeds into a partial apply](bugs/fixed/bug-79-import-swallows-read-errors.md) | 2026-08-15 | 2026-08-18 | Medium | `safeQuery`'s 4-arg fallback mode turns a FAILED read into "row absent" everywhere the import's reconcile leans on repository reads, so a damaged destination yields a partial, duplicated apply that reports success with zero warnings | new `strict-failures.ts` scope suspends `safeQuery`'s fallback for the duration of `executeImport` / `previewImport`; the five importers that only logged now name what they dropped in `warnings`, as does the preserveIds preflight's refusal | Fixed in v5, deliberately divergent (named skip sentences); both-direction pins retire on convergence |
 
 ### Families and reading order
 
@@ -535,6 +562,8 @@ retire the divergence entries and let the cases become plain equalities.
 |---|---|---|
 | Bugs 1–3 | `crates/quilltap-harness/tests/system_restore_state.rs` → `assert_divergences` | Re-rule the divergence as converged |
 | Bug 4 | `crates/quilltap-harness/tests/system_import_equivalence.rs` → `EXPECTED_DIVERGENCES` | Remove the `throw_ndjson_truncated_blob` case |
+| Bug 78 | `crates/quilltap-harness/tests/avatar_job_tier3_equivalence.rs` → `legacy_four_key_equipped` | The v4 leg asserts the throw and will now fail by design — retire the pin to a plain equality |
+| Bug 79 | `crates/quilltap-harness/tests/…` → the `system_import_state` family | v4 no longer swallows; retire the both-direction pins. v5's per-step skip sentences and v4's `warnings` sentences are worded independently — converge the text only if a 1:1 sentence match is wanted (the v5 list is in that repo's `status-log.md` P4.48 entries) |
 
 The oracle baseline moves once, at the commit that carries these fixes.
 

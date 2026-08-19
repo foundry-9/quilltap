@@ -22,7 +22,7 @@ import type {
 } from '../wardrobe-create-tool';
 import { validateWardrobeCreateInput } from '../wardrobe-create-tool';
 import type { WardrobeItem, WardrobeItemType, EquippedSlots } from '@/lib/schemas/wardrobe.types';
-import { WARDROBE_SLOT_TYPES, EMPTY_EQUIPPED_SLOTS, isSlotReportedWhenEmpty } from '@/lib/schemas/wardrobe.types';
+import { WARDROBE_SLOT_TYPES, makeEmptyEquippedSlots, isSlotReportedWhenEmpty } from '@/lib/schemas/wardrobe.types';
 import { equipItem } from '@/lib/wardrobe/outfit-displacement';
 import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
 import { unionTypes } from '@/lib/wardrobe/composite-types';
@@ -273,11 +273,11 @@ export async function executeWardrobeCreateTool(
       equipped = true;
       effect = newItem.replace ? 'replaced' : 'layered';
 
-      const chat = await repos.chats.findById(context.chatId);
-      if (chat) {
-        const equippedOutfit = (chat as Record<string, unknown>).equippedOutfit as Record<string, EquippedSlots> | undefined;
-        currentState = equippedOutfit?.[targetCharacterId] || { ...EMPTY_EQUIPPED_SLOTS };
-      }
+      // Read through the repository so the stored bag is normalized to all
+      // five slots — a chat row written before a slot existed omits its key.
+      currentState =
+        (await repos.chats.getEquippedOutfitForCharacter(context.chatId, targetCharacterId)) ??
+        makeEmptyEquippedSlots();
 
       await triggerAvatarGenerationIfEnabled(repos, {
         userId: context.userId,

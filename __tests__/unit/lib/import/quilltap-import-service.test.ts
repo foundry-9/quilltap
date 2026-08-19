@@ -8,7 +8,7 @@
  * - ID remapping and relationship reconciliation
  */
 
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import {
   createMockCharacter,
   createMockPersona,
@@ -70,6 +70,7 @@ import {
 } from '@/lib/import/quilltap-import-service';
 import { PreserveIdsCollisionError } from '@/lib/import/quilltap-import/execute';
 import { getUserRepositories, getRepositories } from '@/lib/repositories/factory';
+import { strictRepositoryFailuresActive } from '@/lib/database/repositories/strict-failures';
 
 describe('quilltap-import-service', () => {
   const mockUserRepos = createMockUserRepositories();
@@ -591,6 +592,116 @@ describe('quilltap-import-service', () => {
       expect(result.warnings).toContainEqual(
         expect.stringContaining('non-existent character')
       );
+    });
+  });
+
+  // ============================================================================
+  // executeImport() - unreadable destination (Bug 79)
+  // ============================================================================
+
+  describe('executeImport() - unreadable destination', () => {
+    // `jest.clearAllMocks()` clears calls but keeps implementations, so a
+    // throwing reader planted here would follow the suite into later tests.
+    afterEach(() => {
+      mockUserRepos.tags.findById.mockImplementation(async () => null);
+      mockUserRepos.connections.findById.mockImplementation(async () => null);
+      mockUserRepos.characters.findById.mockImplementation(async () => null);
+    });
+
+    it('names the tag whose existence check failed instead of importing in silence', async () => {
+      const tag = createMockTag({ name: 'TestTag' });
+      const exportData = {
+        manifest: createMockExportManifest({ exportType: 'characters' }),
+        data: { tags: [tag] },
+      };
+
+      mockUserRepos.tags.findById.mockImplementation(async () => {
+        throw new Error('database disk image is malformed');
+      });
+
+      const result = await executeImport(testUserId, exportData as any, {
+        conflictStrategy: 'skip',
+        includeMemories: false,
+        includeRelatedEntities: false,
+      });
+
+      // The item is skipped, not silently duplicated on top of a row that
+      // exists but could not be read.
+      expect(mockUserRepos.tags.create).not.toHaveBeenCalled();
+      expect(result.imported.tags).toBe(0);
+      expect(result.warnings.join('\n')).toContain('Failed to import tag "TestTag"');
+      expect(result.warnings.join('\n')).toContain('database disk image is malformed');
+    });
+
+    it('runs the whole execution under the strict-failure scope', async () => {
+      const tag = createMockTag({ name: 'TestTag' });
+      const exportData = {
+        manifest: createMockExportManifest({ exportType: 'characters' }),
+        data: { tags: [tag] },
+      };
+
+      // Observed from inside a repository call, which is the only vantage
+      // point that proves the scope actually reaches the importers.
+      let strictInsideRepositoryCall: boolean | null = null;
+      mockUserRepos.tags.findById.mockImplementation(async () => {
+        strictInsideRepositoryCall = strictRepositoryFailuresActive();
+        return null;
+      });
+
+      await executeImport(testUserId, exportData as any, {
+        conflictStrategy: 'skip',
+        includeMemories: false,
+        includeRelatedEntities: false,
+      });
+
+      expect(strictInsideRepositoryCall).toBe(true);
+      expect(strictRepositoryFailuresActive()).toBe(false);
+    });
+
+    it('names the connection profile whose existence check failed', async () => {
+      const profile = createMockSanitizedConnectionProfile({ name: 'Local Ollama' });
+      const exportData = {
+        manifest: createMockExportManifest({ exportType: 'characters' }),
+        data: { connectionProfiles: [profile] },
+      };
+
+      mockUserRepos.connections.findById.mockImplementation(async () => {
+        throw new Error('no such table: connection_profiles');
+      });
+
+      const result = await executeImport(testUserId, exportData as any, {
+        conflictStrategy: 'skip',
+        includeMemories: false,
+        includeRelatedEntities: false,
+      });
+
+      expect(mockUserRepos.connections.create).not.toHaveBeenCalled();
+      expect(result.warnings.join('\n')).toContain('Failed to import connection profile "Local Ollama"');
+    });
+
+    it('says why the import was refused when the preserveIds preflight cannot read the destination', async () => {
+      const character = createMockExportedCharacter();
+      const exportData = {
+        manifest: createMockExportManifest({ exportType: 'characters' }),
+        data: { characters: [character] },
+      };
+
+      mockUserRepos.characters.findById.mockImplementation(async () => {
+        throw new Error('database disk image is malformed');
+      });
+
+      const result = await executeImport(testUserId, exportData as any, {
+        conflictStrategy: 'skip',
+        includeMemories: false,
+        includeRelatedEntities: false,
+        preserveIds: true,
+      });
+
+      expect(result.success).toBe(false);
+      // Before the fix this returned `success: false` with an empty warnings
+      // array — a refusal the user could not see a reason for.
+      expect(result.warnings.join('\n')).toContain('Import refused before anything was written');
+      expect(result.warnings.join('\n')).toContain('database disk image is malformed');
     });
   });
 

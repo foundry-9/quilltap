@@ -28,7 +28,8 @@ export async function importTags(
   tags: Tag[],
   options: ImportOptions,
   idMaps: IdMappingState,
-  repos: ReturnType<typeof getUserRepositories>
+  repos: ReturnType<typeof getUserRepositories>,
+  warnings: string[]
 ): Promise<ImportCounts> {
   let imported = 0;
   let skipped = 0;
@@ -70,6 +71,11 @@ export async function importTags(
       idMaps.tags.set(tag.id, newTag.id);
       imported++;
     } catch (error) {
+      warnings.push(
+        `Failed to import tag "${tag.name}": ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
       moduleLogger.warn('Failed to import tag', {
         tagId: tag.id,
         error: error instanceof Error ? error.message : String(error),
@@ -85,7 +91,8 @@ export async function importRoleplayTemplates(
   templates: RoleplayTemplate[],
   options: ImportOptions,
   idMaps: IdMappingState,
-  globalRepos: ReturnType<typeof getRepositories>
+  globalRepos: ReturnType<typeof getRepositories>,
+  warnings: string[]
 ): Promise<ImportCounts> {
   let imported = 0;
   let skipped = 0;
@@ -167,6 +174,11 @@ export async function importRoleplayTemplates(
       idMaps.roleplayTemplates.set(template.id, newTemplate.id);
       imported++;
     } catch (error) {
+      warnings.push(
+        `Failed to import roleplay template "${template.name}": ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
       moduleLogger.warn('Failed to import roleplay template', {
         templateId: template.id,
         error: error instanceof Error ? error.message : String(error),

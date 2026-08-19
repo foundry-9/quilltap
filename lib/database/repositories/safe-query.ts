@@ -8,9 +8,14 @@
  * - Rethrow (no fallback): logs error then re-throws
  * - Fallback (fallback provided): logs error then returns fallback value
  * - Silent (fallback = undefined): logs error then returns undefined
+ *
+ * Fallback and silent mode are suspended inside
+ * `withStrictRepositoryFailures` — see `./strict-failures` for why the import
+ * path cannot afford them.
  */
 
 import { logger } from '@/lib/logger';
+import { strictRepositoryFailuresActive } from './strict-failures';
 
 /**
  * Extract a human-readable error message from an unknown error value.
@@ -52,8 +57,16 @@ export async function safeQuery<R>(
   try {
     return await operation();
   } catch (error) {
-    logger.error(errorMessage, { ...context, error: extractErrorMessage(error) });
-    if (rest.length > 0) return rest[0] as R;
+    // A caller that asked for a fallback still gets one — unless we are inside
+    // a scope that has declared it would rather see the failure than a value
+    // indistinguishable from "there was nothing there" (Bug 79).
+    const strict = strictRepositoryFailuresActive();
+    logger.error(errorMessage, {
+      ...context,
+      error: extractErrorMessage(error),
+      ...(strict ? { strictFailures: true } : {}),
+    });
+    if (rest.length > 0 && !strict) return rest[0] as R;
     throw error;
   }
 }
