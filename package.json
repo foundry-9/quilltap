@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "4.9.0-claude-commonplace-whisper-character-summary-xyg11k.35",
+  "version": "4.9.0-dev.36",
   "private": true,
   "author": {
     "name": "Charles Sebold",
