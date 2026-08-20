@@ -241,6 +241,20 @@ than racing it.
 2. **Every turn** — existing relevant-memories, `currentState`, etc.
 3. **On fold** — refreshed relevant-conversations half.
 
+**Added later (4.9-dev):** a fourth cadence for the conversation list, fired on
+*retrospective* turns (the dated `retrospective-recall` mini-recap, from the
+episodic-recall overhaul), and a fifth that is off by default — the instance-wide
+`memoryRecall.perTurnConversationSummaries` setting, which re-runs the
+relevant-conversations search on **every** turn and folds the list into the
+consolidated whisper's `relevantConversations` part. It is affordable per turn
+because it never embeds anything: `searchMemoriesSemantic` hands the turn's query
+vector back through `captureQueryEmbedding`, and
+`searchVaultConversationSummaries` takes it as `precomputedEmbedding` (the
+proactive pre-search path threads its vector through `runPreContextPreCompute` →
+`buildMessageContext` → `buildContext`). No vector → no list that turn, and the cadence stands down on recap turns (the recap's own list already covers them). Both
+turn-scoped lists dedup against the standing fold whisper's UUIDs, and the
+retrospective list additionally dedups against the per-turn one.
+
 ---
 
 ## 5. Workstream E — "Regenerate conversation summaries" button (Memory settings)

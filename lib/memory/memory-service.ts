@@ -296,6 +296,18 @@ export interface MemoryServiceOptions {
 }
 
 /**
+ * A query and the vector actually embedded for it. Handed back through
+ * `captureQueryEmbedding` so one turn's embedding can serve more than one
+ * search (memories, then the character's vault conversation summaries).
+ */
+export interface SearchQueryEmbedding {
+  /** The exact text that was embedded — pass it verbatim to the reusing search. */
+  query: string
+  /** Unit-length vector for `query`, from the caller's embedding profile. */
+  embedding: Float32Array
+}
+
+/**
  * Result of a semantic memory search
  */
 export interface SemanticSearchResult {
@@ -784,6 +796,14 @@ export async function searchMemoriesSemantic(
      * memory keeps its max cosine across probes. Capped to 2 extras.
      */
     extraProbes?: readonly string[]
+    /**
+     * Called with the main query's vector the moment it is embedded (never for
+     * the `extraProbes`, and never on the text-search fallback). Lets a caller
+     * reuse the turn's one embedding for a companion search — the per-turn
+     * conversation-summary list in `lib/chat/context-manager.ts` — rather than
+     * paying for a second call on the same sentence. Must not throw.
+     */
+    captureQueryEmbedding?: (captured: SearchQueryEmbedding) => void
   }
 ): Promise<SemanticSearchResult[]> {
   const repos = getRepositories()
@@ -807,6 +827,13 @@ export async function searchMemoriesSemantic(
       options.embeddingProfileId
     )
     const tEmbed = performance.now()
+
+    // Hand the caller the vector we just paid for, so a companion search in the
+    // same turn (the per-turn conversation-summary list) can reuse it instead of
+    // embedding the same sentence twice. Reported before the dimension guard
+    // below: a vector that doesn't match THIS character's memory index may still
+    // match the vault's document index, which is built separately.
+    options.captureQueryEmbedding?.({ query, embedding: embeddingResult.embedding })
 
     // Relevance floor on the raw cosine, applied before the importance/recency
     // blend so a low-cosine memory can't be smuggled into recall by its weight.

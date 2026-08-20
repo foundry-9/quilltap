@@ -9,11 +9,13 @@ type ScopePolicy = 'down-weight' | 'exclude'
 interface RecallConfig {
   scopePolicy: ScopePolicy
   expandRelated: boolean
+  perTurnConversationSummaries: boolean
 }
 
 const DEFAULT_CONFIG: RecallConfig = {
   scopePolicy: 'down-weight',
   expandRelated: false,
+  perTurnConversationSummaries: false,
 }
 
 const SCOPE_POLICY_OPTIONS: ReadonlyArray<{
@@ -106,6 +108,11 @@ export function MemoryRecallCard() {
     void saveConfig({ expandRelated: value })
   }
 
+  const handlePerTurnConversationsChange = (value: boolean) => {
+    setConfig(c => ({ ...c, perTurnConversationSummaries: value }))
+    void saveConfig({ perTurnConversationSummaries: value })
+  }
+
   if (loading) {
     return <p className="qt-text-small qt-text-muted">Loading recall settings&hellip;</p>
   }
@@ -152,6 +159,28 @@ export function MemoryRecallCard() {
             compete for a place in the recollection too. This rescues the memory that is plainly
             relevant by association yet never quite matched the words of the moment. A touch more
             work each turn; left off unless you ask for it.
+          </div>
+        </div>
+      </label>
+
+      <label className="flex items-start gap-3 p-4 border qt-border-default rounded qt-hover-accent cursor-pointer">
+        <input
+          type="checkbox"
+          checked={config.perTurnConversationSummaries}
+          onChange={e => handlePerTurnConversationsChange(e.target.checked)}
+          disabled={saving}
+          className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-primary"
+        />
+        <div className="flex-1">
+          <div className="font-medium text-foreground">Consult past conversations every turn</div>
+          <div className="qt-text-small mt-1">
+            Ordinarily the Book re-reads its shelf of past conversations only at the opening of a
+            chat, whenever it takes down a fresh summary, and when somebody speaks of days gone by.
+            Switch this on and it consults that shelf on <em>every</em> turn, so the list of
+            pertinent past dialogues never lags behind the talk at hand. It rides along on the
+            reckoning already made for the memory search, so it asks nothing further of your
+            embedding provider — merely a little more reading, and a few more lines in each
+            whisper. Off unless you ask for it, and it applies to every conversation alike.
           </div>
         </div>
       </label>

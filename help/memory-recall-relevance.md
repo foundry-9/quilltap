@@ -31,6 +31,18 @@ Switch on **Expand related memories** and the Book, having gathered its first ha
 
 It is off until you ask for it, and costs a little more effort each turn — a fair trade for a longer reach, which is why the choice is left to you.
 
+## Consulting the Shelf of Past Conversations
+
+Every conversation a character takes part in is, in the fullness of time, written up and shelved in that character's own vault — a tidy summary apiece, filed under *Conversation Summaries*. The Commonplace Book consults that shelf and hands the character a short list of past dialogues bearing on the present one, each with the means of calling up the full transcript should the character wish to read it properly.
+
+Ordinarily the Book visits that shelf on three occasions only: when a chat opens (or a character joins one), whenever it takes down a fresh summary of the conversation so far, and when somebody speaks pointedly of days gone by. Between those occasions the list simply stands as it was last drawn up — which is perfectly serviceable, until the talk wanders somewhere else entirely and the character is left holding a list of yesterday's pertinences.
+
+Switch on **Consult past conversations every turn** and the Book visits the shelf on *every* turn, so the list of relevant past dialogues never trails behind the conversation. It is a good deal less extravagant than it sounds: the Book is already taking the measure of the moment for its search through the memories, and this simply carries that same measure along to the shelf — no second reckoning, and nothing further asked of your embedding provider. What it does cost is a little more reading each turn, and a few more lines in each whisper, which is why it waits until you ask for it.
+
+Two small courtesies come with it. The list never repeats a conversation the Book has already put before that character this turn — not one already standing in the fold's own list, nor one produced by a backward-looking question, and the Book holds its peace entirely on the turn it draws up its opening recollection, that recollection having already been to the shelf itself. And its length is measured against the room in your model's context window: a modest window gets a modest list, a generous one gets up to ten.
+
+The setting governs every conversation alike. There is no per-chat, per-project, or per-character exception: it is on for all of them or off for all of them.
+
 ## What Else Recall Quietly Does
 
 Beyond the choices on this card, the recall path keeps a few unobtrusive courtesies of its own — no settings, no fuss, simply the Book becoming a slightly better librarian.

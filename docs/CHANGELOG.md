@@ -4,6 +4,18 @@
 
 ### 4.9-dev
 
+#### The Commonplace Book can consult past conversations on every turn
+
+A character's vault holds a summary of every conversation it has taken part in, and the Commonplace Book searches that shelf to build the "Relevant Past Conversations" list a character sees. Until now that list was refreshed on three cadences only: the opening recap (chat start or character join), each summary fold, and retrospective turns that reference the past explicitly. Between folds the list stood still, so the conversation could wander several turns away from the past dialogues the character was still being pointed at.
+
+A new instance-wide setting — Settings → Memory → Recall Relevance → **Consult past conversations every turn** — re-runs that search on every turn and folds the fresh list into the consolidated whisper. It is off by default.
+
+The reason it can run per turn at all is that it costs no extra embedding call. `searchMemoriesSemantic` now reports the vector it embedded for the turn's memory search through a `captureQueryEmbedding` hook, and `searchVaultConversationSummaries` accepts that vector via `precomputedEmbedding` instead of embedding the same sentence again. The proactive pre-search path threads its vector through `runPreContextPreCompute` → `buildMessageContext` → `buildContext`, so the reuse holds on both memory paths. When no vector is available (memories skipped, no embedding profile, a failed embedding, or the degraded text-search fallback), the cadence sits the turn out rather than paying for a call of its own.
+
+The per-turn search is skipped on the turn the opening recap runs — the recap already carries its own freshly-searched list, and a second one would repeat it inside a single whisper. Otherwise the per-turn list is deduplicated against the standing fold-posted `relevant-conversations` whisper, and the retrospective mini-recap is now deduplicated against both — one conversation UUID is never listed twice to the same character in the same turn. List length ramps with the connection profile's context window (3 entries at 4K, 10 at 32K), the same ramp the fold cadence uses; the constants now live in `lib/memory/conversation-summary-search.ts` so the two cadences cannot drift apart.
+
+There is no chat-, project-, or character-level override: the setting is on for every conversation or off for every conversation.
+
 #### Local models with strict chat templates stop failing on every turn after the first (bug 82)
 
 A chat on a local Ollama or OpenAI-compatible server running a Qwen model would greet you and then never answer again. Every turn after the opening died with `Jinja Exception: System message must be at the beginning`, and because the failure was an HTTP 500 from the endpoint rather than an empty reply, it showed up as a toast and a server-log entry and nothing else.
