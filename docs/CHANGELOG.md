@@ -4,6 +4,14 @@
 
 ### 4.9-dev
 
+#### Group scenes stop turning into committee meetings
+
+In a multi-character chat, especially on weaker models, every character's turn converged on the same shape: open with a roll-call recap of what the previous speakers said, endorse all of it, claim "the one thing nobody has named yet," repeat the cast's coined phrases verbatim, and close by restating the group's action list. One observed chat had three characters in a row ending consecutive turns with the identical sentence. Three changes attack the loop:
+
+- **Group-scene discipline rules** now ride in the system prompt on every multi-character turn (both the `[Name]`-prefill and prose anchor routes). They forbid opening with a recap of other speakers, agree-then-add replies, reusing another character's metaphors or coined phrases, and restating the plan; they tell the character to speak only when it changes something, and to vary length instead of defaulting to a speech. The previous anchor only pinned *who* was speaking and said nothing about content, so the strongest style signal in context was the preceding chorus itself.
+- **The turn-skip note counts an echo as nothing to say.** The "you may pass" note now states that a reply which mostly restates, endorses, or rephrases what has already been said — even in the character's own voice — is not substantive, and the character should pass.
+- **"Recently addressed" now means directly addressed.** `isRecentlyAddressed` used to fire on any name mention since the character last spoke. Because every chorus turn named most of the cast in its recap, every character was permanently "addressed," so every turn note carried the "answer rather than pass" caution and nobody ever passed — the recap ritual and the skip mechanism fed each other. The check now requires a vocative position (name at a clause boundary followed by address punctuation: "Marion, …", "Greg?", "Amy —"), an `@`-mention, or a targeted whisper; possessives and mid-sentence citations ("Marion's point", "if Greg is ready") no longer count.
+
 #### The Commonplace Book can consult past conversations on every turn
 
 A character's vault holds a summary of every conversation it has taken part in, and the Commonplace Book searches that shelf to build the "Relevant Past Conversations" list a character sees. Until now that list was refreshed on three cadences only: the opening recap (chat start or character join), each summary fold, and retrospective turns that reference the past explicitly. Between folds the list stood still, so the conversation could wander several turns away from the past dialogues the character was still being pointed at.

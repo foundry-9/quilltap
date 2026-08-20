@@ -579,13 +579,16 @@ this single line and nothing else:
 The floor will then pass to someone else and the scene continues without you
 this turn. Do not use it to be coy or mysterious — a brief in-character
 remark is always better than an empty pass. If you have anything worth
-saying, write your reply as normal and ignore this note entirely.`
+saying, write your reply as normal and ignore this note entirely.
+
+If your reply would mostly restate, endorse, or re-phrase what has already
+been said — even in your own voice — that is not substantive. Pass.`
 
   if (!recentlyAddressed) return base
 
   return `${base}
 
-One caution: ${characterName} appears to have been addressed or mentioned since you last spoke. If someone has spoken to you and you have not yet answered them, you should answer rather than pass.`
+One caution: ${characterName} appears to have been directly addressed since they last spoke. If someone has spoken to you and you have not yet answered them, you should answer rather than pass.`
 }
 
 /**

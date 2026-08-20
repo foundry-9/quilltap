@@ -3,7 +3,7 @@
  *
  * Client-safe: this module imports only type-level schema definitions plus
  * pure string helpers (`normalizeContentBlockFormat`, `stripCharacterNamePrefix`,
- * `findMentionedCharacterIds`). It performs NO repository / filesystem access,
+ * `escapeRegex`). It performs NO repository / filesystem access,
  * so it can run identically on the server (orchestrator, turn action), in the
  * forked background-jobs child, and in the Salon client for the Skip-button
  * guard.
@@ -18,8 +18,8 @@ import type { ChatEvent, MessageEvent, ChatParticipantBase } from '@/lib/schemas
 import type { Character } from '@/lib/schemas/types'
 import { isParticipantPresent } from '@/lib/schemas/chat.types'
 import { normalizeContentBlockFormat, stripCharacterNamePrefix } from '@/lib/llm/response-normalizer'
-import { findMentionedCharacterIds } from '@/lib/chat/context/mentioned-characters'
 import { isVisibleConversationalTurn } from '@/lib/chat/context/core-whisper-trigger'
+import { escapeRegex } from '@/lib/utils/regex'
 
 /** The literal sentinel a character emits to pass its turn. */
 export const NOTHING_TO_ADD_SENTINEL = '[NOTHING TO ADD]'
@@ -227,11 +227,62 @@ export function isFirstCharacterTurn(events: ReadonlyArray<ChatEvent>): boolean 
 const RECENTLY_ADDRESSED_LOOKBACK = 10
 
 /**
- * Has the responding character been addressed or mentioned since they last
- * spoke? Scans the visible conversational turns after the responder's own most
- * recent non-whisper ASSISTANT message (capped at the last
+ * Short interjections that commonly lead into a vocative ("Hey Marion, ...").
+ * Deliberately small — the goal is catching real address openers, not every
+ * word that could precede a name.
+ */
+const VOCATIVE_LEAD_INS =
+  '(?:hey|hi|hello|oh|no|yes|well|so|and|but|now|listen|please|right|ok|okay|thanks|sorry|merci)'
+
+/**
+ * Characters that can end the clause *before* a vocative: sentence punctuation,
+ * quotes, brackets, markdown emphasis, newlines, dashes. `-` sits last so the
+ * class needs no escaping.
+ */
+const VOCATIVE_PRE_BOUNDARY = '[.!?;:…"“”\'()\\[\\]*_~\\n—–-]'
+
+/**
+ * Build a regex matching the character's name or an alias in a
+ * direct-address (vocative) position: preceded by the start of the text, a
+ * clause boundary, a comma, an `@`, or a lead-in interjection — and followed
+ * by address punctuation (`Marion,` / `Greg?` / `Amy —` / `Al.`) or the end of
+ * a line. A name flowing mid-sentence ("if Greg is ready", "Friday's block",
+ * "I glance at Amy over the bench") deliberately does NOT match: narrating or
+ * citing someone is not speaking *to* them.
+ *
+ * Returns null when the character has no usable name tokens.
+ */
+function buildDirectAddressRegex(character: Character): RegExp | null {
+  const tokens = [character.name, ...(character.aliases ?? [])]
+    .map(t => t?.trim())
+    .filter((t): t is string => !!t && t.length > 0)
+  if (tokens.length === 0) return null
+
+  // Longer tokens first so "John Smith" wins over "John".
+  const names = tokens
+    .sort((a, b) => b.length - a.length)
+    .map(escapeRegex)
+    .join('|')
+
+  return new RegExp(
+    `(?:^|${VOCATIVE_PRE_BOUNDARY}\\s*|,\\s+|@|\\b${VOCATIVE_LEAD_INS},?\\s+)` +
+      `(?:${names})\\s*(?:[,.!?…—–:;]|$)`,
+    'im'
+  )
+}
+
+/**
+ * Has the responding character been DIRECTLY addressed since they last spoke?
+ * Scans the visible conversational turns after the responder's own most recent
+ * non-whisper ASSISTANT message (capped at the last
  * {@link RECENTLY_ADDRESSED_LOOKBACK}). A hit is either the responder's
- * name/alias appearing in that corpus, or a whisper targeted at the responder.
+ * name/alias in a vocative position ({@link buildDirectAddressRegex}), or a
+ * whisper targeted at the responder.
+ *
+ * Direct address, not mere mention, on purpose: in a chorus-prone group scene
+ * every turn's roll-call recap names most of the cast, so a mention-based
+ * signal marked everyone as addressed forever and the "answer rather than
+ * pass" caution fired for every character on every turn — nobody ever passed.
  */
 export function isRecentlyAddressed(
   events: ReadonlyArray<ChatEvent>,
@@ -272,8 +323,10 @@ export function isRecentlyAddressed(
     }
   }
 
+  const regex = buildDirectAddressRegex(respondingCharacter)
+  if (!regex) return false
   const corpus = window.map(m => m.content ?? '').join('\n')
-  return findMentionedCharacterIds(corpus, [respondingCharacter]).size > 0
+  return regex.test(corpus)
 }
 
 export type MustSpeakReason =

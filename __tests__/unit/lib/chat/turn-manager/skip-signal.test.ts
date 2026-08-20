@@ -199,7 +199,7 @@ describe('isFirstCharacterTurn', () => {
 describe('isRecentlyAddressed', () => {
   const alice = makeChar('c-alice', { name: 'Alice', aliases: ['Al'] })
 
-  it('flags a mention by name after the responder last spoke', () => {
+  it('flags a vocative address by name after the responder last spoke', () => {
     const events: ChatEvent[] = [
       msg('ASSISTANT', 'p-alice'),
       msg('USER', 'p-user', { content: 'Alice, what do you think?' }),
@@ -207,10 +207,42 @@ describe('isRecentlyAddressed', () => {
     expect(isRecentlyAddressed(events, 'p-alice', alice)).toBe(true)
   })
 
-  it('flags a mention by alias', () => {
+  it('flags a vocative address by alias with a lead-in interjection', () => {
     const events: ChatEvent[] = [
       msg('ASSISTANT', 'p-alice'),
       msg('USER', 'p-user', { content: 'Hey Al, over here.' }),
+    ]
+    expect(isRecentlyAddressed(events, 'p-alice', alice)).toBe(true)
+  })
+
+  it('flags a mid-sentence vocative', () => {
+    const events: ChatEvent[] = [
+      msg('ASSISTANT', 'p-alice'),
+      msg('USER', 'p-user', { content: 'Look at me last, Alice.' }),
+    ]
+    expect(isRecentlyAddressed(events, 'p-alice', alice)).toBe(true)
+  })
+
+  it('flags a bare trailing vocative question', () => {
+    const events: ChatEvent[] = [
+      msg('ASSISTANT', 'p-alice'),
+      msg('USER', 'p-user', { content: 'Someone has to run the pod. Alice?' }),
+    ]
+    expect(isRecentlyAddressed(events, 'p-alice', alice)).toBe(true)
+  })
+
+  it('flags a vocative opening a quoted line', () => {
+    const events: ChatEvent[] = [
+      msg('ASSISTANT', 'p-alice'),
+      msg('USER', 'p-user', { content: '*I turn to her.* "Alice — the three originals are clean."' }),
+    ]
+    expect(isRecentlyAddressed(events, 'p-alice', alice)).toBe(true)
+  })
+
+  it('flags an @-mention', () => {
+    const events: ChatEvent[] = [
+      msg('ASSISTANT', 'p-alice'),
+      msg('USER', 'p-user', { content: 'Let me ask @Alice: is the pod ready?' }),
     ]
     expect(isRecentlyAddressed(events, 'p-alice', alice)).toBe(true)
   })
@@ -221,6 +253,26 @@ describe('isRecentlyAddressed', () => {
       msg('USER', 'p-user', { content: 'psst', targetParticipantIds: ['p-alice'] }),
     ]
     expect(isRecentlyAddressed(events, 'p-alice', alice)).toBe(true)
+  })
+
+  it('does NOT flag a third-person mention flowing mid-sentence', () => {
+    const events: ChatEvent[] = [
+      msg('ASSISTANT', 'p-alice'),
+      msg('USER', 'p-user', { content: 'I wonder if Alice is ready to operate the stasis pod tonight.' }),
+    ]
+    expect(isRecentlyAddressed(events, 'p-alice', alice)).toBe(false)
+  })
+
+  it('does NOT flag a possessive roll-call recap', () => {
+    // The chorus pattern: every turn opens by naming the whole cast's
+    // contributions. Mere citation must not force everyone to speak forever.
+    const events: ChatEvent[] = [
+      msg('ASSISTANT', 'p-alice'),
+      msg('USER', 'p-user', {
+        content: "I've been listening through the round — Alice's three joints, the pod read, the heartbeat.",
+      }),
+    ]
+    expect(isRecentlyAddressed(events, 'p-alice', alice)).toBe(false)
   })
 
   it('is false when nobody addressed the responder since they spoke', () => {

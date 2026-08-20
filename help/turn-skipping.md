@@ -14,13 +14,15 @@ This is a courtesy for a crowd, not a tête-à-tête. It comes into play only in
 
 On any turn but the very first character turn of a fresh conversation, each thinking character is quietly offered the option to pass. Should it genuinely have nothing to add to the moment, it replies with a single agreed phrase and nothing else. The Host then inclines his head — *"so-and-so waves the turn graciously by — nothing to add for the moment, it seems"* — and the floor moves on. No empty bubble is left behind; only the Host's brief note remains in the transcript, marked **nothing to add**.
 
-A pass is never an invitation to be coy or mysterious. A brief in-character remark is always the better contribution; the pass exists only for the genuine case of *nothing to say*.
+A pass is never an invitation to be coy or mysterious. A brief in-character remark is always the better contribution; the pass exists only for the genuine case of *nothing to say*. And the turn note is now candid about what counts: a reply that would merely restate, applaud, or handsomely rephrase what the company has already said *is* nothing to say, and the character is advised to pass rather than echo.
 
 Occasionally a character says its piece — a gesture, a quiet observation, a real contribution to the moment — and *then* tacks the pass phrase on at the very end, as a sort of afterthought. That is not a pass: there is genuine communication above it, and it is kept and remembered in full. Quilltap simply strikes the stray closing phrase from the message, so what remains in the transcript is the remark the character actually made, with no dangling *"nothing to add"* line trailing beneath it.
 
 ### When a character is expected to speak
 
-If a character has been addressed or mentioned by name since it last spoke, its turn note carries a gentle caution to answer rather than pass. Someone spoke to you; the courteous thing is to reply.
+If a character has been spoken to *directly* since it last spoke — called by name ("Marion, what do you think?"), asked after with a bare "Marion?", or sent a whisper — its turn note carries a gentle caution to answer rather than pass. Someone spoke to you; the courteous thing is to reply.
+
+Merely being *mentioned*, however, no longer counts. A room of raconteurs citing one another's contributions by name — "Marion's excellent point, Greg's earned wisdom" — should not oblige every soul cited to deliver a speech in return, or nobody would ever hold their peace again.
 
 ### The stall guard
 

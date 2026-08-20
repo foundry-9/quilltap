@@ -97,6 +97,14 @@ Ticked, the model is handed a reply already opened with its own name in brackets
 
 Whichever method is in force, a reply that wanders into another participant's turn is cut off at the first foreign name tag.
 
+### Keeping the Company Out of Chorus
+
+The subtler hazard of a crowded room is not a model that writes everyone's turn — it is a room where everyone writes the *same* turn. Left to their own devices, models in a group scene drift into what might charitably be called a committee meeting: each speaker opens with a courteous recapitulation of everything the previous speakers said, agrees with the lot of it, produces one small item of their own in precisely the shape of everyone else's, borrows the most striking phrase of the evening for a fourth outing, and closes by reading the minutes back to the room. Multiply by eight characters and the scene sets like aspic.
+
+Quilltap now serves every speaker in a group scene a standing set of house rules against exactly this. A character is told not to open by summarizing the others (everyone present heard them), not to agree-and-append, not to borrow a phrase another character has already coined, not to re-read the plan into the record, and to speak only when speaking would *change* something — an objection, a question, a joke, an action, a refusal. Real conversational turns run a sentence or three; the long speech is reserved for occasions that have earned one.
+
+The rules are strongest paired with [turn skipping](turn-skipping.md), which gives a character with nothing new to offer a graceful exit instead of an obligation to perform. Stronger models take the instruction more faithfully than budget ones — if a scene still sounds like a chorus, the speaking characters' connection profiles are the next place to look.
+
 ### Control Modes
 
 Each character can be:

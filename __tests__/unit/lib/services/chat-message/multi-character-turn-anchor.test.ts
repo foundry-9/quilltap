@@ -8,7 +8,10 @@
  * everything else prefill); see bug 68 for why that was wrong for Ollama.
  */
 
-import { applyMultiCharacterTurnAnchor } from '@/lib/services/chat-message/context-builder.service'
+import {
+  applyMultiCharacterTurnAnchor,
+  GROUP_SCENE_DISCIPLINE,
+} from '@/lib/services/chat-message/context-builder.service'
 
 jest.mock('@/lib/logging/create-logger', () => ({
   createServiceLogger: jest.fn(() => ({
@@ -40,11 +43,23 @@ describe('applyMultiCharacterTurnAnchor — prefill route', () => {
     })
   })
 
-  it('leaves the system message untouched', () => {
+  it('appends the group-scene discipline but not the identity instruction to the system message', () => {
+    // Identity is anchored structurally by the [Name] prefill; the content
+    // rules still have to ride in the system prompt.
     const messages = baseMessages()
     applyMultiCharacterTurnAnchor(messages, 'Marie', true)
 
-    expect(messages[0].content).toBe('You are Marie.')
+    expect(messages[0].content).toMatch(/^You are Marie\./)
+    expect(messages[0].content).toContain('GROUP-SCENE DISCIPLINE')
+    expect(messages[0].content).not.toContain('Respond as Marie and ONLY Marie')
+  })
+
+  it('still pushes the prefill anchor when there is no system message', () => {
+    const messages = [{ role: 'user', content: 'Hello' }]
+    applyMultiCharacterTurnAnchor(messages, 'Marie', true)
+
+    expect(messages).toHaveLength(2)
+    expect(messages[1]).toMatchObject({ role: 'assistant', content: '[Marie]' })
   })
 })
 
@@ -67,6 +82,21 @@ describe('applyMultiCharacterTurnAnchor — prose route', () => {
     expect(messages[0].content).toMatch(/^You are Marie\./)
     expect(messages[0].content).toContain('multi-character scene')
     expect(messages[0].content).toContain('Respond as Marie and ONLY Marie')
+  })
+
+  it('appends the group-scene discipline after the identity instruction', () => {
+    const messages = baseMessages()
+    applyMultiCharacterTurnAnchor(messages, 'Marie', false)
+
+    const content = messages[0].content
+    expect(content).toContain('GROUP-SCENE DISCIPLINE')
+    expect(content.indexOf('GROUP-SCENE DISCIPLINE')).toBeGreaterThan(
+      content.indexOf('Respond as Marie and ONLY Marie')
+    )
+  })
+
+  it('keeps the discipline block free of anything a weaker model could parrot as a speaker tag', () => {
+    expect(GROUP_SCENE_DISCIPLINE).not.toMatch(/\[[A-Z][a-z]+\]/)
   })
 
   it('never teaches the model to emit a [Name] tag of its own', () => {
