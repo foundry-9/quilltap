@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "4.9.0-dev.37",
+  "version": "4.9.0-dev.38",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -43,14 +43,14 @@
     "start:docker": "tsx scripts/start-quilltap-docker.ts",
     "stop:docker": "docker stop quilltap && docker rm quilltap",
     "test": "cross-env LOG_LEVEL=error npm run test:all",
-    "test:all": "cross-env LOG_LEVEL=error jest && cross-env LOG_LEVEL=error jest --config jest.integration.config.ts",
-    "test:coverage": "jest --coverage",
+    "test:all": "cross-env LOG_LEVEL=error node --no-sparkplug node_modules/jest/bin/jest.js && cross-env LOG_LEVEL=error node --no-sparkplug node_modules/jest/bin/jest.js --config jest.integration.config.ts",
+    "test:coverage": "node --no-sparkplug node_modules/jest/bin/jest.js --coverage",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",
-    "test:integration": "cross-env LOG_LEVEL=error jest --config jest.integration.config.ts",
-    "test:unit": "cross-env LOG_LEVEL=error jest",
-    "test:watch": "jest --watch",
+    "test:integration": "cross-env LOG_LEVEL=error node --no-sparkplug node_modules/jest/bin/jest.js --config jest.integration.config.ts",
+    "test:unit": "cross-env LOG_LEVEL=error node --no-sparkplug node_modules/jest/bin/jest.js",
+    "test:watch": "node --no-sparkplug node_modules/jest/bin/jest.js --watch",
     "update:npm": "./scripts/upgrade-dependencies.sh",
     "update:version": "./scripts/update_version.sh"
   },

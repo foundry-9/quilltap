@@ -27,18 +27,20 @@ const config: Config = {
   coverageProvider: 'v8',
   testEnvironment: 'jsdom',
   // Recycle a worker once it crosses this resident-memory threshold. Over the
-  // full ~350-file suite a worker keeps the same process alive across dozens of
-  // test files; without recycling, memory accumulates and GC timing grows
-  // aggressive, which is one of the conditions that makes the native SQLCipher
-  // binding (loaded by the real-binding DB suites) flaky-segfault under parallel
-  // load. The DB suites also opt into the `node` environment via a per-file
+  // full suite a worker keeps the same process alive across dozens of test
+  // files; without recycling, memory accumulates and GC grows aggressive. (The
+  // real-binding DB suites also opt into the `node` environment via a per-file
   // `@jest-environment node` docblock so their native Buffers never cross a
-  // jsdom realm boundary — the other half of that fix.
+  // jsdom realm boundary.) Note the long-standing intermittent worker SIGSEGV
+  // was ultimately neither of those things — it is a V8 Sparkplug GC bug,
+  // nodejs/node#62393, suppressed by the --no-sparkplug guard in
+  // jest.global-setup.js and the npm test scripts.
   workerIdleMemoryLimit: '512MB',
-  // Runs once before the whole suite: rebuilds the real SQLCipher binding if it
-  // was compiled against a different Node ABI than the one running, so the
-  // real-binding DB suites self-heal after a Node upgrade instead of failing
-  // with NODE_MODULE_VERSION. Cheap no-op when the ABI already matches.
+  // Runs once before the whole suite: arms the V8 Sparkplug segfault guard
+  // (nodejs/node#62393 — see the note in jest.global-setup.js) and rebuilds the
+  // real SQLCipher binding if it was compiled against a different Node ABI than
+  // the one running, so the real-binding DB suites self-heal after a Node
+  // upgrade instead of failing with NODE_MODULE_VERSION.
   globalSetup: '<rootDir>/jest.global-setup.js',
   // Add more setup options before each test is run
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],

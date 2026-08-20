@@ -1,12 +1,17 @@
 # Bugs — defects surfaced by the v5 port
 
-**Last Updated**: 2026-08-19
+**Last Updated**: 2026-08-20
 **Codebase**: Quilltap v4.9.0-dev
 **Provenance**: the quilltap-v5 native port's differential harness, its
 dogfood walks against a copy of real data, and — from Bug 62 — v4's own
 feature-spec work and browser verification
-**Status**: Bugs **1–82** are **fixed in v4** — nothing in this catalogue is
-open. Bugs 81 and 82 (filed and fixed 2026-08-19) both come of a request being
+**Status**: Bugs **1–83** are **fixed in v4** — nothing in this catalogue is
+open. Bug 83 (filed and fixed 2026-08-20) is the intermittent jest worker
+SIGSEGV, misattributed for months to the native SQLCipher binding and finally
+traced by a macOS crash report to an upstream V8 GC race
+([nodejs/node#62393](https://github.com/nodejs/node/issues/62393)); the suite
+now runs with Sparkplug disabled at two chokepoints, and the v5 side owes
+nothing — Rust doesn't carry V8. Bugs 81 and 82 (filed and fixed 2026-08-19) both come of a request being
 shaped by one answer where two were needed. In **81** the answer is a boolean:
 `requiresApiKey` was asked both "must this provider have a key?" and "may it?",
 and for OpenAI-Compatible — the one provider spanning an unauthenticated
@@ -437,6 +442,7 @@ One row per bug, newest last. **Bug** links to the entry; **Fix site** and
 | 80 | [a project's story background is ignored inside the workspace](bugs/fixed/bug-80-project-background-ignored-in-workspace.md) | 2026-08-18 | 2026-08-18 | Medium | The workspace replaced the per-view `::before` background layer with one arbitrated backdrop that views must *report* to, and suppressed the old layer inside `.qt-workspace` — but `ProjectDetailView` was never converted, so its `--story-background-url` reaches the screen by neither route. What paints instead is `ProsperoView`'s subsystem background, still registered under the tab's id after the view drilled into a project | `ProjectDetailView` reports its story background (falling back to the Prospero subsystem image for `theme` mode); the list's subsystem background moved into a `ProsperoListShell` that unmounts while a detail is shown, so one reporter holds the tab's key at a time | Not applicable — the workspace shell and its backdrop arbitration have no v5 counterpart yet |
 | 81 | [an OpenAI-Compatible profile can never hold an API key](bugs/fixed/bug-81-oac-cannot-hold-an-api-key.md) | 2026-08-19 | 2026-08-19 | Medium | `requiresApiKey` answers two questions with one boolean, so OpenAI-Compatible is absent from the Add-New-API-Key provider list **and** from the profile form's key field — every hosted OpenAI-compatible endpoint that needs a bearer token is unconfigurable. Server-side, four call sites gated the key *lookup* on the same flag, so even an attached key never reached the wire | An optional `acceptsApiKey` capability answers the second question (`@quilltap/plugin-types` 2.5.7, absent = same answer as `requiresApiKey`); both UI gates and `useProfileForm`'s outbound guard read it via `lib/llm/api-key-support.ts`; the four services share `resolveConnectionProfileApiKey` | Owed |
 | 82 | [three leading system messages break strict local chat templates](bugs/fixed/bug-82-three-leading-system-messages.md) | 2026-08-19 | 2026-08-19 | High (for local models) | Every non-opening turn dies with `Jinja Exception: System message must be at the beginning` on Qwen-family templates — the greeting sends one system block and works, a normal turn sends three and is refused before a token is generated | `collapseLeadingSystemMessages` (`@quilltap/plugin-utils` 2.4.0) folds the leading run at request-build time; Ollama calls it unconditionally, OAC via `acceptsRepeatedSystemMessages: false` — the flag defaults true, so hosted subclasses stay byte-identical | Owed |
+| 83 | [a V8 GC race kills a jest worker and fails an arbitrary suite](bugs/fixed/bug-83-v8-sparkplug-worker-segfault.md) | 2026-08-20 | 2026-08-20 | Medium (dev tooling) | ~1 full unit run in 5 loses a worker to a SIGSEGV in V8's mark-compact ([nodejs/node#62393](https://github.com/nodejs/node/issues/62393)) and fails a different innocent suite each time; months of misattribution to the native SQLCipher binding trained a "just rerun it" reflex | `package.json` jest scripts (`node --no-sparkplug`) + `armSparkplugGuard()` in `jest.global-setup.js`, now shared by `jest.integration.config.ts` | Nothing owed (no V8 in Rust) |
 
 ### Families and reading order
 
