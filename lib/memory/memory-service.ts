@@ -801,7 +801,8 @@ export async function searchMemoriesSemantic(
      * the `extraProbes`, and never on the text-search fallback). Lets a caller
      * reuse the turn's one embedding for a companion search — the per-turn
      * conversation-summary list in `lib/chat/context-manager.ts` — rather than
-     * paying for a second call on the same sentence. Must not throw.
+     * paying for a second call on the same sentence. A callback that throws is
+     * caught and logged; the search itself carries on.
      */
     captureQueryEmbedding?: (captured: SearchQueryEmbedding) => void
   }
@@ -833,7 +834,18 @@ export async function searchMemoriesSemantic(
     // embedding the same sentence twice. Reported before the dimension guard
     // below: a vector that doesn't match THIS character's memory index may still
     // match the vault's document index, which is built separately.
-    options.captureQueryEmbedding?.({ query, embedding: embeddingResult.embedding })
+    if (options.captureQueryEmbedding) {
+      try {
+        options.captureQueryEmbedding({ query, embedding: embeddingResult.embedding })
+      } catch (captureError) {
+        // A companion search's bookkeeping must never cost the caller its
+        // memories — swallow and carry on with the search itself.
+        logger.warn('[Memory] captureQueryEmbedding callback threw; ignoring', {
+          characterId,
+          error: captureError instanceof Error ? captureError.message : String(captureError),
+        })
+      }
+    }
 
     // Relevance floor on the raw cosine, applied before the importance/recency
     // blend so a low-cosine memory can't be smuggled into recall by its weight.

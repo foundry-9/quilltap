@@ -52,6 +52,11 @@ const CONVERSATION_UUID_PATTERN = /`([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
  * per-turn list and the retrospective mini-recap) filter against it rather than
  * printing the same UUID twice.
  *
+ * Walks the transcript backwards and stops at the first match: the fold refresh
+ * sweeps a target's prior whispers of this kind as soon as it posts a fresh one
+ * (`sweepPriorRelevantConversationWhispers`), so at most one is standing, and
+ * the newest is the only one worth reading anyway.
+ *
  * Best-effort: an unreadable transcript yields an empty set — a duplicate
  * listing is harmless, a thrown turn is not.
  */
@@ -62,7 +67,8 @@ async function collectFoldWhisperConversationIds(
   const ids = new Set<string>()
   try {
     const messages = await getRepositories().chats.getMessages(chatId)
-    for (const m of messages) {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i]
       if (m.type !== 'message') continue
       const msg = m as MessageEvent
       if (msg.systemSender !== 'commonplaceBook' || msg.systemKind !== 'relevant-conversations') continue
@@ -75,6 +81,7 @@ async function collectFoldWhisperConversationIds(
       for (const uuid of (msg.content ?? '').matchAll(CONVERSATION_UUID_PATTERN)) {
         ids.add(uuid[1])
       }
+      break
     }
   } catch {
     // Dedup is best-effort; a duplicate UUID listing is harmless.
